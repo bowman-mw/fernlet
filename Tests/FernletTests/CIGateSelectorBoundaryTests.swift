@@ -192,8 +192,15 @@ import Testing
     /// `FernletAuditLog` through the bridge `FernletApp.init` installs. A missing install compiles
     /// clean and turns every "this event was not logged" assertion vacuous. The step's floor stays
     /// the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.2.12, walls and cleanup (2026-10-02): `s3-grep`
+    /// 9 → 10, for `ProximityNamespaceBoundaryTests` — the ratchet that keeps ProximityKit reading
+    /// its host's namespace: no namespace, group or purpose built outside `Namespace/`,
+    /// `FernletCryptoPurpose` only on the feature lines that leave in A0.4, and every `fernlet`
+    /// literal on an exact allowlist with its exit step. Each thing it refuses compiles clean. The
+    /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 9,
+        "s3-grep": 10,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
@@ -218,7 +225,8 @@ import Testing
     /// suite here is a wall with no compiler half — the `MeshRoutedDrainWallTests` argument — so its
     /// line leaving, or it leaving its line, must red rather than go quiet.
     private static let wallLines: [String: [String]] = [
-        "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests"],
+        "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
+                    "ProximityNamespaceBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],

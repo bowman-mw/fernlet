@@ -13,8 +13,9 @@
 // `com.fernlet.mesh-routed` key that seals all of them — and `MeshRoutedStore.wipeForDeleteAll`
 // destroys every one of them by service and by path. The family must not gain a member.
 //
-// Source-scanning is the only way to catch the omission: `MeshRoutedStore(scope: .production)`
-// compiles, passes in isolation every time, and lands its damage in somebody else's suite.
+// Source-scanning is the only way to catch the omission:
+// `MeshRoutedStore(scope: .production(for: namespace, installBinding: binding))` compiles, passes in
+// isolation every time, and lands its damage in somebody else's suite.
 //
 // The witness wall is a different kind of claim and lives here because it is the same tool. The
 // compile-time gate on `MeshCustodyDurabilityWitness` is `fileprivate`, which is FILE scope — so it
@@ -130,7 +131,12 @@ struct MeshRoutedStoreIsolationTests {
     /// strictly worse than losing them outright. Since ProximityKit plan step A0.2.8, when the
     /// production scope began reading the namespace, a hand-built scope naming a namespace's
     /// `installation.storage.defaultDirectory` or `installation.keychain.meshRoutedSealKey.service`
-    /// is banned beside the two older spellings.
+    /// is banned beside the two older spellings. Since step A0.2.12 so are the two the substring
+    /// needle never saw: the shorthand `.production(for:installBinding:)` wherever a scope is
+    /// expected (`MeshRoutedStore(scope: .production(…))`), and the type-prefixed one broken before
+    /// its `.`, read by the session twin's two scanners
+    /// (`MeshSessionStoreIsolationTests.shorthandProductionScopes(in:)` and
+    /// `typePrefixedProductionScopes(of:in:)`, fixtured there).
     @Test func noTestReachesTheProductionScope() throws {
         var scanned = 0
         for (file, source) in try Self.testSources() {
@@ -138,6 +144,20 @@ struct MeshRoutedStoreIsolationTests {
             #expect(
                 !source.contains("MeshRoutedStorageScope.production"),
                 "\(file) uses the PRODUCTION routed scope — it shares the real index, the real chunk directory and the real keychain row with every concurrent suite."
+            )
+            let code = SwiftSourceLexer.lex(source).code
+            let reads = MeshSessionStoreIsolationTests.typePrefixedProductionScopes(
+                of: "MeshRoutedStorageScope", in: code
+            ) + MeshSessionStoreIsolationTests.shorthandProductionScopes(in: code)
+            #expect(
+                reads.isEmpty,
+                """
+                \(file) reaches a PRODUCTION storage scope through \(reads) — it shares the real index, \
+                the real chunk directory and the real keychain row with every concurrent suite. A \
+                shorthand `.production(for:installBinding:)` does not say which scope it builds (only \
+                the routed and mesh-session scopes declare it), so this wall and its session twin both \
+                refuse it.
+                """
             )
             for arguments in MeshSessionStoreIsolationTests.constructionArguments(
                 of: "MeshRoutedStorageScope(", in: source

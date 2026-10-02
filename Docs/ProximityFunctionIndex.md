@@ -11,6 +11,11 @@ The 2026-08-09 pass added the away-hearts dead-drop subsystem, the `ProtectedSid
 primitive, wire2 sealed-payload framing, the QR verification ceremony, and the coach trust/ceremony
 types (which still have no production callers).
 
+**2026-10-02 (ProximityKit plan step A0.2.12):** the "Protocol Namespace" section describes A0.2's end
+state rather than its commits: what the host supplies, how each kind of reader takes the namespace,
+the column-seal and keychain copies, and the test target's bindings in one table, with no row left
+for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in purposes:` overloads.
+
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
 > minting", "Phase 5", …). **That document does not exist in this tree.** The phase numbers are still
@@ -23,8 +28,8 @@ types (which still have no production callers).
 
 | Need | Prefer Reusing |
 | --- | --- |
-| Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
-| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, a moderation row, the routed manifest (P5 item 1) and the routed chunk (P5 item 2), each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
+| Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:in:)` |
+| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:in:)` is overloaded for the identity envelope, the mesh admission token, the membership records and messages, the removal quorum, the key advertisement, the channel introduction and the six routed transcripts, each behind its own domain tag from the `in purposes:` it is handed (ProximityKit plan step A0.2); `canonicalBytes(for:)` remains only for the three Group-Activity types and a moderation row, whose tags are still FernletCrypto's until A0.4. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
@@ -511,7 +516,7 @@ fingerprint — canonical, deterministic, and short enough to ride the introduct
 | --- | --- |
 | `MeshEpochBounds` | Plan §8.4's numbers in one place: counter cap 4096, keyring 3 predecessors, 5-minute grace, the 32/16 hex widths, the frozen derivation domain `fernlet.mesh.epoch.v1`. |
 | `MeshEpochRef` | `counter` + `epochID` + `coordinatorFingerprint`. Two branches at ONE counter are two distinct values — the representability plan §8.4 needs. |
-| `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:in:)` | Derives `epochID` as SHA-256(domain ‖ meshID ‖ counter ‖ coordinator) truncated to 16 bytes, so every member of a branch computes the same id with no wire change. The domain is the caller's `purposes.hash.meshEpochIDV1`, raw (ProximityKit plan step A0.2.6, which deleted `MeshEpochBounds.derivationDomain`). Returns nil over the cap or on a non-canonical fingerprint. |
+| `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:in:)` | Derives `epochID` as SHA-256(domain ‖ meshID ‖ counter ‖ coordinator) truncated to 16 bytes, so every member of a branch computes the same id with no wire change. The domain is the caller's `purposes.hash.meshEpochIDV1`, raw (read off the namespace since ProximityKit plan step A0.2.6; ProximityKit holds no epoch constant of its own). Returns nil over the cap or on a non-canonical fingerprint. |
 | `…successor(coordinatorFingerprint:meshID:in:)` | `counter + 1`, derived under the same caller's purposes, or **nil at the cap** — the documented "rotation refused; the session must end" answer. Never traps. |
 | `…canonicalString` / `init(canonical:)` / `isCanonical(_:)` | `"<counter>.<32 hex>.<16 hex>"`, canonical in both directions (no leading zeros, no uppercase) so two devices sign byte-identical strings. The parse is strict and every refusal is named. |
 | `MeshEpochRefParseError` | Five named refusals, including `counterOverCap(_:)` which carries what it saw. |
@@ -895,7 +900,7 @@ P5 item 3: where one device's sealed routed custody lives, and the key row that 
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:)` replaced the static `production` and `productionKeychainService`: the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
+| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:installBinding:)` is the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
 | `MeshRoutedStorageScope.keychainService(besideHeartDrop:in:)` | Production in ⇒ the namespace's production service out (A0.2.8 added `in:`); any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
 | `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. |
 | `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
@@ -1418,17 +1423,21 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 
 ## Protocol Namespace
 
-ProximityKit plan step A0.2.1 (2026-10-02): the host-supplied protocol identity, under
-`ProximityKit/Namespace/`. Since step A0.2.3 the host hands it in (`ProximityHost.proximityNamespace`,
-the supply path below) and `IdentityService` takes its keychain service from it; A0.2's later commits
-route ProximityKit's remaining label, radio, keychain and storage reads through it. ProximityKit
-holds no instance and offers no default. `ProximityNamespaceSoundnessTests` covers every rule below.
+ProximityKit plan step A0.2: the host-supplied protocol identity, under `ProximityKit/Namespace/`,
+and every ProximityKit read of a label, radio value, keychain row or storage name routed through it,
+byte-identical for Fernlet. The host hands it in (`ProximityHost.proximityNamespace`) beside its
+install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
+copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
+covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value and every reader;
+`ProximityNamespaceBoundaryTests` keeps any namespace, group or purpose from being built outside
+`Namespace/`, `FernletCryptoPurpose` to the 20 feature lines that leave at A0.4, and every remaining
+`fernlet` literal to an allowlist naming its exit step.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers call it, so every label is a source literal. |
+| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers call it, so every label is a source literal. `ProximityNamespaceBoundaryTests` refuses a call anywhere else in ProximityKit. |
 | `data` | `Data(rawValue.utf8)`, no terminator, no normalization. |
 | `prefixBytes` | What the consumer writes first: `data` (raw prefix, and every role taking the label whole), the 8-byte big-endian count then `data` (length-prefixed), or nothing (`.absent`). |
 | `signingBytes(_:)` | The transcript unchanged when the role is a signature role and the transcript begins with `prefixBytes`, else nil: FernletCrypto's positional rule, refusing every non-signature role. |
@@ -1453,7 +1462,7 @@ holds no instance and offers no default. `ProximityNamespaceSoundnessTests` cove
 
 | Function | What It Does |
 | --- | --- |
-| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built as `ProximitySupportLayout.defaultDirectory` builds today's root. |
+| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built as `ProximitySupportLayout.defaultDirectory` builds Fernlet's root. |
 
 ### `Namespace/ProximityNamespace+Soundness.swift`
 
@@ -1465,136 +1474,111 @@ holds no instance and offers no default. `ProximityNamespaceSoundnessTests` cove
 
 ### `FernletConnections/FernletProtocolNamespace.swift`
 
-Plan step A0.2.2: Fernlet's own value, in the `FernletConnections` module, which depends on
-ProximityKit so ProximityKit can never name it. Since A0.2.3 the app supplies it as its
-`ProximityHost.proximityNamespace` and builds every `IdentityService` from it. `ProximityNamespaceGoldenTests`
-pins every literal against its frozen column, every role, soundness and the 38 FernletCrypto twins.
+Fernlet's own value, in the `FernletConnections` module, which depends on ProximityKit so ProximityKit
+can never name it. The app supplies it as its `ProximityHost.proximityNamespace` and builds every
+`IdentityService` from it. `ProximityNamespaceGoldenTests` pins every literal against its frozen
+column, every role, soundness and the 38 FernletCrypto twins.
 
 | Function | What It Does |
 | --- | --- |
 | `ProximityNamespace.fernlet` | Fernlet's whole protocol identity: `Family.fernlet` with `Installation.fernletApp`. |
-| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Today's labels, radio values and `fernlet` QR scheme by group, byte for byte, the legacy pair accepted. |
+| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Fernlet's labels, radio values and `fernlet` QR scheme by group, byte for byte as they shipped, the legacy pair accepted. |
 | `Installation.fernletApp` | The Fernlet app's identity and seal-key rows, storage names and log subsystem. Coach adds an installation of its own beside it in plan step C1. |
 
-### The supply path (A0.2.3)
+### The supply path
 
 How the value reaches ProximityKit: through the host seam, read once per manager, with no default
-anywhere. The one label read moved so far is the identity's keychain service, and
-`ProximityNamespaceGoldenTests` pins it.
+anywhere. `ProximityNamespaceGoldenTests` pins the identity's keychain read and the namespace
+overloads of `sign` and `verify`.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityHost.proximityNamespace` | The host's protocol identity: the one `ProximityHost` requirement with **no default** in the protocol extension, so a host that supplies none fails to compile instead of running under another app's identity. |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: with `proximityInstallBinding`, one of the two `ProximityHost` requirements with **no default** in the protocol extension, so a host that supplies none fails to compile instead of running under another app's identity. |
 | `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
-| `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`. Their construction calls do not change. |
+| `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`, and each builds its radio from it. |
 | `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
-| `IdentityService.init()` / `init(keychainService:)` (test target, `ProximityNamespaceTestBindings.swift`) | Convenience initializers passing `.fernlet`, restoring the call shapes the suites were written against. A binding restores a call shape, never a value; a test that pins a value names `.fernlet` explicitly. Later A0.2 commits add their bindings to the same file. |
 
-### Signed transcripts I (A0.2.4)
+### Signed transcripts
 
-The envelope, the admission token, the membership records and messages, the removal quorum and the
-key advertisement read their labels off the namespace, the legacy pair included. Each reader takes
-the purposes it already holds: a builder its signing identity's `purposes`, the envelope's `verify`
-its `identityService`'s, a `MeshMembershipRecordVerifier` its own copy, the manager its stored
-`namespace.family.purposes`. `ProximityNamespaceGoldenTests` pins the thirteen moved labels off
-`.fernlet` and holds each reader to the namespace it is handed.
-
-| Function | What It Does |
-| --- | --- |
-| `canonicalBytes(for:in:)` (10 types) / `canonicalInventoryDigestBytes(for:in:)` | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. |
-| `MeshMembershipRecordVerifier.init(...purposes:)` / `MeshLedgerAdoption.bootstrapVerifier(...in:)` / `adopt(...in:)` / `MeshInventoryDigest.init(meshID:ledger:purposes:)` / `MeshAdmissionToken.verify(...in:)` | The verifiers and helpers that take the labels, each with no default. |
-| `canonicalBytes(for:)`, `canonicalInventoryDigestBytes(for:)`, `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet` (`ProximityNamespace.Purposes.fernlet`, which the golden pins equal to `ProximityNamespace.fernlet.family.purposes`). |
-
-### Signed transcripts II (A0.2.5)
-
-The QUIC channel introduction, the six routed transcripts and the verify QR read the namespace. The
-routed doors and the introduction exchange keep their own copy, which the manager fills with its stored
-`namespace.family.purposes` (the transport filled the exchange's from `MeshIntroductionAuthority.namespace`,
-the manager's same value, until A0.2.7 gave the radio its own copy, so the peer's introduction is
-checked under the label the manager signs this side's under); every routed builder signs under its
-identity's `purposes`; the QR scheme and labels come from the signing identity's namespace or the
-caller's. `CoachVerificationCeremony` and the app's duress
-flow scan and answer under their identity's. `ProximityNamespaceGoldenTests` pins the ten moved values
-off `.fernlet` and holds each reader to the namespace it is handed.
+Every signed transcript reads its label off the namespace: the identity envelope, the admission
+token, the membership records and messages, the removal quorum, the key advertisement, the QUIC
+channel introduction, the six routed transcripts and the verify QR, the legacy pair included. Each
+reader takes the purposes it already holds: a builder its signing identity's `purposes`, the
+envelope's `verify` its `identityService`'s, a verifier its own copy, the manager its stored
+`namespace.family.purposes`; the QR's scheme and labels come from the signing identity's namespace
+or the caller's, and `CoachVerificationCeremony` and the app's duress flow scan and answer under their
+identity's. `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (groups 9
+and 10).
 
 | Function | What It Does |
 | --- | --- |
-| `canonicalBytes(for:in:)` (the channel introduction and the six routed types) | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. |
+| `canonicalBytes(for:in:)` (17 types) / `canonicalInventoryDigestBytes(for:in:)` | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. Only the four activity and moderation domains are still FernletCrypto's, until A0.4. |
+| `MeshMembershipRecordVerifier.init(...purposes:)` / `MeshLedgerAdoption.bootstrapVerifier(...in:)` / `adopt(...in:)` / `MeshInventoryDigest.init(meshID:ledger:purposes:)` / `MeshAdmissionToken.verify(...in:)` | The membership verifiers and helpers that take the labels, each with no default. The legacy pair is the family's choice: a family with `LegacyV1.refused` verifies no schema-v1 envelope and no pre-WI-6 token. |
 | `MeshRoutedManifestVerifier` / `MeshChunkVerifier` / `MeshCustodyReceiptVerifier` / `MeshRecipientReceiptVerifier` / `MeshRoutedInventoryVerifier` / `MeshRoutedDrainAnswerVerifier` / `MeshChannelIntroductionExchange` `init(...purposes:)` | Each keeps its copy of the labels as a trailing `purposes:` with no default and checks every signature (and frames the introduction transcript) under it. |
-| `MeshIntroductionAuthority.namespace` (A0.2.5; removed by A0.2.7) | The host's namespace as the transport's authority held it, before the radio held one of its own. |
-| `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `ProximityVerifySignature.message(...in:)` | The QR's scheme and labels from the caller's namespace; see `ProximityVerification.swift` below. |
-| `canonicalBytes(for:)` for the seven types, the old verifier and exchange initializers, `ProximityVerifyQR.parse(_:)` / `isValid(_:at:)` / `urlScheme`, `ProximityVerifySignature.message(...qrNonce:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet`. |
+| `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `ProximityVerifySignature.message(...in:)` | The QR's scheme and labels from the caller's namespace; see `ProximityVerification.swift` below. The QR host `verify`, the query key `d` and version 1 stay ProximityKit format constants. |
 
-### Hashes, AEAD, salts, epoch (A0.2.6)
+### Hashes, seals, salts and the epoch
 
 The routed hash and id domains, the five AEAD labels, the three HKDF salts and the epoch id's domain
-read the namespace; `MeshEpochBounds.derivationDomain` is deleted. Stateless helpers take a trailing
-`in purposes:` with no default, the three ids that hash a label became functions (a decoded value
-carries no namespace), `MeshChunkVerifier` re-derives the chunk hash under its own copy, and
-`IdentityService` reads its own `purposes`. The manager hands every reader it calls its stored
-`namespace.family.purposes`; the chunker, the manifest's wraps and the delivery seam their identity's.
-The routed store's three hashing verbs took the caller's, until A0.2.8 gave its scope the namespace. `ProximityNamespaceGoldenTests` pins the fourteen moved values off `.fernlet` and holds each
-reader to the namespace it is handed (group 11).
+read the namespace. Stateless helpers take a trailing `in purposes:` with no default, the three ids
+that hash a label are functions (a decoded value carries no namespace), `MeshChunkVerifier`
+re-derives the chunk hash under its own copy, and `IdentityService` reads its own `purposes`. The
+manager hands every reader it calls its stored `namespace.family.purposes`; the chunker, the
+manifest's wraps and the delivery seam their identity's; the routed store its scope's (see "At rest"
+below). `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (group 11).
 
 | Function | What It Does |
 | --- | --- |
 | `MeshRoutedContentDigest.contentHash(of:in:)` / `chunkHash(of:in:)` / `chunkID(itemID:chunkIndex:in:)` / `MeshRoutedContentHasher.init(purposes:)` | The routed digests under `purposes.hash`; see `MeshChunk.swift` and `MeshRoutedContentHasher.swift`. |
-| `MeshChunk.chunkID(in:)` / `MeshCustodyReceipt.receiptID(in:)` / `MeshRecipientReceipt.receiptID(in:)` | The three derived ids, functions since A0.2.6 (they were computed properties). |
+| `MeshChunk.chunkID(in:)` / `MeshCustodyReceipt.receiptID(in:)` / `MeshRecipientReceipt.receiptID(in:)` | The three derived ids, functions because a decoded value carries no namespace (`Codable` stays namespace-free). |
 | `MeshChunkAssembly.admit(_:in:)` / `completion(against:in:)` | The in-memory reassembler's two hashing verbs. |
-| `MeshRoutedStore.stagingChunk(_:now:in:)` / `committingCustody(item:custodian:now:in:)` / `assembledBlob(item:expecting:in:)` | The routed store's three hashing verbs (readers the design's list missed); A0.2.8 dropped the `in:` again, reading the scope's namespace. |
 | `MeshRoutedItemSealer.seal/open/additionalData(...in:)` / `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData(...in:)` | The routed seals; the item seal reads `purposes.aead.meshRoutedItemV1`, the wrap `purposes.keyDerivation.meshRoutedContentKeyWrapV1` and `purposes.aead.meshRoutedContentKeyWrapV1`. |
-| `MeshEpochRef.minted(...in:)` / `successor(...in:)` / `MeshRotationPolicy.plan(...in:)` | Every epoch id derived under `purposes.hash.meshEpochIDV1`, raw. |
-| `IdentityService.seal(_:to:format:)` / `open(_:from:format:)` / `encryptGroupKey(_:for:)` / `decryptGroupKey(_:)` | Unchanged shapes; their salts and AEAD labels come from the identity's `purposes`. |
-| The digest statics, `MeshChunk.chunkID` / `receiptID` as properties, `MeshRoutedContentHasher()`, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` (until A0.2.8), the six seal and wrap doors, `MeshEpochRef.minted` / `successor`, `MeshRotationPolicy.plan` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet`. |
+| `MeshEpochRef.minted(...in:)` / `successor(...in:)` / `MeshRotationPolicy.plan(...in:)` | Every epoch id derived under `purposes.hash.meshEpochIDV1`, raw; parsing and decoding an epoch derive nothing. |
+| `IdentityService.seal(_:to:format:)` / `open(_:from:format:)` / `encryptGroupKey(_:for:)` / `decryptGroupKey(_:)` | Their salts and AEAD labels come from the identity's `purposes`. |
 
-### Radios (A0.2.7)
+### The radios
 
 The three radios read their service types, ALPNs, the mesh heartbeat, the TLS exporter label and the
-log subsystem off the namespace their manager builds them from, once, in `init(namespace:)`; the
-statics are deleted. The mesh radio also keeps a copy of `family.purposes`, which every channel
-introduction exchange it starts frames and checks under, so `MeshIntroductionAuthority.namespace`
-(A0.2.5) is gone. `ProximityNamespaceGoldenTests` pins the nine moved values off `.fernlet` and holds
-each radio to the namespace it is built from (group 12).
+log subsystem off the namespace their manager builds them from, once, in `init(namespace:)`. The mesh
+radio also keeps a copy of `family.purposes`, under which every channel introduction exchange it
+starts frames this side's transcript and checks the peer's, so the manager that signs a tunnel's
+introduction and the radio that checks the peer's read one namespace. `ProximityNamespaceGoldenTests`
+holds each radio to the namespace it is built from (group 12).
 
 | Function | What It Does |
 | --- | --- |
 | `NetworkMeshSession.init(namespace:)` | Keeps `serviceType`, `alpn`, `heartbeatDatagram`, `tlsExporterLabel` and `purposes` as `nonisolated let`s and a private instance `Logger` (`proximity.transport.quic`); `connectionParameters()` and `listenerParameters(identity:)` are instance methods reading the instance ALPN. |
 | `NetworkMeshSession.channelBindingHash(for:exporterLabel:)` | SHA-256 of the connection's TLS exporter secret under the label it is handed, whole (role `.tlsExporterLabel`); its one caller hands it the radio's `tlsExporterLabel`. |
 | `NetworkPresenceSession.init(namespace:)` / `NetworkRecipeShareSession.init(namespace:)` | Keep `serviceType` and `alpn` from `family.radios.presence` / `.recipeShare` and a private instance `Logger`. |
-| `MeshNetworkManager.init` / `ProximityRecipeShareManager.init` / `PresenceManager.makeSession` | Build their radio from the stored `namespace`; presence's `makeSession` is set in `init`, a closure capturing the value. |
-| `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkRecipeShareSession.init()` (test target, `ProximityNamespaceTestBindings.swift`) | The argument-less radios, restored for the suites by passing `.fernlet`. |
+| `MeshNetworkManager.init` / `ProximityRecipeShareManager.init` / `PresenceManager.makeSession` | Build their radio from the stored `namespace`; presence's `makeSession` is set in `init`, a closure capturing the `Sendable` value. |
 
-### At rest: names and rows (A0.2.8)
+### At rest: names, rows and scopes
 
-The two storage scopes carry the host's namespace, and the stores, the seal-key helpers, the host's
-defaults and the identity read their names and rows off it: the mesh stores' file names, chunk
-directory and seal-key accounts, the production seal-key services, the default sidecar root and the
-identity's four accounts. The routed store measures under its scope's labels, so its three hashing
-verbs lost A0.2.6's `in purposes:`. The two unused at-rest mirror tokens are deleted.
-`ProximityNamespaceGoldenTests` pins the twelve moved values off `.fernlet` and holds each reader to
-the namespace it is handed (group 13).
+The two storage scopes carry the host's namespace and install binding, and the stores, the seal-key
+helpers, the host's defaults and the identity read their names and rows off the namespace: the mesh
+stores' file names, chunk directory and seal-key accounts, the production seal-key services, the
+default sidecar root and the identity's four accounts. The routed store measures under its scope's
+labels. `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (group 13).
 
 | Function | What It Does |
 | --- | --- |
-| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `init(namespace:directory:keychainService:)` / `production(for:)` / `keychainService(besideHeartDrop:in:)` | The scopes with their namespace; `production(for:)` is the namespace's `defaultDirectory` and seal-key service, replacing the static `production` and `productionKeychainService`. (Both take `installBinding:` since A0.2.9, below.) |
-| `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account; the static `keychainAccount`s are gone. |
-| `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace (the file names were statics). |
-| `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`. |
-| `ProximityHost.proximitySupportDirectory` / `meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from `proximityNamespace`: the root is `installation.storage.defaultDirectory`; on it the scopes are the namespace's production scopes, on any other root their services are named after it. |
+| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `namespace`, `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)`, `keychainService(besideHeartDrop:in:)` | The scopes with the host's namespace and binding; `production(for:installBinding:)` is the namespace's `defaultDirectory` and seal-key service, and `keychainService(besideHeartDrop:in:)` maps the production heart-drop service to the namespace's (A0.4 retires that comparison). No longer `Equatable`, since a capability has no equality. The two isolation walls refuse every production spelling in tests, the shorthand `.production(for:installBinding:)` included. |
+| `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account. |
+| `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace. |
+| `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`: a store holds one source of its labels. |
+| `ProximityHost.proximitySupportDirectory` / `meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from `proximityNamespace` and `proximityInstallBinding`: the root is `installation.storage.defaultDirectory`; on it the scopes are the namespace's production scopes, on any other root their services are named after it. |
 | `IdentityService.accounts` / `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` | The four device rows' accounts, the namespace's `installation.keychain.identity`, under the identity's `keychainService`. |
-| `FernletStore.meshSessionStorage` / `meshRoutedStorage` (app) | Pass `namespace: proximityNamespace` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `.fernlet`'s `defaultDirectory`, as does `CryptoFormatCensus.Inputs.production`. |
-| `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites with `.fernlet`'s rows. |
+| `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement; both scopes pass `namespace: proximityNamespace`, `installBinding: proximityInstallBinding` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `.fernlet`'s `defaultDirectory`, as does `CryptoFormatCensus.Inputs.production`. |
 
-### The column seal and the install binding (A0.2.9)
+### The column seal and the install binding
 
-FernletCrypto's `ColumnCrypto` V3 seal is copied into ProximityKit byte for byte, and the install
-binding it mixes into every blob's authenticated data is injected by the host instead of read off
-FernletCrypto's `DeviceBindingID`. The two mesh stores seal under their scope namespace's two
-column-seal labels, the last core labels to leave FernletCrypto's registry, and catch
-`ProximityInstallBindingReadError` where they caught `DeviceBindingID.ReadError`; neither store nor
-either scope file imports FernletCrypto any more. `ProximityNamespaceGoldenTests` group 14 runs the
-A0.2.0 column vectors through the copy, opens each implementation's blobs with the other, compares
-their refusals pairing by pairing, and holds each store to its scope's label and binding.
+The two sealed mesh stores seal through `ProximityColumnCrypto`, FernletCrypto's `ColumnCrypto` V3
+seal copied into ProximityKit byte for byte, under their scope namespace's two column-seal labels and
+the install binding their scope carries, which the host injects. They catch the retryable
+`ProximityInstallBindingReadError`; neither store nor either scope file imports FernletCrypto.
+`ProximityNamespaceGoldenTests` group 14 runs the A0.2.0 column vectors through the copy, opens each
+implementation's blobs with the other, compares their refusals pairing by pairing, and holds each
+store to its scope's label and binding.
 
 | Function | What It Does |
 | --- | --- |
@@ -1604,13 +1588,11 @@ their refusals pairing by pairing, and holds each store to its scope's label and
 | `ProximityColumnCrypto.deriveColumnKey(contentKey:purpose:outputByteCount:)` | The column-key derivation, internal so the golden can pin its known answers. No `deriveColumnKey(info:)`, no `init(label:)`. |
 | `ProximityInstallBinding.read(for:)` (`Support/ProximityInstallBinding.swift`) | The host's per-install binding, one synchronous read. `.seal` may mint and answers nil without a durable binding (the seal refuses); `.open` never mints, answers nil only for an absent binding (the open refuses), and throws `ProximityInstallBindingReadError` for a failed read (the open defers). |
 | `ProximityInstallBindingReadError(status:)` | The retryable read failure, mirroring `DeviceBindingID.ReadError`'s `status`. |
-| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)` | The scopes carry the host's binding to the stores; no longer `Equatable`, since a capability has no equality. |
-| `MeshSessionStore` / `MeshRoutedStore` `crypto` (private) | `ProximityColumnCrypto` over `scope.namespace.family.purposes.keyDerivation.meshSessionContextV1` / `.meshRoutedStoreV1` and `scope.installBinding`, built per use like the A0.2.8 name reads. |
+| `MeshSessionStore` / `MeshRoutedStore` `crypto` (private) | `ProximityColumnCrypto` over `scope.namespace.family.purposes.keyDerivation.meshSessionContextV1` / `.meshRoutedStoreV1` and `scope.installBinding`, built per use like the name reads. |
 | `ProximityHost.proximityInstallBinding` | The host's binding, with no default, like `proximityNamespace`; the extension's default scopes carry it. |
 | `FernletDeviceBindingAdapter` (`FernletConnections/FernletDeviceBindingAdapter.swift`) | Fernlet's binding: delegates to `DeviceBindingID` at each call (`current()` for `.seal`, `currentForOpen()` for `.open`, `ReadError` translated with its status), so the row, the cache and the task-local test seam stay FernletCrypto's one. |
-| `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement, and both scopes pass `installBinding: proximityInstallBinding`. |
 
-### The keychain mechanism (A0.2.11)
+### The keychain mechanism
 
 FernletFoundation's `KeychainItem` mechanism is copied into ProximityKit member for member as
 `ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 42
@@ -1633,6 +1615,23 @@ read, list and delete each other's rows and fail and audit alike.
 | `deleteAll(service:)` / `deleteAllReportingStatus(service:)` | Every row under a service, both variants; not-found is success. `deleteAll` audits a failure as `keychain.deleteAll.failed` (`service`, `status`). |
 | `SynchronizableScope` (`.any`, `.synced`, `.local`) | Which variant a read or delete matches: `kSecAttrSynchronizableAny`, `true` or `false`. |
 | `addQuery` / `readQuery` / `enumerationQuery` / `deleteQuery` / `deleteAllQuery` | The five query dictionaries, each built in one place and issued by every member of its shape, so the golden compares the dictionaries production issues. |
+
+### The test target's bindings (`Tests/FernletTests/ProximityNamespaceTestBindings.swift`)
+
+The call shapes A0.2 took out of ProximityKit, restored for the suites by passing `.fernlet`
+(`ProximityNamespace.Purposes.fernlet` where a reader takes the labels, which the golden pins equal to
+`ProximityNamespace.fernlet.family.purposes`). A binding restores a call shape, never a value; a test
+that pins a value names `.fernlet` explicitly.
+
+| Function | What It Does |
+| --- | --- |
+| `IdentityService.init()` / `init(keychainService:)` | An identity under `.fernlet`. |
+| `canonicalBytes(for:)` (17 types), `canonicalInventoryDigestBytes(for:)` | The serializer's overloads with `.fernlet`'s labels. |
+| `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)`, the six routed verifiers' and `MeshChannelIntroductionExchange`'s initializers without `purposes:` | The verifiers and helpers with `.fernlet`'s labels. |
+| `ProximityVerifyQR.urlScheme` / `parse(_:)` / `isValid(_:at:)`, `ProximityVerifySignature.message(scannerKeyAgreementPublicKey:challengeNonce:qrNonce:)` | The verify QR in `.fernlet`. |
+| `MeshRoutedContentDigest.contentHash(of:)` / `chunkHash(of:)` / `chunkID(itemID:chunkIndex:)`, `MeshChunk.chunkID` / `MeshCustodyReceipt.receiptID` / `MeshRecipientReceipt.receiptID` as properties, `MeshRoutedContentHasher.init()`, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, the six item-seal and key-wrap doors, `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` / `successor(coordinatorFingerprint:meshID:)`, `MeshRotationPolicy.plan(...)` | The hashes, seals and epoch under `.fernlet`'s labels. |
+| `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkRecipeShareSession.init()` | The argument-less radios, built from `.fernlet`. |
+| `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` | The seal-key and identity-row helpers with `.fernlet`'s accounts. |
 
 ## Identity, Wire, Trust, And Audit
 

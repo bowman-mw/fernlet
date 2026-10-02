@@ -12,8 +12,8 @@
 // through one sees the bytes it always saw, and nothing here may pass anything else or compute a
 // label, a row or a name of its own. A test that PINS a value does not lean on a binding: it names
 // `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is visibly
-// Fernlet's and still reads correctly once a binding is retired. Later A0.2 commits add their
-// bindings to this file, each beside the API it restores.
+// Fernlet's and still reads correctly once a binding is retired. Each A0.2 commit added its
+// bindings to this file, beside the API it restores.
 //
 // Where an API takes the namespace's labels rather than the whole namespace (step A0.2.4 on), the
 // binding passes `.fernlet` for a `ProximityNamespace.Purposes`: FernletConnections'
