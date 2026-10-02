@@ -650,6 +650,13 @@ public extension View {
                     // this button as a native image item and names it after the image alone, so an
                     // `Image(systemName:)` was announced as "selected" (the symbol's own label) and
                     // `.accessibilityLabel` on the button never reached the item.
+                    //
+                    // It deliberately carries no `.accessibilityIgnoresInvertColors()`, unlike the
+                    // photographs and rendered bitmaps that modifier exists for: this is a template
+                    // glyph drawn in the tint, so under Smart Invert it has to invert with the bar
+                    // it sits on, as any `Image(systemName:)` does. The accessibility wall's A6 rule
+                    // reads the line as a bitmap; its entry in Scripts/accessibility-allowlist.json
+                    // carries this reasoning. Do not trade that entry for the modifier.
                     Label {
                         Text(verbatim: FernletUICopy.done)
                     } icon: {
@@ -2010,6 +2017,12 @@ private enum KeyboardDoneGlyph {
     /// A template COPY of the symbol, never the symbol image itself: `UIImage(systemName:)` hands
     /// every caller the same cached instance (measured on iOS 26.5), so labelling that one would
     /// rename the checkmark everywhere UIKit draws it. `withRenderingMode` returns a new image.
+    ///
+    /// The template mode is load-bearing a second way: a template image has no colours of its own
+    /// (the bar draws it in the button's tint), so Smart Invert inverts it with the bar like any
+    /// other symbol, and the accessibility wall's A6 allowlist entry for its call site rests on
+    /// exactly that. An image here that carried colours of its own would have to be decided
+    /// against that rule again.
     @MainActor
     static func image() -> UIImage {
         let image = (UIImage(systemName: "checkmark.circle.fill") ?? UIImage()).withRenderingMode(.alwaysTemplate)
