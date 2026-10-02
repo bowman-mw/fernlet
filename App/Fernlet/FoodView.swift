@@ -902,6 +902,9 @@ private struct RecipeImportSheet: View {
                 SavedRecipeNotesSheet(store: store, recipe: recipe)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    // The notes editor's keyboard "Done". Declared here, not in the sheet: its other
+                    // two presentations go through `fernletSheetChrome`, which already gives it one.
+                    .keyboardDoneToolbar()
             }
             .sheet(item: $recipeShareDraft) { draft in
                 ProximityRecipeShareSheet(draft: draft, manager: store.recipeShareManager, store: store)
@@ -5342,6 +5345,10 @@ private struct MealReviewSheet: View {
             }
         }
         .background(Color.parchment)
+        // The keyboard "Done" for the Qty and macro pads, which have no return key. This sheet is
+        // presented by the meal sheet's root page, and a sheet is a host of its own: that page's
+        // Done never reaches it, so its root declares one.
+        .keyboardDoneToolbar()
     }
 
     /// Offers the decomposition-built recipe for saving to the recipe book: an opt-out toggle plus an

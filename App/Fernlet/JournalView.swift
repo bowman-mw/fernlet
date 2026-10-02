@@ -687,7 +687,21 @@ struct JournalEntryEditorSheet: View {
         .buttonStyle(DestructiveCardButtonStyle())
     }
 
+    /// The editor hosted as the root page of a `NavigationStack` of the sheet's own, whose bar is
+    /// hidden, for the keyboard "Done" (Return only adds a line). Both presenters present this sheet
+    /// bare, from the Private hub, where a Done declared at the sheet's root never rendered and one
+    /// on a stack page does — see ``DayEditSheet``'s body (2026-10-01).
     var body: some View {
+        NavigationStack {
+            editorPage
+                .keyboardDoneToolbar()
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        // Also at the sheet root: the guard's swipe-dismiss block is a preference of the page.
+        .interactiveDismissDisabled(isDirty)
+    }
+
+    private var editorPage: some View {
         VStack(spacing: 0) {
             ScrollView {
                 editorScrollContent
@@ -1781,7 +1795,24 @@ struct DayEditSheet: View {
         return d.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
+    /// The editor hosted as the root page of a `NavigationStack` of the sheet's own, whose bar is
+    /// hidden, for the one thing the stack is there for: the keyboard "Done" over the sleep hours'
+    /// decimal pad (no return key) and the journal note. Both presenters present this sheet bare,
+    /// from the Private hub, and there a Done declared at the sheet's root never rendered — on any
+    /// modifier position, with the presentation delayed or not — while one on a stack page does
+    /// (iPhone 17 simulator, iOS 26.5, 2026-10-01).
     var body: some View {
+        NavigationStack {
+            editorPage
+                .keyboardDoneToolbar()
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        // Also at the sheet root, as `RecipeSheet` does: the guard's swipe-dismiss block is a
+        // preference of the page inside the stack.
+        .interactiveDismissDisabled(isDirty)
+    }
+
+    private var editorPage: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {

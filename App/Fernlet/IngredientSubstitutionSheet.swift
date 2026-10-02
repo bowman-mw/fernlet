@@ -60,6 +60,9 @@ struct IngredientSubstitutionSheet: View {
                         .accessibilityIdentifier("substitution.cancel")
                 }
             }
+            // The search field's keyboard "Done", on the stack's root page: one declared on the
+            // stack itself would reach no page in it.
+            .keyboardDoneToolbar()
         }
         .task {
             // Seed the search list from the ingredient's own name, once, then ask AI for world-knowledge

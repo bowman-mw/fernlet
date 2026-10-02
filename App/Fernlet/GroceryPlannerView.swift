@@ -544,6 +544,9 @@ private struct RecipePickerSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+            // The search field's keyboard "Done", on the stack's root page: one declared on the
+            // stack itself would reach no page in it.
+            .keyboardDoneToolbar()
         }
     }
 

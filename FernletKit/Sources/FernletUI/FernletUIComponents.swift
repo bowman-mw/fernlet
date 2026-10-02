@@ -626,8 +626,13 @@ public extension View {
     /// no `NavigationStack`, or on the page itself when the page lives in a stack. Every page of a
     /// stack, its root included, is hosted in its own controller, and a toolbar declared OUTSIDE the
     /// stack reaches none of them: the Food tab's and the stack-wrapping sheets' Done showed on no
-    /// page at all (2026-10-01, iOS 26.5). Declare it once per page — two in one page put two
-    /// buttons in the bar.
+    /// page at all (2026-10-01, iOS 26.5). A presented sheet is a host of its own too. It inherits a
+    /// Done declared AROUND the view whose `.sheet` presents it (Settings' pushed pages reach the
+    /// memory editor that way), never one declared inside the content the `.sheet` modifier wraps,
+    /// so a sheet presented bare declares its own at its root. From the Private hub even that never
+    /// rendered, while one on a `NavigationStack` page inside the sheet did, so the hub's day and
+    /// entry editors host theirs on a stack page. Declare it once per page — two in one page put
+    /// two buttons in the bar.
     func keyboardDoneToolbar() -> some View {
         self.toolbar {
             ToolbarItemGroup(placement: .keyboard) {

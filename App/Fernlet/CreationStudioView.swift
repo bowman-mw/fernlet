@@ -622,6 +622,10 @@ struct CreationStudioView: View {
         .tint(Color.moss)
         .navigationTitle("Save item")
         .navigationBarTitleDisplayMode(.inline)
+        // The name field's keyboard "Done", on this page because it is always pushed (the
+        // customization sheet's stack or the Wardrobe's): a Done declared outside the stack, or on
+        // another of its pages, never reaches it.
+        .keyboardDoneToolbar()
         .safeAreaInset(edge: .bottom) {
             SheetSaveBar(label: "Save to closet", disabled: !canSave) { save() }
         }

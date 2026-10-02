@@ -517,6 +517,10 @@ struct WorryBoxView: View {
         }
         .background(Color.parchment)
         .overlay(alignment: .bottom) { keepItToast }
+        // Return adds a line in the composer, so the accessory is the way to put the keyboard away.
+        // Declared here because this page is a tab page with no stack and no sheet chrome around it:
+        // nothing else in its host declares one (2026-10-01).
+        .keyboardDoneToolbar()
         // Leaving COMMITS the pending release — the same contract as Mail's Undo Send. The strip is
         // the undo affordance while the user is on the page; once the page is gone, the ceremony the
         // user just completed ("releasing one lets it go for good") must not quietly un-happen and

@@ -99,6 +99,84 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         assertOneKeyboardDone(dismissing: hours, named: "sleep sheet hours", in: app)
     }
 
+    // MARK: - Hosts no routed sheet chrome reaches (their own Done, 2026-10-01)
+
+    /// The day edit sheet's sleep hours: a decimal pad in a sheet the day detail page (and this
+    /// DEBUG hook, from the Private hub's Journal page) presents bare, outside `fernletSheetChrome`.
+    @MainActor
+    func testDayEditSheetSleepHoursPadHasOneKeyboardDone() {
+        let app = UXTestApp.launch(bypassPrivateLock: true, extraEnvironment: ["FERNLET_UI_TEST_OPEN_DAY_EDIT": "1"])
+        // The sheet's pinned header reads "Edit <weekday, month day>".
+        let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Edit ")).firstMatch
+        openPrivateTab(until: header, in: app)
+        let hours = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "Hours (e.g. 7.5)")).firstMatch
+        scrollUntilHittable(hours, in: app)
+        assertOneKeyboardDone(dismissing: hours, named: "day edit sleep hours", in: app)
+    }
+
+    /// The pre-log review: a meal that matched only in part ("2 eggs" and a word that finds nothing)
+    /// pauses at the review sheet, presented by the meal sheet's root page as a sheet of its own.
+    /// Its matched items' Qty boxes are decimal pads.
+    @MainActor
+    func testMealReviewSheetQuantityPadHasOneKeyboardDone() {
+        let app = UXTestApp.launch(openSheet: "meal")
+        let search = app.descendants(matching: .any)["mealComposer.search"].firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 8), "the meal composer has no search field")
+        search.tap()
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 2) { search.tap() }
+        search.typeText("2 eggs and zzqqxx")
+        let save = app.buttons["Save"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 4), "the meal composer has no Save button")
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Check this meal"].waitForExistence(timeout: 20),
+                      "a partly matched meal did not pause at the review sheet")
+        let quantity = quantityField(in: app)
+        scrollUntilHittable(quantity, in: app)
+        assertOneKeyboardDone(dismissing: quantity, named: "meal review Qty", in: app)
+    }
+
+    /// Onboarding's age: a number pad on the window's root view, which no sheet chrome wraps.
+    @MainActor
+    func testOnboardingAgePadHasOneKeyboardDone() {
+        UXTestApp.forcePortrait()
+        let app = XCUIApplication()
+        app.launchArguments = ["-resetOnboarding"]
+        app.launchEnvironment["FERNLET_UI_TEST_DISABLE_CLOUD_DETECTION"] = "1"
+        app.launch()
+        continueOnboarding(in: app, waitingFor: "Welcome to Fernlet")
+        tapOnboardingChoice("onboarding.lock.biometrics", in: app)
+        tapOnboardingChoice("onboarding.storage.local", in: app)
+        continueOnboarding(in: app, waitingFor: "Choose where logs live")
+        continueOnboarding(in: app, waitingFor: "Plan your goals")
+        continueOnboarding(in: app, waitingFor: "Make Fernlet yours")
+        XCTAssertTrue(app.staticTexts["Add personal details"].waitForExistence(timeout: 6),
+                      "onboarding did not reach its personal details")
+        // By label as well as id: the screen's container id can stand in for its children's.
+        let age = app.textFields.matching(
+            NSPredicate(format: "identifier == %@ OR label == %@", "onboarding.profile.age", "Age")
+        ).firstMatch
+        assertOneKeyboardDone(dismissing: age, named: "onboarding age", in: app)
+    }
+
+    /// Private → Worry box: a tab page with no stack, whose composer grows a line on Return.
+    @MainActor
+    func testWorryBoxComposerHasOneKeyboardDone() {
+        let app = UXTestApp.launch(bypassPrivateLock: true)
+        // The hub opens on its Journal page; Home has a "Worry box" chip of its own.
+        openPrivateTab(until: app.descendants(matching: .any)["screen.journal"].firstMatch, in: app)
+        let section = app.buttons["Worry box"].firstMatch
+        XCTAssertTrue(section.waitForExistence(timeout: 8), "the Private hub has no Worry box section")
+        section.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["screen.worryBox"].waitForExistence(timeout: 6),
+                      "the Worry box page did not open")
+        let composer = app.descendants(matching: .any).matching(
+            NSPredicate(format: "(elementType == %d OR elementType == %d) AND placeholderValue == %@",
+                        XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue,
+                        "Something circling around?")
+        ).firstMatch
+        assertOneKeyboardDone(dismissing: composer, named: "worry box composer", in: app)
+    }
+
     // MARK: - Assertion
 
     /// How far above the keys the accessory band reaches: the predictions bar (44pt) plus the
@@ -193,6 +271,50 @@ final class KeyboardDoneAccessoryUITests: XCTestCase {
         manual.tap()
         XCTAssertTrue(app.navigationBars["New recipe"].waitForExistence(timeout: 6), "the manual editor did not open",
                       file: file, line: line)
+    }
+
+    /// Taps the Private tab until `target` shows. Bounded: one or two "Private"-labelled buttons,
+    /// and a tap in the first seconds can be lost.
+    @MainActor
+    private func openPrivateTab(until target: XCUIElement, in app: XCUIApplication,
+                                file: StaticString = #filePath, line: UInt = #line) {
+        let tabs = app.buttons.matching(NSPredicate(format: "label == %@", "Private"))
+        for index in 0..<min(max(tabs.count, 1), 4) where !target.exists {
+            tabs.element(boundBy: index).tap()
+            _ = target.waitForExistence(timeout: 10)
+        }
+        XCTAssertTrue(target.exists, "the Private tab never showed \(target)", file: file, line: line)
+    }
+
+    /// Swipes the page up until `element` can be tapped. Bounded: a sheet's form is a few screens.
+    @MainActor
+    private func scrollUntilHittable(_ element: XCUIElement, in app: XCUIApplication,
+                                     file: StaticString = #filePath, line: UInt = #line) {
+        _ = element.waitForExistence(timeout: 4)
+        for _ in 0..<8 where !(element.exists && element.isHittable) { app.swipeUp() }
+        XCTAssertTrue(element.exists && element.isHittable, "\(element) never scrolled into reach", file: file, line: line)
+    }
+
+    /// Waits for an onboarding step's title, then taps its Continue once it is enabled.
+    @MainActor
+    private func continueOnboarding(in app: XCUIApplication, waitingFor title: String,
+                                    file: StaticString = #filePath, line: UInt = #line) {
+        // Long: the first step waits out the launch overlay too.
+        XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 30), "onboarding never showed \(title)",
+                      file: file, line: line)
+        let next = app.buttons["Continue"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5), "\(title) has no Continue", file: file, line: line)
+        XCTAssertTrue(next.isEnabled || next.wait(for: \.isEnabled, toEqual: true, timeout: 5),
+                      "\(title)'s Continue never enabled", file: file, line: line)
+        next.tap()
+    }
+
+    @MainActor
+    private func tapOnboardingChoice(_ identifier: String, in app: XCUIApplication,
+                                     file: StaticString = #filePath, line: UInt = #line) {
+        let choice = app.buttons[identifier]
+        XCTAssertTrue(choice.waitForExistence(timeout: 6), "onboarding has no \(identifier)", file: file, line: line)
+        choice.tap()
     }
 
     private func nameField(in app: XCUIApplication) -> XCUIElement {
