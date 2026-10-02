@@ -27,8 +27,10 @@ import Security
 ///
 /// **Where it is handed over.** The app's `ProximityHost` adapter answers
 /// `proximityInstallBinding` with one, and `FernletStore`'s two storage scopes carry it to the stores.
-/// The test target's `ProximityHost` doubles and store fixtures carry one too, so every
-/// `DeviceBindingID.$testOverride` in the suites still decides what the stores seal and open under.
+/// The test target's `ProximityHost` doubles and store fixtures carry one too (but for the
+/// `ProximityNamespaceGoldenTests` cells that hand a host or scope a pinned binding of their own), so
+/// every `DeviceBindingID.$testOverride` in the suites still decides what the stores seal and open
+/// under.
 ///
 /// `nonisolated` against this module's `defaultIsolation(MainActor.self)`, and `Sendable`: it holds no
 /// state, and ProximityKit's column seal calls it synchronously from inside its nonisolated stores.

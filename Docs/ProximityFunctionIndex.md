@@ -514,7 +514,7 @@ fingerprint — canonical, deterministic, and short enough to ride the introduct
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshEpochBounds` | Plan §8.4's numbers in one place: counter cap 4096, keyring 3 predecessors, 5-minute grace, the 32/16 hex widths, the frozen derivation domain `fernlet.mesh.epoch.v1`. |
+| `MeshEpochBounds` | Plan §8.4's numbers in one place: counter cap 4096, keyring 3 predecessors, 5-minute grace, the 32/16 hex widths. It holds no derivation domain: the epoch id's is the caller's `purposes.hash.meshEpochIDV1` (Fernlet's `fernlet.mesh.epoch.v1`). |
 | `MeshEpochRef` | `counter` + `epochID` + `coordinatorFingerprint`. Two branches at ONE counter are two distinct values — the representability plan §8.4 needs. |
 | `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:in:)` | Derives `epochID` as SHA-256(domain ‖ meshID ‖ counter ‖ coordinator) truncated to 16 bytes, so every member of a branch computes the same id with no wire change. The domain is the caller's `purposes.hash.meshEpochIDV1`, raw (read off the namespace since ProximityKit plan step A0.2.6; ProximityKit holds no epoch constant of its own). Returns nil over the cap or on a non-canonical fingerprint. |
 | `…successor(coordinatorFingerprint:meshID:in:)` | `counter + 1`, derived under the same caller's purposes, or **nil at the cap** — the documented "rotation refused; the session must end" answer. Never traps. |
@@ -902,7 +902,7 @@ P5 item 3: where one device's sealed routed custody lives, and the key row that 
 | --- | --- |
 | `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:installBinding:)` is the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
 | `MeshRoutedStorageScope.keychainService(besideHeartDrop:in:)` | Production in ⇒ the namespace's production service out (A0.2.8 added `in:`); any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
-| `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. |
+| `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). |
 | `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
 
 ### `MeshRoutedIndex.swift`
@@ -1424,8 +1424,11 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 ## Protocol Namespace
 
 ProximityKit plan step A0.2: the host-supplied protocol identity, under `ProximityKit/Namespace/`,
-and every ProximityKit read of a label, radio value, keychain row or storage name routed through it,
-byte-identical for Fernlet. The host hands it in (`ProximityHost.proximityNamespace`) beside its
+and every ProximityKit read of its 39 labels, radio values, QR scheme, identity and mesh seal-key
+rows, storage names and log subsystem routed through it, byte-identical for Fernlet. The feature
+labels, the heart-drop and moderation keychain services and `ProximitySupportLayout`'s folder stay
+outside it until A0.4, the payload vocabulary and presentation strings until A0.3.
+The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
 copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
 covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value and every reader;
@@ -1493,7 +1496,7 @@ overloads of `sign` and `verify`.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityHost.proximityNamespace` | The host's protocol identity: with `proximityInstallBinding`, one of the two `ProximityHost` requirements with **no default** in the protocol extension, so a host that supplies none fails to compile instead of running under another app's identity. |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, a requirement the protocol extension **never defaults**, so a host that supplies none fails to compile instead of running under another app's identity. |
 | `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
 | `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`, and each builds its radio from it. |
 | `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
@@ -1644,7 +1647,7 @@ that pins a value names `.fernlet` explicitly.
 | `localFingerprint` | Returns fingerprint of current signing public key, or empty string before provisioning. |
 | `localSigningPublicKey` | Returns raw Ed25519 public key, or empty data before provisioning. |
 | `localKeyAgreementPublicKey` | Returns raw X25519 public key, or empty data before provisioning. |
-| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature labels, the app's duress and probe purposes, the core labels until their builders move, and the tests. No deprecation attribute (warnings are errors). |
+| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature signature labels (the activity join token, roster snapshot and moderation report) until A0.4, the app's duress and probe purposes until C1, and the tests that name them; every core label's builder signs through the namespace overload since A0.2.5. No deprecation attribute (warnings are errors). |
 | `sign(_:purpose:)` with a `ProximityCryptographicPurpose` | The same Ed25519 boundary under a namespace label (A0.2.3). Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
 | `sealedBackupKey()` | Derives the sealed-backup symmetric key from the X25519 private key. |
 | `verify(_:of:by:purpose:)` with a `CryptographicPurpose` or a `ProximityCryptographicPurpose` | Verifies an Ed25519 signature over a transcript framed for the purpose (`signingBytes`). Under a namespace label a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. The registry overload is transitional, like its `sign`. |
@@ -1855,7 +1858,7 @@ bytes. **The field order in each function IS the schema.**
 | --- | --- |
 | `canonicalBytes(for: FernletIdentityEnvelope, in:)` | Canonical v2 bytes for an envelope (schema v2+); the `signature` field is excluded, being the output of signing these bytes. Writes `payloadSummary`'s title/subtitle/extraDetails — the reason that summary is frozen English. |
 | `canonicalBytes(for: MeshAdmissionToken, in:)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
-| `canonicalBytes(for:in:)` for the membership family and `canonicalInventoryDigestBytes(for:in:)` | Since A0.2.4 the envelope, the token, the departure, removal and termination records, the inventory-digest and epoch-heads messages, the removal proposal and vote and the key advertisement write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`), and the inventory digest's preimage from `purposes.hash.meshInventoryDigestV1`; their file-level domain tags are gone. The channel introduction and the routed family keep theirs until A0.2.5, the activity and moderation tags until A0.4. |
+| `canonicalBytes(for:in:)` for the membership family and `canonicalInventoryDigestBytes(for:in:)` | Since A0.2.4 the envelope, the token, the departure, removal and termination records, the inventory-digest and epoch-heads messages, the removal proposal and vote and the key advertisement write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`), and the inventory digest's preimage from `purposes.hash.meshInventoryDigestV1`; their file-level domain tags are gone. The channel introduction and the routed family moved at A0.2.5 (their own row, below); the activity and moderation tags stay until A0.4. |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
 | `canonicalBytes(for:in:)` for the channel introduction and the routed family | Since A0.2.5 the channel introduction, the manifest, the chunk, both receipts, the routed inventory digest and the drain answer write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`) too; only the activity and moderation tags remain file-level, until A0.4. |
@@ -2521,10 +2524,12 @@ Shared by `FriendStateCache`, `ClosenessLedger`, `ModerationLedger`, `ProximityA
 > states its root, the same way every heart-drop caller states its `HeartDropStorageScope`. The
 > in-source comment where `defaultFileURL(name:)` used to be says so; do not re-add it.
 >
-> The production root is `Application Support/Fernlet`, defined once in
-> `ProximitySupportLayout.defaultDirectory` and reached through
+> The production root is `Application Support/Fernlet`, the host namespace's
+> `installation.storage.defaultDirectory` (`.fernlet` names the folder `Fernlet`), reached through
 > `ProximityHost.proximitySupportDirectory` (the protocol extension supplies it as the default for
-> hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root).
+> hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root that
+> defaults to the same folder). `ProximitySupportLayout.defaultDirectory` spells the same folder for
+> the heart-drop scope and the feature ledgers' defaults until A0.4.
 > The `App/Fernlet/` that appeared here was a repo-restructure artefact: `9fb86a9` collapsed the
 > seven `Fernlet*` roots into `App/`, `Tests/` and `FernletKit/`, and the mechanical path rewrite
 > caught this *runtime* path as if it were a *source* path. No shipped install has ever used it.

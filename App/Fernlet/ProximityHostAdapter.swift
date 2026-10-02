@@ -21,9 +21,11 @@ extension FernletStore: ProximityHost {
     /// `Application Support/Fernlet`; only tests redirect it. Overrides the protocol's default.
     var proximitySupportDirectory: URL { proximitySupportRoot }
     /// Fernlet's protocol identity, `ProximityNamespace.fernlet` from `FernletConnections`: the one
-    /// value this composition root hands ProximityKit for every label, radio value, keychain row and
-    /// storage name it reads (ProximityKit plan step A0.2.3). The requirement has no default, so a
-    /// host that left this out would not compile.
+    /// value this composition root hands ProximityKit for the protocol labels, radio values, QR
+    /// scheme, identity and mesh seal-key rows, storage names and log subsystem it reads (ProximityKit
+    /// plan step A0.2.3; the feature labels, the heart-drop and moderation services and ProximityKit's
+    /// support folder stay outside it until A0.4, the payload vocabulary and presentation strings until
+    /// A0.3). The requirement has no default, so a host that left this out would not compile.
     ///
     /// `nonisolated`: the namespace is inert `Sendable` value data, and the store's nonisolated
     /// storage-scope properties (`meshSessionStorage`, `meshRoutedStorage`) read it: since plan step

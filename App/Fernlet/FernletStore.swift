@@ -545,7 +545,8 @@ final class FernletStore {
     /// `PhotoDirectoryIsolationTests` (whose `deleteAllData` trigger covers both lists). A fourth
     /// injectable seam would add a fourth way to forget one. Production resolves to
     /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged from
-    /// `MeshSessionStorageScope.production(for: proximityNamespace)`. The scope carries
+    /// `MeshSessionStorageScope.production(for: proximityNamespace, installBinding:
+    /// proximityInstallBinding)`. The scope carries
     /// ``proximityNamespace``, which names the file and the seal key's account (plan step A0.2.8), and
     /// ``proximityInstallBinding``, Fernlet's `DeviceBindingID` adapter, which the file is sealed and
     /// opened under (plan step A0.2.9).
@@ -572,10 +573,10 @@ final class FernletStore {
     /// already fails `PhotoDirectoryIsolationTests`. A fourth injectable seam would add a fourth way
     /// to forget one. Production resolves to `Application Support/Fernlet` +
     /// `com.fernlet.mesh-routed`, unchanged from `MeshRoutedStorageScope.production(for:
-    /// proximityNamespace)`. The scope carries ``proximityNamespace``, which names the files and the
-    /// seal key's account and holds the labels the store measures under (plan step A0.2.8), and
-    /// ``proximityInstallBinding``, Fernlet's `DeviceBindingID` adapter, which the files are sealed
-    /// and opened under (plan step A0.2.9).
+    /// proximityNamespace, installBinding: proximityInstallBinding)`. The scope carries
+    /// ``proximityNamespace``, which names the files and the seal key's account and holds the labels
+    /// the store measures under (plan step A0.2.8), and ``proximityInstallBinding``, Fernlet's
+    /// `DeviceBindingID` adapter, which the files are sealed and opened under (plan step A0.2.9).
     ///
     /// Its own keychain service rather than a lodger under the mesh-session one: one fate per
     /// service is the only arrangement a service-wide delete can express honestly, and a session

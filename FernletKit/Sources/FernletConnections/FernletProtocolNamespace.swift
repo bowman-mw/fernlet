@@ -30,8 +30,12 @@ import ProximityKit
 
 nonisolated extension ProximityNamespace {
 
-    /// Fernlet's family and the Fernlet app's installation: every byte string by which ProximityKit's
-    /// wire, keychain and disk formats identify Fernlet, exactly as today's code spells it.
+    /// Fernlet's family and the Fernlet app's installation: the labels, radio values, QR scheme,
+    /// identity and mesh seal-key rows, storage names and log subsystem by which ProximityKit's wire,
+    /// keychain and disk formats identify Fernlet, exactly as today's code spells them. What
+    /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
+    /// moderation keychain services, its support folder, the payload vocabulary and presentation
+    /// strings) waits for plan steps A0.3 and A0.4.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an

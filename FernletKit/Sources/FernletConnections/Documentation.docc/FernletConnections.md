@@ -10,7 +10,7 @@ becoming a drop-in package any app can use, with nothing Fernlet-specific in its
 connection types and rules in FernletKit instead, on top of ProximityKit's mechanisms. This module
 is that place.
 
-**What it holds now (plan step A0.2.2).** One value and its parts, all in `FernletProtocolNamespace.swift`:
+**The namespace (plan step A0.2.2).** One value and its parts, in `FernletProtocolNamespace.swift`:
 
 - `ProximityNamespace.fernlet`, Fernlet's whole protocol identity, built from the two halves below.
 - `ProximityNamespace.Family.fernlet`, what every app on Fernlet's wire shares: the 39
@@ -37,9 +37,11 @@ construction, keep their own copy and build their default identity from it; ever
 `IdentityService` the app builds says `IdentityService(namespace: .fernlet)` (the sealed-backup,
 own-photo, duress-recovery and launch paths, the readout and the DEBUG probe), and the heart-drop
 service's identity is built from the store's `proximityNamespace`. The identity's keychain service,
-`com.fernlet.identity`, is the first value ProximityKit reads off it. The test target's eleven
-`ProximityHost` doubles supply the same value, and its `ProximityNamespaceTestBindings.swift`
-restores the old `IdentityService()` and `IdentityService(keychainService:)` call shapes by passing
+`com.fernlet.identity`, is the first value ProximityKit reads off it. Eleven of the test target's
+`ProximityHost` doubles supply the same value (`ProximityNamespaceGoldenTests`' three hosts take
+theirs from the cell that builds them, another app's in the cells that test one), and its
+`ProximityNamespaceTestBindings.swift` restores the old `IdentityService()` and
+`IdentityService(keychainService:)` call shapes by passing
 `.fernlet`. Since step A0.2.4 ProximityKit also reads thirteen of `Purposes.fernlet`'s labels: the
 identity envelope's, the admission token's, the membership, quorum and key-agreement transcripts',
 the inventory digest's hash domain and the legacy pair, which `.fernlet` accepts so that Fernlet's
@@ -85,7 +87,8 @@ stores keep sealing under the 16 bytes Fernlet's sealed private stores share, an
 `DeviceBindingID.$testOverride` in the suites, including one flipped in the middle of an operation,
 still decides what they seal and open under. The app's `ProximityHost` adapter answers
 `proximityInstallBinding` with one, `FernletStore`'s two storage scopes carry it, and so do the test
-target's `ProximityHost` doubles and store fixtures.
+target's `ProximityHost` doubles and store fixtures, but for the `ProximityNamespaceGoldenTests` cells
+that hand a host or scope a pinned binding of their own.
 
 **The audit bridge (plan step A0.2.10).** ProximityKit writes every audit line through
 `ProximityAudit.log(_:context:)` to the `ProximityAuditSink` its host installed, and drops the line

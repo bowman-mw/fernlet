@@ -67,6 +67,9 @@
 # Key custody and at-rest formats (what the tripwire/format tests protect)
 /FernletKit/Sources/FernletCrypto/            @bowman-mw
 /FernletKit/Sources/FernletLock/              @bowman-mw
+# ProximityKit's copy of ColumnCrypto's V3 seal and its DeviceBindingID seam: the mesh stores' at-rest format, owned like FernletCrypto's originals
+/FernletKit/Sources/ProximityKit/Support/ProximityColumnCrypto.swift   @bowman-mw
+/FernletKit/Sources/ProximityKit/Support/ProximityInstallBinding.swift @bowman-mw
 
 # ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
 /FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw

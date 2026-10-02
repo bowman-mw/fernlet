@@ -2,9 +2,9 @@
 // FernletTests
 //
 // ProximityKit plan step A0.2.0 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2): every
-// byte string by which ProximityKit's wire, keychain and disk formats identify Fernlet, pinned BEFORE
-// the later A0.2 commits re-route each one through a host-supplied `ProximityNamespace`. Those commits
-// must move no byte; this file is how that claim is checked rather than asserted.
+// byte string `ProximityNamespace.fernlet` carries, pinned BEFORE the later A0.2 commits re-route
+// each one through a host-supplied `ProximityNamespace`. Those commits must move no byte; this file
+// is how that claim is checked rather than asserted.
 //
 // Four groups of claims:
 //

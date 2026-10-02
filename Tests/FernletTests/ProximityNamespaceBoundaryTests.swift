@@ -3,8 +3,9 @@
 //
 // ProximityKit plan step A0.2.12 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2), the
 // last commit of A0.2: the wall that keeps its result from eroding. A0.2 left ProximityKit reading
-// every protocol label, radio value, keychain row and storage name off the namespace its host hands
-// down (`ProximityNamespace`; Fernlet's is `.fernlet`, in FernletConnections). The compiler does not
+// every protocol label and radio value, the QR scheme, the identity's and the two mesh seal keys'
+// keychain rows, the storage names and the log subsystem off the namespace its host hands down
+// (`ProximityNamespace`; Fernlet's is `.fernlet`, in FernletConnections). The compiler does not
 // keep it that way: a ProximityKit file that builds a namespace of its own, reaches for one of
 // FernletCrypto's purposes again, or spells a new Fernlet string compiles clean and passes every
 // other test. So this suite reads ProximityKit's source and holds three lines:
@@ -16,7 +17,10 @@
 //      exact per-file allowlist that names why it is still there and the plan step that removes it.
 //
 // Rules 2 and 3 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// deleted. So both lists only shrink, to nothing, as A0.3 to A0.5 and A1 land.
+// deleted. So both lists only shrink, to nothing, as A0.3 to A0.5 and A1 land. Between them they
+// hold what A0.2 left outside the namespace wherever it reads a feature label or spells `fernlet`:
+// the feature labels, the heart-drop and moderation keychain services and the support folder (until
+// A0.4), and the payload vocabulary and presentation strings that spell it (until A0.3).
 
 import Foundation
 import Testing
