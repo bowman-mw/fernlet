@@ -8,7 +8,8 @@ and as a header rule in `_headers`).
 Every page **renders completely with JavaScript disabled.** `app.js` is progressive
 enhancement only — the companion poke, the friend-mesh walkthrough, the app-screen tabs, the
 backup toggle and the collapsing nav. It sets no cookies, writes no storage, and makes no
-requests. Fonts, styles and script are all served from this origin.
+requests. Fonts, styles and script are all served from this origin. The temporary probe page has a
+second small script of its own, `probe/probe.js`, under the same rules.
 
 ## Contents
 
@@ -18,7 +19,8 @@ requests. Fonts, styles and script are all served from this origin.
 | `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `App/Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
 | `support/index.html` | Support/contact page — the ASC Support URL. |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
-| `probe/index.html` | **Temporary.** The Phase 0 link probe's page: where a `fernlet.com/probe/` test link lands on a device with no probe app (a Mac, a browser). No script, `noindex`, the same CSP as every page. It goes away with the probe. |
+| `probe/index.html` | **Temporary.** The Phase 0 link probe's page: where a `fernlet.com/probe/` test link lands on a device with no probe app (a Mac, a browser). `noindex`, the same CSP as every page. It goes away with the probe. |
+| `probe/probe.js` | **Temporary.** The probe page's own script. It reads the page's address, measures the part after the `#` and says whether the test payload in it arrived whole, written into the page as text. Like `app.js`: no cookies, no storage, no requests. The page reads fine without it. |
 | `.well-known/apple-app-site-association` | The universal-links association file. Right now it claims one path for one app: `/probe/*` for the link probe (`3RTUPF8FFH.MBO.FernletLinkProbe`). See *Universal links* below. |
 | `style.css` | The whole site's styling, light **and** dark (`prefers-color-scheme`, no toggle — it follows the OS). Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans); the dark palette is the app's own (`FernletThemeDefaults`). |
 | `app.js` | Progressive-enhancement interactions. Optional by construction. |

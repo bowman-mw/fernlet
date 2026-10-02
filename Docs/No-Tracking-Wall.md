@@ -35,6 +35,12 @@ Three concrete commitments follow from it:
    complete and readable with JavaScript disabled. It calls no `fetch`/`XHR`, sets no cookie, and
    touches neither `localStorage` nor `sessionStorage`.
 
+   **A second, temporary first-party file (added 2026-10-01).** While the Phase 0 link probe is
+   deployed, `/probe/` loads `/probe/probe.js` (~3.5 KB) and no other page does. It reads the page's
+   own address, hashes the part after the `#` in the browser, and writes what it measured into the
+   page as text. The same rules hold: no `fetch`/`XHR`, no cookie, no storage, and the page is
+   complete without it. It is removed with the probe page.
+
    The CSP is what makes that checkable rather than a promise: `default-src 'none'` with
    `script-src 'self'` (no `'unsafe-inline'`, so no inline `<script>` and no `on*` handlers can run
    even if one were added), `font-src 'self'` over self-hosted fonts, and `img-src 'self' data:`.
