@@ -15,9 +15,11 @@ so the design-system fonts must live here. Drop these six files in this folder:
 ## Licenses
 
 All five families are under the SIL Open Font License 1.1. The site may serve them only if each
-family's copyright notice and license sit beside its files, so when you add a family's `.woff2`,
-copy its license from [`App/Fernlet/Fonts/LICENSES/`](../../App/Fernlet/Fonts/LICENSES) into this
-folder in the same commit:
+family's copyright notice and license sit beside its files, so add a family's license file to this
+folder in the same commit as its `.woff2`. Copy the first four from
+[`App/Fernlet/Fonts/LICENSES/`](../../App/Fernlet/Fonts/LICENSES). The app doesn't bundle Playfair
+Display, so for that one save the `OFL.txt` from Google Fonts' Playfair Display download as
+`PlayfairDisplay-OFL.txt`.
 
 | Font files | License file |
 | --- | --- |
@@ -41,8 +43,8 @@ Modified Version (OFL FAQ 2.2 and 2.6), and Playfair Display reserves its name, 
 could not be served as "Playfair Display". Two shortcuts produce modified files, so avoid both:
 
 - saving the `.woff2` files that `fonts.googleapis.com/css2?...` returns, which are subsets;
-- converting the app's bundled Fraunces, DM Sans or Playfair Display TTFs, which are static
-  instances made from the variable fonts.
+- converting the app's bundled Fraunces or DM Sans TTFs, which are static instances made from
+  the variable fonts.
 
 ## Until the files are here
 

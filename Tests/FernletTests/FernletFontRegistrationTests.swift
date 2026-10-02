@@ -23,7 +23,6 @@ struct FernletFontRegistrationTests {
         "InstrumentSerif-Italic.ttf":  ("InstrumentSerif-OFL", "The Instrument Serif Project Authors"),
         "DMSans-Regular.ttf":          ("DMSans-OFL", "The DM Sans Project Authors"),
         "DMSans-Medium.ttf":           ("DMSans-OFL", "The DM Sans Project Authors"),
-        "PlayfairDisplay-Italic.ttf":  ("PlayfairDisplay-OFL", "with Reserved Font Name \"Playfair Display\""),
     ]
 
     /// OFL 1.1 condition 2 lets the fonts ship inside the app only if each copy carries the copyright
@@ -71,7 +70,6 @@ struct FernletFontRegistrationTests {
     /// with the `.allCases` loop above, a new role is both auto-covered and forced to name its face.
     private static func postScriptName(for role: FernletTextRole) -> String {
         switch role {
-        case .wordmark:      return FernletFontName.playfairItalic
         case .display:       return FernletFontName.frauncesSemiBold
         case .displayMedium: return FernletFontName.frauncesSemiBold
         case .header:        return FernletFontName.dmSerifDisplay

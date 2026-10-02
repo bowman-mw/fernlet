@@ -6,8 +6,8 @@ import SwiftUI
 // two-system serif/sans type scale, the warm token palette (adds lichen, midnight, and the state +
 // journal palettes), the 8pt spacing grid, corner radii, warm bark-tinted shadow, and motion tokens.
 //
-// The bundled fonts (Fraunces / DM Serif Display / Instrument Serif / DM Sans / Playfair Display)
-// live in `Fernlet/Fonts`, are registered via Info.plist `UIAppFonts`, and are referenced here by
+// The bundled fonts (Fraunces / DM Serif Display / Instrument Serif / DM Sans)
+// live in `App/Fernlet/Fonts`, are registered via Info.plist `UIAppFonts`, and are referenced here by
 // their exact PostScript names. `FernletFontRegistrationTests` asserts every name resolves so a
 // wrong filename or PostScript name fails the build's test run rather than silently falling back
 // to the system font.
@@ -20,8 +20,11 @@ import SwiftUI
 /// role to a bundled font via `Font.fernlet(_:)`, so every text style in the app, the lock UI, and
 /// the proximity sheets flows through this one vocabulary. Sizes mirror the design-system
 /// `--text-*` tokens; each role scales with Dynamic Type via the `relativeTo:` text style.
+///
+/// The design export's wordmark role (Playfair Display Italic) is deliberately absent: its face
+/// was dropped on 2026-10-01 because the bundled copy broke the font's license. Read the FernletUI
+/// landing page before adding it back.
 public enum FernletTextRole: CaseIterable {
-    case wordmark        // Playfair Display Italic — app logo only (reserved design-export role, no call site yet)
     case display         // Fraunces SemiBold 36 — avatar state / hero
     case displayMedium   // Fraunces SemiBold 28 — section display
     case header          // DM Serif Display 24 — section headers
@@ -39,7 +42,6 @@ public extension Font {
     /// Dynamic Type relative to the nearest system text style.
     static func fernlet(_ role: FernletTextRole) -> Font {
         switch role {
-        case .wordmark:      return .custom(FernletFontName.playfairItalic, size: 34, relativeTo: .largeTitle)
         case .display:       return .custom(FernletFontName.frauncesSemiBold, size: 36, relativeTo: .largeTitle)
         case .displayMedium: return .custom(FernletFontName.frauncesSemiBold, size: 28, relativeTo: .title)
         case .header:        return .custom(FernletFontName.dmSerifDisplay, size: 24, relativeTo: .title2)
@@ -71,8 +73,8 @@ public extension Font {
 /// Exact PostScript names of the bundled fonts (see `App/Fernlet/Fonts` + Info.plist `UIAppFonts`).
 ///
 /// A caseless namespace enum consumed by `Font.fernlet(_:)`. These are the static faces the app
-/// bundles (Fraunces, DM Sans and Playfair Display were instanced from their variable fonts) — do
-/// not guess; they are verified by a test. The font *files* stay registered by the app's
+/// bundles (Fraunces and DM Sans were instanced from their variable fonts) — do not guess; they
+/// are verified by a test. The font *files* stay registered by the app's
 /// Info.plist (this package resolves purely by name), so a renamed or missing file fails
 /// `FernletFontRegistrationTests` rather than silently falling back to the system font.
 ///
@@ -80,7 +82,6 @@ public extension Font {
 /// lives in `App/Fernlet/Fonts/LICENSES/` and must reach the app bundle beside the font, which the
 /// same test checks — adding a font means adding its family's license in the same commit.
 public enum FernletFontName {
-    public static let playfairItalic        = "PlayfairDisplayItalic-Italic"
     public static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
     public static let dmSerifDisplay        = "DMSerifDisplay-Regular"
     public static let instrumentSerif       = "InstrumentSerif-Regular"
@@ -90,7 +91,7 @@ public enum FernletFontName {
 
     /// Every bundled PostScript name — consumed by the registration self-check test.
     public static let all = [
-        playfairItalic, frauncesSemiBold, dmSerifDisplay,
+        frauncesSemiBold, dmSerifDisplay,
         instrumentSerif, instrumentSerifItalic, dmSans, dmSansMedium,
     ]
 }
