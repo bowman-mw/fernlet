@@ -1610,6 +1610,30 @@ their refusals pairing by pairing, and holds each store to its scope's label and
 | `FernletDeviceBindingAdapter` (`FernletConnections/FernletDeviceBindingAdapter.swift`) | Fernlet's binding: delegates to `DeviceBindingID` at each call (`current()` for `.seal`, `currentForOpen()` for `.open`, `ReadError` translated with its status), so the row, the cache and the task-local test seam stay FernletCrypto's one. |
 | `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement, and both scopes pass `installBinding: proximityInstallBinding`. |
 
+### The keychain mechanism (A0.2.11)
+
+FernletFoundation's `KeychainItem` mechanism is copied into ProximityKit member for member as
+`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 42
+references in the six key-store files (the identity's rows and escrow, the two mesh seal keys, the
+heart-drop prekey blob and sidecar seal key, the moderation bans) call it. Only the mechanism came
+across; Fernlet's `Account` names, typed overloads, service constants, `loadOrCreateSymmetricKey`
+and `updateReportingStatus` stayed behind. Every query is FernletFoundation's for the same call, so
+rows written before the copy read back unchanged and a host's own `KeychainItem` still reads and
+clears these services. Reach the keychain from ProximityKit through this type, never
+`KeychainItem`: `ProximityNamespaceGoldenTests` group 15 fails on ProximityKit code that names it,
+holds every query dictionary to the one FernletFoundation's source spells, and checks that the two
+read, list and delete each other's rows and fail and audit alike.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityKeychainItem.store(_:account:service:accessibility:synchronizable:replacing:)` | Delete-then-add under the caller's class; `synchronizable` defaults to `false`, `replacing` (which variant the delete removes) to `.any`. Refuses an empty account, service or payload with `errSecParam`. Not discardable. |
+| `load(account:service:synchronizable:)` / `loadDistinguishingAbsence(account:service:synchronizable:)` | The single-row read: `Data?`, or the three-way `ReadResult` (`found`, `absent`, `unreadable(OSStatus)`) the mint-on-absent stores use to fail closed. An empty name is `nil` / `.unreadable(errSecParam)`. |
+| `loadAll(service:synchronizable:)` / `loadAllDistinguishingFailure(service:synchronizable:)` / `enumerationResult(status:matches:)` | Every row under a service, collapsing a failed enumeration into `[]` or reporting it as `EnumerationResult.unreadable`; the classifier is pure, so the statuses a simulator cannot produce are testable. |
+| `delete(account:service:synchronizable:)` / `deleteReportingStatus(account:service:synchronizable:)` | One row (or one synchronizable variant of it); not-found is success. `delete` audits any other failure through `ProximityAudit` as `keychain.delete.failed` (`service`, `account`, `status`). |
+| `deleteAll(service:)` / `deleteAllReportingStatus(service:)` | Every row under a service, both variants; not-found is success. `deleteAll` audits a failure as `keychain.deleteAll.failed` (`service`, `status`). |
+| `SynchronizableScope` (`.any`, `.synced`, `.local`) | Which variant a read or delete matches: `kSecAttrSynchronizableAny`, `true` or `false`. |
+| `addQuery` / `readQuery` / `enumerationQuery` / `deleteQuery` / `deleteAllQuery` | The five query dictionaries, each built in one place and issued by every member of its shape, so the golden compares the dictionaries production issues. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`
@@ -1629,7 +1653,7 @@ their refusals pairing by pairing, and holds each store to its scope's label and
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM; since A0.2.6 the salt and AAD are the identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and `purposes.aead.meshGroupKeyWrapV2`. |
 | `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`, under the same purposes. |
-| `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `KeychainItem.loadDistinguishingAbsence`, and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
+| `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `ProximityKeychainItem.loadDistinguishingAbsence` (FernletFoundation's `KeychainItem` before A0.2.11), and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
 | `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` / `DeviceIdentityRead` / `loadExistingDeviceIdentity()` / `loadLegacyKeyAgreementKey()` | The pure half and the two reads of the fail-closed rule: an unreadable row wins over everything (`.unreadable`), absence on either row falls through to the mint (`.absent`), a present-but-unparseable row is `.unparseable(row:)` — minted over, but named by `identity.keychain.unparseableRow` first — and both rows found and parsed is `.found`. Since A0.2.8 the rows are the identity's `accounts` (the namespace's `installation.keychain.identity`), and the classifier names a refusing row by the `accounts:` it is handed. Tabled in `IdentityProvisioningReadTests`. |
 | `wipe()` | Deletes identity Keychain entries and clears loaded keys. |
 | `fingerprint(of:)` | Returns a 16-character lowercase SHA-256 prefix for a public key. |

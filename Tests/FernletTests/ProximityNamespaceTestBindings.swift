@@ -22,7 +22,6 @@
 
 import CryptoKit
 import FernletConnections
-import FernletFoundation
 import Foundation
 @testable import ProximityKit
 
@@ -560,13 +559,14 @@ extension MeshRoutedSealKey {
 }
 
 /// The identity-row classifier in the shape the suites were written against (plan step A0.2.8). It
-/// inherits the class's main-actor isolation, as the function it restores has.
+/// inherits the class's main-actor isolation, as the function it restores has. Since step A0.2.11 the
+/// two reads are ProximityKit's own `ProximityKeychainItem.ReadResult`, as the function takes them.
 extension IdentityService {
 
     /// `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` with `.fernlet`'s
     /// `installation.keychain.identity`.
     static func classifyDeviceIdentityRows(
-        signing: KeychainItem.ReadResult, keyAgreement: KeychainItem.ReadResult
+        signing: ProximityKeychainItem.ReadResult, keyAgreement: ProximityKeychainItem.ReadResult
     ) -> DeviceIdentityRead {
         classifyDeviceIdentityRows(signing: signing, keyAgreement: keyAgreement,
                                    accounts: ProximityNamespace.fernlet.installation.keychain.identity)

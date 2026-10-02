@@ -299,7 +299,12 @@ jobs:
         # it holds the copy to the original: the A0.2.0 column vectors run through it, it and
         # FernletCrypto's `ColumnCrypto` open each other's blobs for both mesh labels, both ways, and
         # refuse alike, each store seals under its scope namespace's label and its scope's binding,
-        # and Fernlet's adapter answers `DeviceBindingID` at each call.
+        # and Fernlet's adapter answers `DeviceBindingID` at each call. Since A0.2.11, which copies
+        # FernletFoundation's `KeychainItem` mechanism into ProximityKit (`ProximityKeychainItem`), it
+        # holds that copy to the original too: for each of `.fernlet`'s keychain rows every query
+        # dictionary the copy issues is the one FernletFoundation's source spells, the two read, list
+        # and delete each other's rows (a device-only row and its synchronized twin alike), they fail
+        # and audit alike, and ProximityKit's code names `KeychainItem` nowhere.
         #
         # `ProximityNamespaceSoundnessTests` joins at ProximityKit plan step A0.2.1 (2026-10-02): the
         # soundness rules, byte rules and collision checks of ProximityKit's protocol namespace — the
@@ -332,9 +337,15 @@ jobs:
         # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 165: passed. Run
         # once more at 165 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
         # 158 + 7 (the column-seal group's seven cells) = 165 is the ARITHMETIC CHECK, never the source.
+        # RAISED 165 -> 170 at A0.2.11, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact five-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "170 tests in 5 suites" (6 + 13 + 19 + 103 + 29),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 170: passed. Run
+        # once more at 170 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
+        # 165 + 5 (the keychain group's five cells) = 170 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 165 \
+          Scripts/run-gated-suites.sh crypto-goldens 170 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

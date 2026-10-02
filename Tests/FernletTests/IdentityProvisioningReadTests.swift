@@ -9,7 +9,7 @@
 // identity and every trust relationship built on it.
 //
 // The keychain cannot be made to fail on demand in a test, so the rule lives in a PURE function
-// (`classifyDeviceIdentityRows`) over `KeychainItem.ReadResult` values, tabled here; the one path a
+// (`classifyDeviceIdentityRows`) over `ProximityKeychainItem.ReadResult` values, tabled here; the one path a
 // real keychain can drive (a present-but-unparseable row) is driven for real; and a source wall pins
 // that the identity rows are never read nil-collapsing again.
 
@@ -41,7 +41,7 @@ struct IdentityProvisioningReadTests {
     @Test func anUnreadableRowWinsOverEverything() {
         let signing = Curve25519.Signing.PrivateKey().rawRepresentation
         let keyAgreement = Curve25519.KeyAgreement.PrivateKey().rawRepresentation
-        let table: [(KeychainItem.ReadResult, KeychainItem.ReadResult, String, OSStatus)] = [
+        let table: [(ProximityKeychainItem.ReadResult, ProximityKeychainItem.ReadResult, String, OSStatus)] = [
             (.unreadable(errSecInteractionNotAllowed), .found(keyAgreement), Self.signingRow, errSecInteractionNotAllowed),
             (.found(signing), .unreadable(errSecNotAvailable), Self.keyAgreementRow, errSecNotAvailable),
             (.absent, .unreadable(errSecIO), Self.keyAgreementRow, errSecIO),
@@ -67,7 +67,7 @@ struct IdentityProvisioningReadTests {
     @Test func absenceOnEitherRowFallsThroughToTheMint() {
         let signing = Curve25519.Signing.PrivateKey().rawRepresentation
         let keyAgreement = Curve25519.KeyAgreement.PrivateKey().rawRepresentation
-        let table: [(KeychainItem.ReadResult, KeychainItem.ReadResult)] = [
+        let table: [(ProximityKeychainItem.ReadResult, ProximityKeychainItem.ReadResult)] = [
             (.absent, .absent), (.found(signing), .absent), (.absent, .found(keyAgreement)),
             (.absent, .found(Data([9, 9])))
         ]
@@ -103,7 +103,7 @@ struct IdentityProvisioningReadTests {
     @Test func aFoundRowWithTheWrongShapeIsUnparseableByName() {
         let signing = Curve25519.Signing.PrivateKey().rawRepresentation
         let keyAgreement = Curve25519.KeyAgreement.PrivateKey().rawRepresentation
-        let table: [(KeychainItem.ReadResult, KeychainItem.ReadResult, String)] = [
+        let table: [(ProximityKeychainItem.ReadResult, ProximityKeychainItem.ReadResult, String)] = [
             (.found(Data([1, 2, 3])), .found(keyAgreement), Self.signingRow),
             (.found(signing), .found(Data(repeating: 0, count: 5)), Self.keyAgreementRow)
         ]
@@ -168,7 +168,11 @@ struct IdentityProvisioningReadTests {
     /// distinguishing read is used for both rows and Case 3's legacy read, and the unreadable arm
     /// throws rather than returns. The rows are named by the identity's `accounts` (the namespace's
     /// `installation.keychain.identity`) since ProximityKit plan step A0.2.8, which deleted the
-    /// `IdentityKeychainKey` cases the needle used to spell.
+    /// `IdentityKeychainKey` cases the needle used to spell. Since step A0.2.11 the service reads
+    /// through ProximityKit's copy, `ProximityKeychainItem`; each needle below spells
+    /// FernletFoundation's `KeychainItem.…`, which the copy's `ProximityKeychainItem.…` contains, so
+    /// the wall holds both: a nil-collapsing read through either is caught, and a distinguishing read
+    /// through either counts.
     @Test func theIdentityRowsAreNeverReadNilCollapsing() throws {
         let source = try RepoRoot.source("FernletKit/Sources/ProximityKit/Identity/IdentityService.swift")
         // R2: bounded by the two rows.

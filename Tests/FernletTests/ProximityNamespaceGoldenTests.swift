@@ -129,6 +129,18 @@
 //     binding, and under nothing else; Fernlet's adapter answers `DeviceBindingID` at each call, a
 //     mid-operation flip included; and a host's default scopes carry the binding it supplies.
 //
+// One more group since step A0.2.11, when ProximityKit's key stores began reaching the keychain
+// through `ProximityKeychainItem`, its copy of FernletFoundation's `KeychainItem` mechanism. No row
+// is re-pointed: the rows' names have been read off the namespace since A0.2.3 and A0.2.8, and the
+// mechanism that writes them is not a namespace value:
+//
+// 15. **The keychain mechanism.** For every keychain row `.fernlet` names, each query dictionary the
+//     copy issues is the one FernletFoundation's `KeychainItem` issues for the same service and
+//     account, read out of FernletFoundation's own source; on an isolated service the copy and the
+//     original read, list and delete each other's rows, a device-only row and its synchronized twin
+//     alike; the copy fails exactly where the original fails, with the same answers and the same
+//     two audit lines; and ProximityKit's code reaches the keychain only through the copy.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
 // suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
@@ -144,6 +156,7 @@ import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 import Foundation
+import os
 import Security
 import Testing
 @testable import FernletCrypto
@@ -2852,6 +2865,284 @@ struct ProximityNamespaceGoldenTests {
         return expected && !underOtherLabel && !underOtherInstall
     }
 
+    // MARK: Group 15 — the keychain mechanism (A0.2.11)
+
+    /// The keychain rows `.fernlet` names, as ProximityKit keeps them: the identity's four device rows
+    /// and the two seal-key rows, each stored `AfterFirstUnlockThisDeviceOnly` and never synchronized.
+    private static var fernletKeychainRows: [ProximityNamespace.Keychain.Row] {
+        let keychain = ProximityNamespace.fernlet.installation.keychain
+        let identity = keychain.identity
+        let accounts = [identity.signingPrivateKey, identity.keyAgreementPrivateKey, identity.signingPublicKeyCache,
+                        identity.keyAgreementPublicKeyCache]
+        return accounts.map { ProximityNamespace.Keychain.Row(service: identity.service, account: $0) }
+            + [keychain.meshSessionSealKey, keychain.meshRoutedSealKey]
+    }
+
+    /// For every keychain row `.fernlet` names, each query dictionary ProximityKit's copy issues is the
+    /// one FernletFoundation's `KeychainItem` issues for the same service and account: read out of
+    /// `KeychainHelpers.swift` itself and evaluated for that row, then compared key for key and value
+    /// for value. Per row: the add (under the row's class, never synchronized), the whole-service
+    /// delete, and under each of the three scopes the read behind `load`, the read behind
+    /// `loadDistinguishingAbsence`, the enumeration and the delete; 14 a row, 84 in all. A key or value
+    /// FernletFoundation's source spells that the evaluation does not know fails the cell.
+    @Test func theCopysQueryForEveryNamespaceRowIsFernletFoundationsDictionary() throws {
+        let original = FernletFoundationKeychainQueries(
+            source: try RepoRoot.source("FernletKit/Sources/FernletFoundation/KeychainHelpers.swift"))
+        let (data, deviceOnly) = (Self.sequence(from: 0x20), kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        let scopes: [(String, ProximityKeychainItem.SynchronizableScope)] = [("any", .any), ("synced", .synced), ("local", .local)]
+        var compared = 0
+        // R2: bounded by the six rows and the three scopes.
+        for row in Self.fernletKeychainRows {
+            let (service, account) = (row.service, row.account)
+            let call: [String: Any] = ["service": service, "account": account, "data": data,
+                                       "accessibility": deviceOnly, "synchronizable": false]
+            var pairs: [(member: String, original: [String: Any]?, copy: [String: Any])] = [
+                ("store", original.query("store", call), ProximityKeychainItem.addQuery(
+                    data, account: account, service: service, accessibility: deviceOnly, synchronizable: false)),
+                ("deleteAllReportingStatus", original.query("deleteAllReportingStatus", call),
+                 ProximityKeychainItem.deleteAllQuery(service: service))
+            ]
+            for (name, scope) in scopes {
+                let scoped = call.merging(["scope": name]) { $1 }
+                let read = ProximityKeychainItem.readQuery(account: account, service: service, synchronizable: scope)
+                pairs += [
+                    ("load", original.query("load", scoped), read),
+                    ("loadDistinguishingAbsence", original.query("loadDistinguishingAbsence", scoped), read),
+                    ("loadAllDistinguishingFailure", original.query("loadAllDistinguishingFailure", scoped),
+                     ProximityKeychainItem.enumerationQuery(service: service, synchronizable: scope)),
+                    ("deleteReportingStatus", original.query("deleteReportingStatus", scoped),
+                     ProximityKeychainItem.deleteQuery(account: account, service: service, synchronizable: scope))
+                ]
+            }
+            for pair in pairs {
+                compared += 1
+                let same = pair.original.map { NSDictionary(dictionary: pair.copy).isEqual(to: $0) } ?? false
+                #expect(same, """
+                    \(account) under \(service): the copy's \(pair.member) query is \(pair.copy), \
+                    FernletFoundation's is \(pair.original.map { "\($0)" } ?? "not evaluable")
+                    """)
+            }
+        }
+        #expect(compared == 84, "the query comparison covered \(compared) dictionaries")
+    }
+
+    /// On an isolated service, ProximityKit's copy and FernletFoundation's `KeychainItem` share one
+    /// device-only row, as rows written before step A0.2.11 and a host's own cleanup need: the copy
+    /// stores it, both read it back, `loadAll` and `loadAllDistinguishingFailure` list it alone, and
+    /// the keychain holds it `AfterFirstUnlockThisDeviceOnly` and unsynchronized; a second `store`
+    /// replaces it in place; FernletFoundation deletes it and the copy finds it absent and the
+    /// service empty; FernletFoundation stores one under the same class, which the copy reads and
+    /// deletes; and an emptied service still deletes cleanly.
+    @Test func theCopyAndFernletFoundationShareOneDeviceOnlyRow() {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let account = ProximityNamespace.fernlet.installation.keychain.meshSessionSealKey.account
+        let (first, second, third) = (Self.sequence(from: 0x10), Self.sequence(from: 0x30), Self.sequence(from: 0x50))
+        let deviceOnly = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        #expect(ProximityKeychainItem.store(first, account: account, service: service, accessibility: deviceOnly) == errSecSuccess)
+        #expect(ProximityKeychainItem.load(account: account, service: service) == first)
+        #expect(Self.spelled(ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service))
+                    == "found \(Self.hex(first))")
+        #expect(Self.spelled(KeychainItem.loadDistinguishingAbsence(account: account, service: service))
+                    == "found \(Self.hex(first))", "FernletFoundation did not read the copy's row")
+        #expect(ProximityKeychainItem.loadAll(service: service).map { $0.account } == [account])
+        #expect(Self.spelled(ProximityKeychainItem.loadAllDistinguishingFailure(service: service))
+                    == "rows \(account)=\(Self.hex(first))")
+        let stored = Self.storedClass(account: account, service: service)
+        #expect(stored == StoredKeychainClass(accessible: deviceOnly as String, synchronizable: false),
+                "the copy stored its row as \(String(describing: stored))")
+        #expect(ProximityKeychainItem.store(second, account: account, service: service, accessibility: deviceOnly) == errSecSuccess)
+        #expect(KeychainItem.loadAll(service: service).map { $0.data } == [second], "a second store did not replace the row")
+        #expect(KeychainItem.deleteReportingStatus(account: account, service: service) == errSecSuccess)
+        #expect(Self.spelled(ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service)) == "absent")
+        #expect(Self.spelled(ProximityKeychainItem.loadAllDistinguishingFailure(service: service)) == "rows ")
+        #expect(KeychainItem.store(third, account: account, service: service, accessibility: deviceOnly) == errSecSuccess)
+        #expect(Self.storedClass(account: account, service: service) == stored, "FernletFoundation stored another class")
+        #expect(ProximityKeychainItem.load(account: account, service: service) == third)
+        #expect(ProximityKeychainItem.deleteReportingStatus(account: account, service: service) == errSecSuccess)
+        #expect(Self.spelled(KeychainItem.loadDistinguishingAbsence(account: account, service: service)) == "absent")
+        #expect(ProximityKeychainItem.deleteAllReportingStatus(service: service) == errSecSuccess, "an empty slot is a cleared slot")
+    }
+
+    /// A device-only row and its synchronized twin under one account and service, the two the
+    /// identity's escrow reconciliation tells apart, are matched alike by ProximityKit's copy and
+    /// FernletFoundation's `KeychainItem` under every scope: the copy writes the twin with
+    /// `replacing: .synced`, which leaves the device-only row in place; `.synced` and `.local` each
+    /// find exactly their own row through either, and `.any` both; a `.local` delete through the copy
+    /// leaves FernletFoundation the synced row alone; and `deleteAll` through the copy clears both.
+    @Test func theCopyAndFernletFoundationMatchEachSynchronizableVariantAlike() {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let account = "backupEscrowPrivateKey.k.namespacegolden"
+        let (local, synced) = (Self.sequence(from: 0x70), Self.sequence(from: 0x90))
+        #expect(ProximityKeychainItem.store(local, account: account, service: service,
+                                            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly) == errSecSuccess)
+        #expect(ProximityKeychainItem.store(synced, account: account, service: service,
+                                            accessibility: kSecAttrAccessibleAfterFirstUnlock, synchronizable: true,
+                                            replacing: .synced) == errSecSuccess)
+        let scopes: [(ProximityKeychainItem.SynchronizableScope, KeychainItem.SynchronizableScope, [Data])] = [
+            (.synced, .synced, [synced]), (.local, .local, [local]), (.any, .any, [local, synced])
+        ]
+        // R2: bounded by the three scopes.
+        for (scope, originalScope, expected) in scopes {
+            let byCopy = ProximityKeychainItem.loadAll(service: service, synchronizable: scope).map { $0.data }
+            let byOriginal = KeychainItem.loadAll(service: service, synchronizable: originalScope).map { $0.data }
+            #expect(Set(byCopy) == Set(expected) && byCopy.count == expected.count, "the copy's \(scope) listed \(byCopy)")
+            #expect(Set(byOriginal) == Set(byCopy) && byOriginal.count == byCopy.count,
+                    "FernletFoundation's \(originalScope) listed \(byOriginal), the copy's \(byCopy)")
+            if expected.count == 1 {
+                #expect(ProximityKeychainItem.load(account: account, service: service, synchronizable: scope) == expected.first)
+                #expect(KeychainItem.load(account: account, service: service, synchronizable: originalScope) == expected.first)
+            }
+        }
+        #expect(ProximityKeychainItem.deleteReportingStatus(account: account, service: service, synchronizable: .local) == errSecSuccess)
+        #expect(KeychainItem.load(account: account, service: service, synchronizable: .local) == nil)
+        #expect(KeychainItem.load(account: account, service: service, synchronizable: .synced) == synced,
+                "a .local delete through the copy removed the synced twin")
+        ProximityKeychainItem.deleteAll(service: service)
+        #expect(KeychainItem.loadAll(service: service).isEmpty, "deleteAll left a variant behind")
+    }
+
+    /// ProximityKit's copy fails exactly where FernletFoundation's `KeychainItem` fails, with the same
+    /// answer, and audits the two delete failures with FernletFoundation's lines. Every empty-name
+    /// guard answers what the original answers (`errSecParam`, `nil`, `.unreadable(errSecParam)`); the
+    /// enumeration classifier answers alike for a success carrying rows (one of them not a row, which
+    /// both drop), a success without them, an empty slot, and three failing statuses, among them
+    /// `errSecInteractionNotAllowed`, which no simulator keychain can be made to return; and a failed
+    /// `delete` and `deleteAll` reach `FernletAuditLog`, through the bridge the app installs, as exactly
+    /// the `keychain.delete.failed` and `keychain.deleteAll.failed` lines the original writes.
+    @Test func theCopyFailsAndAuditsExactlyWhereFernletFoundationsKeychainItemDoes() {
+        let service = Self.isolatedIdentityService()
+        let deviceOnly = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        #expect(ProximityKeychainItem.store(Data([1]), account: "", service: service, accessibility: deviceOnly) == errSecParam
+                    && KeychainItem.store(Data([1]), account: "", service: service, accessibility: deviceOnly) == errSecParam)
+        #expect(ProximityKeychainItem.store(Data(), account: "row", service: service, accessibility: deviceOnly) == errSecParam
+                    && KeychainItem.store(Data(), account: "row", service: service, accessibility: deviceOnly) == errSecParam)
+        #expect(ProximityKeychainItem.load(account: "row", service: "") == nil && KeychainItem.load(account: "row", service: "") == nil)
+        // R2: bounded by the two empty-name pairs.
+        for (account, named) in [("", service), ("row", "")] {
+            #expect(Self.spelled(ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: named))
+                        == Self.spelled(KeychainItem.loadDistinguishingAbsence(account: account, service: named)))
+            #expect(ProximityKeychainItem.deleteReportingStatus(account: account, service: named)
+                        == KeychainItem.deleteReportingStatus(account: account, service: named))
+        }
+        #expect(Self.spelled(ProximityKeychainItem.loadAllDistinguishingFailure(service: ""))
+                    == Self.spelled(KeychainItem.loadAllDistinguishingFailure(service: "")))
+        #expect(ProximityKeychainItem.deleteAllReportingStatus(service: "") == KeychainItem.deleteAllReportingStatus(service: ""))
+        let matches: [[String: Any]] = [[kSecAttrAccount as String: "row", kSecValueData as String: Data([7])],
+                                        [kSecAttrAccount as String: "dataless"]]
+        let enumerations: [(OSStatus, [[String: Any]]?)] = [
+            (errSecSuccess, matches), (errSecSuccess, nil), (errSecItemNotFound, nil),
+            (errSecInteractionNotAllowed, nil), (errSecNotAvailable, nil), (errSecIO, nil)
+        ]
+        // R2: bounded by the six enumeration outcomes.
+        for (status, given) in enumerations {
+            let copy = Self.spelled(ProximityKeychainItem.enumerationResult(status: status, matches: given))
+            #expect(copy == Self.spelled(KeychainItem.enumerationResult(status: status, matches: given)),
+                    "status \(status): the copy classified \(copy)")
+        }
+        let byCopy = KeychainAuditLines.delivered {
+            ProximityKeychainItem.delete(account: "", service: service)
+            ProximityKeychainItem.deleteAll(service: "")
+        }
+        let byOriginal = KeychainAuditLines.delivered {
+            KeychainItem.delete(account: "", service: service)
+            KeychainItem.deleteAll(service: "")
+        }
+        let written = [
+            KeychainAuditLines.Line(event: "keychain.delete.failed",
+                                    context: ["service": service, "account": "", "status": "\(errSecParam)"]),
+            KeychainAuditLines.Line(event: "keychain.deleteAll.failed", context: ["service": "", "status": "\(errSecParam)"])
+        ]
+        #expect(byOriginal == written, "FernletFoundation's delete lines are \(byOriginal)")
+        #expect(byCopy == byOriginal, "the copy's delete lines are \(byCopy), FernletFoundation's \(byOriginal)")
+    }
+
+    /// ProximityKit's code reaches the keychain through its own copy and names FernletFoundation's
+    /// `KeychainItem` nowhere, so the move is whole: a call that went back to the original, from a
+    /// file that still imports FernletFoundation for something else, fails here. Comments may name
+    /// `KeychainItem` (the copy's own explain where it came from); the scan reads code lines only.
+    @Test func proximityKitReachesTheKeychainOnlyThroughItsOwnCopy() throws {
+        let root = RepoRoot.url("FernletKit/Sources/ProximityKit")
+        let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+        let original = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])KeychainItem\b"#)
+        var copyUses = 0
+        var offenders: [String] = []
+        // R2: bounded by the module's own file list.
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            let code = MeshRoutedSourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
+            copyUses += code.components(separatedBy: "ProximityKeychainItem.").count - 1
+            if original.firstMatch(in: code, range: NSRange(code.startIndex..., in: code)) != nil {
+                offenders.append(file.lastPathComponent)
+            }
+        }
+        #expect(files.count >= 50, "the ProximityKit sweep read only \(files.count) Swift files")
+        #expect(copyUses > 0, "the sweep found no `ProximityKeychainItem.` use: wrong tree?")
+        #expect(offenders.isEmpty, """
+            ProximityKit code names FernletFoundation's KeychainItem in \(offenders). Reach the keychain \
+            through `ProximityKeychainItem`, which issues the same queries.
+            """)
+    }
+
+    /// A row's class and synchronizable flag as the keychain itself holds them.
+    private struct StoredKeychainClass: Equatable {
+        /// `kSecAttrAccessible`.
+        let accessible: String
+        /// `kSecAttrSynchronizable`.
+        let synchronizable: Bool
+    }
+
+    /// The class and flag of the one `account` row under `service`, read back from the keychain, or nil.
+    private static func storedClass(account: String, service: String) -> StoredKeychainClass? {
+        var result: AnyObject?
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account, kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+            kSecMatchLimit as String: kSecMatchLimitOne, kSecReturnAttributes as String: true,
+            kSecUseDataProtectionKeychain as String: true
+        ]
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let attributes = result as? [String: Any],
+              let accessible = attributes[kSecAttrAccessible as String] as? String else { return nil }
+        let synchronizable = (attributes[kSecAttrSynchronizable as String] as? NSNumber)?.boolValue ?? false
+        return StoredKeychainClass(accessible: accessible, synchronizable: synchronizable)
+    }
+
+    /// A read's outcome, spelled alike for the copy and FernletFoundation's `KeychainItem`.
+    private static func spelled(_ read: ProximityKeychainItem.ReadResult) -> String {
+        switch read {
+        case .found(let data): return "found \(hex(data))"
+        case .absent: return "absent"
+        case .unreadable(let status): return "unreadable \(status)"
+        }
+    }
+
+    /// FernletFoundation's read outcome, spelled as the copy's is.
+    private static func spelled(_ read: KeychainItem.ReadResult) -> String {
+        switch read {
+        case .found(let data): return "found \(hex(data))"
+        case .absent: return "absent"
+        case .unreadable(let status): return "unreadable \(status)"
+        }
+    }
+
+    /// An enumeration's outcome, spelled alike for the copy and FernletFoundation's `KeychainItem`.
+    private static func spelled(_ rows: ProximityKeychainItem.EnumerationResult) -> String {
+        switch rows {
+        case .rows(let rows): return "rows " + rows.map { "\($0.account)=\(hex($0.data))" }.joined(separator: ",")
+        case .unreadable(let status): return "unreadable \(status)"
+        }
+    }
+
+    /// FernletFoundation's enumeration outcome, spelled as the copy's is.
+    private static func spelled(_ rows: KeychainItem.EnumerationResult) -> String {
+        switch rows {
+        case .rows(let rows): return "rows " + rows.map { "\($0.account)=\(hex($0.data))" }.joined(separator: ",")
+        case .unreadable(let status): return "unreadable \(status)"
+        }
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -3618,5 +3909,165 @@ private enum ForeignAppNamespace {
             meshRecipientReceiptIDV1: "acme.mesh.recipient-receipt-id.hash.v1",
             meshEpochIDV1: "acme.mesh.epoch.v1"
         )
+    }
+}
+
+// MARK: - FernletFoundation's keychain queries, read out of its source
+
+/// FernletFoundation's `KeychainItem` query dictionaries, read out of `KeychainHelpers.swift` and
+/// evaluated for one call, so group 15 holds ProximityKit's copy to the dictionaries FernletFoundation
+/// issues rather than to a transcription of them (plan step A0.2.11).
+///
+/// A member's dictionary is the first `let query: [String: Any] = [ … ]` literal after its first
+/// declaration (the string-keyed one; the `Account`-typed overloads come later and spell no dictionary
+/// of their own), provided no other declaration starts between the two. Each `key as String: value`
+/// entry is resolved through the tables below: a Security constant, a Boolean literal, the scope's
+/// `queryValue` arm (read out of the same source) or one of the call's arguments. A token the tables
+/// do not know leaves the member with no dictionary at all, so a key FernletFoundation adds fails the
+/// comparison instead of dropping out of it.
+private struct FernletFoundationKeychainQueries {
+
+    /// The members whose dictionaries ProximityKit's copy reproduces.
+    static let members = ["store", "load", "loadDistinguishingAbsence", "loadAllDistinguishingFailure",
+                          "deleteReportingStatus", "deleteAllReportingStatus"]
+
+    /// Each member's `key as String: value` entries, as source tokens in source order.
+    private let entries: [String: [(key: String, value: String)]]
+    /// `SynchronizableScope.queryValue`'s arms: the value token each case returns, by case name.
+    private let scopeArms: [String: String]
+
+    /// Reads every member's dictionary, and the scope arms, out of `source`.
+    ///
+    /// - Parameter source: The text of `FernletKit/Sources/FernletFoundation/KeychainHelpers.swift`.
+    init(source: String) {
+        let lines = source.components(separatedBy: "\n")
+        var entries: [String: [(key: String, value: String)]] = [:]
+        // R2: bounded by the six members.
+        for member in Self.members {
+            entries[member] = Self.queryEntries(of: member, in: lines)
+        }
+        self.entries = entries
+        self.scopeArms = Self.scopeArms(in: lines)
+    }
+
+    /// The dictionary `member` issues for `call`: its `service`, `account`, `data`, `accessibility` and
+    /// `synchronizable` arguments and, for a scoped member, `scope` (`any`, `synced` or `local`). Nil
+    /// when the member's literal was not found or spells a token the evaluation does not know.
+    func query(_ member: String, _ call: [String: Any]) -> [String: Any]? {
+        guard let spelled = entries[member], !spelled.isEmpty else { return nil }
+        var query: [String: Any] = [:]
+        // R2: bounded by the member's entries.
+        for entry in spelled {
+            guard let key = Self.key(entry.key), let resolved = self.value(of: entry.value, in: call),
+                  query[key] == nil else { return nil }
+            query[key] = resolved
+        }
+        return query
+    }
+
+    /// The value a source token stands for in `call`.
+    private func value(of token: String, in call: [String: Any]) -> Any? {
+        guard token == "synchronizable.queryValue" else { return Self.constant(token) ?? call[token] }
+        guard let scope = call["scope"] as? String, let arm = scopeArms[scope] else { return nil }
+        return Self.constant(arm)
+    }
+
+    /// The query key a source token names, or nil for one the evaluation does not know.
+    private static func key(_ token: String) -> String? {
+        switch token {
+        case "kSecClass": return kSecClass as String
+        case "kSecAttrService": return kSecAttrService as String
+        case "kSecAttrAccount": return kSecAttrAccount as String
+        case "kSecAttrAccessible": return kSecAttrAccessible as String
+        case "kSecAttrSynchronizable": return kSecAttrSynchronizable as String
+        case "kSecMatchLimit": return kSecMatchLimit as String
+        case "kSecReturnData": return kSecReturnData as String
+        case "kSecReturnAttributes": return kSecReturnAttributes as String
+        case "kSecValueData": return kSecValueData as String
+        case "kSecUseDataProtectionKeychain": return kSecUseDataProtectionKeychain as String
+        default: return nil
+        }
+    }
+
+    /// The constant a source token names, or nil for an argument or an unknown token.
+    private static func constant(_ token: String) -> Any? {
+        switch token {
+        case "kSecClassGenericPassword": return kSecClassGenericPassword
+        case "kSecMatchLimitOne": return kSecMatchLimitOne
+        case "kSecMatchLimitAll": return kSecMatchLimitAll
+        case "kSecAttrSynchronizableAny": return kSecAttrSynchronizableAny
+        case "true": return true
+        case "false": return false
+        default: return nil
+        }
+    }
+
+    /// The `key as String: value` entries of `member`'s dictionary literal, or [] when the literal is
+    /// not where the reading expects it or holds a line of another shape.
+    private static func queryEntries(of member: String, in lines: [String]) -> [(key: String, value: String)] {
+        guard let declaration = lines.firstIndex(where: { $0.contains("public static func \(member)(") }),
+              let open = lines[declaration...].firstIndex(where: { $0.contains("let query: [String: Any] = [") }),
+              !lines[(declaration + 1)..<open].contains(where: { $0.contains("static func ") }) else { return [] }
+        var found: [(key: String, value: String)] = []
+        // R2: bounded by the file's remaining lines.
+        for line in lines[(open + 1)...] {
+            let entry = line.trimmingCharacters(in: .whitespaces)
+            guard entry != "]" else { return found }
+            let parts = entry.trimmingCharacters(in: CharacterSet(charactersIn: ","))
+                .components(separatedBy: " as String: ")
+            guard parts.count == 2 else { return [] }
+            found.append((key: parts[0], value: parts[1]))
+        }
+        return []
+    }
+
+    /// `SynchronizableScope.queryValue`'s `case .x: return y` arms, by case name.
+    private static func scopeArms(in lines: [String]) -> [String: String] {
+        guard let getter = lines.firstIndex(where: { $0.contains("var queryValue: Any {") }) else { return [:] }
+        var arms: [String: String] = [:]
+        // R2: bounded by the eight lines after the getter, which hold its three arms.
+        for line in lines[(getter + 1)...].prefix(8) {
+            let words = line.split(separator: " ").map(String.init)
+            guard words.count == 4, words[0] == "case", words[2] == "return",
+                  words[1].hasPrefix("."), words[1].hasSuffix(":") else { continue }
+            arms[String(words[1].dropFirst().dropLast())] = words[3]
+        }
+        return arms
+    }
+}
+
+// MARK: - The audit lines one call writes
+
+/// The `FernletAuditLog` lines one synchronous call writes, captured as `ProximityAuditBridgeTests`
+/// captures them: the handler records only while a task-local mark bound around that call is visible,
+/// so no line from a suite running beside this one is counted, and the capture is read the moment the
+/// call returns. Group 15 compares the copy's two delete lines with FernletFoundation's through it.
+private enum KeychainAuditLines {
+
+    /// One line as a capture handler saw it.
+    struct Line: Equatable, Sendable {
+        /// The event name.
+        let event: String
+        /// The context.
+        let context: [String: String]
+    }
+
+    /// The mark, bound only around the call being captured.
+    @TaskLocal static var emitter: UUID?
+
+    /// Every line written while `emit` ran under this call's own mark, in order.
+    ///
+    /// - Parameter emit: The synchronous call.
+    /// - Returns: The lines it wrote.
+    static func delivered(during emit: () -> Void) -> [Line] {
+        let mark = UUID()
+        let seen = OSAllocatedUnfairLock<[Line]>(initialState: [])
+        let token = FernletAuditLog.addCaptureHandler { event, context in
+            guard Self.emitter == mark else { return }
+            seen.withLock { $0.append(Line(event: event, context: context)) }
+        }
+        defer { FernletAuditLog.removeCaptureHandler(token) }
+        Self.$emitter.withValue(mark) { emit() }
+        return seen.withLock { $0 }
     }
 }
