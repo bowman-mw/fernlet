@@ -1462,6 +1462,18 @@ every rule below.
 | `familyCollisions(with:)` | Labels equal or byte-prefix related, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
 | `installationCollisions(with:)` | Equal keychain services, an equal directory name ignoring case, or an equal log subsystem. |
 
+### `FernletConnections/FernletProtocolNamespace.swift`
+
+Plan step A0.2.2: Fernlet's own value, in the `FernletConnections` module, which depends on
+ProximityKit so ProximityKit can never name it. Nothing reads it yet. `ProximityNamespaceGoldenTests`
+pins every literal against its frozen column, every role, soundness and the 38 FernletCrypto twins.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityNamespace.fernlet` | Fernlet's whole protocol identity: `Family.fernlet` with `Installation.fernletApp`. |
+| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Today's labels, radio values and `fernlet` QR scheme by group, byte for byte, the legacy pair accepted. |
+| `Installation.fernletApp` | The Fernlet app's identity and seal-key rows, storage names and log subsystem. Coach adds an installation of its own beside it in plan step C1. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`

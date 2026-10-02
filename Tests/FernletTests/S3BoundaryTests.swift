@@ -213,9 +213,13 @@ struct S3BoundaryTests {
     ///   app injects CloudKitSync's implementation, which only ever sees rotating day tags + ciphertext.
     ///   `FernletProximityUI` is held to the same rule: its review screens left ProximityKit's `UI/`
     ///   folder (ProximityKit plan step A0.1) and still render held peer photos and peer names.
+    ///   `FernletConnections` is too: it holds Fernlet's protocol identity (ProximityKit plan step
+    ///   A0.2.2), and Fernlet's connection rules on top of the mesh join it in later steps.
     /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
     ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
-    ///   allowed to carry, and would invert that injection seam.
+    ///   allowed to carry, and would invert that injection seam. The same holds for
+    ///   `FernletConnections`, the home of Fernlet's wire identity and, from plan step A0.3, of its
+    ///   payload vocabulary.
     ///
     /// Comments naming CloudKit are fine and expected (the dead-drop is documented in both modules) —
     /// only an actual `import` line is a breach.
@@ -225,7 +229,9 @@ struct S3BoundaryTests {
         for (module, forbidden) in [
             ("FernletKit/Sources/ProximityKit", "CloudKit"),
             ("FernletKit/Sources/FernletProximityUI", "CloudKit"),
-            ("FernletKit/Sources/CloudKitSync", "ProximityKit")
+            ("FernletKit/Sources/FernletConnections", "CloudKit"),
+            ("FernletKit/Sources/CloudKitSync", "ProximityKit"),
+            ("FernletKit/Sources/CloudKitSync", "FernletConnections")
         ] {
             let moduleURL = repoRoot.appendingPathComponent(module)
             var scanned = 0

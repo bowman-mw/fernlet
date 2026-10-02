@@ -27,12 +27,28 @@
 //    column byte `0x03`, the QR host, query key and version, the `corrupt` and `chunk` extensions):
 //    not namespace values, but later A0.2 commits edit the code right next to each of them.
 //
+// Three more groups since step A0.2.2, when `ProximityNamespace.fernlet` arrived in
+// FernletConnections. They add cells and change no row:
+//
+// 5. **`.fernlet` against the table.** Every value it carries equals its frozen literal, every label
+//    has the role ProximityKit fixes for its field, it is sound, the 38 labels FernletCrypto's
+//    registry also declares are spelled alike and accept the same transcripts, no label of the
+//    registry's 81 and its 39 together is a byte prefix of another (CDST's sealed-backup pair aside),
+//    and reflection finds no label field `labelRows` leaves out.
+// 6. **Every hash and transcript consumer against its field's role.** The bytes each production
+//    consumer writes today begin with that field's `prefixBytes`: 19 signed transcripts and 8 hash
+//    preimages, one cell each.
+// 7. **A foreign namespace.** One built from another app's literals collides with `.fernlet` nowhere,
+//    and no signature purpose of either accepts a transcript framed for the other, except Fernlet's
+//    two verify-only legacy labels, which accept every transcript by construction.
+//
 // Every hex vector below was derived from the FORMAT by an independent Python re-implementation,
 // proved honest first by reproducing vectors the repo already pins (SealedBackupFormatPinTests' two
 // escrow KATs, MeshMembershipEventGoldenTests' epoch-heads golden, MeshRoutedManifestGoldenTests' wrap
 // AAD), then cross-checked in CryptoKit — never copied out of Swift's output.
 
 import CryptoKit
+import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 import Foundation
@@ -849,6 +865,611 @@ struct ProximityNamespaceGoldenTests {
         #expect(ProximityVerifyQR.isValid(payload, at: now))
     }
 
+    // MARK: Group 5 — `.fernlet` against the table (A0.2.2)
+
+    /// The QR host's row: a ProximityKit format constant beside the scheme, not a namespace value.
+    static let qrHostField = "proximityKit.verifyQR.urlHost"
+
+    /// The one label FernletCrypto's registry does not declare: the epoch id's domain.
+    static let epochField = "family.purposes.hash.meshEpochIDV1"
+
+    /// `.fernlet`'s bytes for every namespace field the table pins, read straight off the value
+    /// FernletConnections ships: the labels through `labelRows`, everything else by its own accessor.
+    static var fernletValues: [String: Data] {
+        let namespace = ProximityNamespace.fernlet
+        let radios = namespace.family.radios
+        let keychain = namespace.installation.keychain
+        let storage = namespace.installation.storage
+        let text: [String: String] = [
+            "family.radios.mesh.serviceType": radios.mesh.serviceType,
+            "family.radios.mesh.alpn": radios.mesh.alpn,
+            "family.radios.presence.serviceType": radios.presence.serviceType,
+            "family.radios.presence.alpn": radios.presence.alpn,
+            "family.radios.recipeShare.serviceType": radios.recipeShare.serviceType,
+            "family.radios.recipeShare.alpn": radios.recipeShare.alpn,
+            "family.verifyQR.urlScheme": namespace.family.verifyQR.urlScheme,
+            "installation.keychain.identity.service": keychain.identity.service,
+            "installation.keychain.identity.signingPrivateKey": keychain.identity.signingPrivateKey,
+            "installation.keychain.identity.keyAgreementPrivateKey": keychain.identity.keyAgreementPrivateKey,
+            "installation.keychain.identity.signingPublicKeyCache": keychain.identity.signingPublicKeyCache,
+            "installation.keychain.identity.keyAgreementPublicKeyCache": keychain.identity.keyAgreementPublicKeyCache,
+            "installation.keychain.meshSessionSealKey.service": keychain.meshSessionSealKey.service,
+            "installation.keychain.meshSessionSealKey.account": keychain.meshSessionSealKey.account,
+            "installation.keychain.meshRoutedSealKey.service": keychain.meshRoutedSealKey.service,
+            "installation.keychain.meshRoutedSealKey.account": keychain.meshRoutedSealKey.account,
+            "installation.storage.directoryName": storage.directoryName,
+            "installation.storage.meshSessionContextFileName": storage.meshSessionContextFileName,
+            "installation.storage.meshRoutedIndexFileName": storage.meshRoutedIndexFileName,
+            "installation.storage.meshRoutedChunkDirectoryName": storage.meshRoutedChunkDirectoryName,
+            "installation.logSubsystem": namespace.installation.logSubsystem
+        ]
+        var values = text.mapValues { Data($0.utf8) }
+        values["family.radios.meshHeartbeat"] = radios.meshHeartbeat
+        // R2: bounded by the 39 label rows.
+        for row in namespace.labelRows {
+            values[row.field] = row.purpose.data
+        }
+        return values
+    }
+
+    /// The value FernletConnections ships IS the literal column: exactly the table's 61 namespace
+    /// fields, each equal to its frozen literal byte for byte, and the labels in the table's order.
+    @Test func everyFernletValueIsItsFrozenLiteral() {
+        let values = Self.fernletValues
+        let rows = Self.table.filter { $0.field != Self.qrHostField }
+        #expect(rows.count == 61, "the table holds \(rows.count) namespace values besides the QR host")
+        #expect(values.count == 61, "`.fernlet` was read for \(values.count) fields")
+        let unpinned = Set(values.keys).subtracting(rows.map(\.field)).sorted()
+        let unread = Set(rows.map(\.field)).subtracting(values.keys).sorted()
+        #expect(unpinned.isEmpty && unread.isEmpty, "no frozen row for \(unpinned); never read off `.fernlet`: \(unread)")
+        // R2: bounded by the table.
+        for row in rows {
+            guard let actual = values[row.field] else { continue }
+            #expect(actual == Data(row.frozen.utf8), """
+                ProximityNamespace.fernlet's \(row.field) is "\(String(decoding: actual, as: UTF8.self))" \
+                (\(Self.hex(actual))); its frozen literal is "\(row.frozen)". The literal never moves: \
+                fix FernletProtocolNamespace.swift.
+                """)
+        }
+        let labelFields = Self.table.filter { $0.group == .label }.map(\.field)
+        #expect(ProximityNamespace.fernlet.labelRows.map(\.field) == labelFields,
+                "`labelRows` lists the labels in another order than the table")
+    }
+
+    /// The role ProximityKit fixes for `field`, as the A0.2 design assigns it, or nil for a field the
+    /// design does not have.
+    private static func designedRole(of field: String) -> ProximityCryptographicPurpose.Role? {
+        let signature = "family.purposes.signature."
+        let keyDerivation = "family.purposes.keyDerivation."
+        switch field {
+        case signature + "proximityQRIdentityV1", signature + "proximityQRResponseV1":
+            return .signature(.rawPrefix)
+        case signature + "legacyV1.identityEnvelopeV1", signature + "legacyV1.meshAdmissionTokenV1":
+            return .signature(.absent)
+        case keyDerivation + "meshTLSExporterV1":
+            return .tlsExporterLabel
+        case keyDerivation + "meshSessionContextV1", keyDerivation + "meshRoutedStoreV1":
+            return .columnSeal
+        case epochField:
+            return .hashDomain(.rawPrefix)
+        default:
+            break
+        }
+        if field.hasPrefix(signature) { return .signature(.lengthPrefixed) }
+        if field.hasPrefix(keyDerivation) { return .keyDerivationSalt }
+        if field.hasPrefix("family.purposes.aead.") { return .aeadAssociatedData }
+        if field.hasPrefix("family.purposes.hash.") { return .hashDomain(.lengthPrefixed) }
+        return nil
+    }
+
+    /// Every `.fernlet` label carries the role its field fixes: the 17 canonical transcripts
+    /// length-prefixed, the two QR transcripts raw, the legacy pair verify-only, three salts, the
+    /// exporter label, two column seals, five AADs, the six mesh hashes length-prefixed (as
+    /// ProximityKit consumes them, not as FernletCrypto declares them) and the epoch domain raw.
+    @Test func everyFernletLabelCarriesTheRoleItsFieldFixes() {
+        let rows = ProximityNamespace.fernlet.labelRows
+        #expect(rows.count == 39, "`.fernlet` has \(rows.count) labels")
+        // R2: bounded by the 39 label rows.
+        for row in rows {
+            #expect(row.purpose.role == Self.designedRole(of: row.field),
+                    "\(row.field) has the role \(row.purpose.role), the design fixes \(String(describing: Self.designedRole(of: row.field)))")
+        }
+        let tally = Dictionary(grouping: rows, by: { $0.purpose.role }).mapValues(\.count)
+        let designed: [ProximityCryptographicPurpose.Role: Int] = [
+            .signature(.lengthPrefixed): 17, .signature(.rawPrefix): 2, .signature(.absent): 2,
+            .keyDerivationSalt: 3, .tlsExporterLabel: 1, .columnSeal: 2, .aeadAssociatedData: 5,
+            .hashDomain(.lengthPrefixed): 6, .hashDomain(.rawPrefix): 1
+        ]
+        #expect(tally == designed, "the roles tally \(tally), the design \(designed)")
+    }
+
+    /// `.fernlet` passes every soundness rule, and `validated` hands the same value back.
+    @Test func theFernletNamespaceIsSound() throws {
+        #expect(ProximityNamespace.fernlet.soundness == .sound,
+                "ProximityNamespace.fernlet is unsound: \(ProximityNamespace.fernlet.soundness)")
+        let validated = try ProximityNamespace.validated(family: .fernlet, installation: .fernletApp)
+        #expect(validated == ProximityNamespace.fernlet)
+    }
+
+    /// FernletCrypto's 38 core registry entries, each beside the `.fernlet` field that twins it.
+    ///
+    /// Written out by hand: the table's `today:` column is the one later commits re-point at the
+    /// namespace itself, so it cannot double as the registry side of this comparison.
+    static var registryTwins: [(field: String, twin: CryptographicPurpose)] {
+        typealias Signature = FernletCryptoPurpose.Signature
+        typealias KeyDerivation = FernletCryptoPurpose.KeyDerivation
+        typealias AEAD = FernletCryptoPurpose.AEAD
+        typealias Hash = FernletCryptoPurpose.Hash
+        let signature = "family.purposes.signature."
+        let derivation = "family.purposes.keyDerivation."
+        let aead = "family.purposes.aead."
+        let hash = "family.purposes.hash."
+        return [
+            (signature + "identityEnvelopeV2", Signature.identityEnvelopeV2),
+            (signature + "meshAdmissionTokenV2", Signature.meshAdmissionTokenV2),
+            (signature + "meshChannelIntroductionV1", Signature.meshChannelIntroductionV1),
+            (signature + "meshMemberDepartureV1", Signature.meshMemberDepartureV1),
+            (signature + "meshMemberRemovalV1", Signature.meshMemberRemovalV1),
+            (signature + "meshTerminatedV1", Signature.meshTerminatedV1),
+            (signature + "meshInventoryDigestV1", Signature.meshInventoryDigestV1),
+            (signature + "meshEpochHeadsV1", Signature.meshEpochHeadsV1),
+            (signature + "meshRemovalProposalV1", Signature.meshRemovalProposalV1),
+            (signature + "meshRemovalVoteV1", Signature.meshRemovalVoteV1),
+            (signature + "meshKeyAgreementV1", Signature.meshKeyAgreementV1),
+            (signature + "meshRoutedManifestV1", Signature.meshRoutedManifestV1),
+            (signature + "meshRoutedChunkV1", Signature.meshRoutedChunkV1),
+            (signature + "meshCustodyReceiptV1", Signature.meshCustodyReceiptV1),
+            (signature + "meshRecipientReceiptV1", Signature.meshRecipientReceiptV1),
+            (signature + "meshRoutedInventoryDigestV1", Signature.meshRoutedInventoryDigestV1),
+            (signature + "meshRoutedDrainAnswerV1", Signature.meshRoutedDrainAnswerV1),
+            (signature + "proximityQRIdentityV1", Signature.proximityQRIdentityV1),
+            (signature + "proximityQRResponseV1", Signature.proximityQRResponseV1),
+            (signature + "legacyV1.identityEnvelopeV1", Signature.identityEnvelopeLegacyV1),
+            (signature + "legacyV1.meshAdmissionTokenV1", Signature.meshAdmissionTokenLegacyV1),
+            (derivation + "proximityTransportV1", KeyDerivation.proximityTransportV1),
+            (derivation + "meshGroupKeyWrapV1", KeyDerivation.meshGroupKeyWrapV1),
+            (derivation + "meshTLSExporterV1", KeyDerivation.meshTLSExporterV1),
+            (derivation + "meshRoutedContentKeyWrapV1", KeyDerivation.meshRoutedContentKeyWrapV1),
+            (derivation + "meshSessionContextV1", KeyDerivation.meshSessionContextV1),
+            (derivation + "meshRoutedStoreV1", KeyDerivation.meshRoutedStoreV1),
+            (aead + "proximityTransportV2", AEAD.proximityTransportV2),
+            (aead + "meshGroupKeyWrapV2", AEAD.meshGroupKeyWrapV2),
+            (aead + "meshEncryptedMetadataV2", AEAD.meshEncryptedMetadataV2),
+            (aead + "meshRoutedContentKeyWrapV1", AEAD.meshRoutedContentKeyWrapV1),
+            (aead + "meshRoutedItemV1", AEAD.meshRoutedItemV1),
+            (hash + "meshInventoryDigestV1", Hash.meshInventoryDigestV1),
+            (hash + "meshRoutedContentV1", Hash.meshRoutedContentV1),
+            (hash + "meshRoutedChunkV1", Hash.meshRoutedChunkV1),
+            (hash + "meshRoutedChunkIDV1", Hash.meshRoutedChunkIDV1),
+            (hash + "meshCustodyReceiptIDV1", Hash.meshCustodyReceiptIDV1),
+            (hash + "meshRecipientReceiptIDV1", Hash.meshRecipientReceiptIDV1)
+        ]
+    }
+
+    /// `.fernlet`'s labels by field. A repeated field keeps its first label rather than trapping; the
+    /// roles and reflection cells are the ones that would report it.
+    private static var fernletPurposes: [String: ProximityCryptographicPurpose] {
+        Dictionary(ProximityNamespace.fernlet.labelRows.map { ($0.field, $0.purpose) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Each of FernletCrypto's 38 core entries and its `.fernlet` twin are the same spelling, the same
+    /// bytes. The twins retire at plan step C1; until then the two registries must not drift.
+    @Test func everyCoreLabelIsSpelledLikeItsFernletCryptoTwin() {
+        let twins = Self.registryTwins
+        let purposes = Self.fernletPurposes
+        #expect(twins.count == 38, "\(twins.count) twins listed")
+        let twinFields = Set(twins.map(\.field))
+        #expect(twinFields.count == 38, "a field is listed twice")
+        #expect(twinFields == Set(purposes.keys).subtracting([Self.epochField]),
+                "every `.fernlet` label but the epoch domain has a registry twin, and no other field does")
+        // R2: bounded by the 38 twins.
+        for entry in twins {
+            guard let purpose = purposes[entry.field] else {
+                Issue.record("`.fernlet` has no label at \(entry.field)")
+                continue
+            }
+            #expect(purpose.rawValue == entry.twin.rawValue && purpose.data == entry.twin.data,
+                    "\(entry.field) is \(purpose.rawValue); its FernletCrypto twin is \(entry.twin.rawValue)")
+        }
+    }
+
+    /// Every signature twin, the legacy pair included, accepts exactly what its `.fernlet` twin
+    /// accepts — over `lp(label) ‖ body`, `label ‖ body`, `body` and the empty input — and that is the
+    /// acceptance the field's framing promises.
+    @Test func everySignatureTwinAcceptsWhatItsFernletTwinAccepts() {
+        let purposes = Self.fernletPurposes
+        let body = Data("golden transcript body".utf8)
+        var compared = 0
+        // R2: bounded by the 38 twins.
+        for entry in Self.registryTwins {
+            guard let purpose = purposes[entry.field], case .signature(let framing) = purpose.role else { continue }
+            compared += 1
+            let inputs = [Self.lengthPrefixed(purpose.data) + body, purpose.data + body, body, Data()]
+            let accepted = inputs.map { purpose.signingBytes($0) != nil }
+            let twinAccepted = inputs.map { entry.twin.signingBytes($0) != nil }
+            #expect(accepted == twinAccepted,
+                    "\(entry.field) accepts \(accepted) of [lp+body, label+body, body, empty]; its twin \(twinAccepted)")
+            let promised: [Bool]
+            switch framing {
+            case .lengthPrefixed: promised = [true, false, false, false]
+            case .rawPrefix: promised = [false, true, false, false]
+            case .absent: promised = [true, true, true, true]
+            }
+            #expect(accepted == promised, "\(entry.field) (\(framing)) accepts \(accepted), its framing promises \(promised)")
+            // R2: bounded by the four inputs.
+            for input in inputs where purpose.signingBytes(input) != nil {
+                #expect(purpose.signingBytes(input) == input, "\(entry.field) changed the bytes it accepted")
+            }
+        }
+        #expect(compared == 21, "\(compared) signature twins compared; the design has 17 + 2 + the legacy pair")
+    }
+
+    /// No label of FernletCrypto's 81 and `.fernlet`'s 39 together, deduplicated by bytes, is a byte
+    /// prefix of another, but for the one pair CDST already argues safe (the two sealed-backup HKDF
+    /// `info` labels). A ProximityKit label and an app label meet at every shared consumer from A0.2's
+    /// routing on; this is CDST's rule run over both registries at once.
+    @Test func noLabelOfTheRegistryAndFernletTogetherIsAPrefixOfAnother() {
+        var names: [Data: String] = [:]
+        // R2: bounded by the 81 registry entries.
+        for domain in CryptographicDomainSeparationTests.allDomains where names[domain.purpose.data] == nil {
+            names[domain.purpose.data] = "FernletCryptoPurpose.\(domain.name)"
+        }
+        #expect(names.count == 81, "the registry holds \(names.count) distinct labels")
+        // R2: bounded by the 39 label rows.
+        for row in ProximityNamespace.fernlet.labelRows where names[row.purpose.data] == nil {
+            names[row.purpose.data] = ".fernlet \(row.field)"
+        }
+        #expect(names.count == 82, "together \(names.count) distinct labels; the 38 twins coincide and the epoch domain is new")
+        let exceptions = CryptographicDomainSeparationTests.prefixExceptions
+        var offenders: [String] = []
+        var excused = 0
+        // R2: bounded by the 82 × 82 label pairs.
+        for (shorter, shorterName) in names {
+            for (longer, longerName) in names where longer != shorter && longer.starts(with: shorter) {
+                let pair = (String(decoding: shorter, as: UTF8.self), String(decoding: longer, as: UTF8.self))
+                if exceptions.contains(where: { $0.shorter == pair.0 && $0.longer == pair.1 }) {
+                    excused += 1
+                } else {
+                    offenders.append("\(shorterName) (\(pair.0)) prefixes \(longerName) (\(pair.1))")
+                }
+            }
+        }
+        #expect(offenders.isEmpty, "labels that are byte prefixes of another:\n\(offenders.sorted().joined(separator: "\n"))")
+        #expect(excused == exceptions.count, "CDST's \(exceptions.count) prefix exception(s) matched \(excused) pair(s) here")
+    }
+
+    /// `labelRows` lists every label `.fernlet` stores, and nothing else stores one. Read by
+    /// reflection over the WHOLE namespace, so a label added to any group, or anywhere else, without
+    /// a row cannot slip past the prefix check above.
+    @Test func labelRowsCoverEveryLabelFieldOfFernlet() {
+        let namespace = ProximityNamespace.fernlet
+        var reflected: [(field: String, purpose: ProximityCryptographicPurpose)] = []
+        var pending: [(path: String, value: Any)] = [(path: "", value: namespace)]
+        var visits = 0
+        // R2: at most 256 nodes; `.fernlet` has about 90 (its groups, 39 labels, its strings and the
+        // heartbeat's three mirror children), and the check below fails if the walk is cut short.
+        while visits < 256, let node = pending.popLast() {
+            visits += 1
+            if let purpose = node.value as? ProximityCryptographicPurpose {
+                reflected.append((field: node.path, purpose: purpose))
+                continue
+            }
+            let children = Mirror(reflecting: node.value).children.compactMap { child in
+                child.label.map { (path: node.path.isEmpty ? $0 : node.path + "." + $0, value: child.value) }
+            }
+            pending.append(contentsOf: children.reversed())
+        }
+        #expect(pending.isEmpty, "the reflection walk stopped at \(visits) nodes with \(pending.count) left")
+        #expect(reflected.count == 39, "reflection found \(reflected.count) labels in `.fernlet`")
+        #expect(reflected.map(\.field) == namespace.labelRows.map(\.field), "labelRows and the stored labels disagree")
+        #expect(reflected.map(\.purpose) == namespace.labelRows.map(\.purpose))
+    }
+
+    // MARK: Group 6 — every hash and transcript consumer against its field's role (A0.2.2)
+    //
+    // A role says how ProximityKit consumes a label; the consumer is the code that does it. Each cell
+    // takes the bytes one production consumer writes TODAY and requires them to begin with the
+    // `.fernlet` field's `prefixBytes`, so when A0.2's routing hands a consumer its field, a role and
+    // the code that honours it cannot have drifted apart. Hash consumers hide their preimage behind
+    // SHA-256, so their cells rebuild it as the field's prefix followed by the consumer's own tail
+    // (written with the production writer) and require the production digest to match: only the
+    // prefix is under test. The legacy pair has no writer, so no cell.
+
+    /// The signature labels of `.fernlet`.
+    private static var signatures: ProximityNamespace.Signature { ProximityNamespace.fernlet.family.purposes.signature }
+
+    /// The hash labels of `.fernlet`.
+    private static var hashes: ProximityNamespace.Hash { ProximityNamespace.fernlet.family.purposes.hash }
+
+    /// The canonical envelope opens with `lp(identityEnvelopeV2)`.
+    @Test func theIdentityEnvelopeTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: Self.consumerEnvelope()), by: Self.signatures.identityEnvelopeV2,
+                          consumer: "canonicalBytes(for: FernletIdentityEnvelope)")
+    }
+
+    /// The canonical admission token opens with `lp(meshAdmissionTokenV2)`.
+    @Test func theAdmissionTokenTranscriptBeginsWithItsFieldsPrefix() {
+        let token = MeshAdmissionToken(
+            meshID: MeshMembershipEventFixtures.meshID, joinerFingerprint: "fp-joiner",
+            joinerSigningPublicKey: Data(repeating: 0x03, count: 32), admitterFingerprint: "fp-admitter",
+            grantedAt: MeshMembershipEventFixtures.base, expiresAt: MeshMembershipEventFixtures.base.addingTimeInterval(3_600),
+            admitterSigningPublicKey: Data(repeating: 0x04, count: 32), admitterSignature: Data())
+        Self.expectFramed(canonicalBytes(for: token), by: Self.signatures.meshAdmissionTokenV2,
+                          consumer: "canonicalBytes(for: MeshAdmissionToken)")
+    }
+
+    /// The QUIC channel introduction opens with `lp(meshChannelIntroductionV1)`.
+    @Test func theChannelIntroductionTranscriptBeginsWithItsFieldsPrefix() {
+        let transcript = MeshChannelIntroductionTranscript(
+            protocolVersion: MeshChannelIntroductionFormat.protocolVersion, meshID: MeshMembershipEventFixtures.meshID,
+            epochRef: "7", initiatorSigningPublicKey: Data(repeating: 0x06, count: 32),
+            responderSigningPublicKey: Data(repeating: 0x07, count: 32), initiatorNonce: Data(repeating: 0x08, count: 16),
+            responderNonce: Data(repeating: 0x09, count: 16), channelBindingHash: Data(repeating: 0x0A, count: 32))
+        Self.expectFramed(canonicalBytes(for: transcript), by: Self.signatures.meshChannelIntroductionV1,
+                          consumer: "canonicalBytes(for: MeshChannelIntroductionTranscript)")
+    }
+
+    /// A departure record opens with `lp(meshMemberDepartureV1)`.
+    @Test func theDepartureTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.departure()), by: Self.signatures.meshMemberDepartureV1,
+                          consumer: "canonicalBytes(for: SignedDepartureRecord)")
+    }
+
+    /// A removal record opens with `lp(meshMemberRemovalV1)`.
+    @Test func theRemovalTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removal()), by: Self.signatures.meshMemberRemovalV1,
+                          consumer: "canonicalBytes(for: SignedRemovalRecord)")
+    }
+
+    /// A termination record opens with `lp(meshTerminatedV1)`.
+    @Test func theTerminationTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.termination()), by: Self.signatures.meshTerminatedV1,
+                          consumer: "canonicalBytes(for: SignedTerminationRecord)")
+    }
+
+    /// The signed membership inventory digest opens with `lp(signature.meshInventoryDigestV1)`.
+    @Test func theInventoryDigestTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload()),
+                          by: Self.signatures.meshInventoryDigestV1, consumer: "canonicalBytes(for: MeshInventoryDigestPayload)")
+    }
+
+    /// The epoch-heads message opens with `lp(meshEpochHeadsV1)`.
+    @Test func theEpochHeadsTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload()),
+                          by: Self.signatures.meshEpochHeadsV1, consumer: "canonicalBytes(for: MeshEpochHeadsPayload)")
+    }
+
+    /// A removal proposal opens with `lp(meshRemovalProposalV1)`.
+    @Test func theRemovalProposalTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removalProposal()),
+                          by: Self.signatures.meshRemovalProposalV1, consumer: "canonicalBytes(for: SignedRemovalProposal)")
+    }
+
+    /// A removal vote opens with `lp(meshRemovalVoteV1)`.
+    @Test func theRemovalVoteTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removalVote()),
+                          by: Self.signatures.meshRemovalVoteV1, consumer: "canonicalBytes(for: SignedRemovalVote)")
+    }
+
+    /// A key-agreement advertisement opens with `lp(meshKeyAgreementV1)`.
+    @Test func theKeyAgreementTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.keyAdvertisement()),
+                          by: Self.signatures.meshKeyAgreementV1, consumer: "canonicalBytes(for: SignedKeyAgreementAdvertisement)")
+    }
+
+    /// A routed manifest opens with `lp(meshRoutedManifestV1)`.
+    @Test func theRoutedManifestTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshRoutedManifestFixtures.manifest()),
+                          by: Self.signatures.meshRoutedManifestV1, consumer: "canonicalBytes(for: MeshRoutedManifest)")
+    }
+
+    /// A routed chunk opens with `lp(signature.meshRoutedChunkV1)`.
+    @Test func theRoutedChunkTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshChunkFixtures.chunk()), by: Self.signatures.meshRoutedChunkV1,
+                          consumer: "canonicalBytes(for: MeshChunk)")
+    }
+
+    /// A custody receipt opens with `lp(meshCustodyReceiptV1)`.
+    @Test func theCustodyReceiptTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshCustodyReceiptFixtures.receipt()),
+                          by: Self.signatures.meshCustodyReceiptV1, consumer: "canonicalBytes(for: MeshCustodyReceipt)")
+    }
+
+    /// A recipient receipt opens with `lp(meshRecipientReceiptV1)`.
+    @Test func theRecipientReceiptTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshRecipientReceiptFixtures.receipt()),
+                          by: Self.signatures.meshRecipientReceiptV1, consumer: "canonicalBytes(for: MeshRecipientReceipt)")
+    }
+
+    /// The routed inventory digest opens with `lp(meshRoutedInventoryDigestV1)`.
+    @Test func theRoutedInventoryTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshRoutedInventoryFixtures.payload()),
+                          by: Self.signatures.meshRoutedInventoryDigestV1, consumer: "canonicalBytes(for: MeshRoutedInventoryPayload)")
+    }
+
+    /// A routed drain answer opens with `lp(meshRoutedDrainAnswerV1)`.
+    @Test func theRoutedDrainAnswerTranscriptBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalBytes(for: MeshRoutedDrainAnswerFixtures.payload()),
+                          by: Self.signatures.meshRoutedDrainAnswerV1, consumer: "canonicalBytes(for: MeshRoutedDrainAnswerPayload)")
+    }
+
+    /// The verify QR's fixed-width transcript opens with `proximityQRIdentityV1`, raw.
+    @Test func theVerifyQRTranscriptBeginsWithItsFieldsPrefix() {
+        let transcript = ProximityVerifyQR.canonicalBytes(
+            version: 1, signingPublicKey: Data(repeating: 0x11, count: 32),
+            keyAgreementPublicKey: Data(repeating: 0x22, count: 32), timestamp: 1_700_000_000,
+            nonce: Data(repeating: 0x33, count: 16))
+        Self.expectFramed(transcript, by: Self.signatures.proximityQRIdentityV1, consumer: "ProximityVerifyQR.canonicalBytes")
+    }
+
+    /// The verify response's fixed-width transcript opens with `proximityQRResponseV1`, raw.
+    @Test func theVerifyResponseTranscriptBeginsWithItsFieldsPrefix() {
+        let transcript = ProximityVerifySignature.message(
+            scannerKeyAgreementPublicKey: Data(repeating: 0x44, count: 32),
+            challengeNonce: Data(repeating: 0x55, count: 16), qrNonce: Data(repeating: 0x66, count: 16))
+        Self.expectFramed(transcript, by: Self.signatures.proximityQRResponseV1, consumer: "ProximityVerifySignature.message")
+    }
+
+    /// The membership inventory digest's hash preimage opens with `lp(hash.meshInventoryDigestV1)`.
+    @Test func theMembershipInventoryDigestPreimageBeginsWithItsFieldsPrefix() {
+        Self.expectFramed(canonicalInventoryDigestBytes(for: []), by: Self.hashes.meshInventoryDigestV1,
+                          consumer: "canonicalInventoryDigestBytes(for:)")
+    }
+
+    /// A routed item's content hash is SHA-256 over `lp(meshRoutedContentV1) ‖ blob`.
+    @Test func theRoutedContentHashIsTakenOverItsFieldsPrefix() {
+        let blob = Data("golden routed blob".utf8)
+        Self.expectDigest(MeshRoutedContentDigest.contentHash(of: blob), over: blob, by: Self.hashes.meshRoutedContentV1,
+                          consumer: "MeshRoutedContentDigest.contentHash(of:)")
+    }
+
+    /// The streaming content hasher is seeded with the same `lp(meshRoutedContentV1)`.
+    @Test func theStreamedRoutedContentHashIsTakenOverItsFieldsPrefix() {
+        var hasher = MeshRoutedContentHasher()
+        hasher.update(Data("golden ".utf8))
+        hasher.update(Data("routed blob".utf8))
+        Self.expectDigest(hasher.finalized(), over: Data("golden routed blob".utf8), by: Self.hashes.meshRoutedContentV1,
+                          consumer: "MeshRoutedContentHasher")
+    }
+
+    /// A chunk's payload hash is SHA-256 over `lp(hash.meshRoutedChunkV1) ‖ payload`.
+    @Test func theRoutedChunkHashIsTakenOverItsFieldsPrefix() {
+        let payload = Data("golden chunk payload".utf8)
+        Self.expectDigest(MeshRoutedContentDigest.chunkHash(of: payload), over: payload, by: Self.hashes.meshRoutedChunkV1,
+                          consumer: "MeshRoutedContentDigest.chunkHash(of:)")
+    }
+
+    /// A chunk's id is cut from SHA-256 over `lp(meshRoutedChunkIDV1) ‖ item ‖ index`.
+    @Test func theRoutedChunkIDIsTakenOverItsFieldsPrefix() {
+        let itemID = MeshChunkFixtures.itemID
+        var tail = CanonicalByteWriter()
+        tail.appendUUID(itemID)
+        tail.appendUInt64(3)
+        Self.expectDigest(Self.uuidBytes(MeshRoutedContentDigest.chunkID(itemID: itemID, chunkIndex: 3)), over: tail.bytes,
+                          by: Self.hashes.meshRoutedChunkIDV1, consumer: "MeshRoutedContentDigest.chunkID(itemID:chunkIndex:)")
+    }
+
+    /// A custody receipt's id is cut from SHA-256 over `lp(meshCustodyReceiptIDV1) ‖ item ‖ origin ‖ custodian`.
+    @Test func theCustodyReceiptIDIsTakenOverItsFieldsPrefix() {
+        let receipt = MeshCustodyReceiptFixtures.receipt()
+        var tail = CanonicalByteWriter()
+        tail.appendUUID(receipt.itemID)
+        tail.appendString(receipt.originFingerprint)
+        tail.appendString(receipt.custodianFingerprint)
+        Self.expectDigest(Self.uuidBytes(receipt.receiptID), over: tail.bytes, by: Self.hashes.meshCustodyReceiptIDV1,
+                          consumer: "MeshCustodyReceipt.receiptID")
+    }
+
+    /// A recipient receipt's id is cut from SHA-256 over `lp(meshRecipientReceiptIDV1) ‖ item ‖ origin ‖ recipient`.
+    @Test func theRecipientReceiptIDIsTakenOverItsFieldsPrefix() {
+        let receipt = MeshRecipientReceiptFixtures.receipt()
+        var tail = CanonicalByteWriter()
+        tail.appendUUID(receipt.itemID)
+        tail.appendString(receipt.originFingerprint)
+        tail.appendString(receipt.recipientFingerprint)
+        Self.expectDigest(Self.uuidBytes(receipt.receiptID), over: tail.bytes, by: Self.hashes.meshRecipientReceiptIDV1,
+                          consumer: "MeshRecipientReceipt.receiptID")
+    }
+
+    /// The epoch id is the one RAW hash prefix: the domain's bytes with no count, then the lowercase
+    /// mesh id, the big-endian counter and the coordinator's fingerprint.
+    @Test func theEpochIDIsTakenOverItsFieldsRawPrefix() throws {
+        let meshID = MeshMembershipEventFixtures.meshID
+        let epoch = try #require(MeshEpochRef.minted(counter: 7, coordinatorFingerprint: "00000000000000aa", meshID: meshID))
+        var tail = Data(meshID.uuidString.lowercased().utf8)
+        tail.append(contentsOf: [0x00, 0x00, 0x00, 0x07])
+        tail.append(Data("00000000000000aa".utf8))
+        #expect(Self.hashes.meshEpochIDV1.prefixBytes == Self.hashes.meshEpochIDV1.data, "the epoch domain is a raw prefix")
+        Self.expectDigest(Self.uuidBytes(epoch.epochID), over: tail, by: Self.hashes.meshEpochIDV1,
+                          consumer: "MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)")
+    }
+
+    /// An identity envelope with every field set: the shape `CryptographicPurposeBoundaryTests`' framing
+    /// cell signs.
+    private static func consumerEnvelope() -> FernletIdentityEnvelope {
+        FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion, envelopeID: MeshMembershipEventFixtures.proposalID,
+            senderSigningPublicKey: Data(repeating: 0x01, count: 32), senderKeyAgreementPublicKey: Data(repeating: 0x02, count: 32),
+            senderDisplayName: "Golden", recipientFingerprint: nil, payloadType: .inspectorEcho, payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Golden"), payload: Data("golden".utf8),
+            createdAt: MeshMembershipEventFixtures.base, expiresAt: nil, signature: Data())
+    }
+
+    /// Expects the bytes a production consumer writes today to begin with `purpose.prefixBytes` and
+    /// to carry more than it, and a signature role to accept them whole.
+    private static func expectFramed(
+        _ bytes: Data, by purpose: ProximityCryptographicPurpose, consumer: String,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let prefix = purpose.prefixBytes
+        #expect(!prefix.isEmpty, "\(purpose.rawValue) puts no bytes in front of \(consumer)", sourceLocation: sourceLocation)
+        #expect(bytes.count > prefix.count, "\(consumer) wrote \(bytes.count) bytes, no more than its prefix",
+                sourceLocation: sourceLocation)
+        #expect(bytes.starts(with: prefix), """
+            \(consumer) begins \(hex(bytes.prefix(prefix.count))), but its field \(purpose.rawValue) has the role \
+            \(purpose.role), which puts \(hex(prefix)) there: the role and its consumer have drifted apart
+            """, sourceLocation: sourceLocation)
+        guard case .signature = purpose.role else { return }
+        #expect(purpose.signingBytes(bytes) == bytes, "\(purpose.rawValue) refuses the transcript \(consumer) writes",
+                sourceLocation: sourceLocation)
+    }
+
+    /// Expects `actual`, a production digest or the 16-byte id cut from one, to be SHA-256 over
+    /// `purpose.prefixBytes` followed by `tail`.
+    private static func expectDigest(
+        _ actual: Data, over tail: Data, by purpose: ProximityCryptographicPurpose, consumer: String,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let expected = Data(SHA256.hash(data: purpose.prefixBytes + tail))
+        #expect(actual.count == 32 || actual.count == 16, "\(consumer) produced \(actual.count) bytes",
+                sourceLocation: sourceLocation)
+        #expect(actual == expected.prefix(actual.count), """
+            \(consumer) is \(hex(actual)), not SHA-256 over its field's prefix (\(purpose.role), \
+            \(hex(purpose.prefixBytes))) then its tail (\(hex(expected.prefix(actual.count)))): the hash \
+            domain is consumed in another framing than its role says
+            """, sourceLocation: sourceLocation)
+    }
+
+    // MARK: Group 7 — a foreign namespace (A0.2.2)
+
+    /// `.fernlet` and a namespace built from another app's literals overlap nowhere: no label equal or
+    /// byte-prefix related, no service type, ALPN, heartbeat or scheme shared, and no keychain
+    /// service, directory or log subsystem either. Asked from both sides.
+    @Test func aForeignNamespaceCollidesWithFernletNowhere() {
+        let foreign = ForeignAppNamespace.namespace()
+        #expect(foreign.soundness == .sound, "the foreign fixture is unsound: \(foreign.soundness)")
+        let fernlet = ProximityNamespace.fernlet
+        #expect(fernlet.familyCollisions(with: foreign).isEmpty, "\(fernlet.familyCollisions(with: foreign))")
+        #expect(foreign.familyCollisions(with: fernlet).isEmpty, "\(foreign.familyCollisions(with: fernlet))")
+        #expect(fernlet.installationCollisions(with: foreign).isEmpty, "\(fernlet.installationCollisions(with: foreign))")
+        #expect(foreign.installationCollisions(with: fernlet).isEmpty, "\(foreign.installationCollisions(with: fernlet))")
+    }
+
+    /// No signature purpose of either namespace accepts a transcript framed for the other's, in either
+    /// direction. The one exception is by construction and pinned rather than skipped: Fernlet's two
+    /// legacy labels are `.signature(.absent)`, verify-only formats that carry no label, so they accept
+    /// every transcript, the foreign app's included. The foreign app has no legacy peers (`.refused`).
+    @Test func noSignaturePurposeOfEitherAcceptsATranscriptFramedForTheOther() {
+        let body = Data("golden transcript body".utf8)
+        let fernlet = ProximityNamespace.fernlet.labelRows.filter { Self.isSignatureRole($0.purpose.role) }
+        let foreign = ForeignAppNamespace.namespace().labelRows.filter { Self.isSignatureRole($0.purpose.role) }
+        #expect(fernlet.count == 21 && foreign.count == 19, "\(fernlet.count) Fernlet and \(foreign.count) foreign signature labels")
+        var fernletAcceptors: Set<String> = []
+        // R2: bounded by the 21 × 19 signature pairs.
+        for mine in fernlet {
+            for theirs in foreign {
+                if mine.purpose.signingBytes(theirs.purpose.prefixBytes + body) != nil {
+                    fernletAcceptors.insert(mine.field)
+                }
+                #expect(theirs.purpose.signingBytes(mine.purpose.prefixBytes + body) == nil,
+                        "the foreign \(theirs.field) accepts a transcript framed for Fernlet's \(mine.field)")
+            }
+        }
+        let legacy: Set<String> = ["family.purposes.signature.legacyV1.identityEnvelopeV1",
+                                   "family.purposes.signature.legacyV1.meshAdmissionTokenV1"]
+        #expect(fernletAcceptors == legacy, "Fernlet purposes that accept a foreign transcript: \(fernletAcceptors.sorted())")
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -1058,5 +1679,128 @@ struct ProximityNamespaceGoldenTests {
     /// `count` bytes counting up from `start` — the fixed key material every vector here is built on.
     static func sequence(from start: UInt8, count: Int = 32) -> Data {
         Data((0..<count).map { start &+ UInt8($0) })
+    }
+
+    /// `bytes` behind their 8-byte big-endian count, written here rather than by the production
+    /// writer, so the twin cells frame a transcript independently of the code under test.
+    static func lengthPrefixed(_ bytes: Data) -> Data {
+        var framed = Data()
+        let count = UInt64(bytes.count)
+        // R2: eight iterations, one per byte of the count.
+        for shift in stride(from: 56, through: 0, by: -8) {
+            framed.append(UInt8(truncatingIfNeeded: count >> UInt64(shift)))
+        }
+        return framed + bytes
+    }
+
+    /// A UUID's 16 bytes in network order, read through its tuple.
+    static func uuidBytes(_ uuid: UUID) -> Data {
+        let raw = uuid.uuid
+        return Data([raw.0, raw.1, raw.2, raw.3, raw.4, raw.5, raw.6, raw.7,
+                     raw.8, raw.9, raw.10, raw.11, raw.12, raw.13, raw.14, raw.15])
+    }
+
+    /// Whether `role` is a signature role, of any framing.
+    static func isSignatureRole(_ role: ProximityCryptographicPurpose.Role) -> Bool {
+        guard case .signature = role else { return false }
+        return true
+    }
+}
+
+// MARK: - A foreign app
+
+/// An app that does not exist, "acme", its namespace built entirely from its own literals: the shape a
+/// non-Fernlet host of ProximityKit supplies (plan step A1.2's example app is the real one). It has no
+/// legacy peers, so its legacy pair is `.refused`, and it shares nothing with Fernlet on purpose.
+private enum ForeignAppNamespace {
+
+    /// The namespace: sound, and disjoint from `.fernlet` everywhere.
+    static func namespace() -> ProximityNamespace {
+        ProximityNamespace(
+            family: ProximityNamespace.Family(
+                purposes: ProximityNamespace.Purposes(signature: signature(), keyDerivation: keyDerivation(),
+                                                      aead: aead(), hash: hash()),
+                radios: ProximityNamespace.Radios(
+                    mesh: ProximityNamespace.Radio(serviceType: "_acme-mesh._udp", alpn: "acme-mesh-v1"),
+                    presence: ProximityNamespace.Radio(serviceType: "_acme-near._udp", alpn: "acme-near-v1"),
+                    recipeShare: ProximityNamespace.Radio(serviceType: "_acme-recipe._udp", alpn: "acme-recipe-v1"),
+                    meshHeartbeat: Data("acme-mesh-heartbeat".utf8)),
+                verifyQR: ProximityNamespace.VerifyQR(urlScheme: "acme")),
+            installation: ProximityNamespace.Installation(
+                keychain: ProximityNamespace.Keychain(
+                    identity: ProximityNamespace.Keychain.IdentityRows(
+                        service: "org.example.acme.identity", signingPrivateKey: "signing.private",
+                        keyAgreementPrivateKey: "agreement.private", signingPublicKeyCache: "signing.public",
+                        keyAgreementPublicKeyCache: "agreement.public"),
+                    meshSessionSealKey: ProximityNamespace.Keychain.Row(service: "org.example.acme.mesh-session",
+                                                                        account: "session.seal"),
+                    meshRoutedSealKey: ProximityNamespace.Keychain.Row(service: "org.example.acme.mesh-routed",
+                                                                       account: "routed.seal")),
+                storage: ProximityNamespace.Storage(
+                    directoryName: "Acme", meshSessionContextFileName: "Session.sealed",
+                    meshRoutedIndexFileName: "Routed.sealed", meshRoutedChunkDirectoryName: "RoutedChunks"),
+                logSubsystem: "org.example.acme"))
+    }
+
+    /// Nineteen signature labels and no legacy pair.
+    static func signature() -> ProximityNamespace.Signature {
+        ProximityNamespace.Signature(
+            identityEnvelopeV2: "acme.canonical.identity-envelope.v2",
+            meshAdmissionTokenV2: "acme.canonical.mesh-admission-token.v2",
+            meshChannelIntroductionV1: "acme.mesh.channel-introduction.v1",
+            meshMemberDepartureV1: "acme.mesh.member-departure.v1",
+            meshMemberRemovalV1: "acme.mesh.member-removal.v1",
+            meshTerminatedV1: "acme.mesh.terminated.v1",
+            meshInventoryDigestV1: "acme.mesh.inventory-digest.v1",
+            meshEpochHeadsV1: "acme.mesh.epoch-heads.v1",
+            meshRemovalProposalV1: "acme.mesh.removal-proposal.v1",
+            meshRemovalVoteV1: "acme.mesh.removal-vote.v1",
+            meshKeyAgreementV1: "acme.mesh.key-agreement.v1",
+            meshRoutedManifestV1: "acme.mesh.routed-manifest.v1",
+            meshRoutedChunkV1: "acme.mesh.routed-chunk.v1",
+            meshCustodyReceiptV1: "acme.mesh.custody-receipt.v1",
+            meshRecipientReceiptV1: "acme.mesh.recipient-receipt.v1",
+            meshRoutedInventoryDigestV1: "acme.mesh.routed-inventory-digest.v1",
+            meshRoutedDrainAnswerV1: "acme.mesh.routed-drain-answer.v1",
+            proximityQRIdentityV1: "acme.verify.qr.v1",
+            proximityQRResponseV1: "acme.verify.response.v1",
+            legacyV1: .refused
+        )
+    }
+
+    /// The six key-derivation labels.
+    static func keyDerivation() -> ProximityNamespace.KeyDerivation {
+        ProximityNamespace.KeyDerivation(
+            proximityTransportV1: "acme.proximity.v1",
+            meshGroupKeyWrapV1: "acme.mesh.groupkey.v1",
+            meshTLSExporterV1: "acme.mesh.tls-exporter.v1",
+            meshRoutedContentKeyWrapV1: "acme.mesh.routed.content-key.v1",
+            meshSessionContextV1: "acme.mesh.session-context.v1",
+            meshRoutedStoreV1: "acme.mesh.routed-store.v1"
+        )
+    }
+
+    /// The five AEAD labels.
+    static func aead() -> ProximityNamespace.AEAD {
+        ProximityNamespace.AEAD(
+            proximityTransportV2: "acme.proximity.transport.aead.v2",
+            meshGroupKeyWrapV2: "acme.mesh.groupkey.wrap.aead.v2",
+            meshEncryptedMetadataV2: "acme.mesh.encrypted-metadata.aead.v2",
+            meshRoutedContentKeyWrapV1: "acme.mesh.routed.content-key.wrap.aead.v1",
+            meshRoutedItemV1: "acme.mesh.routed.item.aead.v1"
+        )
+    }
+
+    /// The seven hash labels.
+    static func hash() -> ProximityNamespace.Hash {
+        ProximityNamespace.Hash(
+            meshInventoryDigestV1: "acme.mesh.inventory-digest.hash.v1",
+            meshRoutedContentV1: "acme.mesh.routed-content.hash.v1",
+            meshRoutedChunkV1: "acme.mesh.routed-chunk.hash.v1",
+            meshRoutedChunkIDV1: "acme.mesh.routed-chunk-id.hash.v1",
+            meshCustodyReceiptIDV1: "acme.mesh.custody-receipt-id.hash.v1",
+            meshRecipientReceiptIDV1: "acme.mesh.recipient-receipt-id.hash.v1",
+            meshEpochIDV1: "acme.mesh.epoch.v1"
+        )
     }
 }

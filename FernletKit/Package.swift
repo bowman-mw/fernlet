@@ -30,7 +30,7 @@ let package = Package(
     products: [
         // The app and its tests link the umbrella product. An extension that needs only a portable
         // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
     ],
     dependencies: [
@@ -423,6 +423,22 @@ let package = Package(
         .target(
             name: "FernletProximityUI",
             dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 6.5 — Fernlet's connection rules on top of ProximityKit's mechanisms
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). Step A0.2.2
+        // gives it one thing: `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39
+        // domain-separation labels, the radios' service types, ALPNs and heartbeat, the QR scheme,
+        // the keychain rows, the storage names and the log subsystem), byte-identical to today's
+        // literals. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
+        // never the reverse. The payload vocabulary (A0.3), the feature purposes (A0.4) and the
+        // coach profile and link purposes (C1) join it later. Deps: ProximityKit only. MainActor
+        // default, with every namespace static marked nonisolated within (inert value data).
+        .target(
+            name: "FernletConnections",
+            dependencies: ["ProximityKit"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

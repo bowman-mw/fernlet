@@ -253,7 +253,10 @@ jobs:
         # names, the log subsystem), pinned by literal before any A0.2 commit moves one, with known
         # answers for the six core labels nothing else pinned. Its name ends `GoldenTests`, so
         # CIGateSelectorBoundaryTests demands it on a line; it rides this one because it is a domain
-        # and framing golden, not a mesh wire vector.
+        # and framing golden, not a mesh wire vector. Since A0.2.2 it also holds the shipped value,
+        # FernletConnections' `ProximityNamespace.fernlet`, to that table: every value, role and
+        # FernletCrypto twin, soundness, the byte-prefix check over both registries together, and one
+        # role-versus-consumer cell per hash and transcript consumer.
         #
         # `ProximityNamespaceSoundnessTests` joins at ProximityKit plan step A0.2.1 (2026-10-02): the
         # soundness rules, byte rules and collision checks of ProximityKit's protocol namespace — the
@@ -261,16 +264,16 @@ jobs:
         # from literals. Like the three above it has no compiler half: a loosened rule compiles clean
         # and moves no other test.
         #
-        # RAISED 38 -> 91 across A0.2.0 and A0.2.1, MEASURED on a Mac, 2026-10-02 (iPhone 17
-        # simulator, iOS 26.5), on the tree carrying both: this exact five-name list run at floor 1
-        # after the strict build-for-testing (Scripts/spm-wall-check.sh, WALL CHECK PASSED), read off
-        # its own result bundle: "91 tests in 5 suites" (6 + 13 + 19 + 24 + 29), 0 failed, 0
-        # skipped, no `Restarting after unexpected exit` line. Re-run AT 91: passed. Run once more at
-        # 91 without ProximityNamespaceSoundnessTests: 62 ran and the floor refused it, so a name
-        # cannot leave this line quietly. 38 + 24 + 29 = 91 is the ARITHMETIC CHECK, never the source.
+        # RAISED 38 -> 127 across A0.2.0, A0.2.1 and A0.2.2, MEASURED on a Mac, 2026-10-02 (iPhone 17
+        # simulator, iOS 26.5), on the tree carrying all three: this exact five-name list run at
+        # floor 1 after the strict build-for-testing (Scripts/spm-wall-check.sh, WALL CHECK PASSED),
+        # read off its own result bundle: "127 tests in 5 suites" (6 + 13 + 19 + 60 + 29), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 127: passed. Run once more
+        # at 127 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it, so a name
+        # cannot leave this line quietly. 38 + 60 + 29 = 127 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 91 \
+          Scripts/run-gated-suites.sh crypto-goldens 127 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

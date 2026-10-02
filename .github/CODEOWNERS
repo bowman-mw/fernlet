@@ -69,3 +69,7 @@
 
 # ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
 /FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw
+
+# Fernlet's wire identity (ProximityNamespace.fernlet): changing a literal breaks Fernlet's wire,
+# keychain and on-disk formats for every device already in the field
+/FernletKit/Sources/FernletConnections/       @bowman-mw
