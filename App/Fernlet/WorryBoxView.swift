@@ -64,6 +64,10 @@ struct WorryEntryView: View {
         .background(Color.parchment)
         .navigationTitle("Worry box")
         .navigationBarTitleDisplayMode(.inline)
+        // Return adds a line in the worry editor, which focuses itself on arrival, so the accessory
+        // is the way to put the keyboard away. On the page: it is pushed inside First aid's stack,
+        // where the sheet chrome's Done never reaches.
+        .keyboardDoneToolbar()
     }
 
     private var composer: some View {

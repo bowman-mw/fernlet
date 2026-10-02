@@ -679,6 +679,9 @@ struct BarcodeNotFoundView: View {
         }
         .background(Color.parchment)
         .navigationBarTitleDisplayMode(.inline)
+        // Always pushed (the meal sheet's or the recipe editor's stack), so the name field's
+        // keyboard "Done" is declared on the page: a Done outside the stack never reaches it.
+        .keyboardDoneToolbar()
         .onAppear {
             // Seed the macros the auto-router already read (once — don't clobber a rescan).
             if scanResult == nil, let prefilledScan {

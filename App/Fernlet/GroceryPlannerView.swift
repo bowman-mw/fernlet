@@ -115,6 +115,9 @@ struct ShoppingListBuilderView: View {
         .background(Color.parchment)
         .navigationTitle("Shopping list")
         .navigationBarTitleDisplayMode(.inline)
+        // Always pushed (the recipe book or the planner), so the page declares its own keyboard
+        // "Done": one declared outside the stack never reaches a page inside it.
+        .keyboardDoneToolbar()
         .onAppear {
             if !didSeed {
                 didSeed = true

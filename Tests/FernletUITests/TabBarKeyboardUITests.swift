@@ -67,10 +67,13 @@ final class TabBarKeyboardUITests: XCTestCase {
         XCTAssertTrue(save.exists, "the editor has no Save recipe button")
         // A bar resting on the keyboard puts Save's label 36pt above the keyboard's top. The tab-bar
         // reservation stacked on the keyboard added the bar's whole height to that: 128.7pt on main.
+        // The editor's keyboard "Done" accessory floats over the page's bottom, and the page avoids
+        // part of it (iPhone 17, iOS 26.5: its bottom moved 14pt up, Save's gap 36 → 50), so the
+        // allowance grows by that band's height; the stacked reservation would still add ~92pt.
         let gap = keyboardTop - save.frame.maxY
         XCTAssertGreaterThanOrEqual(gap, 0, "Save recipe (\(save.frame)) is under the keyboard (top \(keyboardTop))")
         XCTAssertLessThanOrEqual(
-            gap, Self.saveLabelInset + 4,
+            gap, Self.saveLabelInset + keyboardAccessoryHeight(above: keyboardTop, in: app) + 4,
             "Save recipe (\(save.frame)) floats \(gap)pt above the keyboard (top \(keyboardTop)): the tab-bar reservation is still stacked on it"
         )
         XCTAssertTrue(save.isHittable, "Save recipe is not hittable with the keyboard up")
@@ -88,10 +91,18 @@ final class TabBarKeyboardUITests: XCTestCase {
         search.typeText("oats")
         let log = app.buttons["Log recipe as meal"].firstMatch
         XCTAssertTrue(log.waitForExistence(timeout: 6), "the search found no recipe to log")
-        log.tap()
+        // The search field's keyboard "Done" accessory is a full-width band over the page's bottom
+        // that takes every touch in it, and the row's Log pill reaches into it (iPhone 17: pill
+        // y 478–522, band 491–539, page edge 525): a tap at the pill's centre landed on the band.
+        let bandTop = keyboardTop - keyboardAccessoryHeight(above: keyboardTop, in: app)
+        tap(log, above: bandTop)
         let snack = app.buttons["Snack"].firstMatch
         XCTAssertTrue(snack.waitForExistence(timeout: 4), "Log did not offer the meal slots")
-        snack.tap()
+        // The slots open under the row, wholly behind the band (y 530–574): scroll them up first.
+        if snack.frame.maxY > bandTop - 8 {
+            dragContent(up: snack.frame.maxY - bandTop + 24, from: bandTop - 12, in: app)
+        }
+        tap(snack, above: bandTop)
 
         let undo = app.buttons["mealToast.undo"]
         XCTAssertTrue(undo.waitForExistence(timeout: 3), "no meal-logged toast appeared")
@@ -172,6 +183,38 @@ final class TabBarKeyboardUITests: XCTestCase {
         guard predictions.exists else { return keys.minY }
         let bar = predictions.frame
         return abs(bar.maxY - keys.minY) < 2 ? min(bar.minY, keys.minY) : keys.minY
+    }
+
+    /// The height of the keyboard accessory toolbar (the "Done" bar) resting on the keyboard's
+    /// drawn top, or 0 when the focused field's page declares none.
+    private func keyboardAccessoryHeight(above keyboardTop: CGFloat, in app: XCUIApplication) -> CGFloat {
+        let bars = app.toolbars.matching(identifier: "Toolbar")
+        // Bounded: one accessory bar, plus any toolbar a page draws itself.
+        for index in 0..<min(bars.count, 4) {
+            let bar = bars.element(boundBy: index).frame
+            if abs(bar.maxY - keyboardTop) < 2 { return bar.height }
+        }
+        return 0
+    }
+
+    /// Taps `element` midway between its top and `bandTop` when its centre lies at or below that
+    /// line (a band that takes touches covers its lower part), else at its centre.
+    private func tap(_ element: XCUIElement, above bandTop: CGFloat, file: StaticString = #filePath, line: UInt = #line) {
+        let frame = element.frame
+        guard frame.midY >= bandTop else { return element.tap() }
+        XCTAssertGreaterThan(bandTop - frame.minY, 8, "\(element) (\(frame)) is wholly behind the band from y \(bandTop)",
+                             file: file, line: line)
+        let dy = ((frame.minY + bandTop) / 2 - frame.minY) / max(frame.height, 1)
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: dy)).tap()
+    }
+
+    /// Drags the page's content up by about `distance` points from a press at height `y`, above the
+    /// keyboard, with a slow press-drag-hold that ends where it is told to.
+    private func dragContent(up distance: CGFloat, from y: CGFloat, in app: XCUIApplication) {
+        let window = app.windows.firstMatch.frame
+        let start = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: y / window.height))
+        let end = start.withOffset(CGVector(dx: 0, dy: -distance))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.25)
     }
 
     /// Waits for `element` to leave the tree; true once it has.

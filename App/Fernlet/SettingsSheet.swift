@@ -136,6 +136,10 @@ struct SettingsSheet: View {
                 .navigationTitle("Settings")
                 .navigationDestination(for: SettingsRoute.self) { route in
                     destination(for: route)
+                        // Each pushed page's keyboard "Done" (the nutrition targets' number pads,
+                        // core memory's search, the care-task field): the sheet chrome's Done sits
+                        // outside this stack and reaches no page in it.
+                        .keyboardDoneToolbar()
                 }
                 // navigationBarDrawer keeps the field at the top (classic settings idiom). The
                 // iOS 26 default docks a floating capsule over the sheet's bottom rows, where it

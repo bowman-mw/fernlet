@@ -83,11 +83,10 @@ struct FoodView: View {
             .navigationTitle("")
             .navigationDestination(for: FoodRoute.self) { foodDestination($0) }
         }
-        // One keyboard "Done" for everything pushed inside the Food tab (the recipe book, its create
-        // flow, the planner). A tab is not a sheet, so it gets none of `fernletSheetChrome`'s
-        // accessories, and the numeric pads in there had no way to dismiss themselves. Declared once,
-        // at the stack, so a pushed page never stacks a second Done on top of it.
-        .keyboardDoneToolbar()
+        // No keyboard "Done" here: declared outside the stack it reached none of the stack's pages —
+        // each is hosted in its own controller — so the recipe book, its editor's number pads and
+        // the import screen showed no accessory at all (2026-10-01). Each page that holds a field
+        // declares its own (`RecipeBookSheet`, `RecipeSheet`, `RecipeImportSheet`, …).
         // Re-tapping Food pops everything pushed here back to this page; at this page it scrolls up.
         .tabReselect(token: $tabResetToken, scrollToTopToken: $scrollToTopToken, isAtRoot: { path.isEmpty }) {
             path.removeAll()
@@ -844,6 +843,9 @@ private struct RecipeImportSheet: View {
             }
         }
         .background(Color.parchment)
+        // Return adds a line in the paste editor, so the accessory is the way to put the keyboard
+        // away. On the page: it is always pushed, beyond the reach of a Done outside its stack.
+        .keyboardDoneToolbar()
     }
 
     /// The pasteboard-URL import affordance; disabled (and relabelled) while a fetch is in flight so
@@ -1537,9 +1539,12 @@ struct RecipeSheet: View {
         .background(Color.parchment)
         // Belt and braces for the unit menu and the steppers: this editor is reached from a routed
         // sheet, its own sheet, and two pushed stacks, and an untinted system control renders Apple
-        // blue in any presentation that isn't already tinted. (The keyboard "Done" is NOT declared
-        // here — its host does that once, so a pushed editor can't stack a second one.)
+        // blue in any presentation that isn't already tinted.
         .tint(Color.moss)
+        // The keyboard "Done" for the Qty and macro number pads, which have no return key. Declared
+        // on this page because it is always a page of a stack (pushed, or the root of its own
+        // sheet's stack), and a Done declared by the host outside that stack never reaches it.
+        .keyboardDoneToolbar()
         .navigationTitle(isEmbeddedInNavigationStack ? editorTitle : "")
         .navigationBarTitleDisplayMode(.inline)
         .destructiveConfirmation($pendingDestructiveAction)
@@ -2690,6 +2695,9 @@ struct MealSheet: View {
     private var mealNavigation: some View {
         NavigationStack(path: $path) {
             mealContent
+                // The composer's keyboard "Done" (its macro number pads have no return key). On the
+                // root page: the sheet chrome's Done sits outside this stack and reaches no page.
+                .keyboardDoneToolbar()
                 .navigationDestination(for: MealFlowDestination.self) { destination in
                     flowDestination(for: destination)
                 }
@@ -3874,6 +3882,8 @@ private struct FoodProductPageImportView: View {
         .background(Color.parchment)
         .navigationTitle("Import product")
         .navigationBarTitleDisplayMode(.inline)
+        // Always pushed (the meal sheet's stack), so the page declares its own keyboard Done.
+        .keyboardDoneToolbar()
         .sheet(isPresented: $showingProductReview) {
             if let preview {
                 FoodProductReviewSheet(
@@ -6836,6 +6846,9 @@ struct RecipeBookSheet: View {
         .background(Color.parchment)
         .navigationTitle(isEmbeddedInNavigationStack ? "Recipe book" : "")
         .navigationBarTitleDisplayMode(.inline)
+        // The search field's keyboard "Done": this content is always a page of a stack (pushed in
+        // the Food tab, or the root of the sheet's own stack), out of reach of any host's Done.
+        .keyboardDoneToolbar()
         // The create branch hangs off the book, not off the chooser, so `finishCreation` collapses
         // chooser + editor in one go and the user lands back here — the new recipe's home.
         .navigationDestination(isPresented: $isCreatingRecipe) {

@@ -618,9 +618,16 @@ public extension View {
     }
 
     /// A keyboard accessory toolbar carrying a single moss "Done" (checkmark) button that dismisses the
-    /// keyboard globally. Attach at a *sheet root* so every text/number field inside gets a Done: the
-    /// numeric pads otherwise have no return key and float over the save bar. Resigning first responder
-    /// app-wide (rather than a per-field `FocusState`) is what lets one modifier cover a whole sheet.
+    /// keyboard globally: the numeric pads otherwise have no return key and float over the save bar.
+    /// Resigning first responder app-wide (rather than a per-field `FocusState`) is what lets one
+    /// modifier cover every field on a page.
+    ///
+    /// **Attach it in the same hosting controller as the fields** — at the root of a sheet that has
+    /// no `NavigationStack`, or on the page itself when the page lives in a stack. Every page of a
+    /// stack, its root included, is hosted in its own controller, and a toolbar declared OUTSIDE the
+    /// stack reaches none of them: the Food tab's and the stack-wrapping sheets' Done showed on no
+    /// page at all (2026-10-01, iOS 26.5). Declare it once per page — two in one page put two
+    /// buttons in the bar.
     func keyboardDoneToolbar() -> some View {
         self.toolbar {
             ToolbarItemGroup(placement: .keyboard) {
@@ -633,10 +640,20 @@ public extension View {
                     // `FernletUICopy` (a resolved String), not a literal: a LocalizedStringKey
                     // written inside this package resolves against Bundle.main and never sees this
                     // module's catalog. See FernletUICopy's header.
-                    Label(FernletUICopy.done, systemImage: "checkmark.circle.fill")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.moss)
+                    //
+                    // The icon is a UIImage carrying its own accessibility label: the bar renders
+                    // this button as a native image item and names it after the image alone, so an
+                    // `Image(systemName:)` was announced as "selected" (the symbol's own label) and
+                    // `.accessibilityLabel` on the button never reached the item.
+                    Label {
+                        Text(verbatim: FernletUICopy.done)
+                    } icon: {
+                        Image(uiImage: KeyboardDoneGlyph.image())
+                    }
                 }
+                // Tint, not `foregroundStyle`: the native item ignored the style and drew the
+                // checkmark in the default ink.
+                .tint(Color.moss)
             }
         }
     }
@@ -1975,5 +1992,23 @@ public struct CoinBalancePill: View {
         .fernletSmallShadow()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: FernletUICopy.coinBalance(balance)))
+    }
+}
+
+/// The keyboard accessory's checkmark, as a `UIImage` that names itself "Done" (localized).
+///
+/// ``SwiftUI/View/keyboardDoneToolbar()`` hands it to the bar because the native item the bar
+/// draws takes its accessibility label from its image and nothing else: from an SF Symbol that is
+/// the symbol's own description ("selected"), which is what VoiceOver read and why no query found
+/// a "Done" (2026-10-01, iOS 26.5).
+private enum KeyboardDoneGlyph {
+    /// A template COPY of the symbol, never the symbol image itself: `UIImage(systemName:)` hands
+    /// every caller the same cached instance (measured on iOS 26.5), so labelling that one would
+    /// rename the checkmark everywhere UIKit draws it. `withRenderingMode` returns a new image.
+    @MainActor
+    static func image() -> UIImage {
+        let image = (UIImage(systemName: "checkmark.circle.fill") ?? UIImage()).withRenderingMode(.alwaysTemplate)
+        image.accessibilityLabel = FernletUICopy.done
+        return image
     }
 }

@@ -2035,6 +2035,11 @@ extension View {
     /// the Settings hub's toggles and links) rendered Apple blue. And numeric keypads have no return
     /// key, so without ``SwiftUI/View/keyboardDoneToolbar()`` the pad floated over the Save bar with
     /// no way to dismiss it.
+    ///
+    /// That Done reaches only a sheet with no `NavigationStack` of its own. Where the sheet's view
+    /// wraps a stack (meal, recipe, recipe book, Settings, First aid), every page of the stack —
+    /// its root included — is hosted in its own controller and never sees it, so those pages
+    /// declare their own (2026-10-01).
     func fernletSheetChrome(anchor: String, detents: Set<PresentationDetent>) -> some View {
         uxScreenAnchor(anchor)
             .presentationDetents(detents)
