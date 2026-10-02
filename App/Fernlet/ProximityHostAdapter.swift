@@ -1,10 +1,11 @@
 import ProximityKit
+import FernletConnections
 import Foundation
 import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`
-/// is already satisfied by existing store members (`trustedProximityPeers`,
+/// and `proximityNamespace` is already satisfied by existing store members (`trustedProximityPeers`,
 /// `proximityTrustVault`, `isBlockedFingerprint`, `blockProximityPeer`). Kept in
 /// the app target: this conformance is the one piece that cannot move into the
 /// future `ProximityKit` module, since it bridges the module's abstraction to the
@@ -19,4 +20,13 @@ extension FernletStore: ProximityHost {
     /// same way the own-photo corpora are. Production resolves to the unchanged
     /// `Application Support/Fernlet`; only tests redirect it. Overrides the protocol's default.
     var proximitySupportDirectory: URL { proximitySupportRoot }
+    /// Fernlet's protocol identity, `ProximityNamespace.fernlet` from `FernletConnections`: the one
+    /// value this composition root hands ProximityKit for every label, radio value, keychain row and
+    /// storage name it reads (ProximityKit plan step A0.2.3). The requirement has no default, so a
+    /// host that left this out would not compile.
+    ///
+    /// `nonisolated`: the namespace is inert `Sendable` value data, and the store's nonisolated
+    /// storage-scope properties (`meshSessionStorage`, `meshRoutedStorage`) read it once a later
+    /// A0.2 step builds the scopes from it.
+    nonisolated var proximityNamespace: ProximityNamespace { .fernlet }
 }

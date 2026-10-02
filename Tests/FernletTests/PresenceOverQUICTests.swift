@@ -12,6 +12,7 @@
 // the seam existed.
 
 @testable import ProximityKit
+import FernletConnections
 import Combine
 import Foundation
 import Testing
@@ -28,6 +29,7 @@ final class MockPresenceQUICHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
     var allowNearbyHearts: Bool = true
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)

@@ -89,7 +89,8 @@ import Testing
 /// that only reads or writes an INERT record does not, and the excluded set is written down here
 /// rather than left unmentioned, so the cut is visible and can be re-argued: `meshSessionStorage`,
 /// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximitySupportRoot`,
-/// `proximitySupportDirectory`, `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
+/// protocol identity, a constant value), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,

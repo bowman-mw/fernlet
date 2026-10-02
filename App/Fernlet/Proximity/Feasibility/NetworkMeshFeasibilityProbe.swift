@@ -8,6 +8,7 @@
 import BackgroundTasks
 import CryptoKit
 import Dispatch
+import FernletConnections
 import FernletCrypto
 import Foundation
 import Network
@@ -410,7 +411,7 @@ final class NetworkMeshFeasibilityProbe {
     private static let outboundRetryDelay: Duration = .seconds(2)
     private static let progressTotal: Int64 = 100
 
-    private let identity = IdentityService()
+    private let identity = IdentityService(namespace: .fernlet)
     private let serviceName = "fernlet-probe-\(UUID().uuidString.lowercased())"
     private var listener: NetworkListener<QUIC>?
     private var browser: NetworkBrowser<Bonjour>?

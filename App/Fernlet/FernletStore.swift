@@ -390,6 +390,10 @@ final class FernletStore {
             },
             localDayKey: { FernletDate.dayKey(for: $0) },
             displayName: { [weak self] in self?.proximityDisplayName ?? "" },
+            // This device's identity under the host's namespace (`.fernlet`, so the unchanged
+            // `com.fernlet.identity` rows): the service's identity has no default since ProximityKit
+            // plan step A0.2.3.
+            identity: IdentityService(namespace: proximityNamespace),
             // Files AND seal key on this store's own scope: `wipeForDeleteAll` destroys both, so
             // under the parallel test runner one store's "delete everything" would otherwise empty
             // every other live store's outbox and delete the key their sidecars are sealed with.

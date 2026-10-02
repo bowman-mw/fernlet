@@ -163,7 +163,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `FriendPhotoWallPost.isCarousel` | Returns true when a post contains more than one photo. |
 | `JSONSidecarFile<FriendPhotoWallPreferences>.load()` | Loads persisted wall aggregation/cover/favorite preferences, or `nil` (caller substitutes defaults). Was `FriendPhotoWallPreferencesStore.load()`, now the shared sidecar helper in `Support/JSONSidecarFile.swift`. |
 | `JSONSidecarFile<FriendPhotoWallPreferences>.save(_:)` | Persists wall preferences with atomic protected file writes. Was `FriendPhotoWallPreferencesStore.save(_:)`. |
-| `init(store:)` | Provisions identity, initializes photo cache/preferences, loads cached photos, and configures mesh session callbacks. |
+| `init(store:)` | Reads the host's namespace once (A0.2.3) and provisions the identity built from it, initializes photo cache/preferences, loads cached photos, and configures mesh session callbacks. |
 | `spawnHostPinned(_:)` | **The mandatory spawn idiom** for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host (`swift_abortRetainUnowned` aborts the whole process). Every `Task { … }` here goes through it EXCEPT the spawns whose handle the manager stores — those form `store → manager → handle → store` if pinned (HP2) and stay plain literals with a `// host-pin: timer — <reason>` marker. `MemoryLifecycleBoundaryTests` rule ML4 fails an unmarked one. |
 | `isInSession` | Returns true when a mesh exists or any slot has a committed fingerprint — the **UI** half, true across a blip because a founded mesh outlives its links (`ConnectView`'s camera swap, `ContentView.isDisposableCameraSessionActive`, `DisposableCameraView.resumeCameraAfterCancelledReview`, `ContentView.startFriendsDiscovery`'s re-entry guard). |
 | `hasCommittedPeer` | Whether any slot holds a committed fingerprint — **"is there a peer right now"**, and nothing more (P6 item 2, narrowed by its fix). Its remaining readers all mean a peer: `ConnectView.handleCommittedPeerChange(hadPeer:hasPeer:)` (the connection choreography and the session-end-sheet abandonment — on `isInSession` that arm's `!was && now` leg is DEAD for a founded pair), `ContentView.stopFriendsDiscovery()`, the 5-minute discovery timeout's own door, and `FriendsDiscoveryEntry`'s table. The three session-end hooks and `ConnectView.presentDisconnectReviewIfNeeded()` moved OFF it onto `isSessionLive`: on `isInSession` they would never fire again once a pair founds a mesh, and on this predicate a two-second link blip ran the whole ceremony over a live session. `isInSession` keeps the surfaces that must survive a blip: the layout swap, the camera chrome, and `handleSessionSurfaceChange(wasInSession:nowInSession:)`. |
@@ -1418,10 +1418,10 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 ## Protocol Namespace
 
 ProximityKit plan step A0.2.1 (2026-10-02): the host-supplied protocol identity, under
-`ProximityKit/Namespace/`. The types exist and nothing reads them yet; A0.2's later commits route
-ProximityKit's label, radio, keychain and storage reads through a `ProximityNamespace` the host hands
-in. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests` covers
-every rule below.
+`ProximityKit/Namespace/`. Since step A0.2.3 the host hands it in (`ProximityHost.proximityNamespace`,
+the supply path below) and `IdentityService` takes its keychain service from it; A0.2's later commits
+route ProximityKit's remaining label, radio, keychain and storage reads through it. ProximityKit
+holds no instance and offers no default. `ProximityNamespaceSoundnessTests` covers every rule below.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
 
@@ -1465,7 +1465,8 @@ every rule below.
 ### `FernletConnections/FernletProtocolNamespace.swift`
 
 Plan step A0.2.2: Fernlet's own value, in the `FernletConnections` module, which depends on
-ProximityKit so ProximityKit can never name it. Nothing reads it yet. `ProximityNamespaceGoldenTests`
+ProximityKit so ProximityKit can never name it. Since A0.2.3 the app supplies it as its
+`ProximityHost.proximityNamespace` and builds every `IdentityService` from it. `ProximityNamespaceGoldenTests`
 pins every literal against its frozen column, every role, soundness and the 38 FernletCrypto twins.
 
 | Function | What It Does |
@@ -1474,19 +1475,35 @@ pins every literal against its frozen column, every role, soundness and the 38 F
 | `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Today's labels, radio values and `fernlet` QR scheme by group, byte for byte, the legacy pair accepted. |
 | `Installation.fernletApp` | The Fernlet app's identity and seal-key rows, storage names and log subsystem. Coach adds an installation of its own beside it in plan step C1. |
 
+### The supply path (A0.2.3)
+
+How the value reaches ProximityKit: through the host seam, read once per manager, with no default
+anywhere. The one label read moved so far is the identity's keychain service, and
+`ProximityNamespaceGoldenTests` pins it.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: the one `ProximityHost` requirement with **no default** in the protocol extension, so a host that supplies none fails to compile instead of running under another app's identity. |
+| `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
+| `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`. Their construction calls do not change. |
+| `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
+| `IdentityService.init()` / `init(keychainService:)` (test target, `ProximityNamespaceTestBindings.swift`) | Convenience initializers passing `.fernlet`, restoring the call shapes the suites were written against. A binding restores a call shape, never a value; a test that pins a value names `.fernlet` explicitly. Later A0.2 commits add their bindings to the same file. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `init(keychainService:)` | Configures the Keychain service namespace. |
+| `init(namespace:keychainService:)` | Builds an identity under the host's `ProximityNamespace` (plan step A0.2.3). A `nil` service — every shipping path — is `namespace.installation.keychain.identity.service`, `com.fernlet.identity` under `.fernlet`; a test passes a throwaway service of its own. Replaced `init(keychainService:)` and its `"com.fernlet.identity"` default, so ProximityKit spells no app's service. Touches no keychain row. |
+| `namespace` / `purposes` | The namespace the identity was built with (`nonisolated let`) and its labels, `namespace.family.purposes` (`nonisolated`). |
 | `localFingerprint` | Returns fingerprint of current signing public key, or empty string before provisioning. |
 | `localSigningPublicKey` | Returns raw Ed25519 public key, or empty data before provisioning. |
 | `localKeyAgreementPublicKey` | Returns raw X25519 public key, or empty data before provisioning. |
-| `sign(_:)` | Signs bytes with local Ed25519 private key. |
+| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature labels, the app's duress and probe purposes, the core labels until their builders move, and the tests. No deprecation attribute (warnings are errors). |
+| `sign(_:purpose:)` with a `ProximityCryptographicPurpose` | The same Ed25519 boundary under a namespace label (A0.2.3). Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
 | `sealedBackupKey()` | Derives the sealed-backup symmetric key from the X25519 private key. |
-| `verify(_:of:by:)` | Verifies an Ed25519 signature against raw public key bytes. |
+| `verify(_:of:by:purpose:)` with a `CryptographicPurpose` or a `ProximityCryptographicPurpose` | Verifies an Ed25519 signature over a transcript framed for the purpose (`signingBytes`). Under a namespace label a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. The registry overload is transitional, like its `sign`. |
 | `seal(_:to:)` | Pairwise-seals payload using ephemeral X25519 ECDH, HKDF-SHA256, and ChaChaPoly. |
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM. |
@@ -1808,7 +1825,7 @@ frame.
 | --- | --- |
 | `ProximityRecipeShareDiagnosticEvent.init(...)` | Creates a timestamped diagnostic event. |
 | `ProximityRecipeShareDiagnostics.appending(_:to:maxCount:)` | Appends and caps diagnostics to the newest events. |
-| `init(store:)` / `init(store:makeSession:)` | Provisions identity, builds the radio and configures its callbacks. `makeSession` is the **test seam** (pass 2): an optional closure resolved in the init body — a `@MainActor` type cannot be a default-argument value — so a unit test hands in an in-memory `RecipeShareRadioSession` and every gate, pause and discovery callback is reachable with no Bonjour. Shipping code calls `init(store:)`. |
+| `init(store:)` / `init(store:makeSession:)` | Reads the host's namespace once (A0.2.3), provisions the identity built from it, builds the radio and configures its callbacks. `makeSession` is the **test seam** (pass 2): an optional closure resolved in the init body — a `@MainActor` type cannot be a default-argument value — so a unit test hands in an in-memory `RecipeShareRadioSession` and every gate, pause and discovery callback is reachable with no Bonjour. Shipping code calls `init(store:)`. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `start()` | Starts recipe-share discovery/advertising and observation if not already running. The radio's `start(advertisement:)` THROWS (pass 2), and a failure goes straight through `handleTransportError(_:)`'s stand-down door so `isListening` tells the truth. |
 | `stop()` | Stops discovery/session, cancels tasks, clears recipients/connections/status. A share still in flight is published first (`finishShareEndedByTeardown()`): `interrupted` before its send began, `sendIncomplete` after. |
@@ -2299,6 +2316,7 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | Type Or Member | What It Does |
 | --- | --- |
 | `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. |
+| `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. |
 | `proximityDisplayName`, `trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. |
 | `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
 | `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |

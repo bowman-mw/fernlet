@@ -37,6 +37,7 @@
 // in-person rather than merely defaulting to it.
 
 import SwiftUI
+import FernletConnections
 import FernletFoundation
 import FernletLock
 import FernletUI
@@ -301,8 +302,9 @@ private func ceremonyMessage(for error: Error) -> String {
 /// second key holder you can walk to" into "a second key holder anyone can reach".
 struct DuressRecoveryEnrollmentSheet: View {
     /// Injected in tests to point the ceremony at a throwaway identity keychain; production leaves
-    /// it nil and gets `IdentityService()`. Not a default *value*, because a `@MainActor` type can
-    /// never be a default argument — the coordinator is built in `onAppear` instead.
+    /// it nil and gets `IdentityService(namespace: .fernlet)`. Not a default *value*, because a
+    /// `@MainActor` type can never be a default argument — the coordinator is built in `onAppear`
+    /// instead.
     var coordinatorFactory: (@MainActor (FernletLockService) -> DuressRecoveryCoordinator)?
     /// The side of the ceremony the entry point already committed to, skipping the chooser.
     ///
@@ -337,7 +339,7 @@ struct DuressRecoveryEnrollmentSheet: View {
             if role == nil { role = initialRole }
             guard coordinator == nil else { return }
             coordinator = coordinatorFactory?(lockService)
-                ?? DuressRecoveryCoordinator(identity: IdentityService(), lockService: lockService)
+                ?? DuressRecoveryCoordinator(identity: IdentityService(namespace: .fernlet), lockService: lockService)
         }
     }
 
@@ -457,7 +459,7 @@ struct DuressRecoveryReturnSheet: View {
         .onAppear {
             guard coordinator == nil else { return }
             coordinator = coordinatorFactory?(lockService)
-                ?? DuressRecoveryCoordinator(identity: IdentityService(), lockService: lockService)
+                ?? DuressRecoveryCoordinator(identity: IdentityService(namespace: .fernlet), lockService: lockService)
         }
     }
 

@@ -13,6 +13,7 @@
 // drive it over `FakeRecipeShareRadioSession`, the in-memory conformer of the seam pass 2 added.
 
 @testable import ProximityKit
+import FernletConnections
 import Combine
 import Foundation
 import Testing
@@ -127,6 +128,7 @@ private final class RecipeQUICTestHost: ProximityHost {
     var proximityDisplayName: String { name }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

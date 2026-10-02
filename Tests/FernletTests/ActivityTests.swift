@@ -2,6 +2,7 @@ import XCTest
 import FernletFoundation
 import FernletDomainModel
 @testable import ProximityKit
+import FernletConnections
 
 /// Group Activities (Phase 6) — token/snapshot crypto + the host→join→grant flow through
 /// `ProximityActivityManager`. The join-token verification is the security-critical surface (this is the
@@ -509,6 +510,7 @@ private final class MockActivityHost: ProximityHost {
     var proximityDisplayName: String { name }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
 }

@@ -27,9 +27,22 @@ A0.2 commit, requires `ProximityNamespace.fernlet.soundness == .sound`, holds th
 FernletCrypto's registry also declares to the same spelling and the same signing acceptance, runs
 the "no label is a byte prefix of another" check over FernletCrypto's 81 registry labels and these
 39 together, and checks that the bytes each hash and transcript consumer writes today begin with
-the field's prefix. Nothing reads `.fernlet` yet: A0.2's later commits hand it to ProximityKit's
-readers (the host's supply path, the signed transcripts, the hashes and seals, the radios, the
-at-rest names), each move byte-identical, so Fernlet's behaviour does not change.
+the field's prefix.
+
+**How the app supplies it (plan step A0.2.3).** ProximityKit's `ProximityHost` requires a
+`proximityNamespace` and gives it no default, so the app is what hands `.fernlet` over: the
+`FernletStore` adapter (`App/Fernlet/ProximityHostAdapter.swift`) answers `.fernlet`, `nonisolated`
+because it is inert value data. The mesh, presence and recipe-share managers read it once at
+construction, keep their own copy and build their default identity from it; every other
+`IdentityService` the app builds says `IdentityService(namespace: .fernlet)` (the sealed-backup,
+own-photo, duress-recovery and launch paths, the readout and the DEBUG probe), and the heart-drop
+service's identity is built from the store's `proximityNamespace`. The identity's keychain service,
+`com.fernlet.identity`, is the first value ProximityKit reads off it. The test target's eleven
+`ProximityHost` doubles supply the same value, and its `ProximityNamespaceTestBindings.swift`
+restores the old `IdentityService()` and `IdentityService(keychainService:)` call shapes by passing
+`.fernlet`. A0.2's later commits hand the rest to ProximityKit's readers (the signed transcripts,
+the hashes and seals, the radios, the at-rest names), each move byte-identical, so Fernlet's
+behaviour does not change.
 
 **What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter
 that ProximityKit's copies of the audit log and of `ColumnCrypto` call back into. A0.3 adds the

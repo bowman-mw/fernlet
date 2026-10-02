@@ -5,8 +5,10 @@
 // Fernlet's protocol identity as ONE `ProximityNamespace` value, `.fernlet`, spelled from the same
 // literals today's code already ships, byte for byte. It lives here and not in ProximityKit because
 // the edge runs FernletConnections → ProximityKit: ProximityKit cannot name this module, so it can
-// never fall back to Fernlet's identity. Nothing reads `.fernlet` yet; A0.2's later commits hand it
-// to ProximityKit's readers one consumer family at a time.
+// never fall back to Fernlet's identity. Since A0.2.3 the app hands `.fernlet` to ProximityKit as its
+// `ProximityHost.proximityNamespace` and builds every `IdentityService` from it, and the identity's
+// keychain service is the one value read off it; A0.2's later commits hand the rest to ProximityKit's
+// readers one consumer family at a time.
 //
 // Every literal below is pinned by `ProximityNamespaceGoldenTests`' frozen column, so a change here
 // is a wire, keychain or on-disk format change for every device already in the field: it fails that

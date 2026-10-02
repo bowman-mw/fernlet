@@ -22,6 +22,7 @@
 // (.ended/.failed), and the parked pre-verification sweep (.idle/.starting/.discovering).
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletDomainModel
@@ -32,6 +33,7 @@ private final class RecipeCapTestHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

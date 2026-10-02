@@ -10,6 +10,7 @@
 // driven through the no-radio seams.
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import CryptoKit
@@ -22,6 +23,7 @@ private final class MockPresenceHeartsHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
     /// Settable so a test can toggle the hearts opt-out (the app's FernletStore backs this with
     /// `settings.allowNearbyHearts`).
     var allowNearbyHearts: Bool = true

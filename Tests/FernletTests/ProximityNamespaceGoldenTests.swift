@@ -42,6 +42,20 @@
 //    and no signature purpose of either accepts a transcript framed for the other, except Fernlet's
 //    two verify-only legacy labels, which accept every transcript by construction.
 //
+// One more group since step A0.2.3, when the host's supply path arrived and the identity's keychain
+// service became the first value read off the namespace. Its row's accessor is re-pointed at
+// `.fernlet`'s field; no literal moves:
+//
+// 8. **The supply path.** `IdentityService(namespace:)` takes its keychain service from the
+//    namespace it is handed (Fernlet's frozen service for `.fernlet`, another app's for another
+//    app's, an explicit service over either), and its namespace overloads of `sign` and `verify`
+//    treat each label by its role: the 19 writable signature labels sign and verify, the verify-only
+//    legacy pair verifies and never signs, and no other label does either.
+//
+// Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
+// Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
+// suite that pins values names the namespace it pins them under.
+//
 // Every hex vector below was derived from the FORMAT by an independent Python re-implementation,
 // proved honest first by reproducing vectors the repo already pins (SealedBackupFormatPinTests' two
 // escrow KATs, MeshMembershipEventGoldenTests' epoch-heads golden, MeshRoutedManifestGoldenTests' wrap
@@ -277,15 +291,17 @@ struct ProximityNamespaceGoldenTests {
 
     /// The identity service and its four device accounts, and the two seal-key rows.
     ///
-    /// The two seal-key services are read through the derivation the isolation walls themselves use
-    /// (the production heart-drop service in, the production service out): the production scopes'
-    /// own spellings are banned by substring in every other test file.
+    /// The identity service is read off `.fernlet` since step A0.2.3, when `IdentityService` began
+    /// taking it from the host's namespace (``theIdentityKeychainServiceIsReadOffTheNamespace()``
+    /// pins that read). The two seal-key services are read through the derivation the isolation
+    /// walls themselves use (the production heart-drop service in, the production service out): the
+    /// production scopes' own spellings are banned by substring in every other test file.
     private static var keychainRows: [NamespaceGoldenRow] {
         let identity = "installation.keychain.identity."
         let heartDrop = HeartPrekeyStore.keychainService
         return [
             NamespaceGoldenRow(.keychain, identity + "service", frozen: "com.fernlet.identity",
-                               today: .text(IdentityService().keychainService)),
+                               today: .text(ProximityNamespace.fernlet.installation.keychain.identity.service)),
             NamespaceGoldenRow(.keychain, identity + "signingPrivateKey", frozen: "signingPrivateKey", today: .unnamed),
             NamespaceGoldenRow(.keychain, identity + "keyAgreementPrivateKey", frozen: "keyAgreementPrivateKey",
                                today: .unnamed),
@@ -409,7 +425,7 @@ struct ProximityNamespaceGoldenTests {
     @Test func theIdentityAccountsAreTheFourRowsAProvisionedIdentityWrites() throws {
         let service = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        try IdentityService(keychainService: service).ensureProvisioned()
+        try IdentityService(namespace: .fernlet, keychainService: service).ensureProvisioned()
 
         let written = Set(KeychainItem.loadAll(service: service).map { $0.account })
         let frozen = Set(Self.table.filter { Self.identityAccountFields.contains($0.field) }.map(\.frozen))
@@ -680,7 +696,7 @@ struct ProximityNamespaceGoldenTests {
                                   fingerprint: "fp-member")
         let admitterService = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: admitterService) }
-        let admitter = IdentityService(keychainService: admitterService)
+        let admitter = IdentityService(namespace: .fernlet, keychainService: admitterService)
         try admitter.ensureProvisioned()
         let groupKey = Self.sequence(from: 0x70)
         let mesh = try Self.join(manager, on: coordinator, admitter: admitter, groupKey: groupKey, epoch: 5)
@@ -835,7 +851,7 @@ struct ProximityNamespaceGoldenTests {
 
         let service = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let identity = IdentityService(keychainService: service)
+        let identity = IdentityService(namespace: .fernlet, keychainService: service)
         try identity.ensureProvisioned()
         let sealed = try identity.seal(Data("marker".utf8), to: identity.localKeyAgreementPublicKey)
         #expect(sealed.prefix(4) == Data("FPT2".utf8), "the transport seal starts \(Self.hex(sealed.prefix(4)))")
@@ -849,7 +865,7 @@ struct ProximityNamespaceGoldenTests {
     @Test func theVerifyQRURLKeepsItsHostQueryKeyAndVersion() throws {
         let service = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let identity = IdentityService(keychainService: service)
+        let identity = IdentityService(namespace: .fernlet, keychainService: service)
         try identity.ensureProvisioned()
         let now = Date(timeIntervalSince1970: 1_700_000_000)
 
@@ -1470,6 +1486,112 @@ struct ProximityNamespaceGoldenTests {
         #expect(fernletAcceptors == legacy, "Fernlet purposes that accept a foreign transcript: \(fernletAcceptors.sorted())")
     }
 
+    // MARK: Group 8 — the supply path (A0.2.3)
+
+    /// The one label read A0.2.3 moves: an identity built from `.fernlet` with no service of its own
+    /// keeps its rows under the frozen identity service, one built from another app's namespace keeps
+    /// them under that app's (so the read is the namespace's field, not a literal that happens to
+    /// match Fernlet's), and an explicit service still wins. The identity keeps the namespace it was
+    /// handed, and its `purposes` are that namespace's. Construction touches no keychain row.
+    @Test func theIdentityKeychainServiceIsReadOffTheNamespace() {
+        let fernlet = IdentityService(namespace: .fernlet)
+        #expect(fernlet.keychainService == Self.frozen("installation.keychain.identity.service"),
+                "IdentityService(namespace: .fernlet) keeps its rows under \(fernlet.keychainService)")
+        #expect(fernlet.namespace == ProximityNamespace.fernlet)
+        #expect(fernlet.purposes == ProximityNamespace.fernlet.family.purposes)
+
+        let foreignNamespace = ForeignAppNamespace.namespace()
+        let foreign = IdentityService(namespace: foreignNamespace)
+        #expect(foreign.keychainService == "org.example.acme.identity",
+                "an identity under another app's namespace keeps its rows under \(foreign.keychainService)")
+        #expect(foreign.purposes == foreignNamespace.family.purposes)
+
+        let service = Self.isolatedIdentityService()
+        let isolated = IdentityService(namespace: .fernlet, keychainService: service)
+        #expect(isolated.keychainService == service, "an explicit keychain service no longer wins over the namespace's")
+        #expect(isolated.namespace == ProximityNamespace.fernlet)
+    }
+
+    /// `sign` under a namespace label signs only the 19 writable signature labels, each over a
+    /// transcript framed for it, and the signature verifies under the label and under its
+    /// FernletCrypto twin alike. It refuses, with `invalidKeyData` — the error a misframed transcript
+    /// has always thrown — a transcript framed for no label, the two verify-only legacy labels (they
+    /// accept every transcript, so signing under one would make the identity an unscoped signing
+    /// oracle) and all 18 labels in a non-signature role.
+    @Test func theNamespaceSignRefusesVerifyOnlyAndNonSignatureLabels() throws {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let identity = IdentityService(namespace: .fernlet, keychainService: service)
+        try identity.ensureProvisioned()
+        let twins = Dictionary(Self.registryTwins.map { ($0.field, $0.twin) }, uniquingKeysWith: { first, _ in first })
+        let body = Data("golden transcript body".utf8)
+        var signed = 0
+        var refused: [ProximityCryptographicPurpose.Role: Int] = [:]
+        // R2: bounded by the 39 label rows.
+        for row in ProximityNamespace.fernlet.labelRows {
+            let transcript = row.purpose.prefixBytes + body
+            guard Self.isWritableSignatureRole(row.purpose.role) else {
+                #expect(throws: IdentityError.invalidKeyData, "\(row.field) (\(row.purpose.role)) signed a transcript") {
+                    _ = try identity.sign(transcript, purpose: row.purpose)
+                }
+                refused[row.purpose.role, default: 0] += 1
+                continue
+            }
+            signed += 1
+            let signature = try identity.sign(transcript, purpose: row.purpose)
+            let key = identity.localSigningPublicKey
+            #expect(IdentityService.verify(signature, of: transcript, by: key, purpose: row.purpose),
+                    "\(row.field) does not verify the signature it made")
+            let twin = try #require(twins[row.field], "\(row.field) has no FernletCrypto twin")
+            #expect(IdentityService.verify(signature, of: transcript, by: key, purpose: twin),
+                    "\(row.field)'s signature does not verify under its FernletCrypto twin")
+            #expect(throws: IdentityError.invalidKeyData, "\(row.field) signed a transcript framed for no label") {
+                _ = try identity.sign(body, purpose: row.purpose)
+            }
+        }
+        #expect(signed == 19, "\(signed) labels signed; the design has 17 canonical and 2 QR transcripts")
+        let expectedRefusals: [ProximityCryptographicPurpose.Role: Int] = [
+            .signature(.absent): 2, .keyDerivationSalt: 3, .tlsExporterLabel: 1, .columnSeal: 2,
+            .aeadAssociatedData: 5, .hashDomain(.lengthPrefixed): 6, .hashDomain(.rawPrefix): 1
+        ]
+        #expect(refused == expectedRefusals, "sign refused \(refused); the design refuses \(expectedRefusals)")
+    }
+
+    /// `verify` under a namespace label answers as the `CryptographicPurpose` overload answers under
+    /// the label's FernletCrypto twin, for a genuine signature over `lp(label) ‖ body`, `label ‖ body`
+    /// and `body`: each writable label accepts only its own framing and each legacy label all three.
+    /// A label in a non-signature role verifies nothing at all — where its registry twin, which has
+    /// no role, still accepts the raw-framed transcript.
+    @Test func theNamespaceVerifyAcceptsWhatItsFernletCryptoTwinAccepts() throws {
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let publicKey = key.publicKey.rawRepresentation
+        let twins = Dictionary(Self.registryTwins.map { ($0.field, $0.twin) }, uniquingKeysWith: { first, _ in first })
+        let body = Data("golden transcript body".utf8)
+        var compared = 0
+        var refusing = 0
+        // R2: bounded by the 39 label rows, three inputs each.
+        for row in ProximityNamespace.fernlet.labelRows {
+            let inputs = [Self.lengthPrefixed(row.purpose.data) + body, row.purpose.data + body, body]
+            let signatures = try inputs.map { try key.signature(for: $0) }
+            let accepted = zip(inputs, signatures).map {
+                IdentityService.verify($1, of: $0, by: publicKey, purpose: row.purpose)
+            }
+            guard Self.isSignatureRole(row.purpose.role) else {
+                refusing += 1
+                #expect(accepted == [false, false, false], "\(row.field) (\(row.purpose.role)) verified \(accepted)")
+                continue
+            }
+            compared += 1
+            let twin = try #require(twins[row.field], "\(row.field) has no FernletCrypto twin")
+            let twinAccepted = zip(inputs, signatures).map {
+                IdentityService.verify($1, of: $0, by: publicKey, purpose: twin)
+            }
+            #expect(accepted == twinAccepted,
+                    "\(row.field) verifies \(accepted) of [lp+body, label+body, body]; its twin \(twinAccepted)")
+        }
+        #expect(compared == 21 && refusing == 18, "\(compared) signature labels compared and \(refusing) refusing")
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -1537,7 +1659,7 @@ struct ProximityNamespaceGoldenTests {
                                            account: frozen("installation.keychain.identity.keyAgreementPrivateKey"),
                                            service: service, accessibility: accessibility)
         #expect(signing == errSecSuccess && agreement == errSecSuccess, "the planted identity rows did not land")
-        let identity = IdentityService(keychainService: service)
+        let identity = IdentityService(namespace: .fernlet, keychainService: service)
         try identity.ensureProvisioned()
         #expect(hex(identity.localKeyAgreementPublicKey) == plantedKeyAgreementPublicKeyHex,
                 "provisioning did not adopt the planted key agreement key")
@@ -1562,7 +1684,7 @@ struct ProximityNamespaceGoldenTests {
     /// writes no keychain row (the `MeshEncryptionTests` harness).
     private static func unprovisionedCoordinator() -> ProximityCoordinator {
         ProximityCoordinator(
-            identity: IdentityService(keychainService: isolatedIdentityService()),
+            identity: IdentityService(namespace: .fernlet, keychainService: isolatedIdentityService()),
             transport: MockMultipeerTransport(),
             ranging: MockRangingProvider(),
             replayCache: ReplayCache(),
@@ -1704,6 +1826,13 @@ struct ProximityNamespaceGoldenTests {
     static func isSignatureRole(_ role: ProximityCryptographicPurpose.Role) -> Bool {
         guard case .signature = role else { return false }
         return true
+    }
+
+    /// Whether a new transcript may be signed under `role`, as the design puts it: a length-prefixed
+    /// or raw-prefix signature, never the verify-only `.absent`. Spelled here independently of the
+    /// production check it is compared with.
+    static func isWritableSignatureRole(_ role: ProximityCryptographicPurpose.Role) -> Bool {
+        role == .signature(.lengthPrefixed) || role == .signature(.rawPrefix)
     }
 }
 

@@ -13,6 +13,7 @@
 // and the one-time first-kept-friend enable prompt (fires on 0→1, never twice).
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import CryptoKit
@@ -27,6 +28,7 @@ private final class MockPresenceHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }
