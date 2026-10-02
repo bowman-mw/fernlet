@@ -184,12 +184,23 @@ jobs:
         # exported or sent to friends", it has no compiler half, and this step's floor is the shared `1`,
         # so the name needs no re-measure (the line ran 88 tests in 8 suites on the round's integrated
         # tree).
+        #
+        # `ProximityAuditBridgeTests` joins them at ProximityKit plan step A0.2's audit sink
+        # (2026-10-02). ProximityKit now writes every audit line to the sink its host installs and
+        # drops it while none is; Fernlet's, `FernletAuditBridge`, is installed by
+        # `FernletApp.init`. A missing install compiles clean, and every capture test that asserts
+        # an event was NOT logged would then pass vacuously, so this canary (a ProximityKit line
+        # reaches a `FernletAuditLog` capture handler, unchanged and before the call returns),
+        # together with its scan that ProximityKit code names `FernletAuditLog` nowhere, must run on
+        # every push. It rides this line because its floor is the shared `1`, so the name needs no
+        # re-measure.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
             AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
             CompanionRefreshSchedulingTests CompanionRefreshPipelineTests \
-            WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests
+            WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests \
+            ProximityAuditBridgeTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an

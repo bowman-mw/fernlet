@@ -251,7 +251,7 @@ struct MeshRoutedRetryPlanTests {
         // R2: bounded by the needle list.
         for needle in ["MeshRoutedTypeToken", "typeToken", "routedTypes", "canonicalStore",
                        "entry(for:", "requiresForeground", "MeshRoutedManifest",
-                       "MeshRoutedStore(", "MeshRoutedIndex(", "FernletAuditLog"] {
+                       "MeshRoutedStore(", "MeshRoutedIndex(", "ProximityAudit"] {
             #expect(code.contains(needle) == false, "the planner acquired something it must not see")
         }
     }

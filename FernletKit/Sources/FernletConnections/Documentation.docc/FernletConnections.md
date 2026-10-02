@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, and `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; and ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`.
 
 ## Overview
 
@@ -87,9 +87,20 @@ still decides what they seal and open under. The app's `ProximityHost` adapter a
 `proximityInstallBinding` with one, `FernletStore`'s two storage scopes carry it, and so do the test
 target's `ProximityHost` doubles and store fixtures.
 
-**What joins it later.** A0.2's later steps add the audit bridge that ProximityKit's copy of the
-audit log calls back into. A0.3 adds the
-payload vocabulary (payload type tokens, capability raw values, the sealing set, routed-type rows,
+**The audit bridge (plan step A0.2.10).** ProximityKit writes every audit line through
+`ProximityAudit.log(_:context:)` to the `ProximityAuditSink` its host installed, and drops the line
+while none is. ``FernletAuditBridge`` (`FernletAuditBridge.swift`) is Fernlet's: it hands each event
+name and context to `FernletAuditLog.log(_:context:)` unchanged, on the emitting executor, before it
+returns, so the unified log and every test that captures a ProximityKit event through
+`FernletAuditLog.addCaptureHandler` see exactly what they saw when ProximityKit named
+`FernletAuditLog` itself. `FernletApp.init` installs it first, before anything can build a
+ProximityKit object, and unconditionally, since the unit tests are hosted in the app.
+`ProximityAuditBridgeTests` (on the `s3-grep` CI line) is the canary: a ProximityKit line must reach
+a `FernletAuditLog` capture handler verbatim before the call returns, or every test asserting that
+an event was NOT logged would pass vacuously; it also holds ProximityKit's code to naming
+`FernletAuditLog` nowhere.
+
+**What joins it later.** A0.3 adds the payload vocabulary (payload type tokens, capability raw values, the sealing set, routed-type rows,
 membership record kinds), the session trust policies and the presentation strings that must become
 per-host (instance prefixes, the TLS certificate name, the display default). A0.4 makes Fernlet's
 feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
@@ -104,10 +115,11 @@ reverse, so ProximityKit cannot name `.fernlet` even by accident; a non-Fernlet 
 identity only by importing this module or by copying its literals on purpose. It stays in
 FernletKit after ProximityKit leaves for its own repository (plan A1), consuming the package by tag.
 
-**Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit` and,
-since step A0.2.9, `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to),
-and imports nothing else but Foundation and Security. Through ProximityKit it reaches `PrivateMediaStore`
-transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
+**Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; since
+step A0.2.9 on `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to); and
+since step A0.2.10, for the audit bridge, on `FernletFoundation` (Layer 0, which `FernletAuditLog`
+lives in). It imports nothing else but Foundation and Security. Through ProximityKit it reaches
+`PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair
 of rules (nothing here imports CloudKit, and CloudKitSync never imports this module).
@@ -120,4 +132,6 @@ every device already in the field.
 `Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`:
 the namespace is inert `Sendable` value data, and its readers are ProximityKit's nonisolated
 serializers, verifiers and stores; the binding adapter is a stateless `Sendable` value the column
-seal calls synchronously from inside those stores.
+seal calls synchronously from inside those stores. ``FernletAuditBridge`` is a `nonisolated` struct
+for the same reason: ProximityKit's `nonisolated` stores call it synchronously, which a main-actor
+conformance would not allow.

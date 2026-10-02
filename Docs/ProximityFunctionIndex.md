@@ -1719,6 +1719,25 @@ their refusals pairing by pairing, and holds each store to its scope's label and
 | `TrainerAuditEvent.init(...)` | Creates an audit event for pairing, state, envelope, revocation, ending, and error diagnostics. |
 | `ProximityTrustPolicy` methods | Define trust, revoke/block, and audit hooks consumed by `ProximityCoordinator`. |
 
+### `Support/ProximityAudit.swift`
+
+ProximityKit plan step A0.2, the audit sink: every audit line this module writes goes through here to
+the sink the host installed. Not the persisted trainer audit above, and not Fernlet's AI audit log.
+Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog`:
+`ProximityAuditBridgeTests` fails on any ProximityKit code that names `FernletAuditLog`.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityAuditSink.record(_:context:)` | The host's requirement: record one event, synchronously and on the caller's executor (`nonisolated`, `Sendable`, non-throwing). |
+| `ProximityAudit.install(_:)` | The host installs its sink once at launch; a later call replaces it. Until the first call every line is dropped. |
+| `ProximityAudit.log(_:context:)` (internal) | The module's only audit entry point (`context` defaults to `[:]`): reads the sink under the slot's `Mutex`, calls it after releasing the lock, before returning; drops the line when no sink is installed. |
+
+### `FernletConnections/FernletAuditBridge.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `FernletAuditBridge.record(_:context:)` | Fernlet's sink: `FernletAuditLog.log(event, context: context)`, unchanged and in line, so every `FernletAuditLog` capture handler sees ProximityKit's lines. `FernletApp.init` installs it first, unconditionally. |
+
 ### `ConnectionInspector.swift`
 
 | Function | What It Does |

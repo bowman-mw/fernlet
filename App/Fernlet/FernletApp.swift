@@ -1,5 +1,6 @@
 import SwiftUI
 import CloudKitSync
+import FernletConnections
 import FernletFoundation
 import FernletLock
 import HealthKitGateway
@@ -21,6 +22,8 @@ import FernletUI
 /// must-happen-before-launch wiring: installing ``CoreDataHealthKitCacheCleaner`` into the
 /// HealthKit gateway's static seam, setting ``FernletNotificationDelegate`` on the notification
 /// center (so a cold-launch tap is delivered), and baking the UIKit nav-bar appearance.
+/// Before all of that it installs ProximityKit's audit sink, `FernletAuditBridge`, so no
+/// ProximityKit audit line is dropped (ProximityKit plan step A0.2).
 ///
 /// The body swaps between `LaunchScreen` (preparing), onboarding or ``ContentView`` (ready), and
 /// `LaunchFailureView` (failed). Scene-phase changes relock the app and flush the pending
@@ -76,6 +79,12 @@ struct FernletApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // ProximityKit plan step A0.2: ProximityKit writes its audit lines to the sink its host
+        // installs and drops them while none is, so this runs FIRST, before anything below can
+        // build a ProximityKit object, and unconditionally, never behind `UITestSupport`: the unit
+        // tests are hosted in this app, and their audit captures see ProximityKit's lines only
+        // through it.
+        ProximityAudit.install(FernletAuditBridge())
         // App Intents resolve this dependency before any scene exists. Registering it at process
         // startup gives background file exchange the same main-process store access as the UI.
         ExchangeIntentService.registerAppDependency()

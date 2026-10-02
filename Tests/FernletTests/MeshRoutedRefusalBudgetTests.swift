@@ -200,7 +200,7 @@ struct MeshRoutedRefusalBudgetTests {
     /// `receiveRoutedDrainAnswer`) is a pre-store refusal in one of the two doors the sentence is
     /// about and was pinned nowhere in `Tests/`. Enumerating spellings is the failure mode: a sixth
     /// exit under a fresh token is invisible to a list and visible to a count. So the doors are
-    /// brace-matched and every `FernletAuditLog.log(` inside them is counted — **six**: two
+    /// brace-matched and every `ProximityAudit.log(` inside them is counted — **six**: two
     /// refusals + one guard + two refusals, plus the one SUCCESS line
     /// (`mesh.merge.routedQuiescent`), which is deliberately inside the count. A new line of any
     /// kind, refusal or not, reds here and has to be argued for.
@@ -234,7 +234,7 @@ struct MeshRoutedRefusalBudgetTests {
                 "a spent sender is dropped at the dispatch, before the decode")
         #expect(dispatch.components(separatedBy: "refuseRoutedFrameBeforeStore(").count - 1 == 4,
                 "all four undecodable exits charge the sender")
-        #expect(!dispatch.contains("FernletAuditLog.log("),
+        #expect(!dispatch.contains("ProximityAudit.log("),
                 "the dispatch writes no audit line of its own — every refusal there goes through the charging door")
 
         let resets = code.components(separatedBy: "routedRefusalBudget.reset()").count - 1
@@ -261,7 +261,7 @@ struct MeshRoutedRefusalBudgetTests {
                 MeshRoutedSourceScan.bracedBody(after: door, in: code),
                 "a digest door was renamed, or its brace-matched body does not close"
             )
-            lines += body.components(separatedBy: "FernletAuditLog.log(").count - 1
+            lines += body.components(separatedBy: "ProximityAudit.log(").count - 1
         }
         #expect(lines == 6, """
             the digest doors write an audit line this wall does not know about. Six are expected: \
