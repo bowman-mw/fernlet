@@ -692,11 +692,12 @@ struct PresenceOverQUICTests {
     /// A service type missing from `NSBonjourServices` fails discovery silently on device, and a
     /// shared ALPN would let a presence dial complete a TLS handshake with a mesh listener.
     @Test func thePresenceServiceTypeIsItsOwnAndIsDeclared() throws {
-        #expect(NetworkPresenceSession.serviceType == "_fernlet-near2._udp")
-        #expect(NetworkPresenceSession.serviceType != NetworkMeshSession.friendServiceType)
-        #expect(NetworkPresenceSession.alpn != NetworkMeshSession.alpn)
+        let radios = ProximityNamespace.fernlet.family.radios
+        #expect(radios.presence.serviceType == "_fernlet-near2._udp")
+        #expect(radios.presence.serviceType != radios.mesh.serviceType)
+        #expect(radios.presence.alpn != radios.mesh.alpn)
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
-        #expect(plist.contains("<string>\(NetworkPresenceSession.serviceType)</string>"))
+        #expect(plist.contains("<string>\(radios.presence.serviceType)</string>"))
     }
 
     // MARK: - Peer labels (P9 item 2, tier-2 finding A)
@@ -722,7 +723,8 @@ struct PresenceOverQUICTests {
         // A real browsed endpoint id, built exactly as Bonjour builds one.
         let hex = "0123456789abcdef"
         let peerName = "\(PresenceEpochPosture.instanceNamePrefix)-\(hex)"
-        let endpointID = "\(peerName).\(NetworkPresenceSession.serviceType).local."
+        let serviceType = ProximityNamespace.fernlet.family.radios.presence.serviceType
+        let endpointID = "\(peerName).\(serviceType).local."
         let key = MeshLinkKey(endpointID)
 
         let capture = MeshRoutedBackpressureAuditCapture()
@@ -755,7 +757,7 @@ struct PresenceOverQUICTests {
         // Every fragment of the peer's identity, hunted across EVERY context value of EVERY line.
         let forbidden = [
             endpointID, peerName, hex,
-            "\(PresenceEpochPosture.instanceNamePrefix)-", NetworkPresenceSession.serviceType
+            "\(PresenceEpochPosture.instanceNamePrefix)-", serviceType
         ]
         for record in records {
             for (contextKey, value) in record.context {

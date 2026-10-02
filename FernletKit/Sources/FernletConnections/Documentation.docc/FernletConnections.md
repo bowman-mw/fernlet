@@ -59,8 +59,12 @@ id's domain, `fernlet.mesh.epoch.v1`, which ProximityKit used to spell for itsel
 label. Every sealed payload, group-key wrap, encrypted-metadata wrapper, routed item seal, content-key
 wrap, content hash, chunk and receipt id and epoch id is therefore derived from `.fernlet`'s bytes,
 which are today's, so none of them moves; the bindings file restores those call shapes with `.fernlet`
-too. A0.2's later commits hand the rest to ProximityKit's readers (the radios and the exporter label,
-the at-rest names and the two column seals), each move byte-identical, so Fernlet's behaviour does not
+too. Since step A0.2.7 the three radios are built from the namespace their manager holds and read
+`Radios.fernlet`'s service types, ALPNs and heartbeat, the TLS exporter label and
+`Installation.fernletApp`'s log subsystem off it, so every advertisement, negotiation, beat and
+channel binding is spelled exactly as before; the bindings file restores the radios' argument-less
+initializers with `.fernlet`. A0.2's later commits hand the rest to ProximityKit's readers (the at-rest
+names and rows and the two column seals), each move byte-identical, so Fernlet's behaviour does not
 change.
 
 **What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter

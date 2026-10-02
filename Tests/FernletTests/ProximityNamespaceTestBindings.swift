@@ -492,3 +492,41 @@ extension MeshRotationPolicy {
              presentedRoster: presentedRoster, in: .fernlet)
     }
 }
+
+// MARK: - The three radios (A0.2.7)
+
+/// The argument-less radio initializer the suites were written against, restored over
+/// `init(namespace:)` with Fernlet's namespace (plan step A0.2.7). The radios are internal, so this
+/// file imports ProximityKit `@testable`.
+///
+/// A binding restores a call shape, never a value: a test that pins a service type, an ALPN or the
+/// heartbeat reads it off `ProximityNamespace.fernlet.family.radios` instead of off a radio built
+/// here. Each inherits the class's main-actor isolation, as the initializer it replaces had.
+extension NetworkMeshSession {
+
+    /// `NetworkMeshSession(namespace: .fernlet)`: the friend mesh's radio on Fernlet's wire, the radio
+    /// the retired `init()` built.
+    convenience init() {
+        self.init(namespace: .fernlet)
+    }
+}
+
+/// The presence radio's argument-less initializer, restored as ``NetworkMeshSession``'s is.
+extension NetworkPresenceSession {
+
+    /// `NetworkPresenceSession(namespace: .fernlet)`: the presence radio on Fernlet's wire, the radio
+    /// the retired `init()` built.
+    convenience init() {
+        self.init(namespace: .fernlet)
+    }
+}
+
+/// The recipe-share radio's argument-less initializer, restored as ``NetworkMeshSession``'s is.
+extension NetworkRecipeShareSession {
+
+    /// `NetworkRecipeShareSession(namespace: .fernlet)`: the recipe-share radio on Fernlet's wire, the
+    /// radio the retired `init()` built.
+    convenience init() {
+        self.init(namespace: .fernlet)
+    }
+}

@@ -1509,10 +1509,11 @@ its `identityService`'s, a `MeshMembershipRecordVerifier` its own copy, the mana
 
 The QUIC channel introduction, the six routed transcripts and the verify QR read the namespace. The
 routed doors and the introduction exchange keep their own copy, which the manager fills with its stored
-`namespace.family.purposes` (the transport fills the exchange's from `MeshIntroductionAuthority.namespace`,
-the manager's same value, so the peer's introduction is checked under the label the manager signs this
-side's under); every routed builder signs under its identity's `purposes`; the QR scheme and labels come
-from the signing identity's namespace or the caller's. `CoachVerificationCeremony` and the app's duress
+`namespace.family.purposes` (the transport filled the exchange's from `MeshIntroductionAuthority.namespace`,
+the manager's same value, until A0.2.7 gave the radio its own copy, so the peer's introduction is
+checked under the label the manager signs this side's under); every routed builder signs under its
+identity's `purposes`; the QR scheme and labels come from the signing identity's namespace or the
+caller's. `CoachVerificationCeremony` and the app's duress
 flow scan and answer under their identity's. `ProximityNamespaceGoldenTests` pins the ten moved values
 off `.fernlet` and holds each reader to the namespace it is handed.
 
@@ -1520,7 +1521,7 @@ off `.fernlet` and holds each reader to the namespace it is handed.
 | --- | --- |
 | `canonicalBytes(for:in:)` (the channel introduction and the six routed types) | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. |
 | `MeshRoutedManifestVerifier` / `MeshChunkVerifier` / `MeshCustodyReceiptVerifier` / `MeshRecipientReceiptVerifier` / `MeshRoutedInventoryVerifier` / `MeshRoutedDrainAnswerVerifier` / `MeshChannelIntroductionExchange` `init(...purposes:)` | Each keeps its copy of the labels as a trailing `purposes:` with no default and checks every signature (and frames the introduction transcript) under it. |
-| `MeshIntroductionAuthority.namespace` | The host's namespace as the transport's authority holds it; `MeshNetworkManager` meets it with its stored `namespace`. |
+| `MeshIntroductionAuthority.namespace` (A0.2.5; removed by A0.2.7) | The host's namespace as the transport's authority held it, before the radio held one of its own. |
 | `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `ProximityVerifySignature.message(...in:)` | The QR's scheme and labels from the caller's namespace; see `ProximityVerification.swift` below. |
 | `canonicalBytes(for:)` for the seven types, the old verifier and exchange initializers, `ProximityVerifyQR.parse(_:)` / `isValid(_:at:)` / `urlScheme`, `ProximityVerifySignature.message(...qrNonce:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet`. |
 
@@ -1546,6 +1547,23 @@ reader to the namespace it is handed (group 11).
 | `MeshEpochRef.minted(...in:)` / `successor(...in:)` / `MeshRotationPolicy.plan(...in:)` | Every epoch id derived under `purposes.hash.meshEpochIDV1`, raw. |
 | `IdentityService.seal(_:to:format:)` / `open(_:from:format:)` / `encryptGroupKey(_:for:)` / `decryptGroupKey(_:)` | Unchanged shapes; their salts and AEAD labels come from the identity's `purposes`. |
 | The digest statics, `MeshChunk.chunkID` / `receiptID` as properties, `MeshRoutedContentHasher()`, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)`, the six seal and wrap doors, `MeshEpochRef.minted` / `successor`, `MeshRotationPolicy.plan` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet`. |
+
+### Radios (A0.2.7)
+
+The three radios read their service types, ALPNs, the mesh heartbeat, the TLS exporter label and the
+log subsystem off the namespace their manager builds them from, once, in `init(namespace:)`; the
+statics are deleted. The mesh radio also keeps a copy of `family.purposes`, which every channel
+introduction exchange it starts frames and checks under, so `MeshIntroductionAuthority.namespace`
+(A0.2.5) is gone. `ProximityNamespaceGoldenTests` pins the nine moved values off `.fernlet` and holds
+each radio to the namespace it is built from (group 12).
+
+| Function | What It Does |
+| --- | --- |
+| `NetworkMeshSession.init(namespace:)` | Keeps `serviceType`, `alpn`, `heartbeatDatagram`, `tlsExporterLabel` and `purposes` as `nonisolated let`s and a private instance `Logger` (`proximity.transport.quic`); `connectionParameters()` and `listenerParameters(identity:)` are instance methods reading the instance ALPN. |
+| `NetworkMeshSession.channelBindingHash(for:exporterLabel:)` | SHA-256 of the connection's TLS exporter secret under the label it is handed, whole (role `.tlsExporterLabel`); its one caller hands it the radio's `tlsExporterLabel`. |
+| `NetworkPresenceSession.init(namespace:)` / `NetworkRecipeShareSession.init(namespace:)` | Keep `serviceType` and `alpn` from `family.radios.presence` / `.recipeShare` and a private instance `Logger`. |
+| `MeshNetworkManager.init` / `ProximityRecipeShareManager.init` / `PresenceManager.makeSession` | Build their radio from the stored `namespace`; presence's `makeSession` is set in `init`, a closure capturing the value. |
+| `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkRecipeShareSession.init()` (test target, `ProximityNamespaceTestBindings.swift`) | The argument-less radios, restored for the suites by passing `.fernlet`. |
 
 ## Identity, Wire, Trust, And Audit
 

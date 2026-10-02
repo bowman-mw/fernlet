@@ -92,6 +92,16 @@
 //     the manager opens encrypted metadata under its host's namespace; and every epoch id is
 //     derived under the namespace's raw epoch domain.
 //
+// One more group since step A0.2.7, when the three radios began reading their service types, ALPNs,
+// heartbeat, TLS exporter label and log subsystem off the namespace their manager hands them, and the
+// mesh radio began framing and checking every channel introduction under that namespace's labels
+// (group 10's manager cell now reads them off the radio the manager builds). Those nine rows'
+// accessors are re-pointed at `.fernlet`'s fields; no literal moves:
+//
+// 12. **The radios.** Each radio holds what the namespace it was built from says (Fernlet's frozen
+//     values under `.fernlet`, another app's under another app's), and the mesh radio's heartbeat
+//     and channel-binding consumers take those values from the radio, whole.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
 // suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
@@ -259,8 +269,9 @@ struct ProximityNamespaceGoldenTests {
     /// Since step A0.2.4 the membership inventory digest's hash domain is read off `.fernlet`
     /// (`fernletHash` below), as production reads it off the host's namespace; since step A0.2.6 the
     /// three HKDF salts, the five AEAD labels and the other six hash domains are too, the epoch
-    /// domain among them (its `MeshEpochBounds.derivationDomain` is gone). Only the TLS exporter label
-    /// (A0.2.7) and the two column seals (A0.2.9) still read FernletCrypto's registry here.
+    /// domain among them (its `MeshEpochBounds.derivationDomain` is gone), and since step A0.2.7 the
+    /// TLS exporter label, which the mesh radio reads off the namespace it is built from. Only the two
+    /// column seals (A0.2.9) still read FernletCrypto's registry here.
     private static var otherLabelRows: [NamespaceGoldenRow] {
         typealias KeyDerivation = FernletCryptoPurpose.KeyDerivation
         let fernletDerivation = ProximityNamespace.fernlet.family.purposes.keyDerivation
@@ -275,7 +286,7 @@ struct ProximityNamespaceGoldenTests {
             NamespaceGoldenRow(.label, derivation + "meshGroupKeyWrapV1", frozen: "fernlet.mesh.groupkey.v1",
                                today: .text(fernletDerivation.meshGroupKeyWrapV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshTLSExporterV1", frozen: "fernlet.mesh.tls-exporter.v1",
-                               today: .text(KeyDerivation.meshTLSExporterV1.rawValue)),
+                               today: .text(fernletDerivation.meshTLSExporterV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshRoutedContentKeyWrapV1", frozen: "fernlet.mesh.routed.content-key.v1",
                                today: .text(fernletDerivation.meshRoutedContentKeyWrapV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshSessionContextV1", frozen: "fernlet.mesh.session-context.v1",
@@ -311,22 +322,25 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// The three radios' service types and ALPNs, and the heartbeat the mesh radio filters by equality.
+    ///
+    /// Read off `.fernlet` since step A0.2.7, when each radio began taking them from the namespace its
+    /// manager hands it (``theRadiosReadTheirValuesOffTheNamespace()`` pins those reads).
     private static var radioRows: [NamespaceGoldenRow] {
         [
             NamespaceGoldenRow(.radio, "family.radios.mesh.serviceType", frozen: "_fernlet-mesh2._udp",
-                               today: .text(NetworkMeshSession.friendServiceType)),
+                               today: .text(ProximityNamespace.fernlet.family.radios.mesh.serviceType)),
             NamespaceGoldenRow(.radio, "family.radios.mesh.alpn", frozen: "fernlet-mesh-v1",
-                               today: .text(NetworkMeshSession.alpn)),
+                               today: .text(ProximityNamespace.fernlet.family.radios.mesh.alpn)),
             NamespaceGoldenRow(.radio, "family.radios.presence.serviceType", frozen: "_fernlet-near2._udp",
-                               today: .text(NetworkPresenceSession.serviceType)),
+                               today: .text(ProximityNamespace.fernlet.family.radios.presence.serviceType)),
             NamespaceGoldenRow(.radio, "family.radios.presence.alpn", frozen: "fernlet-near-v1",
-                               today: .text(NetworkPresenceSession.alpn)),
+                               today: .text(ProximityNamespace.fernlet.family.radios.presence.alpn)),
             NamespaceGoldenRow(.radio, "family.radios.recipeShare.serviceType", frozen: "_fernlet-recipe2._udp",
-                               today: .text(NetworkRecipeShareSession.serviceType)),
+                               today: .text(ProximityNamespace.fernlet.family.radios.recipeShare.serviceType)),
             NamespaceGoldenRow(.radio, "family.radios.recipeShare.alpn", frozen: "fernlet-recipe-v1",
-                               today: .text(NetworkRecipeShareSession.alpn)),
+                               today: .text(ProximityNamespace.fernlet.family.radios.recipeShare.alpn)),
             NamespaceGoldenRow(.radio, "family.radios.meshHeartbeat", frozen: "fernlet-mesh-heartbeat",
-                               today: .bytes(NetworkMeshSession.heartbeatDatagram))
+                               today: .bytes(ProximityNamespace.fernlet.family.radios.meshHeartbeat))
         ]
     }
 
@@ -391,10 +405,12 @@ struct ProximityNamespaceGoldenTests {
         ]
     }
 
-    /// The radios' log subsystem: their loggers are private and a `Logger` does not expose its
-    /// subsystem, so ``theThreeRadiosLogUnderTheFrozenSubsystem()`` reads it from their declarations.
+    /// The radios' log subsystem, read off `.fernlet` since step A0.2.7, when each radio began building
+    /// its `Logger` from the namespace it is handed. A `Logger` does not expose its subsystem, so
+    /// ``theThreeRadiosLogUnderTheFrozenSubsystem()`` pins that read in each radio's source.
     private static var logRows: [NamespaceGoldenRow] {
-        [NamespaceGoldenRow(.logSubsystem, Self.logSubsystemField, frozen: "com.fernlet", today: .unnamed)]
+        [NamespaceGoldenRow(.logSubsystem, Self.logSubsystemField, frozen: "com.fernlet",
+                            today: .text(ProximityNamespace.fernlet.installation.logSubsystem))]
     }
 
     /// The four identity accounts' fields: ``theIdentityAccountsAreTheFourRowsAProvisionedIdentityWrites()``
@@ -487,10 +503,13 @@ struct ProximityNamespaceGoldenTests {
         #expect(written == frozen, "a provisioned identity wrote \(written.sorted()); the table freezes \(frozen.sorted())")
     }
 
-    /// The radios' log subsystem, read from the one `Logger` declaration in each radio's source.
+    /// The radios' log subsystem: the row reads `.fernlet`'s field, and since step A0.2.7 each radio
+    /// builds its one `Logger` in `init(namespace:)` from the namespace it is handed. A `Logger` does
+    /// not expose its subsystem, so that read is pinned in each radio's source: exactly one `Logger`
+    /// built from `namespace.installation.logSubsystem`, and no subsystem spelled as a literal.
     @Test func theThreeRadiosLogUnderTheFrozenSubsystem() throws {
-        Self.expectFrozen(.logSubsystem)   // compares nothing until a later commit names the row
-        let frozen = Self.frozen(Self.logSubsystemField)
+        #expect(Self.expectFrozen(.logSubsystem) == 1, "the log subsystem's row names no value")
+        let fromNamespace = "Logger(subsystem: namespace.installation.logSubsystem, category: \""
         let radios = [
             "FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift",
             "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift",
@@ -498,8 +517,11 @@ struct ProximityNamespaceGoldenTests {
         ]
         // R2: bounded by the three radios.
         for path in radios {
-            let subsystems = Self.loggerSubsystems(in: try RepoRoot.source(path))
-            #expect(subsystems == [frozen], "\(path) declares its Logger under \(subsystems), not [\(frozen)]")
+            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
+            let literals = Self.loggerSubsystems(in: code)
+            #expect(literals.isEmpty, "\(path) still declares a Logger under the literal subsystem \(literals)")
+            let built = code.components(separatedBy: fromNamespace).count - 1
+            #expect(built == 1, "\(path) builds \(built) Loggers from the namespace's log subsystem, not one")
         }
     }
 
@@ -2011,21 +2033,25 @@ struct ProximityNamespaceGoldenTests {
         }
     }
 
-    /// The manager answers its transport's introduction authority from its own copy of the host's
-    /// namespace: the namespace it hands the transport is the store's, and the introduction it signs
-    /// is framed under that namespace's label. A transcript framed with those purposes is signed and
-    /// verifies under the label; one framed for another app's label is refused at the signing boundary.
+    /// The manager hands its transport its own copy of the host's namespace and signs the
+    /// introduction that transport frames under that namespace's label. Since step A0.2.7 the radio
+    /// the manager builds keeps its own copy of the labels, read off the namespace it is built from
+    /// (A0.2.5 read them off the authority, before the radio held a namespace): that radio's purposes
+    /// are the store's, and a transcript framed with them is signed and verifies under the label; one
+    /// framed for another app's label is refused at the signing boundary.
     @Test func theManagerSignsTheIntroductionUnderTheNamespaceItHandsItsTransport() throws {
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }   // `MeshNetworkManager.store` is `unowned`
         let service = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession(),
+        let manager = MeshNetworkManager(store: store, transport: nil,
                                          identity: IdentityService(namespace: .fernlet, keychainService: service))
+        let radio = try #require(manager.transportForTesting as? NetworkMeshSession, "the manager built no QUIC radio")
+        #expect(radio.purposes == store.proximityNamespace.family.purposes
+                    && radio.purposes == ProximityNamespace.fernlet.family.purposes,
+                "the manager hands its transport another namespace's labels than the host's")
         let authority: any MeshIntroductionAuthority = manager
-        #expect(authority.namespace == store.proximityNamespace && authority.namespace == ProximityNamespace.fernlet,
-                "the authority hands its transport another namespace than the host's")
-        let framed = canonicalBytes(for: Self.introductionTranscript(), in: authority.namespace.family.purposes)
+        let framed = canonicalBytes(for: Self.introductionTranscript(), in: radio.purposes)
         let signature = try authority.signChannelIntroduction(framed)
         #expect(IdentityService.verify(signature, of: framed, by: authority.localSigningPublicKey,
                                        purpose: Self.signatures.meshChannelIntroductionV1),
@@ -2257,6 +2283,88 @@ struct ProximityNamespaceGoldenTests {
             minted.append(head.epochID)
         }
         #expect(minted.count == 2 && minted[0] != minted[1], "two namespaces derived one epoch id")
+    }
+
+    // MARK: Group 12 — the radios (A0.2.7)
+
+    /// The values A0.2.7 moves, read through the radios that consume them. Built from `.fernlet`,
+    /// each radio holds its OWN field's frozen service type and ALPN (so no radio reads a sibling's),
+    /// and the mesh radio the frozen heartbeat and TLS exporter label, and `.fernlet`'s labels as the
+    /// copy its channel introductions are framed and checked under. Built from another app's
+    /// namespace, each holds that app's values, so every read is the namespace's field and not a
+    /// literal that happens to match Fernlet's. Building a radio starts nothing.
+    @Test func theRadiosReadTheirValuesOffTheNamespace() {
+        let mesh = NetworkMeshSession(namespace: .fernlet)
+        let presence = NetworkPresenceSession(namespace: .fernlet)
+        let recipe = NetworkRecipeShareSession(namespace: .fernlet)
+        let read: [(field: String, bytes: Data)] = [
+            ("family.radios.mesh.serviceType", Data(mesh.serviceType.utf8)),
+            ("family.radios.mesh.alpn", Data(mesh.alpn.utf8)),
+            ("family.radios.presence.serviceType", Data(presence.serviceType.utf8)),
+            ("family.radios.presence.alpn", Data(presence.alpn.utf8)),
+            ("family.radios.recipeShare.serviceType", Data(recipe.serviceType.utf8)),
+            ("family.radios.recipeShare.alpn", Data(recipe.alpn.utf8)),
+            ("family.radios.meshHeartbeat", mesh.heartbeatDatagram),
+            ("family.purposes.keyDerivation.meshTLSExporterV1", mesh.tlsExporterLabel.data)
+        ]
+        // R2: bounded by the eight values.
+        for entry in read {
+            #expect(entry.bytes == Data(Self.frozen(entry.field).utf8),
+                    "a radio built from .fernlet holds \(Self.hex(entry.bytes)) for \(entry.field)")
+        }
+        #expect(mesh.tlsExporterLabel.role == .tlsExporterLabel, "the exporter label lost its role")
+        #expect(mesh.purposes == ProximityNamespace.fernlet.family.purposes,
+                "the mesh radio frames its channel introductions under labels other than .fernlet's")
+
+        let foreign = ForeignAppNamespace.namespace()
+        let radios = foreign.family.radios
+        let foreignMesh = NetworkMeshSession(namespace: foreign)
+        let foreignPresence = NetworkPresenceSession(namespace: foreign)
+        let foreignRecipe = NetworkRecipeShareSession(namespace: foreign)
+        #expect([foreignMesh.serviceType, foreignPresence.serviceType, foreignRecipe.serviceType]
+                == [radios.mesh.serviceType, radios.presence.serviceType, radios.recipeShare.serviceType],
+                "a radio built from another app's namespace advertises a service type of its own")
+        #expect([foreignMesh.alpn, foreignPresence.alpn, foreignRecipe.alpn]
+                == [radios.mesh.alpn, radios.presence.alpn, radios.recipeShare.alpn],
+                "a radio built from another app's namespace negotiates an ALPN of its own")
+        #expect(foreignMesh.heartbeatDatagram == radios.meshHeartbeat, "the heartbeat is not the namespace's")
+        #expect(foreignMesh.tlsExporterLabel == foreign.family.purposes.keyDerivation.meshTLSExporterV1,
+                "the exporter label is not the namespace's")
+        #expect(foreignMesh.purposes == foreign.family.purposes, "the introduction's labels are not the namespace's")
+    }
+
+    /// The mesh radio's two consumers of a moved value, against what their fields promise. Tier 1
+    /// cannot open the live QUIC connection both run over, so they are pinned in source, the way
+    /// `NetworkMeshWireTests` pins the wire ceiling's two call sites:
+    ///
+    /// - the heartbeat goes out on both pipes as the radio's own `heartbeatDatagram`, and both receive
+    ///   loops drop it by byte equality against that same value before anything decodes a frame;
+    /// - the channel binding derives under the label it is handed, whole, as the `.tlsExporterLabel`
+    ///   role says (its `prefixBytes` are its bytes): the TLS exporter gets the label's bytes and their
+    ///   count, no terminator and no count in front. It names no registry purpose, and its one caller
+    ///   hands it the label the radio read off its namespace.
+    @Test func theMeshRadiosHeartbeatAndChannelBindingTakeTheirValuesWhole() throws {
+        let code = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"))
+        func count(_ needle: String) -> Int { code.components(separatedBy: needle).count - 1 }
+        #expect(count("guard payload != heartbeatDatagram else {") == 2,
+                "both receive loops must drop the heartbeat by byte equality")
+        #expect(count("try await self.sendFramed(self.heartbeatDatagram, over: stream)") == 1,
+                "the control-stream beat must send the radio's own heartbeat")
+        #expect(count("try await datagrams.send(self.heartbeatDatagram)") == 1,
+                "the datagram beat must send the radio's own heartbeat")
+
+        let label = ProximityNamespace.fernlet.family.purposes.keyDerivation.meshTLSExporterV1
+        #expect(label.role == .tlsExporterLabel && label.prefixBytes == label.data, "an exporter label is taken whole")
+        let binding = try #require(MeshRoutedSourceScan.bracedBody(after: "static func channelBindingHash(", in: code),
+                                   "the channel binding's derivation is gone")
+        #expect(binding.contains("let label = exporterLabel.rawValue"), "the binding derives under another label")
+        #expect(binding.contains("label.utf8.count,"), "the exporter is not handed the label's own byte count")
+        #expect(!binding.contains("FernletCryptoPurpose"), "the binding names a registry purpose again")
+        #expect(count("Self.channelBindingHash(for: connection, exporterLabel: tlsExporterLabel)") == 1,
+                "the introduction no longer binds under the radio's own exporter label")
+        #expect(count("tlsExporterLabel = namespace.family.purposes.keyDerivation.meshTLSExporterV1") == 1,
+                "the radio no longer reads its exporter label off the namespace")
     }
 
     // MARK: Helpers

@@ -1,5 +1,6 @@
 import Combine
 import CryptoKit
+import FernletConnections
 import Foundation
 import Security
 import Testing
@@ -1165,9 +1166,9 @@ struct NetworkMeshSessionTests {
         defer { subscription.cancel() }
 
         try await channel.startAdvertising(
-            serviceType: NetworkMeshSession.friendServiceType, discoveryInfo: [:]
+            serviceType: ProximityNamespace.fernlet.family.radios.mesh.serviceType, discoveryInfo: [:]
         )
-        try await channel.startBrowsing(serviceType: NetworkMeshSession.friendServiceType)
+        try await channel.startBrowsing(serviceType: ProximityNamespace.fernlet.family.radios.mesh.serviceType)
         try await channel.invite(peer)
         channel.notifyConnected()
         channel.receive(Data([0x01]), at: Date())
