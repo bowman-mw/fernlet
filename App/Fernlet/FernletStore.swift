@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletProximityUI
 import CryptoKit
 import CloudKitSync
 import FernletLock

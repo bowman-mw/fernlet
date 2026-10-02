@@ -8,6 +8,7 @@
 import SwiftUI
 import ProximityKit
 import FernletUI
+import FernletProximityUI
 
 /// The session-end photo review as the overlay window draws it: ``SessionPhotoReviewCoordinator``'s
 /// snapshot rendered through `FriendPhotoReviewSheet`, full screen.

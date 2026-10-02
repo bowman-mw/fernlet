@@ -1706,7 +1706,10 @@ view-free so the session-end flows in `ConnectView` / `DisposableCameraView` sta
 | `PrivateMediaKeyProviding.mediaKey()` | Supplies the symmetric key for `PrivateMediaStore`; injectable for tests. |
 | `KeychainPrivateMediaKeyProvider.mediaKey()` | Loads or generates a 256-bit AES key stored backup-restorable (`kSecAttrAccessibleAfterFirstUnlock`); caches it in memory. |
 
-### `FriendPhotoReviewSheet.swift`
+### `FernletProximityUI/FriendPhotoReviewSheet.swift`
+
+In the `FernletProximityUI` module since ProximityKit plan step A0.1 (2026-10-01), with the other two
+screens that left ProximityKit's `UI/` folder; its copy is `FernletProximityUICopy`.
 
 | Function | What It Does |
 | --- | --- |
@@ -2197,7 +2200,11 @@ credits almost nothing, and the reboot-gap credit is capped). It is deliberately
 
 ## Session And Friend UI
 
-### `UI/KeepFriendsPromptSheet.swift`
+`KeepFriendsPromptSheet.swift` and `FingerprintText.swift` live in the `FernletProximityUI` module
+(ProximityKit plan step A0.1, 2026-10-01); `PeerNameDisplay.swift` stays in ProximityKit's `UI/`
+folder, because `PresenceManager.firstName(of:)` calls it from inside the package.
+
+### `FernletProximityUI/KeepFriendsPromptSheet.swift`
 
 The per-participant "keep as a friend?" affordance at session end. One-sided and local-only: keeping
 mints a trust-vault record on THIS device only, skipping does nothing, and the peer is never notified
@@ -2211,7 +2218,7 @@ either way.
 Which of the two appears is decided by `FriendMintingReview.sessionEndReview(...)`, and the candidate
 list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 
-### `UI/FingerprintText.swift`
+### `FernletProximityUI/FingerprintText.swift`
 
 | Type | What It Does |
 | --- | --- |

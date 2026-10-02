@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletUI
 import FernletDomainModel
+import ProximityKit
 
 // Phase 2 friend minting (Docs/Proximity-Mesh-Redesign-2026-07-10.md): the per-participant
 // "keep as a friend?" affordance shown at session end. One-sided and local-only — keeping mints
@@ -15,11 +16,11 @@ struct KeepFriendsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: ProximityUICopy.KeepFriends.sectionTitle)
+            Text(verbatim: FernletProximityUICopy.KeepFriends.sectionTitle)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
 
-            Text(verbatim: ProximityUICopy.KeepFriends.explainer)
+            Text(verbatim: FernletProximityUICopy.KeepFriends.explainer)
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -70,7 +71,7 @@ private struct KeepFriendRow: View {
 
             Spacer(minLength: 12)
 
-            Button(isKept ? ProximityUICopy.KeepFriends.keeping : ProximityUICopy.KeepFriends.keep) { toggle() }
+            Button(isKept ? FernletProximityUICopy.KeepFriends.keeping : FernletProximityUICopy.KeepFriends.keep) { toggle() }
                 .buttonStyle(ChipButtonStyle(selected: isKept))
                 .accessibilityIdentifier("friends.keepFriend.\(candidate.fingerprint)")
         }
@@ -103,7 +104,7 @@ public struct KeepFriendsPromptSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(verbatim: ProximityUICopy.KeepFriends.sessionTitle)
+                    Text(verbatim: FernletProximityUICopy.KeepFriends.sessionTitle)
                         .font(.fernlet(.displayMedium))
                         .foregroundStyle(Color.bark)
 
@@ -115,7 +116,7 @@ public struct KeepFriendsPromptSheet: View {
 
             // "Done" finishes the flow (and mints the keeps), so it is a call-to-action pill, not a
             // 34pt selection chip.
-            Button(ProximityUICopy.KeepFriends.done) { done() }
+            Button(FernletProximityUICopy.KeepFriends.done) { done() }
                 .buttonStyle(ActionPillButtonStyle(.primary))
                 .frame(maxWidth: .infinity)
                 .padding(16)

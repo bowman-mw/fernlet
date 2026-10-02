@@ -185,7 +185,7 @@ import FernletDomainModel
             "App/Fernlet/VerifyQRViews.swift",
             "App/Fernlet/SessionChatPanel.swift",
             "App/Fernlet/Proximity/UI/ProximityRecipeShareSheet.swift",
-            "FernletKit/Sources/ProximityKit/UI/KeepFriendsPromptSheet.swift"
+            "FernletKit/Sources/FernletProximityUI/KeepFriendsPromptSheet.swift"
         ]
         let forbidden = ["FingerprintText(", "displayNameOrFingerprint", ".peer.displayHint",
                          "fingerprint.prefix(", "fingerprint.map {"]

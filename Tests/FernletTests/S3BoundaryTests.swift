@@ -211,6 +211,8 @@ struct S3BoundaryTests {
     ///   it would put that data on a server without passing the app-layer seal/dead-drop seam. The
     ///   heart dead-drop is the deliberate shape: ProximityKit defines `HeartDropTransporting` and the
     ///   app injects CloudKitSync's implementation, which only ever sees rotating day tags + ciphertext.
+    ///   `FernletProximityUI` is held to the same rule: its review screens left ProximityKit's `UI/`
+    ///   folder (ProximityKit plan step A0.1) and still render held peer photos and peer names.
     /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
     ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
     ///   allowed to carry, and would invert that injection seam.
@@ -222,6 +224,7 @@ struct S3BoundaryTests {
 
         for (module, forbidden) in [
             ("FernletKit/Sources/ProximityKit", "CloudKit"),
+            ("FernletKit/Sources/FernletProximityUI", "CloudKit"),
             ("FernletKit/Sources/CloudKitSync", "ProximityKit")
         ] {
             let moduleURL = repoRoot.appendingPathComponent(module)

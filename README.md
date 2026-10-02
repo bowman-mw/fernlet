@@ -74,7 +74,7 @@ at the app and check that the published egress list is the whole list.
 | Path | What lives there |
 | --- | --- |
 | [`App/Fernlet/`](App/Fernlet) | The app target — composition root, `FernletStore`, and the tab surfaces. |
-| [`FernletKit/`](FernletKit) | Local SPM package: 24 modules (domain, persistence, crypto, the sealed `Private*` stores, the walled `AIProviders` + `CloudKitSync`, `ProximityKit`, UI kits, services). |
+| [`FernletKit/`](FernletKit) | Local SPM package: 26 modules (domain, persistence, crypto, the sealed `Private*` stores, the walled `AIProviders` + `CloudKitSync`, `ProximityKit`, UI kits, services). |
 | [`App/FernletWidgets/`](App/FernletWidgets), [`App/FernletShareExtension/`](App/FernletShareExtension) | Widget and recipe-share extension targets. |
 | [`Tests/FernletTests/`](Tests/FernletTests), [`Tests/FernletUITests/`](Tests/FernletUITests) | Unit tests (including the grep-walls) and UI tests. |
 | [`Site/`](Site) | The whole public web presence — static files only. See [`Site/README.md`](Site/README.md). |

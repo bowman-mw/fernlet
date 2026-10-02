@@ -26,6 +26,7 @@ import UIKit
 @testable import FernletCrypto
 import FernletDomainModel
 @testable import ProximityKit
+import FernletProximityUI
 @testable import Fernlet
 
 // MARK: - Hosts

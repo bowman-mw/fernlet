@@ -693,7 +693,7 @@ public extension View {
     ///
     /// The package-side counterpart of the app target's `DestructiveConfirmation` type: use *that*
     /// inside `Fernlet/` (it carries the audit trail and the two-destructive-outcome case), and this
-    /// one from package-resident UI (`ProximityKit`, `FernletLockUI`, `FernletUI`) which cannot see
+    /// one from package-resident UI (`FernletProximityUI`, `FernletLockUI`, `FernletUI`) which cannot see
     /// app-target types. Same rule as ``discardConfirmation(isPresented:onDiscard:)``: an `alert`, so
     /// iOS 26 cannot hide the Cancel button, and the mutation runs *only* from `onConfirm`.
     ///
