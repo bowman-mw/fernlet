@@ -5,8 +5,10 @@
 // per clause, each promoting the named tier-1 claims of the item it speaks for and running its
 // clause END TO END on the shipping seams, so CI gating a clause fails on this battery's own
 // assertions. Where an exhaustive space already exists it is CITED and re-run whole rather than
-// sampled — the §11.4 idiom, and the reason the run-policy clause evaluates all 11 520 rows here
-// (23 040 until P9-3-A's fix retired `appLockEngaged`, 2026-09-22).
+// sampled — the §11.4 idiom, and the reason the run-policy clause evaluates all 23 040 rows here.
+// That is 2⁷ flag rows again with a different seventh Bool: P9-3-A's fix retired `appLockEngaged`
+// (23 040 → 11 520, 2026-09-22) and session photos U3 added `sessionPhotoReviewBlocksDiscovery`
+// (11 520 → 23 040, 2026-09-30).
 //
 // **Six suites.** The run policy (item 1), the gate's single writer (item 2), the radios' seams
 // (item 3), the poller's three consumers each driven to a verdict (item 4), the resume decision
@@ -123,12 +125,15 @@ enum MeshP7Acceptance {
 @Suite(.serialized)
 struct MeshP7RunPolicyAcceptanceTests {
 
-    /// All 11 520 rows, distinct, each agreeing with its flat re-statement, `.inactive` a foreground
-    /// scene on every one. It was 23 040 until P9-3-A's fix (2026-09-22) retired `appLockEngaged`.
+    /// All 23 040 rows, distinct, each agreeing with its flat re-statement, `.inactive` a foreground
+    /// scene on every one. It was 23 040 until P9-3-A's fix (2026-09-22) retired `appLockEngaged`,
+    /// then 11 520 until session photos U3 (2026-09-30) added `sessionPhotoReviewBlocksDiscovery`.
     @Test func theInputProductIsWholeAndEveryRowAgreesWithItsFlatStatement() {
         let rows = ProximityRunPolicyProduct.rows()
-        #expect(rows.count == 11_520 && Set(rows).count == 11_520,
-                "3 × 5 × 4 × 3 × 2⁶ rows, no two the same — a new input must move this number deliberately")
+        #expect(rows.count == 23_040 && Set(rows).count == 23_040, """
+            3 × 5 × 4 × 3 × 2⁷ rows, no two the same — the seventh Bool is session photos U3's review \
+            block (2026-09-30); a new input must move this number deliberately
+            """)
         let agrees = rows.allSatisfy { r in
             let v = ProximityRunPolicy.verdict(for: r)
             return v.mesh == ProximityRunPolicyProduct.expectedMesh(r)
@@ -143,7 +148,9 @@ struct MeshP7RunPolicyAcceptanceTests {
         #expect(inactiveIsForeground, "an inactive scene is a foreground scene on every row")
     }
 
-    /// §13's load-bearing rows.
+    /// §13's load-bearing rows, by hand on both halves of the product since session photos U3
+    /// (2026-09-30) added `sessionPhotoReviewBlocksDiscovery`: with photos waiting every claim
+    /// stands, and the block lowers only the one running discovery among these rows.
     @Test func theLoadBearingRowsOfSection13() {
         let continued = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(
             phase: .background, continuation: .running, session: .peerCommitted
@@ -156,19 +163,37 @@ struct MeshP7RunPolicyAcceptanceTests {
         let stops = [
             ProximityRunPolicyProduct.row(wipe: true, session: .peerCommitted),
             ProximityRunPolicyProduct.row(belowAge: true, session: .peerCommitted),
-            ProximityRunPolicyProduct.row(duress: true, session: .peerCommitted)
+            ProximityRunPolicyProduct.row(duress: true, session: .peerCommitted),
+            ProximityRunPolicyProduct.row(wipe: true, session: .peerCommitted, reviewBlock: true),
+            ProximityRunPolicyProduct.row(belowAge: true, session: .peerCommitted, reviewBlock: true),
+            ProximityRunPolicyProduct.row(duress: true, session: .peerCommitted, reviewBlock: true)
         ].map { ProximityRunPolicy.verdict(for: $0) }
         let allStopped = stops.allSatisfy {
             $0.mesh == .stop && $0.discovery == .stop && $0.presence == .stop && $0.recipeShare == .stop
         }
-        #expect(allStopped, "delete-all, below-age and duress: every radio stops")
+        #expect(allStopped, "delete-all, below-age and duress: every radio stops, photos waiting or not")
+
+        // The continued and refused rows again, with the session-photo review's block raised.
+        let continuedBlocked = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(
+            phase: .background, continuation: .running, session: .peerCommitted, reviewBlock: true
+        ))
+        #expect(continuedBlocked == continued,
+                "photos waiting change nothing on a continued mesh — its background discovery was already stopped")
+        let refusedBlocked = ProximityRunPolicy.verdict(for: ProximityRunPolicyProduct.row(
+            continuation: .refused, session: .peerCommitted, reviewBlock: true
+        ))
+        #expect(refusedBlocked.mesh == .foregroundOnly, "CPT refused with photos waiting: the mesh is still foreground-only")
+        #expect(refused.discovery == .foregroundOnly && refusedBlocked.discovery == .hold,
+                "while the Friends tab's search — the one running discovery here — is held for the committed peer instead")
     }
 
     /// Under `.notRequested` — the only value the app can feed until P8 — no radio claims the
-    /// background, and the gate reads only its three facts.
+    /// background, and the gate reads only its three facts. A quarter of the product: 5 760 rows
+    /// (2 880 between P9-3-A's fix, 2026-09-22, and session photos U3's review block, 2026-09-30).
     @Test func nothingClaimsTheBackgroundUnderTheOnlyValueTheAppCanFeed() {
         let rows = ProximityRunPolicyProduct.rows().filter { $0.continuation == .notRequested }
-        #expect(rows.count == 2_880, "a quarter of the product")
+        #expect(rows.count == 5_760,
+                "a quarter of the 23 040-row product — 2 880 until session photos U3's review block doubled it (2026-09-30)")
         let inert = rows.allSatisfy { r in
             let v = ProximityRunPolicy.verdict(for: r)
             return v.mesh != .run && v.discovery != .run && v.presence != .run && v.recipeShare != .run
