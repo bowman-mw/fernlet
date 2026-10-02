@@ -65,6 +65,18 @@
 //    other, both ways; and a membership verifier and the ledger adoption accept a foreign-signed
 //    admission, departure and digest only under the foreign labels they hold or are handed.
 //
+// One more group since step A0.2.5, when the QUIC channel introduction, the six routed transcripts and
+// the verify QR (its URL scheme and both of its labels) began to read the namespace. Those ten rows'
+// accessors are re-pointed at `.fernlet`'s fields; no literal moves:
+//
+// 10. **The routed transcripts, the introduction and the QR read the namespace they are handed.** A
+//     verify QR carries its identity's scheme and parses and validates only in its own namespace; a
+//     verify response verifies only under the label it was framed in; a coach ceremony runs under its
+//     identity's namespace and a Fernlet scanner refuses another app's code; the six routed doors
+//     accept only what was signed under the labels they hold; the channel-introduction exchange frames
+//     its transcript and checks the peer's under its own copy; and the manager hands its transport
+//     the namespace whose label it signs the introduction under.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
 // suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
@@ -174,10 +186,9 @@ struct ProximityNamespaceGoldenTests {
     ///
     /// Since step A0.2.4 the envelope, admission-token, membership, quorum and key-agreement labels
     /// and the legacy pair are read off `.fernlet` (`fernlet` below), because production reads them
-    /// off the host's namespace; the routed, channel-introduction and QR rows still read their
-    /// FernletCrypto twins until step A0.2.5 moves them.
+    /// off the host's namespace; since step A0.2.5 the routed, channel-introduction and QR rows are
+    /// too, so every signature row now reads the field production reads.
     private static var signatureRows: [NamespaceGoldenRow] {
-        typealias Signature = FernletCryptoPurpose.Signature
         let fernlet = ProximityNamespace.fernlet.family.purposes.signature
         let field = "family.purposes.signature."
         return [
@@ -186,7 +197,7 @@ struct ProximityNamespaceGoldenTests {
             NamespaceGoldenRow(.label, field + "meshAdmissionTokenV2", frozen: "fernlet.canonical.mesh-admission-token.v2",
                                today: .text(fernlet.meshAdmissionTokenV2.rawValue)),
             NamespaceGoldenRow(.label, field + "meshChannelIntroductionV1", frozen: "fernlet.mesh.channel-introduction.v1",
-                               today: .text(Signature.meshChannelIntroductionV1.rawValue)),
+                               today: .text(fernlet.meshChannelIntroductionV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshMemberDepartureV1", frozen: "fernlet.mesh.member-departure.v1",
                                today: .text(fernlet.meshMemberDepartureV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshMemberRemovalV1", frozen: "fernlet.mesh.member-removal.v1",
@@ -204,22 +215,22 @@ struct ProximityNamespaceGoldenTests {
             NamespaceGoldenRow(.label, field + "meshKeyAgreementV1", frozen: "fernlet.mesh.key-agreement.v1",
                                today: .text(fernlet.meshKeyAgreementV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRoutedManifestV1", frozen: "fernlet.mesh.routed-manifest.v1",
-                               today: .text(Signature.meshRoutedManifestV1.rawValue)),
+                               today: .text(fernlet.meshRoutedManifestV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRoutedChunkV1", frozen: "fernlet.mesh.routed-chunk.v1",
-                               today: .text(Signature.meshRoutedChunkV1.rawValue)),
+                               today: .text(fernlet.meshRoutedChunkV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshCustodyReceiptV1", frozen: "fernlet.mesh.custody-receipt.v1",
-                               today: .text(Signature.meshCustodyReceiptV1.rawValue)),
+                               today: .text(fernlet.meshCustodyReceiptV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRecipientReceiptV1", frozen: "fernlet.mesh.recipient-receipt.v1",
-                               today: .text(Signature.meshRecipientReceiptV1.rawValue)),
+                               today: .text(fernlet.meshRecipientReceiptV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRoutedInventoryDigestV1",
                                frozen: "fernlet.mesh.routed-inventory-digest.v1",
-                               today: .text(Signature.meshRoutedInventoryDigestV1.rawValue)),
+                               today: .text(fernlet.meshRoutedInventoryDigestV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRoutedDrainAnswerV1", frozen: "fernlet.mesh.routed-drain-answer.v1",
-                               today: .text(Signature.meshRoutedDrainAnswerV1.rawValue)),
+                               today: .text(fernlet.meshRoutedDrainAnswerV1.rawValue)),
             NamespaceGoldenRow(.label, field + "proximityQRIdentityV1", frozen: "fernlet.verify.qr.v1",
-                               today: .text(Signature.proximityQRIdentityV1.rawValue)),
+                               today: .text(fernlet.proximityQRIdentityV1.rawValue)),
             NamespaceGoldenRow(.label, field + "proximityQRResponseV1", frozen: "fernlet.verify.response.v1",
-                               today: .text(Signature.proximityQRResponseV1.rawValue)),
+                               today: .text(fernlet.proximityQRResponseV1.rawValue)),
             NamespaceGoldenRow(.label, field + "legacyV1.identityEnvelopeV1", frozen: "fernlet.canonical.identity-envelope.v1",
                                today: .text(fernlet.legacyV1.identityEnvelopeV1?.rawValue ?? "")),
             NamespaceGoldenRow(.label, field + "legacyV1.meshAdmissionTokenV1",
@@ -301,12 +312,14 @@ struct ProximityNamespaceGoldenTests {
         ]
     }
 
-    /// The QR's scheme, which the namespace will carry, and its host, which stays a ProximityKit
+    /// The QR's scheme, which the namespace carries, and its host, which stays a ProximityKit
     /// constant (``theVerifyQRURLKeepsItsHostQueryKeyAndVersion()`` pins it by behaviour as well).
+    /// Since step A0.2.5 the scheme is read off `.fernlet`, as production reads it off the host's
+    /// namespace (``theVerifyQRReadsItsSchemeAndLabelOffTheNamespace()`` pins that read).
     private static var verifyQRRows: [NamespaceGoldenRow] {
         [
             NamespaceGoldenRow(.verifyQR, "family.verifyQR.urlScheme", frozen: "fernlet",
-                               today: .text(ProximityVerifyQR.urlScheme)),
+                               today: .text(ProximityNamespace.fernlet.family.verifyQR.urlScheme)),
             NamespaceGoldenRow(.verifyQR, "proximityKit.verifyQR.urlHost", frozen: "verify",
                                today: .text(ProximityVerifyQR.urlHost))
         ]
@@ -767,7 +780,7 @@ struct ProximityNamespaceGoldenTests {
             initiatorNonce: Data(repeating: 0x08, count: 16),
             responderNonce: Data(repeating: 0x09, count: 16),
             channelBindingHash: Data(repeating: 0x0A, count: 32)
-        ))
+        ), in: .fernlet)
         let prefix = try #require(Self.bytes(hex: Self.channelIntroductionPrefixHex))
         #expect(transcript.count > prefix.count)
         #expect(transcript.prefix(prefix.count) == prefix,
@@ -783,7 +796,8 @@ struct ProximityNamespaceGoldenTests {
             signingPublicKey: Data(repeating: 0x11, count: 32),
             keyAgreementPublicKey: Data(repeating: 0x22, count: 32),
             timestamp: 1_700_000_000,
-            nonce: Data(repeating: 0x33, count: 16)
+            nonce: Data(repeating: 0x33, count: 16),
+            in: .fernlet
         )
         let prefix = try #require(Self.bytes(hex: Self.verifyQRPrefixHex))
         #expect(transcript.prefix(prefix.count) == prefix,
@@ -798,7 +812,8 @@ struct ProximityNamespaceGoldenTests {
         let transcript = ProximityVerifySignature.message(
             scannerKeyAgreementPublicKey: Data(repeating: 0x44, count: 32),
             challengeNonce: Data(repeating: 0x55, count: 16),
-            qrNonce: Data(repeating: 0x66, count: 16)
+            qrNonce: Data(repeating: 0x66, count: 16),
+            in: .fernlet
         )
         let prefix = try #require(Self.bytes(hex: Self.verifyResponsePrefixHex))
         #expect(transcript.prefix(prefix.count) == prefix,
@@ -899,9 +914,9 @@ struct ProximityNamespaceGoldenTests {
         #expect(components.queryItems?.map(\.name) == ["d"])
         let encoded = try #require(components.queryItems?.first?.value)
         let handBuilt = try #require(URL(string: "fernlet://verify?d=" + encoded))
-        let payload = try #require(ProximityVerifyQR.parse(handBuilt), "a hand-built verify URL no longer parses")
+        let payload = try #require(ProximityVerifyQR.parse(handBuilt, in: .fernlet), "a hand-built verify URL no longer parses")
         #expect(payload.version == 1)
-        #expect(ProximityVerifyQR.isValid(payload, at: now))
+        #expect(ProximityVerifyQR.isValid(payload, at: now, in: .fernlet))
     }
 
     // MARK: Group 5 — `.fernlet` against the table (A0.2.2)
@@ -1248,8 +1263,8 @@ struct ProximityNamespaceGoldenTests {
             epochRef: "7", initiatorSigningPublicKey: Data(repeating: 0x06, count: 32),
             responderSigningPublicKey: Data(repeating: 0x07, count: 32), initiatorNonce: Data(repeating: 0x08, count: 16),
             responderNonce: Data(repeating: 0x09, count: 16), channelBindingHash: Data(repeating: 0x0A, count: 32))
-        Self.expectFramed(canonicalBytes(for: transcript), by: Self.signatures.meshChannelIntroductionV1,
-                          consumer: "canonicalBytes(for: MeshChannelIntroductionTranscript)")
+        Self.expectFramed(canonicalBytes(for: transcript, in: .fernlet), by: Self.signatures.meshChannelIntroductionV1,
+                          consumer: "canonicalBytes(for: MeshChannelIntroductionTranscript, in:)")
     }
 
     /// A departure record opens with `lp(meshMemberDepartureV1)`.
@@ -1302,38 +1317,40 @@ struct ProximityNamespaceGoldenTests {
 
     /// A routed manifest opens with `lp(meshRoutedManifestV1)`.
     @Test func theRoutedManifestTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshRoutedManifestFixtures.manifest()),
-                          by: Self.signatures.meshRoutedManifestV1, consumer: "canonicalBytes(for: MeshRoutedManifest)")
+        Self.expectFramed(canonicalBytes(for: MeshRoutedManifestFixtures.manifest(), in: .fernlet),
+                          by: Self.signatures.meshRoutedManifestV1, consumer: "canonicalBytes(for: MeshRoutedManifest, in:)")
     }
 
     /// A routed chunk opens with `lp(signature.meshRoutedChunkV1)`.
     @Test func theRoutedChunkTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshChunkFixtures.chunk()), by: Self.signatures.meshRoutedChunkV1,
-                          consumer: "canonicalBytes(for: MeshChunk)")
+        Self.expectFramed(canonicalBytes(for: MeshChunkFixtures.chunk(), in: .fernlet), by: Self.signatures.meshRoutedChunkV1,
+                          consumer: "canonicalBytes(for: MeshChunk, in:)")
     }
 
     /// A custody receipt opens with `lp(meshCustodyReceiptV1)`.
     @Test func theCustodyReceiptTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshCustodyReceiptFixtures.receipt()),
-                          by: Self.signatures.meshCustodyReceiptV1, consumer: "canonicalBytes(for: MeshCustodyReceipt)")
+        Self.expectFramed(canonicalBytes(for: MeshCustodyReceiptFixtures.receipt(), in: .fernlet),
+                          by: Self.signatures.meshCustodyReceiptV1, consumer: "canonicalBytes(for: MeshCustodyReceipt, in:)")
     }
 
     /// A recipient receipt opens with `lp(meshRecipientReceiptV1)`.
     @Test func theRecipientReceiptTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshRecipientReceiptFixtures.receipt()),
-                          by: Self.signatures.meshRecipientReceiptV1, consumer: "canonicalBytes(for: MeshRecipientReceipt)")
+        Self.expectFramed(canonicalBytes(for: MeshRecipientReceiptFixtures.receipt(), in: .fernlet),
+                          by: Self.signatures.meshRecipientReceiptV1, consumer: "canonicalBytes(for: MeshRecipientReceipt, in:)")
     }
 
     /// The routed inventory digest opens with `lp(meshRoutedInventoryDigestV1)`.
     @Test func theRoutedInventoryTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshRoutedInventoryFixtures.payload()),
-                          by: Self.signatures.meshRoutedInventoryDigestV1, consumer: "canonicalBytes(for: MeshRoutedInventoryPayload)")
+        Self.expectFramed(canonicalBytes(for: MeshRoutedInventoryFixtures.payload(), in: .fernlet),
+                          by: Self.signatures.meshRoutedInventoryDigestV1,
+                          consumer: "canonicalBytes(for: MeshRoutedInventoryPayload, in:)")
     }
 
     /// A routed drain answer opens with `lp(meshRoutedDrainAnswerV1)`.
     @Test func theRoutedDrainAnswerTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshRoutedDrainAnswerFixtures.payload()),
-                          by: Self.signatures.meshRoutedDrainAnswerV1, consumer: "canonicalBytes(for: MeshRoutedDrainAnswerPayload)")
+        Self.expectFramed(canonicalBytes(for: MeshRoutedDrainAnswerFixtures.payload(), in: .fernlet),
+                          by: Self.signatures.meshRoutedDrainAnswerV1,
+                          consumer: "canonicalBytes(for: MeshRoutedDrainAnswerPayload, in:)")
     }
 
     /// The verify QR's fixed-width transcript opens with `proximityQRIdentityV1`, raw.
@@ -1341,16 +1358,17 @@ struct ProximityNamespaceGoldenTests {
         let transcript = ProximityVerifyQR.canonicalBytes(
             version: 1, signingPublicKey: Data(repeating: 0x11, count: 32),
             keyAgreementPublicKey: Data(repeating: 0x22, count: 32), timestamp: 1_700_000_000,
-            nonce: Data(repeating: 0x33, count: 16))
-        Self.expectFramed(transcript, by: Self.signatures.proximityQRIdentityV1, consumer: "ProximityVerifyQR.canonicalBytes")
+            nonce: Data(repeating: 0x33, count: 16), in: .fernlet)
+        Self.expectFramed(transcript, by: Self.signatures.proximityQRIdentityV1, consumer: "ProximityVerifyQR.canonicalBytes(...in:)")
     }
 
     /// The verify response's fixed-width transcript opens with `proximityQRResponseV1`, raw.
     @Test func theVerifyResponseTranscriptBeginsWithItsFieldsPrefix() {
         let transcript = ProximityVerifySignature.message(
             scannerKeyAgreementPublicKey: Data(repeating: 0x44, count: 32),
-            challengeNonce: Data(repeating: 0x55, count: 16), qrNonce: Data(repeating: 0x66, count: 16))
-        Self.expectFramed(transcript, by: Self.signatures.proximityQRResponseV1, consumer: "ProximityVerifySignature.message")
+            challengeNonce: Data(repeating: 0x55, count: 16), qrNonce: Data(repeating: 0x66, count: 16), in: .fernlet)
+        Self.expectFramed(transcript, by: Self.signatures.proximityQRResponseV1,
+                          consumer: "ProximityVerifySignature.message(...in:)")
     }
 
     /// The membership inventory digest's hash preimage opens with `lp(hash.meshInventoryDigestV1)`.
@@ -1804,6 +1822,175 @@ struct ProximityNamespaceGoldenTests {
                     == .admitterNotChained, "a foreign ledger was adopted under .fernlet")
     }
 
+    // MARK: Group 10 — the routed transcripts, the introduction and the QR read the namespace (A0.2.5)
+
+    /// The verify QR's scheme and its identity transcript's label are its namespace's: a code made by
+    /// an identity of `.fernlet` carries the frozen scheme and one made by an identity of another app
+    /// carries that app's, and each parses (`parse(_:in:)`) and validates (`isValid(_:at:in:)`) only
+    /// in the namespace it was made in, both ways.
+    @Test func theVerifyQRReadsItsSchemeAndLabelOffTheNamespace() throws {
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let foreignNamespace = ForeignAppNamespace.namespace()
+        let fernlet = IdentityService(namespace: .fernlet, keychainService: services[0])
+        let foreign = IdentityService(namespace: foreignNamespace, keychainService: services[1])
+        try fernlet.ensureProvisioned()
+        try foreign.ensureProvisioned()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let fernletURL = try ProximityVerifyQR.makeURL(identity: fernlet, now: now).url
+        let foreignURL = try ProximityVerifyQR.makeURL(identity: foreign, now: now).url
+        #expect(fernletURL.scheme == Self.frozen("family.verifyQR.urlScheme"),
+                "a code made under .fernlet carries the scheme \(fernletURL.scheme ?? "none")")
+        #expect(foreignURL.scheme == foreignNamespace.family.verifyQR.urlScheme,
+                "a code made under another app's namespace carries the scheme \(foreignURL.scheme ?? "none")")
+        let directions = [(fernletURL, ProximityNamespace.fernlet, foreignNamespace),
+                          (foreignURL, foreignNamespace, ProximityNamespace.fernlet)]
+        // R2: bounded by the two directions.
+        for (url, own, other) in directions {
+            let label = own.family.purposes.signature.proximityQRIdentityV1.rawValue
+            let payload = try #require(ProximityVerifyQR.parse(url, in: own), "\(url) did not parse in its own namespace")
+            #expect(ProximityVerifyQR.parse(url, in: other) == nil, "\(url) parsed in another namespace")
+            #expect(ProximityVerifyQR.isValid(payload, at: now, in: own.family.purposes),
+                    "a code signed under \(label) was invalid there")
+            #expect(!ProximityVerifyQR.isValid(payload, at: now, in: other.family.purposes),
+                    "a code signed under \(label) validated under another namespace's label")
+        }
+    }
+
+    /// The verify response's transcript is framed by the namespace it is built in (`message(...in:)`),
+    /// so a response signed over one namespace's transcript verifies under that namespace's label and
+    /// under no other's, both ways: the check the manager's, the coach's and the duress flow's
+    /// ceremonies all make.
+    @Test func aVerifyResponseVerifiesOnlyUnderTheNamespaceItWasBuiltIn() throws {
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let publicKey = key.publicKey.rawRepresentation
+        let foreign = ForeignAppNamespace.namespace().family.purposes
+        // R2: bounded by the two directions.
+        for (signer, other) in [(ProximityNamespace.Purposes.fernlet, foreign), (foreign, ProximityNamespace.Purposes.fernlet)] {
+            let message = Self.verifyResponse(in: signer)
+            let label = signer.signature.proximityQRResponseV1
+            Self.expectFramed(message, by: label, consumer: "ProximityVerifySignature.message(...in:)")
+            let signature = try key.signature(for: message)
+            #expect(IdentityService.verify(signature, of: message, by: publicKey, purpose: label),
+                    "a response framed for \(label.rawValue) did not verify there")
+            #expect(!IdentityService.verify(signature, of: message, by: publicKey, purpose: other.signature.proximityQRResponseV1),
+                    "a response framed for \(label.rawValue) verified under another namespace's label")
+            #expect(!IdentityService.verify(signature, of: Self.verifyResponse(in: other), by: publicKey,
+                                            purpose: other.signature.proximityQRResponseV1),
+                    "a response signed for \(label.rawValue) verified over another namespace's transcript")
+        }
+    }
+
+    /// `CoachVerificationCeremony` — a reader of both QR transcripts that the design's commit list left
+    /// out — runs its whole round under its identity's namespace: two coaches of another app display,
+    /// scan, challenge, respond and prove under that app's scheme and labels, and a scanner of
+    /// `.fernlet` refuses the other app's code before any challenge is minted.
+    @Test func aCoachCeremonyRunsUnderItsIdentitysNamespace() throws {
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let foreignNamespace = ForeignAppNamespace.namespace()
+        let displayer = IdentityService(namespace: foreignNamespace, keychainService: services[0])
+        let scanner = IdentityService(namespace: foreignNamespace, keychainService: services[1])
+        let fernletScanner = IdentityService(namespace: .fernlet, keychainService: services[2])
+        // R2: bounded by the three identities.
+        for identity in [displayer, scanner, fernletScanner] {
+            try identity.ensureProvisioned()
+        }
+        let display = CoachVerificationCeremony(identity: displayer)
+        let scan = CoachVerificationCeremony(identity: scanner)
+        let url = try #require(display.makeDisplayURL(forPeerSigningKey: scanner.localSigningPublicKey))
+        #expect(url.scheme == foreignNamespace.family.verifyQR.urlScheme, "the coach displayed \(url.scheme ?? "no scheme")")
+        #expect(CoachVerificationCeremony(identity: fernletScanner).beginVerification(
+            scannedURL: url, expectedPeerSigningKey: displayer.localSigningPublicKey) == nil,
+                "a .fernlet scanner opened a round on another app's code")
+        let challenge = try #require(scan.beginVerification(
+            scannedURL: url, expectedPeerSigningKey: displayer.localSigningPublicKey), "the coach refused its own app's code")
+        let verdict = display.handleChallenge(challenge, senderSigningPublicKey: scanner.localSigningPublicKey,
+                                              senderKeyAgreementPublicKey: scanner.localKeyAgreementPublicKey)
+        guard case .respond(let response) = verdict else {
+            Issue.record("the displaying coach did not answer its own app's challenge: \(verdict)")
+            return
+        }
+        #expect(scan.handleResponse(response, senderSigningPublicKey: displayer.localSigningPublicKey),
+                "the scanning coach refused a response signed under its own app's label")
+    }
+
+    /// The six routed doors check every signature under their own copy of the labels. One key, admitted
+    /// to the fixtures' mesh, signs a manifest, a chunk, both receipts, a routed inventory digest and a
+    /// drain answer over the bytes one namespace frames for each: every door holding that namespace's
+    /// purposes accepts its record, and every door holding the other's refuses it `signatureInvalid`,
+    /// both ways.
+    @Test func theRoutedVerifiersCheckUnderTheirOwnCopyOfTheLabels() throws {
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let foreign = ForeignAppNamespace.namespace().family.purposes
+        let doors: Set<String> = ["manifest", "chunk", "custodyReceipt", "recipientReceipt", "routedInventory", "drainAnswer"]
+        // R2: bounded by the two directions.
+        for (signer, other) in [(ProximityNamespace.Purposes.fernlet, foreign), (foreign, ProximityNamespace.Purposes.fernlet)] {
+            let label = signer.signature.meshRoutedManifestV1.rawValue
+            let own = try Self.routedVerdicts(signedBy: key, in: signer, checkedIn: signer)
+            let elsewhere = try Self.routedVerdicts(signedBy: key, in: signer, checkedIn: other)
+            #expect(Set(own.keys) == doors && Set(elsewhere.keys) == doors, "\(own.keys.sorted()) \(elsewhere.keys.sorted())")
+            #expect(own.values.allSatisfy { $0 == "accepted" }, "the doors of the signer's own namespace (\(label)) answered \(own)")
+            #expect(elsewhere.values.allSatisfy { $0 == MeshChunkRejection.signatureInvalid.rawValue },
+                    "the doors of another namespace answered \(elsewhere) for records signed under \(label)")
+        }
+    }
+
+    /// The channel-introduction exchange frames its transcript and checks the peer's signature under
+    /// its own copy of the labels. An initiator holding one namespace's purposes binds a transcript
+    /// that opens with that namespace's `lp(meshChannelIntroductionV1)`; a responder holding the same
+    /// purposes accepts the initiator's signature over it, and one holding the other namespace's
+    /// refuses it `signatureInvalid`, both ways.
+    @Test func theChannelIntroductionExchangeChecksUnderItsOwnCopyOfTheLabels() throws {
+        let meshID = MeshMembershipEventFixtures.meshID
+        let initiator = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "golden-initiator")
+        let responder = MeshIntroductionHarness.endpoint(meshID: meshID, sessionID: "golden-responder")
+        let foreign = ForeignAppNamespace.namespace().family.purposes
+        // R2: bounded by the two directions.
+        for (signer, other) in [(ProximityNamespace.Purposes.fernlet, foreign), (foreign, ProximityNamespace.Purposes.fernlet)] {
+            var dialer = MeshChannelIntroductionExchange(role: .initiator, localHello: initiator.hello, purposes: signer)
+            var nonces = MeshIntroductionNonceCache()
+            #expect(dialer.receive(responder.hello, roster: MeshIntroductionHarness.roster(initiator, responder),
+                                   nonces: &nonces) == nil)
+            let bound = dialer.bind(channelBindingHash: MeshIntroductionHarness.binding)
+            let transcript = try #require(bound, "an initiator holding \(signer.signature.meshChannelIntroductionV1.rawValue) bound nothing")
+            Self.expectFramed(transcript, by: signer.signature.meshChannelIntroductionV1,
+                              consumer: "MeshChannelIntroductionExchange.bind(channelBindingHash:)")
+            let signed = MeshChannelIntroduction(channelBindingHash: MeshIntroductionHarness.binding,
+                                                 signature: try initiator.signingKey.signature(for: transcript))
+            let label = signer.signature.meshChannelIntroductionV1.rawValue
+            #expect(Self.review(signed, from: initiator, by: responder, in: signer).verifiedPeer != nil,
+                    "a responder holding \(label) refused an introduction signed under it")
+            #expect(Self.review(signed, from: initiator, by: responder, in: other) == .rejected(.signatureInvalid),
+                    "a responder holding another namespace's labels accepted an introduction signed under \(label)")
+        }
+    }
+
+    /// The manager answers its transport's introduction authority from its own copy of the host's
+    /// namespace: the namespace it hands the transport is the store's, and the introduction it signs
+    /// is framed under that namespace's label. A transcript framed with those purposes is signed and
+    /// verifies under the label; one framed for another app's label is refused at the signing boundary.
+    @Test func theManagerSignsTheIntroductionUnderTheNamespaceItHandsItsTransport() throws {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }   // `MeshNetworkManager.store` is `unowned`
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession(),
+                                         identity: IdentityService(namespace: .fernlet, keychainService: service))
+        let authority: any MeshIntroductionAuthority = manager
+        #expect(authority.namespace == store.proximityNamespace && authority.namespace == ProximityNamespace.fernlet,
+                "the authority hands its transport another namespace than the host's")
+        let framed = canonicalBytes(for: Self.introductionTranscript(), in: authority.namespace.family.purposes)
+        let signature = try authority.signChannelIntroduction(framed)
+        #expect(IdentityService.verify(signature, of: framed, by: authority.localSigningPublicKey,
+                                       purpose: Self.signatures.meshChannelIntroductionV1),
+                "the authority's introduction does not verify under the label of the namespace it hands its transport")
+        #expect(throws: IdentityError.invalidKeyData, "the manager signed a transcript framed for another app's label") {
+            _ = try authority.signChannelIntroduction(
+                canonicalBytes(for: Self.introductionTranscript(), in: ForeignAppNamespace.namespace().family.purposes))
+        }
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -2075,6 +2262,87 @@ struct ProximityNamespaceGoldenTests {
     private static func refusal(_ outcome: MeshLedgerAdoptionOutcome) -> MeshLedgerAdoptionRefusal? {
         guard case .refused(let refusal) = outcome else { return nil }
         return refusal
+    }
+
+    /// The fixture verify response (scanner key `44…`, challenge nonce `55…`, QR nonce `66…`), framed
+    /// by `purposes`.
+    private static func verifyResponse(in purposes: ProximityNamespace.Purposes) -> Data {
+        ProximityVerifySignature.message(
+            scannerKeyAgreementPublicKey: Data(repeating: 0x44, count: 32),
+            challengeNonce: Data(repeating: 0x55, count: 16), qrNonce: Data(repeating: 0x66, count: 16), in: purposes)
+    }
+
+    /// The fixture channel introduction the group-3 and group-6 cells frame.
+    private static func introductionTranscript() -> MeshChannelIntroductionTranscript {
+        MeshChannelIntroductionTranscript(
+            protocolVersion: MeshChannelIntroductionFormat.protocolVersion, meshID: MeshMembershipEventFixtures.meshID,
+            epochRef: "7", initiatorSigningPublicKey: Data(repeating: 0x06, count: 32),
+            responderSigningPublicKey: Data(repeating: 0x07, count: 32), initiatorNonce: Data(repeating: 0x08, count: 16),
+            responderNonce: Data(repeating: 0x09, count: 16), channelBindingHash: Data(repeating: 0x0A, count: 32))
+    }
+
+    /// A ledger admitting `signingKey`, by its fingerprint, to the fixtures' mesh. The routed doors
+    /// resolve a signer's key from the admissions and verify no admission themselves, so the token's
+    /// own signature is the fixtures' opaque one.
+    private static func ledgerAdmitting(_ signingKey: Data) -> MeshMembershipLedger {
+        var ledger = MeshMembershipLedger.empty
+        ledger.admissions = ledger.admissions.inserting(SignedAdmissionRecord(token: admissionToken(
+            admitter: signingKey, joiner: signingKey, signature: MeshMembershipEventFixtures.opaqueSignature)))
+        return ledger
+    }
+
+    /// Each routed door's answer to its golden fixture record, re-addressed to `key`'s fingerprint and
+    /// signed by `key` over the bytes `signer` frames for it, at a door holding `checker`: the
+    /// rejection's frozen token, or `accepted`. The receipt and chunk doors hold no manifest, so only
+    /// the checks every record owes run.
+    private static func routedVerdicts(
+        signedBy key: Curve25519.Signing.PrivateKey, in signer: ProximityNamespace.Purposes,
+        checkedIn checker: ProximityNamespace.Purposes
+    ) throws -> [String: String] {
+        let me = IdentityService.fingerprint(of: key.publicKey.rawRepresentation)
+        let ledger = ledgerAdmitting(key.publicKey.rawRepresentation)
+        let (meshID, deadline) = (MeshRoutedManifestFixtures.meshID, MeshRoutedManifestFixtures.hardDeadline)
+        let manifest = MeshRoutedManifestFixtures.manifest().replacing(originFingerprint: me)
+        let chunk = MeshChunkFixtures.chunk().replacing(originFingerprint: me)
+        let custody = MeshCustodyReceiptFixtures.receipt().replacing(custodianFingerprint: me)
+        let recipient = MeshRecipientReceiptFixtures.receipt().replacing(recipientFingerprint: me)
+        let inventory = MeshRoutedInventoryFixtures.payload().replacing(senderFingerprint: me)
+        let answer = MeshRoutedDrainAnswerFixtures.payload().replacing(senderFingerprint: me)
+        let verdicts: [String: String?] = [
+            "manifest": MeshRoutedManifestVerifier(
+                meshID: meshID, hardDeadline: deadline, ledger: ledger,
+                acceptedTypeTokens: MeshRoutedManifestFixtures.acceptedTypeTokens, purposes: checker
+            ).verify(manifest.replacing(signature: try key.signature(for: canonicalBytes(for: manifest, in: signer))))?.rawValue,
+            "chunk": MeshChunkVerifier(
+                meshID: meshID, hardDeadline: deadline, ledger: ledger, manifest: nil, purposes: checker
+            ).verify(chunk.replacing(signature: try key.signature(for: canonicalBytes(for: chunk, in: signer))))?.rawValue,
+            "custodyReceipt": MeshCustodyReceiptVerifier(
+                meshID: meshID, hardDeadline: deadline, ledger: ledger, manifest: nil, purposes: checker
+            ).verify(custody.replacing(signature: try key.signature(for: canonicalBytes(for: custody, in: signer))))?.rawValue,
+            "recipientReceipt": MeshRecipientReceiptVerifier(
+                meshID: meshID, hardDeadline: deadline, ledger: ledger, manifest: nil, purposes: checker
+            ).verify(recipient.replacing(signature: try key.signature(for: canonicalBytes(for: recipient, in: signer))))?.rawValue,
+            "routedInventory": MeshRoutedInventoryVerifier(meshID: meshID, ledger: ledger, purposes: checker)
+                .verify(inventory.replacing(signature: try key.signature(for: canonicalBytes(for: inventory, in: signer))))?.rawValue,
+            "drainAnswer": MeshRoutedDrainAnswerVerifier(meshID: meshID, ledger: ledger, purposes: checker)
+                .verify(answer.replacing(signature: try key.signature(for: canonicalBytes(for: answer, in: signer))))?.rawValue
+        ]
+        return verdicts.mapValues { $0 ?? "accepted" }
+    }
+
+    /// A responder holding `purposes` takes `initiator`'s hello and reviews `signed` over the
+    /// transcript it binds.
+    private static func review(
+        _ signed: MeshChannelIntroduction, from initiator: MeshIntroductionHarness.Endpoint,
+        by responder: MeshIntroductionHarness.Endpoint, in purposes: ProximityNamespace.Purposes
+    ) -> MeshChannelIntroductionOutcome {
+        var exchange = MeshChannelIntroductionExchange(role: .responder, localHello: responder.hello, purposes: purposes)
+        var nonces = MeshIntroductionNonceCache()
+        #expect(exchange.receive(initiator.hello, roster: MeshIntroductionHarness.roster(initiator, responder),
+                                 nonces: &nonces) == nil)
+        let bound = exchange.bind(channelBindingHash: MeshIntroductionHarness.binding)
+        #expect(bound != nil, "a responder holding \(purposes.signature.meshChannelIntroductionV1.rawValue) bound nothing")
+        return exchange.review(signed)
     }
 
     /// Whether `role` is a signature role, of any framing.

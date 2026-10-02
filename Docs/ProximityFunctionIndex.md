@@ -695,7 +695,7 @@ reach a per-recipient static-key wrap (D14).
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedManifestRejection` | Eleven frozen English tokens: `foreignMesh`, `malformed`, `unknownTypeToken`, `originNotAdmitted`, `originRemoved`, `originKeyMismatch`, `signatureInvalid`, `wrapsDoNotMatchDestinations`, `destinationSetInvalid`, `expiryMismatch`, and **P6 item 3's** `sizeExceedsTypeCap`. Logged verbatim, never localized. `sizeExceedsTypeCap` is the one case the verifier itself never returns: the cap lives on the registry ROW and this verifier carries only the accepted-token set (a projection, D-11.1), so the manifest door raises it from the registry it already holds, immediately after `verify(_:)` answers nil. The vocabulary is shared because it is the audit surface for *a refused manifest*, whichever half of the door refused it. |
-| `MeshRoutedManifestVerifier(meshID:hardDeadline:ledger:acceptedTypeTokens:)` | Bound to one session: the mesh, its signed ceiling, the merged membership ledger, and the routed-type tokens this build will hold or forward (D13 — item 1's callers pass a fixture set, item 11 the registry's; empty means accept nothing). |
+| `MeshRoutedManifestVerifier(meshID:hardDeadline:ledger:acceptedTypeTokens:purposes:)` | Bound to one session: the mesh, its signed ceiling, the merged membership ledger, and the routed-type tokens this build will hold or forward (D13 — item 1's callers pass a fixture set, item 11 the registry's; empty means accept nothing), and since A0.2.5 its own copy of the namespace labels the origin's signature is checked under. |
 | `verify(_:)` | Ten guards in order: mesh → shape → type token accepted → admitted key (from `ledger.admissions`, by the manifest's OWN origin, never the envelope's sender) → origin not in `ledger.removals` (the same set `MeshDerivedRoster` subtracts; departures untouched) → key/fingerprint agreement → signature under `Signature.meshRoutedManifestV1` → wraps ≡ destinations → distinct set without the origin → `expiresAt` == own `hardDeadline` + grace (`Date` equality through `floored`; no `Int64` anywhere). Returns the named rejection or nil. |
 
 ### `MeshRoutedContentKeyWrapper.swift`
@@ -749,7 +749,7 @@ against the control stream, so a chunk that arrives first is verified and parked
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshChunkRejection` | Frozen English tokens: `foreignMesh`, `malformed`, `originNotAdmitted`, `originRemoved`, `originKeyMismatch`, `signatureInvalid`, `chunkHashMismatch`, `expiryMismatch`, `manifestMismatch`, `chunkCountMismatch`, `payloadLengthMismatch`. Logged verbatim, never localized. |
-| `MeshChunkVerifier(meshID:hardDeadline:ledger:manifest:)` | Bound to one session and, optionally, one **already-verified** manifest — the type never re-verifies it and it is the only authority on `itemID`, `originFingerprint`, `contentHash` and `size`. |
+| `MeshChunkVerifier(meshID:hardDeadline:ledger:manifest:purposes:)` | Bound to one session and, optionally, one **already-verified** manifest — the type never re-verifies it and it is the only authority on `itemID`, `originFingerprint`, `contentHash` and `size`. Since A0.2.5 it keeps its own copy of the namespace labels the origin's signature is checked under. |
 | `verify(_:)` | Eleven guards: mesh → shape → admitted key (from `ledger.admissions`, by the chunk's OWN origin) → origin not in `ledger.removals` (departures never consulted) → key/fingerprint agreement → signature → **then** the chunk hash (so a hash mismatch names a payload swapped under an authentic chunk) → expiry equality → and, with a manifest, the identity **triple** `(itemID, originFingerprint, contentHash)`, the chunk count and the payload length. Dropping the origin leg of the triple would let an admitted member squat another origin's item id under its own valid signature. |
 
 ### `MeshChunker.swift`
@@ -1505,6 +1505,25 @@ its `identityService`'s, a `MeshMembershipRecordVerifier` its own copy, the mana
 | `MeshMembershipRecordVerifier.init(...purposes:)` / `MeshLedgerAdoption.bootstrapVerifier(...in:)` / `adopt(...in:)` / `MeshInventoryDigest.init(meshID:ledger:purposes:)` / `MeshAdmissionToken.verify(...in:)` | The verifiers and helpers that take the labels, each with no default. |
 | `canonicalBytes(for:)`, `canonicalInventoryDigestBytes(for:)`, `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet` (`ProximityNamespace.Purposes.fernlet`, which the golden pins equal to `ProximityNamespace.fernlet.family.purposes`). |
 
+### Signed transcripts II (A0.2.5)
+
+The QUIC channel introduction, the six routed transcripts and the verify QR read the namespace. The
+routed doors and the introduction exchange keep their own copy, which the manager fills with its stored
+`namespace.family.purposes` (the transport fills the exchange's from `MeshIntroductionAuthority.namespace`,
+the manager's same value, so the peer's introduction is checked under the label the manager signs this
+side's under); every routed builder signs under its identity's `purposes`; the QR scheme and labels come
+from the signing identity's namespace or the caller's. `CoachVerificationCeremony` and the app's duress
+flow scan and answer under their identity's. `ProximityNamespaceGoldenTests` pins the ten moved values
+off `.fernlet` and holds each reader to the namespace it is handed.
+
+| Function | What It Does |
+| --- | --- |
+| `canonicalBytes(for:in:)` (the channel introduction and the six routed types) | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. |
+| `MeshRoutedManifestVerifier` / `MeshChunkVerifier` / `MeshCustodyReceiptVerifier` / `MeshRecipientReceiptVerifier` / `MeshRoutedInventoryVerifier` / `MeshRoutedDrainAnswerVerifier` / `MeshChannelIntroductionExchange` `init(...purposes:)` | Each keeps its copy of the labels as a trailing `purposes:` with no default and checks every signature (and frames the introduction transcript) under it. |
+| `MeshIntroductionAuthority.namespace` | The host's namespace as the transport's authority holds it; `MeshNetworkManager` meets it with its stored `namespace`. |
+| `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `ProximityVerifySignature.message(...in:)` | The QR's scheme and labels from the caller's namespace; see `ProximityVerification.swift` below. |
+| `canonicalBytes(for:)` for the seven types, the old verifier and exchange initializers, `ProximityVerifyQR.parse(_:)` / `isValid(_:at:)` / `urlScheme`, `ProximityVerifySignature.message(...qrNonce:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet`. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`
@@ -1664,9 +1683,9 @@ its `identityService`'s, a `MeshMembershipRecordVerifier` its own copy, the mana
 | Function | What It Does |
 | --- | --- |
 | `ProximityVerifyQR.makeURL(identity:now:)` | Mints this device's signed `fernlet://verify` URL (signing key, key-agreement key, timestamp, random nonce, signature) and returns it with the nonce to match a response against. |
-| `ProximityVerifyQR.canonicalBytes(...)` | The domain-tagged (`fernlet.verify.qr.v1`) byte sequence the QR signature covers. |
-| `ProximityVerifyQR.parse(...)` / `freshnessWindow` | Parses and validates a scanned URL, rejecting payloads older than the 5-minute window. |
-| `ProximityVerifySignature.message(...)` | The challenge/response transcript both ceremonies sign, so the friend and coach paths can never diverge. |
+| `ProximityVerifyQR.canonicalBytes(...in:)` | The byte sequence the QR signature covers, opening with the namespace's `purposes.signature.proximityQRIdentityV1` raw (`fernlet.verify.qr.v1` for Fernlet; A0.2.5). |
+| `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `freshnessWindow` | Parses a scanned URL whose scheme is the caller's namespace's `family.verifyQR.urlScheme` (host `verify`, query key `d` and version 1 stay format constants), then validates shape, signature under the caller's purposes and freshness, rejecting payloads older than the 5-minute window. Since A0.2.5 `makeURL` takes the scheme off the signing identity's namespace and the static `urlScheme` is gone. |
+| `ProximityVerifySignature.message(...in:)` | The challenge/response transcript every ceremony signs, opening with the namespace's `purposes.signature.proximityQRResponseV1`, so the friend, coach and duress paths can never diverge. |
 
 ### `CoachSessionTrustPolicy.swift`
 
@@ -1690,6 +1709,7 @@ its `identityService`'s, a `MeshMembershipRecordVerifier` its own copy, the mana
 | `handleChallenge(...)` | Verifies the incoming challenge against the displayed nonce and signs the transcript — sign-after-check ordering is load-bearing. |
 | `beginVerification(...)` | Starts a round against a scanned QR, minting the challenge nonce. |
 | `handleResponse(...)` | Validates the peer's response; **a wrong-peer response must be dropped without clearing the pending round**, or an attacker could cancel a legitimate ceremony. |
+| (all of the above) | Since A0.2.5 the ceremony scans, signs and checks under its identity's namespace: `parse(_:in: identity.namespace)`, and `isValid` and the response transcript under `identity.purposes`. |
 
 ### `Wire/CanonicalSignatureSerializer.swift`
 
@@ -1710,9 +1730,10 @@ bytes. **The field order in each function IS the schema.**
 | `canonicalBytes(for:in:)` for the membership family and `canonicalInventoryDigestBytes(for:in:)` | Since A0.2.4 the envelope, the token, the departure, removal and termination records, the inventory-digest and epoch-heads messages, the removal proposal and vote and the key advertisement write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`), and the inventory digest's preimage from `purposes.hash.meshInventoryDigestV1`; their file-level domain tags are gone. The channel introduction and the routed family keep theirs until A0.2.5, the activity and moderation tags until A0.4. |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
-| `canonicalBytes(for: MeshRoutedManifest)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
-| `canonicalBytes(for: MeshChunk)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
-| `canonicalBytes(for: MeshCustodyReceipt)` | P5 item 3: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ custodian ‖ custodiedAt ‖ expiresAt; `signature` excluded. **Two fingerprints in two fixed positions** — the item's ORIGIN (the subject) and the CUSTODIAN (the signer) — so a receipt cannot be re-read as being about the signer's own item, and one lifted onto another origin's item fails the signature. No destination set, no chunk index, no partial count: a receipt exists only for a COMPLETE item. Field order is the schema. |
+| `canonicalBytes(for:in:)` for the channel introduction and the routed family | Since A0.2.5 the channel introduction, the manifest, the chunk, both receipts, the routed inventory digest and the drain answer write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`) too; only the activity and moderation tags remain file-level, until A0.4. |
+| `canonicalBytes(for: MeshRoutedManifest, in:)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
+| `canonicalBytes(for: MeshChunk, in:)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
+| `canonicalBytes(for: MeshCustodyReceipt, in:)` | P5 item 3: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ custodian ‖ custodiedAt ‖ expiresAt; `signature` excluded. **Two fingerprints in two fixed positions** — the item's ORIGIN (the subject) and the CUSTODIAN (the signer) — so a receipt cannot be re-read as being about the signer's own item, and one lifted onto another origin's item fails the signature. No destination set, no chunk index, no partial count: a receipt exists only for a COMPLETE item. Field order is the schema. |
 | `legacyCanonicalBytes(for:)` (envelope, token) | The exact pre-WI-6 `JSONEncoder` configuration, retained ONLY to VERIFY signatures minted by in-field peers on older builds. Never used to sign; do not change its configuration — its byte output is a compatibility contract with already-signed data. |
 | `CanonicalByteWriter` | The append-only binary writer (`appendByte`/`appendInt64`/`appendUUID`/`appendString`/`appendLengthPrefixed`/`appendDate`, optional presence bytes, byte-ordered maps). |
 | `canonicalUTF8Ordered(_:_:)` | Byte-lexicographic key ordering — unambiguous and identical on every stack, unlike `.sortedKeys`' UTF-16 ordering. |

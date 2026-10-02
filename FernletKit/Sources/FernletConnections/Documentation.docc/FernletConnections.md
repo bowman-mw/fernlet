@@ -45,8 +45,15 @@ identity envelope's, the admission token's, the membership, quorum and key-agree
 the inventory digest's hash domain and the legacy pair, which `.fernlet` accepts so that Fernlet's
 schema-v1 and pre-WI-6 peers verify exactly as before (a family that refuses legacy peers would
 reject them); the bindings file restores those serializers' and verifiers' old call shapes with
-`.fernlet` too. A0.2's later commits hand the rest to ProximityKit's readers (the routed and
-introduction transcripts, the hashes and seals, the radios, the at-rest names), each move
+`.fernlet` too. Since step A0.2.5 ProximityKit reads nine more labels and the QR scheme: the channel
+introduction's, the six routed transcripts' and both verify-QR labels, and `Family.fernlet`'s
+`fernlet` scheme, which every verify code the app shows carries and every code it scans must match.
+That settles who owns `fernlet.verify.response.v1`: the app's duress-recovery ceremony signs and
+checks ProximityKit's response transcript under its identity's `purposes`, so the label is
+ProximityKit's, supplied here, and only the two duress labels stay the app's own. The ceremony's
+view parses a scanned code with `ProximityVerifyQR.parse(url, in: .fernlet)`, and the bindings file
+restores the routed and QR call shapes with `.fernlet`. A0.2's later commits hand the rest to
+ProximityKit's readers (the hashes and seals, the radios, the at-rest names), each move
 byte-identical, so Fernlet's behaviour does not change.
 
 **What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter

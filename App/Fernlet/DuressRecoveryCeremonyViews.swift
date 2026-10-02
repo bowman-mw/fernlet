@@ -677,7 +677,7 @@ private struct DuressCeremonyPrimaryFlow: View {
         switch step {
         case .scanIdentity:
             do {
-                guard let payload = ProximityVerifyQR.parse(url) else {
+                guard let payload = ProximityVerifyQR.parse(url, in: .fernlet) else {
                     throw DuressRecoveryError.invalidQRCode
                 }
                 let challenge = purpose == .enroll

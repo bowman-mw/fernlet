@@ -264,7 +264,11 @@ jobs:
         # the inventory digest's hash onto the namespace, it holds those readers to the namespace they
         # are handed: a schema-v1 envelope and a pre-WI-6 token verify under `.fernlet` and are refused
         # by a family that refuses legacy peers, and an envelope, a token, a membership verifier and
-        # the ledger adoption accept only what was signed under their own labels.
+        # the ledger adoption accept only what was signed under their own labels. Since A0.2.5, which
+        # moves the channel-introduction, routed and verify-QR labels and the QR scheme, it holds those
+        # readers the same way: a verify QR parses and validates only in its own namespace, a verify
+        # response and a coach ceremony run under their identity's labels, and the six routed doors,
+        # the introduction exchange and the manager's introduction signature use the labels they hold.
         #
         # `ProximityNamespaceSoundnessTests` joins at ProximityKit plan step A0.2.1 (2026-10-02): the
         # soundness rules, byte rules and collision checks of ProximityKit's protocol namespace — the
@@ -272,16 +276,16 @@ jobs:
         # from literals. Like the three above it has no compiler half: a loosened rule compiles clean
         # and moves no other test.
         #
-        # RAISED 38 -> 138 across A0.2.0 to A0.2.4, MEASURED on a Mac, 2026-10-02 (iPhone 17
-        # simulator, iOS 26.5), on the tree carrying all five: this exact five-name list run at
+        # RAISED 38 -> 144 across A0.2.0 to A0.2.5, MEASURED on a Mac, 2026-10-02 (iPhone 17
+        # simulator, iOS 26.5), on the tree carrying all six: this exact five-name list run at
         # floor 1 after the strict build-for-testing (Scripts/spm-wall-check.sh, WALL CHECK PASSED),
-        # read off its own result bundle: "138 tests in 5 suites" (6 + 13 + 19 + 71 + 29), 0 failed,
-        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 138: passed. Run once more
-        # at 138 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it, so a name
-        # cannot leave this line quietly. 38 + 71 + 29 = 138 is the ARITHMETIC CHECK, never the source.
+        # read off its own result bundle: "144 tests in 5 suites" (6 + 13 + 19 + 77 + 29), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 144: passed. Run once more
+        # at 144 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it, so a name
+        # cannot leave this line quietly. 38 + 77 + 29 = 144 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 138 \
+          Scripts/run-gated-suites.sh crypto-goldens 144 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

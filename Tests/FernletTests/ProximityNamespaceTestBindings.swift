@@ -53,7 +53,7 @@ extension IdentityService {
 //
 // The ten `canonicalBytes(for:)` overloads whose domain step A0.2.4 moved onto the namespace, and the
 // membership inventory digest's preimage, each restored over its `in purposes:` form with Fernlet's
-// labels. The routed, channel-introduction and QR overloads keep their old shape until step A0.2.5.
+// labels. The routed and channel-introduction overloads follow in their own section (A0.2.5).
 
 /// `canonicalBytes(for: envelope, in: .fernlet)`: the identity envelope under Fernlet's labels.
 func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
@@ -167,5 +167,148 @@ extension MeshAdmissionToken {
     ) throws {
         try verify(joinerSigningPublicKey: presentedKey, expectedMeshID: expectedMeshID,
                    expectedAdmitterSigningPublicKey: expectedAdmitterSigningPublicKey, now: now, in: .fernlet)
+    }
+}
+
+// MARK: - Signed transcripts II: the canonical bytes (A0.2.5)
+//
+// The seven `canonicalBytes(for:)` overloads whose domain step A0.2.5 moved onto the namespace — the
+// QUIC channel introduction and the six routed transcripts — each restored over its `in purposes:`
+// form with Fernlet's labels.
+
+/// `canonicalBytes(for: transcript, in: .fernlet)`: a channel introduction under Fernlet's labels.
+func canonicalBytes(for transcript: MeshChannelIntroductionTranscript) -> Data {
+    canonicalBytes(for: transcript, in: .fernlet)
+}
+
+/// `canonicalBytes(for: manifest, in: .fernlet)`: a routed manifest under Fernlet's labels.
+func canonicalBytes(for manifest: MeshRoutedManifest) -> Data {
+    canonicalBytes(for: manifest, in: .fernlet)
+}
+
+/// `canonicalBytes(for: chunk, in: .fernlet)`: a routed chunk under Fernlet's labels.
+func canonicalBytes(for chunk: MeshChunk) -> Data {
+    canonicalBytes(for: chunk, in: .fernlet)
+}
+
+/// `canonicalBytes(for: receipt, in: .fernlet)`: a custody receipt under Fernlet's labels.
+func canonicalBytes(for receipt: MeshCustodyReceipt) -> Data {
+    canonicalBytes(for: receipt, in: .fernlet)
+}
+
+/// `canonicalBytes(for: receipt, in: .fernlet)`: a recipient receipt under Fernlet's labels.
+func canonicalBytes(for receipt: MeshRecipientReceipt) -> Data {
+    canonicalBytes(for: receipt, in: .fernlet)
+}
+
+/// `canonicalBytes(for: payload, in: .fernlet)`: a routed inventory digest under Fernlet's labels.
+func canonicalBytes(for payload: MeshRoutedInventoryPayload) -> Data {
+    canonicalBytes(for: payload, in: .fernlet)
+}
+
+/// `canonicalBytes(for: payload, in: .fernlet)`: a routed drain answer under Fernlet's labels.
+func canonicalBytes(for payload: MeshRoutedDrainAnswerPayload) -> Data {
+    canonicalBytes(for: payload, in: .fernlet)
+}
+
+// MARK: - Signed transcripts II: the verifiers and the exchange (A0.2.5)
+//
+// The six routed verifiers and the channel-introduction exchange each keep a copy of the labels they
+// check under (a trailing `purposes:` since step A0.2.5); each old initializer comes back here,
+// keeping Fernlet's labels as that copy.
+
+/// The manifest door's initializer the suites were written against (plan step A0.2.5).
+extension MeshRoutedManifestVerifier {
+
+    /// `init(meshID:hardDeadline:ledger:acceptedTypeTokens:purposes: .fernlet)`.
+    init(meshID: UUID, hardDeadline: Date, ledger: MeshMembershipLedger, acceptedTypeTokens: Set<String>) {
+        self.init(meshID: meshID, hardDeadline: hardDeadline, ledger: ledger,
+                  acceptedTypeTokens: acceptedTypeTokens, purposes: .fernlet)
+    }
+}
+
+/// The chunk door's initializer the suites were written against (plan step A0.2.5).
+extension MeshChunkVerifier {
+
+    /// `init(meshID:hardDeadline:ledger:manifest:purposes: .fernlet)`.
+    init(meshID: UUID, hardDeadline: Date, ledger: MeshMembershipLedger, manifest: MeshRoutedManifest?) {
+        self.init(meshID: meshID, hardDeadline: hardDeadline, ledger: ledger, manifest: manifest, purposes: .fernlet)
+    }
+}
+
+/// The custody-receipt door's initializer the suites were written against (plan step A0.2.5).
+extension MeshCustodyReceiptVerifier {
+
+    /// `init(meshID:hardDeadline:ledger:manifest:purposes: .fernlet)`.
+    init(meshID: UUID, hardDeadline: Date, ledger: MeshMembershipLedger, manifest: MeshRoutedManifest?) {
+        self.init(meshID: meshID, hardDeadline: hardDeadline, ledger: ledger, manifest: manifest, purposes: .fernlet)
+    }
+}
+
+/// The recipient-receipt door's initializer the suites were written against (plan step A0.2.5).
+extension MeshRecipientReceiptVerifier {
+
+    /// `init(meshID:hardDeadline:ledger:manifest:purposes: .fernlet)`.
+    init(meshID: UUID, hardDeadline: Date, ledger: MeshMembershipLedger, manifest: MeshRoutedManifest?) {
+        self.init(meshID: meshID, hardDeadline: hardDeadline, ledger: ledger, manifest: manifest, purposes: .fernlet)
+    }
+}
+
+/// The routed-inventory door's initializer the suites were written against (plan step A0.2.5).
+extension MeshRoutedInventoryVerifier {
+
+    /// `init(meshID:ledger:purposes: .fernlet)`.
+    init(meshID: UUID, ledger: MeshMembershipLedger) {
+        self.init(meshID: meshID, ledger: ledger, purposes: .fernlet)
+    }
+}
+
+/// The drain-answer door's initializer the suites were written against (plan step A0.2.5).
+extension MeshRoutedDrainAnswerVerifier {
+
+    /// `init(meshID:ledger:purposes: .fernlet)`.
+    init(meshID: UUID, ledger: MeshMembershipLedger) {
+        self.init(meshID: meshID, ledger: ledger, purposes: .fernlet)
+    }
+}
+
+/// The channel-introduction exchange's initializer the suites were written against (plan step
+/// A0.2.5).
+extension MeshChannelIntroductionExchange {
+
+    /// `init(role:localHello:purposes: .fernlet)`.
+    init(role: MeshChannelRole, localHello: MeshChannelHello) {
+        self.init(role: role, localHello: localHello, purposes: .fernlet)
+    }
+}
+
+// MARK: - The verify QR (A0.2.5)
+
+/// The verify QR's calls in the shapes the suites were written against, restored over their
+/// namespace forms with Fernlet's namespace (plan step A0.2.5).
+extension ProximityVerifyQR {
+
+    /// The scheme the retired `ProximityVerifyQR.urlScheme` spelled: `.fernlet`'s
+    /// `family.verifyQR.urlScheme`, read off the value, never respelled here.
+    static let urlScheme = ProximityNamespace.fernlet.family.verifyQR.urlScheme
+
+    /// `parse(url, in: .fernlet)`.
+    static func parse(_ url: URL) -> Payload? {
+        parse(url, in: .fernlet)
+    }
+
+    /// `isValid(payload, at: now, in: .fernlet)`.
+    static func isValid(_ payload: Payload, at now: Date = Date()) -> Bool {
+        isValid(payload, at: now, in: .fernlet)
+    }
+}
+
+/// The response transcript in the shape the suites were written against (plan step A0.2.5).
+extension ProximityVerifySignature {
+
+    /// `message(scannerKeyAgreementPublicKey:challengeNonce:qrNonce:in: .fernlet)`.
+    static func message(scannerKeyAgreementPublicKey: Data, challengeNonce: Data, qrNonce: Data) -> Data {
+        message(scannerKeyAgreementPublicKey: scannerKeyAgreementPublicKey, challengeNonce: challengeNonce,
+                qrNonce: qrNonce, in: .fernlet)
     }
 }
