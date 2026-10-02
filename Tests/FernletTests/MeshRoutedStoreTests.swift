@@ -50,13 +50,15 @@ enum MeshRoutedStoreFixtures {
     /// A scope nobody else in the process shares: temp directory + a `.test.` keychain service (the
     /// spelling `PrivacyWipeCoverageTests`' service discovery deliberately skips), under Fernlet's
     /// namespace, so the store writes Fernlet's names and seal-key account and measures under
-    /// Fernlet's labels (plan step A0.2.8).
+    /// Fernlet's labels (plan step A0.2.8), and Fernlet's install binding, so the store seals and
+    /// opens under whatever `DeviceBindingID.$testOverride` answers at that moment (plan step A0.2.9).
     static func scope() -> MeshRoutedStorageScope {
         MeshRoutedStorageScope(
             namespace: .fernlet,
             directory: FileManager.default.temporaryDirectory
                 .appendingPathComponent("MeshRoutedStore-\(UUID().uuidString)", isDirectory: true),
-            keychainService: "com.fernlet.mesh-routed.test.\(UUID().uuidString)"
+            keychainService: "com.fernlet.mesh-routed.test.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter()
         )
     }
 

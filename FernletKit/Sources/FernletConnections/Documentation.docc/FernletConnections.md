@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds one value: `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, and `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal.
 
 ## Overview
 
@@ -68,11 +68,27 @@ names and rows too: the mesh stores' file names, chunk directory and seal-key ac
 seal-key services, the default sidecar root and the identity's four accounts. The app hands
 `.fernlet` to both storage scopes and resolves its proximity root from it, so every file and keychain
 row keeps its name; the bindings file restores the seal-key reads and the identity-row classifier
-with `.fernlet`'s rows. A0.2's later commits hand the rest to ProximityKit's readers (the two column
-seals), each move byte-identical, so Fernlet's behaviour does not change.
+with `.fernlet`'s rows. Since step A0.2.9 the two mesh stores seal under `KeyDerivation.fernlet`'s two
+column seals too, `fernlet.mesh.session-context.v1` and `fernlet.mesh.routed-store.v1`, the last of the
+39 labels to move, each read off the store's scope namespace, so every sealed file opens exactly as
+before.
 
-**What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter
-that ProximityKit's copies of the audit log and of `ColumnCrypto` call back into. A0.3 adds the
+**The install binding (plan step A0.2.9).** ProximityKit's copy of the column seal,
+`ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks
+the host for it through `ProximityInstallBinding` instead of reading FernletCrypto's `DeviceBindingID`
+itself. `FernletDeviceBindingAdapter` (`FernletDeviceBindingAdapter.swift`) is Fernlet's answer: a
+stateless value that delegates to `DeviceBindingID` at each call — `current()` for a seal, which may
+mint the row; `currentForOpen()` for an open, which never mints and whose retryable `ReadError` it
+translates into ProximityKit's `ProximityInstallBindingReadError` with the same status. Delegating
+rather than copying keeps one row, one cache, one mint path and one task-local test seam: the mesh
+stores keep sealing under the 16 bytes Fernlet's sealed private stores share, and every
+`DeviceBindingID.$testOverride` in the suites, including one flipped in the middle of an operation,
+still decides what they seal and open under. The app's `ProximityHost` adapter answers
+`proximityInstallBinding` with one, `FernletStore`'s two storage scopes carry it, and so do the test
+target's `ProximityHost` doubles and store fixtures.
+
+**What joins it later.** A0.2's later steps add the audit bridge that ProximityKit's copy of the
+audit log calls back into. A0.3 adds the
 payload vocabulary (payload type tokens, capability raw values, the sealing set, routed-type rows,
 membership record kinds), the session trust policies and the presentation strings that must become
 per-host (instance prefixes, the TLS certificate name, the display default). A0.4 makes Fernlet's
@@ -88,8 +104,9 @@ reverse, so ProximityKit cannot name `.fernlet` even by accident; a non-Fernlet 
 identity only by importing this module or by copying its literals on purpose. It stays in
 FernletKit after ProximityKit leaves for its own repository (plan A1), consuming the package by tag.
 
-**Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit` alone
-and imports nothing else but Foundation. Through ProximityKit it reaches `PrivateMediaStore`
+**Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit` and,
+since step A0.2.9, `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to),
+and imports nothing else but Foundation and Security. Through ProximityKit it reaches `PrivateMediaStore`
 transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair
@@ -100,6 +117,7 @@ ProximityKit's `Namespace/`: a changed literal here is a wire, keychain or on-di
 every device already in the field.
 
 **Isolation.** The module is main-actor by default (`defaultIsolation(MainActor.self)` in
-`Package.swift`), matching ProximityKit, and every extension and static here is `nonisolated`: the
-namespace is inert `Sendable` value data, and its readers are ProximityKit's nonisolated
-serializers, verifiers and stores.
+`Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`:
+the namespace is inert `Sendable` value data, and its readers are ProximityKit's nonisolated
+serializers, verifiers and stores; the binding adapter is a stateless `Sendable` value the column
+seal calls synchronously from inside those stores.

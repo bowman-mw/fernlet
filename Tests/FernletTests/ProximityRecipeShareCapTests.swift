@@ -34,6 +34,7 @@ private final class RecipeCapTestHost: ProximityHost {
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
     let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

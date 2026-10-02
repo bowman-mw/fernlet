@@ -41,13 +41,15 @@ enum MeshSessionStoreFixtures {
     /// A scope nobody else in the process shares: temp directory + a `.test.` keychain service
     /// (the spelling `PrivacyWipeCoverageTests`' service discovery deliberately skips), under
     /// Fernlet's namespace, so the store writes Fernlet's file name and seal-key account (plan step
-    /// A0.2.8).
+    /// A0.2.8), and Fernlet's install binding, so the store seals and opens under whatever
+    /// `DeviceBindingID.$testOverride` answers at that moment (plan step A0.2.9).
     static func scope() -> MeshSessionStorageScope {
         MeshSessionStorageScope(
             namespace: .fernlet,
             directory: FileManager.default.temporaryDirectory
                 .appendingPathComponent("MeshSessionStore-\(UUID().uuidString)", isDirectory: true),
-            keychainService: "com.fernlet.mesh-session.test.\(UUID().uuidString)"
+            keychainService: "com.fernlet.mesh-session.test.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter()
         )
     }
 

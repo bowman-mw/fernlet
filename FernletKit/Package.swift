@@ -434,11 +434,11 @@ let package = Package(
         // the keychain rows, the storage names and the log subsystem), byte-identical to today's
         // literals. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
         // never the reverse. The payload vocabulary (A0.3), the feature purposes (A0.4) and the
-        // coach profile and link purposes (C1) join it later. Deps: ProximityKit only. MainActor
+        // coach profile and link purposes (C1) join it later. Deps: ProximityKit, FernletCrypto (A0.2.9). MainActor
         // default, with every namespace static marked nonisolated within (inert value data).
         .target(
             name: "FernletConnections",
-            dependencies: ["ProximityKit"],
+            dependencies: ["ProximityKit", "FernletCrypto"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

@@ -194,7 +194,8 @@ struct MeshRoutedStoreIsolationTests {
     ///
     /// Since ProximityKit plan step A0.2.8 the derivation and the production scope read the host's
     /// namespace, so this pins them under `.fernlet`: its seal-key service, its default directory, and
-    /// the namespace itself carried on the scope.
+    /// the namespace itself carried on the scope — and since step A0.2.9, the install binding it is
+    /// handed.
     @Test func theDerivedKeychainServiceTracksItsHeartDropInput() {
         let namespace = ProximityNamespace.fernlet
         let keychain = namespace.installation.keychain
@@ -202,10 +203,13 @@ struct MeshRoutedStoreIsolationTests {
             besideHeartDrop: HeartPrekeyStore.keychainService, in: namespace
         )
         #expect(production == keychain.meshRoutedSealKey.service)
-        let productionScope = MeshRoutedStorageScope.production(for: namespace)
+        let productionScope = MeshRoutedStorageScope.production(
+            for: namespace, installBinding: FernletDeviceBindingAdapter()
+        )
         #expect(productionScope.keychainService == production)
         #expect(productionScope.directory == namespace.installation.storage.defaultDirectory)
         #expect(productionScope.namespace == namespace)
+        #expect(productionScope.installBinding is FernletDeviceBindingAdapter)
 
         let isolated = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
         let derived = MeshRoutedStorageScope.keychainService(besideHeartDrop: isolated, in: namespace)

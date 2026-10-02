@@ -4,11 +4,11 @@ import Foundation
 import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
-/// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`
-/// and `proximityNamespace` is already satisfied by existing store members (`trustedProximityPeers`,
-/// `proximityTrustVault`, `isBlockedFingerprint`, `blockProximityPeer`). Kept in
-/// the app target: this conformance is the one piece that cannot move into the
-/// future `ProximityKit` module, since it bridges the module's abstraction to the
+/// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
+/// `proximityNamespace` and `proximityInstallBinding` is already satisfied by existing store
+/// members (`trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint`,
+/// `blockProximityPeer`). Kept in the app target: this conformance is the one piece that cannot
+/// move into the future `ProximityKit` module, since it bridges the module's abstraction to the
 /// app's concrete store.
 extension FernletStore: ProximityHost {
     var proximityDisplayName: String { settings.proximityDisplayName }
@@ -29,4 +29,12 @@ extension FernletStore: ProximityHost {
     /// storage-scope properties (`meshSessionStorage`, `meshRoutedStorage`) read it: since plan step
     /// A0.2.8 each scope carries it, and its production seal-key service is derived from it.
     nonisolated var proximityNamespace: ProximityNamespace { .fernlet }
+    /// Fernlet's install binding, `FernletDeviceBindingAdapter` from `FernletConnections`:
+    /// FernletCrypto's `DeviceBindingID`, read at each seal and open of the two sealed mesh stores, so
+    /// they keep sealing under the one row the private stores share (ProximityKit plan step A0.2.9).
+    /// The requirement has no default, so a host that left this out would not compile.
+    ///
+    /// `nonisolated`: the adapter is a stateless `Sendable` value, and the store's nonisolated
+    /// storage-scope properties hand it to both scopes.
+    nonisolated var proximityInstallBinding: any ProximityInstallBinding { FernletDeviceBindingAdapter() }
 }

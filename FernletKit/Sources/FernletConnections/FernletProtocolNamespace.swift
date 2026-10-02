@@ -12,10 +12,11 @@
 // are read off it too, since A0.2.5 the channel-introduction, routed and verify-QR labels and the
 // QR scheme, since A0.2.6 the routed hash and id domains, the five AEAD labels, the three HKDF
 // salts and the epoch id's domain, since A0.2.7 the three radios' service types, ALPNs, the mesh
-// heartbeat, the TLS exporter label and the log subsystem, and since A0.2.8 the storage names, the two
+// heartbeat, the TLS exporter label and the log subsystem, since A0.2.8 the storage names, the two
 // seal-key rows, the identity's four accounts and the default sidecar root, which the app's two
-// storage scopes carry and its proximity root resolves. A0.2's later commits hand the rest to
-// ProximityKit's readers one consumer family at a time.
+// storage scopes carry and its proximity root resolves, and since A0.2.9 the two column seals, the last
+// of the 39 labels, which the two mesh stores seal under through ProximityKit's copy of the column seal
+// (and under the install binding `FernletDeviceBindingAdapter` reads from `DeviceBindingID`).
 //
 // Every literal below is pinned by `ProximityNamespaceGoldenTests`' frozen column, so a change here
 // is a wire, keychain or on-disk format change for every device already in the field: it fails that

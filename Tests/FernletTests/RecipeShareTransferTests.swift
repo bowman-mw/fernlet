@@ -35,6 +35,7 @@ final class RecipeTransferTestHost: ProximityHost {
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
     let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }
@@ -51,6 +52,7 @@ private final class NamedTransferTestHost: ProximityHost {
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
     let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

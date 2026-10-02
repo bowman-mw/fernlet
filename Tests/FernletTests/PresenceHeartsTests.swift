@@ -24,6 +24,7 @@ private final class MockPresenceHeartsHost: ProximityHost {
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
     let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     /// Settable so a test can toggle the hearts opt-out (the app's FernletStore backs this with
     /// `settings.allowNearbyHearts`).
     var allowNearbyHearts: Bool = true

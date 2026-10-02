@@ -546,7 +546,9 @@ final class FernletStore {
     /// injectable seam would add a fourth way to forget one. Production resolves to
     /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged from
     /// `MeshSessionStorageScope.production(for: proximityNamespace)`. The scope carries
-    /// ``proximityNamespace``, which names the file and the seal key's account (plan step A0.2.8).
+    /// ``proximityNamespace``, which names the file and the seal key's account (plan step A0.2.8), and
+    /// ``proximityInstallBinding``, Fernlet's `DeviceBindingID` adapter, which the file is sealed and
+    /// opened under (plan step A0.2.9).
     ///
     /// Nothing writes through this scope yet — P3 item 2a builds the store and its wipe; item 2b
     /// wires the session manager to it. The delete-all leg is here from the first commit anyway,
@@ -555,7 +557,8 @@ final class FernletStore {
         MeshSessionStorageScope(
             namespace: proximityNamespace,
             directory: proximitySupportRoot,
-            keychainService: MeshSessionStorageScope.keychainService(besideHeartDrop: heartDropKeychainService, in: proximityNamespace)
+            keychainService: MeshSessionStorageScope.keychainService(besideHeartDrop: heartDropKeychainService, in: proximityNamespace),
+            installBinding: proximityInstallBinding
         )
     }
     /// This store's sealed ROUTED-CONTENT scope (network migration P5 item 3, plan §11/§19.5):
@@ -570,7 +573,9 @@ final class FernletStore {
     /// to forget one. Production resolves to `Application Support/Fernlet` +
     /// `com.fernlet.mesh-routed`, unchanged from `MeshRoutedStorageScope.production(for:
     /// proximityNamespace)`. The scope carries ``proximityNamespace``, which names the files and the
-    /// seal key's account and holds the labels the store measures under (plan step A0.2.8).
+    /// seal key's account and holds the labels the store measures under (plan step A0.2.8), and
+    /// ``proximityInstallBinding``, Fernlet's `DeviceBindingID` adapter, which the files are sealed
+    /// and opened under (plan step A0.2.9).
     ///
     /// Its own keychain service rather than a lodger under the mesh-session one: one fate per
     /// service is the only arrangement a service-wide delete can express honestly, and a session
@@ -583,7 +588,8 @@ final class FernletStore {
         MeshRoutedStorageScope(
             namespace: proximityNamespace,
             directory: proximitySupportRoot,
-            keychainService: MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDropKeychainService, in: proximityNamespace)
+            keychainService: MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDropKeychainService, in: proximityNamespace),
+            installBinding: proximityInstallBinding
         )
     }
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo

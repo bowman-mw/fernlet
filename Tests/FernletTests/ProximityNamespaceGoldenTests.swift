@@ -115,6 +115,20 @@
 //     app's; a host with no sidecar root or scope of its own gets them built from its namespace; and
 //     an identity provisions, and its provisioning rule names, the four rows its namespace names.
 //
+// One more group since step A0.2.9, when ProximityKit's copy of the column seal,
+// `ProximityColumnCrypto`, began sealing the two mesh stores under their scope namespace's column
+// labels and the install binding their scope carries (Fernlet's `FernletDeviceBindingAdapter`, over
+// `DeviceBindingID`). The two column-seal rows' accessors are re-pointed at `.fernlet`'s fields; no
+// literal moves. Every scope here carries a binding (Fernlet's adapter, unless a cell supplies its
+// own), and group 11's store helper hands its two stores one column seal:
+//
+// 14. **The column seal and the install binding.** The copy derives group 2's known column keys from
+//     `.fernlet`'s fields and opens group 2's known blobs; it and FernletCrypto's `ColumnCrypto` open
+//     each other's blobs, for both labels, both ways; it refuses exactly where `ColumnCrypto`
+//     refuses, by the same name; each store seals under its scope namespace's label and its scope's
+//     binding, and under nothing else; Fernlet's adapter answers `DeviceBindingID` at each call, a
+//     mid-operation flip included; and a host's default scopes carry the binding it supplies.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
 // suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
@@ -283,10 +297,10 @@ struct ProximityNamespaceGoldenTests {
     /// (`fernletHash` below), as production reads it off the host's namespace; since step A0.2.6 the
     /// three HKDF salts, the five AEAD labels and the other six hash domains are too, the epoch
     /// domain among them (its `MeshEpochBounds.derivationDomain` is gone), and since step A0.2.7 the
-    /// TLS exporter label, which the mesh radio reads off the namespace it is built from. Only the two
-    /// column seals (A0.2.9) still read FernletCrypto's registry here.
+    /// TLS exporter label, which the mesh radio reads off the namespace it is built from. Since step
+    /// A0.2.9 the two column seals are too, which the two sealed mesh stores read off their scope's
+    /// namespace, so every label row now reads the field production reads.
     private static var otherLabelRows: [NamespaceGoldenRow] {
-        typealias KeyDerivation = FernletCryptoPurpose.KeyDerivation
         let fernletDerivation = ProximityNamespace.fernlet.family.purposes.keyDerivation
         let fernletAEAD = ProximityNamespace.fernlet.family.purposes.aead
         let fernletHash = ProximityNamespace.fernlet.family.purposes.hash
@@ -303,9 +317,9 @@ struct ProximityNamespaceGoldenTests {
             NamespaceGoldenRow(.label, derivation + "meshRoutedContentKeyWrapV1", frozen: "fernlet.mesh.routed.content-key.v1",
                                today: .text(fernletDerivation.meshRoutedContentKeyWrapV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshSessionContextV1", frozen: "fernlet.mesh.session-context.v1",
-                               today: .text(KeyDerivation.meshSessionContextV1.rawValue)),
+                               today: .text(fernletDerivation.meshSessionContextV1.rawValue)),
             NamespaceGoldenRow(.label, derivation + "meshRoutedStoreV1", frozen: "fernlet.mesh.routed-store.v1",
-                               today: .text(KeyDerivation.meshRoutedStoreV1.rawValue)),
+                               today: .text(fernletDerivation.meshRoutedStoreV1.rawValue)),
             NamespaceGoldenRow(.label, aead + "proximityTransportV2", frozen: "fernlet.proximity.transport.aead.v2",
                                today: .text(fernletAEAD.proximityTransportV2.rawValue)),
             NamespaceGoldenRow(.label, aead + "meshGroupKeyWrapV2", frozen: "fernlet.mesh.groupkey.wrap.aead.v2",
@@ -672,12 +686,14 @@ struct ProximityNamespaceGoldenTests {
     /// The session store, on an isolated scope, opens a blob planted at the frozen file name under a
     /// seal key planted at the frozen account — so the store's file name, its seal-key account, its
     /// column purpose and the binding's place in the AAD are all pinned by one load. Since step A0.2.8
-    /// the scope carries `.fernlet`, whose names the store reads.
+    /// the scope carries `.fernlet`, whose names the store reads, and since step A0.2.9 Fernlet's
+    /// install-binding adapter, through which the pinned binding reaches the store's column seal.
     @Test func theSessionStoreOpensItsKnownBlobUnderItsFrozenNames() throws {
         let scope = MeshSessionStorageScope(
             namespace: .fernlet,
             directory: Self.scratchDirectory(),
-            keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)"
+            keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter()
         )
         defer {
             MeshSessionStore.wipeForDeleteAll(scope: scope)
@@ -704,7 +720,8 @@ struct ProximityNamespaceGoldenTests {
         let scope = MeshRoutedStorageScope(
             namespace: .fernlet,
             directory: Self.scratchDirectory(),
-            keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)"
+            keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter()
         )
         defer {
             MeshRoutedStore.wipeForDeleteAll(scope: scope)
@@ -2423,18 +2440,20 @@ struct ProximityNamespaceGoldenTests {
     /// the session store saves its context at that namespace's file name and mints its seal key at
     /// that namespace's account, the only row under the scope's service; the routed store does the
     /// same for its index and keeps its chunks under that namespace's chunk directory; and both load
-    /// back what they wrote. So every read is the namespace's field and no literal. (Both still seal
-    /// under FernletCrypto's column labels until plan step A0.2.9.)
+    /// back what they wrote. So every read is the namespace's field and no literal. (Since plan step
+    /// A0.2.9 both also seal under that namespace's column labels: group 14 pins those reads.)
     @Test func theStoresReadTheirNamesAndSealKeyAccountsOffTheirScopesNamespace() throws {
         // R2: bounded by the two namespaces.
         for namespace in [ProximityNamespace.fernlet, ForeignAppNamespace.namespace()] {
             let (storage, keychain) = (namespace.installation.storage, namespace.installation.keychain)
             let session = MeshSessionStore(scope: MeshSessionStorageScope(
                 namespace: namespace, directory: Self.scratchDirectory(),
-                keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)"))
+                keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)",
+                installBinding: FernletDeviceBindingAdapter()))
             let routed = MeshRoutedStore(scope: MeshRoutedStorageScope(
                 namespace: namespace, directory: Self.scratchDirectory(),
-                keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)"))
+                keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)",
+                installBinding: FernletDeviceBindingAdapter()))
             defer {
                 MeshSessionStoreFixtures.tearDown(session.scope)
                 MeshRoutedStoreFixtures.tearDown(routed.scope)
@@ -2526,6 +2545,311 @@ struct ProximityNamespaceGoldenTests {
             #expect(row == accounts.signingPrivateKey && badRow == accounts.keyAgreementPrivateKey,
                     "the rule named \(row) and \(badRow), not the accounts it was handed")
         }
+    }
+
+    // MARK: Group 14 — the column seal and the install binding (A0.2.9)
+
+    /// One mesh column as ProximityKit's copy reads it (`.fernlet`'s field, as each store reads it off
+    /// its scope's namespace) beside FernletCrypto's twin, with group 2's A0.2.0 vectors.
+    private struct CopiedColumn {
+        let name: String
+        let purpose: ProximityCryptographicPurpose
+        let twin: CryptographicPurpose
+        let columnKeyHex: String
+        let blobHex: String
+    }
+
+    /// The two mesh columns, through `.fernlet`'s fields.
+    private static var copiedColumns: [CopiedColumn] {
+        let derivation = ProximityNamespace.fernlet.family.purposes.keyDerivation
+        return [
+            CopiedColumn(name: "session-context", purpose: derivation.meshSessionContextV1,
+                         twin: FernletCryptoPurpose.KeyDerivation.meshSessionContextV1,
+                         columnKeyHex: sessionColumnKeyHex, blobHex: sessionColumnBlobHex),
+            CopiedColumn(name: "routed-store", purpose: derivation.meshRoutedStoreV1,
+                         twin: FernletCryptoPurpose.KeyDerivation.meshRoutedStoreV1,
+                         columnKeyHex: routedColumnKeyHex, blobHex: routedColumnBlobHex)
+        ]
+    }
+
+    /// The second install every group 14 cell tells apart from `installBinding`: `B9` × 16
+    /// (`MeshSessionStoreFixtures.installB`).
+    static let otherInstallBinding = Data(repeating: 0xB9, count: 16)
+
+    /// The copy derives group 2's two known column keys from `.fernlet`'s two column-seal fields: the
+    /// label is the salt-free HKDF's `info`, whole, as in FernletCrypto's `ColumnCrypto`.
+    @Test func theCopiedColumnSealDerivesTheKnownColumnKeys() {
+        // R2: bounded by the two columns.
+        for column in Self.copiedColumns {
+            #expect(column.purpose.role == .columnSeal, "the \(column.name) field is not a column seal")
+            let key = ProximityColumnCrypto.deriveColumnKey(contentKey: Self.columnContentKey, purpose: column.purpose,
+                                                            outputByteCount: 32)
+            let actual = Self.hex(key.withUnsafeBytes { Data($0) })
+            #expect(actual == column.columnKeyHex, "the copy's \(column.name) column key moved — actual hex = \(actual)")
+        }
+    }
+
+    /// The copy opens group 2's two known V3 blobs, built from the literal labels, under the pinned
+    /// binding — which reaches it through Fernlet's adapter, from `DeviceBindingID`'s task-local seam.
+    @Test func theCopiedColumnSealOpensTheKnownColumnBlobs() throws {
+        try DeviceBindingID.$testOverride.withValue(.identifier(Self.installBinding)) {
+            // R2: bounded by the two columns.
+            for column in Self.copiedColumns {
+                let blob = try #require(Self.bytes(hex: column.blobHex))
+                let copy = ProximityColumnCrypto(purpose: column.purpose, installBinding: FernletDeviceBindingAdapter())
+                let opened: [String]? = try copy.open(blob, contentKey: Self.columnContentKey)
+                #expect(opened == ["golden"], "the copy did not open the known \(column.name) blob")
+            }
+        }
+    }
+
+    /// Byte for byte, both ways: for both labels, a blob the copy seals is `0x03` ‖ nonce ‖ ciphertext ‖
+    /// tag and opens with FernletCrypto's `ColumnCrypto`, and a blob `ColumnCrypto` seals opens with
+    /// the copy — so every mesh file written before step A0.2.9 opens after it, and every one written
+    /// after it opens with the code before.
+    @Test func theCopyAndFernletCryptosColumnCryptoOpenEachOthersBlobs() throws {
+        let plaintext = ["golden", "both ways"]
+        let plaintextByteCount = try JSONEncoder().encode(plaintext).count
+        try DeviceBindingID.$testOverride.withValue(.identifier(Self.installBinding)) {
+            // R2: bounded by the two columns.
+            for column in Self.copiedColumns {
+                let copy = ProximityColumnCrypto(purpose: column.purpose, installBinding: FernletDeviceBindingAdapter())
+                let original = ColumnCrypto(purpose: column.twin)
+                let byCopy = try copy.seal(plaintext, contentKey: Self.columnContentKey)
+                let byOriginal = try original.seal(plaintext, contentKey: Self.columnContentKey)
+                #expect(byCopy.first == 0x03 && byCopy.count == 1 + 12 + plaintextByteCount + 16,
+                        "the copy wrote a \(byCopy.count)-byte \(column.name) blob starting \(Self.hex(byCopy.prefix(1)))")
+                let openedByOriginal: [String]? = try original.open(byCopy, contentKey: Self.columnContentKey)
+                let openedByCopy: [String]? = try copy.open(byOriginal, contentKey: Self.columnContentKey)
+                #expect(openedByOriginal == plaintext, "ColumnCrypto did not open the copy's \(column.name) blob")
+                #expect(openedByCopy == plaintext, "the copy did not open ColumnCrypto's \(column.name) blob")
+            }
+        }
+    }
+
+    /// The copy refuses exactly where FernletCrypto's `ColumnCrypto` refuses, and by the same name. For
+    /// both labels, five blobs (a good V3 blob, one tampered with, a `0x02` blob, an unprefixed one and
+    /// an empty one) are opened under four answers of the install binding (this install, another one,
+    /// an absent row, a failed read), and the two verdicts agree in all forty pairings: a retired
+    /// format is named before the binding is read, an absent row refuses, a failed read is the
+    /// retryable error carrying the same status, and another install fails authentication. And under an
+    /// absent row or a failed read, both seals refuse.
+    @Test func theCopyRefusesExactlyWhereFernletCryptosColumnCryptoRefuses() throws {
+        let overrides: [DeviceBindingID.TestOverride] = [
+            .identifier(Self.installBinding), .identifier(Self.otherInstallBinding), .unavailable, .readError
+        ]
+        var compared = 0
+        // R2: bounded by the two columns, five blobs and four answers.
+        for column in Self.copiedColumns {
+            let copy = ProximityColumnCrypto(purpose: column.purpose, installBinding: FernletDeviceBindingAdapter())
+            let original = ColumnCrypto(purpose: column.twin)
+            for blob in try Self.refusalBlobs(sealedBy: original) {
+                for answer in overrides {
+                    let verdicts = DeviceBindingID.$testOverride.withValue(answer) {
+                        (copy: Self.verdict(of: copy, opening: blob), original: Self.verdict(of: original, opening: blob))
+                    }
+                    #expect(verdicts.copy == verdicts.original,
+                            "\(column.name), \(answer): the copy said \(verdicts.copy), ColumnCrypto \(verdicts.original)")
+                    compared += 1
+                }
+            }
+            for answer in [DeviceBindingID.TestOverride.unavailable, .readError] {
+                DeviceBindingID.$testOverride.withValue(answer) {
+                    #expect(throws: ProximityColumnCrypto.SealedColumnStrictSealError.bindingUnavailable) {
+                        try copy.seal(["golden"], contentKey: Self.columnContentKey)
+                    }
+                    #expect(throws: ColumnCrypto.SealedColumnStrictSealError.bindingUnavailable) {
+                        try original.seal(["golden"], contentKey: Self.columnContentKey)
+                    }
+                }
+            }
+        }
+        #expect(compared == 40, "the refusal matrix compared \(compared) pairings")
+        let routedBlobs = try Self.refusalBlobs(sealedBy: ColumnCrypto(purpose: FernletCryptoPurpose.KeyDerivation.meshRoutedStoreV1))
+        let anchor = try #require(routedBlobs.first)
+        let readError = DeviceBindingID.$testOverride.withValue(.readError) {
+            Self.verdict(of: ProximityColumnCrypto(purpose: ProximityNamespace.fernlet.family.purposes.keyDerivation.meshRoutedStoreV1,
+                                                   installBinding: FernletDeviceBindingAdapter()), opening: anchor)
+        }
+        #expect(readError == .bindingReadError(errSecIO), "a failed binding read was not the retryable error: \(readError)")
+    }
+
+    /// Each sealed mesh store seals under its scope namespace's column label and its scope's install
+    /// binding, and under nothing else. On a scope carrying a binding of the test's own (`A7`) while
+    /// `DeviceBindingID` answers another (`B9`), under `.fernlet` and under another app's namespace,
+    /// the context file and the routed index the two stores write open under that namespace's label
+    /// and `A7`, and under neither the other namespace's label nor `B9`.
+    @Test func theStoresSealUnderTheirScopesColumnLabelAndInstallBinding() throws {
+        let namespaces = [ProximityNamespace.fernlet, ForeignAppNamespace.namespace()]
+        // R2: bounded by the two namespaces.
+        for (index, namespace) in namespaces.enumerated() {
+            let pinned = PinnedInstallBinding(bytes: Self.installBinding)
+            let session = MeshSessionStore(scope: MeshSessionStorageScope(
+                namespace: namespace, directory: Self.scratchDirectory(),
+                keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)", installBinding: pinned))
+            let routed = MeshRoutedStore(scope: MeshRoutedStorageScope(
+                namespace: namespace, directory: Self.scratchDirectory(),
+                keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)", installBinding: pinned))
+            defer {
+                MeshSessionStoreFixtures.tearDown(session.scope)
+                MeshRoutedStoreFixtures.tearDown(routed.scope)
+            }
+            try MeshSessionStoreFixtures.save(MeshSessionStoreFixtures.context(), into: session, install: Self.otherInstallBinding)
+            try MeshRoutedStoreFixtures.save(MeshRoutedIndex(), into: routed, install: Self.otherInstallBinding)
+            let keychain = namespace.installation.keychain
+            guard case .available(let sessionKey) = MeshSessionSealKey.forOpen(
+                      service: session.scope.keychainService, account: keychain.meshSessionSealKey.account),
+                  case .available(let routedKey) = MeshRoutedSealKey.forOpen(
+                      service: routed.scope.keychainService, account: keychain.meshRoutedSealKey.account) else {
+                Issue.record("a store under \(namespace.installation.storage.directoryName)'s names minted no seal key")
+                continue
+            }
+            let (labels, other) = (namespace.family.purposes.keyDerivation, namespaces[1 - index].family.purposes.keyDerivation)
+            let sessionBlob = try Data(contentsOf: session.fileURL)
+            let routedBlob = try Data(contentsOf: routed.indexURL)
+            #expect(Self.sealedUnder(sessionBlob, as: MeshSessionContext.self, key: sessionKey,
+                                     label: labels.meshSessionContextV1, otherLabel: other.meshSessionContextV1))
+            #expect(Self.sealedUnder(routedBlob, as: MeshRoutedIndex.self, key: routedKey,
+                                     label: labels.meshRoutedStoreV1, otherLabel: other.meshRoutedStoreV1))
+        }
+    }
+
+    /// Fernlet's adapter answers `DeviceBindingID` at each call and keeps nothing: a seal reads
+    /// `current()` (this install, `nil` for an absent row and for a failed read), an open reads
+    /// `currentForOpen()` (this install, `nil` for an absent row, the retryable error carrying
+    /// `errSecIO` for a failed read), and a scripted answer flipped between two reads is what the
+    /// second read sees — the seam the mid-operation flip in `MeshSessionLifecycleManagerTests` rides.
+    @Test func fernletsAdapterAnswersDeviceBindingIDAtEachCall() throws {
+        let adapter = FernletDeviceBindingAdapter()
+        let pinned = try DeviceBindingID.$testOverride.withValue(.identifier(Self.installBinding)) {
+            (seal: try adapter.read(for: .seal), open: try adapter.read(for: .open))
+        }
+        #expect(pinned.seal == Self.installBinding && pinned.open == Self.installBinding, "\(pinned)")
+        let absent = try DeviceBindingID.$testOverride.withValue(.unavailable) {
+            (seal: try adapter.read(for: .seal), open: try adapter.read(for: .open))
+        }
+        #expect(absent.seal == nil && absent.open == nil, "an absent row answered \(absent)")
+        let sealThroughFailedRead = try DeviceBindingID.$testOverride.withValue(.readError) { try adapter.read(for: .seal) }
+        #expect(sealThroughFailedRead == nil, "a seal read a binding through a failed read")
+        DeviceBindingID.$testOverride.withValue(.readError) {
+            #expect(throws: ProximityInstallBindingReadError(status: errSecIO)) { try adapter.read(for: .open) }
+        }
+        let scripted = DeviceBindingID.ScriptedBinding(.identifier(Self.installBinding))
+        let reads: (before: Data?, after: Data?) = try DeviceBindingID.$testOverride.withValue(.scripted(scripted)) {
+            let before = try adapter.read(for: .open)
+            scripted.set(.identifier(Self.otherInstallBinding))
+            return (before: before, after: try adapter.read(for: .open))
+        }
+        #expect(reads.before == Self.installBinding && reads.after == Self.otherInstallBinding,
+                "the adapter kept an answer DeviceBindingID changed: \(reads)")
+    }
+
+    /// A host's default storage scopes carry the install binding the host supplies, on the namespace's
+    /// root and on a root of its own, so the stores a manager builds over them seal under the host's
+    /// binding. Building a host or a scope reads no binding.
+    @Test func aHostsDefaultScopesCarryTheInstallBindingItSupplies() throws {
+        let supplied = PinnedInstallBinding(bytes: Self.otherInstallBinding)
+        let host = NamespaceDefaultsHost(namespace: .fernlet, installBinding: supplied)
+        let rooted = RootedNamespaceDefaultsHost(namespace: .fernlet, root: Self.scratchDirectory(), installBinding: supplied)
+        let carried: [any ProximityInstallBinding] = [
+            host.meshSessionStorage.installBinding, host.meshRoutedStorage.installBinding,
+            rooted.meshSessionStorage.installBinding, rooted.meshRoutedStorage.installBinding
+        ]
+        // R2: bounded by the four scopes.
+        for binding in carried {
+            #expect(try binding.read(for: .open) == Self.otherInstallBinding, "a default scope carries another binding")
+        }
+    }
+
+    /// What opening one blob came to, spelled alike for the copy and FernletCrypto's `ColumnCrypto`, so
+    /// the two can be compared verdict for verdict.
+    private enum ColumnOpenVerdict: Equatable {
+        /// The blob opened.
+        case opened([String]?)
+        /// A retired format, named by its marker bucket.
+        case retired(String)
+        /// An empty blob.
+        case emptyBlob
+        /// An authoritatively absent install binding.
+        case installBindingMissing
+        /// A failed binding read, with its status.
+        case bindingReadError(OSStatus)
+        /// Anything else: CryptoKit's authentication failure.
+        case authenticationFailed
+    }
+
+    /// Five blobs for the refusal matrix: a good V3 blob `original` seals under `installBinding`, the
+    /// same with its last byte flipped, 96 bytes of `0x02`, an unprefixed blob and an empty one.
+    private static func refusalBlobs(sealedBy original: ColumnCrypto) throws -> [Data] {
+        let good = try DeviceBindingID.$testOverride.withValue(.identifier(installBinding)) {
+            try original.seal(["golden"], contentKey: columnContentKey)
+        }
+        var tampered = good
+        tampered[tampered.index(before: tampered.endIndex)] ^= 0x01
+        return [good, tampered, Data(repeating: 0x02, count: 96), Data([0x05]) + sequence(from: 0x40, count: 40), Data()]
+    }
+
+    /// The copy's verdict on `blob`.
+    private static func verdict(of copy: ProximityColumnCrypto, opening blob: Data) -> ColumnOpenVerdict {
+        do {
+            let opened: [String]? = try copy.open(blob, contentKey: columnContentKey)
+            return .opened(opened)
+        } catch ProximityColumnCrypto.SealedColumnOpenError.retiredFormat(let format) {
+            return .retired(String(describing: format))
+        } catch ProximityColumnCrypto.SealedColumnOpenError.emptyBlob {
+            return .emptyBlob
+        } catch ProximityColumnCrypto.SealedColumnOpenError.installBindingMissing {
+            return .installBindingMissing
+        } catch let error as ProximityInstallBindingReadError {
+            return .bindingReadError(error.status)
+        } catch {
+            return .authenticationFailed
+        }
+    }
+
+    /// FernletCrypto's `ColumnCrypto`'s verdict on `blob`.
+    private static func verdict(of original: ColumnCrypto, opening blob: Data) -> ColumnOpenVerdict {
+        do {
+            let opened: [String]? = try original.open(blob, contentKey: columnContentKey)
+            return .opened(opened)
+        } catch ColumnCrypto.SealedColumnOpenError.retiredFormat(let format) {
+            return .retired(format.rawValue)
+        } catch ColumnCrypto.SealedColumnOpenError.emptyBlob {
+            return .emptyBlob
+        } catch ColumnCrypto.SealedColumnOpenError.installBindingMissing {
+            return .installBindingMissing
+        } catch let error as DeviceBindingID.ReadError {
+            return .bindingReadError(error.status)
+        } catch {
+            return .authenticationFailed
+        }
+    }
+
+    /// Whether `blob`, sealed under `key`, opens as a `T` under `label` and `installBinding`, and
+    /// under neither `otherLabel` nor `otherInstallBinding`.
+    private static func sealedUnder<T: Decodable>(
+        _ blob: Data, as type: T.Type, key: SymmetricKey,
+        label: ProximityCryptographicPurpose, otherLabel: ProximityCryptographicPurpose
+    ) -> Bool {
+        func opens(_ label: ProximityCryptographicPurpose, _ binding: Data) -> Bool {
+            let seal = ProximityColumnCrypto(purpose: label, installBinding: PinnedInstallBinding(bytes: binding))
+            do {
+                let opened: T? = try seal.open(blob, contentKey: key)
+                return opened != nil
+            } catch {
+                return false
+            }
+        }
+        let expected = opens(label, installBinding)
+        let underOtherLabel = opens(otherLabel, installBinding)
+        let underOtherInstall = opens(label, otherInstallBinding)
+        if !expected || underOtherLabel || underOtherInstall {
+            Issue.record("""
+                a \(T.self) blob opened under its label and binding: \(expected), under \(otherLabel.rawValue): \
+                \(underOtherLabel), under the other install: \(underOtherInstall)
+                """)
+        }
+        return expected && !underOtherLabel && !underOtherInstall
     }
 
     // MARK: Helpers
@@ -3026,19 +3350,25 @@ struct ProximityNamespaceGoldenTests {
     /// `chunk`, commits custody of the item and reads its blob back, each first through a store whose
     /// scope carries `other`'s labels — which must refuse — and then through one whose scope carries
     /// `family`'s, the labels the item was hashed in. Both scopes keep Fernlet's installation, the
-    /// fixture's directory and its keychain service, so the two stores open one index under one key
-    /// and differ in their labels alone. The store verifies no signature: an accepted manifest and
-    /// chunk are its callers' precondition.
+    /// fixture's directory, its keychain service and its install binding, and both take `family`'s
+    /// key-derivation group, whose column seal the stores seal the index under since step A0.2.9, so
+    /// the two stores open one index under one key and one column seal and differ in the labels they
+    /// measure under alone. The store verifies no signature: an accepted manifest and chunk are its
+    /// callers' precondition.
     private static func expectStoreMeasures(
         _ chunk: MeshChunk, of blob: Data, manifest: MeshRoutedManifest,
         hashedIn family: ProximityNamespace.Family, notIn other: ProximityNamespace.Family
     ) {
         let scope = MeshRoutedStoreFixtures.scope()
         defer { MeshRoutedStoreFixtures.tearDown(scope) }
-        func store(_ family: ProximityNamespace.Family) -> MeshRoutedStore {
-            MeshRoutedStore(scope: MeshRoutedStorageScope(
-                namespace: ProximityNamespace(family: family, installation: scope.namespace.installation),
-                directory: scope.directory, keychainService: scope.keychainService))
+        func store(_ labels: ProximityNamespace.Family) -> MeshRoutedStore {
+            let purposes = ProximityNamespace.Purposes(
+                signature: labels.purposes.signature, keyDerivation: family.purposes.keyDerivation,
+                aead: labels.purposes.aead, hash: labels.purposes.hash)
+            let sealedAlike = ProximityNamespace.Family(purposes: purposes, radios: labels.radios, verifyQR: labels.verifyQR)
+            return MeshRoutedStore(scope: MeshRoutedStorageScope(
+                namespace: ProximityNamespace(family: sealedAlike, installation: scope.namespace.installation),
+                directory: scope.directory, keychainService: scope.keychainService, installBinding: scope.installBinding))
         }
         let (hashed, unhashed) = (store(family), store(other))
         let (key, now, custodian) = (MeshRoutedItemKey(manifest), MeshRoutedStoreFixtures.now, "fp-golden-custodian")
@@ -3092,6 +3422,7 @@ struct ProximityNamespaceGoldenTests {
 @MainActor
 private final class ForeignNamespaceHost: ProximityHost {
     let proximityNamespace: ProximityNamespace
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximitySupportDirectory: URL
     let meshSessionStorage: MeshSessionStorageScope
     let meshRoutedStorage: MeshRoutedStorageScope
@@ -3107,10 +3438,12 @@ private final class ForeignNamespaceHost: ProximityHost {
         proximitySupportDirectory = root
         meshSessionStorage = MeshSessionStorageScope(
             namespace: namespace, directory: root,
-            keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)")
+            keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter())
         meshRoutedStorage = MeshRoutedStorageScope(
             namespace: namespace, directory: root,
-            keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)")
+            keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter())
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
@@ -3128,17 +3461,21 @@ private final class ForeignNamespaceHost: ProximityHost {
 
 /// A `ProximityHost` that supplies only its namespace and the requirements with no default, so its
 /// sidecar root and both storage scopes are `ProximityHost`'s extension defaults, built from that
-/// namespace (plan step A0.2.8's cell). Building one touches no disk and no keychain.
+/// namespace (plan step A0.2.8's cell) and its install binding (plan step A0.2.9). Building one
+/// touches no disk and no keychain.
 @MainActor
 private final class NamespaceDefaultsHost: ProximityHost {
     let proximityNamespace: ProximityNamespace
+    let proximityInstallBinding: any ProximityInstallBinding
     let proximityTrustVault = ProximityTrustVault()
     var proximityDisplayName: String { "Golden" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
-    /// A host of `namespace` on the extension's default root.
-    init(namespace: ProximityNamespace) {
+    /// A host of `namespace` on the extension's default root, supplying `installBinding` (Fernlet's
+    /// adapter unless a cell hands it one of its own).
+    init(namespace: ProximityNamespace, installBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()) {
         proximityNamespace = namespace
+        proximityInstallBinding = installBinding
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
@@ -3150,19 +3487,40 @@ private final class NamespaceDefaultsHost: ProximityHost {
 @MainActor
 private final class RootedNamespaceDefaultsHost: ProximityHost {
     let proximityNamespace: ProximityNamespace
+    let proximityInstallBinding: any ProximityInstallBinding
     let proximitySupportDirectory: URL
     let proximityTrustVault = ProximityTrustVault()
     var proximityDisplayName: String { "Golden" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
-    /// A host of `namespace` on `root`.
-    init(namespace: ProximityNamespace, root: URL) {
+    /// A host of `namespace` on `root`, supplying `installBinding` (Fernlet's adapter unless a cell
+    /// hands it one of its own).
+    init(
+        namespace: ProximityNamespace, root: URL,
+        installBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    ) {
         proximityNamespace = namespace
         proximitySupportDirectory = root
+        proximityInstallBinding = installBinding
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+}
+
+// MARK: - An install binding of the test's own
+
+/// An install binding that answers the same bytes to every read and never consults `DeviceBindingID`,
+/// so a cell can tell the binding a scope hands a store from the one Fernlet's adapter would read
+/// (plan step A0.2.9's cells).
+private struct PinnedInstallBinding: ProximityInstallBinding {
+    /// The bytes every read answers.
+    let bytes: Data
+
+    /// `bytes`, whatever the access.
+    func read(for access: ProximityInstallBindingAccess) throws(ProximityInstallBindingReadError) -> Data? {
+        bytes
+    }
 }
 
 // MARK: - A foreign app

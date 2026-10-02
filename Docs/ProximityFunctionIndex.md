@@ -895,7 +895,7 @@ P5 item 3: where one device's sealed routed custody lives, and the key row that 
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace` (`init(namespace:directory:keychainService:)`), which names the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:)` replaced the static `production` and `productionKeychainService`: the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
+| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:)` replaced the static `production` and `productionKeychainService`: the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
 | `MeshRoutedStorageScope.keychainService(besideHeartDrop:in:)` | Production in ⇒ the namespace's production service out (A0.2.8 added `in:`); any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
 | `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. |
 | `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
@@ -921,14 +921,14 @@ copy has got, and which sealed payload file backs each chunk. No I/O, no crypto,
 ### `MeshRoutedStore.swift`
 
 P5 item 3: the sealed sidecar's floor, mirroring `MeshSessionStore` method for method — and the only
-file in the routed store that names `ColumnCrypto`.
+file in the routed store that names `ColumnCrypto` (`ProximityColumnCrypto` since A0.2.9).
 
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedSealRefusal` / `MeshRoutedDeferral` / `MeshRoutedCorruption` | Siblings of P3's, with **identical frozen rawValues** (a test asserts the sets are equal). Separate types because `MeshSessionSealRefusal.summary` hard-codes "mesh session context". |
 | `MeshRoutedLoad` | Five states; only `loaded` and `absent` vend a `LoadToken`, whose initializer is `fileprivate` to this file — so no verb, in any other file, can mint one. |
-| `load()` | File before custody (a missing index answers `absent` without consulting the keychain), emptiness before key, a read error is never absence, and `ColumnCrypto`'s three error families stay apart: binding READ error ⇒ defer, binding absent ⇒ refuse, wrong BYTES ⇒ corrupt. Read-only: the sweeps are explicit calls. |
-| `save(_:token:)` | Seals and writes atomically at `.completeFileProtectionUntilFirstUserAuthentication`. **No write-side deferral for the install binding** — `DeviceBindingID.current()` collapses unavailable and read-error into nil, so the seal refuses, fail-closed. |
+| `load()` | File before custody (a missing index answers `absent` without consulting the keychain), emptiness before key, a read error is never absence, and `ProximityColumnCrypto`'s three error families stay apart: binding READ error (`ProximityInstallBindingReadError`) ⇒ defer, binding absent ⇒ refuse, wrong BYTES ⇒ corrupt. Read-only: the sweeps are explicit calls. |
+| `save(_:token:)` | Seals and writes atomically at `.completeFileProtectionUntilFirstUserAuthentication`. **No write-side deferral for the install binding** — the binding's `.seal` read (Fernlet's `DeviceBindingID.current()`) collapses unavailable and read-error into nil, so the seal refuses, fail-closed. |
 | `readChunkFile(expecting:contentKey:)` | Opens one payload file and compares all eight descriptor fields **and** the payload length against the slot's stored descriptor. Not redundant: the AAD is purpose ‖ install only, so every blob authenticates in any slot. Missing/unauthentic ⇒ repair; unreadable ⇒ defer, repair nothing. |
 | `quarantineCorruptIndex(_:)` | The only route from `corrupt` to a writer. Moves the bytes aside rather than deleting them, and its contract requires the caller to spend the returned token on `sweepingOrphanChunkFiles()` first — after a quarantine every payload file is an orphan. |
 | `wipeForDeleteAll(scope:)` | Index + quarantine sibling + the whole chunk directory + the keychain row, together. A missing file counts as success. |
@@ -1576,7 +1576,7 @@ the namespace it is handed (group 13).
 
 | Function | What It Does |
 | --- | --- |
-| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `init(namespace:directory:keychainService:)` / `production(for:)` / `keychainService(besideHeartDrop:in:)` | The scopes with their namespace; `production(for:)` is the namespace's `defaultDirectory` and seal-key service, replacing the static `production` and `productionKeychainService`. |
+| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `init(namespace:directory:keychainService:)` / `production(for:)` / `keychainService(besideHeartDrop:in:)` | The scopes with their namespace; `production(for:)` is the namespace's `defaultDirectory` and seal-key service, replacing the static `production` and `productionKeychainService`. (Both take `installBinding:` since A0.2.9, below.) |
 | `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account; the static `keychainAccount`s are gone. |
 | `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace (the file names were statics). |
 | `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`. |
@@ -1584,6 +1584,31 @@ the namespace it is handed (group 13).
 | `IdentityService.accounts` / `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` | The four device rows' accounts, the namespace's `installation.keychain.identity`, under the identity's `keychainService`. |
 | `FernletStore.meshSessionStorage` / `meshRoutedStorage` (app) | Pass `namespace: proximityNamespace` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `.fernlet`'s `defaultDirectory`, as does `CryptoFormatCensus.Inputs.production`. |
 | `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites with `.fernlet`'s rows. |
+
+### The column seal and the install binding (A0.2.9)
+
+FernletCrypto's `ColumnCrypto` V3 seal is copied into ProximityKit byte for byte, and the install
+binding it mixes into every blob's authenticated data is injected by the host instead of read off
+FernletCrypto's `DeviceBindingID`. The two mesh stores seal under their scope namespace's two
+column-seal labels, the last core labels to leave FernletCrypto's registry, and catch
+`ProximityInstallBindingReadError` where they caught `DeviceBindingID.ReadError`; neither store nor
+either scope file imports FernletCrypto any more. `ProximityNamespaceGoldenTests` group 14 runs the
+A0.2.0 column vectors through the copy, opens each implementation's blobs with the other, compares
+their refusals pairing by pairing, and holds each store to its scope's label and binding.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityColumnCrypto(purpose:installBinding:)` (`Support/ProximityColumnCrypto.swift`, internal) | The V3 column seal under one `.columnSeal` label and one install binding. `nonisolated`, `Sendable`; stores neither key nor binding. |
+| `ProximityColumnCrypto.seal(_:contentKey:)` / `open(_:contentKey:)` | The `Codable` pair the stores use: `JSONEncoder()` output sealed as `0x03` ‖ nonce ‖ ciphertext ‖ tag under the salt-free HKDF-SHA256 column key, `label ‖ binding` as AAD; the open classifies the marker before it reads the binding. |
+| `ProximityColumnCrypto.SealedColumnOpenError` / `SealedColumnStrictSealError` / `StoredFormat` | The original's three named open refusals (`retiredFormat`, `emptyBlob`, `installBindingMissing`), its one seal refusal (`bindingUnavailable`) and its marker classifier, without the census helpers. |
+| `ProximityColumnCrypto.deriveColumnKey(contentKey:purpose:outputByteCount:)` | The column-key derivation, internal so the golden can pin its known answers. No `deriveColumnKey(info:)`, no `init(label:)`. |
+| `ProximityInstallBinding.read(for:)` (`Support/ProximityInstallBinding.swift`) | The host's per-install binding, one synchronous read. `.seal` may mint and answers nil without a durable binding (the seal refuses); `.open` never mints, answers nil only for an absent binding (the open refuses), and throws `ProximityInstallBindingReadError` for a failed read (the open defers). |
+| `ProximityInstallBindingReadError(status:)` | The retryable read failure, mirroring `DeviceBindingID.ReadError`'s `status`. |
+| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)` | The scopes carry the host's binding to the stores; no longer `Equatable`, since a capability has no equality. |
+| `MeshSessionStore` / `MeshRoutedStore` `crypto` (private) | `ProximityColumnCrypto` over `scope.namespace.family.purposes.keyDerivation.meshSessionContextV1` / `.meshRoutedStoreV1` and `scope.installBinding`, built per use like the A0.2.8 name reads. |
+| `ProximityHost.proximityInstallBinding` | The host's binding, with no default, like `proximityNamespace`; the extension's default scopes carry it. |
+| `FernletDeviceBindingAdapter` (`FernletConnections/FernletDeviceBindingAdapter.swift`) | Fernlet's binding: delegates to `DeviceBindingID` at each call (`current()` for `.seal`, `currentForOpen()` for `.open`, `ReadError` translated with its status), so the row, the cache and the task-local test seam stay FernletCrypto's one. |
+| `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement, and both scopes pass `installBinding: proximityInstallBinding`. |
 
 ## Identity, Wire, Trust, And Audit
 
@@ -2416,6 +2441,7 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | --- | --- |
 | `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. |
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
+| `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `proximityDisplayName`, `trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. |
 | `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
 | `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |

@@ -64,7 +64,7 @@ struct MeshSessionStoreIsolationTests {
     /// The directory half alone is not enough and neither is the key half: files on a private root
     /// sealed by a shared key survive somebody else's wipe as ciphertext nothing can open, which is
     /// strictly worse than losing them outright. So both spellings that resolve to production —
-    /// `MeshSessionStorageScope.production(for:)` and a hand-built scope naming
+    /// `MeshSessionStorageScope.production(for:installBinding:)` and a hand-built scope naming
     /// `ProximitySupportLayout.defaultDirectory` or the production service literal, or (since
     /// ProximityKit plan step A0.2.8, when the production scope began reading the namespace) a
     /// namespace's `installation.storage.defaultDirectory` or
@@ -134,7 +134,7 @@ struct MeshSessionStoreIsolationTests {
     /// for an isolated input would pass the source scan and isolate nothing. Since ProximityKit plan
     /// step A0.2.8 the derivation and the production scope read the host's namespace, so this pins
     /// them under `.fernlet`: its seal-key service, its default directory, and the namespace itself
-    /// carried on the scope.
+    /// carried on the scope — and since step A0.2.9, the install binding it is handed.
     @Test func theDerivedKeychainServiceTracksItsHeartDropInput() {
         let namespace = ProximityNamespace.fernlet
         let productionService = namespace.installation.keychain.meshSessionSealKey.service
@@ -142,10 +142,13 @@ struct MeshSessionStoreIsolationTests {
             besideHeartDrop: HeartPrekeyStore.keychainService, in: namespace
         )
         #expect(production == productionService)
-        let productionScope = MeshSessionStorageScope.production(for: namespace)
+        let productionScope = MeshSessionStorageScope.production(
+            for: namespace, installBinding: FernletDeviceBindingAdapter()
+        )
         #expect(productionScope.keychainService == production)
         #expect(productionScope.directory == namespace.installation.storage.defaultDirectory)
         #expect(productionScope.namespace == namespace)
+        #expect(productionScope.installBinding is FernletDeviceBindingAdapter)
 
         let isolated = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
         let derived = MeshSessionStorageScope.keychainService(besideHeartDrop: isolated, in: namespace)
