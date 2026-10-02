@@ -52,9 +52,23 @@
 //    treat each label by its role: the 19 writable signature labels sign and verify, the verify-only
 //    legacy pair verifies and never signs, and no other label does either.
 //
+// One more group since step A0.2.4, when the envelope, admission-token, membership, quorum and
+// key-agreement transcripts, the legacy pair and the membership inventory digest's hash began to read
+// their labels off the namespace. Those thirteen rows' accessors are re-pointed at `.fernlet`'s
+// fields; no literal moves:
+//
+// 9. **The signed transcripts read the namespace they are handed.** The labels the test bindings pass
+//    are `.fernlet`'s own; the membership inventory digest is hashed over its field's prefix; a
+//    schema-v1 envelope and a pre-WI-6 admission token still verify under `.fernlet`, whose family
+//    accepts its legacy peers, and are refused under a family that refuses them; an envelope and an
+//    admission token each verify under the namespace they were signed in and are refused under the
+//    other, both ways; and a membership verifier and the ledger adoption accept a foreign-signed
+//    admission, departure and digest only under the foreign labels they hold or are handed.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
-// suite that pins values names the namespace it pins them under.
+// suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
+// the labels a consumer takes: `in: .fernlet`, `purposes: .fernlet`.
 //
 // Every hex vector below was derived from the FORMAT by an independent Python re-implementation,
 // proved honest first by reproducing vectors the repo already pins (SealedBackupFormatPinTests' two
@@ -157,32 +171,38 @@ struct ProximityNamespaceGoldenTests {
 
     /// The 21 signature labels: 17 length-prefixed transcripts, the two raw-prefixed QR transcripts
     /// and the verify-only legacy pair.
+    ///
+    /// Since step A0.2.4 the envelope, admission-token, membership, quorum and key-agreement labels
+    /// and the legacy pair are read off `.fernlet` (`fernlet` below), because production reads them
+    /// off the host's namespace; the routed, channel-introduction and QR rows still read their
+    /// FernletCrypto twins until step A0.2.5 moves them.
     private static var signatureRows: [NamespaceGoldenRow] {
         typealias Signature = FernletCryptoPurpose.Signature
+        let fernlet = ProximityNamespace.fernlet.family.purposes.signature
         let field = "family.purposes.signature."
         return [
             NamespaceGoldenRow(.label, field + "identityEnvelopeV2", frozen: "fernlet.canonical.identity-envelope.v2",
-                               today: .text(Signature.identityEnvelopeV2.rawValue)),
+                               today: .text(fernlet.identityEnvelopeV2.rawValue)),
             NamespaceGoldenRow(.label, field + "meshAdmissionTokenV2", frozen: "fernlet.canonical.mesh-admission-token.v2",
-                               today: .text(Signature.meshAdmissionTokenV2.rawValue)),
+                               today: .text(fernlet.meshAdmissionTokenV2.rawValue)),
             NamespaceGoldenRow(.label, field + "meshChannelIntroductionV1", frozen: "fernlet.mesh.channel-introduction.v1",
                                today: .text(Signature.meshChannelIntroductionV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshMemberDepartureV1", frozen: "fernlet.mesh.member-departure.v1",
-                               today: .text(Signature.meshMemberDepartureV1.rawValue)),
+                               today: .text(fernlet.meshMemberDepartureV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshMemberRemovalV1", frozen: "fernlet.mesh.member-removal.v1",
-                               today: .text(Signature.meshMemberRemovalV1.rawValue)),
+                               today: .text(fernlet.meshMemberRemovalV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshTerminatedV1", frozen: "fernlet.mesh.terminated.v1",
-                               today: .text(Signature.meshTerminatedV1.rawValue)),
+                               today: .text(fernlet.meshTerminatedV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshInventoryDigestV1", frozen: "fernlet.mesh.inventory-digest.v1",
-                               today: .text(Signature.meshInventoryDigestV1.rawValue)),
+                               today: .text(fernlet.meshInventoryDigestV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshEpochHeadsV1", frozen: "fernlet.mesh.epoch-heads.v1",
-                               today: .text(Signature.meshEpochHeadsV1.rawValue)),
+                               today: .text(fernlet.meshEpochHeadsV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRemovalProposalV1", frozen: "fernlet.mesh.removal-proposal.v1",
-                               today: .text(Signature.meshRemovalProposalV1.rawValue)),
+                               today: .text(fernlet.meshRemovalProposalV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRemovalVoteV1", frozen: "fernlet.mesh.removal-vote.v1",
-                               today: .text(Signature.meshRemovalVoteV1.rawValue)),
+                               today: .text(fernlet.meshRemovalVoteV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshKeyAgreementV1", frozen: "fernlet.mesh.key-agreement.v1",
-                               today: .text(Signature.meshKeyAgreementV1.rawValue)),
+                               today: .text(fernlet.meshKeyAgreementV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRoutedManifestV1", frozen: "fernlet.mesh.routed-manifest.v1",
                                today: .text(Signature.meshRoutedManifestV1.rawValue)),
             NamespaceGoldenRow(.label, field + "meshRoutedChunkV1", frozen: "fernlet.mesh.routed-chunk.v1",
@@ -201,19 +221,22 @@ struct ProximityNamespaceGoldenTests {
             NamespaceGoldenRow(.label, field + "proximityQRResponseV1", frozen: "fernlet.verify.response.v1",
                                today: .text(Signature.proximityQRResponseV1.rawValue)),
             NamespaceGoldenRow(.label, field + "legacyV1.identityEnvelopeV1", frozen: "fernlet.canonical.identity-envelope.v1",
-                               today: .text(Signature.identityEnvelopeLegacyV1.rawValue)),
+                               today: .text(fernlet.legacyV1.identityEnvelopeV1?.rawValue ?? "")),
             NamespaceGoldenRow(.label, field + "legacyV1.meshAdmissionTokenV1",
                                frozen: "fernlet.canonical.mesh-admission-token.v1",
-                               today: .text(Signature.meshAdmissionTokenLegacyV1.rawValue))
+                               today: .text(fernlet.legacyV1.meshAdmissionTokenV1?.rawValue ?? ""))
         ]
     }
 
     /// The 18 other labels: six key-derivation labels, five AEAD labels, seven hash domains — the
     /// last of them the ProximityKit-local epoch domain, which no registry or domain test covers.
+    /// Since step A0.2.4 the membership inventory digest's hash domain is read off `.fernlet`
+    /// (`fernletHash` below), as production reads it off the host's namespace.
     private static var otherLabelRows: [NamespaceGoldenRow] {
         typealias KeyDerivation = FernletCryptoPurpose.KeyDerivation
         typealias AEAD = FernletCryptoPurpose.AEAD
         typealias Hash = FernletCryptoPurpose.Hash
+        let fernletHash = ProximityNamespace.fernlet.family.purposes.hash
         let derivation = "family.purposes.keyDerivation."
         let aead = "family.purposes.aead."
         let hash = "family.purposes.hash."
@@ -242,7 +265,7 @@ struct ProximityNamespaceGoldenTests {
             NamespaceGoldenRow(.label, aead + "meshRoutedItemV1", frozen: "fernlet.mesh.routed.item.aead.v1",
                                today: .text(AEAD.meshRoutedItemV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshInventoryDigestV1", frozen: "fernlet.mesh.inventory-digest.hash.v1",
-                               today: .text(Hash.meshInventoryDigestV1.rawValue)),
+                               today: .text(fernletHash.meshInventoryDigestV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshRoutedContentV1", frozen: "fernlet.mesh.routed-content.hash.v1",
                                today: .text(Hash.meshRoutedContentV1.rawValue)),
             NamespaceGoldenRow(.label, hash + "meshRoutedChunkV1", frozen: "fernlet.mesh.routed-chunk.hash.v1",
@@ -1189,7 +1212,11 @@ struct ProximityNamespaceGoldenTests {
     // the code that honours it cannot have drifted apart. Hash consumers hide their preimage behind
     // SHA-256, so their cells rebuild it as the field's prefix followed by the consumer's own tail
     // (written with the production writer) and require the production digest to match: only the
-    // prefix is under test. The legacy pair has no writer, so no cell.
+    // prefix is under test. The legacy pair has no writer, so no cell; its readers, the envelope's
+    // and the admission token's verify, are pinned in group 9.
+    //
+    // Since step A0.2.4 a consumer that takes the namespace's labels is called here with `.fernlet`
+    // spelled out (`in: .fernlet`), never through the test target's bindings: these cells pin values.
 
     /// The signature labels of `.fernlet`.
     private static var signatures: ProximityNamespace.Signature { ProximityNamespace.fernlet.family.purposes.signature }
@@ -1199,8 +1226,8 @@ struct ProximityNamespaceGoldenTests {
 
     /// The canonical envelope opens with `lp(identityEnvelopeV2)`.
     @Test func theIdentityEnvelopeTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: Self.consumerEnvelope()), by: Self.signatures.identityEnvelopeV2,
-                          consumer: "canonicalBytes(for: FernletIdentityEnvelope)")
+        Self.expectFramed(canonicalBytes(for: Self.consumerEnvelope(), in: .fernlet), by: Self.signatures.identityEnvelopeV2,
+                          consumer: "canonicalBytes(for: FernletIdentityEnvelope, in:)")
     }
 
     /// The canonical admission token opens with `lp(meshAdmissionTokenV2)`.
@@ -1210,8 +1237,8 @@ struct ProximityNamespaceGoldenTests {
             joinerSigningPublicKey: Data(repeating: 0x03, count: 32), admitterFingerprint: "fp-admitter",
             grantedAt: MeshMembershipEventFixtures.base, expiresAt: MeshMembershipEventFixtures.base.addingTimeInterval(3_600),
             admitterSigningPublicKey: Data(repeating: 0x04, count: 32), admitterSignature: Data())
-        Self.expectFramed(canonicalBytes(for: token), by: Self.signatures.meshAdmissionTokenV2,
-                          consumer: "canonicalBytes(for: MeshAdmissionToken)")
+        Self.expectFramed(canonicalBytes(for: token, in: .fernlet), by: Self.signatures.meshAdmissionTokenV2,
+                          consumer: "canonicalBytes(for: MeshAdmissionToken, in:)")
     }
 
     /// The QUIC channel introduction opens with `lp(meshChannelIntroductionV1)`.
@@ -1227,50 +1254,50 @@ struct ProximityNamespaceGoldenTests {
 
     /// A departure record opens with `lp(meshMemberDepartureV1)`.
     @Test func theDepartureTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.departure()), by: Self.signatures.meshMemberDepartureV1,
-                          consumer: "canonicalBytes(for: SignedDepartureRecord)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.departure(), in: .fernlet),
+                          by: Self.signatures.meshMemberDepartureV1, consumer: "canonicalBytes(for: SignedDepartureRecord, in:)")
     }
 
     /// A removal record opens with `lp(meshMemberRemovalV1)`.
     @Test func theRemovalTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removal()), by: Self.signatures.meshMemberRemovalV1,
-                          consumer: "canonicalBytes(for: SignedRemovalRecord)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removal(), in: .fernlet),
+                          by: Self.signatures.meshMemberRemovalV1, consumer: "canonicalBytes(for: SignedRemovalRecord, in:)")
     }
 
     /// A termination record opens with `lp(meshTerminatedV1)`.
     @Test func theTerminationTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.termination()), by: Self.signatures.meshTerminatedV1,
-                          consumer: "canonicalBytes(for: SignedTerminationRecord)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.termination(), in: .fernlet),
+                          by: Self.signatures.meshTerminatedV1, consumer: "canonicalBytes(for: SignedTerminationRecord, in:)")
     }
 
     /// The signed membership inventory digest opens with `lp(signature.meshInventoryDigestV1)`.
     @Test func theInventoryDigestTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload()),
-                          by: Self.signatures.meshInventoryDigestV1, consumer: "canonicalBytes(for: MeshInventoryDigestPayload)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.inventoryPayload(), in: .fernlet),
+                          by: Self.signatures.meshInventoryDigestV1, consumer: "canonicalBytes(for: MeshInventoryDigestPayload, in:)")
     }
 
     /// The epoch-heads message opens with `lp(meshEpochHeadsV1)`.
     @Test func theEpochHeadsTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload()),
-                          by: Self.signatures.meshEpochHeadsV1, consumer: "canonicalBytes(for: MeshEpochHeadsPayload)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.epochHeadsPayload(), in: .fernlet),
+                          by: Self.signatures.meshEpochHeadsV1, consumer: "canonicalBytes(for: MeshEpochHeadsPayload, in:)")
     }
 
     /// A removal proposal opens with `lp(meshRemovalProposalV1)`.
     @Test func theRemovalProposalTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removalProposal()),
-                          by: Self.signatures.meshRemovalProposalV1, consumer: "canonicalBytes(for: SignedRemovalProposal)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removalProposal(), in: .fernlet),
+                          by: Self.signatures.meshRemovalProposalV1, consumer: "canonicalBytes(for: SignedRemovalProposal, in:)")
     }
 
     /// A removal vote opens with `lp(meshRemovalVoteV1)`.
     @Test func theRemovalVoteTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removalVote()),
-                          by: Self.signatures.meshRemovalVoteV1, consumer: "canonicalBytes(for: SignedRemovalVote)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.removalVote(), in: .fernlet),
+                          by: Self.signatures.meshRemovalVoteV1, consumer: "canonicalBytes(for: SignedRemovalVote, in:)")
     }
 
     /// A key-agreement advertisement opens with `lp(meshKeyAgreementV1)`.
     @Test func theKeyAgreementTranscriptBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.keyAdvertisement()),
-                          by: Self.signatures.meshKeyAgreementV1, consumer: "canonicalBytes(for: SignedKeyAgreementAdvertisement)")
+        Self.expectFramed(canonicalBytes(for: MeshMembershipEventFixtures.keyAdvertisement(), in: .fernlet),
+                          by: Self.signatures.meshKeyAgreementV1, consumer: "canonicalBytes(for: SignedKeyAgreementAdvertisement, in:)")
     }
 
     /// A routed manifest opens with `lp(meshRoutedManifestV1)`.
@@ -1328,8 +1355,8 @@ struct ProximityNamespaceGoldenTests {
 
     /// The membership inventory digest's hash preimage opens with `lp(hash.meshInventoryDigestV1)`.
     @Test func theMembershipInventoryDigestPreimageBeginsWithItsFieldsPrefix() {
-        Self.expectFramed(canonicalInventoryDigestBytes(for: []), by: Self.hashes.meshInventoryDigestV1,
-                          consumer: "canonicalInventoryDigestBytes(for:)")
+        Self.expectFramed(canonicalInventoryDigestBytes(for: [], in: .fernlet), by: Self.hashes.meshInventoryDigestV1,
+                          consumer: "canonicalInventoryDigestBytes(for:in:)")
     }
 
     /// A routed item's content hash is SHA-256 over `lp(meshRoutedContentV1) ‖ blob`.
@@ -1592,6 +1619,191 @@ struct ProximityNamespaceGoldenTests {
         #expect(compared == 21 && refusing == 18, "\(compared) signature labels compared and \(refusing) refusing")
     }
 
+    // MARK: Group 9 — the signed transcripts read the namespace they are handed (A0.2.4)
+
+    /// The labels every test binding passes for a `ProximityNamespace.Purposes` (`.fernlet`) are the
+    /// ones the app hands ProximityKit: FernletConnections' `ProximityNamespace.Purposes.fernlet` is
+    /// `ProximityNamespace.fernlet`'s family purposes, so a suite that leans on a binding signs and
+    /// verifies under Fernlet's bytes.
+    @Test func theBindingsPassFernletsOwnPurposes() {
+        #expect(ProximityNamespace.Purposes.fernlet == ProximityNamespace.fernlet.family.purposes,
+                "the purposes the bindings pass are not the ones the app hands ProximityKit")
+    }
+
+    /// The membership inventory digest's records hash is SHA-256 over `lp(hash.meshInventoryDigestV1)`
+    /// then the counted record identities: `MeshInventoryDigest(meshID:ledger:purposes:)` consumes the
+    /// field in the role it fixes, over a one-admission ledger whose tail is written here.
+    @Test func theMembershipInventoryDigestHashIsTakenOverItsFieldsPrefix() {
+        let ledger = MeshMembershipEventFixtures.singleAdmissionLedger()
+        let identities = MeshInventoryDigest.identities(in: ledger)
+        #expect(identities.count == 1)
+        var tail = CanonicalByteWriter()
+        tail.appendUInt64(UInt64(identities.count))
+        // R2: bounded by the one admission.
+        for identity in identities {
+            tail.appendString(identity.kind.rawValue)
+            tail.appendString(identity.memberFingerprint)
+            tail.appendDate(identity.occurredAt)
+            tail.appendString(identity.authorFingerprint)
+            tail.appendLengthPrefixed(identity.signature)
+        }
+        let digest = MeshInventoryDigest(meshID: MeshMembershipEventFixtures.meshID, ledger: ledger, purposes: .fernlet)
+        Self.expectDigest(digest.recordsHash, over: tail.bytes, by: Self.hashes.meshInventoryDigestV1,
+                          consumer: "MeshInventoryDigest(meshID:ledger:purposes:)")
+    }
+
+    /// A schema-v1 envelope — signed over the pre-WI-6 JSON bytes, which carry no label — still
+    /// verifies under an identity of `.fernlet`, whose family accepts its legacy peers
+    /// (`legacyV1.identityEnvelopeV1`), and is refused `signatureInvalid` under one of a family that
+    /// refuses them (`.refused`: no label at all). No identity is provisioned: an unsealed broadcast
+    /// envelope reads no key.
+    @Test func aLegacyEnvelopeVerifiesOnlyWhereTheFamilyAcceptsLegacyPeers() throws {
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let sender = key.publicKey.rawRepresentation
+        let unsigned = Self.legacyEnvelope(sender: sender, signature: Data())
+        let envelope = Self.legacyEnvelope(sender: sender, signature: try key.signature(for: legacyCanonicalBytes(for: unsigned)))
+        let fernlet = IdentityService(namespace: .fernlet, keychainService: Self.isolatedIdentityService())
+        #expect(try envelope.verify(identityService: fernlet, replayCache: nil) == envelope.payload,
+                "a schema-v1 envelope no longer verifies under .fernlet")
+        let foreign = IdentityService(namespace: ForeignAppNamespace.namespace(),
+                                      keychainService: Self.isolatedIdentityService())
+        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid,
+                "a family that refuses legacy peers verified a schema-v1 envelope") {
+            _ = try envelope.verify(identityService: foreign, replayCache: nil)
+        }
+    }
+
+    /// An envelope minted by `signed(identityService:...)` under one namespace verifies under an
+    /// identity of that namespace and is refused `signatureInvalid` under the other, in both
+    /// directions: the builder and the verifier each read their identity's `purposes`, never a fixed
+    /// label.
+    @Test func anEnvelopeVerifiesUnderTheNamespaceItWasSignedIn() throws {
+        let fernletService = Self.isolatedIdentityService()
+        let foreignService = Self.isolatedIdentityService()
+        defer {
+            KeychainItem.deleteAll(service: fernletService)
+            KeychainItem.deleteAll(service: foreignService)
+        }
+        let fernlet = IdentityService(namespace: .fernlet, keychainService: fernletService)
+        let foreign = IdentityService(namespace: ForeignAppNamespace.namespace(), keychainService: foreignService)
+        try fernlet.ensureProvisioned()
+        try foreign.ensureProvisioned()
+        let payload = Data("golden".utf8)
+        // R2: bounded by the two directions.
+        for (signer, other) in [(fernlet, foreign), (foreign, fernlet)] {
+            let envelope = try FernletIdentityEnvelope.signed(
+                identityService: signer, senderDisplayName: "Golden", payloadType: .inspectorEcho,
+                payloadSummary: PayloadSummary(title: "Golden"), payload: payload)
+            #expect(try envelope.verify(identityService: signer, replayCache: nil) == payload,
+                    "an envelope signed under \(signer.purposes.signature.identityEnvelopeV2.rawValue) did not verify there")
+            #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid,
+                    "an envelope signed under \(signer.purposes.signature.identityEnvelopeV2.rawValue) verified elsewhere") {
+                _ = try envelope.verify(identityService: other, replayCache: nil)
+            }
+        }
+    }
+
+    /// A pre-WI-6 admission token — the admitter's signature over the legacy JSON bytes, which carry no
+    /// label — still verifies `in: .fernlet` through the dual verify's legacy alternative, and is
+    /// refused `signatureInvalid` in a family that refuses legacy peers, which has no such alternative.
+    @Test func aLegacyAdmissionTokenVerifiesOnlyWhereTheFamilyAcceptsLegacyPeers() throws {
+        let admitter = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let joiner = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x80))
+        let keys = (admitter: admitter.publicKey.rawRepresentation, joiner: joiner.publicKey.rawRepresentation)
+        let unsigned = Self.admissionToken(admitter: keys.admitter, joiner: keys.joiner, signature: Data())
+        let legacy = Self.admissionToken(admitter: keys.admitter, joiner: keys.joiner,
+                                         signature: try admitter.signature(for: legacyCanonicalBytes(for: unsigned)))
+        try Self.verifyToken(legacy, keys: keys, in: .fernlet)
+        #expect(throws: MeshAdmissionToken.VerifyError.signatureInvalid,
+                "a family that refuses legacy peers verified a pre-WI-6 token") {
+            try Self.verifyToken(legacy, keys: keys, in: ForeignAppNamespace.namespace().family.purposes)
+        }
+    }
+
+    /// A canonical admission token signed under one namespace's label verifies in that namespace and is
+    /// refused `signatureInvalid` in the other, in both directions — `.fernlet`'s legacy alternative
+    /// included, since its verify-only label accepts only the legacy bytes' signature.
+    @Test func anAdmissionTokenVerifiesUnderTheNamespaceItWasSignedIn() throws {
+        let admitter = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x40))
+        let joiner = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.sequence(from: 0x80))
+        let keys = (admitter: admitter.publicKey.rawRepresentation, joiner: joiner.publicKey.rawRepresentation)
+        let unsigned = Self.admissionToken(admitter: keys.admitter, joiner: keys.joiner, signature: Data())
+        let foreign = ForeignAppNamespace.namespace().family.purposes
+        // R2: bounded by the two directions.
+        for (signer, other) in [(ProximityNamespace.Purposes.fernlet, foreign), (foreign, .fernlet)] {
+            let token = Self.admissionToken(admitter: keys.admitter, joiner: keys.joiner,
+                                            signature: try admitter.signature(for: canonicalBytes(for: unsigned, in: signer)))
+            try Self.verifyToken(token, keys: keys, in: signer)
+            #expect(throws: MeshAdmissionToken.VerifyError.signatureInvalid,
+                    "a token signed under \(signer.signature.meshAdmissionTokenV2.rawValue) verified elsewhere") {
+                try Self.verifyToken(token, keys: keys, in: other)
+            }
+        }
+    }
+
+    /// A membership verifier checks every signature under its own copy of the labels. An admission and
+    /// a departure signed by an identity of the foreign namespace are accepted by a verifier holding
+    /// that namespace's purposes and refused `signatureInvalid` by one holding `.fernlet`'s, over the
+    /// very same ledger; so is the signed inventory digest, whose records hash only the verifier of
+    /// the signer's namespace finds equal to its own.
+    @Test func aMembershipVerifierChecksUnderItsOwnCopyOfTheLabels() throws {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let foreignNamespace = ForeignAppNamespace.namespace()
+        let member = IdentityService(namespace: foreignNamespace, keychainService: service)
+        try member.ensureProvisioned()
+        let meshID = MeshMembershipEventFixtures.meshID
+        let admission = try Self.selfAdmission(of: member, meshID: meshID)
+        let founderKey = member.localSigningPublicKey
+        var foreignView = MeshMembershipRecordVerifier(meshID: meshID, founderSigningPublicKey: founderKey,
+                                                       purposes: foreignNamespace.family.purposes)
+        var fernletView = MeshMembershipRecordVerifier(meshID: meshID, founderSigningPublicKey: founderKey,
+                                                       purposes: .fernlet)
+        #expect(fernletView.insert(admission) == .signatureInvalid, "a foreign admission verified under .fernlet")
+        #expect(foreignView.insert(admission) == nil, "a verifier refused an admission signed in its own namespace")
+
+        var fernletOverTheSameLedger = MeshMembershipRecordVerifier(
+            meshID: meshID, founderSigningPublicKey: founderKey, ledger: foreignView.ledger, purposes: .fernlet)
+        let digest = try MeshInventoryDigestPayload.signed(meshID: meshID, ledger: foreignView.ledger, identity: member)
+        #expect(foreignView.verify(digest) == nil && foreignView.matchesLocalInventory(digest.digest),
+                "the signer's namespace refused its own digest, or hashed its ledger otherwise")
+        #expect(fernletOverTheSameLedger.verify(digest) == .signatureInvalid, "a foreign digest verified under .fernlet")
+        #expect(!fernletOverTheSameLedger.matchesLocalInventory(digest.digest),
+                "two namespaces hashed one ledger to the same digest")
+        let departure = try SignedDepartureRecord.signed(meshID: meshID, identity: member,
+                                                          occurredAt: MeshMembershipEventFixtures.base)
+        #expect(fernletOverTheSameLedger.insert(departure) == .signatureInvalid, "a foreign departure verified under .fernlet")
+        #expect(foreignView.insert(departure) == nil, "a verifier refused a departure signed in its own namespace")
+    }
+
+    /// The joiner's two ledger steps re-verify under the labels they are handed: a self-admission
+    /// signed in the foreign namespace bootstraps a verifier there and is refused in `.fernlet`
+    /// (`ownAdmissionRefused(signatureInvalid)`), and a ledger rooted in it is adopted there and
+    /// refused in `.fernlet`, whose re-verification admits nobody from it (`admitterNotChained`).
+    @Test func theLedgerAdoptionVerifiesUnderTheLabelsItIsHanded() throws {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let foreignNamespace = ForeignAppNamespace.namespace()
+        let foreign = foreignNamespace.family.purposes
+        let founder = IdentityService(namespace: foreignNamespace, keychainService: service)
+        try founder.ensureProvisioned()
+        let meshID = MeshMembershipEventFixtures.meshID
+        let own = try Self.selfAdmission(of: founder, meshID: meshID)
+
+        let bootstrap = MeshLedgerAdoption.bootstrapVerifier(meshID: meshID, ownAdmission: own, in: foreign)
+        guard case .adopted(let rooted) = bootstrap else {
+            Issue.record("the foreign namespace refused its own admission at bootstrap: \(String(describing: Self.refusal(bootstrap)))")
+            return
+        }
+        #expect(Self.refusal(MeshLedgerAdoption.bootstrapVerifier(meshID: meshID, ownAdmission: own, in: .fernlet))
+                    == .ownAdmissionRefused(.signatureInvalid), "a foreign admission bootstrapped under .fernlet")
+        let offered = rooted.ledger
+        #expect(Self.refusal(MeshLedgerAdoption.adopt(offered: offered, ownAdmission: own, meshID: meshID, in: foreign)) == nil,
+                "the foreign namespace refused to adopt a ledger rooted in its own admission")
+        #expect(Self.refusal(MeshLedgerAdoption.adopt(offered: offered, ownAdmission: own, meshID: meshID, in: .fernlet))
+                    == .admitterNotChained, "a foreign ledger was adopted under .fernlet")
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -1820,6 +2032,49 @@ struct ProximityNamespaceGoldenTests {
         let raw = uuid.uuid
         return Data([raw.0, raw.1, raw.2, raw.3, raw.4, raw.5, raw.6, raw.7,
                      raw.8, raw.9, raw.10, raw.11, raw.12, raw.13, raw.14, raw.15])
+    }
+
+    /// A schema-v1 broadcast envelope from `sender`, carrying `signature`: the shape a pre-WI-6 peer
+    /// still sends, signed over the legacy JSON bytes.
+    private static func legacyEnvelope(sender: Data, signature: Data) -> FernletIdentityEnvelope {
+        FernletIdentityEnvelope(
+            schemaVersion: FernletIdentityEnvelope.legacySchemaVersion, envelopeID: MeshMembershipEventFixtures.proposalID,
+            senderSigningPublicKey: sender, senderKeyAgreementPublicKey: Data(repeating: 0x02, count: 32),
+            senderDisplayName: "Golden", recipientFingerprint: nil, payloadType: .inspectorEcho, payloadEncryption: .none,
+            payloadSummary: PayloadSummary(title: "Golden"), payload: Data("golden legacy".utf8),
+            createdAt: MeshMembershipEventFixtures.base, expiresAt: nil, signature: signature)
+    }
+
+    /// An admission token from `admitter` to `joiner` in the fixtures' mesh, carrying `signature`.
+    private static func admissionToken(admitter: Data, joiner: Data, signature: Data) -> MeshAdmissionToken {
+        MeshAdmissionToken(
+            meshID: MeshMembershipEventFixtures.meshID, joinerFingerprint: IdentityService.fingerprint(of: joiner),
+            joinerSigningPublicKey: joiner, admitterFingerprint: IdentityService.fingerprint(of: admitter),
+            grantedAt: MeshMembershipEventFixtures.base, expiresAt: MeshMembershipEventFixtures.base.addingTimeInterval(3_600),
+            admitterSigningPublicKey: admitter, admitterSignature: signature)
+    }
+
+    /// `token.verify(...in: purposes)` at the token's own grant instant, against the keys it was issued
+    /// for: everything but the signature passes, so the signature is what the answer is about.
+    private static func verifyToken(
+        _ token: MeshAdmissionToken, keys: (admitter: Data, joiner: Data), in purposes: ProximityNamespace.Purposes
+    ) throws {
+        try token.verify(joinerSigningPublicKey: keys.joiner, expectedMeshID: token.meshID,
+                         expectedAdmitterSigningPublicKey: keys.admitter, now: token.grantedAt, in: purposes)
+    }
+
+    /// `identity`'s admission to `meshID` by itself — a founder's record — signed by the production
+    /// builder under the identity's own namespace.
+    private static func selfAdmission(of identity: IdentityService, meshID: UUID) throws -> SignedAdmissionRecord {
+        SignedAdmissionRecord(token: try MeshAdmissionToken.signed(
+            meshID: meshID, joinerFingerprint: identity.localFingerprint,
+            joinerSigningPublicKey: identity.localSigningPublicKey, admitterIdentity: identity))
+    }
+
+    /// The refusal a ledger step answered, or nil when it adopted.
+    private static func refusal(_ outcome: MeshLedgerAdoptionOutcome) -> MeshLedgerAdoptionRefusal? {
+        guard case .refused(let refusal) = outcome else { return nil }
+        return refusal
     }
 
     /// Whether `role` is a signature role, of any framing.

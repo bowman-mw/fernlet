@@ -379,9 +379,9 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | Function | What It Does |
 | --- | --- |
 | `MeshAdmissionGrantPayload.init(...)` | Creates an admission grant with optional encrypted current group key. |
-| `canonicalBytes(for token:)` | Deterministically encodes an admission token with empty signature for signing/verification. |
+| `canonicalBytes(for token:in:)` | Deterministically encodes an admission token with empty signature for signing/verification, its domain the caller's namespace's `purposes.signature.meshAdmissionTokenV2` (A0.2.4). |
 | `MeshAdmissionToken.signed(...)` | Builds and signs an expiring admission token binding mesh ID, joiner fingerprint, and joiner signing key. |
-| `MeshAdmissionToken.verify(joinerSigningPublicKey:now:)` | Validates expiry, joiner key, joiner/admitter fingerprints, and admitter signature. |
+| `MeshAdmissionToken.verify(joinerSigningPublicKey:expectedMeshID:expectedAdmitterSigningPublicKey:now:in:)` | Validates expiry, joiner key, joiner/admitter fingerprints, and admitter signature under the caller's namespace labels (`in purposes:`, no default; A0.2.4). The dual verify's legacy alternative runs under the family's verify-only `legacyV1.meshAdmissionTokenV1`, and a family that refuses legacy peers has none, so there a pre-WI-6 token is `signatureInvalid`. |
 
 ### `MeshNameGenerator.swift`
 
@@ -433,7 +433,7 @@ BEFORE the record reaches a ledger a roster is derived from.
 | `…DerivedRoster.isFinalPair` | Judged on the DERIVED roster, never the connected pair (a 2/2 split of a 4-roster is not two final pairs). |
 | `…DerivedRoster.introductionRoster(additionalBarred:)` | Hands the QUIC transport members AND barred as keys. **The shipping answer from P3 item 7**: `MeshNetworkManager.roster` is this function, so a peer with a verified removal or departure refuses as `barredMember` by name. `additionalBarred` only ever adds a refusal (the two-node lane's chaos hook). |
 | `MeshNetworkManager.legacyIntroductionRoster()` | The pre-records fallback: the gossiped descriptor's members, logged once as `mesh.introductionAuthority.legacyRosterFallback`. Reachable only with an empty ledger — tests and pre-P3 interop. |
-| `MeshLedgerAdoption.isBootstrap(_:selfFingerprint:)` / `bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)` | The joiner's ledger, pure. Bootstrap roots at the admitter's key; adopt rebases onto the offered ledger's own root once it is proven to admit this device's admitter under exactly the key its token names. |
+| `MeshLedgerAdoption.isBootstrap(_:selfFingerprint:)` / `bootstrapVerifier(meshID:ownAdmission:in:)` / `adopt(offered:ownAdmission:meshID:in:)` | The joiner's ledger, pure. Bootstrap roots at the admitter's key; adopt rebases onto the offered ledger's own root once it is proven to admit this device's admitter under exactly the key its token names. Both verify under the caller's namespace labels (`in purposes:`, A0.2.4), which the verifier they hand back keeps. |
 | `applyTermination(_:to:)` (private) | Read-time, not merge-time: a termination from a non-member is ignored; one whose signer sits on a roster larger than two downgrades to that signer's departure. Applying it at merge time would make the union order-dependent. |
 
 ### `MeshMembershipEvents.swift`
@@ -445,7 +445,7 @@ share one frozen English spelling per event, so a grep for the token finds every
 | --- | --- |
 | `MeshMembershipEventFormat` | Widths and caps every frame is checked against BEFORE a signature is verified: 64-byte signature, 32-byte digest, 32-byte key-agreement key (P6 item 1, its own constant rather than borrowed from the signing-key width), 64-char fingerprint ceiling. |
 | `MeshRecordIdentity` | One record's kind + the four fields of its total order, so the digest is computed over a kind-tagged flattening of all four sets rather than four separate hashes. |
-| `MeshInventoryDigest` | Counts + SHA-256 over the sorted identities, under `Hash.meshInventoryDigestV1`. A pure function of the record SET — a hint that decides whether a full record exchange is worth its bytes, never an authority. |
+| `MeshInventoryDigest` | Counts + SHA-256 over the sorted identities, under the namespace's `purposes.hash.meshInventoryDigestV1` (`init(meshID:ledger:purposes:)` since A0.2.4; the purposes are never stored, so the `Codable` form is unchanged). A pure function of the record SET — a hint that decides whether a full record exchange is worth its bytes, never an authority. |
 | `MeshMemberDeparturePayload` / `MeshMemberRemovalPayload` / `MeshTerminationPayload` | The three record frames. Each carries the signed record and nothing else — a second unsigned copy of the same fact is a second thing that can disagree, and the receiver re-derives quorum from its own roster anyway. The removal's voter list is clamped to §9's cap on decode as well as on init. |
 | `MeshInventoryDigestPayload` | The signed digest message: digest + sender + `sentAt` + signature, with `isWellFormed` checked on untrusted bytes first. |
 | `SignedDepartureRecord.signed(…)` / `SignedTerminationRecord.signed(…)` / `SignedRemovalRecord.signed(…)` | `@MainActor` minting factories over `IdentityService`, mirroring `MeshAdmissionToken.signed`. Verification stays `nonisolated`. |
@@ -489,6 +489,7 @@ with a low timestamp crowds a real removal out on every device it reaches.
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshMembershipRecordRejection` | Ten named refusals + frozen-English `diagnosticDescription`. A bare boolean is how "signed by a stranger" and "three votes short" become one indistinguishable non-update. |
+| `init(meshID:founderSigningPublicKey:ledger:purposes:)` / `purposes` | The verifier keeps its own copy of its host namespace's labels (A0.2.4), a trailing argument with no default; every signature below is checked under them (`purposes.signature.<field>`), and `localInventoryDigest` hashes under them. The manager passes `namespace.family.purposes`; `MeshLedgerAdoption` passes what it is handed. |
 | `insert(_: SignedAdmissionRecord)` | Verifies under the token's own `meshAdmissionTokenV2` domain (one admission format, not two); the admitter must be a current member, or the founder when the ledger is empty. `expiresAt` is NOT re-applied — it gates admission, not a durable record. |
 | `insert(_: SignedDepartureRecord)` | Self-signed by the leaver; the key comes from that member's admission record, never from the departure. |
 | `insert(_: SignedRemovalRecord)` | Re-checks plan §10.4's ⌊&#124;roster&#124;/2⌋ + 1 against THIS device's merged roster via `MeshDerivedRoster.quorumThreshold`; distinct eligible voters only, target excluded. |
@@ -1489,6 +1490,21 @@ anywhere. The one label read moved so far is the identity's keychain service, an
 | `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
 | `IdentityService.init()` / `init(keychainService:)` (test target, `ProximityNamespaceTestBindings.swift`) | Convenience initializers passing `.fernlet`, restoring the call shapes the suites were written against. A binding restores a call shape, never a value; a test that pins a value names `.fernlet` explicitly. Later A0.2 commits add their bindings to the same file. |
 
+### Signed transcripts I (A0.2.4)
+
+The envelope, the admission token, the membership records and messages, the removal quorum and the
+key advertisement read their labels off the namespace, the legacy pair included. Each reader takes
+the purposes it already holds: a builder its signing identity's `purposes`, the envelope's `verify`
+its `identityService`'s, a `MeshMembershipRecordVerifier` its own copy, the manager its stored
+`namespace.family.purposes`. `ProximityNamespaceGoldenTests` pins the thirteen moved labels off
+`.fernlet` and holds each reader to the namespace it is handed.
+
+| Function | What It Does |
+| --- | --- |
+| `canonicalBytes(for:in:)` (10 types) / `canonicalInventoryDigestBytes(for:in:)` | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. |
+| `MeshMembershipRecordVerifier.init(...purposes:)` / `MeshLedgerAdoption.bootstrapVerifier(...in:)` / `adopt(...in:)` / `MeshInventoryDigest.init(meshID:ledger:purposes:)` / `MeshAdmissionToken.verify(...in:)` | The verifiers and helpers that take the labels, each with no default. |
+| `canonicalBytes(for:)`, `canonicalInventoryDigestBytes(for:)`, `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)` (test target, `ProximityNamespaceTestBindings.swift`) | The old shapes, restored for the suites by passing `.fernlet` (`ProximityNamespace.Purposes.fernlet`, which the golden pins equal to `ProximityNamespace.fernlet.family.purposes`). |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`
@@ -1518,8 +1534,8 @@ anywhere. The one label read moved so far is the identity's keychain service, an
 
 | Function | What It Does |
 | --- | --- |
-| `canonicalBytes(for envelope:)` | Deterministically encodes an envelope with empty signature for signing/verification. |
-| `verify(identityService:replayCache:)` | Validates schema, expiry, signature, recipient, required sealing, replay status, and decrypts payload if sealed. |
+| `canonicalBytes(for envelope:in:)` | Deterministically encodes an envelope with empty signature for signing/verification, its domain the identity's namespace's `purposes.signature.identityEnvelopeV2` (A0.2.4). |
+| `verify(identityService:replayCache:)` | Validates schema, expiry, signature, recipient, required sealing, replay status, and decrypts payload if sealed. The signature is checked under `identityService.purposes` (A0.2.4): `identityEnvelopeV2`, or for a schema-v1 envelope the verify-only `legacyV1.identityEnvelopeV1`, which a family that refuses legacy peers lacks — there a schema-v1 envelope is `signatureInvalid`. |
 | `signed(...)` | Builds and signs a schema-version-1 identity envelope. |
 | `disclosedSenderDisplayName` | The sender's sanitized name, or `nil` when it withheld one (empty field) — unlike `sanitizedSenderDisplayName`, whose "A friend" floor cannot tell withheld from blank (Option 1b, 2026-09-22). |
 
@@ -1689,8 +1705,9 @@ bytes. **The field order in each function IS the schema.**
 
 | Function | What It Does |
 | --- | --- |
-| `canonicalBytes(for: FernletIdentityEnvelope)` | Canonical v2 bytes for an envelope (schema v2+); the `signature` field is excluded, being the output of signing these bytes. Writes `payloadSummary`'s title/subtitle/extraDetails — the reason that summary is frozen English. |
-| `canonicalBytes(for: MeshAdmissionToken)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
+| `canonicalBytes(for: FernletIdentityEnvelope, in:)` | Canonical v2 bytes for an envelope (schema v2+); the `signature` field is excluded, being the output of signing these bytes. Writes `payloadSummary`'s title/subtitle/extraDetails — the reason that summary is frozen English. |
+| `canonicalBytes(for: MeshAdmissionToken, in:)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
+| `canonicalBytes(for:in:)` for the membership family and `canonicalInventoryDigestBytes(for:in:)` | Since A0.2.4 the envelope, the token, the departure, removal and termination records, the inventory-digest and epoch-heads messages, the removal proposal and vote and the key advertisement write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`), and the inventory digest's preimage from `purposes.hash.meshInventoryDigestV1`; their file-level domain tags are gone. The channel introduction and the routed family keep theirs until A0.2.5, the activity and moderation tags until A0.4. |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
 | `canonicalBytes(for: MeshRoutedManifest)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |

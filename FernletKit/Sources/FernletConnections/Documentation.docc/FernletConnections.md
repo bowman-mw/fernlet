@@ -40,9 +40,14 @@ service's identity is built from the store's `proximityNamespace`. The identity'
 `com.fernlet.identity`, is the first value ProximityKit reads off it. The test target's eleven
 `ProximityHost` doubles supply the same value, and its `ProximityNamespaceTestBindings.swift`
 restores the old `IdentityService()` and `IdentityService(keychainService:)` call shapes by passing
-`.fernlet`. A0.2's later commits hand the rest to ProximityKit's readers (the signed transcripts,
-the hashes and seals, the radios, the at-rest names), each move byte-identical, so Fernlet's
-behaviour does not change.
+`.fernlet`. Since step A0.2.4 ProximityKit also reads thirteen of `Purposes.fernlet`'s labels: the
+identity envelope's, the admission token's, the membership, quorum and key-agreement transcripts',
+the inventory digest's hash domain and the legacy pair, which `.fernlet` accepts so that Fernlet's
+schema-v1 and pre-WI-6 peers verify exactly as before (a family that refuses legacy peers would
+reject them); the bindings file restores those serializers' and verifiers' old call shapes with
+`.fernlet` too. A0.2's later commits hand the rest to ProximityKit's readers (the routed and
+introduction transcripts, the hashes and seals, the radios, the at-rest names), each move
+byte-identical, so Fernlet's behaviour does not change.
 
 **What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter
 that ProximityKit's copies of the audit log and of `ColumnCrypto` call back into. A0.3 adds the
