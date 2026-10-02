@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["3RTUPF8FFH.MBO.FernletLinkProbe"],
+        "components": [
+          { "/": "/probe/*", "comment": "Phase 0 link probe only. Temporary." }
+        ]
+      }
+    ]
+  }
+}

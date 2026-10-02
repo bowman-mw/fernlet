@@ -97,11 +97,41 @@ jobs:
           done
           exit "$missing"
 
+      # Universal links: Apple fetches /.well-known/apple-app-site-association for fernlet.com. The
+      # file claims exactly one thing for now, the Phase 0 link probe's /probe/ path. Claiming more
+      # (Fernlet's own /plan/ and /recipe/) is a deliberate edit here and in Site/README.md.
+      - name: The association file is valid JSON and claims only the probe path
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          with open("Site/.well-known/apple-app-site-association") as handle:
+              details = json.load(handle)["applinks"]["details"]
+          claimed = [(app, part.get("/")) for entry in details for app in entry["appIDs"] for part in entry["components"]]
+          expected = [("3RTUPF8FFH.MBO.FernletLinkProbe", "/probe/*")]
+          if claimed != expected:
+              raise SystemExit(f"::error::the association file claims {claimed}, expected {expected}")
+          PY
+
       - uses: actions/configure-pages@v5
 
+      # Keep this at v3. v4 leaves dot-folders out of the artifact without saying so, which would
+      # drop Site/.well-known/ and with it the association file. The step after this one checks
+      # the artifact itself, so a bump that loses the file fails here and never deploys.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: Site
+
+      # The deploy job publishes the artifact, not the folder, so this reads the tar the step above
+      # built and uploaded ($RUNNER_TEMP/artifact.tar).
+      - name: The uploaded artifact carries the association file and the probe page
+        run: |
+          set -euo pipefail
+          tar -tf "$RUNNER_TEMP/artifact.tar" > "$RUNNER_TEMP/artifact-files.txt"
+          for path in .well-known/apple-app-site-association probe/index.html; do
+            grep -qxF -e "./$path" -e "$path" "$RUNNER_TEMP/artifact-files.txt" \
+              || { echo "::error::$path is missing from the Pages artifact"; exit 1; }
+          done
 
   deploy:
     name: Deploy to Pages

@@ -18,11 +18,13 @@ requests. Fonts, styles and script are all served from this origin.
 | `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `App/Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
 | `support/index.html` | Support/contact page — the ASC Support URL. |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |
+| `probe/index.html` | **Temporary.** The Phase 0 link probe's page: where a `fernlet.com/probe/` test link lands on a device with no probe app (a Mac, a browser). No script, `noindex`, the same CSP as every page. It goes away with the probe. |
+| `.well-known/apple-app-site-association` | The universal-links association file. Right now it claims one path for one app: `/probe/*` for the link probe (`3RTUPF8FFH.MBO.FernletLinkProbe`). See *Universal links* below. |
 | `style.css` | The whole site's styling, light **and** dark (`prefers-color-scheme`, no toggle — it follows the OS). Design tokens mirror the Fernlet Design System (parchment/cream/bark/moss, Fraunces + DM Serif Display + Instrument Serif + DM Sans); the dark palette is the app's own (`FernletThemeDefaults`). |
 | `app.js` | Progressive-enhancement interactions. Optional by construction. |
 | `assets/` | The brand mark and the favicons. `fernlet-mark-header.svg` is the nav/footer logo; `fernlet-mark-header-dark.svg` is the same mark with the bark-brown branch recoloured to pale sage (`#C8DBC2`, the app's own dark-icon treatment) because the brown vanishes on the dark ground — the pages pick between them with `<picture media="(prefers-color-scheme:dark)">`. `favicon.svg` is the tab icon, with `favicon-32.png` / `favicon-16.png` as the raster fallback and `apple-touch-icon.png` (180px) for iOS home screens. All five come from the app icon set, so the tab, the header and the App Store icon are the same mark. |
 | `fonts/` | Self-hosted woff2 files — see [`fonts/README.md`](fonts/README.md) for what to drop in. |
-| `_headers` | Cloudflare/Netlify header rules: security baseline + font caching + the `application/json` content-type rule for the future AASA file. **Ignored by GitHub Pages** (see below). |
+| `_headers` | Cloudflare/Netlify header rules: security baseline + font caching + the `application/json` content-type rule for the association file. **Ignored by GitHub Pages** (see below). |
 | `.nojekyll` | Stops any Jekyll processing, so `_headers` and future `_`-prefixed paths publish verbatim. |
 
 ## Keeping the policy honest
@@ -105,11 +107,29 @@ One-time setup (needs a Cloudflare account + registrar access):
 Subsequent deploys: push (Git-connected) or re-upload the folder (Direct Upload). Use one host or
 the other — pointing both at `fernlet.com` is a DNS conflict, not a fallback.
 
-## Reserved for the coach track (do NOT add yet)
+## Universal links
 
-- `/.well-known/apple-app-site-association` — needs the Apple Team ID + app IDs; added at coach
-  P0 with `applinks` (and later `appclips`) entries. The `_headers` rule for it already exists,
-  but it only takes effect on Cloudflare — GitHub Pages cannot set the content type on an
-  extensionless file, so verify the AASA fetch works there before committing to that host.
-- `/plan/` — the universal-link fallback page + static OG card metadata (coach P1; per-length
-  variants only if the D11 prototype fails).
+`.well-known/apple-app-site-association` tells iOS which paths on fernlet.com open an app. It was
+reserved until the coach work started. It exists now for **one path only**: `/probe/*`, claimed by
+the Phase 0 link probe (`3RTUPF8FFH.MBO.FernletLinkProbe`), a throwaway test app that checks whether
+a long link fragment survives Messages and a universal link. Fernlet itself claims nothing yet.
+
+- **The Pages workflow pins the file's contents.** A step fails the deploy if the file claims
+  anything other than the probe path, so widening it is a deliberate edit in
+  [`pages.yml`](../.github/workflows/pages.yml) and here, in the same commit.
+- **Keep `actions/upload-pages-artifact` at `@v3`.** v4 leaves dot-folders out of the artifact
+  without saying so, which drops `.well-known/`. A workflow step reads the uploaded artifact and
+  fails if the association file is missing from it.
+- **Content type.** GitHub Pages serves this extensionless file as `application/octet-stream`. The
+  `_headers` rule that sets `application/json` only takes effect on Cloudflare. Apple's association
+  CDN is reported to accept the GitHub Pages form. Confirm it after a deploy at
+  `https://app-site-association.cdn-apple.com/a/v1/fernlet.com`.
+- **Removing the probe.** When the probe is finished, delete `probe/` and either delete the
+  association file or replace its entry with Fernlet's, and update the workflow step to match.
+
+## Still reserved for the coach track (do NOT add yet)
+
+- Fernlet's own entries in the association file: `/plan/*` and `/recipe/*` for
+  `3RTUPF8FFH.MBO.Fernlet` (and later `appclips`, if that returns). They wait for the probe's
+  result.
+- `/plan/` and `/recipe/`: the universal-link fallback pages with static OG card metadata.
