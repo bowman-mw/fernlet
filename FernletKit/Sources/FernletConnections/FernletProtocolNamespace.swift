@@ -11,8 +11,10 @@
 // membership, quorum and key-agreement labels, the legacy pair and the inventory digest's hash domain
 // are read off it too, since A0.2.5 the channel-introduction, routed and verify-QR labels and the
 // QR scheme, since A0.2.6 the routed hash and id domains, the five AEAD labels, the three HKDF
-// salts and the epoch id's domain, and since A0.2.7 the three radios' service types, ALPNs, the mesh
-// heartbeat, the TLS exporter label and the log subsystem. A0.2's later commits hand the rest to
+// salts and the epoch id's domain, since A0.2.7 the three radios' service types, ALPNs, the mesh
+// heartbeat, the TLS exporter label and the log subsystem, and since A0.2.8 the storage names, the two
+// seal-key rows, the identity's four accounts and the default sidecar root, which the app's two
+// storage scopes carry and its proximity root resolves. A0.2's later commits hand the rest to
 // ProximityKit's readers one consumer family at a time.
 //
 // Every literal below is pinned by `ProximityNamespaceGoldenTests`' frozen column, so a change here

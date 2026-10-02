@@ -22,6 +22,7 @@
 
 #if DEBUG
 
+import FernletConnections
 import FernletFoundation
 import FernletLock
 import Foundation
@@ -265,7 +266,7 @@ nonisolated enum CryptoFormatCensus {
             Inputs(
                 sealedStore: .shared,
                 ownPhotoDocumentsDirectory: FernletStore.defaultPhotoDocumentsDirectory,
-                friendWallSupportDirectory: ProximitySupportLayout.defaultDirectory,
+                friendWallSupportDirectory: ProximityNamespace.fernlet.installation.storage.defaultDirectory,
                 narrativeScope: .production,
                 lockKeychainService: KeychainItem.productionService,
                 heartDropDirectory: HeartDropStorageScope.production.directory

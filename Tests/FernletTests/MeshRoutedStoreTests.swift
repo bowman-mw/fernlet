@@ -23,6 +23,7 @@
 // service). `MeshRoutedStoreIsolationTests` is the grep-wall that keeps it that way.
 
 import CryptoKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletFoundation
@@ -47,9 +48,12 @@ enum MeshRoutedStoreFixtures {
     nonisolated static let now = MeshRoutedManifestFixtures.base.addingTimeInterval(600)
 
     /// A scope nobody else in the process shares: temp directory + a `.test.` keychain service (the
-    /// spelling `PrivacyWipeCoverageTests`' service discovery deliberately skips).
+    /// spelling `PrivacyWipeCoverageTests`' service discovery deliberately skips), under Fernlet's
+    /// namespace, so the store writes Fernlet's names and seal-key account and measures under
+    /// Fernlet's labels (plan step A0.2.8).
     static func scope() -> MeshRoutedStorageScope {
         MeshRoutedStorageScope(
+            namespace: .fernlet,
             directory: FileManager.default.temporaryDirectory
                 .appendingPathComponent("MeshRoutedStore-\(UUID().uuidString)", isDirectory: true),
             keychainService: "com.fernlet.mesh-routed.test.\(UUID().uuidString)"
@@ -817,7 +821,6 @@ struct MeshRoutedVocabularyTests {
         #expect(MeshRoutedStoreFormat.maxItems == 1024)
         #expect(MeshRoutedStoreFormat.maxHeldChunkFiles == 4096)
         #expect(MeshRoutedIndexSchema.current == 2, "P5 item 4 bumped the routed index schema")
-        #expect(MeshRoutedIndexSchema.token == "fernlet.mesh.routed-store.v1")
         #expect(
             MeshSessionContextSchema.current == 3,
             """
@@ -902,7 +905,7 @@ struct MeshRoutedStoreDurabilityTests {
             Issue.record("an unwritable directory answered \(cause.logToken)")
             return
         }
-        #expect(detail != MeshRoutedStore.indexFileName, "the failure must name the write error, not the file")
+        #expect(detail != rig.store.indexFileName, "the failure must name the write error, not the file")
         #expect(detail.isEmpty == false)
         #expect(try Data(contentsOf: rig.store.indexURL) == before, "the previous index must be byte-identical")
     }

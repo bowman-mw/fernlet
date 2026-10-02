@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletConnections
 import FernletProximityUI
 import CryptoKit
 import CloudKitSync
@@ -494,7 +495,9 @@ final class FernletStore {
     /// Note this is the OTHER side of the Phase-5 media-key split — the wall stays on the
     /// backup-restorable `friendWall` key — so it deliberately gets its own root rather than hanging
     /// off the own-photo one. Production always resolves to `Application Support/Fernlet`, the path
-    /// the cache has always used; nothing shipped is migrated.
+    /// the cache has always used — `ProximityNamespace.fernlet`'s `installation.storage.defaultDirectory`
+    /// since ProximityKit plan step A0.2.8, which builds it exactly as before; nothing shipped is
+    /// migrated.
     @ObservationIgnored nonisolated let proximitySupportRoot: URL
     /// Keychain service for THIS store's heart-drop material — the prekey private halves and the key
     /// that seals the three heart-drop sidecars, which live under one service by design so a
@@ -542,15 +545,17 @@ final class FernletStore {
     /// `PhotoDirectoryIsolationTests` (whose `deleteAllData` trigger covers both lists). A fourth
     /// injectable seam would add a fourth way to forget one. Production resolves to
     /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged from
-    /// `MeshSessionStorageScope.production`.
+    /// `MeshSessionStorageScope.production(for: proximityNamespace)`. The scope carries
+    /// ``proximityNamespace``, which names the file and the seal key's account (plan step A0.2.8).
     ///
     /// Nothing writes through this scope yet — P3 item 2a builds the store and its wipe; item 2b
     /// wires the session manager to it. The delete-all leg is here from the first commit anyway,
     /// because a persisted surface with no wipe row is what the wall exists to catch.
     @ObservationIgnored nonisolated var meshSessionStorage: MeshSessionStorageScope {
         MeshSessionStorageScope(
+            namespace: proximityNamespace,
             directory: proximitySupportRoot,
-            keychainService: MeshSessionStorageScope.keychainService(besideHeartDrop: heartDropKeychainService)
+            keychainService: MeshSessionStorageScope.keychainService(besideHeartDrop: heartDropKeychainService, in: proximityNamespace)
         )
     }
     /// This store's sealed ROUTED-CONTENT scope (network migration P5 item 3, plan §11/§19.5):
@@ -563,7 +568,9 @@ final class FernletStore {
     /// and the heart-drop sidecars is isolated for routed custody for free, and one that is NOT
     /// already fails `PhotoDirectoryIsolationTests`. A fourth injectable seam would add a fourth way
     /// to forget one. Production resolves to `Application Support/Fernlet` +
-    /// `com.fernlet.mesh-routed`, unchanged from `MeshRoutedStorageScope.production`.
+    /// `com.fernlet.mesh-routed`, unchanged from `MeshRoutedStorageScope.production(for:
+    /// proximityNamespace)`. The scope carries ``proximityNamespace``, which names the files and the
+    /// seal key's account and holds the labels the store measures under (plan step A0.2.8).
     ///
     /// Its own keychain service rather than a lodger under the mesh-session one: one fate per
     /// service is the only arrangement a service-wide delete can express honestly, and a session
@@ -574,8 +581,9 @@ final class FernletStore {
     /// surface with no wipe row is what the wall exists to catch.
     @ObservationIgnored nonisolated var meshRoutedStorage: MeshRoutedStorageScope {
         MeshRoutedStorageScope(
+            namespace: proximityNamespace,
             directory: proximitySupportRoot,
-            keychainService: MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDropKeychainService)
+            keychainService: MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDropKeychainService, in: proximityNamespace)
         )
     }
     /// The user's OWN at-rest media key (security-hardening Phase 5), used by all three own-photo
@@ -828,7 +836,7 @@ final class FernletStore {
         // Nil = a fresh IN-MEMORY cache, not production (see the property): this initializer is the
         // tests' and previews' path; the launch path hands in the production file.
         self.deviceHealthResidueStore = deviceHealthResidueStore ?? InMemoryDeviceHealthResidueStore()
-        self.proximitySupportRoot = proximitySupportDirectory ?? ProximitySupportLayout.defaultDirectory
+        self.proximitySupportRoot = proximitySupportDirectory ?? ProximityNamespace.fernlet.installation.storage.defaultDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
         self.messagesCatalogDirectory = messagesCatalogDirectory
@@ -977,7 +985,7 @@ final class FernletStore {
         self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
         // `FernletStore.load` passes the production file unless a test hands one in.
         self.deviceHealthResidueStore = deviceHealthResidueStore
-        self.proximitySupportRoot = ProximitySupportLayout.defaultDirectory
+        self.proximitySupportRoot = ProximityNamespace.fernlet.installation.storage.defaultDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
         // value here: the widget extension is a separate process with no seam, so an app that

@@ -166,12 +166,14 @@ struct IdentityProvisioningReadTests {
 
     /// Neither identity private-key row is read nil-collapsing anywhere in the service, the
     /// distinguishing read is used for both rows and Case 3's legacy read, and the unreadable arm
-    /// throws rather than returns.
+    /// throws rather than returns. The rows are named by the identity's `accounts` (the namespace's
+    /// `installation.keychain.identity`) since ProximityKit plan step A0.2.8, which deleted the
+    /// `IdentityKeychainKey` cases the needle used to spell.
     @Test func theIdentityRowsAreNeverReadNilCollapsing() throws {
         let source = try RepoRoot.source("FernletKit/Sources/ProximityKit/Identity/IdentityService.swift")
         // R2: bounded by the two rows.
         for row in [Self.signingRow, Self.keyAgreementRow] {
-            #expect(!source.contains("KeychainItem.load(account: IdentityKeychainKey.\(row)"),
+            #expect(!source.contains("KeychainItem.load(account: accounts.\(row)"),
                     "\(row) is read with the nil-collapsing load again — a transient error would mint over it")
         }
         let distinguishingReads = source.components(separatedBy: "KeychainItem.loadDistinguishingAbsence(").count - 1

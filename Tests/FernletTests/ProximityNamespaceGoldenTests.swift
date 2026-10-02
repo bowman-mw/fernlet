@@ -102,6 +102,19 @@
 //     values under `.fernlet`, another app's under another app's), and the mesh radio's heartbeat
 //     and channel-binding consumers take those values from the radio, whole.
 //
+// One more group since step A0.2.8, when the mesh stores' file names, chunk directory and seal-key
+// accounts, the production seal-key services, the hosts' default sidecar root and the identity's four
+// accounts began to read the namespace (and the two unused at-rest mirror tokens were deleted). Those
+// twelve rows' accessors are re-pointed at `.fernlet`'s fields, the two services through the
+// derivation called with `.fernlet`; no literal moves. Group 2's store cells build their scopes with
+// `.fernlet`, group 3's token cell takes the deleted tokens' pins as literal rows, and group 11's store
+// cell hands the store its labels through its scope:
+//
+// 13. **The at-rest names and rows read the namespace.** The two stores write and read their files
+//     and seal keys under the names the namespace their scope carries gives, Fernlet's or another
+//     app's; a host with no sidecar root or scope of its own gets them built from its namespace; and
+//     an identity provisions, and its provisioning rule names, the four rows its namespace names.
+//
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
 // suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
@@ -361,47 +374,57 @@ struct ProximityNamespaceGoldenTests {
     ///
     /// The identity service is read off `.fernlet` since step A0.2.3, when `IdentityService` began
     /// taking it from the host's namespace (``theIdentityKeychainServiceIsReadOffTheNamespace()``
-    /// pins that read). The two seal-key services are read through the derivation the isolation
-    /// walls themselves use (the production heart-drop service in, the production service out): the
+    /// pins that read). Since step A0.2.8 the four accounts and both seal-key accounts are read off
+    /// `.fernlet` too, as the identity and the stores read them off the namespace they hold, and the
+    /// two seal-key services through the derivation the app and the isolation walls use, called with
+    /// `.fernlet` (the production heart-drop service in, the namespace's production service out): the
     /// production scopes' own spellings are banned by substring in every other test file.
     private static var keychainRows: [NamespaceGoldenRow] {
         let identity = "installation.keychain.identity."
         let heartDrop = HeartPrekeyStore.keychainService
+        let fernlet = ProximityNamespace.fernlet.installation.keychain
         return [
             NamespaceGoldenRow(.keychain, identity + "service", frozen: "com.fernlet.identity",
                                today: .text(ProximityNamespace.fernlet.installation.keychain.identity.service)),
-            NamespaceGoldenRow(.keychain, identity + "signingPrivateKey", frozen: "signingPrivateKey", today: .unnamed),
+            NamespaceGoldenRow(.keychain, identity + "signingPrivateKey", frozen: "signingPrivateKey",
+                               today: .text(fernlet.identity.signingPrivateKey)),
             NamespaceGoldenRow(.keychain, identity + "keyAgreementPrivateKey", frozen: "keyAgreementPrivateKey",
-                               today: .unnamed),
+                               today: .text(fernlet.identity.keyAgreementPrivateKey)),
             NamespaceGoldenRow(.keychain, identity + "signingPublicKeyCache", frozen: "signingPublicKeyCache",
-                               today: .unnamed),
+                               today: .text(fernlet.identity.signingPublicKeyCache)),
             NamespaceGoldenRow(.keychain, identity + "keyAgreementPublicKeyCache", frozen: "keyAgreementPublicKeyCache",
-                               today: .unnamed),
+                               today: .text(fernlet.identity.keyAgreementPublicKeyCache)),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshSessionSealKey.service",
                                frozen: "com.fernlet.mesh-session",
-                               today: .text(MeshSessionStorageScope.keychainService(besideHeartDrop: heartDrop))),
+                               today: .text(MeshSessionStorageScope.keychainService(besideHeartDrop: heartDrop, in: .fernlet))),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshSessionSealKey.account", frozen: "meshSessionContextKey",
-                               today: .text(MeshSessionSealKey.keychainAccount)),
+                               today: .text(fernlet.meshSessionSealKey.account)),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshRoutedSealKey.service",
                                frozen: "com.fernlet.mesh-routed",
-                               today: .text(MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDrop))),
+                               today: .text(MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDrop, in: .fernlet))),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshRoutedSealKey.account", frozen: "meshRoutedStoreKey",
-                               today: .text(MeshRoutedSealKey.keychainAccount))
+                               today: .text(fernlet.meshRoutedSealKey.account))
         ]
     }
 
     /// The storage directory and the three names the two sealed mesh stores write under it.
+    ///
+    /// Read off `.fernlet` since step A0.2.8, when the stores began taking their names from their
+    /// scope's namespace and the host's default root became the namespace's `defaultDirectory` (read
+    /// here through it, as the app and the host default read it). Group 2's store cells and group 13
+    /// pin those reads.
     private static var storageRows: [NamespaceGoldenRow] {
         let storage = "installation.storage."
+        let fernlet = ProximityNamespace.fernlet.installation.storage
         return [
             NamespaceGoldenRow(.storage, storage + "directoryName", frozen: "Fernlet",
-                               today: .text(ProximitySupportLayout.defaultDirectory.lastPathComponent)),
+                               today: .text(fernlet.defaultDirectory.lastPathComponent)),
             NamespaceGoldenRow(.storage, storage + "meshSessionContextFileName", frozen: "MeshSessionContext.sealed",
-                               today: .text(MeshSessionStore.fileName)),
+                               today: .text(fernlet.meshSessionContextFileName)),
             NamespaceGoldenRow(.storage, storage + "meshRoutedIndexFileName", frozen: "MeshRoutedIndex.sealed",
-                               today: .text(MeshRoutedStore.indexFileName)),
+                               today: .text(fernlet.meshRoutedIndexFileName)),
             NamespaceGoldenRow(.storage, storage + "meshRoutedChunkDirectoryName", frozen: "MeshRoutedChunks",
-                               today: .text(MeshRoutedStore.chunkDirectoryName))
+                               today: .text(fernlet.meshRoutedChunkDirectoryName))
         ]
     }
 
@@ -473,18 +496,23 @@ struct ProximityNamespaceGoldenTests {
         #expect(Self.expectFrozen(.verifyQR) >= 2)
     }
 
-    /// The identity service and both seal-key rows, byte for byte. The four identity accounts are
-    /// pinned by a real provision in the next cell.
+    /// The identity service and both seal-key rows, byte for byte, and since step A0.2.8 the four
+    /// identity accounts too, which the next cell also pins by a real provision.
     @Test func everyNamedKeychainValueIsItsFrozenBytes() {
-        #expect(Self.expectFrozen(.keychain) >= 5)
+        #expect(Self.expectFrozen(.keychain) >= 9)
     }
 
     /// The directory and the three on-disk names, byte for byte — and the directory resolves under
-    /// Application Support, the root the design's `Storage.defaultDirectory` names.
+    /// Application Support, the root the design's `Storage.defaultDirectory` names: `.fernlet`'s,
+    /// which the app and the host default resolve since step A0.2.8, and
+    /// `ProximitySupportLayout.defaultDirectory`, which the heart-drop scope and the feature ledgers
+    /// still resolve, are one path.
     @Test func everyStorageNameIsItsFrozenBytes() {
         #expect(Self.expectFrozen(.storage) >= 4)
         let expected = URL.applicationSupportDirectory
             .appendingPathComponent(Self.frozen("installation.storage.directoryName"), isDirectory: true)
+        let namespaceRoot = ProximityNamespace.fernlet.installation.storage.defaultDirectory
+        #expect(namespaceRoot == expected, "the namespace's sidecar root is \(namespaceRoot.path), not \(expected.path)")
         #expect(ProximitySupportLayout.defaultDirectory == expected,
                 "the proximity sidecar root is \(ProximitySupportLayout.defaultDirectory.path), not \(expected.path)")
     }
@@ -643,9 +671,11 @@ struct ProximityNamespaceGoldenTests {
 
     /// The session store, on an isolated scope, opens a blob planted at the frozen file name under a
     /// seal key planted at the frozen account — so the store's file name, its seal-key account, its
-    /// column purpose and the binding's place in the AAD are all pinned by one load.
+    /// column purpose and the binding's place in the AAD are all pinned by one load. Since step A0.2.8
+    /// the scope carries `.fernlet`, whose names the store reads.
     @Test func theSessionStoreOpensItsKnownBlobUnderItsFrozenNames() throws {
         let scope = MeshSessionStorageScope(
+            namespace: .fernlet,
             directory: Self.scratchDirectory(),
             keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)"
         )
@@ -672,6 +702,7 @@ struct ProximityNamespaceGoldenTests {
     /// load, and its chunk directory by the path it composes.
     @Test func theRoutedStoreOpensItsKnownBlobUnderItsFrozenNames() throws {
         let scope = MeshRoutedStorageScope(
+            namespace: .fernlet,
             directory: Self.scratchDirectory(),
             keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)"
         )
@@ -883,6 +914,12 @@ struct ProximityNamespaceGoldenTests {
     /// membership record kinds — still equal the frozen label. `meshKeyAgreement` and `verifyResponse`
     /// had no such pin before this suite. The fourth record kind equals no label; it is persisted and
     /// hashed into the signed inventory digest, so it is pinned by literal beside them.
+    ///
+    /// Two at-rest format names join them as literal rows since step A0.2.8, which deleted the unused
+    /// mirror tokens that spelled them (`MeshSessionContextSchema.token`, `MeshRoutedIndexSchema.token`,
+    /// pinned until then in MeshKeyAgreementAdvertisementTests and MeshRoutedStoreTests): each named
+    /// its sealed file's format exactly as its store's column-seal label, so a file's format and its
+    /// key derivation stay one vocabulary.
     @Test func theWireTokensSpelledLikeALabelStillEqualIt() {
         let signature = "family.purposes.signature."
         let vocabulary: [(token: String, spelling: String, label: String)] = [
@@ -915,6 +952,16 @@ struct ProximityNamespaceGoldenTests {
         }
         #expect(MeshMembershipRecordKind.admission.rawValue == "fernlet.mesh.member-admission.v1",
                 "the admission record kind moved: \(MeshMembershipRecordKind.admission.rawValue)")
+
+        let retiredAtRestTokens: [(token: String, spelling: String, label: String)] = [
+            ("MeshSessionContextSchema.token", "fernlet.mesh.session-context.v1", "meshSessionContextV1"),
+            ("MeshRoutedIndexSchema.token", "fernlet.mesh.routed-store.v1", "meshRoutedStoreV1")
+        ]
+        // R2: bounded by the two retired tokens.
+        for entry in retiredAtRestTokens {
+            let frozen = Self.frozen("family.purposes.keyDerivation." + entry.label)
+            #expect(entry.spelling == frozen, "\(entry.token) was \(entry.spelling); the column seal it mirrored is \(frozen)")
+        }
     }
 
     // MARK: Group 4 — the format constants that stay ProximityKit's
@@ -2113,8 +2160,9 @@ struct ProximityNamespaceGoldenTests {
     /// origin of another app's namespace slices an item whose manifest hashes in that namespace and
     /// stamps the chunk with that namespace's chunk hash, while an origin of `.fernlet` refuses the
     /// same item `contentHashMismatch`; and the store stages that chunk, commits custody of the item
-    /// and hands its blob back only when handed that namespace's labels — refusing the chunk
-    /// `chunkHashMismatch`, the commit `contentHashMismatch` and the blob otherwise.
+    /// and hands its blob back only when its scope carries that namespace's labels — refusing the
+    /// chunk `chunkHashMismatch`, the commit `contentHashMismatch` and the blob otherwise. (Step
+    /// A0.2.6 handed the store's three verbs the labels; since A0.2.8 the scope carries them.)
     @Test func theChunkerAndTheRoutedStoreMeasureUnderTheNamespaceTheyAreHanded() throws {
         let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
         defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
@@ -2136,7 +2184,8 @@ struct ProximityNamespaceGoldenTests {
                                        identity: fernletOrigin)
         }
         let chunk = try #require(chunks.first)
-        Self.expectStoreMeasures(chunk, of: blob, manifest: manifest, hashedIn: foreign, notIn: .fernlet)
+        Self.expectStoreMeasures(chunk, of: blob, manifest: manifest, hashedIn: foreignNamespace.family,
+                                 notIn: ProximityNamespace.fernlet.family)
     }
 
     /// The routed item seal and the content-key wrap open only under the labels they were sealed
@@ -2367,6 +2416,118 @@ struct ProximityNamespaceGoldenTests {
                 "the radio no longer reads its exporter label off the namespace")
     }
 
+    // MARK: Group 13 — the at-rest names and rows read the namespace (A0.2.8)
+
+    /// The two sealed mesh stores read their file names and their seal key's account off the namespace
+    /// their scope carries, under `.fernlet` and under another app's namespace, on isolated scopes:
+    /// the session store saves its context at that namespace's file name and mints its seal key at
+    /// that namespace's account, the only row under the scope's service; the routed store does the
+    /// same for its index and keeps its chunks under that namespace's chunk directory; and both load
+    /// back what they wrote. So every read is the namespace's field and no literal. (Both still seal
+    /// under FernletCrypto's column labels until plan step A0.2.9.)
+    @Test func theStoresReadTheirNamesAndSealKeyAccountsOffTheirScopesNamespace() throws {
+        // R2: bounded by the two namespaces.
+        for namespace in [ProximityNamespace.fernlet, ForeignAppNamespace.namespace()] {
+            let (storage, keychain) = (namespace.installation.storage, namespace.installation.keychain)
+            let session = MeshSessionStore(scope: MeshSessionStorageScope(
+                namespace: namespace, directory: Self.scratchDirectory(),
+                keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)"))
+            let routed = MeshRoutedStore(scope: MeshRoutedStorageScope(
+                namespace: namespace, directory: Self.scratchDirectory(),
+                keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)"))
+            defer {
+                MeshSessionStoreFixtures.tearDown(session.scope)
+                MeshRoutedStoreFixtures.tearDown(routed.scope)
+            }
+            try MeshSessionStoreFixtures.save(MeshSessionStoreFixtures.context(), into: session)
+            try MeshRoutedStoreFixtures.save(MeshRoutedIndex(), into: routed)
+            let directory = storage.directoryName
+            let (sessionNames, routedNames) = (try Self.names(in: session.scope.directory), try Self.names(in: routed.scope.directory))
+            #expect(sessionNames == [storage.meshSessionContextFileName],
+                    "the session store under \(directory)'s names wrote \(sessionNames)")
+            #expect(Self.accounts(under: session.scope.keychainService) == [keychain.meshSessionSealKey.account],
+                    "the session store under \(directory)'s names sealed under another account")
+            #expect(routedNames == [storage.meshRoutedIndexFileName],
+                    "the routed store under \(directory)'s names wrote \(routedNames)")
+            #expect(routed.chunkDirectory == routed.scope.directory.appendingPathComponent(
+                storage.meshRoutedChunkDirectoryName, isDirectory: true), "the chunks moved: \(routed.chunkDirectory.path)")
+            #expect(Self.accounts(under: routed.scope.keychainService) == [keychain.meshRoutedSealKey.account],
+                    "the routed store under \(directory)'s names sealed under another account")
+            let loads = DeviceBindingID.$testOverride.withValue(.identifier(MeshSessionStoreFixtures.installA)) {
+                (session: session.load(), routed: routed.load())
+            }
+            guard case .loaded = loads.session, case .loaded = loads.routed else {
+                Issue.record("a store under \(directory)'s names did not load what it wrote: \(loads)")
+                continue
+            }
+        }
+    }
+
+    /// A host that carries no sidecar root or scope of its own gets them built from its namespace:
+    /// the root is the namespace's `installation.storage.defaultDirectory`, and on it both scopes carry
+    /// the namespace and its production seal-key services; a host on another root keeps the namespace
+    /// and gets services named after that root. Under `.fernlet` that is `Application Support/Fernlet`
+    /// with Fernlet's frozen services; under another app's namespace, that app's. Building a host or a
+    /// scope touches no disk and no keychain.
+    @Test func aHostsDefaultRootAndScopesAreBuiltFromItsNamespace() {
+        // R2: bounded by the two namespaces.
+        for namespace in [ProximityNamespace.fernlet, ForeignAppNamespace.namespace()] {
+            let keychain = namespace.installation.keychain
+            let host = NamespaceDefaultsHost(namespace: namespace)
+            let root = namespace.installation.storage.defaultDirectory
+            #expect(host.proximitySupportDirectory == root, "the default root is \(host.proximitySupportDirectory.path)")
+            let (session, routed) = (host.meshSessionStorage, host.meshRoutedStorage)
+            #expect(session.namespace == namespace && session.directory == root
+                        && session.keychainService == keychain.meshSessionSealKey.service,
+                    "the default session scope on the namespace's root is \(session.keychainService)")
+            #expect(routed.namespace == namespace && routed.directory == root
+                        && routed.keychainService == keychain.meshRoutedSealKey.service,
+                    "the default routed scope on the namespace's root is \(routed.keychainService)")
+            let rooted = RootedNamespaceDefaultsHost(namespace: namespace, root: Self.scratchDirectory())
+            let suffix = ".host." + rooted.proximitySupportDirectory.lastPathComponent
+            #expect(rooted.meshSessionStorage.namespace == namespace
+                        && rooted.meshSessionStorage.keychainService == keychain.meshSessionSealKey.service + suffix,
+                    "a host on its own root shares the session seal-key row: \(rooted.meshSessionStorage.keychainService)")
+            #expect(rooted.meshRoutedStorage.namespace == namespace
+                        && rooted.meshRoutedStorage.keychainService == keychain.meshRoutedSealKey.service + suffix,
+                    "a host on its own root shares the routed seal-key row: \(rooted.meshRoutedStorage.keychainService)")
+        }
+        let fernlet = NamespaceDefaultsHost(namespace: .fernlet)
+        #expect(fernlet.meshSessionStorage.keychainService == Self.frozen("installation.keychain.meshSessionSealKey.service")
+                    && fernlet.meshRoutedStorage.keychainService == Self.frozen("installation.keychain.meshRoutedSealKey.service"),
+                "a Fernlet host's default scopes left Fernlet's production rows")
+    }
+
+    /// An identity keeps, and its provisioning rule names, the four device rows its namespace names.
+    /// One of another app's namespace, on an isolated service, writes exactly that app's four accounts
+    /// (one of `.fernlet` writes the frozen four: group 1); and under Fernlet's accounts and that app's,
+    /// the rule names an unreadable signing row and an unparseable key-agreement row by the accounts
+    /// it is handed.
+    @Test func anIdentityKeepsAndNamesTheRowsItsNamespaceNames() throws {
+        let foreign = ForeignAppNamespace.namespace().installation.keychain.identity
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        try IdentityService(namespace: ForeignAppNamespace.namespace(), keychainService: service).ensureProvisioned()
+        let written = Set(KeychainItem.loadAll(service: service).map { $0.account })
+        let named: Set = [foreign.signingPrivateKey, foreign.keyAgreementPrivateKey, foreign.signingPublicKeyCache,
+                          foreign.keyAgreementPublicKeyCache]
+        #expect(written == named, "an identity of another app wrote \(written.sorted()), not \(named.sorted())")
+        let signing = Curve25519.Signing.PrivateKey().rawRepresentation
+        // R2: bounded by the two namespaces.
+        for accounts in [ProximityNamespace.fernlet.installation.keychain.identity, foreign] {
+            let unreadable = IdentityService.classifyDeviceIdentityRows(
+                signing: .unreadable(errSecIO), keyAgreement: .absent, accounts: accounts)
+            let unparseable = IdentityService.classifyDeviceIdentityRows(
+                signing: .found(signing), keyAgreement: .found(Data([1, 2, 3])), accounts: accounts)
+            guard case .unreadable(let row, _) = unreadable, case .unparseable(let badRow) = unparseable else {
+                Issue.record("the rule did not refuse by row: \(unreadable), \(unparseable)")
+                continue
+            }
+            #expect(row == accounts.signingPrivateKey && badRow == accounts.keyAgreementPrivateKey,
+                    "the rule named \(row) and \(badRow), not the accounts it was handed")
+        }
+    }
+
     // MARK: Helpers
 
     /// Compares every named row of `group` with its frozen literal, byte for byte, and returns how
@@ -2409,6 +2570,16 @@ struct ProximityNamespaceGoldenTests {
             rest = tail[close...]
         }
         return found
+    }
+
+    /// The entries `directory` holds, by name, hidden ones aside and sorted.
+    private static func names(in directory: URL) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { !$0.hasPrefix(".") }.sorted()
+    }
+
+    /// The accounts of every row under `service`.
+    private static func accounts(under service: String) -> Set<String> {
+        Set(KeychainItem.loadAll(service: service).map { $0.account })
     }
 
     /// A fresh identity keychain service nobody else uses.
@@ -2852,31 +3023,39 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// On a fresh isolated routed store under a pinned install binding: admits `manifest`, then stages
-    /// `chunk`, commits custody of the item and reads its blob back, each first under `other` — which
-    /// must refuse — and then under `purposes`, the namespace the item was hashed in. The store
-    /// verifies no signature: an accepted manifest and chunk are its callers' precondition.
+    /// `chunk`, commits custody of the item and reads its blob back, each first through a store whose
+    /// scope carries `other`'s labels — which must refuse — and then through one whose scope carries
+    /// `family`'s, the labels the item was hashed in. Both scopes keep Fernlet's installation, the
+    /// fixture's directory and its keychain service, so the two stores open one index under one key
+    /// and differ in their labels alone. The store verifies no signature: an accepted manifest and
+    /// chunk are its callers' precondition.
     private static func expectStoreMeasures(
         _ chunk: MeshChunk, of blob: Data, manifest: MeshRoutedManifest,
-        hashedIn purposes: ProximityNamespace.Purposes, notIn other: ProximityNamespace.Purposes
+        hashedIn family: ProximityNamespace.Family, notIn other: ProximityNamespace.Family
     ) {
         let scope = MeshRoutedStoreFixtures.scope()
         defer { MeshRoutedStoreFixtures.tearDown(scope) }
-        let store = MeshRoutedStore(scope: scope)
+        func store(_ family: ProximityNamespace.Family) -> MeshRoutedStore {
+            MeshRoutedStore(scope: MeshRoutedStorageScope(
+                namespace: ProximityNamespace(family: family, installation: scope.namespace.installation),
+                directory: scope.directory, keychainService: scope.keychainService))
+        }
+        let (hashed, unhashed) = (store(family), store(other))
         let (key, now, custodian) = (MeshRoutedItemKey(manifest), MeshRoutedStoreFixtures.now, "fp-golden-custodian")
         DeviceBindingID.$testOverride.withValue(.identifier(MeshRoutedStoreFixtures.installA)) {
-            #expect(store.admittingManifest(manifest, now: now).value != nil, "the store refused the item's manifest")
-            #expect(store.stagingChunk(chunk, now: now, in: other) == .completed(.refused(.chunkHashMismatch)))
-            #expect(store.stagingChunk(chunk, now: now, in: purposes) == .completed(.admitted(received: 1, expected: 1)))
-            #expect(store.committingCustody(item: key, custodian: custodian, now: now, in: other)
+            #expect(hashed.admittingManifest(manifest, now: now).value != nil, "the store refused the item's manifest")
+            #expect(unhashed.stagingChunk(chunk, now: now) == .completed(.refused(.chunkHashMismatch)))
+            #expect(hashed.stagingChunk(chunk, now: now) == .completed(.admitted(received: 1, expected: 1)))
+            #expect(unhashed.committingCustody(item: key, custodian: custodian, now: now)
                         == .completed(.refused(.contentHashMismatch)))
-            let committed = store.committingCustody(item: key, custodian: custodian, now: now, in: purposes)
+            let committed = hashed.committingCustody(item: key, custodian: custodian, now: now)
             guard case .completed(.committed(let witness)) = committed else {
                 Issue.record("the store did not commit custody under the item's own labels: \(committed)")
                 return
             }
             #expect(witness.contentHash == manifest.contentHash)
-            #expect(store.assembledBlob(item: key, expecting: manifest, in: other) == .completed(nil))
-            #expect(store.assembledBlob(item: key, expecting: manifest, in: purposes) == .completed(blob))
+            #expect(unhashed.assembledBlob(item: key, expecting: manifest) == .completed(nil))
+            #expect(hashed.assembledBlob(item: key, expecting: manifest) == .completed(blob))
         }
     }
 
@@ -2927,9 +3106,11 @@ private final class ForeignNamespaceHost: ProximityHost {
         proximityNamespace = namespace
         proximitySupportDirectory = root
         meshSessionStorage = MeshSessionStorageScope(
-            directory: root, keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)")
+            namespace: namespace, directory: root,
+            keychainService: "com.fernlet.mesh-session.test.namespacegolden.\(UUID().uuidString)")
         meshRoutedStorage = MeshRoutedStorageScope(
-            directory: root, keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)")
+            namespace: namespace, directory: root,
+            keychainService: "com.fernlet.mesh-routed.test.namespacegolden.\(UUID().uuidString)")
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
@@ -2941,6 +3122,47 @@ private final class ForeignNamespaceHost: ProximityHost {
         MeshRoutedStore.wipeForDeleteAll(scope: meshRoutedStorage)
         try? FileManager.default.removeItem(at: proximitySupportDirectory)
     }
+}
+
+// MARK: - Hosts of the extension defaults
+
+/// A `ProximityHost` that supplies only its namespace and the requirements with no default, so its
+/// sidecar root and both storage scopes are `ProximityHost`'s extension defaults, built from that
+/// namespace (plan step A0.2.8's cell). Building one touches no disk and no keychain.
+@MainActor
+private final class NamespaceDefaultsHost: ProximityHost {
+    let proximityNamespace: ProximityNamespace
+    let proximityTrustVault = ProximityTrustVault()
+    var proximityDisplayName: String { "Golden" }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+
+    /// A host of `namespace` on the extension's default root.
+    init(namespace: ProximityNamespace) {
+        proximityNamespace = namespace
+    }
+
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
+    func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+}
+
+/// ``NamespaceDefaultsHost`` on a sidecar root of its own: only its two storage scopes are the
+/// extension defaults.
+@MainActor
+private final class RootedNamespaceDefaultsHost: ProximityHost {
+    let proximityNamespace: ProximityNamespace
+    let proximitySupportDirectory: URL
+    let proximityTrustVault = ProximityTrustVault()
+    var proximityDisplayName: String { "Golden" }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+
+    /// A host of `namespace` on `root`.
+    init(namespace: ProximityNamespace, root: URL) {
+        proximityNamespace = namespace
+        proximitySupportDirectory = root
+    }
+
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
+    func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
 }
 
 // MARK: - A foreign app

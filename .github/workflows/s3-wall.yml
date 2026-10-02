@@ -278,7 +278,12 @@ jobs:
         # namespace's raw epoch domain. Since A0.2.7, which moves the three radios' service types,
         # ALPNs, heartbeat, TLS exporter label and log subsystem, it also pins the radios: each holds
         # the values of the namespace it is built from and logs under its subsystem, and the mesh
-        # radio frames and checks every channel introduction under that namespace's labels.
+        # radio frames and checks every channel introduction under that namespace's labels. Since
+        # A0.2.8, which moves the mesh stores' file names and seal-key accounts, the production
+        # seal-key services, the hosts' default sidecar root and the identity's four accounts, it holds
+        # those readers too: the two stores write and read under the names the namespace their scope
+        # carries gives, a host's default root and scopes are built from its namespace, and an identity
+        # keeps, and names, the four rows its namespace names.
         #
         # `ProximityNamespaceSoundnessTests` joins at ProximityKit plan step A0.2.1 (2026-10-02): the
         # soundness rules, byte rules and collision checks of ProximityKit's protocol namespace — the
@@ -299,9 +304,15 @@ jobs:
         # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 155: passed. Run
         # once more at 155 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
         # 153 + 2 (the radios' two cells) = 155 is the ARITHMETIC CHECK, never the source.
+        # RAISED 155 -> 158 at A0.2.8, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact five-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "158 tests in 5 suites" (6 + 13 + 19 + 91 + 29),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 158: passed. Run
+        # once more at 158 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
+        # 155 + 3 (the at-rest group's three cells) = 158 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 155 \
+          Scripts/run-gated-suites.sh crypto-goldens 158 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

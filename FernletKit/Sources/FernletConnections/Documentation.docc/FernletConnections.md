@@ -63,9 +63,13 @@ too. Since step A0.2.7 the three radios are built from the namespace their manag
 `Radios.fernlet`'s service types, ALPNs and heartbeat, the TLS exporter label and
 `Installation.fernletApp`'s log subsystem off it, so every advertisement, negotiation, beat and
 channel binding is spelled exactly as before; the bindings file restores the radios' argument-less
-initializers with `.fernlet`. A0.2's later commits hand the rest to ProximityKit's readers (the at-rest
-names and rows and the two column seals), each move byte-identical, so Fernlet's behaviour does not
-change.
+initializers with `.fernlet`. Since step A0.2.8 ProximityKit reads `Installation.fernletApp`'s at-rest
+names and rows too: the mesh stores' file names, chunk directory and seal-key accounts, the production
+seal-key services, the default sidecar root and the identity's four accounts. The app hands
+`.fernlet` to both storage scopes and resolves its proximity root from it, so every file and keychain
+row keeps its name; the bindings file restores the seal-key reads and the identity-row classifier
+with `.fernlet`'s rows. A0.2's later commits hand the rest to ProximityKit's readers (the two column
+seals), each move byte-identical, so Fernlet's behaviour does not change.
 
 **What joins it later.** A0.2's later steps add the audit bridge and the device-binding adapter
 that ProximityKit's copies of the audit log and of `ColumnCrypto` call back into. A0.3 adds the

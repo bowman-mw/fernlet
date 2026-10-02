@@ -26,7 +26,7 @@ extension FernletStore: ProximityHost {
     /// host that left this out would not compile.
     ///
     /// `nonisolated`: the namespace is inert `Sendable` value data, and the store's nonisolated
-    /// storage-scope properties (`meshSessionStorage`, `meshRoutedStorage`) read it once a later
-    /// A0.2 step builds the scopes from it.
+    /// storage-scope properties (`meshSessionStorage`, `meshRoutedStorage`) read it: since plan step
+    /// A0.2.8 each scope carries it, and its production seal-key service is derived from it.
     nonisolated var proximityNamespace: ProximityNamespace { .fernlet }
 }

@@ -22,6 +22,7 @@
 // the type would widen the gate silently, with no compile error and no failing behaviour test. This
 // is the wall that notices.
 
+import FernletConnections
 import Foundation
 import Testing
 @testable import ProximityKit
@@ -126,7 +127,10 @@ struct MeshRoutedStoreIsolationTests {
     ///
     /// The directory half alone is not enough and neither is the key half: files on a private root
     /// sealed by a shared key survive somebody else's wipe as ciphertext nothing can open, which is
-    /// strictly worse than losing them outright.
+    /// strictly worse than losing them outright. Since ProximityKit plan step A0.2.8, when the
+    /// production scope began reading the namespace, a hand-built scope naming a namespace's
+    /// `installation.storage.defaultDirectory` or `installation.keychain.meshRoutedSealKey.service`
+    /// is banned beside the two older spellings.
     @Test func noTestReachesTheProductionScope() throws {
         var scanned = 0
         for (file, source) in try Self.testSources() {
@@ -145,6 +149,14 @@ struct MeshRoutedStoreIsolationTests {
                 #expect(
                     !arguments.contains("\"com.fernlet.mesh-routed\""),
                     "\(file) builds a routed scope on the production keychain service: \(arguments)"
+                )
+                #expect(
+                    !arguments.contains("installation.storage.defaultDirectory"),
+                    "\(file) builds a routed scope on a namespace's production directory: \(arguments)"
+                )
+                #expect(
+                    !arguments.contains("installation.keychain.meshRoutedSealKey.service"),
+                    "\(file) builds a routed scope on a namespace's production keychain service: \(arguments)"
                 )
             }
         }
@@ -179,26 +191,39 @@ struct MeshRoutedStoreIsolationTests {
     }
 
     /// The derivation itself: production in, production out; anything else in, something else out.
+    ///
+    /// Since ProximityKit plan step A0.2.8 the derivation and the production scope read the host's
+    /// namespace, so this pins them under `.fernlet`: its seal-key service, its default directory, and
+    /// the namespace itself carried on the scope.
     @Test func theDerivedKeychainServiceTracksItsHeartDropInput() {
-        let production = MeshRoutedStorageScope.keychainService(besideHeartDrop: HeartPrekeyStore.keychainService)
-        #expect(production == MeshRoutedStorageScope.productionKeychainService)
+        let namespace = ProximityNamespace.fernlet
+        let keychain = namespace.installation.keychain
+        let production = MeshRoutedStorageScope.keychainService(
+            besideHeartDrop: HeartPrekeyStore.keychainService, in: namespace
+        )
+        #expect(production == keychain.meshRoutedSealKey.service)
+        let productionScope = MeshRoutedStorageScope.production(for: namespace)
+        #expect(productionScope.keychainService == production)
+        #expect(productionScope.directory == namespace.installation.storage.defaultDirectory)
+        #expect(productionScope.namespace == namespace)
 
         let isolated = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
-        let derived = MeshRoutedStorageScope.keychainService(besideHeartDrop: isolated)
-        #expect(derived != MeshRoutedStorageScope.productionKeychainService,
+        let derived = MeshRoutedStorageScope.keychainService(besideHeartDrop: isolated, in: namespace)
+        #expect(derived != keychain.meshRoutedSealKey.service,
                 "an isolated heart-drop service derived the PRODUCTION routed service — isolation lost")
         #expect(derived.hasPrefix(isolated), "the derived service must stay traceable to the scope it belongs to")
 
         let other = MeshRoutedStorageScope.keychainService(
-            besideHeartDrop: "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+            besideHeartDrop: "com.fernlet.heartdrop.test.\(UUID().uuidString)", in: namespace
         )
         #expect(derived != other, "two isolated stores derived the SAME routed service")
         // And the routed key does NOT lodge under the mesh-session service: one fate per service is
         // the only arrangement a service-wide delete can express honestly, so a session wipe must
-        // not be able to orphan routed ciphertext. (Spelled as a literal rather than through the
-        // session scope's own constant, which `MeshSessionStoreIsolationTests` bans by substring.)
-        #expect(production != "com.fernlet.mesh-session")
-        #expect(MeshRoutedSealKey.keychainAccount != MeshSessionSealKey.keychainAccount)
+        // not be able to orphan routed ciphertext. (Read off the namespace rather than through the
+        // session scope's own production scope, which `MeshSessionStoreIsolationTests` bans by
+        // substring.)
+        #expect(production != keychain.meshSessionSealKey.service)
+        #expect(keychain.meshRoutedSealKey.account != keychain.meshSessionSealKey.account)
     }
 
     // MARK: - The durability gate

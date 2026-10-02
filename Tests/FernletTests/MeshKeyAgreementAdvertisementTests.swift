@@ -874,8 +874,6 @@ struct MeshKeyAgreementSchemaTests {
     @Test func theSchemaIsThree() {
         #expect(MeshSessionContextSchema.current == 3, "P6 item 1's bump")
         #expect(Self.context().schemaVersion == 3)
-        #expect(MeshSessionContextSchema.token == "fernlet.mesh.session-context.v1",
-                "the sealing domain did not change; only the shape did")
     }
 
     @Test func aSchemaThreeContextRoundTripsItsAdvertisementSetAndConflicts() throws {

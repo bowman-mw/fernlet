@@ -23,6 +23,7 @@
 //     derivation is ever replaced by a production constant, this wall goes red rather than the
 //     flake appearing three suites away.
 
+import FernletConnections
 import Foundation
 import Testing
 @testable import ProximityKit
@@ -63,9 +64,11 @@ struct MeshSessionStoreIsolationTests {
     /// The directory half alone is not enough and neither is the key half: files on a private root
     /// sealed by a shared key survive somebody else's wipe as ciphertext nothing can open, which is
     /// strictly worse than losing them outright. So both spellings that resolve to production —
-    /// `MeshSessionStorageScope.production` and a hand-built scope naming
-    /// `ProximitySupportLayout.defaultDirectory` or the production service literal — are banned in
-    /// the test tree.
+    /// `MeshSessionStorageScope.production(for:)` and a hand-built scope naming
+    /// `ProximitySupportLayout.defaultDirectory` or the production service literal, or (since
+    /// ProximityKit plan step A0.2.8, when the production scope began reading the namespace) a
+    /// namespace's `installation.storage.defaultDirectory` or
+    /// `installation.keychain.meshSessionSealKey.service` — are banned in the test tree.
     @Test func noTestReachesTheProductionScope() throws {
         var scanned = 0
         for (file, source) in try Self.testSources() {
@@ -82,6 +85,14 @@ struct MeshSessionStoreIsolationTests {
                 #expect(
                     !arguments.contains("\"com.fernlet.mesh-session\""),
                     "\(file) builds a mesh-session scope on the production keychain service: \(arguments)"
+                )
+                #expect(
+                    !arguments.contains("installation.storage.defaultDirectory"),
+                    "\(file) builds a mesh-session scope on a namespace's production directory: \(arguments)"
+                )
+                #expect(
+                    !arguments.contains("installation.keychain.meshSessionSealKey.service"),
+                    "\(file) builds a mesh-session scope on a namespace's production keychain service: \(arguments)"
                 )
             }
         }
@@ -120,20 +131,30 @@ struct MeshSessionStoreIsolationTests {
     /// The derivation itself: production in, production out; anything else in, something else out.
     ///
     /// The behavioural half of the scan above — a derivation that returned the production service
-    /// for an isolated input would pass the source scan and isolate nothing.
+    /// for an isolated input would pass the source scan and isolate nothing. Since ProximityKit plan
+    /// step A0.2.8 the derivation and the production scope read the host's namespace, so this pins
+    /// them under `.fernlet`: its seal-key service, its default directory, and the namespace itself
+    /// carried on the scope.
     @Test func theDerivedKeychainServiceTracksItsHeartDropInput() {
-        let production = MeshSessionStorageScope.keychainService(besideHeartDrop: HeartPrekeyStore.keychainService)
-        #expect(production == MeshSessionStorageScope.productionKeychainService)
-        #expect(MeshSessionStorageScope.production.keychainService == production)
+        let namespace = ProximityNamespace.fernlet
+        let productionService = namespace.installation.keychain.meshSessionSealKey.service
+        let production = MeshSessionStorageScope.keychainService(
+            besideHeartDrop: HeartPrekeyStore.keychainService, in: namespace
+        )
+        #expect(production == productionService)
+        let productionScope = MeshSessionStorageScope.production(for: namespace)
+        #expect(productionScope.keychainService == production)
+        #expect(productionScope.directory == namespace.installation.storage.defaultDirectory)
+        #expect(productionScope.namespace == namespace)
 
         let isolated = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
-        let derived = MeshSessionStorageScope.keychainService(besideHeartDrop: isolated)
-        #expect(derived != MeshSessionStorageScope.productionKeychainService,
+        let derived = MeshSessionStorageScope.keychainService(besideHeartDrop: isolated, in: namespace)
+        #expect(derived != productionService,
                 "an isolated heart-drop service derived the PRODUCTION mesh-session service — isolation lost")
         #expect(derived.hasPrefix(isolated), "the derived service must stay traceable to the scope it belongs to")
 
         let other = MeshSessionStorageScope.keychainService(
-            besideHeartDrop: "com.fernlet.heartdrop.test.\(UUID().uuidString)"
+            besideHeartDrop: "com.fernlet.heartdrop.test.\(UUID().uuidString)", in: namespace
         )
         #expect(derived != other, "two isolated stores derived the SAME mesh-session service")
     }

@@ -22,6 +22,7 @@
 
 import CryptoKit
 import FernletConnections
+import FernletFoundation
 import Foundation
 @testable import ProximityKit
 
@@ -386,23 +387,6 @@ extension MeshChunkAssembly {
     }
 }
 
-/// The routed store's two hashing verbs the suites call, in the shapes they were written against
-/// (plan step A0.2.6). The third, `assembledBlob(item:expecting:in:)`, has no test caller.
-extension MeshRoutedStore {
-
-    /// `stagingChunk(chunk, now: now, in: .fernlet)`.
-    func stagingChunk(_ chunk: MeshChunk, now: Date) -> MeshRoutedOutcome<MeshChunkAdmission> {
-        stagingChunk(chunk, now: now, in: .fernlet)
-    }
-
-    /// `committingCustody(item:custodian:now:in: .fernlet)`.
-    func committingCustody(
-        item: MeshRoutedItemKey, custodian: String, now: Date
-    ) -> MeshRoutedOutcome<MeshRoutedCustodyOutcome> {
-        committingCustody(item: item, custodian: custodian, now: now, in: .fernlet)
-    }
-}
-
 // MARK: - Hashes, AEAD, salts, epoch: the routed seals (A0.2.6)
 //
 // The item seal and the per-recipient content-key wrap read their AEAD labels — and the wrap its
@@ -528,5 +512,63 @@ extension NetworkRecipeShareSession {
     /// radio the retired `init()` built.
     convenience init() {
         self.init(namespace: .fernlet)
+    }
+}
+
+// MARK: - At rest: names and rows (A0.2.8)
+//
+// Step A0.2.8 moved the mesh stores' file names and seal-key accounts and the identity's four
+// accounts onto the namespace's installation: the seal-key helpers take the row's `account:` and the
+// identity's row classifier the `accounts:` its refusals name. Each old shape comes back here with
+// Fernlet's rows, read off `.fernlet`, never respelled. The routed store's two hashing verbs that
+// step A0.2.6 restored above are gone from this file: since A0.2.8 the store measures under its
+// scope's namespace, so `stagingChunk(_:now:)` and `committingCustody(item:custodian:now:)` are its
+// own shapes again.
+
+/// The mesh-session seal key's two reads in the shapes the suites were written against (plan step
+/// A0.2.8), with Fernlet's mesh-session seal-key account.
+extension MeshSessionSealKey {
+
+    /// `forOpen(service:account:)` with `.fernlet`'s `installation.keychain.meshSessionSealKey.account`.
+    static func forOpen(service: String) -> MeshSessionSealKeyOutcome {
+        forOpen(service: service, account: ProximityNamespace.fernlet.installation.keychain.meshSessionSealKey.account)
+    }
+
+    /// `forSeal(service:account:)` with `.fernlet`'s `installation.keychain.meshSessionSealKey.account`.
+    static func forSeal(service: String) -> MeshSessionSealKeyOutcome {
+        forSeal(service: service, account: ProximityNamespace.fernlet.installation.keychain.meshSessionSealKey.account)
+    }
+}
+
+/// The routed seal key's two reads and its account in the shapes the suites were written against
+/// (plan step A0.2.8), with Fernlet's routed seal-key account.
+extension MeshRoutedSealKey {
+
+    /// The account the retired `MeshRoutedSealKey.keychainAccount` spelled: `.fernlet`'s
+    /// `installation.keychain.meshRoutedSealKey.account`, read off the value, never respelled here.
+    static let keychainAccount = ProximityNamespace.fernlet.installation.keychain.meshRoutedSealKey.account
+
+    /// `forOpen(service:account:)` with `.fernlet`'s routed seal-key account.
+    static func forOpen(service: String) -> MeshRoutedSealKeyOutcome {
+        forOpen(service: service, account: keychainAccount)
+    }
+
+    /// `forSeal(service:account:)` with `.fernlet`'s routed seal-key account.
+    static func forSeal(service: String) -> MeshRoutedSealKeyOutcome {
+        forSeal(service: service, account: keychainAccount)
+    }
+}
+
+/// The identity-row classifier in the shape the suites were written against (plan step A0.2.8). It
+/// inherits the class's main-actor isolation, as the function it restores has.
+extension IdentityService {
+
+    /// `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` with `.fernlet`'s
+    /// `installation.keychain.identity`.
+    static func classifyDeviceIdentityRows(
+        signing: KeychainItem.ReadResult, keyAgreement: KeychainItem.ReadResult
+    ) -> DeviceIdentityRead {
+        classifyDeviceIdentityRows(signing: signing, keyAgreement: keyAgreement,
+                                   accounts: ProximityNamespace.fernlet.installation.keychain.identity)
     }
 }
