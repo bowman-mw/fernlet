@@ -79,6 +79,24 @@ jobs:
             exit 1
           fi
 
+      # The self-hosted fonts are SIL Open Font License 1.1, which lets the site serve them only with
+      # each family's license beside the files: <Family>.woff2 or <Family>-<Style>.woff2 needs
+      # <Family>-OFL.txt (the table is in Site/fonts/README.md).
+      - name: Every self-hosted font ships its license
+        run: |
+          set -euo pipefail
+          missing=0
+          for font in Site/fonts/*.woff2; do
+            [ -e "$font" ] || continue
+            stem="$(basename "$font" .woff2)"
+            license="Site/fonts/${stem%%-*}-OFL.txt"
+            if [ ! -f "$license" ]; then
+              echo "::error file=$font::no license beside it: expected $license"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3

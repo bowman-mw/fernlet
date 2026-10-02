@@ -145,3 +145,7 @@ egress inventory, a cross-wall data path, anything that contradicts the policy. 
 
 [Apache License 2.0](LICENSE) — see [`NOTICE`](NOTICE). Fernlet is a wellness and self-care
 companion, not a medical device; it does not provide medical advice, diagnosis, or treatment.
+
+The fonts in [`App/Fernlet/Fonts/`](App/Fernlet/Fonts) are the exception. They are licensed under
+the SIL Open Font License 1.1, not Apache-2.0, and each family's copyright notice and license are in
+[`App/Fernlet/Fonts/LICENSES/`](App/Fernlet/Fonts/LICENSES).

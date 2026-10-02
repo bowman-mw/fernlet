@@ -5,3 +5,34 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this work except in compliance with the License.
 You may obtain a copy of the License in the LICENSE file at the root
 of this repository or at http://www.apache.org/licenses/LICENSE-2.0
+
+Bundled fonts
+
+The fonts in App/Fernlet/Fonts are not covered by the Apache License.
+Each family is licensed under the SIL Open Font License, Version 1.1.
+Its copyright notice and the license text are in
+App/Fernlet/Fonts/LICENSES, and the app bundle carries the same files.
+
+Fraunces
+  Copyright 2018 The Fraunces Project Authors
+  (https://github.com/undercasetype/Fraunces)
+
+DM Serif Display
+  Copyright 2014 The DM Serif Project Authors
+  (https://github.com/googlefonts/dm-fonts)
+  Copyright 2014-2018 Adobe (http://www.adobe.com/), with Reserved Font
+  Name 'Source'. All Rights Reserved. Source is a trademark of Adobe in
+  the United States and/or other countries. Copyright 2019 Google LLC.
+
+Instrument Serif
+  Copyright 2022 The Instrument Serif Project Authors
+  (https://github.com/Instrument/instrument-serif)
+
+DM Sans
+  Copyright 2014 The DM Sans Project Authors
+  (https://github.com/googlefonts/dm-fonts)
+
+Playfair Display
+  Copyright 2017 The Playfair Display Project Authors
+  (https://github.com/clauseggers/Playfair-Display), with Reserved Font
+  Name "Playfair Display"

@@ -8,9 +8,40 @@ import FernletUI
 /// by the exact PostScript name used in `FernletFontName`. Because `Font.custom` silently falls back
 /// to the system font on a name miss, this is the only guard that a wrong filename or PostScript name
 /// would otherwise slip through unnoticed. Unit tests are hosted in the app, so its `UIAppFonts` are
-/// registered here.
+/// registered here. It also pins that every registered font file ships its family's SIL Open Font
+/// License text inside the app bundle.
 @Suite @MainActor
 struct FernletFontRegistrationTests {
+
+    /// Each `UIAppFonts` file → its family's bundled license (`<resource>.txt`, from `Fonts/LICENSES/`)
+    /// and a fragment of the copyright notice that license must carry. Kept by hand on purpose: this
+    /// table is where adding a font is forced to remember its license.
+    private static let licenseByFontFile: [String: (resource: String, copyright: String)] = [
+        "Fraunces-SemiBold.ttf":       ("Fraunces-OFL", "The Fraunces Project Authors"),
+        "DMSerifDisplay-Regular.ttf":  ("DMSerifDisplay-OFL", "with Reserved Font Name 'Source'"),
+        "InstrumentSerif-Regular.ttf": ("InstrumentSerif-OFL", "The Instrument Serif Project Authors"),
+        "InstrumentSerif-Italic.ttf":  ("InstrumentSerif-OFL", "The Instrument Serif Project Authors"),
+        "DMSans-Regular.ttf":          ("DMSans-OFL", "The DM Sans Project Authors"),
+        "DMSans-Medium.ttf":           ("DMSans-OFL", "The DM Sans Project Authors"),
+        "PlayfairDisplay-Italic.ttf":  ("PlayfairDisplay-OFL", "with Reserved Font Name \"Playfair Display\""),
+    ]
+
+    /// OFL 1.1 condition 2 lets the fonts ship inside the app only if each copy carries the copyright
+    /// notice and the license. The synchronized `Fernlet` folder copies `Fonts/LICENSES/*.txt` into the
+    /// bundle root beside the fonts; a new `UIAppFonts` entry without a row above, a stale row, or a
+    /// license file that stops reaching the bundle fails here.
+    @Test func everyBundledFontShipsItsLicense() throws {
+        let registered = Bundle.main.object(forInfoDictionaryKey: "UIAppFonts") as? [String] ?? []
+        #expect(Set(registered) == Set(Self.licenseByFontFile.keys),
+                "UIAppFonts \(registered.sorted()) and licenseByFontFile disagree")
+        for (fontFile, license) in Self.licenseByFontFile {
+            let url = try #require(Bundle.main.url(forResource: license.resource, withExtension: "txt"),
+                                   "\(license.resource).txt (the license for \(fontFile)) is not in the app bundle")
+            let text = try String(contentsOf: url, encoding: .utf8)
+            #expect(text.contains("SIL OPEN FONT LICENSE Version 1.1"), "\(license.resource).txt is not the OFL text")
+            #expect(text.contains(license.copyright), "\(license.resource).txt lacks \"\(license.copyright)\"")
+        }
+    }
 
     @Test func allBundledFontsResolveByPostScriptName() {
         for name in FernletFontName.all {

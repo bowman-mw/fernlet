@@ -68,12 +68,17 @@ public extension Font {
     }
 }
 
-/// Exact PostScript names of the bundled fonts (see `Fernlet/Fonts` + Info.plist `UIAppFonts`).
+/// Exact PostScript names of the bundled fonts (see `App/Fernlet/Fonts` + Info.plist `UIAppFonts`).
 ///
-/// A caseless namespace enum consumed by `Font.fernlet(_:)`. These are the instanced static
-/// weights — do not guess; they are verified by a test. The font *files* stay registered by the
-/// app's Info.plist (this package resolves purely by name), so a renamed or missing file fails
+/// A caseless namespace enum consumed by `Font.fernlet(_:)`. These are the static faces the app
+/// bundles (Fraunces, DM Sans and Playfair Display were instanced from their variable fonts) — do
+/// not guess; they are verified by a test. The font *files* stay registered by the app's
+/// Info.plist (this package resolves purely by name), so a renamed or missing file fails
 /// `FernletFontRegistrationTests` rather than silently falling back to the system font.
+///
+/// The fonts are under the SIL Open Font License 1.1, not Apache-2.0. Each family's license text
+/// lives in `App/Fernlet/Fonts/LICENSES/` and must reach the app bundle beside the font, which the
+/// same test checks — adding a font means adding its family's license in the same commit.
 public enum FernletFontName {
     public static let playfairItalic        = "PlayfairDisplayItalic-Italic"
     public static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
