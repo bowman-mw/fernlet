@@ -328,7 +328,7 @@ struct RecipeShareTransferTests {
         for sample in samples {
             let name = RecipeShareAdvertisedName.publishable(sample)
             #expect(name.utf8.count <= RecipeShareAdvertisedName.maxByteCount, "\(sample.prefix(8)) overflows")
-            #expect(name.count <= ItemNameModeration.maxNameLength)
+            #expect(name.count <= ProximityNamespace.fernlet.installation.peerNames.maxLength)
         }
     }
 
@@ -431,10 +431,10 @@ struct RecipeShareTransferTests {
     }
 
     /// The one input the byte bound cannot publish: a SINGLE grapheme cluster wider than 64 bytes
-    /// (a letter under 40 combining marks — `sanitizedName` strips zero-width and bidi scalars, not
+    /// (a letter under 40 combining marks — the sanitizer strips zero-width and bidi scalars, not
     /// combining ones). Removing that one Character leaves nothing, and an empty `name` is not an
-    /// absent one: published as `""` it would reach `moderatedPeerDisplayName` and render as the
-    /// placeholder, losing a peer the transport hint could have named. The publisher omits the key
+    /// absent one: published as `""` it would reach `ProximityDisplayName.peerDisplayName` and render
+    /// as the placeholder, losing a peer the transport hint could have named. The publisher omits the key
     /// and the receiver falls back on absent and empty alike.
     @Test func anUnpublishableNameIsOmittedAndTheReceiverFallsBackToTheHint() {
         let overWide = "e" + String(repeating: "\u{0301}", count: 40)
@@ -514,7 +514,7 @@ struct RecipeShareTransferTests {
     /// must not come back beside it.
     @Test func theAdvertisementNameHasNoCharacterCap() throws {
         let source = try Self.managerSource()
-        #expect(source.contains("RecipeShareAdvertisedName.publishable(displayName)"))
+        #expect(source.contains("RecipeShareAdvertisedName.publishable(displayName, in: namespace)"))
         #expect(source.contains("displayName.prefix(") == false,
                 "a Character cap is back on the advertised name")
     }

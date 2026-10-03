@@ -785,3 +785,57 @@ extension ProximityCoordinator.PeerIdentity {
         supports(capability, in: ProximityNamespace.fernlet.family.vocabulary.capabilities)
     }
 }
+
+// MARK: - The display-name policy (A0.3.12)
+//
+// ProximityKit sanitizes a peer's name with its own sanitizer (`ProximityDisplayName`) and applies the
+// cap and the floor of the namespace each reader holds (`installation.peerNames`): its coercion is
+// `ProximityDisplayName.peerDisplayName(_:in:)` rather than an extension of FernletDomainModel's
+// `ItemNameModeration`, the envelope's two sender reads are functions taking the namespace, and the
+// advertised recipe name and the session message store's ingest take it last. Each old shape comes
+// back here with `.fernlet`'s peer-name policy, never a cap or a floor of its own. A cell whose subject
+// is the cap or the floor names `.fernlet` explicitly instead.
+
+/// ProximityKit's peer-name coercion in the shape the suites were written against (plan step
+/// A0.3.12), on the type that used to carry it.
+extension ItemNameModeration {
+
+    /// `ProximityDisplayName.peerDisplayName(raw, in: .fernlet)`.
+    static func moderatedPeerDisplayName(_ raw: String) -> String {
+        ProximityDisplayName.peerDisplayName(raw, in: .fernlet)
+    }
+}
+
+/// The envelope's two sender reads as the properties the suites were written against (plan step
+/// A0.3.12), each under `.fernlet`'s peer-name policy.
+extension FernletIdentityEnvelope {
+
+    /// `sanitizedSenderDisplayName(in: .fernlet)`.
+    var sanitizedSenderDisplayName: String { sanitizedSenderDisplayName(in: .fernlet) }
+
+    /// `disclosedSenderDisplayName(in: .fernlet)`.
+    var disclosedSenderDisplayName: String? { disclosedSenderDisplayName(in: .fernlet) }
+}
+
+/// The advertised recipe name in the shape the suites were written against (plan step A0.3.12).
+extension RecipeShareAdvertisedName {
+
+    /// `publishable(_:in: .fernlet)`.
+    static func publishable(_ raw: String) -> String {
+        publishable(raw, in: .fernlet)
+    }
+}
+
+/// The session message store's ingest in the shape the suites were written against (plan step
+/// A0.3.12). It inherits the store's main-actor isolation, as the function it restores has.
+extension SessionMessageStore {
+
+    /// `receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:in: .fernlet)`.
+    func receiveIncoming(
+        id: UUID, senderFingerprint: String, senderDisplayName: String, text rawText: String,
+        sentAt: Date, seenAt: Date
+    ) -> Acceptance {
+        receiveIncoming(id: id, senderFingerprint: senderFingerprint, senderDisplayName: senderDisplayName,
+                        text: rawText, sentAt: sentAt, seenAt: seenAt, in: .fernlet)
+    }
+}

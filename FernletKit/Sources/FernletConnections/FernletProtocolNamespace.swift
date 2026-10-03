@@ -25,14 +25,18 @@
 // manager's mesh messages), and the
 // radios' three presentation strings: the instance-name prefixes and the certificates' common name, which
 // ProximityKit's radios, their postures and its peer-name display read off the namespace (the app
-// and FernletProximityUI hand the display `.fernlet`).
+// and FernletProximityUI hand the display `.fernlet`). The installation also carries the Fernlet app's
+// peer-name policy (`PeerNames.fernlet`: the 24-character cap Fernlet's item names share, read off
+// `ItemNameModeration` so it keeps one spelling, and the "A friend" floor), which ProximityKit applies
+// wherever a peer's name enters.
 //
 // Every literal below is pinned by a frozen column, `ProximityNamespaceGoldenTests`' or, for the three
-// presentation strings, `ProximityVocabularyGoldenTests`', so a change here is a wire, keychain or
-// on-disk format change for every device already in the field: it fails that suite rather than
-// shipping. `service:` sits directly before each keychain service literal, so the discovery regex in
-// `PrivacyWipeCoverageTests.keychainServiceLiterals(in:)` keeps finding all three.
+// presentation strings and the peer-name policy, `ProximityVocabularyGoldenTests`', so a change here
+// is a wire, keychain, on-disk or display change for every device already in the field: it fails that
+// suite rather than shipping. `service:` sits directly before each keychain service literal, so the
+// discovery regex in `PrivacyWipeCoverageTests.keychainServiceLiterals(in:)` keeps finding all three.
 
+import FernletDomainModel
 import Foundation
 import ProximityKit
 
@@ -47,7 +51,8 @@ nonisolated extension ProximityNamespace {
     /// engine's own messages included; the mesh features' payload and capability tokens are still
     /// `PayloadType` and `ProximityCapability` cases until plan steps A0.4 and A0.5, and what
     /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
-    /// moderation keychain services, its support folder) waits for plan step A0.4.
+    /// moderation keychain services, its support folder) waits for plan step A0.4. Its installation
+    /// also carries the Fernlet app's peer-name policy, which ProximityKit shows every peer's name under.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an
@@ -175,7 +180,8 @@ nonisolated extension ProximityNamespace.Radios {
 
 nonisolated extension ProximityNamespace.Installation {
 
-    /// The Fernlet app's keychain rows, storage names and log subsystem on this device.
+    /// The Fernlet app's keychain rows, storage names, log subsystem and peer-name policy on this
+    /// device.
     ///
     /// The three keychain services are rows "Delete everything" already accounts for
     /// (`Docs/PrivacyWipeCoverage.md`); each `service:` label sits directly before its literal so the
@@ -202,6 +208,18 @@ nonisolated extension ProximityNamespace.Installation {
             meshRoutedIndexFileName: "MeshRoutedIndex.sealed",
             meshRoutedChunkDirectoryName: "MeshRoutedChunks"
         ),
-        logSubsystem: "com.fernlet"
+        logSubsystem: "com.fernlet",
+        peerNames: .fernlet
+    )
+}
+
+nonisolated extension ProximityNamespace.PeerNames {
+
+    /// How the Fernlet app shows a peer's name: at most 24 characters of it, the cap Fernlet's item
+    /// names share (`ItemNameModeration.maxNameLength`, read rather than respelled, so the two keep
+    /// one spelling), and "A friend" for a name that sanitizes to nothing.
+    public nonisolated static let fernlet = ProximityNamespace.PeerNames(
+        maxLength: ItemNameModeration.maxNameLength,
+        floor: "A friend"
     )
 }

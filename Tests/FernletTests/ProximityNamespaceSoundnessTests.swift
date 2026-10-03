@@ -623,6 +623,40 @@ import Testing
         }
     }
 
+    /// The peer-name policy: a cap of 1 to 63 characters, and a floor that is not empty and is exactly
+    /// what ProximityKit's sanitizer makes of it under the cap — so no longer than the cap, with no
+    /// invisible or control scalar, no tab or doubled space, and no space at either end. Each field is
+    /// named by its path; a cap below one names the floor too, since no floor fits under it. The
+    /// accepting edges count characters, so a letter and its combining mark are one.
+    @Test func aMalformedPeerNamePolicyIsRefusedByName() {
+        let (capField, floorField) = ("installation.peerNames.maxLength", "installation.peerNames.floor")
+        func installation(maxLength: Int = 32, floor: String = "An alpha friend") -> ProximityNamespace.Installation {
+            AlphaApp.installation(peerNames: AlphaApp.peerNames(maxLength: maxLength, floor: floor))
+        }
+        for maxLength in [64, 1_000] {
+            expectOnly([.malformedPeerNames(field: capField)], installation: installation(maxLength: maxLength),
+                       note: "a cap of \(maxLength)")
+        }
+        for maxLength in [0, -1] {
+            expectOnly([.malformedPeerNames(field: capField), .malformedPeerNames(field: floorField)],
+                       installation: installation(maxLength: maxLength), note: "a cap of \(maxLength)")
+        }
+        let unfit = ["", "   ", "An alpha\u{200B} friend", "An alpha  friend", " An alpha friend", "An alpha friend ",
+                     "An\talpha friend", "An alpha friend\u{7}", "\u{202E}An alpha friend", String(repeating: "f", count: 33)]
+        for text in unfit {
+            expectOnly([.malformedPeerNames(field: floorField)], installation: installation(floor: text),
+                       note: text.debugDescription)
+        }
+        let accepted: [(maxLength: Int, floor: String)] = [
+            (1, "A"), (32, String(repeating: "f", count: 32)), (63, String(repeating: "f", count: 63)),
+            (5, "Zo\u{EB} \u{1F331}"), (4, "Cafe\u{301}")
+        ]
+        for policy in accepted {
+            expectSound(installation: installation(maxLength: policy.maxLength, floor: policy.floor),
+                        note: "\(policy.floor.debugDescription) under a cap of \(policy.maxLength)")
+        }
+    }
+
     /// The green control of the vocabulary and presentation rules: every rule's accepting edge at once
     /// — each token at its group's longest, each title at 200 characters, both prefixes at their room,
     /// the longest common name, nothing sealed and nothing assumed — makes a sound namespace, and the
@@ -668,7 +702,7 @@ import Testing
 
     /// Several broken rules are all recorded, in rule order, and thrown in that order: the labels,
     /// radios, scheme, keychain, storage and log subsystem first, then the vocabulary's tokens and
-    /// titles, then the radios' presentation strings.
+    /// titles, then the radios' presentation strings, then the peer-name policy.
     @Test func everyViolationIsRecordedInRuleOrder() {
         let family = AlphaApp.family(
             signature: AlphaApp.signature(identityEnvelopeV2: "alpha.canonical identity-envelope.v2"),
@@ -685,7 +719,8 @@ import Testing
             keychain: AlphaApp.keychain(
                 meshRoutedSealKey: .init(service: "org.example.alpha.identity", account: "routed.seal")),
             storage: AlphaApp.storage(directoryName: ".."),
-            logSubsystem: ""
+            logSubsystem: "",
+            peerNames: AlphaApp.peerNames(floor: "")
         )
         expectOnly([
             .malformedLabel(field: "family.purposes.signature.identityEnvelopeV2"),
@@ -701,7 +736,8 @@ import Testing
             .unknownToken(field: "family.vocabulary.mesh.keyAck"),
             .malformedSummaryTitle(field: "family.vocabulary.session.heartbeat.pingTitle"),
             .malformedInstanceNamePrefix(field: "family.radios.meshInstanceNamePrefix"),
-            .malformedCommonName
+            .malformedCommonName,
+            .malformedPeerNames(field: "installation.peerNames.floor")
         ], family: family, installation: installation)
     }
 
@@ -1057,9 +1093,15 @@ private enum AlphaApp {
     static func installation(
         keychain: ProximityNamespace.Keychain = AlphaApp.keychain(),
         storage: ProximityNamespace.Storage = AlphaApp.storage(),
-        logSubsystem: String = "org.example.alpha"
+        logSubsystem: String = "org.example.alpha",
+        peerNames: ProximityNamespace.PeerNames = AlphaApp.peerNames()
     ) -> ProximityNamespace.Installation {
-        ProximityNamespace.Installation(keychain: keychain, storage: storage, logSubsystem: logSubsystem)
+        ProximityNamespace.Installation(keychain: keychain, storage: storage, logSubsystem: logSubsystem,
+                                        peerNames: peerNames)
+    }
+
+    static func peerNames(maxLength: Int = 32, floor: String = "An alpha friend") -> ProximityNamespace.PeerNames {
+        ProximityNamespace.PeerNames(maxLength: maxLength, floor: floor)
     }
 
     static func keychain(
@@ -1219,7 +1261,8 @@ private enum BravoApp {
         storage: ProximityNamespace.Storage = BravoApp.storage(),
         logSubsystem: String = "org.example.bravo"
     ) -> ProximityNamespace.Installation {
-        ProximityNamespace.Installation(keychain: keychain, storage: storage, logSubsystem: logSubsystem)
+        ProximityNamespace.Installation(keychain: keychain, storage: storage, logSubsystem: logSubsystem,
+                                        peerNames: ProximityNamespace.PeerNames(maxLength: 20, floor: "A bravo friend"))
     }
 
     static func keychain(

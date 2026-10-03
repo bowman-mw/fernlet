@@ -698,7 +698,8 @@ to compile rather than signing under another app's labels.
   `soundness` (labels well-formed, distinct and prefix-free among themselves; radio, QR, keychain and
   storage values well-formed and distinct; the payload vocabulary's tokens, titles and the radios'
   presentation strings well-formed, no token repeated within its group or left unknown by a rule
-  that names it), `validated(family:installation:)` throws the same, and
+  that names it; the installation's peer-name cap and floor within bounds), `validated(family:installation:)`
+  throws the same, and
   `familyCollisions(with:)` lets a host's tests show its labels collide with no other app's.
   `ProximityNamespaceSoundnessTests` holds the rules. ProximityKit acts on the recorded verdict at
   run time: under an unsound namespace an identity refuses to provision and to wrap a group key, and

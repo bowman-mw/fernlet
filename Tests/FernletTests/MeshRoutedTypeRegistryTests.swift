@@ -116,7 +116,7 @@ enum MeshRoutedTypeRegistryFixtures {
     /// rather than assert it: nothing in the framing bounds a header, so the allowance is only
     /// honest if the widest header a sender can honestly build fits well inside it.
     static func maximalPhotoHeader() -> MeshRoutedPhotoHeader {
-        let name = String(repeating: "W", count: ItemNameModeration.maxNameLength)
+        let name = String(repeating: "W", count: ProximityNamespace.fernlet.installation.peerNames.maxLength)
         let fingerprint = String(repeating: "f", count: 64)
         // R2: bounded by the wire cap on participants.
         let participants = (0..<FriendPhotoLimits.maxParticipants).map { _ in

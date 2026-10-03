@@ -453,9 +453,18 @@ jobs:
         # refused it. 235 + 2 (the cells holding a coordinator's converted audit to the frozen audit
         # row and each audit kind to its persisted token) = 237 is the ARITHMETIC CHECK, never the
         # source.
+        # RAISED 237 -> 241 at A0.3.12, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "241 tests in 7 suites" (6 + 13 + 19 + 104 + 38 +
+        # 50 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 241:
+        # passed. Run once more at 241 without ProximityVocabularyGoldenTests: 191 ran and the floor
+        # refused it. 237 + 4 (the soundness suite's peer-name policy cell, and the vocabulary suite's
+        # three display-name cells: ProximityKit's sanitizer against the domain model's it was copied
+        # from, and the name consumers and the mesh and recipe-share managers under a namespace whose
+        # peer-name policy is its own) = 241 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 237 \
+          Scripts/run-gated-suites.sh crypto-goldens 241 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

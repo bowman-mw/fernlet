@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary and the app's peer-name policy; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
 
 ## Overview
 
@@ -20,7 +20,8 @@ is that place.
   (`Vocabulary.fernlet`, below).
 - `ProximityNamespace.Installation.fernletApp`, what belongs to the Fernlet app on one device: the
   identity's keychain service and four accounts, the two seal-key rows, the `Fernlet` storage
-  directory with its three on-disk names, and the radios' log subsystem.
+  directory with its three on-disk names, the radios' log subsystem, and the peer-name policy
+  (`PeerNames.fernlet`, below).
 
 Every literal is today's, byte for byte, and pinned: `ProximityNamespaceGoldenTests` (on the
 `crypto-goldens` CI line) compares each value with the frozen literal column written before any
@@ -139,6 +140,22 @@ the two `increment1` values, the mint without a registry) with `.fernlet`'s rout
 membership verifier's, the adoption's and the digest's with `Family.fernlet`, and a peer's capability
 gate with `.fernlet`'s capabilities.
 
+**The peer-name policy (plan step A0.3).** `Installation.fernletApp` also carries
+`ProximityNamespace.PeerNames.fernlet`, how the Fernlet app shows a name a peer supplied: at most 24
+characters of it once sanitized (`ItemNameModeration.maxNameLength`, the cap Fernlet's item names
+share, read rather than respelled so the two keep one spelling), and "A friend" for a name with
+nothing displayable left. ProximityKit sanitizes every peer's name with its own copy of the generic
+sanitizer and applies the cap and the floor of the namespace each reader holds (the mesh, presence
+and recipe-share managers, the session message store, the envelope's two sender reads and the name
+display), and caps the recipe radio's advertised name at the same cap. Its soundness rules hold the
+cap to 1–63 characters and the floor to a non-empty name the sanitizer leaves unchanged;
+`ProximityVocabularyGoldenTests` pins both values to the literals ProximityKit shipped and holds
+ProximityKit's sanitizer to FernletDomainModel's byte for byte. The activities' titles, locations
+and roster names still go through `ItemNameModeration` until activities leave ProximityKit (plan
+step A0.4). The test target's bindings file restores the old call shapes of the coercion, the
+envelope's sender reads, the advertised recipe name and the session message store's ingest with
+`.fernlet`'s policy.
+
 **The install binding (plan step A0.2.9).** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks
 the host for it through `ProximityInstallBinding` instead of reading FernletCrypto's `DeviceBindingID`
@@ -238,7 +255,7 @@ in); and for the payload vocabulary and the session rules on `FernletDomainModel
 `PayloadType` and `ProximityCapability`, whose raw values the vocabulary reads, for
 `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the policies and the
 review read and the vault builds and keeps, and for `TrainerAuditEvent` and `PayloadType`, which the
-audit conversion reads). It imports nothing else but Foundation, Observation (the vault is
+audit conversion reads, and for `ItemNameModeration`, whose name cap the peer-name policy reads). It imports nothing else but Foundation, Observation (the vault is
 `@Observable`) and Security. Through ProximityKit it reaches
 `PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and

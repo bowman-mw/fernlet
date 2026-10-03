@@ -131,19 +131,19 @@ struct ProximityNamespaceGateTests {
 
     // MARK: The audit line
 
-    /// The audit line names the refusal and never a value. Each of the nineteen violation cases is
+    /// The audit line names the refusal and never a value. Each of the twenty violation cases is
     /// written as its own case name, which carries nothing of the fields the case names; each door's
     /// `at` is its frozen token; a refusal's line holds the door, the count and the first case and
     /// nothing else, whatever the first case carries; and a sound verdict passes every door silently.
     @Test func theAuditLineNamesTheDoorTheCountAndTheFirstCaseNeverAValue() {
         let field = "family.vocabulary.capabilities.wire2"
-        // R2: bounded by the nineteen cases.
+        // R2: bounded by the twenty cases.
         for (violation, name) in Self.namedViolations(carrying: field) {
             let audited = ProximityNamespaceGate.caseName(of: violation)
             let spelled = String(String(describing: violation).prefix { $0 != "(" })
             #expect(audited == name && audited == spelled, "\(violation) is audited as \(audited)")
         }
-        #expect(Set(Self.namedViolations(carrying: field).map(\.name)).count == 19, "a violation case is listed twice")
+        #expect(Set(Self.namedViolations(carrying: field).map(\.name)).count == 20, "a violation case is listed twice")
         let doors: [(site: ProximityNamespaceGate.Site, token: String)] = [
             (.provision, "provision"), (.groupKeyWrap, "groupKeyWrap"), (.start, "start"), (.construction, "construction")
         ]
@@ -420,7 +420,8 @@ struct ProximityNamespaceGateTests {
             (.unknownToken(field: field), "unknownToken"),
             (.malformedSummaryTitle(field: field), "malformedSummaryTitle"),
             (.malformedInstanceNamePrefix(field: field), "malformedInstanceNamePrefix"),
-            (.malformedCommonName, "malformedCommonName")
+            (.malformedCommonName, "malformedCommonName"),
+            (.malformedPeerNames(field: field), "malformedPeerNames")
         ]
     }
 
@@ -621,6 +622,7 @@ private enum GateFixtureApp {
             storage: ProximityNamespace.Storage(
                 directoryName: "Gate", meshSessionContextFileName: "Session.sealed",
                 meshRoutedIndexFileName: "Routed.sealed", meshRoutedChunkDirectoryName: "RoutedChunks"),
-            logSubsystem: logSubsystem)
+            logSubsystem: logSubsystem,
+            peerNames: ProximityNamespace.PeerNames(maxLength: 24, floor: "A gate peer"))
     }
 }

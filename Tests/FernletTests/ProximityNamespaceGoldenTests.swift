@@ -3906,7 +3906,8 @@ private enum ForeignAppNamespace {
                 storage: ProximityNamespace.Storage(
                     directoryName: "Acme", meshSessionContextFileName: "Session.sealed",
                     meshRoutedIndexFileName: "Routed.sealed", meshRoutedChunkDirectoryName: "RoutedChunks"),
-                logSubsystem: "org.example.acme"))
+                logSubsystem: "org.example.acme",
+                peerNames: ProximityNamespace.PeerNames(maxLength: 30, floor: "An acme pal")))
     }
 
     /// Nineteen signature labels and no legacy pair.

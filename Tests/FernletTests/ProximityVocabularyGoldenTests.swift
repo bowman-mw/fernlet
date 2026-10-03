@@ -49,8 +49,13 @@
 // 11. **Persisted records that stay Fernlet's.** A trusted peer, a trainer audit row and a session
 //     log, each as the JSON Fernlet's repositories write, both ways; and a coordinator's audit,
 //     converted, as that audit row's bytes, every kind under its persisted token.
-// 12. **Display-name sanitizing.** `ItemNameModeration.sanitizedName` over a fixed corpus, and the
-//     "A friend" floor ProximityKit puts under it.
+// 12. **Display-name sanitizing.** ProximityKit's sanitizer (`ProximityDisplayName`) over a fixed
+//     corpus under `.fernlet`'s cap, and the same as FernletDomainModel's `ItemNameModeration.sanitizedName`
+//     it was copied from over that corpus and a generated set mixing every scalar class the corpus
+//     names; `.fernlet`'s "A friend" floor under a name that sanitizes to nothing; and the coercion,
+//     the envelope's sender reads, the name display, the advertised recipe name, the session message
+//     store and a mesh and a recipe-share manager applying the cap and floor of `.fernlet` and of a
+//     namespace whose peer-name policy alone is its own.
 // 13. **`.fernlet`'s vocabulary and presentation strings.** Every token, title and presentation
 //     string FernletConnections ships in `ProximityNamespace.fernlet` equals its frozen literal, its
 //     thirty mesh messages among them (each also one of the tokens it knows, and each the token of
@@ -67,9 +72,10 @@
 //
 // Every identity and every label-taking consumer this suite builds names its namespace explicitly
 // (`.fernlet`, group 8's namespace that differs from it in the presentation strings alone, groups 5
-// and 6's that differs from it in its record kinds and routed types alone, or groups 2, 3 and 7's that
-// each differ from it in their payload rules, capabilities, session messages or mesh messages alone),
-// never a test binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
+// and 6's that differs from it in its record kinds and routed types alone, groups 2, 3 and 7's that
+// each differ from it in their payload rules, capabilities, session messages or mesh messages alone,
+// or group 12's that differs from it in its peer-name policy alone), never a test binding
+// (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
 // below was derived from the FORMAT by an independent Python re-implementation —
 // `CanonicalByteWriter`'s fields, and Foundation's JSON output rules (keys sorted by code point,
 // `/` escaped unless `.withoutEscapingSlashes`, a whole number printed without a fraction,
@@ -1300,7 +1306,7 @@ struct ProximityVocabularyGoldenTests {
     /// one; under the renamed namespace its own prefix is hidden and Fernlet's instance name is text.
     @Test func theNameDisplayHidesTheMeshPrefixOfTheNamespaceItIsHanded() {
         let instanceName = Self.frozen("presentation.meshInstanceNamePrefix") + "0123456789ab"
-        let forms = [instanceName, instanceName.uppercased(), ItemNameModeration.moderatedPeerDisplayName(instanceName)]
+        let forms = [instanceName, instanceName.uppercased(), ProximityDisplayName.peerDisplayName(instanceName, in: .fernlet)]
         // R2: bounded by the three forms.
         for form in forms {
             #expect(PeerNameDisplay.personName(form, fingerprint: nil, in: .fernlet) == nil, "\(form) reads as a name")
@@ -1310,7 +1316,7 @@ struct ProximityVocabularyGoldenTests {
         let ownName = renamed.family.radios.meshInstanceNamePrefix + "0123456789ab"
         #expect(PeerNameDisplay.personName(ownName, fingerprint: nil, in: renamed) == nil, "\(ownName) reads as a name")
         let text = PeerNameDisplay.personName(instanceName, fingerprint: nil, in: renamed)
-        #expect(text == ItemNameModeration.sanitizedName(instanceName),
+        #expect(text == ProximityDisplayName.sanitized(instanceName, maxLength: renamed.installation.peerNames.maxLength),
                 "under another namespace Fernlet's instance name is text, not hidden: \(text ?? "hidden")")
     }
 
@@ -1748,19 +1754,22 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 12 — display-name sanitizing
 
-    /// The floor ProximityKit puts under a peer name that sanitizes to nothing. No accessor: an
-    /// inline literal in `ItemNameModeration.moderatedPeerDisplayName`.
+    /// The floor a peer name that sanitizes to nothing is shown as: `.fernlet`'s
+    /// `installation.peerNames.floor`, which ProximityKit's coercion reads off the namespace its
+    /// caller holds.
     static var moderationRows: [VocabularyGoldenRow] {
-        [VocabularyGoldenRow(field: "moderation.peerNameFallback", frozen: "A friend", today: nil)]
+        [VocabularyGoldenRow(field: "moderation.peerNameFallback", frozen: "A friend",
+                             today: ProximityNamespace.fernlet.installation.peerNames.floor)]
     }
 
-    /// The sanitizer's length cap, in characters.
+    /// The sanitizer's length cap, in characters: `.fernlet`'s `installation.peerNames.maxLength`.
     static var moderationNumbers: [VocabularyGoldenNumber] {
-        [VocabularyGoldenNumber(field: "moderation.maxNameLength", frozen: 24, today: ItemNameModeration.maxNameLength)]
+        [VocabularyGoldenNumber(field: "moderation.maxNameLength", frozen: 24,
+                                today: ProximityNamespace.fernlet.installation.peerNames.maxLength)]
     }
 
-    /// Raw names and what `sanitizedName` makes of them, compared as UTF-8 so a recomposed or
-    /// reordered scalar fails where `==`'s canonical equivalence would pass.
+    /// Raw names and what the sanitizer makes of them under the frozen cap, compared as UTF-8 so a
+    /// recomposed or reordered scalar fails where `==`'s canonical equivalence would pass.
     static let sanitizerCorpus: [(raw: String, sanitized: String)] = [
         ("Ali\u{200B}ce", "Alice"),
         ("\u{202E}Bob\u{202C}", "Bob"),
@@ -1781,36 +1790,233 @@ struct ProximityVocabularyGoldenTests {
 
     /// Zero-width and bidi scalars vanish (a joiner too, splitting its emoji), control characters
     /// vanish, a newline or tab becomes a space, whitespace runs collapse and trim, the cap counts
-    /// characters (a combining mark rides its letter), and emoji and marks keep their scalars.
+    /// characters (a combining mark rides its letter), and emoji and marks keep their scalars:
+    /// ProximityKit's sanitizer under `.fernlet`'s cap, which is the frozen 24.
     @Test func theSanitizerTurnsItsCorpusIntoTheFrozenOutputs() {
         #expect(Self.expectFrozen(Self.moderationNumbers) == 1)
+        let cap = ProximityNamespace.fernlet.installation.peerNames.maxLength
         // R2: bounded by the corpus.
         for entry in Self.sanitizerCorpus {
-            let actual = ItemNameModeration.sanitizedName(entry.raw)
+            let actual = ProximityDisplayName.sanitized(entry.raw, maxLength: cap)
             #expect(Data(actual.utf8) == Data(entry.sanitized.utf8),
                     "\(entry.raw.debugDescription) sanitized to \(actual.debugDescription) (UTF-8 \(Self.hex(Data(actual.utf8))))")
         }
     }
 
-    /// A peer name that is empty, invisible or blank becomes "A friend", in ProximityKit's coercion
-    /// and in the envelope's display read built on it; a name with something left passes, sanitized.
+    /// A peer name that is empty, invisible or blank becomes "A friend", `.fernlet`'s frozen floor, in
+    /// ProximityKit's coercion and in the envelope's display read built on it; a name with something
+    /// left passes, sanitized.
     @Test func anEmptyOrInvisiblePeerNameBecomesAFriend() {
+        #expect(Self.expectFrozen(Self.moderationRows) == 1)
         let fallback = Self.frozen("moderation.peerNameFallback")
         // R2: bounded by the four names.
         for raw in ["", "\u{200B}\u{2060}\u{FEFF}", "  \n\t  ", "\u{202E}\u{202C}"] {
-            let moderated = ItemNameModeration.moderatedPeerDisplayName(raw)
+            let moderated = ProximityDisplayName.peerDisplayName(raw, in: .fernlet)
             #expect(Data(moderated.utf8) == Data(fallback.utf8), "\(raw.debugDescription) became \(moderated)")
         }
-        #expect(ItemNameModeration.moderatedPeerDisplayName("  Robin \u{200B} ") == "Robin")
-        let envelope = Self.legacyEnvelope()
-        let blank = FernletIdentityEnvelope(
+        #expect(ProximityDisplayName.peerDisplayName("  Robin \u{200B} ", in: .fernlet) == "Robin")
+        let blank = Self.envelope(senderDisplayName: "\u{200B}\u{FEFF}")
+        #expect(blank.sanitizedSenderDisplayName(in: .fernlet) == fallback,
+                "an invisible sender reads as \(blank.sanitizedSenderDisplayName(in: .fernlet))")
+    }
+
+    /// ProximityKit's sanitizer is FernletDomainModel's `ItemNameModeration.sanitizedName`, the one it
+    /// was copied from, byte for byte: over the corpus at the frozen cap and at 60, and over a
+    /// generated set of names mixing every scalar class the corpus names (zero-width and bidi
+    /// scalars, control characters, newlines, tabs and other whitespace in runs, ASCII and accented
+    /// letters, a combining mark, emoji and the joiner between them), every one of which it holds, at
+    /// caps 7, 24 and 60.
+    @Test func proximityKitsSanitizerIsTheDomainModelsByteForByte() {
+        let generated = Self.mixedScalarNames(count: 400)
+        let drawn = Set(generated.flatMap(\.unicodeScalars))
+        #expect(drawn == Set(Self.mixedScalarPalette), "the generated names lack \(Set(Self.mixedScalarPalette).subtracting(drawn))")
+        var agreed = 0
+        // R2: bounded by the two caps and the corpus.
+        for cap in [Self.frozenNumber("moderation.maxNameLength"), 60] {
+            for entry in Self.sanitizerCorpus where Self.sanitizersAgree(on: entry.raw, maxLength: cap) {
+                agreed += 1
+            }
+        }
+        // R2: bounded by the three caps and the generated names.
+        for cap in [7, 24, 60] {
+            for raw in generated where Self.sanitizersAgree(on: raw, maxLength: cap) {
+                agreed += 1
+            }
+        }
+        let compared = 2 * Self.sanitizerCorpus.count + 3 * generated.count
+        #expect(agreed == compared, "the two sanitizers agreed on \(agreed) of \(compared) names")
+    }
+
+    /// The consumers apply the peer-name policy of the namespace they are handed, never a constant of
+    /// their own: under `.fernlet` and under a namespace whose cap and floor alone are its own, a long
+    /// name is cut to that namespace's cap and a name with nothing displayable left reads as its
+    /// floor, through the coercion, the envelope's two sender reads (a withheld, empty name still
+    /// discloses nothing), the name display, the advertised recipe name and the session message store.
+    @Test func theNameConsumersApplyThePeerNamePolicyOfTheirNamespace() {
+        let (long, invisible) = (Self.longPeerName, "\u{202E}\u{200B}")
+        let renamed = Self.renamedPeerNamesNamespace()
+        #expect(renamed.soundness == .sound, "the renamed namespace is unsound: \(renamed.soundness)")
+        #expect(renamed.installation.peerNames != ProximityNamespace.fernlet.installation.peerNames)
+        // R2: bounded by the two namespaces.
+        for namespace in [ProximityNamespace.fernlet, renamed] {
+            let policy = namespace.installation.peerNames
+            let capped = String(long.prefix(policy.maxLength))
+            let note = Comment(rawValue: "under a cap of \(policy.maxLength) and the floor \(policy.floor)")
+            #expect(ProximityDisplayName.peerDisplayName(long, in: namespace) == capped, note)
+            #expect(ProximityDisplayName.peerDisplayName(invisible, in: namespace) == policy.floor, note)
+            let named = Self.envelope(senderDisplayName: long)
+            let blank = Self.envelope(senderDisplayName: invisible)
+            #expect(named.sanitizedSenderDisplayName(in: namespace) == capped
+                        && named.disclosedSenderDisplayName(in: namespace) == capped, note)
+            #expect(blank.sanitizedSenderDisplayName(in: namespace) == policy.floor
+                        && blank.disclosedSenderDisplayName(in: namespace) == policy.floor, note)
+            #expect(Self.envelope(senderDisplayName: "").disclosedSenderDisplayName(in: namespace) == nil, note)
+            #expect(PeerNameDisplay.personName(long, fingerprint: nil, in: namespace) == capped, note)
+            #expect(RecipeShareAdvertisedName.publishable(long, in: namespace) == capped, note)
+            let transcript = Self.transcriptNames(of: ["fp-long": long, "fp-blank": invisible], in: namespace)
+            #expect(transcript == ["fp-long": capped, "fp-blank": policy.floor], note)
+        }
+    }
+
+    /// A mesh manager and a recipe-share manager apply their host namespace's peer-name policy: under
+    /// a host of `.fernlet` and of a namespace whose cap and floor alone are its own, the mesh records
+    /// a committed peer's long name at that cap and a blank one as its floor, renames a roster row and
+    /// files a vouch's voucher name the same way, and the recipe-share manager advertises the host's
+    /// long display name cut to that cap.
+    @Test func theManagersApplyTheirHostNamespacesPeerNamePolicy() {
+        let long = Self.longPeerName
+        // R2: bounded by the two namespaces.
+        for namespace in [ProximityNamespace.fernlet, Self.renamedPeerNamesNamespace()] {
+            let policy = namespace.installation.peerNames
+            let capped = String(long.prefix(policy.maxLength))
+            let names = Self.meshRecordedNames(underHostOf: namespace)
+            #expect(names.roster == ["fp-long": capped, "fp-blank": policy.floor, "fp-renamed": capped],
+                    "a mesh manager under a cap of \(policy.maxLength) recorded \(names.roster)")
+            #expect(names.voucher == policy.floor, "and filed the voucher as \(names.voucher ?? "nothing")")
+            let host = PresentationNamespaceHost(namespace: namespace, displayName: long)
+            let advertised = withExtendedLifetime(host) {   // the manager's `store` is `unowned`
+                ProximityRecipeShareManager(store: host).discoveryInfoForTesting[RecipeShareAdvertisement.nameKey]
+            }
+            #expect(advertised == capped, "a recipe-share manager under a cap of \(policy.maxLength) advertised \(advertised ?? "nothing")")
+        }
+    }
+
+    /// A peer name of letters and hyphens alone, longer than any cap the cells use: the sanitizer only
+    /// ever cuts it, so the expected name under a cap is its prefix, with no sanitizer in the oracle.
+    static let longPeerName = "Maximiliana-Wolfgangina-Theodora-Quinn"
+
+    /// The scalar classes the sanitizer corpus names, a few of each: zero-width and bidi scalars,
+    /// control characters (NEL among them, which Foundation also counts as a newline), newline, tab,
+    /// return and other whitespace, ASCII and accented letters and a bare `e` with a combining mark,
+    /// and emoji with the zero-width joiner listed above.
+    static let mixedScalarPalette: [Unicode.Scalar] = [
+        "\u{200B}", "\u{200D}", "\u{202E}", "\u{2066}", "\u{2060}", "\u{FEFF}",
+        "\u{0007}", "\u{001B}", "\u{007F}", "\u{0085}",
+        "\n", "\t", "\r", " ", "\u{00A0}", "\u{3000}", "\u{2003}",
+        "A", "b", "Z", "e", "\u{00EB}", "\u{00E9}", "\u{0301}",
+        "\u{1F331}", "\u{2728}", "\u{1F469}", "\u{1F4BB}"
+    ]
+
+    /// `count` names of 0 to 40 scalars drawn from ``mixedScalarPalette`` by a fixed linear
+    /// congruential sequence, so every run checks the same names.
+    static func mixedScalarNames(count: Int) -> [String] {
+        var state: UInt64 = 0x5EED_A031_2000_0001
+        func next(below bound: Int) -> Int {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Int((state >> 33) % UInt64(bound))
+        }
+        var names: [String] = []
+        // R2: bounded by `count` names of at most 40 scalars each.
+        for _ in 0..<count {
+            var scalars = String.UnicodeScalarView()
+            for _ in 0..<next(below: 41) {
+                scalars.append(mixedScalarPalette[next(below: mixedScalarPalette.count)])
+            }
+            names.append(String(scalars))
+        }
+        return names
+    }
+
+    /// Whether ProximityKit's sanitizer and the domain model's make the same bytes of `raw` at
+    /// `maxLength`, recording both outputs when they do not.
+    static func sanitizersAgree(on raw: String, maxLength: Int) -> Bool {
+        let copy = ProximityDisplayName.sanitized(raw, maxLength: maxLength)
+        let original = ItemNameModeration.sanitizedName(raw, maxLength: maxLength)
+        let agree = Data(copy.utf8) == Data(original.utf8)
+        #expect(agree, """
+            \(raw.debugDescription) at \(maxLength): ProximityKit's sanitizer made \(copy.debugDescription), \
+            the domain model's \(original.debugDescription)
+            """)
+        return agree
+    }
+
+    /// The legacy envelope with `senderDisplayName` as its sender's name and nothing sealed: the
+    /// sender reads never look past the name.
+    static func envelope(senderDisplayName: String) -> FernletIdentityEnvelope {
+        let envelope = legacyEnvelope()
+        return FernletIdentityEnvelope(
             schemaVersion: envelope.schemaVersion, envelopeID: envelope.envelopeID,
             senderSigningPublicKey: envelope.senderSigningPublicKey,
             senderKeyAgreementPublicKey: envelope.senderKeyAgreementPublicKey,
-            senderDisplayName: "\u{200B}\u{FEFF}", recipientFingerprint: nil, payloadTypeToken: envelope.payloadTypeToken,
+            senderDisplayName: senderDisplayName, recipientFingerprint: nil, payloadTypeToken: envelope.payloadTypeToken,
             payloadEncryption: .none, payloadSummary: envelope.payloadSummary, payload: envelope.payload,
             createdAt: envelope.createdAt, expiresAt: nil, signature: Data())
-        #expect(blank.sanitizedSenderDisplayName == fallback, "an invisible sender reads as \(blank.sanitizedSenderDisplayName)")
+    }
+
+    /// The display names a fresh session message store keeps for one message from each sender, each
+    /// sent under the name `senders` gives it and ingested under `namespace`, by sender fingerprint.
+    static func transcriptNames(of senders: [String: String], in namespace: ProximityNamespace) -> [String: String] {
+        let store = SessionMessageStore()
+        // R2: bounded by the senders.
+        for (fingerprint, name) in senders {
+            _ = store.receiveIncoming(id: UUID(), senderFingerprint: fingerprint, senderDisplayName: name,
+                                      text: "hello", sentAt: at(0), seenAt: at(0), in: namespace)
+        }
+        return Dictionary(store.messages.map { ($0.senderFingerprint, $0.senderDisplayName) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// What a mesh manager over a scratch host of `namespace` records: its session roster's names by
+    /// fingerprint after it records a committed peer with a long name, one with an invisible name,
+    /// and one with an invisible name that discloses the long one, and the voucher name it files for a
+    /// vouch that names nothing displayable. It runs on a fake radio, with an identity on a throwaway
+    /// service; the host's root and seal-key rows and the identity's rows are removed before this
+    /// returns.
+    static func meshRecordedNames(underHostOf namespace: ProximityNamespace) -> (roster: [String: String], voucher: String?) {
+        let host = ScratchNamespaceHost(namespace: namespace)
+        defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
+        let service = isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
+                                         identity: IdentityService(namespace: namespace, keychainService: service))
+        let (signing, agreement) = (Data(repeating: 0x5A, count: 32), Data(repeating: 0xA5, count: 32))
+        manager.recordSessionParticipant(displayName: longPeerName, fingerprint: "fp-long",
+                                         signingPublicKey: signing, keyAgreementPublicKey: agreement)
+        manager.recordSessionParticipant(displayName: "\u{202E}", fingerprint: "fp-blank",
+                                         signingPublicKey: signing, keyAgreementPublicKey: agreement)
+        manager.recordSessionParticipant(displayName: "\u{2066}", fingerprint: "fp-renamed",
+                                         signingPublicKey: signing, keyAgreementPublicKey: agreement)
+        manager.renameSessionParticipant(fingerprint: "fp-renamed", to: longPeerName)
+        manager.isVouchListBroadcastEnabled = true
+        manager.receiveVouchList(MeshFriendVouchListPayload(
+            voucherFingerprint: "fp-voucher", voucherDisplayName: "\u{200B}\u{FEFF}", trustedFingerprints: [],
+            expiresAt: Date().addingTimeInterval(600)), senderFingerprint: "fp-voucher")
+        let roster = Dictionary(manager.sessionRoster.map { ($0.fingerprint, $0.displayName) },
+                                uniquingKeysWith: { first, _ in first })
+        return (roster, manager.cachedVouchList(from: "fp-voucher")?.voucherDisplayName)
+    }
+
+    /// `.fernlet` with its peer-name policy replaced by one of its own (a 12-character cap and the
+    /// floor "Golden pal") and nothing else changed, so a consumer that took the cap or the floor from
+    /// anywhere but its namespace would show Fernlet's where this namespace's belongs.
+    static func renamedPeerNamesNamespace() -> ProximityNamespace {
+        let fernlet = ProximityNamespace.fernlet
+        let installation = fernlet.installation
+        return ProximityNamespace(
+            family: fernlet.family,
+            installation: ProximityNamespace.Installation(
+                keychain: installation.keychain, storage: installation.storage,
+                logSubsystem: installation.logSubsystem,
+                peerNames: ProximityNamespace.PeerNames(maxLength: 12, floor: "Golden pal")))
     }
 
     // MARK: Group 13 — `.fernlet`'s vocabulary and presentation strings
@@ -2291,20 +2497,22 @@ final class VocabularyCoordinatorRig {
 // MARK: - A host of one namespace
 
 /// A `ProximityHost` that supplies the namespace a cell hands it and the requirements with no default,
-/// so a presence manager can be built over `.fernlet` or over a namespace whose presentation strings
-/// are its own. Building one touches no disk and no keychain.
+/// so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
+/// presentation strings or peer-name policy are its own. Building one touches no disk and no keychain.
 @MainActor
 private final class PresentationNamespaceHost: ProximityHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximityTrustVault = ProximityTrustVault()
     var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
-    var proximityDisplayName: String { VocabularyCoordinatorRig.displayName }
+    let proximityDisplayName: String
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
-    /// A host of `namespace`.
-    init(namespace: ProximityNamespace) {
+    /// A host of `namespace` whose user goes by `displayName`, or by the coordinator rig's name when a
+    /// cell hands it none.
+    init(namespace: ProximityNamespace, displayName: String? = nil) {
         proximityNamespace = namespace
+        proximityDisplayName = displayName ?? VocabularyCoordinatorRig.displayName
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }

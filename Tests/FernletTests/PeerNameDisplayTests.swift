@@ -71,8 +71,8 @@ import FernletDomainModel
         let instanceName = MeshLinkAdvertisement.randomInstanceName(prefix: prefix)
         #expect(instanceName.hasPrefix(prefix), "the fixture is the real transport name")
         #expect(PeerNameDisplay.personName(instanceName, fingerprint: nil, in: namespace) == nil)
-        let projected = ItemNameModeration.moderatedPeerDisplayName(instanceName)
-        #expect(projected.count == ItemNameModeration.maxNameLength,
+        let projected = ProximityDisplayName.peerDisplayName(instanceName, in: namespace)
+        #expect(projected.count == namespace.installation.peerNames.maxLength,
                 "the participant projection truncates it, which is the form a session row received")
         #expect(PeerNameDisplay.personName(projected, fingerprint: nil, in: namespace) == nil)
         #expect(PeerNameDisplay.shown(projected, fingerprint: nil, in: namespace) == PeerNameDisplay.text(for: .nearby))
