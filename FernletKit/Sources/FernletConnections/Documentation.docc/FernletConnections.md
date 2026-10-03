@@ -34,9 +34,11 @@ the field's prefix.
 That `.sound` verdict is load-bearing at run time: ProximityKit refuses an unsound namespace on its
 own, failing closed with a named audit event before an identity provisions or wraps a group key and
 before a radio starts, so it is what lets the app's identities provision and its three radios come
-up. Each ProximityKit manager also refuses to start its radio under an identity of another namespace
-than its host's, which no app path hands it: the managers build their own identities from the
-store's `.fernlet`, and so does every other `IdentityService` the app builds.
+up. (The identity's backup-escrow API checks no verdict: it is the app's sealed-backup feature, whose
+paths provision the identity first.) Each ProximityKit manager also refuses to start its radio, and
+the mesh manager to found a mesh, under an identity of another namespace than its host's, which no
+app path hands it: the managers build their own identities from the store's `.fernlet`, and so does
+every other `IdentityService` the app builds.
 
 **How the app supplies it.** ProximityKit's `ProximityHost` requires a
 `proximityNamespace` and gives it no default, so the app is what hands `.fernlet` over: the
@@ -140,17 +142,19 @@ gate with `.fernlet`'s capabilities.
 `ProximityNamespace.PeerNames.fernlet`, how the Fernlet app shows a name a peer supplied: at most 24
 characters of it once sanitized (`ItemNameModeration.maxNameLength`, the cap Fernlet's item names
 share, read rather than respelled so the two keep one spelling), and "A friend" for a name with
-nothing displayable left. ProximityKit sanitizes every peer's name with its own copy of the generic
+nothing displayable left. ProximityKit sanitizes a peer's name with its own copy of the generic
 sanitizer and applies the cap and the floor of the namespace each reader holds (the mesh, presence
 and recipe-share managers, the session message store, the envelope's two sender reads and the name
 display), and caps the recipe radio's advertised name at the same cap. Its soundness rules hold the
-cap to 1–63 characters and the floor to a non-empty name the sanitizer leaves unchanged;
+cap to at most 63 characters and at least a key fingerprint's 16 and the mesh instance-name prefix's
+length (13 for Fernlet's `fernlet-mesh-`), so the name display, which cuts a name to the cap before it
+looks, still hides both identifiers, and the floor to a non-empty name the sanitizer leaves unchanged;
 `ProximityVocabularyGoldenTests` pins both values to the literals ProximityKit shipped and holds
 ProximityKit's sanitizer to FernletDomainModel's byte for byte. The activities' titles, locations
-and roster names still go through `ItemNameModeration` until activities leave ProximityKit (plan
-step A0.4). The test target's bindings file restores the old call shapes of the coercion, the
-envelope's sender reads, the advertised recipe name and the session message store's ingest with
-`.fernlet`'s policy.
+and joiners' names still go through `ItemNameModeration` (its fixed 24-character cap, with no floor)
+until activities leave ProximityKit (plan step A0.4). The test target's bindings file restores the
+old call shapes of the coercion, the envelope's sender reads, the advertised recipe name and the
+session message store's ingest with `.fernlet`'s policy.
 
 **The install binding.** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks

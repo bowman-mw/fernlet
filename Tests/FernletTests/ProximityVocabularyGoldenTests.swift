@@ -56,7 +56,8 @@
 //     names; `.fernlet`'s "A friend" floor under a name that sanitizes to nothing; and the coercion,
 //     the envelope's sender reads, the name display, the advertised recipe name, the session message
 //     store and a mesh and a recipe-share manager applying the cap and floor of `.fernlet` and of a
-//     namespace whose peer-name policy alone is its own.
+//     namespace whose peer-name policy alone is its own, the name display still hiding a mesh
+//     instance name and a fingerprint filed as a name under either cap.
 // 13. **`.fernlet`'s vocabulary and presentation strings.** Every token, title and presentation
 //     string FernletConnections ships in `ProximityNamespace.fernlet` equals its frozen literal, its
 //     thirty mesh messages among them (each also one of the tokens it knows, and each the token of
@@ -1853,6 +1854,8 @@ struct ProximityVocabularyGoldenTests {
     /// name is cut to that namespace's cap and a name with nothing displayable left reads as its
     /// floor, through the coercion, the envelope's two sender reads (a withheld, empty name still
     /// discloses nothing), the name display, the advertised recipe name and the session message store.
+    /// Under either cap the name display, which cuts before it looks, still reads a mesh instance
+    /// name and a fingerprint filed as a name as no one's: soundness keeps each cap long enough.
     @Test func theNameConsumersApplyThePeerNamePolicyOfTheirNamespace() {
         let (long, invisible) = (Self.longPeerName, "\u{202E}\u{200B}")
         let renamed = Self.renamedPeerNamesNamespace()
@@ -1873,6 +1876,9 @@ struct ProximityVocabularyGoldenTests {
                         && blank.disclosedSenderDisplayName(in: namespace) == policy.floor, note)
             #expect(Self.envelope(senderDisplayName: "").disclosedSenderDisplayName(in: namespace) == nil, note)
             #expect(PeerNameDisplay.personName(long, fingerprint: nil, in: namespace) == capped, note)
+            let instanceName = namespace.family.radios.meshInstanceNamePrefix + "0123456789ab"
+            #expect(PeerNameDisplay.personName(instanceName, fingerprint: nil, in: namespace) == nil, note)
+            #expect(PeerNameDisplay.personName("a1b2c3d4e5f60718", fingerprint: nil, in: namespace) == nil, note)
             #expect(RecipeShareAdvertisedName.publishable(long, in: namespace) == capped, note)
             let transcript = Self.transcriptNames(of: ["fp-long": long, "fp-blank": invisible], in: namespace)
             #expect(transcript == ["fp-long": capped, "fp-blank": policy.floor], note)
@@ -2006,9 +2012,11 @@ struct ProximityVocabularyGoldenTests {
         return (roster, manager.cachedVouchList(from: "fp-voucher")?.voucherDisplayName)
     }
 
-    /// `.fernlet` with its peer-name policy replaced by one of its own (a 12-character cap and the
+    /// `.fernlet` with its peer-name policy replaced by one of its own (a 20-character cap and the
     /// floor "Golden pal") and nothing else changed, so a consumer that took the cap or the floor from
-    /// anywhere but its namespace would show Fernlet's where this namespace's belongs.
+    /// anywhere but its namespace would show Fernlet's where this namespace's belongs. Its cap clears
+    /// the soundness rule's lower bound (a fingerprint's 16 characters, longer than Fernlet's
+    /// 13-character mesh prefix) and still differs from Fernlet's 24.
     static func renamedPeerNamesNamespace() -> ProximityNamespace {
         let fernlet = ProximityNamespace.fernlet
         let installation = fernlet.installation
@@ -2017,7 +2025,7 @@ struct ProximityVocabularyGoldenTests {
             installation: ProximityNamespace.Installation(
                 keychain: installation.keychain, storage: installation.storage,
                 logSubsystem: installation.logSubsystem,
-                peerNames: ProximityNamespace.PeerNames(maxLength: 12, floor: "Golden pal")))
+                peerNames: ProximityNamespace.PeerNames(maxLength: 20, floor: "Golden pal")))
     }
 
     // MARK: Group 13 — `.fernlet`'s vocabulary and presentation strings
@@ -2224,11 +2232,14 @@ struct ProximityVocabularyGoldenTests {
             """)
     }
 
-    /// The bounds the namespace's soundness rules hold a vocabulary and the presentation strings to
-    /// are those of the consumers they protect, so a sound namespace names no value a receiver refuses
-    /// or cuts: the summary decode's 200 characters (FernletDomainModel's, out of `Namespace/`'s
-    /// reach), the coordinator's 32-character capability cut, the routed manifest's 64-byte type
-    /// token, and the 12 and 16 hex characters after each instance-name prefix.
+    /// The bounds the namespace's soundness rules hold a vocabulary, the presentation strings and the
+    /// peer-name cap to are those of the consumers they protect, so a sound namespace names no value a
+    /// receiver refuses or cuts: the summary decode's 200 characters (`PayloadSummary`'s, in
+    /// ProximityKit's `Wire/`, out of `Namespace/`'s reach), which bound the session messages' titles
+    /// and every mesh message, signed as its frame's title; the coordinator's 32-character capability
+    /// cut; the routed manifest's 64-byte type token; the 12 and 16 hex characters after each
+    /// instance-name prefix; and the name display's 16-character fingerprint, which the peer-name cap
+    /// may not cut short.
     @Test func theNamespacesSoundnessBoundsAreItsConsumersBounds() {
         let bounds: [(name: String, namespace: Int, consumer: Int)] = [
             ("summary title characters", ProximityNamespace.maximumSummaryTitleCharacters,
@@ -2240,15 +2251,20 @@ struct ProximityVocabularyGoldenTests {
             ("mesh instance-name hex characters", ProximityNamespace.meshInstanceNameTokenLength,
              MeshLinkAdvertisement.instanceNameTokenLength),
             ("presence instance-name hex characters", ProximityNamespace.presenceInstanceNameTokenLength,
-             2 * PresenceEpochPosture.instanceNameEntropyByteCount)
+             2 * PresenceEpochPosture.instanceNameEntropyByteCount),
+            ("fingerprint characters", ProximityNamespace.peerNameFingerprintLength,
+             PeerNameDisplay.fingerprintLength)
         ]
-        // R2: bounded by the five bounds.
+        // R2: bounded by the six bounds.
         for bound in bounds {
             #expect(bound.namespace == bound.consumer,
                     "the namespace allows \(bound.namespace) \(bound.name); its consumer \(bound.consumer)")
         }
         #expect(ProximityNamespace.maximumSummaryTitleCharacters == Self.frozenNumber("payloadSummary.maxDetailCharacters"))
         #expect(ProximityNamespace.maximumCapabilityTokenBytes == Self.frozenNumber("capability.maxTokenLength"))
+        let meshBounds = Set(ProximityNamespace.fernlet.family.vocabulary.tokenFields
+            .filter { $0.field.hasPrefix("family.vocabulary.mesh.") }.map(\.maximumBytes))
+        #expect(meshBounds == [PayloadSummary.maxDetailCharacters], "the mesh messages are judged at \(meshBounds) bytes")
     }
 
     /// The frozen title of the session message named `name`; empty for a name the table does not hold.

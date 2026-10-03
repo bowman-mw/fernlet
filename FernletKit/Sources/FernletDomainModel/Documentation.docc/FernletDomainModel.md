@@ -591,8 +591,10 @@ Fernlet's proximity vocabulary and records. ``PayloadType`` and ``ProximityCapab
 tokens FernletConnections reads into `ProximityNamespace.fernlet`'s vocabulary, which is where
 ProximityKit's core takes every token from; ``ProximityMode`` is the session mode the coordinator's
 `Mode` aliases; ``ProximityTrustedPeerRecord`` and ``TrainerAuditEvent`` are the trust records and
-audit rows Fernlet's `ProximityTrustVault` (FernletConnections) keeps and the snapshot persists, each
-audit row converted from ProximityKit's own `ProximitySessionAudit`; and ``ConnectionSessionLog`` is
+audit rows Fernlet's `ProximityTrustVault` (FernletConnections) keeps and the snapshot persists: a
+coordinator's audits arrive converted from ProximityKit's own `ProximitySessionAudit` by
+FernletConnections' one conversion, while the vault builds its block, revoke and report rows itself
+and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
 the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
 names these types and ``ItemNameModeration`` only on the lines `ProximityNamespaceBoundaryTests`
 allowlists, which leave with Fernlet's features (plan steps A0.4 and A0.5) and, for the mode, with

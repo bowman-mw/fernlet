@@ -9,9 +9,9 @@
 // error, its audit line and what it leaves undone:
 //
 // 1. **The identity.** Under an unsound namespace `ensureProvisioned()` throws every violation before
-//    it reads or writes a keychain row, on every call, and `encryptGroupKey(_:for:)`, the one identity
-//    operation that needs no provisioned key, throws them before it wraps anything; each writes
-//    `identity.namespace.unsound` with its door.
+//    it reads or writes a keychain row, on every call, and `encryptGroupKey(_:for:)`, which needs no
+//    provisioned key, throws them before it wraps anything; each writes `identity.namespace.unsound`
+//    with its door.
 // 2. **The radios.** The mesh, presence and recipe-share radios each refuse to start under an unsound
 //    namespace before they mint, listen or advertise, with `mesh.quic.namespaceUnsound`,
 //    `presence.quic.namespaceUnsound` and `recipe.quic.namespaceUnsound`.
@@ -19,8 +19,9 @@
 //    never a field path or a value; every violation case has a name, and the name is the case's own.
 // 4. **One namespace per manager.** The mesh, presence and recipe-share managers each construct over an
 //    identity of another namespace, audit `<area>.identity.namespaceMismatch` once at construction and
-//    refuse every start of their radio with it; over an identity of their own namespace they audit
-//    nothing and start.
+//    refuse every start of their radio with it, and the mesh manager every founding of a mesh, before it
+//    signs or seals anything; over an identity of their own namespace they audit nothing and start, and
+//    the mesh manager founds.
 // 5. **A sound namespace passes.** The identity provisions and wraps a group key another identity of
 //    the namespace opens, the recipe-share radio comes up, and the mesh and presence radios hold the
 //    sound verdict their starts read. Tier 1 cannot bring those two up for real (a live listener, and
@@ -39,6 +40,7 @@ import FernletFoundation
 import Foundation
 import os
 import Testing
+@testable import FernletCrypto
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -215,6 +217,59 @@ struct ProximityNamespaceGateTests {
         #expect(ownRadio.startedDiscoveryInfo.count == 1 && matched.isSearching,
                 "a mesh manager of its own namespace did not start its radio")
         matched.stopJoin()
+        withExtendedLifetime(ownStore) {}
+    }
+
+    /// The mesh manager handed an identity of another namespace refuses every founding of a mesh with
+    /// `mesh.identity.namespaceMismatch` at `start`, first thing: each `startNewMesh(name:)` writes that
+    /// one line and nothing else, and leaves no mesh and no ledger (so it signed no founder admission or
+    /// key advertisement), no session context sealed into its host's storage and no radio started.
+    /// Handed an identity of its own namespace on the same kind of host, the same call writes no such
+    /// line, founds a mesh whose ledger holds its own admission, seals that mesh's context and starts
+    /// its radio.
+    @Test func theMeshManagerRefusesToFoundAMeshUnderAnIdentityOfAnotherNamespace() throws {
+        let event = "mesh.identity.namespaceMismatch"
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+
+        let store = makeTestStore()
+        let radio = FakeMeshTransportSession()
+        let mismatched = MeshNetworkManager(
+            store: store, transport: radio,
+            identity: IdentityService(namespace: GateFixtureApp.sound(), keychainService: services[0]))
+        let foundings = DeviceBindingID.$testOverride.withValue(.identifier(Self.installBinding)) {
+            GateAuditLines.delivered {
+                mismatched.startNewMesh(name: "Gate Meadow")
+                mismatched.startNewMesh(name: "Gate Meadow")
+            }
+        }
+        let refusal = GateAuditLines.Line(event: event, context: ["at": "start"])
+        #expect(foundings == [refusal, refusal], "two refused foundings wrote \(foundings)")
+        #expect(mismatched.currentMesh == nil && mismatched.membershipVerifier == nil,
+                "the refused mesh manager founded a mesh")
+        var sealedNothing = false
+        if case .absent = MeshSessionStore(scope: store.meshSessionStorage).load() { sealedNothing = true }
+        #expect(sealedNothing, "the refused mesh manager sealed a session context into its host's storage")
+        #expect(radio.startedDiscoveryInfo.isEmpty && !mismatched.isSearching,
+                "the refused mesh manager started its radio")
+        withExtendedLifetime(store) {}   // `MeshNetworkManager.store` is `unowned`
+
+        let ownStore = makeTestStore()
+        defer { MeshSessionStore.wipeForDeleteAll(scope: ownStore.meshSessionStorage) }
+        let ownRadio = FakeMeshTransportSession()
+        let matched = MeshNetworkManager(
+            store: ownStore, transport: ownRadio,
+            identity: IdentityService(namespace: ownStore.proximityNamespace, keychainService: services[1]))
+        let ownLines = DeviceBindingID.$testOverride.withValue(.identifier(Self.installBinding)) {
+            GateAuditLines.delivered { matched.startNewMesh(name: "Own Meadow") }
+        }
+        #expect(ownLines.allSatisfy { $0.event != event }, "a mesh manager of its own namespace wrote \(event)")
+        let founded = try #require(matched.currentMesh, "a mesh manager of its own namespace founded no mesh")
+        #expect(matched.membershipVerifier?.roster.memberCount == 1, "its ledger does not hold its own admission")
+        #expect(Self.sealedMeshID(in: ownStore) == founded.meshID, "it sealed no context for the mesh it founded")
+        #expect(ownRadio.startedDiscoveryInfo.count == 1 && matched.isSearching,
+                "a mesh manager of its own namespace did not start its radio")
+        matched.leaveMesh()
         withExtendedLifetime(ownStore) {}
     }
 
@@ -428,6 +483,20 @@ struct ProximityNamespaceGateTests {
     /// A keychain service no other test uses, in the `.test.` family the wipe wall's discovery skips.
     static func isolatedIdentityService() -> String {
         "com.fernlet.identity.test.namespacegate.\(UUID().uuidString)"
+    }
+
+    /// The install binding the founding cell seals and opens session contexts under, pinned so no cell
+    /// here reads or mints the device's own binding row.
+    static let installBinding = Data(repeating: 0x6A, count: 16)
+
+    /// The mesh id of the session context sealed into `store`'s storage, opened under
+    /// ``installBinding``; nil when no context opens there.
+    static func sealedMeshID(in store: FernletStore) -> UUID? {
+        let load = DeviceBindingID.$testOverride.withValue(.identifier(installBinding)) {
+            MeshSessionStore(scope: store.meshSessionStorage).load()
+        }
+        guard case .loaded(let context, _) = load else { return nil }
+        return context.meshID
     }
 
     /// A heart-ledger file in a scratch directory of its own.

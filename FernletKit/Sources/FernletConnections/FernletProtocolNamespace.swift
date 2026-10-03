@@ -28,7 +28,8 @@
 // and FernletProximityUI hand the display `.fernlet`). The installation also carries the Fernlet app's
 // peer-name policy (`PeerNames.fernlet`: the 24-character cap Fernlet's item names share, read off
 // `ItemNameModeration` so it keeps one spelling, and the "A friend" floor), which ProximityKit applies
-// wherever a peer's name enters.
+// wherever a peer's name enters except its activity manager, whose joiners' names keep
+// `ItemNameModeration`'s cap, with no floor, until plan step A0.4 moves activities out.
 //
 // Every literal below is pinned by a frozen column, `ProximityNamespaceGoldenTests`' or, for the three
 // presentation strings and the peer-name policy, `ProximityVocabularyGoldenTests`', so a change here
@@ -52,7 +53,8 @@ nonisolated extension ProximityNamespace {
     /// `PayloadType` and `ProximityCapability` cases until plan steps A0.4 and A0.5, and what
     /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
     /// moderation keychain services, its support folder) waits for plan step A0.4. Its installation
-    /// also carries the Fernlet app's peer-name policy, which ProximityKit shows every peer's name under.
+    /// also carries the Fernlet app's peer-name policy, which ProximityKit shows a peer's name under
+    /// everywhere but the activity manager, until plan step A0.4.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an

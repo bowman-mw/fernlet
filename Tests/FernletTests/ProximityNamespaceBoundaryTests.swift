@@ -1027,9 +1027,11 @@ extension ProximityNamespaceBoundaryTests.Reason {
         """)
     /// The activities' names.
     static let activityNames = Self(exit: .a04, why: """
-        an activity's title, location and roster names pass FernletDomainModel's own sanitizer and cap \
-        (`ItemNameModeration`): feature content, not a peer's display name, which the core shows under \
-        the namespace's peer-name policy; activities move to FernletSocial
+        an activity's title and location (feature content) and the display names it carries (a \
+        joining peer's, as the join request and the roster keep it, and this device's own, as it hosts \
+        or joins) pass FernletDomainModel's own sanitizer and fixed 24-character cap, with no floor \
+        (`ItemNameModeration`), rather than the namespace's peer-name policy; activities move to \
+        FernletSocial
         """)
     /// The dead-drop's heart envelope.
     static let heartDropEnvelope = Self(exit: .a04, why: """

@@ -11,10 +11,12 @@ import Testing
 
 /// Every soundness rule refused by name, the byte rules of each framing, and the two collision checks.
 ///
-/// One cell per ``ProximityNamespace/Violation`` case: each changes one literal of a sound namespace
-/// and expects exactly the violation that change causes, both recorded by the initializer and thrown
-/// by `validated`, then shows the rule's accepting edge. Where two rules see one change by design (a
-/// malformed session token is unknown too), the cell expects both, in rule order.
+/// One cell per ``ProximityNamespace/Violation`` case, and one more for each bound a field takes from
+/// another group (a mesh message's from a summary title, the peer-name cap's from the identifiers the
+/// name display hides): each changes one literal of a sound namespace and expects exactly the
+/// violation that change causes, both recorded by the initializer and thrown by `validated`, then
+/// shows the rule's accepting edge. Where two rules see one change by design (a malformed session
+/// token is unknown too), the cell expects both, in rule order.
 @Suite struct ProximityNamespaceSoundnessTests {
 
     // MARK: - A sound namespace
@@ -445,8 +447,9 @@ import Testing
     }
 
     /// Tokens: empty, past the group's bound, or a byte outside 0x21–0x7E — a payload token or record
-    /// kind past 255 bytes, a capability token past 32, a routed type past 64. A set or a list is named
-    /// once, by its own path, however many of its members break the rule.
+    /// kind past 255 bytes, a mesh message past 200 (the next cell), a capability token past 32, a
+    /// routed type past 64. A set or a list is named once, by its own path, however many of its members
+    /// break the rule.
     @Test func aMalformedTokenIsRefusedByName() {
         let departure = "family.vocabulary.membershipRecordKinds.departure"
         func kinds(_ token: String) -> ProximityNamespace.Family {
@@ -499,6 +502,26 @@ import Testing
                        family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
                            mesh: AlphaApp.meshMessages(replacing: ["coordinatorBeacon": token]))), note: token)
         }
+    }
+
+    /// A mesh message is a summary title too: the mesh signs every frame with its token as the
+    /// envelope's summary title, and a receiver's bounded summary decode refuses a title past 200
+    /// characters, so a mesh message past 200 bytes is refused although a payload token may run to
+    /// 255. Listed in `payloads.known`, which takes it, a 201-byte message breaks that rule alone; at
+    /// 200 bytes it is sound.
+    @Test func aMeshMessageLongerThanASummaryTitleIsRefusedByName() {
+        func beacon(_ length: Int) -> ProximityNamespace.Family {
+            let token = "alpha.mesh.beacon." + String(repeating: "b", count: length - 18)
+            return AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                payloads: AlphaApp.payloads(known: AlphaApp.payloadTokens.union([token])),
+                mesh: AlphaApp.meshMessages(replacing: ["coordinatorBeacon": token])))
+        }
+        expectOnly([.malformedToken(field: "family.vocabulary.mesh.coordinatorBeacon")], family: beacon(201),
+                   note: "201 bytes")
+        expectSound(family: beacon(200), note: "200 bytes")
+        expectSound(family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+            payloads: AlphaApp.payloads(known: AlphaApp.payloadTokens.union([String(repeating: "k", count: 255)])))),
+                    note: "a 255-byte payload token that is no mesh message")
     }
 
     /// Two tokens of one group with the same bytes: two session payload tokens, two capability tokens
@@ -590,25 +613,28 @@ import Testing
     }
 
     /// Instance-name prefixes: bytes of `[a-z0-9-]`, at least one, leaving a 63-byte DNS-SD name room
-    /// for the hex after them — the mesh prefix at most 51 bytes, the presence prefix at most 47.
+    /// for the hex after them — the mesh prefix at most 51 bytes, the presence prefix at most 47. Under
+    /// a peer-name cap of 63, which no prefix here outgrows, so the cap's own bound is not in play.
     @Test func aMalformedInstanceNamePrefixIsRefusedByName() {
         let mesh = "family.radios.meshInstanceNamePrefix"
+        let roomy = AlphaApp.installation(peerNames: AlphaApp.peerNames(maxLength: 63))
         let refused = ["", "Alpha-mesh-", "alpha_mesh-", "alpha mesh-", "alphä-mesh-", String(repeating: "m", count: 52)]
         for prefix in refused {
             expectOnly([.malformedInstanceNamePrefix(field: mesh)],
-                       family: AlphaApp.family(radios: AlphaApp.radios(meshInstanceNamePrefix: prefix)), note: prefix)
+                       family: AlphaApp.family(radios: AlphaApp.radios(meshInstanceNamePrefix: prefix)),
+                       installation: roomy, note: prefix)
         }
         expectOnly([.malformedInstanceNamePrefix(field: "family.radios.presenceInstanceNamePrefix")],
                    family: AlphaApp.family(radios: AlphaApp.radios(
                        presenceInstanceNamePrefix: String(repeating: "p", count: 48))),
-                   note: "48 bytes")
+                   installation: roomy, note: "48 bytes")
         let accepted: [(mesh: String, presence: String)] = [
             (String(repeating: "m", count: 51), String(repeating: "p", count: 47)), ("2026-", "a"), ("-", "a-b-")
         ]
         for prefixes in accepted {
             expectSound(family: AlphaApp.family(radios: AlphaApp.radios(
                 meshInstanceNamePrefix: prefixes.mesh, presenceInstanceNamePrefix: prefixes.presence)),
-                note: "\(prefixes.mesh) and \(prefixes.presence)")
+                installation: roomy, note: "\(prefixes.mesh) and \(prefixes.presence)")
         }
     }
 
@@ -623,11 +649,12 @@ import Testing
         }
     }
 
-    /// The peer-name policy: a cap of 1 to 63 characters, and a floor that is not empty and is exactly
-    /// what ProximityKit's sanitizer makes of it under the cap — so no longer than the cap, with no
-    /// invisible or control scalar, no tab or doubled space, and no space at either end. Each field is
-    /// named by its path; a cap below one names the floor too, since no floor fits under it. The
-    /// accepting edges count characters, so a letter and its combining mark are one.
+    /// The peer-name policy: a cap of at most 63 characters (and at least the identifiers the next cell
+    /// holds it to, 16 here), and a floor that is not empty and is exactly what ProximityKit's sanitizer
+    /// makes of it under the cap — so no longer than the cap, with no invisible or control scalar, no
+    /// tab or doubled space, and no space at either end. Each field is named by its path; a cap below
+    /// one names the floor too, since no floor fits under it. The accepting edges count characters, so
+    /// a letter and its combining mark are one.
     @Test func aMalformedPeerNamePolicyIsRefusedByName() {
         let (capField, floorField) = ("installation.peerNames.maxLength", "installation.peerNames.floor")
         func installation(maxLength: Int = 32, floor: String = "An alpha friend") -> ProximityNamespace.Installation {
@@ -648,8 +675,8 @@ import Testing
                        note: text.debugDescription)
         }
         let accepted: [(maxLength: Int, floor: String)] = [
-            (1, "A"), (32, String(repeating: "f", count: 32)), (63, String(repeating: "f", count: 63)),
-            (5, "Zo\u{EB} \u{1F331}"), (4, "Cafe\u{301}")
+            (16, "A"), (32, String(repeating: "f", count: 32)), (63, String(repeating: "f", count: 63)),
+            (16, String(repeating: "Zo\u{EB}\u{1F331}", count: 4)), (16, String(repeating: "Cafe\u{301}", count: 4))
         ]
         for policy in accepted {
             expectSound(installation: installation(maxLength: policy.maxLength, floor: policy.floor),
@@ -657,14 +684,40 @@ import Testing
         }
     }
 
+    /// The peer-name cap against the identifiers the name display hides: `PeerNameDisplay` cuts a name
+    /// to the cap before it looks for a fingerprint filed as a name (16 characters) or a mesh instance
+    /// name (the family's prefix, then hex), so a cap shorter than either would cut one to a name it
+    /// shows as a person's. The cap is refused below a fingerprint's length and below the family's mesh
+    /// prefix, once however many it falls short of, and accepted at each length.
+    @Test func aPeerNameCapShorterThanAnIdentifierItHidesIsRefusedByName() {
+        let capField = "installation.peerNames.maxLength"
+        func installation(maxLength: Int) -> ProximityNamespace.Installation {
+            AlphaApp.installation(peerNames: AlphaApp.peerNames(maxLength: maxLength, floor: "An alpha pal"))
+        }
+        // Alpha's mesh prefix, `alpha-mesh-`, is 11 characters: the fingerprint is the longer bound.
+        expectOnly([.malformedPeerNames(field: capField)], installation: installation(maxLength: 15),
+                   note: "a cap of 15, under a fingerprint's 16")
+        expectSound(installation: installation(maxLength: 16), note: "a cap of 16, a fingerprint's length")
+        let prefix = "alpha-mesh-instance-"
+        let longPrefix = AlphaApp.family(radios: AlphaApp.radios(meshInstanceNamePrefix: prefix))
+        for maxLength in [prefix.count - 1, 12] {
+            expectOnly([.malformedPeerNames(field: capField)], family: longPrefix,
+                       installation: installation(maxLength: maxLength),
+                       note: "a cap of \(maxLength), under the \(prefix.count)-character mesh prefix")
+        }
+        expectSound(family: longPrefix, installation: installation(maxLength: prefix.count),
+                    note: "a cap of \(prefix.count), the mesh prefix's length")
+    }
+
     /// The green control of the vocabulary and presentation rules: every rule's accepting edge at once
-    /// — each token at its group's longest, each title at 200 characters, both prefixes at their room,
-    /// the longest common name, nothing sealed and nothing assumed — makes a sound namespace, and the
-    /// family carries the values exactly as given.
+    /// — each token at its group's longest (a mesh message at a summary title's 200 bytes), each title
+    /// at 200 characters, both prefixes at their room, the longest common name, nothing sealed and
+    /// nothing assumed, and the peer-name cap at the 51-character mesh prefix's length — makes a sound
+    /// namespace, and the family carries the values exactly as given.
     @Test func everyVocabularyAndPresentationRuleAcceptsItsEdgeAtOnce() {
         func token(_ tag: String, _ length: Int) -> String { tag + String(repeating: "x", count: length - tag.utf8.count) }
         func title(_ letter: String) -> String { String(repeating: letter, count: 200) }
-        let meshToken = { (name: String) in token("mesh." + name, 255) }
+        let meshToken = { (name: String) in token("mesh." + name, 200) }
         let vocabulary = ProximityNamespace.Vocabulary(
             session: ProximityNamespace.SessionMessages(
                 identityIntroduction: .init(payloadType: token("i", 255), summaryTitle: title("t")),
@@ -682,7 +735,7 @@ import Testing
                                      presenceInstanceNamePrefix: String(repeating: "p", count: 47),
                                      tlsCommonName: String(repeating: "n", count: 64))
         let namespace = ProximityNamespace(family: AlphaApp.family(radios: radios, vocabulary: vocabulary),
-                                           installation: AlphaApp.installation())
+                                           installation: AlphaApp.installation(peerNames: AlphaApp.peerNames(maxLength: 51)))
         #expect(namespace.soundness == .sound, "\(namespace.soundness)")
         #expect(namespace.family.vocabulary == vocabulary, "the family carries another vocabulary")
         #expect(namespace.family.radios == radios, "the family carries other radios")

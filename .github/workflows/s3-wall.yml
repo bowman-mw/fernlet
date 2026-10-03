@@ -356,9 +356,10 @@ jobs:
         # (2026-10-02): ProximityKit's run-time refusal of an unsound namespace, door by door — the
         # identity refuses to provision and to wrap a group key, and each radio to start, each throwing
         # the namespace's violations and writing its named audit line (the door, the count and the
-        # first violation's case, never a value) — and each manager's refusal to start its radio under
-        # an identity of another namespace, over namespaces built from literals. No compiler half: a
-        # door that stopped refusing compiles clean and moves no other test.
+        # first violation's case, never a value) — and each manager's refusal to start its radio, and
+        # the mesh manager's to found a mesh, under an identity of another namespace, over namespaces
+        # built from literals. No compiler half: a door that stopped refusing compiles clean and moves
+        # no other test.
         #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
@@ -470,9 +471,18 @@ jobs:
         # three display-name cells: ProximityKit's sanitizer against the domain model's it was copied
         # from, and the name consumers and the mesh and recipe-share managers under a namespace whose
         # peer-name policy is its own) = 241 is the ARITHMETIC CHECK, never the source.
+        # RAISED 241 -> 244 at the A0.3 review fixes, MEASURED on a Mac, 2026-10-03 (iPhone 17
+        # simulator, iOS 26.5): this exact seven-name list run at floor 1 after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: "244 tests in 7 suites"
+        # (6 + 13 + 19 + 104 + 40 + 50 + 12), 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. Re-run AT 244: passed. Run once more at 244 without ProximityNamespaceGateTests: 232 ran
+        # and the floor refused it. 241 + 3 (the soundness suite's cells holding a mesh message to a
+        # summary title's bound and the peer-name cap to the identifiers the name display hides, and
+        # the gate suite's cell holding the mesh manager to founding no mesh under an identity of
+        # another namespace) = 244 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 241 \
+          Scripts/run-gated-suites.sh crypto-goldens 244 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
