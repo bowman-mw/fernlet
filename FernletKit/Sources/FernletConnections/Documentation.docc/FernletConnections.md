@@ -30,6 +30,13 @@ the "no label is a byte prefix of another" check over FernletCrypto's 81 registr
 39 together, and checks that the bytes each hash and transcript consumer writes today begin with
 the field's prefix.
 
+That `.sound` verdict is load-bearing at run time: ProximityKit refuses an unsound namespace on its
+own, failing closed with a named audit event before an identity provisions or wraps a group key and
+before a radio starts, so it is what lets the app's identities provision and its three radios come
+up. Each ProximityKit manager also refuses to start its radio under an identity of another namespace
+than its host's, which no app path hands it: the managers build their own identities from the
+store's `.fernlet`, and so does every other `IdentityService` the app builds.
+
 **How the app supplies it (plan step A0.2.3).** ProximityKit's `ProximityHost` requires a
 `proximityNamespace` and gives it no default, so the app is what hands `.fernlet` over: the
 `FernletStore` adapter (`App/Fernlet/ProximityHostAdapter.swift`) answers `.fernlet`, `nonisolated`

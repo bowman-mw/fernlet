@@ -700,7 +700,10 @@ to compile rather than signing under another app's labels.
   presentation strings well-formed, no token repeated within its group or left unknown by a rule
   that names it), `validated(family:installation:)` throws the same, and
   `familyCollisions(with:)` lets a host's tests show its labels collide with no other app's.
-  `ProximityNamespaceSoundnessTests` holds the rules.
+  `ProximityNamespaceSoundnessTests` holds the rules. ProximityKit acts on the recorded verdict at
+  run time: under an unsound namespace an identity refuses to provision and to wrap a group key, and
+  a radio refuses to start, each failing closed with a named audit event before any label is used
+  (`ProximityNamespaceGateTests`).
 - **Fernlet's namespace is `.fernlet`, in FernletConnections.** `ProximityNamespace.fernlet`
   (`FernletKit/Sources/FernletConnections/FernletProtocolNamespace.swift`) spells the 39 labels
   byte for byte as they shipped. It lives in a module that depends on ProximityKit, so ProximityKit
