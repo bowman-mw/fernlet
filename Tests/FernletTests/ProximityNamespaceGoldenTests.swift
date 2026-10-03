@@ -943,9 +943,9 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// The wire tokens spelled exactly like a signature label — fifteen `PayloadType` tokens and three
-    /// membership record kinds — still equal the frozen label. `meshKeyAgreement` and `verifyResponse`
-    /// had no such pin before this suite. The fourth record kind equals no label; it is persisted and
-    /// hashed into the signed inventory digest, so it is pinned by literal beside them.
+    /// of `.fernlet`'s membership record kinds — still equal the frozen label. `meshKeyAgreement` and
+    /// `verifyResponse` had no such pin before this suite. The fourth record kind equals no label; it
+    /// is hashed into the signed inventory digest, so it is pinned by literal beside them.
     ///
     /// Two at-rest format names join them as literal rows since step A0.2.8, which deleted the unused
     /// mirror tokens that spelled them (`MeshSessionContextSchema.token`, `MeshRoutedIndexSchema.token`,
@@ -954,6 +954,7 @@ struct ProximityNamespaceGoldenTests {
     /// key derivation stay one vocabulary.
     @Test func theWireTokensSpelledLikeALabelStillEqualIt() {
         let signature = "family.purposes.signature."
+        let kinds = ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds
         let vocabulary: [(token: String, spelling: String, label: String)] = [
             ("PayloadType.verifyResponse", PayloadType.verifyResponse.rawValue, "proximityQRResponseV1"),
             ("PayloadType.meshKeyAgreement", PayloadType.meshKeyAgreement.rawValue, "meshKeyAgreementV1"),
@@ -972,9 +973,9 @@ struct ProximityNamespaceGoldenTests {
             ("PayloadType.meshRoutedInventoryDigest", PayloadType.meshRoutedInventoryDigest.rawValue,
              "meshRoutedInventoryDigestV1"),
             ("PayloadType.meshRoutedDrainAnswer", PayloadType.meshRoutedDrainAnswer.rawValue, "meshRoutedDrainAnswerV1"),
-            ("MeshMembershipRecordKind.departure", MeshMembershipRecordKind.departure.rawValue, "meshMemberDepartureV1"),
-            ("MeshMembershipRecordKind.removal", MeshMembershipRecordKind.removal.rawValue, "meshMemberRemovalV1"),
-            ("MeshMembershipRecordKind.termination", MeshMembershipRecordKind.termination.rawValue, "meshTerminatedV1")
+            ("membershipRecordKinds.departure", kinds.departure, "meshMemberDepartureV1"),
+            ("membershipRecordKinds.removal", kinds.removal, "meshMemberRemovalV1"),
+            ("membershipRecordKinds.termination", kinds.termination, "meshTerminatedV1")
         ]
         #expect(vocabulary.count == 18)
         // R2: bounded by the eighteen tokens.
@@ -982,8 +983,8 @@ struct ProximityNamespaceGoldenTests {
             let frozen = Self.frozen(signature + entry.label)
             #expect(entry.spelling == frozen, "\(entry.token) is \(entry.spelling); the label it equals is \(frozen)")
         }
-        #expect(MeshMembershipRecordKind.admission.rawValue == "fernlet.mesh.member-admission.v1",
-                "the admission record kind moved: \(MeshMembershipRecordKind.admission.rawValue)")
+        #expect(kinds.admission == "fernlet.mesh.member-admission.v1",
+                "the admission record kind moved: \(kinds.admission)")
 
         let retiredAtRestTokens: [(token: String, spelling: String, label: String)] = [
             ("MeshSessionContextSchema.token", "fernlet.mesh.session-context.v1", "meshSessionContextV1"),
@@ -1822,32 +1823,36 @@ struct ProximityNamespaceGoldenTests {
     /// The labels every test binding passes for a `ProximityNamespace.Purposes` (`.fernlet`) are the
     /// ones the app hands ProximityKit: FernletConnections' `ProximityNamespace.Purposes.fernlet` is
     /// `ProximityNamespace.fernlet`'s family purposes, so a suite that leans on a binding signs and
-    /// verifies under Fernlet's bytes.
+    /// verifies under Fernlet's bytes. So is the family the membership bindings pass for a
+    /// `ProximityNamespace.Family`, labels and record kinds alike.
     @Test func theBindingsPassFernletsOwnPurposes() {
         #expect(ProximityNamespace.Purposes.fernlet == ProximityNamespace.fernlet.family.purposes,
                 "the purposes the bindings pass are not the ones the app hands ProximityKit")
+        #expect(ProximityNamespace.Family.fernlet == ProximityNamespace.fernlet.family,
+                "the family the membership bindings pass is not the one the app hands ProximityKit")
     }
 
     /// The membership inventory digest's records hash is SHA-256 over `lp(hash.meshInventoryDigestV1)`
-    /// then the counted record identities: `MeshInventoryDigest(meshID:ledger:purposes:)` consumes the
+    /// then the counted record identities: `MeshInventoryDigest(meshID:ledger:family:)` consumes the
     /// field in the role it fixes, over a one-admission ledger whose tail is written here.
     @Test func theMembershipInventoryDigestHashIsTakenOverItsFieldsPrefix() {
         let ledger = MeshMembershipEventFixtures.singleAdmissionLedger()
-        let identities = MeshInventoryDigest.identities(in: ledger)
+        let identities = MeshInventoryDigest.identities(
+            in: ledger, recordKinds: ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds)
         #expect(identities.count == 1)
         var tail = CanonicalByteWriter()
         tail.appendUInt64(UInt64(identities.count))
         // R2: bounded by the one admission.
         for identity in identities {
-            tail.appendString(identity.kind.rawValue)
+            tail.appendString(identity.kindToken)
             tail.appendString(identity.memberFingerprint)
             tail.appendDate(identity.occurredAt)
             tail.appendString(identity.authorFingerprint)
             tail.appendLengthPrefixed(identity.signature)
         }
-        let digest = MeshInventoryDigest(meshID: MeshMembershipEventFixtures.meshID, ledger: ledger, purposes: .fernlet)
+        let digest = MeshInventoryDigest(meshID: MeshMembershipEventFixtures.meshID, ledger: ledger, family: .fernlet)
         Self.expectDigest(digest.recordsHash, over: tail.bytes, by: Self.hashes.meshInventoryDigestV1,
-                          consumer: "MeshInventoryDigest(meshID:ledger:purposes:)")
+                          consumer: "MeshInventoryDigest(meshID:ledger:family:)")
     }
 
     /// A schema-v1 envelope — signed over the pre-WI-6 JSON bytes, which carry no label — still
@@ -1941,7 +1946,7 @@ struct ProximityNamespaceGoldenTests {
 
     /// A membership verifier checks every signature under its own copy of the labels. An admission and
     /// a departure signed by an identity of the foreign namespace are accepted by a verifier holding
-    /// that namespace's purposes and refused `signatureInvalid` by one holding `.fernlet`'s, over the
+    /// that namespace's family and refused `signatureInvalid` by one holding `.fernlet`'s, over the
     /// very same ledger; so is the signed inventory digest, whose records hash only the verifier of
     /// the signer's namespace finds equal to its own.
     @Test func aMembershipVerifierChecksUnderItsOwnCopyOfTheLabels() throws {
@@ -1954,14 +1959,14 @@ struct ProximityNamespaceGoldenTests {
         let admission = try Self.selfAdmission(of: member, meshID: meshID)
         let founderKey = member.localSigningPublicKey
         var foreignView = MeshMembershipRecordVerifier(meshID: meshID, founderSigningPublicKey: founderKey,
-                                                       purposes: foreignNamespace.family.purposes)
+                                                       family: foreignNamespace.family)
         var fernletView = MeshMembershipRecordVerifier(meshID: meshID, founderSigningPublicKey: founderKey,
-                                                       purposes: .fernlet)
+                                                       family: .fernlet)
         #expect(fernletView.insert(admission) == .signatureInvalid, "a foreign admission verified under .fernlet")
         #expect(foreignView.insert(admission) == nil, "a verifier refused an admission signed in its own namespace")
 
         var fernletOverTheSameLedger = MeshMembershipRecordVerifier(
-            meshID: meshID, founderSigningPublicKey: founderKey, ledger: foreignView.ledger, purposes: .fernlet)
+            meshID: meshID, founderSigningPublicKey: founderKey, ledger: foreignView.ledger, family: .fernlet)
         let digest = try MeshInventoryDigestPayload.signed(meshID: meshID, ledger: foreignView.ledger, identity: member)
         #expect(foreignView.verify(digest) == nil && foreignView.matchesLocalInventory(digest.digest),
                 "the signer's namespace refused its own digest, or hashed its ledger otherwise")
@@ -1982,7 +1987,7 @@ struct ProximityNamespaceGoldenTests {
         let service = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
         let foreignNamespace = ForeignAppNamespace.namespace()
-        let foreign = foreignNamespace.family.purposes
+        let foreign = foreignNamespace.family
         let founder = IdentityService(namespace: foreignNamespace, keychainService: service)
         try founder.ensureProvisioned()
         let meshID = MeshMembershipEventFixtures.meshID

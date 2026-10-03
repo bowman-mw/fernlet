@@ -20,6 +20,7 @@
 //    is "this link is going away". Letting it mint a permanent, grow-only departure record would
 //    make eviction forgeable by anyone who can reach the link, with no way to undo it.
 
+import FernletConnections
 import Foundation
 @testable import FernletCrypto
 import FernletDomainModel
@@ -489,23 +490,26 @@ struct MeshMembershipEventGoldenTests {
         #expect(FernletCryptoPurpose.Signature.meshInventoryDigestV1.signingBytes(inventory) != nil)
     }
 
-    /// Record kind, wire token and crypto domain are ONE frozen English vocabulary. If they ever
-    /// diverge, a grep for the token stops finding the layer that signs it.
+    /// Record kind, wire token and crypto domain are ONE frozen English vocabulary in Fernlet's
+    /// namespace: each kind's token in `.fernlet`'s record kinds, read through the kind's own
+    /// `token(in:)` as the inventory digest reads it. If they ever diverge, a grep for the token
+    /// stops finding the layer that signs it.
     @Test func theTokenVocabularyIsShared() {
-        #expect(MeshMembershipRecordKind.admission.rawValue == PayloadType.meshMemberAdmission.rawValue)
-        #expect(MeshMembershipRecordKind.departure.rawValue == PayloadType.meshMemberDeparture.rawValue)
-        #expect(MeshMembershipRecordKind.removal.rawValue == PayloadType.meshMemberRemoval.rawValue)
-        #expect(MeshMembershipRecordKind.termination.rawValue == PayloadType.meshTerminated.rawValue)
+        let kinds = ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds
+        #expect(MeshMembershipRecordKind.admission.token(in: kinds) == PayloadType.meshMemberAdmission.rawValue)
+        #expect(MeshMembershipRecordKind.departure.token(in: kinds) == PayloadType.meshMemberDeparture.rawValue)
+        #expect(MeshMembershipRecordKind.removal.token(in: kinds) == PayloadType.meshMemberRemoval.rawValue)
+        #expect(MeshMembershipRecordKind.termination.token(in: kinds) == PayloadType.meshTerminated.rawValue)
         #expect(
-            MeshMembershipRecordKind.departure.rawValue
+            MeshMembershipRecordKind.departure.token(in: kinds)
                 == FernletCryptoPurpose.Signature.meshMemberDepartureV1.rawValue
         )
         #expect(
-            MeshMembershipRecordKind.removal.rawValue
+            MeshMembershipRecordKind.removal.token(in: kinds)
                 == FernletCryptoPurpose.Signature.meshMemberRemovalV1.rawValue
         )
         #expect(
-            MeshMembershipRecordKind.termination.rawValue
+            MeshMembershipRecordKind.termination.token(in: kinds)
                 == FernletCryptoPurpose.Signature.meshTerminatedV1.rawValue
         )
         #expect(

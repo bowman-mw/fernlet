@@ -19,7 +19,12 @@
 // Where an API takes the namespace's labels rather than the whole namespace (step A0.2.4 on), the
 // binding passes `.fernlet` for a `ProximityNamespace.Purposes`: FernletConnections'
 // `ProximityNamespace.Purposes.fernlet`, the very value `ProximityNamespace.fernlet.family.purposes`
-// holds (ProximityNamespaceGoldenTests pins the two equal).
+// holds (ProximityNamespaceGoldenTests pins the two equal). Where it takes the family, because it
+// needs the vocabulary's record kinds beside the labels (the membership verifier, the ledger adoption
+// and the inventory digest), the binding passes `.fernlet` for a `ProximityNamespace.Family`:
+// `ProximityNamespace.Family.fernlet`, the value `ProximityNamespace.fernlet.family` holds (pinned
+// equal beside the purposes). Where it takes a vocabulary group (the routed type registry and its ack
+// projection), the binding reads the group off `ProximityNamespace.fernlet.family.vocabulary`.
 
 import CryptoKit
 import FernletConnections
@@ -116,10 +121,12 @@ func canonicalInventoryDigestBytes(for identities: [MeshRecordIdentity]) -> Data
 // MARK: - Signed transcripts I: verifiers and helpers (A0.2.4)
 
 /// The verifier initializer the suites were written against, restored over
-/// `init(meshID:founderSigningPublicKey:ledger:purposes:)` with Fernlet's labels (plan step A0.2.4).
+/// `init(meshID:founderSigningPublicKey:ledger:family:)` with Fernlet's family (plan steps A0.2.4 and
+/// A0.3.3).
 extension MeshMembershipRecordVerifier {
 
-    /// A verifier keeping Fernlet's labels as its copy, otherwise exactly the retired initializer.
+    /// A verifier keeping Fernlet's family (its labels and record kinds) as its copy, otherwise
+    /// exactly the retired initializer.
     ///
     /// - Parameters:
     ///   - meshID: The mesh every accepted record must name.
@@ -127,12 +134,12 @@ extension MeshMembershipRecordVerifier {
     ///   - ledger: The records to start from.
     init(meshID: UUID, founderSigningPublicKey: Data? = nil, ledger: MeshMembershipLedger = .empty) {
         self.init(meshID: meshID, founderSigningPublicKey: founderSigningPublicKey, ledger: ledger,
-                  purposes: .fernlet)
+                  family: .fernlet)
     }
 }
 
 /// The joiner's two ledger steps in the shapes the suites were written against, restored over their
-/// `in purposes:` forms with Fernlet's labels (plan step A0.2.4).
+/// `in family:` forms with Fernlet's family (plan steps A0.2.4 and A0.3.3).
 extension MeshLedgerAdoption {
 
     /// `bootstrapVerifier(meshID:ownAdmission:in: .fernlet)`.
@@ -149,12 +156,12 @@ extension MeshLedgerAdoption {
 }
 
 /// The digest initializer the suites were written against, restored over
-/// `init(meshID:ledger:purposes:)` with Fernlet's labels (plan step A0.2.4).
+/// `init(meshID:ledger:family:)` with Fernlet's family (plan steps A0.2.4 and A0.3.3).
 extension MeshInventoryDigest {
 
-    /// The digest of `ledger`, its records hash under Fernlet's labels.
+    /// The digest of `ledger`, its records hash under Fernlet's labels over Fernlet's record kinds.
     init(meshID: UUID, ledger: MeshMembershipLedger) {
-        self.init(meshID: meshID, ledger: ledger, purposes: .fernlet)
+        self.init(meshID: meshID, ledger: ledger, family: .fernlet)
     }
 }
 
@@ -692,5 +699,67 @@ extension PresenceManager {
     /// `firstName(of:in: .fernlet)`. `nonisolated`, as the function it restores is.
     nonisolated static func firstName(of displayName: String) -> String {
         firstName(of: displayName, in: .fernlet)
+    }
+}
+
+// MARK: - Record kinds and routed types (A0.3.3)
+//
+// ProximityKit spells no routed type: the routed type registry builds its rows from the routed types
+// it is handed, its ack-stage projection likewise, and the manifest mint takes its registry with no
+// default. The routed-type constants, the two `increment1` values and the mint's old shape come back
+// here with `.fernlet`'s `family.vocabulary.routedTypes`, read off the value, never respelled. A cell
+// whose subject is a token's spelling, or a registry's tokens, names `.fernlet` explicitly instead.
+// (The membership record kinds need no binding of their own: the verifier, the adoption and the
+// digest above take Fernlet's family, record kinds included.)
+
+/// The routed-type tokens the suites were written against, each read off `.fernlet`'s
+/// `family.vocabulary.routedTypes` (plan step A0.3.3), never respelled here.
+enum MeshRoutedTypeToken {
+    /// `.fernlet`'s routed photo type.
+    static let photo = ProximityNamespace.fernlet.family.vocabulary.routedTypes.photo
+    /// `.fernlet`'s routed temporary-message type.
+    static let tempMessage = ProximityNamespace.fernlet.family.vocabulary.routedTypes.tempMessage
+    /// `.fernlet`'s routed heart type, whose manifest's item id is the gift id.
+    static let heart = ProximityNamespace.fernlet.family.vocabulary.routedTypes.heart
+    /// `.fernlet`'s reserved control type, registered for nothing.
+    static let control = ProximityNamespace.fernlet.family.vocabulary.routedTypes.control
+}
+
+/// The shipping registry in the shape the suites were written against (plan step A0.3.3).
+extension MeshRoutedTypeRegistry {
+
+    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the registry the retired
+    /// `increment1` value held.
+    static var increment1: MeshRoutedTypeRegistry {
+        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
+    }
+}
+
+/// The ack-stage projection in the shape the suites were written against (plan step A0.3.3).
+extension MeshRoutedAckStageTable {
+
+    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the table the retired
+    /// `increment1` value held.
+    static var increment1: MeshRoutedAckStageTable {
+        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
+    }
+}
+
+/// The manifest mint in the shape the suites were written against, with the registry its retired
+/// `types:` default named (plan step A0.3.3). It inherits the mint's main-actor isolation.
+extension MeshRoutedManifest {
+
+    /// `signed(...types:)` with `.fernlet`'s registry, `increment1(_:)` over its routed types.
+    @MainActor
+    static func signed(
+        meshID: UUID, target: MeshDeliveryTarget, typeToken: String, contentHash: Data, size: UInt64,
+        createdAt: Date, hardDeadline: Date, contentKey: Data, recipientKeys: [String: Data],
+        identity: IdentityService
+    ) throws -> MeshRoutedManifest {
+        try signed(
+            meshID: meshID, target: target, typeToken: typeToken, contentHash: contentHash, size: size,
+            createdAt: createdAt, hardDeadline: hardDeadline, contentKey: contentKey,
+            recipientKeys: recipientKeys, identity: identity,
+            types: MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes))
     }
 }

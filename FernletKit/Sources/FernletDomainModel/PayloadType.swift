@@ -102,9 +102,9 @@ public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     /// registry; a wire token is never reused for a new meaning.
     ///
     /// The name is load-bearing twice over and the two must not be confused: `PayloadType
-    /// .tempMessage` is this parked wire token, while `MeshRoutedTypeToken.tempMessage`
-    /// (`fernlet.mesh.routed-type.temp-message.v1`) is the LIVE registered routed type that
-    /// replaced it.
+    /// .tempMessage` is this parked wire token, while the routed types' `tempMessage`
+    /// (`fernlet.mesh.routed-type.temp-message.v1` in Fernlet's namespace) is the LIVE registered
+    /// routed type that replaced it.
     case tempMessage           = "fernlet.message.temp.v1"
     /// A one-hop content-moderation report bundle (`ModerationReportPayload`): the sender's OWN
     /// Ed25519-signed report rows about shop items, handed to a vault-trusted friend in person so the

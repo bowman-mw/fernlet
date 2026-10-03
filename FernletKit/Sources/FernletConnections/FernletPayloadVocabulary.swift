@@ -5,10 +5,13 @@
 // `ProximityNamespace.Family.fernlet` carries: the coordinator's three session messages, every payload
 // token and the seventeen whose payload must arrive sealed, the capability tokens, the membership
 // record kinds and the routed-type tokens. Payload and capability tokens are read off
-// FernletDomainModel's `PayloadType` and `ProximityCapability`, so each keeps one spelling. ProximityKit's
-// consumers still read their own constants for all of these until plan step A0.3 re-points them here,
-// so the strings ProximityKit also spells for itself until then (the session titles, the record kinds,
-// the routed-type tokens) are written here byte for byte as it writes them.
+// FernletDomainModel's `PayloadType` and `ProximityCapability`, and so are the record kinds (a record
+// kind IS the payload token of the frame that carries its record), so each keeps one spelling. The
+// routed-type tokens have no `PayloadType` twin and are spelled here alone. ProximityKit reads the
+// record kinds and the routed types off the namespace (its inventory digest hashes the one, its routed
+// type registry builds its rows from the other); its other consumers still read constants of
+// their own for the rest until plan step A0.3 re-points them here, so the session titles, which its
+// coordinator also spells for itself until then, are written here byte for byte as it writes them.
 //
 // Every value is pinned by `ProximityVocabularyGoldenTests`' frozen column, so a change here is a wire
 // change for every device already in the field: it fails that suite rather than shipping. Every token
@@ -82,19 +85,21 @@ nonisolated extension ProximityNamespace.Capabilities {
 
 nonisolated extension ProximityNamespace.MembershipRecordKinds {
 
-    /// The four record kinds, each spelled like the payload token of the message that carries its
-    /// record.
+    /// The four record kinds, each the `PayloadType` token of the message that carries its record:
+    /// a record kind IS its payload token, so it is read off `PayloadType` and keeps one spelling.
     public nonisolated static let fernlet = ProximityNamespace.MembershipRecordKinds(
-        admission: "fernlet.mesh.member-admission.v1",
-        departure: "fernlet.mesh.member-departure.v1",
-        removal: "fernlet.mesh.member-removal.v1",
-        termination: "fernlet.mesh.terminated.v1"
+        admission: PayloadType.meshMemberAdmission.rawValue,
+        departure: PayloadType.meshMemberDeparture.rawValue,
+        removal: PayloadType.meshMemberRemoval.rawValue,
+        termination: PayloadType.meshTerminated.rawValue
     )
 }
 
 nonisolated extension ProximityNamespace.RoutedTypes {
 
-    /// The routed engine's photo, temporary-message and heart types, and the reserved control type.
+    /// The routed engine's photo, temporary-message and heart types, and the reserved control type:
+    /// Fernlet's only spelling of each, which ProximityKit's routed type registry builds its three
+    /// rows from (the control type has none).
     public nonisolated static let fernlet = ProximityNamespace.RoutedTypes(
         photo: "fernlet.mesh.routed-type.photo.v1",
         tempMessage: "fernlet.mesh.routed-type.temp-message.v1",

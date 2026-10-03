@@ -27,6 +27,7 @@
 // Tier 1 throughout: `MeshRoutedDrainRig` on `FakePeerNetwork` plus per-instance store scopes, an
 // injected clock, no radio and no wall-clock sleeps.
 
+import FernletConnections
 import Foundation
 import Testing
 @testable import FernletCrypto
@@ -164,8 +165,9 @@ enum MeshRoutedTypeRegistryFixtures {
 struct MeshRoutedTypeRegistryTests {
 
     @Test func theRegistryHasExactlyThreeEntries() {
-        #expect(MeshRoutedTypeRegistry.increment1.tokens.count == 3)
-        #expect(MeshRoutedTypeRegistry.increment1.tokens == [
+        let registry = MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
+        #expect(registry.tokens.count == 3)
+        #expect(registry.tokens == [
             "fernlet.mesh.routed-type.photo.v1",
             "fernlet.mesh.routed-type.temp-message.v1",
             "fernlet.mesh.routed-type.heart.v1"
@@ -173,21 +175,24 @@ struct MeshRoutedTypeRegistryTests {
     }
 
     /// The spellings, pinned as literals rather than through the constants: a rename would otherwise
-    /// hold under any spelling, and these travel inside the origin's signature.
+    /// hold under any spelling, and these travel inside the origin's signature. The registry is
+    /// `.fernlet`'s, built from its routed types.
     @Test func theRegisteredTokensAreTheFrozenSpellings() {
-        let registry = MeshRoutedTypeRegistry.increment1
+        let routed = ProximityNamespace.fernlet.family.vocabulary.routedTypes
+        let registry = MeshRoutedTypeRegistry.increment1(routed)
         #expect(registry.entry(for: "fernlet.mesh.routed-type.photo.v1")?.token
-                == MeshRoutedTypeToken.photo)
+                == routed.photo)
         #expect(registry.entry(for: "fernlet.mesh.routed-type.temp-message.v1")?.token
-                == MeshRoutedTypeToken.tempMessage)
+                == routed.tempMessage)
         #expect(registry.entry(for: "fernlet.mesh.routed-type.heart.v1")?.token
-                == MeshRoutedTypeToken.heart)
+                == routed.heart)
     }
 
     /// The reserved token stays unregistered: a door with no handler behind it is worse than no door.
     @Test func controlIsNotRegistered() {
-        #expect(MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.control) == nil)
-        #expect(MeshRoutedTypeRegistry.increment1.ackStages.stage(for: MeshRoutedTypeToken.control) == nil)
+        let routed = ProximityNamespace.fernlet.family.vocabulary.routedTypes
+        #expect(MeshRoutedTypeRegistry.increment1(routed).entry(for: routed.control) == nil)
+        #expect(MeshRoutedTypeRegistry.increment1(routed).ackStages.stage(for: routed.control) == nil)
     }
 
     @Test func anUnknownTokenIsNilNotADefault() {
@@ -273,21 +278,22 @@ struct MeshRoutedTypeRegistryTests {
         #expect(MeshRoutedTypeRegistry.maxEntries == MeshRoutedAckStageTable.maxRows)
     }
 
-    /// The projection, against the literal spellings. Asserting `table == registry.ackStages` would
-    /// compare a value with its own definition and could not fail.
+    /// The projection, against the literal spellings, over `.fernlet`'s routed types. Asserting
+    /// `table == registry.ackStages` would compare a value with its own definition and could not fail.
     @Test func theAckStageTableProjectsTheRegistrysRows() {
+        let routed = ProximityNamespace.fernlet.family.vocabulary.routedTypes
         let literals = [
             "fernlet.mesh.routed-type.photo.v1",
             "fernlet.mesh.routed-type.temp-message.v1",
             "fernlet.mesh.routed-type.heart.v1"
         ]
         for literal in literals {
-            let projected = MeshRoutedAckStageTable.increment1.stage(for: literal)
+            let projected = MeshRoutedAckStageTable.increment1(routed).stage(for: literal)
             #expect(projected != nil, "\(literal)")
-            #expect(projected == MeshRoutedTypeRegistry.increment1.entry(for: literal)?.finalAck,
+            #expect(projected == MeshRoutedTypeRegistry.increment1(routed).entry(for: literal)?.finalAck,
                     "\(literal)")
         }
-        #expect(MeshRoutedTypeRegistry.increment1.tokens == Set(literals))
+        #expect(MeshRoutedTypeRegistry.increment1(routed).tokens == Set(literals))
     }
 
     /// D-11.7: increment 2's retention is declared and **unregisterable**, so its token answers nil

@@ -88,15 +88,20 @@ wire tokens and the rules that hang on them, each part `.fernlet`:
   authenticates but is parked) and the seventeen whose payload must arrive sealed.
 - `Capabilities.fernlet`, every `ProximityCapability` token in declaration order, `wire2` as the
   wire2 framing's token, and photos alone for a peer whose introduction lists no capabilities.
-- `MembershipRecordKinds.fernlet` and `RoutedTypes.fernlet`, the four record kinds the inventory
-  digest hashes and the routed engine's photo, temporary-message, heart and reserved control types.
+- `MembershipRecordKinds.fernlet`, the four record kinds the inventory digest hashes, each the
+  `PayloadType` token of the frame that carries its record, and `RoutedTypes.fernlet`, the routed
+  engine's photo, temporary-message, heart and reserved control types.
 
 Payload and capability tokens are read off FernletDomainModel's `PayloadType` and
-`ProximityCapability`, so each keeps one spelling; the titles, record kinds and routed types are
-written out, byte for byte as ProximityKit writes them. ProximityKit's consumers still read
-constants of their own for the vocabulary until the rest of plan step A0.3 re-points them here: the
-envelope its sealing set, the coordinator its tokens, titles and capability rules, the membership and
-routed code their tokens.
+`ProximityCapability`, and so are the record kinds (a record kind IS its payload token), so each
+keeps one spelling. The routed types have no `PayloadType` twin and are spelled here alone, and the
+titles are written out byte for byte as ProximityKit's coordinator writes them. ProximityKit reads the
+record kinds and the routed types off the namespace: its inventory digest tags every record with its
+family's record kind, and its routed type registry builds its three rows from the routed types (the
+mesh manager hands it its namespace's), so ProximityKit spells neither. Its other consumers
+still read constants of their own for the rest of the vocabulary until the rest of plan step A0.3
+re-points them here: the envelope its sealing set, the coordinator its tokens, titles and capability
+rules.
 
 `Radios.fernlet` carries the three presentation strings beside the radio values, and ProximityKit
 reads each of them off the namespace: `fernlet-mesh-`, the prefix the mesh and recipe-share radios'
@@ -106,10 +111,14 @@ ephemeral certificate's common name. The radios read them from the namespace the
 them, the presence manager's posture mint from its own copy, and the name display from the
 namespace each caller passes: the app passes `.fernlet`, and so does `FernletProximityUI`, which
 depends on this module for it. `ProximityVocabularyGoldenTests` holds every `.fernlet` value to its
-frozen literal, so no spelling can drift, drives those consumers under `.fernlet` and under a
-namespace whose strings are its own, and holds the bounds ProximityKit's soundness rules apply to the
+frozen literal, so no spelling can drift, drives those consumers (and the inventory digest, the routed
+type registry and a mesh manager) under `.fernlet` and under a namespace whose strings, record kinds
+or routed types are its own, and holds the bounds ProximityKit's soundness rules apply to the
 bounds of the consumers they protect. `ProximityNamespace.fernlet` stays `.sound` under the vocabulary
-and presentation rules too.
+and presentation rules too. The test target's bindings file restores the routed suites' old call
+shapes (`MeshRoutedTypeToken`, the two `increment1` values, the mint without a registry) with
+`.fernlet`'s routed types, and the membership verifier's, the adoption's and the digest's with
+`Family.fernlet`.
 
 **The install binding (plan step A0.2.9).** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks

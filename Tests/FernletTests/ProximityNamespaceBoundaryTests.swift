@@ -20,8 +20,10 @@
 // deleted. So both lists only shrink, to nothing, as A0.3 to A0.5 and A1 land. Between them they
 // hold what is still outside the namespace wherever ProximityKit reads a feature label or spells
 // `fernlet`: the feature labels, the heart-drop and moderation keychain services and the support
-// folder (until A0.4), and the payload vocabulary that spells it (until A0.3). No presentation
-// string is on either: the radios and the name display read them off the namespace, and the
+// folder (until A0.4), and the payload vocabulary that spells it, the coach channel's trainer-export
+// format (until A0.3). No presentation string, membership record kind or routed-type token is on
+// either: the radios and the name display read the presentation strings off the namespace, the
+// inventory digest its record kinds and the routed type registry its routed types, and the
 // coordinator has no display default and no per-mode service type.
 
 import Foundation
@@ -487,11 +489,12 @@ private extension UInt8 {
     /// ``fernletLiterals``, file by file and count by count, and every row there is still in the code.
     ///
     /// A0.2 moved every Fernlet value ProximityKit's protocol reads into the host's namespace, and the
-    /// radios and the name display read the presentation strings off it too. What is left is spelled
+    /// radios and the name display read the presentation strings off it too, the inventory digest the
+    /// membership record kinds and the routed type registry the routed types. What is left is spelled
     /// in place for a reason each row names, with the plan step that takes it out: payload vocabulary
     /// (A0.3), feature values (A0.4), and DEBUG test-hook names (A1). A new Fernlet string fails here:
     /// it belongs in the host's namespace, or in the feature's own module. A row whose literal is gone
-    /// fails until it is deleted, so the list stays the exact set (46 literals on 45 lines in 15
+    /// fails until it is deleted, so the list stays the exact set (38 literals on 37 lines in 13
     /// files). The scan reads literals only: comments may say Fernlet freely.
     @Test func everyFernletLiteralIsAllowlistedWithItsReasonAndExitStep() throws {
         let sources = try Self.proximitySources()
@@ -551,18 +554,9 @@ private extension UInt8 {
         FernletLiteral("ClothingSharing/MeshClothingShop.swift", "fernlet.proximity.clothing.catalog", 1,
                        .clothingFormat),
         FernletLiteral("HeartSharing/HeartPrekeyStore.swift", "com.fernlet.heartdrop", 1, .heartDropService),
-        FernletLiteral("Mesh/MeshMembershipRecords.swift", "fernlet.mesh.member-admission.v1", 1, .recordKind),
-        FernletLiteral("Mesh/MeshMembershipRecords.swift", "fernlet.mesh.member-departure.v1", 1, .recordKind),
-        FernletLiteral("Mesh/MeshMembershipRecords.swift", "fernlet.mesh.member-removal.v1", 1, .recordKind),
-        FernletLiteral("Mesh/MeshMembershipRecords.swift", "fernlet.mesh.terminated.v1", 1, .recordKind),
         FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_OPEN", 1, .uiTestHook),
         FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_ADMISSION", 2, .uiTestHook),
         FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_CLOSED", 1, .uiTestHook),
-        FernletLiteral("Mesh/MeshRoutedAck.swift", "fernlet.mesh.routed-type.photo.v1", 1, .routedTypeToken),
-        FernletLiteral("Mesh/MeshRoutedAck.swift", "fernlet.mesh.routed-type.temp-message.v1", 1,
-                       .routedTypeToken),
-        FernletLiteral("Mesh/MeshRoutedAck.swift", "fernlet.mesh.routed-type.heart.v1", 1, .routedTypeToken),
-        FernletLiteral("Mesh/MeshRoutedAck.swift", "fernlet.mesh.routed-type.control.v1", 1, .routedTypeToken),
         FernletLiteral("Moderation/ModerationBanStore.swift", "com.fernlet.moderation", 1, .moderationService),
         FernletLiteral("Moderation/ModerationReportRelay.swift", "fernlet.proximity.moderation.report", 2,
                        .moderationFormat),
@@ -744,16 +738,6 @@ extension ProximityNamespaceBoundaryTests.Reason {
 
     // Rule 3: payload vocabulary (A0.3).
 
-    /// A membership record kind.
-    static let recordKind = Self(exit: .a03, why: """
-        a membership record kind, spelled as its PayloadType token and hashed into the signed \
-        inventory digest: payload vocabulary, injected with A0.3's
-        """)
-    /// A routed-type token.
-    static let routedTypeToken = Self(exit: .a03, why: """
-        a routed-type token, on the wire and in the sealed index: A0.3 injects the routed-type policy \
-        rows and MeshRoutedAck's tokens
-        """)
     /// The trainer export body's format token.
     static let trainerExportFormat = Self(exit: .a03, why: """
         the coach channel's trainer-export body format, declared and checked: payload vocabulary of \

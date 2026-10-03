@@ -24,8 +24,11 @@
 //    coordinator and the mesh's seats decide it; and `wire2`'s role, framing sealed bodies.
 // 4. **Session enums.** `ProximityMode`, `ProximityRole` and `ProximityRangingMode`, both ways.
 // 5. **Membership record kinds.** The 4 tokens, the digest's kind-first order and one known-answer
-//    inventory digest over a ledger of one record per kind.
-// 6. **Routed types.** The 4 `MeshRoutedTypeToken` spellings and the heart row's cap.
+//    inventory digest over a ledger of one record per kind; and the digest, an identity's signed
+//    digest and a verifier's own tagging records with the record kinds of the family they hold.
+// 6. **Routed types.** The 4 routed-type tokens `.fernlet`'s routed types carry and the heart row's
+//    cap; and the registry, its ack-stage projection and a mesh manager building their rows from the
+//    routed types they are handed or their host holds.
 // 7. **The coordinator's session messages.** The token and title of the introduction, the
 //    acknowledgement, the heartbeat and its reply, read off what a live coordinator sends; and the
 //    mesh's rule that an envelope's summary title is its payload token.
@@ -54,8 +57,9 @@
 // a table that is exactly a type's cases is what makes a new case fail here until it has a row.
 //
 // Every identity and every label-taking consumer this suite builds names its namespace explicitly
-// (`.fernlet`, or group 8's namespace that differs from it in the presentation strings alone), never
-// a test binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
+// (`.fernlet`, group 8's namespace that differs from it in the presentation strings alone, or groups 5
+// and 6's that differs from it in its record kinds and routed types alone), never a test binding
+// (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
 // below was derived from the FORMAT by an independent Python re-implementation —
 // `CanonicalByteWriter`'s fields, and Foundation's JSON output rules (keys sorted by code point,
 // `/` escaped unless `.withoutEscapingSlashes`, a whole number printed without a fraction,
@@ -512,7 +516,8 @@ struct ProximityVocabularyGoldenTests {
 
     /// The four record kinds. Three are spelled like a signature label and the admission kind is
     /// not; ProximityNamespaceGoldenTests group 3 holds those three equal to their labels and the
-    /// fourth by literal. Each kind is hashed into the signed inventory digest, kind first.
+    /// fourth by literal. Each kind's token is hashed into the signed inventory digest, kind first,
+    /// and is read off the record kinds of the family the digest is handed.
     static var recordKindRows: [VocabularyGoldenRow] {
         [
             recordKind(.admission, "fernlet.mesh.member-admission.v1"),
@@ -522,15 +527,18 @@ struct ProximityVocabularyGoldenTests {
         ]
     }
 
-    /// A record-kind row: the field names the case, today's accessor is its `rawValue`.
+    /// A record-kind row: the field names the case, today's accessor is the case's token in
+    /// `.fernlet`'s record kinds, the read the inventory digest makes.
     private static func recordKind(_ kind: MeshMembershipRecordKind, _ frozen: String) -> VocabularyGoldenRow {
-        VocabularyGoldenRow(field: "recordKind.\(kind)", frozen: frozen, today: kind.rawValue)
+        VocabularyGoldenRow(field: "recordKind.\(kind)", frozen: frozen,
+                            today: kind.token(in: ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds))
     }
 
     /// The table is exactly the kinds, and every kind is its frozen spelling.
     @Test func everyRecordKindIsItsFrozenSpelling() {
+        let kinds = ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds
         #expect(Self.recordKindRows.count == MeshMembershipRecordKind.allCases.count)
-        #expect(Set(Self.recordKindRows.map(\.frozen)) == Set(MeshMembershipRecordKind.allCases.map(\.rawValue)))
+        #expect(Set(Self.recordKindRows.map(\.frozen)) == Set(MeshMembershipRecordKind.allCases.map { $0.token(in: kinds) }))
         #expect(Self.expectFrozen(Self.recordKindRows) == 4)
     }
 
@@ -538,22 +546,26 @@ struct ProximityVocabularyGoldenTests {
     /// instants run opposite to its kinds, and the order that comes out is the kinds' — the frozen
     /// tokens sorted bytewise — not the clock's.
     @Test func theDigestOrdersRecordsByKindTokenBeforeTime() {
-        let identities = MeshInventoryDigest.identities(in: Self.fourKindLedger())
+        let identities = MeshInventoryDigest.identities(
+            in: Self.fourKindLedger(), recordKinds: ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds)
         let byBytes = Self.recordKindRows.map(\.frozen).sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
-        #expect(identities.map(\.kind.rawValue) == byBytes, "the digest's kind order is \(identities.map(\.kind.rawValue))")
+        #expect(identities.map(\.kindToken) == byBytes, "the digest's kind order is \(identities.map(\.kindToken))")
         let instants = identities.map(\.occurredAt)
         #expect(instants == instants.sorted(by: >), "the fixture no longer runs its instants against its kinds")
     }
 
     /// One known answer for the inventory digest over a ledger holding one record of each kind: the
-    /// preimage `canonicalInventoryDigestBytes(for:in: .fernlet)` writes and the records hash the
-    /// digest takes of it. (`MeshMembershipEventGoldenTests` pins the one-admission ledger's hash.)
+    /// preimage `canonicalInventoryDigestBytes(for:in: .fernlet)` writes over the identities tagged
+    /// with `.fernlet`'s record kinds, and the records hash the digest takes of it under `.fernlet`'s
+    /// family. (`MeshMembershipEventGoldenTests` pins the one-admission ledger's hash.)
     @Test func aLedgerOfOneRecordPerKindDigestsToItsKnownAnswer() {
         let ledger = Self.fourKindLedger()
-        let preimage = canonicalInventoryDigestBytes(for: MeshInventoryDigest.identities(in: ledger), in: .fernlet)
+        let identities = MeshInventoryDigest.identities(
+            in: ledger, recordKinds: ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds)
+        let preimage = canonicalInventoryDigestBytes(for: identities, in: .fernlet)
         #expect(Self.hex(preimage) == Self.fourKindPreimageHex, "actual preimage hex = \(Self.hex(preimage))")
         let digest = MeshInventoryDigest(meshID: Self.uuid("1F1F1F1F-2E2E-4D4D-8C8C-0B0B0B0B0B0B"),
-                                         ledger: ledger, purposes: .fernlet)
+                                         ledger: ledger, family: ProximityNamespace.fernlet.family)
         #expect(Self.hex(digest.recordsHash) == Self.fourKindRecordsHashHex,
                 "actual records hash = \(Self.hex(digest.recordsHash))")
         let counts: [Int] = [digest.admissionCount, digest.departureCount, digest.removalCount, digest.terminationCount]
@@ -599,21 +611,77 @@ struct ProximityVocabularyGoldenTests {
             removals: MeshMembershipRecordSet([removal]), terminations: MeshMembershipRecordSet([termination]))
     }
 
+    /// The digest's consumers tag every record with the record kinds of the family they hold, never
+    /// a constant. Under a namespace that differs from `.fernlet` in its record kinds and routed types
+    /// alone, the fixture's records are tagged with that namespace's kind tokens in their own byte
+    /// order (removal, admission, termination, departure: neither Fernlet's kind order nor the
+    /// fixture's time order), so the records hash leaves the known answer though every label is
+    /// `.fernlet`'s; an identity of that namespace signs the same digest a verifier holding its family
+    /// computes, and a verifier holding `.fernlet`'s family over the same ledger finds it different.
+    @Test func theDigestTagsRecordsWithTheKindsOfTheFamilyItHolds() throws {
+        let renamed = Self.renamedMeshTokensNamespace()
+        #expect(renamed.soundness == .sound, "the renamed namespace is unsound: \(renamed.soundness)")
+        let kinds = renamed.family.vocabulary.membershipRecordKinds
+        let ledger = Self.fourKindLedger()
+        let tags = MeshInventoryDigest.identities(in: ledger, recordKinds: kinds).map(\.kindToken)
+        #expect(tags == [kinds.removal, kinds.admission, kinds.termination, kinds.departure],
+                "the renamed namespace's kinds tag the records \(tags)")
+        let meshID = Self.uuid("1F1F1F1F-2E2E-4D4D-8C8C-0B0B0B0B0B0B")
+        let digest = MeshInventoryDigest(meshID: meshID, ledger: ledger, family: renamed.family)
+        #expect(Self.hex(digest.recordsHash) != Self.fourKindRecordsHashHex,
+                "the renamed kinds hash the ledger to Fernlet's known answer")
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let member = IdentityService(namespace: renamed, keychainService: service)
+        try member.ensureProvisioned()
+        let signed = try MeshInventoryDigestPayload.signed(meshID: meshID, ledger: ledger, identity: member)
+        #expect(signed.digest == digest, "an identity of the renamed namespace digests the ledger otherwise")
+        let own = MeshMembershipRecordVerifier(meshID: meshID, ledger: ledger, family: renamed.family)
+        let fernlets = MeshMembershipRecordVerifier(meshID: meshID, ledger: ledger, family: ProximityNamespace.fernlet.family)
+        #expect(own.matchesLocalInventory(signed.digest), "a verifier holding the signer's family digests the ledger otherwise")
+        #expect(!fernlets.matchesLocalInventory(signed.digest), "a verifier holding Fernlet's family matched another's kinds")
+    }
+
+    /// `.fernlet` with its membership record kinds and routed types replaced by tokens of its own and
+    /// nothing else changed, so a consumer that took a record kind or a routed type from anywhere but
+    /// the family it holds would read Fernlet's where this namespace's belongs (groups 5 and 6). The
+    /// record kinds sort removal, admission, termination, departure by their bytes.
+    static func renamedMeshTokensNamespace() -> ProximityNamespace {
+        let fernlet = ProximityNamespace.fernlet
+        let vocabulary = fernlet.family.vocabulary
+        return ProximityNamespace(
+            family: ProximityNamespace.Family(
+                purposes: fernlet.family.purposes,
+                radios: fernlet.family.radios,
+                verifyQR: fernlet.family.verifyQR,
+                vocabulary: ProximityNamespace.Vocabulary(
+                    session: vocabulary.session, payloads: vocabulary.payloads, capabilities: vocabulary.capabilities,
+                    membershipRecordKinds: ProximityNamespace.MembershipRecordKinds(
+                        admission: "golden.kind.b-admitted.v1", departure: "golden.kind.d-departed.v1",
+                        removal: "golden.kind.a-removed.v1", termination: "golden.kind.c-ended.v1"),
+                    routedTypes: ProximityNamespace.RoutedTypes(
+                        photo: "golden.routed.picture.v1", tempMessage: "golden.routed.note.v1",
+                        heart: "golden.routed.wave.v1", control: "golden.routed.signal.v1"))),
+            installation: fernlet.installation)
+    }
+
     // MARK: Group 6 — the routed types
 
     /// The four routed-type tokens — the three the registry carries rows for, and the reserved
-    /// `control` one. `MeshRoutedAckStageTests` pins the same spellings, and
-    /// `MeshRoutedTypeRegistryTests` the registry's tokens and every column of its three rows.
+    /// `control` one — read off `.fernlet`'s routed types, which the registry builds its rows from.
+    /// `MeshRoutedAckStageTests` pins the same spellings, and `MeshRoutedTypeRegistryTests` the
+    /// registry's tokens and every column of its three rows.
     static var routedTypeRows: [VocabularyGoldenRow] {
-        [
+        let routed = ProximityNamespace.fernlet.family.vocabulary.routedTypes
+        return [
             VocabularyGoldenRow(field: "routedType.photo", frozen: "fernlet.mesh.routed-type.photo.v1",
-                                today: MeshRoutedTypeToken.photo),
+                                today: routed.photo),
             VocabularyGoldenRow(field: "routedType.tempMessage", frozen: "fernlet.mesh.routed-type.temp-message.v1",
-                                today: MeshRoutedTypeToken.tempMessage),
+                                today: routed.tempMessage),
             VocabularyGoldenRow(field: "routedType.heart", frozen: "fernlet.mesh.routed-type.heart.v1",
-                                today: MeshRoutedTypeToken.heart),
+                                today: routed.heart),
             VocabularyGoldenRow(field: "routedType.control", frozen: "fernlet.mesh.routed-type.control.v1",
-                                today: MeshRoutedTypeToken.control)
+                                today: routed.control)
         ]
     }
 
@@ -622,18 +690,84 @@ struct ProximityVocabularyGoldenTests {
     /// (`MeshRoutedTextBodyTests`) already have literal pins; the heart row's had only its formula.
     static var routedTypeNumbers: [VocabularyGoldenNumber] {
         [VocabularyGoldenNumber(field: "routedType.heart.maxItemByteCount", frozen: 553,
-                                today: registeredCap(MeshRoutedTypeToken.heart))]
+                                today: registeredCap(ProximityNamespace.fernlet.family.vocabulary.routedTypes.heart))]
     }
 
-    /// The registry's cap for `token`, or -1 when it has no row.
+    /// The cap of `.fernlet`'s registry for `token`, or -1 when it has no row.
     private static func registeredCap(_ token: String) -> Int {
-        MeshRoutedTypeRegistry.increment1.entry(for: token).map { Int(clamping: $0.maxItemByteCount) } ?? -1
+        let registry = MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
+        return registry.entry(for: token).map { Int(clamping: $0.maxItemByteCount) } ?? -1
     }
 
     /// Every routed-type token is its frozen spelling, and the heart row's cap its frozen bytes.
     @Test func everyRoutedTypeTokenAndTheHeartCapIsFrozen() {
         #expect(Self.expectFrozen(Self.routedTypeRows) == 4)
         #expect(Self.expectFrozen(Self.routedTypeNumbers) == 1)
+    }
+
+    /// The registry and its ack-stage projection take every row's token from the routed types they
+    /// are handed and nothing else. Built from `.fernlet`'s, the registry holds exactly the three
+    /// frozen tokens, each for its canonical store; built from a namespace whose record kinds and
+    /// routed types alone are its own, it holds that namespace's three and none of Fernlet's, every
+    /// row otherwise the very row Fernlet's registry holds for the same store, and the projection keys
+    /// the same stages by them. The control type has no row under either.
+    @Test func theRegistryIsBuiltFromTheRoutedTypesItIsHanded() throws {
+        let fernlet = ProximityNamespace.fernlet.family.vocabulary.routedTypes
+        let shipped = MeshRoutedTypeRegistry.increment1(fernlet)
+        let frozen = ["routedType.photo", "routedType.tempMessage", "routedType.heart"].map { Self.frozen($0) }
+        let stores: [MeshRoutedCanonicalStore] = [.friendPhotoWall, .sessionTranscript, .heartLedger]
+        #expect(shipped.tokens == Set(frozen), "Fernlet's registry holds \(shipped.tokens.sorted())")
+        #expect(stores.map { shipped.token(forCanonicalStore: $0) } == frozen, "Fernlet's rows are filed under other stores")
+        let renamed = Self.renamedMeshTokensNamespace().family.vocabulary.routedTypes
+        let other = MeshRoutedTypeRegistry.increment1(renamed)
+        let stages = MeshRoutedAckStageTable.increment1(renamed)
+        let theirs = [renamed.photo, renamed.tempMessage, renamed.heart]
+        #expect(other.tokens == Set(theirs), "another namespace's registry holds \(other.tokens.sorted())")
+        #expect(stores.map { other.token(forCanonicalStore: $0) } == theirs, "its rows are filed under other stores")
+        // R2: bounded by the three rows.
+        for (token, twinToken) in zip(theirs, frozen) {
+            let twin = try #require(shipped.entry(for: twinToken), "Fernlet's registry has no \(twinToken) row")
+            let expected = MeshRoutedTypeEntry(
+                token: token, maxItemByteCount: twin.maxItemByteCount, destinations: twin.destinations,
+                relayRetention: twin.relayRetention, finalAck: twin.finalAck, expiry: twin.expiry,
+                canonicalStore: twin.canonicalStore)
+            #expect(other.entry(for: token) == expected, "the \(token) row is not Fernlet's \(twinToken) row")
+            #expect(other.entry(for: twinToken) == nil && stages.stage(for: twinToken) == nil, "\(twinToken) is registered")
+            #expect(stages.stage(for: token) == twin.finalAck, "the projection stages \(token) otherwise")
+        }
+        let shippedStages = MeshRoutedAckStageTable.increment1(fernlet)
+        #expect(shipped.entry(for: fernlet.control) == nil && shippedStages.stage(for: fernlet.control) == nil,
+                "Fernlet's control type is registered")
+        #expect(other.entry(for: renamed.control) == nil && stages.stage(for: renamed.control) == nil,
+                "another namespace's control type is registered")
+    }
+
+    /// A mesh manager's registry is built from its host namespace's routed types: what it can project
+    /// once chat is allowed (the photo wall's type and the transcript's) is `.fernlet`'s frozen photo
+    /// and temporary-message tokens under a host of `.fernlet`, and that namespace's own under a host
+    /// of the namespace whose record kinds and routed types alone are its own.
+    @Test func theManagersRegistryIsItsHostNamespaces() {
+        let fernlet = Self.projectableRoutedTypes(underHostOf: .fernlet)
+        #expect(fernlet == [Self.frozen("routedType.photo"), Self.frozen("routedType.tempMessage")],
+                "a manager of .fernlet projects \(fernlet.sorted())")
+        let renamed = Self.renamedMeshTokensNamespace()
+        let other = Self.projectableRoutedTypes(underHostOf: renamed)
+        let routed = renamed.family.vocabulary.routedTypes
+        #expect(other == [routed.photo, routed.tempMessage], "a manager of another namespace projects \(other.sorted())")
+    }
+
+    /// The routed types a manager over a scratch host of `namespace` can project once chat is allowed.
+    /// It runs on a fake radio, with an identity on a throwaway service; the host's root and seal-key
+    /// rows and the identity's rows are removed before this returns.
+    static func projectableRoutedTypes(underHostOf namespace: ProximityNamespace) -> Set<String> {
+        let host = ScratchNamespaceHost(namespace: namespace)
+        defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
+        let service = isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
+                                         identity: IdentityService(namespace: namespace, keychainService: service))
+        manager.chatAllowedProvider = { true }
+        return manager.projectableRoutedTypeTokensForTesting
     }
 
     // MARK: Group 7 — the coordinator's session messages
@@ -1673,4 +1807,48 @@ private final class PresentationNamespaceHost: ProximityHost {
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+}
+
+// MARK: - A host of one namespace on a scratch root
+
+/// A `ProximityHost` that supplies the namespace a cell hands it on a scratch sidecar root and
+/// seal-key services of its own, so a mesh manager can be built over `.fernlet` or over a namespace
+/// whose tokens are its own and touch nothing another suite holds. ``tearDown()`` removes the root and
+/// both seal-key rows.
+@MainActor
+private final class ScratchNamespaceHost: ProximityHost {
+    let proximityNamespace: ProximityNamespace
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    let proximitySupportDirectory: URL
+    let meshSessionStorage: MeshSessionStorageScope
+    let meshRoutedStorage: MeshRoutedStorageScope
+    let proximityTrustVault = ProximityTrustVault()
+    var proximityDisplayName: String { VocabularyCoordinatorRig.displayName }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+
+    /// A host of `namespace` on a fresh scratch root and fresh `.test.` seal-key services.
+    init(namespace: ProximityNamespace) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VocabularyGoldenHost-\(UUID().uuidString)", isDirectory: true)
+        proximityNamespace = namespace
+        proximitySupportDirectory = root
+        meshSessionStorage = MeshSessionStorageScope(
+            namespace: namespace, directory: root,
+            keychainService: "com.fernlet.mesh-session.test.vocabularygolden.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter())
+        meshRoutedStorage = MeshRoutedStorageScope(
+            namespace: namespace, directory: root,
+            keychainService: "com.fernlet.mesh-routed.test.vocabularygolden.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter())
+    }
+
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
+    func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+
+    /// Removes the scratch root and both seal-key rows.
+    func tearDown() {
+        MeshSessionStore.wipeForDeleteAll(scope: meshSessionStorage)
+        MeshRoutedStore.wipeForDeleteAll(scope: meshRoutedStorage)
+        try? FileManager.default.removeItem(at: proximitySupportDirectory)
+    }
 }
