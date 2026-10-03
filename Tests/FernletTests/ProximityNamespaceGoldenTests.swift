@@ -40,7 +40,9 @@
 //    preimages, one cell each.
 // 7. **A foreign namespace.** One built from another app's literals collides with `.fernlet` nowhere,
 //    and no signature purpose of either accepts a transcript framed for the other, except Fernlet's
-//    two verify-only legacy labels, which accept every transcript by construction.
+//    two verify-only legacy labels, which accept every transcript by construction. Its payload
+//    vocabulary and presentation strings share no string with `.fernlet`'s, whose own values
+//    ProximityVocabularyGoldenTests pins.
 //
 // One more group since step A0.2.3, when the host's supply path arrived and the identity's keychain
 // service became the first value read off the namespace. Its row's accessor is re-pointed at
@@ -1320,8 +1322,9 @@ struct ProximityNamespaceGoldenTests {
         var reflected: [(field: String, purpose: ProximityCryptographicPurpose)] = []
         var pending: [(path: String, value: Any)] = [(path: "", value: namespace)]
         var visits = 0
-        // R2: at most 256 nodes; `.fernlet` has about 90 (its groups, 39 labels, its strings and the
-        // heartbeat's three mirror children), and the check below fails if the walk is cut short.
+        // R2: at most 256 nodes; `.fernlet` has about 120 (its groups, 39 labels, its strings, the
+        // vocabulary's sets and lists, whose unlabeled members the walk skips, and the heartbeat's
+        // three mirror children), and the check below fails if the walk is cut short.
         while visits < 256, let node = pending.popLast() {
             visits += 1
             if let purpose = node.value as? ProximityCryptographicPurpose {
@@ -1673,6 +1676,39 @@ struct ProximityNamespaceGoldenTests {
         let legacy: Set<String> = ["family.purposes.signature.legacyV1.identityEnvelopeV1",
                                    "family.purposes.signature.legacyV1.meshAdmissionTokenV1"]
         #expect(fernletAcceptors == legacy, "Fernlet purposes that accept a foreign transcript: \(fernletAcceptors.sorted())")
+    }
+
+    /// The foreign namespace's vocabulary and presentation strings are its own: none of its tokens,
+    /// titles, instance-name prefixes or its common name is one of `.fernlet`'s, so a cell that runs a
+    /// consumer under it reads the namespace's value, never a Fernlet constant that happens to match.
+    @Test func aForeignVocabularySharesNoStringWithFernlets() {
+        let foreign = Self.vocabularyStrings(of: ForeignAppNamespace.namespace().family)
+        let fernlet = Self.vocabularyStrings(of: ProximityNamespace.fernlet.family)
+        #expect(foreign.count >= 20 && fernlet.count >= 70,
+                "read only \(foreign.count) foreign and \(fernlet.count) Fernlet vocabulary strings")
+        let shared = foreign.intersection(fernlet)
+        #expect(shared.isEmpty, "the foreign fixture shares \(shared.sorted()) with .fernlet")
+    }
+
+    /// Every token, title and presentation string a family's vocabulary and radios carry.
+    private static func vocabularyStrings(of family: ProximityNamespace.Family) -> Set<String> {
+        let vocabulary = family.vocabulary
+        let session = vocabulary.session
+        let kinds = vocabulary.membershipRecordKinds
+        let routed = vocabulary.routedTypes
+        var strings: Set<String> = [
+            session.identityIntroduction.payloadType, session.identityIntroduction.summaryTitle,
+            session.identityAcknowledge.payloadType, session.identityAcknowledge.summaryTitle,
+            session.heartbeat.payloadType, session.heartbeat.pingTitle, session.heartbeat.replyTitle,
+            vocabulary.capabilities.wire2, kinds.admission, kinds.departure, kinds.removal, kinds.termination,
+            routed.photo, routed.tempMessage, routed.heart, routed.control,
+            family.radios.meshInstanceNamePrefix, family.radios.presenceInstanceNamePrefix, family.radios.tlsCommonName
+        ]
+        strings.formUnion(vocabulary.payloads.known)
+        strings.formUnion(vocabulary.payloads.sealingRequired)
+        strings.formUnion(vocabulary.capabilities.known)
+        strings.formUnion(vocabulary.capabilities.assumedForLegacyPeers)
+        return strings
     }
 
     // MARK: Group 8 — the supply path (A0.2.3)
@@ -3595,7 +3631,8 @@ struct ProximityNamespaceGoldenTests {
     private static func fernletNamespace(with purposes: ProximityNamespace.Purposes) -> ProximityNamespace {
         ProximityNamespace(
             family: ProximityNamespace.Family(purposes: purposes, radios: .fernlet,
-                                              verifyQR: ProximityNamespace.fernlet.family.verifyQR),
+                                              verifyQR: ProximityNamespace.fernlet.family.verifyQR,
+                                              vocabulary: .fernlet),
             installation: .fernletApp)
     }
 
@@ -3656,7 +3693,8 @@ struct ProximityNamespaceGoldenTests {
             let purposes = ProximityNamespace.Purposes(
                 signature: labels.purposes.signature, keyDerivation: family.purposes.keyDerivation,
                 aead: labels.purposes.aead, hash: labels.purposes.hash)
-            let sealedAlike = ProximityNamespace.Family(purposes: purposes, radios: labels.radios, verifyQR: labels.verifyQR)
+            let sealedAlike = ProximityNamespace.Family(purposes: purposes, radios: labels.radios, verifyQR: labels.verifyQR,
+                                                        vocabulary: labels.vocabulary)
             return MeshRoutedStore(scope: MeshRoutedStorageScope(
                 namespace: ProximityNamespace(family: sealedAlike, installation: scope.namespace.installation),
                 directory: scope.directory, keychainService: scope.keychainService, installBinding: scope.installBinding))
@@ -3818,7 +3856,8 @@ private struct PinnedInstallBinding: ProximityInstallBinding {
 
 /// An app that does not exist, "acme", its namespace built entirely from its own literals: the shape a
 /// non-Fernlet host of ProximityKit supplies (plan step A1.2's example app is the real one). It has no
-/// legacy peers, so its legacy pair is `.refused`, and it shares nothing with Fernlet on purpose.
+/// legacy peers, so its legacy pair is `.refused`, and it shares nothing with Fernlet on purpose: no
+/// label, radio value or name, and no token, title or presentation string either.
 private enum ForeignAppNamespace {
 
     /// The namespace: sound, and disjoint from `.fernlet` everywhere.
@@ -3831,8 +3870,11 @@ private enum ForeignAppNamespace {
                     mesh: ProximityNamespace.Radio(serviceType: "_acme-mesh._udp", alpn: "acme-mesh-v1"),
                     presence: ProximityNamespace.Radio(serviceType: "_acme-near._udp", alpn: "acme-near-v1"),
                     recipeShare: ProximityNamespace.Radio(serviceType: "_acme-recipe._udp", alpn: "acme-recipe-v1"),
-                    meshHeartbeat: Data("acme-mesh-heartbeat".utf8)),
-                verifyQR: ProximityNamespace.VerifyQR(urlScheme: "acme")),
+                    meshHeartbeat: Data("acme-mesh-heartbeat".utf8),
+                    meshInstanceNamePrefix: "acme-link-", presenceInstanceNamePrefix: "ac-",
+                    tlsCommonName: "acme-link"),
+                verifyQR: ProximityNamespace.VerifyQR(urlScheme: "acme"),
+                vocabulary: vocabulary()),
             installation: ProximityNamespace.Installation(
                 keychain: ProximityNamespace.Keychain(
                     identity: ProximityNamespace.Keychain.IdentityRows(
@@ -3908,6 +3950,31 @@ private enum ForeignAppNamespace {
             meshCustodyReceiptIDV1: "acme.mesh.custody-receipt-id.hash.v1",
             meshRecipientReceiptIDV1: "acme.mesh.recipient-receipt-id.hash.v1",
             meshEpochIDV1: "acme.mesh.epoch.v1"
+        )
+    }
+
+    /// Its payload vocabulary: its own session messages and titles, five payload tokens of which two
+    /// must arrive sealed, three capabilities with no legacy peers to assume anything for, and its own
+    /// record kinds and routed types.
+    static func vocabulary() -> ProximityNamespace.Vocabulary {
+        ProximityNamespace.Vocabulary(
+            session: ProximityNamespace.SessionMessages(
+                identityIntroduction: ProximityNamespace.SessionMessage(payloadType: "acme.hello.v1", summaryTitle: "Hi"),
+                identityAcknowledge: ProximityNamespace.SessionMessage(payloadType: "acme.welcome.v1",
+                                                                       summaryTitle: "Welcome"),
+                heartbeat: ProximityNamespace.Heartbeat(payloadType: "acme.beat.v1", pingTitle: "Ping",
+                                                        replyTitle: "Pong")),
+            payloads: ProximityNamespace.PayloadRules(
+                known: ["acme.hello.v1", "acme.welcome.v1", "acme.beat.v1", "acme.note.v1", "acme.sketch.v1"],
+                sealingRequired: ["acme.note.v1", "acme.sketch.v1"]),
+            capabilities: ProximityNamespace.Capabilities(
+                known: ["notes", "sketches", "framing"], wire2: "framing", assumedForLegacyPeers: []),
+            membershipRecordKinds: ProximityNamespace.MembershipRecordKinds(
+                admission: "acme.member.joined.v1", departure: "acme.member.left.v1",
+                removal: "acme.member.removed.v1", termination: "acme.group.ended.v1"),
+            routedTypes: ProximityNamespace.RoutedTypes(
+                photo: "acme.routed.picture.v1", tempMessage: "acme.routed.note.v1",
+                heart: "acme.routed.wave.v1", control: "acme.routed.control.v1")
         )
     }
 }

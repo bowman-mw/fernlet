@@ -13,7 +13,7 @@
 // moved consumer no cell drives yet gains a cell. A behavioural cell needs no re-pointing at all:
 // it pins the consumer along with the value, and it reads its expectations off the frozen column.
 //
-// Twelve groups:
+// Thirteen groups:
 //
 // 1. **Payload tokens.** All 55 `PayloadType` tokens, and a table that is exactly the type's cases.
 // 2. **The sealing rule, by behaviour.** The 17 tokens an envelope must carry sealed; every one of
@@ -39,6 +39,10 @@
 //     log, each as the JSON Fernlet's repositories write, both ways.
 // 12. **Display-name sanitizing.** `ItemNameModeration.sanitizedName` over a fixed corpus, and the
 //     "A friend" floor ProximityKit puts under it.
+// 13. **`.fernlet`'s vocabulary and presentation strings.** Every token, title and presentation
+//     string FernletConnections ships in `ProximityNamespace.fernlet` equals its frozen literal, its
+//     token sets and lists are the frozen tables whole, reflection finds no field left unpinned, and
+//     the bounds the namespace's soundness rules apply are those of the consumers they protect.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -1119,6 +1123,192 @@ struct ProximityVocabularyGoldenTests {
             payloadEncryption: .none, payloadSummary: envelope.payloadSummary, payload: envelope.payload,
             createdAt: envelope.createdAt, expiresAt: nil, signature: Data())
         #expect(blank.sanitizedSenderDisplayName == fallback, "an invisible sender reads as \(blank.sanitizedSenderDisplayName)")
+    }
+
+    // MARK: Group 13 — `.fernlet`'s vocabulary and presentation strings
+
+    /// One single value `ProximityNamespace.fernlet` carries, by its path in the namespace, beside the
+    /// frozen literal it must equal.
+    struct FernletValue: Sendable {
+        /// The value's path from the namespace root, as reflection names it.
+        let field: String
+        /// What `.fernlet` carries there.
+        let shipped: String
+        /// The frozen literal it must equal, read off the tables above.
+        let frozen: String
+    }
+
+    /// The vocabulary's token sets and lists, which ``fernletsTokenSetsAndListsAreTheFrozenTablesWhole()``
+    /// compares whole.
+    static let wholeVocabularyFields: Set<String> = [
+        "family.vocabulary.payloads.known", "family.vocabulary.payloads.sealingRequired",
+        "family.vocabulary.capabilities.known", "family.vocabulary.capabilities.assumedForLegacyPeers"
+    ]
+
+    /// The radio values `ProximityNamespaceGoldenTests` pins: the three service types and ALPNs and
+    /// the mesh heartbeat.
+    static let radioFieldsTheNamespaceGoldenPins: Set<String> = [
+        "family.radios.mesh.serviceType", "family.radios.mesh.alpn",
+        "family.radios.presence.serviceType", "family.radios.presence.alpn",
+        "family.radios.recipeShare.serviceType", "family.radios.recipeShare.alpn",
+        "family.radios.meshHeartbeat"
+    ]
+
+    /// Every single token and title of `.fernlet`'s vocabulary and its three presentation strings,
+    /// each beside the frozen literal of the value ProximityKit's consumers read: the payload rows,
+    /// the session messages' titles, the capability, record-kind, routed-type and presentation rows.
+    /// The presence prefix is the frozen prefix and separator together, as the namespace carries it.
+    static var fernletValues: [FernletValue] {
+        let vocabulary = ProximityNamespace.fernlet.family.vocabulary
+        let radios = ProximityNamespace.fernlet.family.radios
+        let (session, kinds, routed) = (vocabulary.session, vocabulary.membershipRecordKinds, vocabulary.routedTypes)
+        let path = "family.vocabulary."
+        return [
+            FernletValue(field: path + "session.identityIntroduction.payloadType",
+                         shipped: session.identityIntroduction.payloadType, frozen: frozen("payloadType.identityIntroduction")),
+            FernletValue(field: path + "session.identityIntroduction.summaryTitle",
+                         shipped: session.identityIntroduction.summaryTitle, frozen: frozenTitle("identity introduction")),
+            FernletValue(field: path + "session.identityAcknowledge.payloadType",
+                         shipped: session.identityAcknowledge.payloadType, frozen: frozen("payloadType.identityAcknowledge")),
+            FernletValue(field: path + "session.identityAcknowledge.summaryTitle",
+                         shipped: session.identityAcknowledge.summaryTitle, frozen: frozenTitle("identity acknowledgement")),
+            FernletValue(field: path + "session.heartbeat.payloadType",
+                         shipped: session.heartbeat.payloadType, frozen: frozen("payloadType.sessionHeartbeat")),
+            FernletValue(field: path + "session.heartbeat.pingTitle",
+                         shipped: session.heartbeat.pingTitle, frozen: frozenTitle("heartbeat")),
+            FernletValue(field: path + "session.heartbeat.replyTitle",
+                         shipped: session.heartbeat.replyTitle, frozen: frozenTitle("heartbeat reply")),
+            FernletValue(field: path + "capabilities.wire2", shipped: vocabulary.capabilities.wire2,
+                         frozen: frozen("capability.wire2")),
+            FernletValue(field: path + "membershipRecordKinds.admission", shipped: kinds.admission,
+                         frozen: frozen("recordKind.admission")),
+            FernletValue(field: path + "membershipRecordKinds.departure", shipped: kinds.departure,
+                         frozen: frozen("recordKind.departure")),
+            FernletValue(field: path + "membershipRecordKinds.removal", shipped: kinds.removal,
+                         frozen: frozen("recordKind.removal")),
+            FernletValue(field: path + "membershipRecordKinds.termination", shipped: kinds.termination,
+                         frozen: frozen("recordKind.termination")),
+            FernletValue(field: path + "routedTypes.photo", shipped: routed.photo, frozen: frozen("routedType.photo")),
+            FernletValue(field: path + "routedTypes.tempMessage", shipped: routed.tempMessage,
+                         frozen: frozen("routedType.tempMessage")),
+            FernletValue(field: path + "routedTypes.heart", shipped: routed.heart, frozen: frozen("routedType.heart")),
+            FernletValue(field: path + "routedTypes.control", shipped: routed.control, frozen: frozen("routedType.control")),
+            FernletValue(field: "family.radios.meshInstanceNamePrefix", shipped: radios.meshInstanceNamePrefix,
+                         frozen: frozen("presentation.meshInstanceNamePrefix")),
+            FernletValue(field: "family.radios.presenceInstanceNamePrefix", shipped: radios.presenceInstanceNamePrefix,
+                         frozen: frozen("presentation.presenceInstanceNamePrefix")
+                             + frozen("presentation.presenceInstanceNameSeparator")),
+            FernletValue(field: "family.radios.tlsCommonName", shipped: radios.tlsCommonName,
+                         frozen: frozen("presentation.tlsCommonName"))
+        ]
+    }
+
+    /// Every single token and title of `.fernlet`'s vocabulary, and its three presentation strings,
+    /// is its frozen literal byte for byte: FernletConnections spells exactly what ProximityKit's
+    /// consumers read, so pointing a consumer at the namespace moves no byte.
+    @Test func everyFernletVocabularyValueIsItsFrozenLiteral() {
+        let values = Self.fernletValues
+        #expect(values.count == 19, "\(values.count) single values compared")
+        #expect(Set(values.map(\.field)).count == values.count, "a field is compared twice")
+        // R2: bounded by the 19 values.
+        for value in values {
+            #expect(!value.frozen.isEmpty && Data(value.shipped.utf8) == Data(value.frozen.utf8), """
+                ProximityNamespace.fernlet's \(value.field) is "\(value.shipped)" \
+                (UTF-8 \(Self.hex(Data(value.shipped.utf8)))); its frozen literal is "\(value.frozen)". \
+                The literal never moves: fix FernletConnections.
+                """)
+        }
+    }
+
+    /// `.fernlet`'s token sets and lists are the frozen tables whole: `known` is the 55 payload tokens,
+    /// exactly `PayloadType`'s cases; the sealing set is the 17; the capabilities are the nine in
+    /// declaration order, photos alone assumed for a legacy peer; and twice their count is the
+    /// coordinator's receive bound.
+    @Test func fernletsTokenSetsAndListsAreTheFrozenTablesWhole() {
+        let vocabulary = ProximityNamespace.fernlet.family.vocabulary
+        let payloads = Set(Self.payloadRows.map(\.frozen))
+        #expect(payloads.count == 55, "the frozen payload table holds \(payloads.count) tokens")
+        #expect(vocabulary.payloads.known == payloads,
+                "known and the frozen table differ by \(vocabulary.payloads.known.symmetricDifference(payloads).sorted())")
+        #expect(vocabulary.payloads.known == Set(PayloadType.allCases.map(\.rawValue)), "known is not PayloadType's cases")
+        #expect(vocabulary.payloads.sealingRequired == Self.sealingRequiredTokens, """
+            the sealing set and the frozen 17 differ by \
+            \(vocabulary.payloads.sealingRequired.symmetricDifference(Self.sealingRequiredTokens).sorted())
+            """)
+        let capabilities = Self.capabilityRows.map(\.frozen)
+        #expect(vocabulary.capabilities.known == capabilities, "the capabilities are \(vocabulary.capabilities.known)")
+        #expect(vocabulary.capabilities.assumedForLegacyPeers == [Self.frozen("capability.photos")],
+                "a legacy peer is assumed to support \(vocabulary.capabilities.assumedForLegacyPeers)")
+        #expect(vocabulary.capabilities.known.count * 2 == Self.frozenNumber("capability.maxAdvertised"),
+                "twice the \(vocabulary.capabilities.known.count) capabilities is not the coordinator's receive bound")
+    }
+
+    /// Reflection over `.fernlet`'s vocabulary and radios finds no field the cells above and
+    /// `ProximityNamespaceGoldenTests` leave out: a token added to the vocabulary, or a string to the
+    /// radios, fails here until it has a frozen literal.
+    @Test func reflectionFindsNoVocabularyOrPresentationFieldLeftUnpinned() {
+        let family = ProximityNamespace.fernlet.family
+        let reflected = Self.reflectedLeaves(of: family.vocabulary, under: "family.vocabulary")
+            + Self.reflectedLeaves(of: family.radios, under: "family.radios")
+        let pinned = Set(Self.fernletValues.map(\.field))
+            .union(Self.wholeVocabularyFields).union(Self.radioFieldsTheNamespaceGoldenPins)
+        #expect(reflected.count == 30, "reflection found \(reflected.count) leaves: \(reflected.sorted())")
+        #expect(Set(reflected) == pinned, """
+            reflected but unpinned: \(Set(reflected).subtracting(pinned).sorted()); \
+            pinned but not reflected: \(pinned.subtracting(reflected).sorted())
+            """)
+    }
+
+    /// The bounds the namespace's soundness rules hold a vocabulary and the presentation strings to
+    /// are those of the consumers they protect, so a sound namespace names no value a receiver refuses
+    /// or cuts: the summary decode's 200 characters (FernletDomainModel's, out of `Namespace/`'s
+    /// reach), the coordinator's 32-character capability cut, the routed manifest's 64-byte type
+    /// token, and the 12 and 16 hex characters after each instance-name prefix.
+    @Test func theNamespacesSoundnessBoundsAreItsConsumersBounds() {
+        let bounds: [(name: String, namespace: Int, consumer: Int)] = [
+            ("summary title characters", ProximityNamespace.maximumSummaryTitleCharacters,
+             PayloadSummary.maxDetailCharacters),
+            ("capability token bytes", ProximityNamespace.maximumCapabilityTokenBytes,
+             ProximityCoordinator.maxCapabilityTokenLength),
+            ("routed-type token bytes", ProximityNamespace.maximumRoutedTypeTokenBytes,
+             MeshRoutedManifestFormat.maxTypeTokenLength),
+            ("mesh instance-name hex characters", ProximityNamespace.meshInstanceNameTokenLength,
+             MeshLinkAdvertisement.instanceNameTokenLength),
+            ("presence instance-name hex characters", ProximityNamespace.presenceInstanceNameTokenLength,
+             2 * PresenceEpochPosture.instanceNameEntropyByteCount)
+        ]
+        // R2: bounded by the five bounds.
+        for bound in bounds {
+            #expect(bound.namespace == bound.consumer,
+                    "the namespace allows \(bound.namespace) \(bound.name); its consumer \(bound.consumer)")
+        }
+        #expect(ProximityNamespace.maximumSummaryTitleCharacters == Self.frozenNumber("payloadSummary.maxDetailCharacters"))
+        #expect(ProximityNamespace.maximumCapabilityTokenBytes == Self.frozenNumber("capability.maxTokenLength"))
+    }
+
+    /// The frozen title of the session message named `name`; empty for a name the table does not hold.
+    static func frozenTitle(_ name: String) -> String {
+        sessionMessages.first { $0.name == name }?.title ?? ""
+    }
+
+    /// The paths of every string, token set or list and byte string under `value`, by reflection over
+    /// its labeled children; empty if the walk was cut short, which fails the cell that reads it.
+    private static func reflectedLeaves(of value: Any, under root: String) -> [String] {
+        var leaves: [String] = []
+        var pending: [(path: String, value: Any)] = [(path: root, value: value)]
+        var visits = 0
+        // R2: at most 128 nodes; the vocabulary and the radios hold about 45 between them.
+        while visits < 128, let node = pending.popLast() {
+            visits += 1
+            if node.value is String || node.value is Set<String> || node.value is [String] || node.value is Data {
+                leaves.append(node.path)
+                continue
+            }
+            pending += Mirror(reflecting: node.value).children.compactMap { child in
+                child.label.map { (path: node.path + "." + $0, value: child.value) }
+            }
+        }
+        return pending.isEmpty ? leaves : []
     }
 
     // MARK: Helpers

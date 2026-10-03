@@ -332,7 +332,9 @@ jobs:
         # inventory digest over one record per kind, the routed-type tokens and the heart row's cap,
         # the coordinator's four session messages and the mesh's title rule, the presentation
         # strings, the trainer export body, the generic types' schema-v1 bytes and JSON, three
-        # persisted records as the repositories write them, and the display-name sanitizer. Its name
+        # persisted records as the repositories write them, and the display-name sanitizer; and
+        # `.fernlet`'s own vocabulary and presentation strings against the same literals, with the
+        # bounds the namespace's soundness rules apply held to the consumers'. Its name
         # ends `GoldenTests`, so CIGateSelectorBoundaryTests demands it on a line; it rides this one
         # beside the namespace golden it continues. No compiler half either: a moved token compiles
         # clean.
@@ -374,9 +376,17 @@ jobs:
         # 29), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 199: passed.
         # Run once more at 199 without ProximityVocabularyGoldenTests: 170 ran and the floor refused
         # it. 170 + 29 (the vocabulary suite's cells) = 199 is the ARITHMETIC CHECK, never the source.
+        # RAISED 199 -> 211 at A0.3.1, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "211 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 33), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 211: passed.
+        # Run once more at 211 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 199 + 12 (the soundness suite's seven vocabulary and presentation cells, the vocabulary
+        # suite's four `.fernlet` cells and the namespace golden's foreign-vocabulary cell) = 211 is
+        # the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 199 \
+          Scripts/run-gated-suites.sh crypto-goldens 211 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

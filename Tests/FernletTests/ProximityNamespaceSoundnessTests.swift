@@ -12,8 +12,9 @@ import Testing
 /// Every soundness rule refused by name, the byte rules of each framing, and the two collision checks.
 ///
 /// One cell per ``ProximityNamespace/Violation`` case: each changes one literal of a sound namespace
-/// and expects exactly the one violation that change causes, both recorded by the initializer and
-/// thrown by `validated`, then shows the rule's accepting edge.
+/// and expects exactly the violation that change causes, both recorded by the initializer and thrown
+/// by `validated`, then shows the rule's accepting edge. Where two rules see one change by design (a
+/// malformed session token is unknown too), the cell expects both, in rule order.
 @Suite struct ProximityNamespaceSoundnessTests {
 
     // MARK: - A sound namespace
@@ -443,12 +444,202 @@ import Testing
         expectOnly([.emptyLogSubsystem], installation: AlphaApp.installation(logSubsystem: ""))
     }
 
-    /// Several broken rules are all recorded, in rule order, and thrown in that order.
+    /// Tokens: empty, past the group's bound, or a byte outside 0x21–0x7E — a payload token or record
+    /// kind past 255 bytes, a capability token past 32, a routed type past 64. A set or a list is named
+    /// once, by its own path, however many of its members break the rule.
+    @Test func aMalformedTokenIsRefusedByName() {
+        let departure = "family.vocabulary.membershipRecordKinds.departure"
+        func kinds(_ token: String) -> ProximityNamespace.Family {
+            AlphaApp.family(vocabulary: AlphaApp.vocabulary(membershipRecordKinds: AlphaApp.recordKinds(departure: token)))
+        }
+        let refused = ["", "alpha.member left.v1", "alpha.member.left.v1\u{7F}", "alpha.member.left.v1\u{9}",
+                       "alpha.membér.left.v1", String(repeating: "k", count: 256)]
+        for token in refused {
+            expectOnly([.malformedToken(field: departure)], family: kinds(token), note: token)
+        }
+        for token in [String(repeating: "k", count: 255), "!alpha.member.left.v1~"] {
+            expectSound(family: kinds(token), note: token)
+        }
+
+        func routed(_ heart: String) -> ProximityNamespace.Family {
+            AlphaApp.family(vocabulary: AlphaApp.vocabulary(routedTypes: AlphaApp.routedTypes(heart: heart)))
+        }
+        expectOnly([.malformedToken(field: "family.vocabulary.routedTypes.heart")],
+                   family: routed(String(repeating: "r", count: 65)), note: "65 bytes")
+        expectSound(family: routed(String(repeating: "r", count: 64)), note: "64 bytes")
+
+        func capabilities(_ known: [String]) -> ProximityNamespace.Family {
+            AlphaApp.family(vocabulary: AlphaApp.vocabulary(capabilities: AlphaApp.capabilities(known: known)))
+        }
+        expectOnly([.malformedToken(field: "family.vocabulary.capabilities.known")],
+                   family: capabilities(AlphaApp.capabilityTokens + [String(repeating: "c", count: 33)]), note: "33 bytes")
+        expectOnly([.malformedToken(field: "family.vocabulary.capabilities.known")],
+                   family: capabilities(AlphaApp.capabilityTokens + [String(repeating: "c", count: 33), "alpha notes"]),
+                   note: "two malformed members, one violation")
+        expectSound(family: capabilities(AlphaApp.capabilityTokens + [String(repeating: "c", count: 32)]), note: "32 bytes")
+
+        let known = "family.vocabulary.payloads.known"
+        expectOnly([.malformedToken(field: known)],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       payloads: AlphaApp.payloads(known: AlphaApp.payloadTokens.union(["", "alpha draft.v1"])))))
+        // A sealed token must also be known, so a malformed one breaks the rule in both sets.
+        let sealed = "alpha.diary\u{0}.v1"
+        expectOnly([.malformedToken(field: known), .malformedToken(field: "family.vocabulary.payloads.sealingRequired")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(payloads: AlphaApp.payloads(
+                       known: AlphaApp.payloadTokens.union([sealed]), sealingRequired: [sealed]))))
+        // A malformed session token is outside `known` too: both rules see it, the malformed one first.
+        let introduction = "family.vocabulary.session.identityIntroduction.payloadType"
+        expectOnly([.malformedToken(field: introduction), .unknownToken(field: introduction)],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       session: AlphaApp.session(introductionType: "alpha session hello"))))
+    }
+
+    /// Two tokens of one group with the same bytes: two session payload tokens, two capability tokens
+    /// (each named by its index), two record kinds, two routed types. Tokens of two groups may match,
+    /// as a record kind may spell its record's payload token, and so may two titles.
+    @Test func aDuplicateTokenIsRefusedByName() {
+        let session = "family.vocabulary.session."
+        expectOnly([.duplicateToken(field: session + "identityIntroduction.payloadType",
+                                    otherField: session + "heartbeat.payloadType")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       session: AlphaApp.session(heartbeatType: AlphaApp.sessionTokens[0]))))
+        expectOnly([.duplicateToken(field: "family.vocabulary.capabilities.known[0]",
+                                    otherField: "family.vocabulary.capabilities.known[3]")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       capabilities: AlphaApp.capabilities(known: AlphaApp.capabilityTokens + ["alpha-notes"]))))
+        expectOnly([.duplicateToken(field: "family.vocabulary.membershipRecordKinds.admission",
+                                    otherField: "family.vocabulary.membershipRecordKinds.departure")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       membershipRecordKinds: AlphaApp.recordKinds(departure: "alpha.member.joined.v1"))))
+        expectOnly([.duplicateToken(field: "family.vocabulary.routedTypes.photo",
+                                    otherField: "family.vocabulary.routedTypes.heart")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       routedTypes: AlphaApp.routedTypes(heart: "alpha.routed.picture.v1"))))
+        expectSound(family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+            session: AlphaApp.session(pingTitle: "Alpha beat", replyTitle: "Alpha beat"),
+            membershipRecordKinds: AlphaApp.recordKinds(admission: "alpha.note.v1"),
+            routedTypes: AlphaApp.routedTypes(photo: "alpha-sketches"))), note: "tokens shared across groups")
+    }
+
+    /// A token a rule names that the vocabulary does not know: a session payload token or a sealed
+    /// token outside `payloads.known`, and `wire2` or an assumed capability outside
+    /// `capabilities.known`. A set or a list is named once.
+    @Test func anUnknownTokenIsRefusedByName() {
+        expectOnly([.unknownToken(field: "family.vocabulary.session.identityAcknowledge.payloadType")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       session: AlphaApp.session(acknowledgeType: "alpha.session.other.v1"))))
+        expectOnly([.unknownToken(field: "family.vocabulary.payloads.sealingRequired")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(payloads: AlphaApp.payloads(
+                       sealingRequired: ["alpha.note.v1", "alpha.unlisted.v1", "alpha.unlisted.v2"]))),
+                   note: "two unknown members, one violation")
+        expectOnly([.unknownToken(field: "family.vocabulary.capabilities.wire2")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       capabilities: AlphaApp.capabilities(wire2: "alpha-unlisted"))))
+        expectOnly([.unknownToken(field: "family.vocabulary.capabilities.assumedForLegacyPeers")],
+                   family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+                       capabilities: AlphaApp.capabilities(assumedForLegacyPeers: ["alpha-notes", "alpha-unlisted"]))))
+        expectSound(family: AlphaApp.family(vocabulary: AlphaApp.vocabulary(
+            payloads: AlphaApp.payloads(sealingRequired: []),
+            capabilities: AlphaApp.capabilities(assumedForLegacyPeers: []))), note: "nothing sealed, nothing assumed")
+    }
+
+    /// Summary titles: 1 to 200 characters, counted as the receiver's bounded decode counts them, so a
+    /// letter with its combining mark is one character however many bytes it takes.
+    @Test func aMalformedSummaryTitleIsRefusedByName() {
+        func titled(_ session: ProximityNamespace.SessionMessages) -> ProximityNamespace.Family {
+            AlphaApp.family(vocabulary: AlphaApp.vocabulary(session: session))
+        }
+        let session = "family.vocabulary.session."
+        expectOnly([.malformedSummaryTitle(field: session + "identityIntroduction.summaryTitle")],
+                   family: titled(AlphaApp.session(introductionTitle: "")), note: "empty")
+        expectOnly([.malformedSummaryTitle(field: session + "identityAcknowledge.summaryTitle")],
+                   family: titled(AlphaApp.session(acknowledgeTitle: String(repeating: "t", count: 201))),
+                   note: "201 characters")
+        expectOnly([.malformedSummaryTitle(field: session + "heartbeat.pingTitle"),
+                    .malformedSummaryTitle(field: session + "heartbeat.replyTitle")],
+                   family: titled(AlphaApp.session(pingTitle: "", replyTitle: String(repeating: "e\u{301}", count: 201))),
+                   note: "both heartbeat titles, in declaration order")
+        expectSound(family: titled(AlphaApp.session(introductionTitle: String(repeating: "t", count: 200))),
+                    note: "200 characters")
+        expectSound(family: titled(AlphaApp.session(replyTitle: String(repeating: "e\u{301}", count: 200))),
+                    note: "200 characters in 600 bytes")
+    }
+
+    /// Instance-name prefixes: bytes of `[a-z0-9-]`, at least one, leaving a 63-byte DNS-SD name room
+    /// for the hex after them — the mesh prefix at most 51 bytes, the presence prefix at most 47.
+    @Test func aMalformedInstanceNamePrefixIsRefusedByName() {
+        let mesh = "family.radios.meshInstanceNamePrefix"
+        let refused = ["", "Alpha-mesh-", "alpha_mesh-", "alpha mesh-", "alphä-mesh-", String(repeating: "m", count: 52)]
+        for prefix in refused {
+            expectOnly([.malformedInstanceNamePrefix(field: mesh)],
+                       family: AlphaApp.family(radios: AlphaApp.radios(meshInstanceNamePrefix: prefix)), note: prefix)
+        }
+        expectOnly([.malformedInstanceNamePrefix(field: "family.radios.presenceInstanceNamePrefix")],
+                   family: AlphaApp.family(radios: AlphaApp.radios(
+                       presenceInstanceNamePrefix: String(repeating: "p", count: 48))),
+                   note: "48 bytes")
+        let accepted: [(mesh: String, presence: String)] = [
+            (String(repeating: "m", count: 51), String(repeating: "p", count: 47)), ("2026-", "a"), ("-", "a-b-")
+        ]
+        for prefixes in accepted {
+            expectSound(family: AlphaApp.family(radios: AlphaApp.radios(
+                meshInstanceNamePrefix: prefixes.mesh, presenceInstanceNamePrefix: prefixes.presence)),
+                note: "\(prefixes.mesh) and \(prefixes.presence)")
+        }
+    }
+
+    /// The certificates' common name: 1 to 64 bytes of printable ASCII, the space included.
+    @Test func aMalformedCommonNameIsRefusedByName() {
+        for name in ["", String(repeating: "n", count: 65), "alpha\u{9}mesh", "alpha-mesh\u{7F}", "alphä-mesh"] {
+            expectOnly([.malformedCommonName], family: AlphaApp.family(radios: AlphaApp.radios(tlsCommonName: name)),
+                       note: name)
+        }
+        for name in [String(repeating: "n", count: 64), "Alpha Mesh", "~"] {
+            expectSound(family: AlphaApp.family(radios: AlphaApp.radios(tlsCommonName: name)), note: name)
+        }
+    }
+
+    /// The green control of the vocabulary and presentation rules: every rule's accepting edge at once
+    /// — each token at its group's longest, each title at 200 characters, both prefixes at their room,
+    /// the longest common name, nothing sealed and nothing assumed — makes a sound namespace, and the
+    /// family carries the values exactly as given.
+    @Test func everyVocabularyAndPresentationRuleAcceptsItsEdgeAtOnce() {
+        func token(_ tag: String, _ length: Int) -> String { tag + String(repeating: "x", count: length - tag.utf8.count) }
+        func title(_ letter: String) -> String { String(repeating: letter, count: 200) }
+        let vocabulary = ProximityNamespace.Vocabulary(
+            session: ProximityNamespace.SessionMessages(
+                identityIntroduction: .init(payloadType: token("i", 255), summaryTitle: title("t")),
+                identityAcknowledge: .init(payloadType: token("a", 255), summaryTitle: title("u")),
+                heartbeat: .init(payloadType: token("h", 255), pingTitle: title("v"), replyTitle: title("w"))),
+            payloads: .init(known: [token("i", 255), token("a", 255), token("h", 255)], sealingRequired: []),
+            capabilities: .init(known: [token("c", 32), token("d", 32)], wire2: token("d", 32), assumedForLegacyPeers: []),
+            membershipRecordKinds: .init(admission: token("j", 255), departure: token("l", 255),
+                                         removal: token("r", 255), termination: token("e", 255)),
+            routedTypes: .init(photo: token("p", 64), tempMessage: token("m", 64), heart: token("h", 64),
+                               control: token("c", 64)))
+        let radios = AlphaApp.radios(meshInstanceNamePrefix: String(repeating: "m", count: 51),
+                                     presenceInstanceNamePrefix: String(repeating: "p", count: 47),
+                                     tlsCommonName: String(repeating: "n", count: 64))
+        let namespace = ProximityNamespace(family: AlphaApp.family(radios: radios, vocabulary: vocabulary),
+                                           installation: AlphaApp.installation())
+        #expect(namespace.soundness == .sound, "\(namespace.soundness)")
+        #expect(namespace.family.vocabulary == vocabulary, "the family carries another vocabulary")
+        #expect(namespace.family.radios == radios, "the family carries other radios")
+    }
+
+    /// Several broken rules are all recorded, in rule order, and thrown in that order: the labels,
+    /// radios, scheme, keychain, storage and log subsystem first, then the vocabulary's tokens and
+    /// titles, then the radios' presentation strings.
     @Test func everyViolationIsRecordedInRuleOrder() {
         let family = AlphaApp.family(
             signature: AlphaApp.signature(identityEnvelopeV2: "alpha.canonical identity-envelope.v2"),
-            radios: AlphaApp.radios(meshHeartbeat: Data()),
-            urlScheme: "Alpha"
+            radios: AlphaApp.radios(meshHeartbeat: Data(), meshInstanceNamePrefix: "Alpha", tlsCommonName: ""),
+            urlScheme: "Alpha",
+            vocabulary: AlphaApp.vocabulary(
+                session: AlphaApp.session(pingTitle: ""),
+                capabilities: AlphaApp.capabilities(wire2: "alpha-unlisted"),
+                membershipRecordKinds: AlphaApp.recordKinds(departure: ""),
+                routedTypes: AlphaApp.routedTypes(heart: "alpha.routed.picture.v1"))
         )
         let installation = AlphaApp.installation(
             keychain: AlphaApp.keychain(
@@ -463,7 +654,13 @@ import Testing
             .duplicateKeychainName(field: "installation.keychain.identity.service",
                                    otherField: "installation.keychain.meshRoutedSealKey.service"),
             .malformedPathComponent(field: "installation.storage.directoryName"),
-            .emptyLogSubsystem
+            .emptyLogSubsystem,
+            .malformedToken(field: "family.vocabulary.membershipRecordKinds.departure"),
+            .duplicateToken(field: "family.vocabulary.routedTypes.photo", otherField: "family.vocabulary.routedTypes.heart"),
+            .unknownToken(field: "family.vocabulary.capabilities.wire2"),
+            .malformedSummaryTitle(field: "family.vocabulary.session.heartbeat.pingTitle"),
+            .malformedInstanceNamePrefix(field: "family.radios.meshInstanceNamePrefix"),
+            .malformedCommonName
         ], family: family, installation: installation)
     }
 
@@ -645,12 +842,14 @@ private enum AlphaApp {
         aead: ProximityNamespace.AEAD = AlphaApp.aead(),
         hash: ProximityNamespace.Hash = AlphaApp.hash(),
         radios: ProximityNamespace.Radios = AlphaApp.radios(),
-        urlScheme: String = "alpha"
+        urlScheme: String = "alpha",
+        vocabulary: ProximityNamespace.Vocabulary = AlphaApp.vocabulary()
     ) -> ProximityNamespace.Family {
         ProximityNamespace.Family(
             purposes: ProximityNamespace.Purposes(signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash),
             radios: radios,
-            verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme)
+            verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme),
+            vocabulary: vocabulary
         )
     }
 
@@ -721,9 +920,84 @@ private enum AlphaApp {
         mesh: ProximityNamespace.Radio = .init(serviceType: "_alpha-mesh._udp", alpn: "alpha-mesh-v1"),
         presence: ProximityNamespace.Radio = .init(serviceType: "_alpha-near._udp", alpn: "alpha-near-v1"),
         recipeShare: ProximityNamespace.Radio = .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-recipe-v1"),
-        meshHeartbeat: Data = Data("alpha-heartbeat".utf8)
+        meshHeartbeat: Data = Data("alpha-heartbeat".utf8),
+        meshInstanceNamePrefix: String = "alpha-mesh-",
+        presenceInstanceNamePrefix: String = "an-",
+        tlsCommonName: String = "alpha-mesh"
     ) -> ProximityNamespace.Radios {
-        ProximityNamespace.Radios(mesh: mesh, presence: presence, recipeShare: recipeShare, meshHeartbeat: meshHeartbeat)
+        ProximityNamespace.Radios(mesh: mesh, presence: presence, recipeShare: recipeShare, meshHeartbeat: meshHeartbeat,
+                                  meshInstanceNamePrefix: meshInstanceNamePrefix,
+                                  presenceInstanceNamePrefix: presenceInstanceNamePrefix, tlsCommonName: tlsCommonName)
+    }
+
+    /// The three session payload tokens, each also one of ``payloadTokens``.
+    static let sessionTokens = ["alpha.session.hello.v1", "alpha.session.welcome.v1", "alpha.session.beat.v1"]
+
+    /// Every payload token alpha dispatches: the session's three and three of its features'.
+    static let payloadTokens = Set(sessionTokens + ["alpha.note.v1", "alpha.sketch.v1", "alpha.wave.v1"])
+
+    /// Alpha's capability tokens, in order.
+    static let capabilityTokens = ["alpha-notes", "alpha-sketches", "alpha-framing"]
+
+    static func vocabulary(
+        session: ProximityNamespace.SessionMessages = AlphaApp.session(),
+        payloads: ProximityNamespace.PayloadRules = AlphaApp.payloads(),
+        capabilities: ProximityNamespace.Capabilities = AlphaApp.capabilities(),
+        membershipRecordKinds: ProximityNamespace.MembershipRecordKinds = AlphaApp.recordKinds(),
+        routedTypes: ProximityNamespace.RoutedTypes = AlphaApp.routedTypes()
+    ) -> ProximityNamespace.Vocabulary {
+        ProximityNamespace.Vocabulary(session: session, payloads: payloads, capabilities: capabilities,
+                                      membershipRecordKinds: membershipRecordKinds, routedTypes: routedTypes)
+    }
+
+    static func session(
+        introductionType: String = AlphaApp.sessionTokens[0],
+        acknowledgeType: String = AlphaApp.sessionTokens[1],
+        heartbeatType: String = AlphaApp.sessionTokens[2],
+        introductionTitle: String = "Alpha hello",
+        acknowledgeTitle: String = "Alpha welcome",
+        pingTitle: String = "Alpha beat",
+        replyTitle: String = "Alpha beat back"
+    ) -> ProximityNamespace.SessionMessages {
+        ProximityNamespace.SessionMessages(
+            identityIntroduction: .init(payloadType: introductionType, summaryTitle: introductionTitle),
+            identityAcknowledge: .init(payloadType: acknowledgeType, summaryTitle: acknowledgeTitle),
+            heartbeat: .init(payloadType: heartbeatType, pingTitle: pingTitle, replyTitle: replyTitle)
+        )
+    }
+
+    static func payloads(
+        known: Set<String> = AlphaApp.payloadTokens,
+        sealingRequired: Set<String> = ["alpha.note.v1", "alpha.sketch.v1"]
+    ) -> ProximityNamespace.PayloadRules {
+        ProximityNamespace.PayloadRules(known: known, sealingRequired: sealingRequired)
+    }
+
+    static func capabilities(
+        known: [String] = AlphaApp.capabilityTokens,
+        wire2: String = "alpha-framing",
+        assumedForLegacyPeers: [String] = ["alpha-notes"]
+    ) -> ProximityNamespace.Capabilities {
+        ProximityNamespace.Capabilities(known: known, wire2: wire2, assumedForLegacyPeers: assumedForLegacyPeers)
+    }
+
+    static func recordKinds(
+        admission: String = "alpha.member.joined.v1",
+        departure: String = "alpha.member.left.v1"
+    ) -> ProximityNamespace.MembershipRecordKinds {
+        ProximityNamespace.MembershipRecordKinds(
+            admission: admission, departure: departure,
+            removal: "alpha.member.removed.v1", termination: "alpha.group.ended.v1"
+        )
+    }
+
+    static func routedTypes(
+        photo: String = "alpha.routed.picture.v1",
+        heart: String = "alpha.routed.wave.v1"
+    ) -> ProximityNamespace.RoutedTypes {
+        ProximityNamespace.RoutedTypes(
+            photo: photo, tempMessage: "alpha.routed.note.v1", heart: heart, control: "alpha.routed.control.v1"
+        )
     }
 
     static func installation(
@@ -788,7 +1062,33 @@ private enum BravoApp {
         return ProximityNamespace.Family(
             purposes: ProximityNamespace.Purposes(signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash),
             radios: radios,
-            verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme)
+            verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme),
+            vocabulary: vocabulary()
+        )
+    }
+
+    static func vocabulary() -> ProximityNamespace.Vocabulary {
+        ProximityNamespace.Vocabulary(
+            session: ProximityNamespace.SessionMessages(
+                identityIntroduction: .init(payloadType: "bravo.session.hello.v1", summaryTitle: "Bravo hello"),
+                identityAcknowledge: .init(payloadType: "bravo.session.welcome.v1", summaryTitle: "Bravo welcome"),
+                heartbeat: .init(payloadType: "bravo.session.beat.v1", pingTitle: "Bravo beat", replyTitle: "Bravo beat back")
+            ),
+            payloads: ProximityNamespace.PayloadRules(
+                known: ["bravo.session.hello.v1", "bravo.session.welcome.v1", "bravo.session.beat.v1", "bravo.note.v1"],
+                sealingRequired: ["bravo.note.v1"]
+            ),
+            capabilities: ProximityNamespace.Capabilities(
+                known: ["bravo-notes", "bravo-framing"], wire2: "bravo-framing", assumedForLegacyPeers: []
+            ),
+            membershipRecordKinds: ProximityNamespace.MembershipRecordKinds(
+                admission: "bravo.member.joined.v1", departure: "bravo.member.left.v1",
+                removal: "bravo.member.removed.v1", termination: "bravo.group.ended.v1"
+            ),
+            routedTypes: ProximityNamespace.RoutedTypes(
+                photo: "bravo.routed.picture.v1", tempMessage: "bravo.routed.note.v1",
+                heart: "bravo.routed.wave.v1", control: "bravo.routed.control.v1"
+            )
         )
     }
 
@@ -850,7 +1150,10 @@ private enum BravoApp {
             mesh: mesh,
             presence: .init(serviceType: "_bravo-near._udp", alpn: "bravo-near-v1"),
             recipeShare: recipeShare,
-            meshHeartbeat: meshHeartbeat
+            meshHeartbeat: meshHeartbeat,
+            meshInstanceNamePrefix: "bravo-mesh-",
+            presenceInstanceNamePrefix: "bn-",
+            tlsCommonName: "bravo-mesh"
         )
     }
 

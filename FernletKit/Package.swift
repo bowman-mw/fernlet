@@ -434,14 +434,16 @@ let package = Package(
         // the keychain rows, the storage names and the log subsystem), byte-identical to today's
         // literals. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
         // never the reverse. A0.2.9 adds FernletDeviceBindingAdapter (the install binding) and
-        // A0.2.10 FernletAuditBridge (the audit sink); the payload vocabulary (A0.3), the feature
-        // purposes (A0.4) and the coach profile and link purposes (C1) join it later. Deps:
-        // ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) + FernletFoundation
-        // (FernletAuditLog, behind the bridge). MainActor default, with every type, extension and
+        // A0.2.10 FernletAuditBridge (the audit sink); A0.3 adds the payload vocabulary
+        // (`ProximityNamespace.Vocabulary.fernlet`); the feature purposes (A0.4) and the coach profile
+        // and link purposes (C1) join it later. Deps: ProximityKit + FernletCrypto (DeviceBindingID,
+        // behind the adapter) + FernletFoundation (FernletAuditLog, behind the bridge) +
+        // FernletDomainModel (PayloadType and ProximityCapability, whose raw values the vocabulary
+        // reads, so each token keeps one spelling). MainActor default, with every type, extension and
         // static marked nonisolated within (inert value data and stateless seams).
         .target(
             name: "FernletConnections",
-            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

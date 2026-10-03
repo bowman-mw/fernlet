@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; and ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; and ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`.
 
 ## Overview
 
@@ -15,8 +15,9 @@ is that place.
 - `ProximityNamespace.fernlet`, Fernlet's whole protocol identity, built from the two halves below.
 - `ProximityNamespace.Family.fernlet`, what every app on Fernlet's wire shares: the 39
   domain-separation labels (`Purposes.fernlet`, grouped as `Signature`, `KeyDerivation`, `AEAD` and
-  `Hash`, each `.fernlet`), the three radios' service types, ALPNs and the mesh heartbeat
-  (`Radios.fernlet`), and the `fernlet` QR scheme.
+  `Hash`, each `.fernlet`), the three radios' service types, ALPNs and the mesh heartbeat with the
+  three presentation strings (`Radios.fernlet`), the `fernlet` QR scheme, and the payload vocabulary
+  (`Vocabulary.fernlet`, below).
 - `ProximityNamespace.Installation.fernletApp`, what belongs to the Fernlet app on one device: the
   identity's keychain service and four accounts, the two seal-key rows, the `Fernlet` storage
   directory with its three on-disk names, and the radios' log subsystem.
@@ -75,6 +76,34 @@ column seals too, `fernlet.mesh.session-context.v1` and `fernlet.mesh.routed-sto
 39 labels to move, each read off the store's scope namespace, so every sealed file opens exactly as
 before.
 
+**The payload vocabulary and the presentation strings (plan step A0.3).** `Family.fernlet` also
+carries `ProximityNamespace.Vocabulary.fernlet` (`FernletPayloadVocabulary.swift`), Fernlet's shared
+wire tokens and the rules that hang on them, each part `.fernlet`:
+
+- `SessionMessages.fernlet`, the coordinator's three session messages: the identity introduction
+  ("Hello"), its acknowledgement ("Identity acknowledged") and the session heartbeat ("Heartbeat",
+  answered by "Heartbeat ack"), each with its `PayloadType` token. A title is signed into its
+  envelope, so it is a wire token like the payload type: frozen English, never localized.
+- `PayloadRules.fernlet`, every `PayloadType` token (the 55 the host dispatches; any other token
+  authenticates but is parked) and the seventeen whose payload must arrive sealed.
+- `Capabilities.fernlet`, every `ProximityCapability` token in declaration order, `wire2` as the
+  wire2 framing's token, and photos alone for a peer whose introduction lists no capabilities.
+- `MembershipRecordKinds.fernlet` and `RoutedTypes.fernlet`, the four record kinds the inventory
+  digest hashes and the routed engine's photo, temporary-message, heart and reserved control types.
+
+Payload and capability tokens are read off FernletDomainModel's `PayloadType` and
+`ProximityCapability`, so each keeps one spelling; the titles, record kinds and routed types are
+written out, byte for byte as ProximityKit writes them. `Radios.fernlet` carries the three
+presentation strings beside the radio values: `fernlet-mesh-`, the mesh and recipe-share radios'
+Bonjour instance-name prefix, `fn-`, the presence radio's (the prefix and its separator together),
+and `fernlet-mesh`, the ephemeral certificates' common name. ProximityKit's consumers still read
+constants of their own for all of these until plan step A0.3 re-points them here: the envelope its
+sealing set, the coordinator its tokens, titles and capability rules, the membership and routed code
+their tokens, the radios their names. `ProximityVocabularyGoldenTests` holds every `.fernlet` value to
+the frozen literal those constants were pinned to, so the two spellings cannot drift, and holds the
+bounds ProximityKit's soundness rules apply to the bounds of the consumers they protect.
+`ProximityNamespace.fernlet` stays `.sound` under the vocabulary and presentation rules too.
+
 **The install binding (plan step A0.2.9).** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks
 the host for it through `ProximityInstallBinding` instead of reading FernletCrypto's `DeviceBindingID`
@@ -103,10 +132,10 @@ a `FernletAuditLog` capture handler verbatim before the call returns, or every t
 an event was NOT logged would pass vacuously; it also holds ProximityKit's code to naming
 `FernletAuditLog` nowhere.
 
-**What joins it later.** A0.3 adds the payload vocabulary (payload type tokens, capability raw values, the sealing set, routed-type rows,
-membership record kinds), the session trust policies and the presentation strings that must become
-per-host (instance prefixes, the TLS certificate name, the display default). A0.4 makes Fernlet's
-feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
+**What joins it later.** The rest of A0.3 adds the session trust policies and the coach channel's
+and the mesh engine's own tokens (the trainer export body, the mesh control tokens), and deletes
+rather than moves the coordinator's `"Fernlet"` display default and its per-mode service types.
+A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
 `.fernletApp` and sharing its family), the connection profiles (friend mesh, presence, recipe,
 coach), app identities with per-app allow lists, coach relationship records and the coach link
 signing purposes; FernletCrypto's 38 twins of these labels then retire.
@@ -119,9 +148,11 @@ identity only by importing this module or by copying its literals on purpose. It
 FernletKit after ProximityKit leaves for its own repository (plan A1), consuming the package by tag.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; since
-step A0.2.9 on `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to); and
-since step A0.2.10, for the audit bridge, on `FernletFoundation` (Layer 0, which `FernletAuditLog`
-lives in). It imports nothing else but Foundation and Security. Through ProximityKit it reaches
+step A0.2.9 on `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to); since
+step A0.2.10, for the audit bridge, on `FernletFoundation` (Layer 0, which `FernletAuditLog` lives
+in); and for the payload vocabulary on `FernletDomainModel` (for `PayloadType` and
+`ProximityCapability`, whose raw values it reads). It imports nothing else but Foundation and
+Security. Through ProximityKit it reaches
 `PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair

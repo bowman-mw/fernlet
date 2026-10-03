@@ -1425,9 +1425,11 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 
 ProximityKit plan step A0.2: the host-supplied protocol identity, under `ProximityKit/Namespace/`,
 and every ProximityKit read of its 39 labels, radio values, QR scheme, identity and mesh seal-key
-rows, storage names and log subsystem routed through it, byte-identical for Fernlet. The feature
-labels, the heart-drop and moderation keychain services and `ProximitySupportLayout`'s folder stay
-outside it until A0.4, the payload vocabulary and presentation strings until A0.3.
+rows, storage names and log subsystem routed through it, byte-identical for Fernlet. Its family also
+carries the payload vocabulary and the radios' presentation strings, judged by its soundness rules;
+ProximityKit's consumers still read their own constants for those until plan step A0.3 re-points
+them. The feature labels, the heart-drop and moderation keychain services and
+`ProximitySupportLayout`'s folder stay outside it until A0.4.
 The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
 copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
@@ -1460,6 +1462,22 @@ covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value an
 | `Signature.init(...)`, `KeyDerivation.init(...)`, `AEAD.init(...)`, `Hash.init(...)` | Take the host's `StaticString` labels and mint each with the role its field fixes (17 canonical `.signature(.lengthPrefixed)`, 2 QR `.signature(.rawPrefix)`; 3 salts, 1 exporter label, 2 column seals; 5 AADs; 6 `.hashDomain(.lengthPrefixed)` + the epoch id `.hashDomain(.rawPrefix)`). |
 | `LegacyV1.refused` / `LegacyV1.accepted(identityEnvelopeV1:meshAdmissionTokenV1:)` | The verify-only legacy pair: absent, or both labels as `.signature(.absent)`. |
 | `Purposes.labelRows(under:)` and the per-group builders (internal) | The rows behind `ProximityNamespace.labelRows`. |
+| `Family.init(purposes:radios:verifyQR:vocabulary:)` | Assembles the shared half: the labels, the radios, the QR scheme and the payload vocabulary. |
+| `Radios.init(mesh:presence:recipeShare:meshHeartbeat:meshInstanceNamePrefix:presenceInstanceNamePrefix:tlsCommonName:)` | The three radios, the heartbeat and the three presentation strings: the mesh and recipe-share instance-name prefix (12 hex characters follow it), the presence one (16 follow) and the ephemeral certificates' common name. |
+
+### `Namespace/ProximityNamespace+Vocabulary.swift`
+
+The family's payload vocabulary: plain `String` tokens, wire data rather than labels, which no
+decoder produces. ProximityKit's consumers still read their own constants for these until plan step
+A0.3 re-points them; `ProximityVocabularyGoldenTests` holds Fernlet's two spellings equal.
+
+| Function | What It Does |
+| --- | --- |
+| `Vocabulary.init(session:payloads:capabilities:membershipRecordKinds:routedTypes:)` | Assembles the five groups. |
+| `SessionMessages.init(identityIntroduction:identityAcknowledge:heartbeat:)`, `SessionMessage.init(payloadType:summaryTitle:)`, `Heartbeat.init(payloadType:pingTitle:replyTitle:)` | The coordinator's introduction, acknowledgement and heartbeat: each payload token with the summary title signed into its envelope (a wire token, never localized). |
+| `PayloadRules.init(known:sealingRequired:)` | Every payload token the host dispatches (any other authenticates but is parked) and those whose payload must arrive sealed. |
+| `Capabilities.init(known:wire2:assumedForLegacyPeers:)` | The capability tokens in order (a receiver keeps twice as many), the wire2 framing's token, and what a peer whose introduction lists none supports. |
+| `MembershipRecordKinds.init(admission:departure:removal:termination:)`, `RoutedTypes.init(photo:tempMessage:heart:control:)` | The four record kinds the signed inventory digest hashes, and the routed engine's three registered types and its reserved control type. |
 
 ### `Namespace/ProximityNamespace+Installation.swift`
 
@@ -1471,7 +1489,7 @@ covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value an
 
 | Function | What It Does |
 | --- | --- |
-| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem. |
+| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem, then the vocabulary (tokens well-formed by group: payload tokens and record kinds 1–255 bytes, capability tokens 1–32, routed types 1–64, all of 0x21–0x7E; none repeated within its group; the session tokens and sealing set in `payloads.known`, `wire2` and the legacy assumption in `capabilities.known`; summary titles 1–200 characters) and the radios' presentation strings (instance-name prefixes of `[a-z0-9-]` within the room a 63-byte DNS-SD name leaves, the common name 1–64 bytes of printable ASCII). |
 | `familyCollisions(with:)` | Labels equal or byte-prefix related, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
 | `installationCollisions(with:)` | Equal keychain services, an equal directory name ignoring case, or an equal log subsystem. |
 
@@ -1485,8 +1503,23 @@ column, every role, soundness and the 38 FernletCrypto twins.
 | Function | What It Does |
 | --- | --- |
 | `ProximityNamespace.fernlet` | Fernlet's whole protocol identity: `Family.fernlet` with `Installation.fernletApp`. |
-| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Fernlet's labels, radio values and `fernlet` QR scheme by group, byte for byte as they shipped, the legacy pair accepted. |
+| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Fernlet's labels, radio values and `fernlet` QR scheme by group, byte for byte as they shipped, the legacy pair accepted; `Family.fernlet` carries `Vocabulary.fernlet`, and `Radios.fernlet` the presentation strings `fernlet-mesh-`, `fn-` and `fernlet-mesh`. |
 | `Installation.fernletApp` | The Fernlet app's identity and seal-key rows, storage names and log subsystem. Coach adds an installation of its own beside it in plan step C1. |
+
+### `FernletConnections/FernletPayloadVocabulary.swift`
+
+Fernlet's payload vocabulary, which `Family.fernlet` carries. Payload and capability tokens are read
+off FernletDomainModel's `PayloadType` and `ProximityCapability`, so each keeps one spelling; the
+titles, record kinds and routed types are written out as ProximityKit writes them.
+`ProximityVocabularyGoldenTests` pins every value against its frozen column.
+
+| Function | What It Does |
+| --- | --- |
+| `Vocabulary.fernlet` | The five groups below, each `.fernlet`. |
+| `SessionMessages.fernlet` | The introduction ("Hello"), the acknowledgement ("Identity acknowledged") and the heartbeat ("Heartbeat", answered "Heartbeat ack"), under their `PayloadType` tokens. |
+| `PayloadRules.fernlet` | Every `PayloadType` token, and the seventeen whose payload must arrive sealed. |
+| `Capabilities.fernlet` | Every `ProximityCapability` token in declaration order, `wire2`, and photos alone for a legacy peer. |
+| `MembershipRecordKinds.fernlet`, `RoutedTypes.fernlet` | The four record kinds and the four routed-type tokens, as ProximityKit spells them. |
 
 ### The supply path
 
