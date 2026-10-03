@@ -3,6 +3,7 @@ import AVFoundation
 import UIKit
 import FernletDomainModel
 import ProximityKit
+import FernletConnections
 import AppServices
 import FernletUI
 import FernletProximityUI
@@ -1729,7 +1730,7 @@ struct DisposableCameraView: View {
     /// - Returns: The text to render.
     private func shownName(_ participant: MeshSessionParticipant) -> String {
         guard !participant.isLocal else { return participant.displayName }
-        return PeerNameDisplay.shown(participant.displayName, fingerprint: participant.fingerprint)
+        return PeerNameDisplay.shown(participant.displayName, fingerprint: participant.fingerprint, in: .fernlet)
     }
 
     /// The per-participant overflow menu: propose a removal, or block outright.
@@ -1847,7 +1848,7 @@ struct DisposableCameraView: View {
     /// One pending removal proposal: what was asked, and this device's part in it.
     private func removalRequestCard(_ proposal: MeshRemovalProposalPayload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint)).")
+            Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint, in: .fernlet)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint, in: .fernlet)).")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
             if manager.canSecondRemoval(proposal) {
@@ -1916,8 +1917,8 @@ struct DisposableCameraView: View {
         // the button over a tap whose switch has nothing to run: a silent tap, with a haptic.
         let reachable = transport != .unavailable
         let sending = sessionHeartSendInProgress
-        let friendName = PeerNameDisplay.shown(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met)
-        let firstName = PeerNameDisplay.firstName(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met)
+        let friendName = PeerNameDisplay.shown(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met, in: .fernlet)
+        let firstName = PeerNameDisplay.firstName(friend.displayName, fingerprint: friend.fingerprint, placeholder: .met, in: .fernlet)
         let state = SendGoodVibesLabel.state(onCooldown: onCooldown, reachable: reachable, sending: sending)
         return Button {
             // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
@@ -2010,7 +2011,7 @@ struct DisposableCameraView: View {
     /// only half of it here would create a `LocalizedStringKey(runtimeString)` conversion rather
     /// than close anything. Names go through `SessionHeartStatusCopy.shownRecipient`: the state
     /// carries the trust-vault name, which is the fingerprint for a friend kept before their name
-    /// arrived. `.failed`'s sentence is the manager's, built on `PresenceManager.firstName(of:)`,
+    /// arrived. `.failed`'s sentence is the manager's, built on `PresenceManager.firstName(of:in:)`,
     /// which applies the same rule.
     private var presenceHeartStatusText: String? {
         switch store.presenceManager.heartSendState {
@@ -2203,7 +2204,7 @@ private struct SessionPromptsModifier: ViewModifier {
             JoinPromptSheet(
                 requests: manager.pendingAdmissionRequests,
                 targetName: mesh.name,
-                displayName: { PeerNameDisplay.shown($0.requesterDisplayName, fingerprint: $0.requesterFingerprint) },
+                displayName: { PeerNameDisplay.shown($0.requesterDisplayName, fingerprint: $0.requesterFingerprint, in: .fernlet) },
                 accessibilityPrefix: "mesh.admission",
                 allow: { manager.allowAdmission($0) },
                 decline: { manager.declineAdmission($0) }
@@ -2224,7 +2225,7 @@ private struct SessionRemovalPromptsModifier: ViewModifier {
         content
             .alert(
                 activeRemovalProposal.map {
-                    "Remove \(PeerNameDisplay.shown($0.targetDisplayName, fingerprint: $0.targetFingerprint))?"
+                    "Remove \(PeerNameDisplay.shown($0.targetDisplayName, fingerprint: $0.targetFingerprint, in: .fernlet))?"
                 } ?? "Remove participant?",
                 isPresented: $activeRemovalProposal.isPresent(),
                 presenting: activeRemovalProposal
@@ -2239,7 +2240,7 @@ private struct SessionRemovalPromptsModifier: ViewModifier {
                     activeRemovalProposal = nil
                 }
             } message: { proposal in
-                Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint)) from this session. A different participant must second the decision.")
+                Text("\(PeerNameDisplay.shown(proposal.proposerDisplayName, fingerprint: proposal.proposerFingerprint, in: .fernlet)) asked to remove \(PeerNameDisplay.shown(proposal.targetDisplayName, fingerprint: proposal.targetFingerprint, in: .fernlet)) from this session. A different participant must second the decision.")
             }
             .alert("End session?", isPresented: $leaveSessionConfirm) {
                 Button("End Session", role: .destructive) {

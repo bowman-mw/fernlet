@@ -2,17 +2,18 @@
 // FernletTests
 //
 // ProximityKit plan step A0.2.3 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2): the one
-// place the test target gets back the call shapes A0.2 takes out of ProximityKit. ProximityKit offers
-// no namespace default, so every API that used to spell Fernlet's bytes for itself now takes the
-// host's `ProximityNamespace`. The suites were written against the old shapes; rather than rewrite
-// every construction in every suite, each old shape comes back here once, passing Fernlet's value.
+// place the test target gets back the call shapes A0.2 and A0.3 take out of ProximityKit. ProximityKit
+// offers no namespace default, so every API that used to spell Fernlet's bytes for itself now takes
+// the host's `ProximityNamespace`, or a value read off it. The suites were written against the old
+// shapes; rather than rewrite every construction in every suite, each old shape comes back here
+// once, passing Fernlet's value.
 //
 // THE RULE. A binding restores a call SHAPE, never a value: it passes `ProximityNamespace.fernlet`,
 // exactly the value FernletConnections ships and the app hands ProximityKit, so a suite that goes
 // through one sees the bytes it always saw, and nothing here may pass anything else or compute a
 // label, a row or a name of its own. A test that PINS a value does not lean on a binding: it names
 // `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is visibly
-// Fernlet's and still reads correctly once a binding is retired. Each A0.2 commit added its
+// Fernlet's and still reads correctly once a binding is retired. Each plan-step commit adds its
 // bindings to this file, beside the API it restores.
 //
 // Where an API takes the namespace's labels rather than the whole namespace (step A0.2.4 on), the
@@ -570,5 +571,126 @@ extension IdentityService {
     ) -> DeviceIdentityRead {
         classifyDeviceIdentityRows(signing: signing, keyAgreement: keyAgreement,
                                    accounts: ProximityNamespace.fernlet.installation.keychain.identity)
+    }
+}
+
+// MARK: - Presentation strings (A0.3.2)
+//
+// The radios' instance-name prefixes and certificate name, and the name display's prefix, are read
+// off the namespace: the minting doors take the prefix and the common name their radio or manager
+// read from its namespace, and `PeerNameDisplay` and `PresenceManager.firstName` take the namespace
+// last. Each old shape comes back here with `.fernlet`'s `family.radios` values, read off the value,
+// never respelled. A cell whose subject is a prefix or the common name passes `.fernlet`'s value
+// explicitly instead.
+
+/// The mesh instance name in the shape the suites were written against (plan step A0.3.2).
+extension MeshLinkAdvertisement {
+
+    /// `randomInstanceName(prefix:)` with `.fernlet`'s `family.radios.meshInstanceNamePrefix`.
+    static func randomInstanceName() -> String {
+        randomInstanceName(prefix: ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix)
+    }
+}
+
+/// The certificate path's two doors in the shapes the suites were written against (plan step
+/// A0.3.2), with `.fernlet`'s common name.
+extension EphemeralMeshTLSIdentity {
+
+    /// `mint(commonName:now:)` with `.fernlet`'s `family.radios.tlsCommonName`.
+    static func mint(now: Date = Date()) throws -> Minted {
+        try mint(commonName: ProximityNamespace.fernlet.family.radios.tlsCommonName, now: now)
+    }
+
+    /// `selfSignedCertificateDER(for:commonName:notBefore:notAfter:serial:)` with `.fernlet`'s
+    /// `family.radios.tlsCommonName`.
+    static func selfSignedCertificateDER(
+        for privateKey: P256.Signing.PrivateKey, notBefore: Date, notAfter: Date, serial: [UInt8]
+    ) throws -> Data {
+        try selfSignedCertificateDER(
+            for: privateKey, commonName: ProximityNamespace.fernlet.family.radios.tlsCommonName,
+            notBefore: notBefore, notAfter: notAfter, serial: serial)
+    }
+}
+
+/// The presence posture's minting, rotation and naming doors in the shapes the suites were written
+/// against (plan step A0.3.2), with `.fernlet`'s presence prefix and, where a door mints the
+/// certificate itself, its common name.
+extension PresenceEpochPosture {
+
+    /// `minted(at:instanceNamePrefix:commonName:)` with `.fernlet`'s values.
+    static func minted(at now: Date) throws -> PresenceEpochPosture {
+        let radios = ProximityNamespace.fernlet.family.radios
+        return try minted(
+            at: now, instanceNamePrefix: radios.presenceInstanceNamePrefix, commonName: radios.tlsCommonName)
+    }
+
+    /// `minted(at:instanceNamePrefix:entropy:mintIdentity:)` with `.fernlet`'s presence prefix.
+    static func minted(
+        at now: Date, entropy: (Int) -> [UInt8], mintIdentity: (Date) throws -> EphemeralMeshTLSIdentity.Minted
+    ) throws -> PresenceEpochPosture {
+        try minted(
+            at: now, instanceNamePrefix: ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix,
+            entropy: entropy, mintIdentity: mintIdentity)
+    }
+
+    /// `rotated(at:instanceNamePrefix:commonName:)` with `.fernlet`'s values.
+    func rotated(at now: Date) throws -> PresenceEpochPosture {
+        let radios = ProximityNamespace.fernlet.family.radios
+        return try rotated(
+            at: now, instanceNamePrefix: radios.presenceInstanceNamePrefix, commonName: radios.tlsCommonName)
+    }
+
+    /// `rotated(at:instanceNamePrefix:entropy:mintIdentity:)` with `.fernlet`'s presence prefix.
+    func rotated(
+        at now: Date, entropy: (Int) -> [UInt8], mintIdentity: (Date) throws -> EphemeralMeshTLSIdentity.Minted
+    ) throws -> PresenceEpochPosture {
+        try rotated(
+            at: now, instanceNamePrefix: ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix,
+            entropy: entropy, mintIdentity: mintIdentity)
+    }
+
+    /// `instanceName(prefix:entropy:)` with `.fernlet`'s presence prefix.
+    static func instanceName(entropy: (Int) -> [UInt8]) throws -> String {
+        try instanceName(prefix: ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix, entropy: entropy)
+    }
+}
+
+/// The recipe posture's mint in the shape the suites were written against (plan step A0.3.2).
+extension RecipeSharePosture {
+
+    /// `minted(instanceNamePrefix:commonName:now:)` with `.fernlet`'s mesh prefix and common name.
+    static func minted(now: Date = Date()) throws -> RecipeSharePosture {
+        let radios = ProximityNamespace.fernlet.family.radios
+        return try minted(
+            instanceNamePrefix: radios.meshInstanceNamePrefix, commonName: radios.tlsCommonName, now: now)
+    }
+}
+
+/// The name display's three rules in the shapes the suites were written against (plan step
+/// A0.3.2), each recognizing `.fernlet`'s mesh instance-name prefix.
+extension PeerNameDisplay {
+
+    /// `personName(_:fingerprint:in: .fernlet)`.
+    static func personName(_ raw: String, fingerprint: String?) -> String? {
+        personName(raw, fingerprint: fingerprint, in: .fernlet)
+    }
+
+    /// `shown(_:fingerprint:placeholder:in: .fernlet)`.
+    static func shown(_ raw: String, fingerprint: String?, placeholder: Placeholder = .nearby) -> String {
+        shown(raw, fingerprint: fingerprint, placeholder: placeholder, in: .fernlet)
+    }
+
+    /// `firstName(_:fingerprint:placeholder:in: .fernlet)`.
+    static func firstName(_ raw: String, fingerprint: String?, placeholder: Placeholder = .nearby) -> String {
+        firstName(raw, fingerprint: fingerprint, placeholder: placeholder, in: .fernlet)
+    }
+}
+
+/// The hearts copy's first name in the shape the suites were written against (plan step A0.3.2).
+extension PresenceManager {
+
+    /// `firstName(of:in: .fernlet)`. `nonisolated`, as the function it restores is.
+    nonisolated static func firstName(of displayName: String) -> String {
+        firstName(of: displayName, in: .fernlet)
     }
 }

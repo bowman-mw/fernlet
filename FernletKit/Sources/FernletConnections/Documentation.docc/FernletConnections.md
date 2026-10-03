@@ -93,16 +93,23 @@ wire tokens and the rules that hang on them, each part `.fernlet`:
 
 Payload and capability tokens are read off FernletDomainModel's `PayloadType` and
 `ProximityCapability`, so each keeps one spelling; the titles, record kinds and routed types are
-written out, byte for byte as ProximityKit writes them. `Radios.fernlet` carries the three
-presentation strings beside the radio values: `fernlet-mesh-`, the mesh and recipe-share radios'
-Bonjour instance-name prefix, `fn-`, the presence radio's (the prefix and its separator together),
-and `fernlet-mesh`, the ephemeral certificates' common name. ProximityKit's consumers still read
-constants of their own for all of these until plan step A0.3 re-points them here: the envelope its
-sealing set, the coordinator its tokens, titles and capability rules, the membership and routed code
-their tokens, the radios their names. `ProximityVocabularyGoldenTests` holds every `.fernlet` value to
-the frozen literal those constants were pinned to, so the two spellings cannot drift, and holds the
-bounds ProximityKit's soundness rules apply to the bounds of the consumers they protect.
-`ProximityNamespace.fernlet` stays `.sound` under the vocabulary and presentation rules too.
+written out, byte for byte as ProximityKit writes them. ProximityKit's consumers still read
+constants of their own for the vocabulary until the rest of plan step A0.3 re-points them here: the
+envelope its sealing set, the coordinator its tokens, titles and capability rules, the membership and
+routed code their tokens.
+
+`Radios.fernlet` carries the three presentation strings beside the radio values, and ProximityKit
+reads each of them off the namespace: `fernlet-mesh-`, the prefix the mesh and recipe-share radios'
+Bonjour instance names begin with and the one `PeerNameDisplay` never shows as a person's name,
+`fn-`, the presence posture's (the prefix and its separator together), and `fernlet-mesh`, every
+ephemeral certificate's common name. The radios read them from the namespace their manager hands
+them, the presence manager's posture mint from its own copy, and the name display from the
+namespace each caller passes: the app passes `.fernlet`, and so does `FernletProximityUI`, which
+depends on this module for it. `ProximityVocabularyGoldenTests` holds every `.fernlet` value to its
+frozen literal, so no spelling can drift, drives those consumers under `.fernlet` and under a
+namespace whose strings are its own, and holds the bounds ProximityKit's soundness rules apply to the
+bounds of the consumers they protect. `ProximityNamespace.fernlet` stays `.sound` under the vocabulary
+and presentation rules too.
 
 **The install binding (plan step A0.2.9).** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks
@@ -133,9 +140,10 @@ an event was NOT logged would pass vacuously; it also holds ProximityKit's code 
 `FernletAuditLog` nowhere.
 
 **What joins it later.** The rest of A0.3 adds the session trust policies and the coach channel's
-and the mesh engine's own tokens (the trainer export body, the mesh control tokens), and deletes
-rather than moves the coordinator's `"Fernlet"` display default and its per-mode service types.
-A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
+and the mesh engine's own tokens (the trainer export body, the mesh control tokens). Nothing here
+stands in for the coordinator's display name or a per-mode service type: ProximityKit has neither,
+every caller passing the host's resolved name and the radios owning discovery on the namespace's
+service types. A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
 `.fernletApp` and sharing its family), the connection profiles (friend mesh, presence, recipe,
 coach), app identities with per-app allow lists, coach relationship records and the coach link
 signing purposes; FernletCrypto's 38 twins of these labels then retire.

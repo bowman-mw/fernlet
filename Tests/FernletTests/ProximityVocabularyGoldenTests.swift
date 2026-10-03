@@ -29,9 +29,11 @@
 // 7. **The coordinator's session messages.** The token and title of the introduction, the
 //    acknowledgement, the heartbeat and its reply, read off what a live coordinator sends; and the
 //    mesh's rule that an envelope's summary title is its payload token.
-// 8. **Presentation strings.** The two instance-name prefixes, the certificate's common name, the
-//    coordinator's display default and its two service types, read off minted values and off what
-//    the coordinator advertises.
+// 8. **Presentation strings.** The two instance-name prefixes and the certificate's common name,
+//    read off `.fernlet`'s radios, off what the radios, the presence manager and the minting doors
+//    mint under them and off what the name display hides, under `.fernlet` and under a namespace
+//    whose strings are its own; and the coordinator's display default and its two service types,
+//    deleted rather than moved, which no accessor reads and no transport is handed.
 // 9. **The trainer export body.** Its format token, version, JSON bytes and two size caps.
 // 10. **The generic types.** `PayloadEncryption` and `PayloadSummary`: one envelope's schema-v1
 //     canonical bytes, both types' JSON, and the summary's decode bounds.
@@ -51,8 +53,9 @@
 // (`MeshMembershipEventGoldenTests.goldenRecordsHashHex`). The token tables are whole on purpose:
 // a table that is exactly a type's cases is what makes a new case fail here until it has a row.
 //
-// Every identity and every label-taking consumer this suite builds names `.fernlet` explicitly,
-// never a test binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
+// Every identity and every label-taking consumer this suite builds names its namespace explicitly
+// (`.fernlet`, or group 8's namespace that differs from it in the presentation strings alone), never
+// a test binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
 // below was derived from the FORMAT by an independent Python re-implementation —
 // `CanonicalByteWriter`'s fields, and Foundation's JSON output rules (keys sorted by code point,
 // `/` escaped unless `.withoutEscapingSlashes`, a whole number printed without a fraction,
@@ -80,8 +83,9 @@ struct VocabularyGoldenRow: Sendable {
     /// The bytes, written by hand from the A0.3 census. Never computed from a constant; never edited.
     let frozen: String
     /// Today's accessor: **the only column a later A0.3 commit may re-point.** `nil` where no test
-    /// can name the value (an inline literal, a default argument); a behaviour cell pins it instead
-    /// and reads its expectation off `frozen`.
+    /// can name the value (an inline literal, a default argument) or where the value was deleted
+    /// rather than moved (a "deleted: no value" row); a behaviour cell pins it instead and reads its
+    /// expectation off `frozen`.
     let today: String?
 }
 
@@ -655,7 +659,7 @@ struct ProximityVocabularyGoldenTests {
 
     /// A live coordinator, driven over `FakePeerTransport` through the introduction, the commit and a
     /// peer's ping, signs its four messages under their frozen tokens and titles — and the two it
-    /// sends after the commit disclose the coordinator's display default, the two before it nothing.
+    /// sends after the commit disclose the display name the rig gave it, the two before it nothing.
     @Test func theCoordinatorSignsItsFourSessionMessagesUnderTheirTokensAndTitles() async throws {
         let rig = try VocabularyCoordinatorRig()
         defer { rig.forgetKeychainRows() }
@@ -676,7 +680,7 @@ struct ProximityVocabularyGoldenTests {
             #expect(envelope.payloadSummary.title == message.title,
                     "the \(message.name) is titled \(envelope.payloadSummary.title)")
         }
-        let name = Self.frozen("presentation.coordinatorDisplayName")
+        let name = VocabularyCoordinatorRig.displayName
         #expect(sent.map(\.senderDisplayName) == ["", "", name, name], "they named \(sent.map(\.senderDisplayName))")
     }
 
@@ -700,71 +704,205 @@ struct ProximityVocabularyGoldenTests {
     // MARK: Group 8 — the presentation strings
 
     /// The strings that name Fernlet to a scanner, a TLS stack or a discovery dictionary without being
-    /// a protocol label: free to change per host, frozen until a host supplies its own.
+    /// a protocol label: free to change per host, frozen until a host supplies its own. The first four
+    /// are read off `.fernlet`'s radios, where the radios and the name display take them from; the
+    /// namespace carries the presence prefix and its separator as one field, so their two rows read
+    /// its two parts. The coordinator's display default and its two service types were deleted, not
+    /// moved: "deleted: no value" rows, which no accessor can read and
+    /// ``theCoordinatorsDisplayDefaultAndServiceTypesAreDeleted()`` proves reach no transport.
     static var presentationRows: [VocabularyGoldenRow] {
-        [
+        let radios = ProximityNamespace.fernlet.family.radios
+        return [
             VocabularyGoldenRow(field: "presentation.meshInstanceNamePrefix", frozen: "fernlet-mesh-",
-                                today: MeshLinkAdvertisement.instanceNamePrefix),
+                                today: radios.meshInstanceNamePrefix),
             VocabularyGoldenRow(field: "presentation.presenceInstanceNamePrefix", frozen: "fn",
-                                today: PresenceEpochPosture.instanceNamePrefix),
+                                today: String(radios.presenceInstanceNamePrefix.dropLast())),
             VocabularyGoldenRow(field: "presentation.presenceInstanceNameSeparator", frozen: "-",
-                                today: PresenceEpochPosture.instanceNameSeparator),
+                                today: String(radios.presenceInstanceNamePrefix.suffix(1))),
             VocabularyGoldenRow(field: "presentation.tlsCommonName", frozen: "fernlet-mesh",
-                                today: EphemeralMeshTLSIdentity.commonName),
+                                today: radios.tlsCommonName),
             VocabularyGoldenRow(field: "presentation.coordinatorDisplayName", frozen: "Fernlet", today: nil),
-            VocabularyGoldenRow(field: "presentation.trainerServiceType", frozen: "fernlet-coach",
-                                today: MultipeerServiceType.trainer),
+            VocabularyGoldenRow(field: "presentation.trainerServiceType", frozen: "fernlet-coach", today: nil),
             VocabularyGoldenRow(field: "presentation.friendServiceType", frozen: "fernlet-friend", today: nil)
         ]
     }
 
-    /// The five with an accessor, byte for byte. The display default is a default argument and the
-    /// friend service type an inline literal, so the coordinator cells below pin those two.
+    /// The four with an accessor, byte for byte. The three deleted values have none.
     @Test func everyPresentationStringIsItsFrozenSpelling() {
-        #expect(Self.expectFrozen(Self.presentationRows) == 5)
+        #expect(Self.expectFrozen(Self.presentationRows) == 4)
     }
 
-    /// What gets minted carries them: a mesh instance name is the prefix and 12 lowercase hex, a
-    /// presence one the prefix, the separator and 16 (`fn-0123456789abcdef` from fixed entropy), and a
-    /// minted certificate's subject common name is the frozen token.
+    /// What the minting doors mint under `.fernlet`'s strings carries the frozen spellings: a mesh
+    /// instance name is the prefix and 12 lowercase hex, a presence one the prefix, the separator and
+    /// 16 (`fn-0123456789abcdef` from fixed entropy, every one as long as the presence length says),
+    /// and a minted certificate's subject common name is the frozen token.
     @Test func theMintedNamesAndCertificateCarryTheFrozenSpellings() throws {
+        let radios = ProximityNamespace.fernlet.family.radios
         let meshPattern = try Regex(#"^fernlet-mesh-[0-9a-f]{12}$"#)
         let presencePattern = try Regex(#"^fn-[0-9a-f]{16}$"#)
-        let meshName = MeshLinkAdvertisement.randomInstanceName()
+        let meshName = MeshLinkAdvertisement.randomInstanceName(prefix: radios.meshInstanceNamePrefix)
         #expect(meshName.wholeMatch(of: meshPattern) != nil, "a mesh instance name: \(meshName)")
         let presence = Self.frozen("presentation.presenceInstanceNamePrefix")
             + Self.frozen("presentation.presenceInstanceNameSeparator")
-        let fixed = try PresenceEpochPosture.instanceName(entropy: { _ in [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF] })
+        let fixed = try PresenceEpochPosture.instanceName(
+            prefix: radios.presenceInstanceNamePrefix, entropy: { _ in [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF] })
         #expect(fixed == presence + "0123456789abcdef", "fixed entropy minted \(fixed)")
-        let posture = try PresenceEpochPosture.minted(at: Date())
+        let posture = try PresenceEpochPosture.minted(
+            at: Date(), instanceNamePrefix: radios.presenceInstanceNamePrefix, commonName: radios.tlsCommonName)
         #expect(posture.instanceName.wholeMatch(of: presencePattern) != nil, "a presence instance name: \(posture.instanceName)")
-        let minted = try EphemeralMeshTLSIdentity.mint()
-        let certificate = try #require(SecCertificateCreateWithData(nil, minted.certificateDER as CFData))
-        var commonName: CFString?
-        let status = SecCertificateCopyCommonName(certificate, &commonName)
-        let named = commonName.map { $0 as String }
-        #expect(status == errSecSuccess, "reading the certificate's common name failed: \(status)")
+        #expect(PresenceEpochPosture.instanceNameLength(prefix: radios.presenceInstanceNamePrefix) == presence.count + 16)
+        let minted = try EphemeralMeshTLSIdentity.mint(commonName: radios.tlsCommonName)
+        let named = Self.commonName(of: minted.certificateDER)
         #expect(named == Self.frozen("presentation.tlsCommonName"), "the certificate names \(named ?? "nothing")")
     }
 
-    /// A coordinator built WITHOUT a display name advertises `Fernlet`, and `serviceType(for:)` answers
-    /// the coach channel's type for trainer mode and the friend label for friend mode — read off what
-    /// the coordinator hands its transport.
-    @Test func theCoordinatorAdvertisesTheFrozenDisplayDefaultAndServiceTypes() async throws {
+    /// The consumers read the strings off the namespace they hold, never off a constant. Built from
+    /// `.fernlet`, the mesh radio keeps the frozen prefix and common name as its copies, the recipe
+    /// radio wears a posture named and certified under them, and the presence manager's own posture
+    /// mint names and certifies its posture, and the one it rotates into at the next boundary, under
+    /// the frozen presence prefix and common name. Built from a namespace that differs from `.fernlet`
+    /// in its three presentation strings alone, each carries that namespace's strings instead: no
+    /// consumer keeps a Fernlet spelling of its own, the presence prefix included, which spells no
+    /// `fernlet` for the boundary wall to catch.
+    @Test func theRadiosAndThePresenceManagerMintUnderTheirNamespacesStrings() throws {
+        let frozenName = Self.frozen("presentation.tlsCommonName")
+        let meshPattern = try Regex(#"^fernlet-mesh-[0-9a-f]{12}$"#)
+        let presencePattern = try Regex(#"^fn-[0-9a-f]{16}$"#)
+        let fernlet = try Self.presentationReadings(of: .fernlet)
+        #expect(fernlet.meshPrefix == Self.frozen("presentation.meshInstanceNamePrefix") && fernlet.meshCommonName == frozenName,
+                "the mesh radio keeps \(fernlet.meshPrefix) and \(fernlet.meshCommonName)")
+        #expect(fernlet.recipeName.wholeMatch(of: meshPattern) != nil && fernlet.recipeCommonName == frozenName,
+                "the recipe radio wears \(fernlet.recipeName), certified as \(fernlet.recipeCommonName ?? "nothing")")
+        #expect(fernlet.presenceNames.count == 2 && fernlet.presenceNames.allSatisfy { $0.wholeMatch(of: presencePattern) != nil },
+                "the presence manager minted \(fernlet.presenceNames)")
+        #expect(fernlet.presenceCommonNames == [frozenName, frozenName], "its certificates name \(fernlet.presenceCommonNames)")
+
+        let renamed = Self.renamedPresentationNamespace()
+        let radios = renamed.family.radios
+        #expect(renamed.soundness == .sound, "the renamed namespace is unsound: \(renamed.soundness)")
+        let other = try Self.presentationReadings(of: renamed)
+        let presenceLength = PresenceEpochPosture.instanceNameLength(prefix: radios.presenceInstanceNamePrefix)
+        #expect(other.meshPrefix == radios.meshInstanceNamePrefix && other.meshCommonName == radios.tlsCommonName,
+                "a mesh radio of another namespace keeps \(other.meshPrefix) and \(other.meshCommonName)")
+        #expect(other.recipeName.hasPrefix(radios.meshInstanceNamePrefix) && other.recipeCommonName == radios.tlsCommonName,
+                "a recipe radio of another namespace wears \(other.recipeName) (\(other.recipeCommonName ?? "nothing"))")
+        #expect(other.presenceNames.count == 2 && other.presenceNames.allSatisfy {
+            $0.hasPrefix(radios.presenceInstanceNamePrefix) && $0.count == presenceLength
+        }, "a presence manager of another namespace minted \(other.presenceNames)")
+        #expect(other.presenceCommonNames == [radios.tlsCommonName, radios.tlsCommonName],
+                "its certificates name \(other.presenceCommonNames)")
+    }
+
+    /// The name display hides what the radios mint, by the namespace it is handed. Under `.fernlet`
+    /// a name that begins with the frozen mesh prefix (whole, upper-cased, or in the participant
+    /// projection's 24-character form) reads as no name while a name that only mentions Fernlet is
+    /// one; under the renamed namespace its own prefix is hidden and Fernlet's instance name is text.
+    @Test func theNameDisplayHidesTheMeshPrefixOfTheNamespaceItIsHanded() {
+        let instanceName = Self.frozen("presentation.meshInstanceNamePrefix") + "0123456789ab"
+        let forms = [instanceName, instanceName.uppercased(), ItemNameModeration.moderatedPeerDisplayName(instanceName)]
+        // R2: bounded by the three forms.
+        for form in forms {
+            #expect(PeerNameDisplay.personName(form, fingerprint: nil, in: .fernlet) == nil, "\(form) reads as a name")
+        }
+        #expect(PeerNameDisplay.personName("Fernlet fan", fingerprint: nil, in: .fernlet) == "Fernlet fan")
+        let renamed = Self.renamedPresentationNamespace()
+        let ownName = renamed.family.radios.meshInstanceNamePrefix + "0123456789ab"
+        #expect(PeerNameDisplay.personName(ownName, fingerprint: nil, in: renamed) == nil, "\(ownName) reads as a name")
+        let text = PeerNameDisplay.personName(instanceName, fingerprint: nil, in: renamed)
+        #expect(text == ItemNameModeration.sanitizedName(instanceName),
+                "under another namespace Fernlet's instance name is text, not hidden: \(text ?? "hidden")")
+    }
+
+    /// The coordinator's display default and its two per-mode service types are deleted, not moved,
+    /// so their rows read no accessor. A coordinator advertises the name its caller gave it, the rig's,
+    /// in trainer mode and on a friend join alike, and hands its transport a discovery dictionary and
+    /// nothing else: `PeerTransport`'s discovery doors take no service type, which
+    /// `FakePeerTransport`'s conformance holds at compile time. No deleted spelling reaches the
+    /// transport either way, and `ProximityNamespaceBoundaryTests` holds the three literals out of
+    /// ProximityKit's code.
+    @Test func theCoordinatorsDisplayDefaultAndServiceTypesAreDeleted() async throws {
         let rig = try VocabularyCoordinatorRig()
         defer { rig.forgetKeychainRows() }
         await rig.coordinator.begin(role: .advertiser, mode: .trainer)
-        let trainerType = rig.local.lastServiceType
-        let advertisedName = rig.local.lastDiscoveryInfo?["name"]
-        await rig.coordinator.begin(role: .browser, mode: .friend)
-        let friendType = rig.local.lastServiceType
+        let trainer = rig.local.lastDiscoveryInfo ?? [:]
+        await rig.coordinator.beginFriendJoin()
+        let friend = rig.local.lastDiscoveryInfo ?? [:]
+        let browses = rig.local.browseStartCount
         await rig.coordinator.cancel()
-        #expect(trainerType == Self.frozen("presentation.trainerServiceType"),
-                "trainer mode advertised \(trainerType ?? "nothing")")
-        #expect(advertisedName == Self.frozen("presentation.coordinatorDisplayName"),
-                "the default name is \(advertisedName ?? "absent")")
-        #expect(friendType == Self.frozen("presentation.friendServiceType"),
-                "friend mode browsed \(friendType ?? "nothing")")
+        let name = VocabularyCoordinatorRig.displayName
+        #expect(trainer["name"] == name && friend["name"] == name,
+                "the coordinator advertised \(trainer["name"] ?? "nothing") and \(friend["name"] ?? "nothing")")
+        #expect(browses == 1, "a friend join browsed \(browses) times")
+        let deleted = ["presentation.coordinatorDisplayName", "presentation.trainerServiceType",
+                       "presentation.friendServiceType"].map { Self.frozen($0) }
+        #expect(!deleted.contains(""), "a deleted value lost its row")
+        // R2: bounded by the two dictionaries' values and the three spellings.
+        for value in Array(trainer.values) + Array(friend.values) {
+            #expect(!deleted.contains { value.contains($0) }, "the transport was handed \(value)")
+        }
+    }
+
+    /// What the three consumers of the presentation strings hold and mint when built from one
+    /// namespace.
+    struct PresentationReadings {
+        /// The mesh radio's copy of the instance-name prefix.
+        let meshPrefix: String
+        /// The mesh radio's copy of the common name.
+        let meshCommonName: String
+        /// The instance name of the recipe radio's posture.
+        let recipeName: String
+        /// The common name of the recipe radio's certificate.
+        let recipeCommonName: String?
+        /// The presence manager's minted posture's name, then its rotated posture's.
+        let presenceNames: [String]
+        /// The two presence postures' certificates' common names, in the same order.
+        let presenceCommonNames: [String?]
+    }
+
+    /// Builds the mesh radio, the recipe radio (running without radios) and a presence manager over a
+    /// host of `namespace`, and reads what each holds and mints. The manager's posture mint is called
+    /// exactly as its epoch tick calls it, for a fresh posture and for the next epoch's rotation; its
+    /// identity sits on a throwaway service it never writes.
+    static func presentationReadings(of namespace: ProximityNamespace) throws -> PresentationReadings {
+        let mesh = NetworkMeshSession(namespace: namespace)
+        let recipe = NetworkRecipeShareSession(namespace: namespace)
+        let recipePosture = try recipe.runWithoutRadiosForTesting()
+        recipe.stop()
+        let host = PresentationNamespaceHost(namespace: namespace)
+        let ledgerURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VocabularyGolden-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("HeartLedger.json")
+        let postures: [PresenceEpochPosture] = try withExtendedLifetime(host) {
+            let manager = PresenceManager(
+                store: host, ledger: ProximityHeartLedger(fileURL: ledgerURL, now: { Self.at(0) }),
+                identity: IdentityService(namespace: namespace, keychainService: Self.isolatedIdentityService()))
+            let minted = try manager.postureMint(nil, Self.at(0))
+            return [minted, try manager.postureMint(minted, Self.at(IdentityService.presenceEpochSeconds))]
+        }
+        return PresentationReadings(
+            meshPrefix: mesh.instanceNamePrefix, meshCommonName: mesh.tlsCommonName,
+            recipeName: recipePosture.instanceName,
+            recipeCommonName: Self.commonName(of: recipePosture.tlsIdentity.certificateDER),
+            presenceNames: postures.map(\.instanceName),
+            presenceCommonNames: postures.map { Self.commonName(of: $0.tlsIdentity.certificateDER) })
+    }
+
+    /// `.fernlet` with its three presentation strings replaced by strings of its own and nothing else
+    /// changed, so a reader that took a string from anywhere but its namespace would read Fernlet's
+    /// where this namespace's belongs.
+    static func renamedPresentationNamespace() -> ProximityNamespace {
+        let fernlet = ProximityNamespace.fernlet
+        let radios = fernlet.family.radios
+        return ProximityNamespace(
+            family: ProximityNamespace.Family(
+                purposes: fernlet.family.purposes,
+                radios: ProximityNamespace.Radios(
+                    mesh: radios.mesh, presence: radios.presence, recipeShare: radios.recipeShare,
+                    meshHeartbeat: radios.meshHeartbeat, meshInstanceNamePrefix: "golden-link-",
+                    presenceInstanceNamePrefix: "gl-", tlsCommonName: "golden-link"),
+                verifyQR: fernlet.family.verifyQR,
+                vocabulary: fernlet.family.vocabulary),
+            installation: fernlet.installation)
     }
 
     // MARK: Group 9 — the trainer export body
@@ -1363,6 +1501,15 @@ struct ProximityVocabularyGoldenTests {
         data.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// The subject common name Security reads out of a certificate's DER; nil when it parses no
+    /// certificate or no common name.
+    static func commonName(of certificateDER: Data) -> String? {
+        guard let certificate = SecCertificateCreateWithData(nil, certificateDER as CFData) else { return nil }
+        var commonName: CFString?
+        guard SecCertificateCopyCommonName(certificate, &commonName) == errSecSuccess else { return nil }
+        return commonName.map { $0 as String }
+    }
+
     /// A keychain service no other test uses, in the `.test.` family the wipe wall's discovery skips.
     static func isolatedIdentityService() -> String {
         "com.fernlet.identity.test.vocabularygolden.\(UUID().uuidString)"
@@ -1375,10 +1522,15 @@ struct ProximityVocabularyGoldenTests {
 /// hand: the peer signs what it sends with an identity of its own, the fabric carries it on the
 /// virtual clock, and every frame the coordinator sends is read back off its endpoint.
 ///
-/// The coordinator is built WITHOUT a display name, so it carries the engine's default, and on a
-/// ranging provider with no UWB, so a verified introduction lands it at the manual-commit gate.
+/// The coordinator is built with ``displayName``, the rig's own (the engine has no default name),
+/// and on a ranging provider with no UWB, so a verified introduction lands it at the manual-commit
+/// gate.
 @MainActor
 final class VocabularyCoordinatorRig {
+
+    /// The name the coordinator advertises and discloses after its commit. Spells no `fernlet`, so a
+    /// deleted spelling can never pass for it.
+    static let displayName = "Golden Rig"
 
     /// The body of an identity introduction as a peer sends it: its ranging mode, and its capability
     /// list or none at all — an older peer's introduction carries no `capabilities` key.
@@ -1439,7 +1591,7 @@ final class VocabularyCoordinatorRig {
         remoteHandle = far.handle
         coordinator = ProximityCoordinator(
             identity: localIdentity, transport: near.transport, ranging: MockRangingProvider(isHardwareSupported: false),
-            replayCache: ReplayCache(), timeoutSeconds: 0)
+            replayCache: ReplayCache(), displayName: Self.displayName, timeoutSeconds: 0)
     }
 
     /// Removes both identities' keychain rows.
@@ -1499,4 +1651,26 @@ final class VocabularyCoordinatorRig {
         }
         return condition()
     }
+}
+
+// MARK: - A host of one namespace
+
+/// A `ProximityHost` that supplies the namespace a cell hands it and the requirements with no default,
+/// so a presence manager can be built over `.fernlet` or over a namespace whose presentation strings
+/// are its own. Building one touches no disk and no keychain.
+@MainActor
+private final class PresentationNamespaceHost: ProximityHost {
+    let proximityNamespace: ProximityNamespace
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    let proximityTrustVault = ProximityTrustVault()
+    var proximityDisplayName: String { VocabularyCoordinatorRig.displayName }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+
+    /// A host of `namespace`.
+    init(namespace: ProximityNamespace) {
+        proximityNamespace = namespace
+    }
+
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
+    func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
 }

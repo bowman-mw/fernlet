@@ -26,6 +26,7 @@
 
 import SwiftUI
 import ProximityKit
+import FernletConnections
 
 /// The copy for an in-session heart's state, one sentence per frozen cause.
 ///
@@ -61,7 +62,7 @@ enum SessionHeartStatusCopy {
     /// - Parameter recipientName: The friend's display name as published.
     /// - Returns: Resolved display text; interpolated as a value, never looked up as a key.
     static func shownRecipient(_ recipientName: String) -> String {
-        PeerNameDisplay.shown(recipientName, fingerprint: nil, placeholder: .met)
+        PeerNameDisplay.shown(recipientName, fingerprint: nil, placeholder: .met, in: .fernlet)
     }
 
     /// The sentence for one frozen failure cause.
@@ -75,7 +76,7 @@ enum SessionHeartStatusCopy {
     static func message(
         _ cause: MeshNetworkManager.SessionHeartFailure, recipientName: String
     ) -> LocalizedStringKey {
-        let firstName = PeerNameDisplay.firstName(recipientName, fingerprint: nil, placeholder: .met)
+        let firstName = PeerNameDisplay.firstName(recipientName, fingerprint: nil, placeholder: .met, in: .fernlet)
         switch cause {
         case .heartsOff:
             return "Turn on nearby hearts to send \(firstName) some warmth."

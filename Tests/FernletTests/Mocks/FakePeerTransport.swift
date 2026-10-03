@@ -243,8 +243,9 @@ final class FakePeerNetwork {
 ///
 /// Discovery is deliberately not modelled — the production conformer, `NetworkPeerChannel`, does
 /// not model it either (the shared session owns advertise/browse), so a fake that invented a
-/// discovery state machine would test a shape production does not have. `startAdvertising` /
-/// `startBrowsing` record their arguments and publish the matching state, and that is all.
+/// discovery state machine would test a shape production does not have. `startAdvertising` records
+/// its discovery dictionary, `startBrowsing` its call, and each publishes the matching state, and
+/// that is all. Neither takes a service type: the protocol's discovery doors carry none.
 @MainActor
 final class FakePeerTransport: PeerTransport {
     /// This endpoint's own handle — what other endpoints address it by.
@@ -295,8 +296,9 @@ final class FakePeerTransport: PeerTransport {
     /// task simply finishes first and the interleaving the production code must survive is never
     /// reached. Nil for every other cell, so nothing else changes shape.
     var sendSuspension: ((Int) async -> Void)?
-    private(set) var lastServiceType: String?
     private(set) var lastDiscoveryInfo: [String: String]?
+    /// How many times the coordinator asked this endpoint to browse.
+    private(set) var browseStartCount = 0
     private(set) var disconnectCallCount = 0
     private(set) var isDiscoveryPaused = false
 
@@ -307,14 +309,13 @@ final class FakePeerTransport: PeerTransport {
 
     // MARK: - PeerTransport
 
-    func startAdvertising(serviceType: String, discoveryInfo: [String: String]) async throws {
-        lastServiceType = serviceType
+    func startAdvertising(discoveryInfo: [String: String]) async throws {
         lastDiscoveryInfo = discoveryInfo
         stateSubject.send(.advertising)
     }
 
-    func startBrowsing(serviceType: String) async throws {
-        lastServiceType = serviceType
+    func startBrowsing() async throws {
+        browseStartCount += 1
         stateSubject.send(.browsing)
     }
 

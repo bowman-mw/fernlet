@@ -201,7 +201,7 @@ jobs:
         # compiles clean and moves no other test: a namespace, namespace group or purpose built
         # outside Namespace/; `FernletCryptoPurpose` in code beyond the 20 feature lines in 7 files
         # that leave with their features in A0.4; and a `fernlet` string literal beyond an exact
-        # per-file allowlist (51 in 19 files) whose every row names why it is still there and the
+        # per-file allowlist (46 in 15 files) whose every row names why it is still there and the
         # step that removes it. A new use fails, and so does a removed one until its row goes, so
         # both lists only shrink. It rides this line because its floor is the shared `1`, so the
         # name needs no re-measure.
@@ -384,9 +384,16 @@ jobs:
         # it. 199 + 12 (the soundness suite's seven vocabulary and presentation cells, the vocabulary
         # suite's four `.fernlet` cells and the namespace golden's foreign-vocabulary cell) = 211 is
         # the ARITHMETIC CHECK, never the source.
+        # RAISED 211 -> 213 at A0.3.2, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "213 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 35), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 213: passed.
+        # Run once more at 213 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 211 + 2 (the vocabulary suite's two presentation-string consumer cells; its display-
+        # default cell was replaced, not added) = 213 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 211 \
+          Scripts/run-gated-suites.sh crypto-goldens 213 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

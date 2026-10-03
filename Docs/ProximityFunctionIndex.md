@@ -106,7 +106,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | --- | --- |
 | `ProximityInspectorRecording` default methods | Provide no-op inspector hooks so coordinator callers can implement only the diagnostics they need. |
 | `ProximityInspectorEventRecorder.recordCoordinatorEvent(_:)` | Stores coordinator event strings for lightweight tests or diagnostics. |
-| `init(identity:transport:ranging:inspector:payloadHandler:trustPolicy:replayCache:foregroundAnchor:displayName:timeoutSeconds:now:)` | Wires identity, transport, ranging, diagnostics, trust policy, replay cache, foreground anchoring, timeouts, and tap/proximity detectors. |
+| `init(identity:transport:ranging:inspector:payloadHandler:trustPolicy:replayCache:foregroundAnchor:displayName:capabilities:sealedIntroductionPeerKeyAgreementKey:timeoutSeconds:now:)` | Wires identity, transport, ranging, diagnostics, trust policy, replay cache, foreground anchoring, timeouts, and tap/proximity detectors. `displayName` has no default: the engine has no name of its own, and every caller passes its host's resolved name. |
 | `deinit` | Cancels timeout and heartbeat tasks. |
 | `attachPayloadHandler(_:)` | Attaches or replaces the payload receiver after construction. |
 | `begin(role:mode:)` | Resets transport, prepares identity/session state, starts advertising or browsing, and transitions to discovery. |
@@ -148,7 +148,6 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `handleIdentityEnvelope(_:plaintext:from:)` | Validates advertised fingerprint, starts ranging, records peer identity (name withheld, whatever the peer sent — Option 1b), sends acknowledgement, and routes to friend proximity gate, trusted auto-confirm, or user confirmation. |
 | `transitionToProximityGate(peerIdentity:)` | Replaces the short session timeout with a longer proximity timeout and chooses UWB or manual commit state. |
 | `startRangingIfPossible(with:from:)` | Starts NearbyInteraction from a peer token, or records RSSI fallback when unsupported/unavailable. |
-| `serviceType(for:)` | Maps trainer/friend modes to their frozen service-type tokens. The trainer one still hangs off the `MultipeerServiceType` enum, whose name is historical — the coach channel is a deferred seam, not a live MultipeerConnectivity radio. |
 | `discoveryInfo(for:mode:)` | Builds advertised discovery metadata for role, fingerprint, name, and capabilities. |
 | `transition(to:)` | Sets coordinator state and records state transition audit/inspector events. |
 | `fail(_:)` | Cancels timers, marks failed state, records audit, ends inspector session, and stops foreground anchoring. |
@@ -1355,7 +1354,9 @@ one timer is the manager's epoch tick — and no roster, dial budget, heartbeat 
 
 **P9 item 3 pass 2** (plan §17.1). The recipe-share radio's QUIC surface on
 `_fernlet-recipe2._udp` (ALPN `fernlet-recipe-v1`): one listener registered under a
-`RecipeSharePosture` minted per `start()` and per resume, one browser, and the ONE pairwise tunnel
+`RecipeSharePosture` minted per `start()` and per resume (`minted(instanceNamePrefix:commonName:now:)`,
+under the mesh instance-name prefix and TLS common name the radio read off its namespace), one
+browser, and the ONE pairwise tunnel
 the hard 2-device cap allows. It owns **no timer** and no roster, dial budget or heartbeat — but,
 unlike the presence radio, it does own a per-transfer stream, because a recipe carrying a picture
 clears `MeshTransferStreamTable.bulkFloorBytes`. `RecipeShareRadioSession` is the seam the manager
@@ -1387,7 +1388,7 @@ drives it through; the production conformer is this file.
 | --- | --- |
 | `PeerTransportState.==` | Equates states and associated peer/invite/error values. |
 | `PeerPendingInvite.==` | Equates pending invites by peer, advertised info, and context, ignoring callback closure identity. |
-| Protocol methods | Define async advertising, browsing, invite, accept, send, and disconnect capabilities implemented by transports. |
+| Protocol methods | Define async advertising, browsing, invite, accept, send, and disconnect capabilities implemented by transports. `startAdvertising(discoveryInfo:)` and `startBrowsing()` take no service type: the shared radio sessions own discovery on their namespace's service types, so every production conformer's two doors are no-ops. |
 
 ### `RangingProvider.swift`
 
@@ -1654,10 +1655,11 @@ read, list and delete each other's rows and fail and audit alike.
 
 ### The test target's bindings (`Tests/FernletTests/ProximityNamespaceTestBindings.swift`)
 
-The call shapes A0.2 took out of ProximityKit, restored for the suites by passing `.fernlet`
+The call shapes A0.2 and A0.3 took out of ProximityKit, restored for the suites by passing `.fernlet`
 (`ProximityNamespace.Purposes.fernlet` where a reader takes the labels, which the golden pins equal to
-`ProximityNamespace.fernlet.family.purposes`). A binding restores a call shape, never a value; a test
-that pins a value names `.fernlet` explicitly.
+`ProximityNamespace.fernlet.family.purposes`, and `.fernlet`'s `family.radios` values where a door
+takes a presentation string). A binding restores a call shape, never a value; a test that pins a
+value names `.fernlet` explicitly.
 
 | Function | What It Does |
 | --- | --- |
@@ -1668,6 +1670,8 @@ that pins a value names `.fernlet` explicitly.
 | `MeshRoutedContentDigest.contentHash(of:)` / `chunkHash(of:)` / `chunkID(itemID:chunkIndex:)`, `MeshChunk.chunkID` / `MeshCustodyReceipt.receiptID` / `MeshRecipientReceipt.receiptID` as properties, `MeshRoutedContentHasher.init()`, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, the six item-seal and key-wrap doors, `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` / `successor(coordinatorFingerprint:meshID:)`, `MeshRotationPolicy.plan(...)` | The hashes, seals and epoch under `.fernlet`'s labels. |
 | `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkRecipeShareSession.init()` | The argument-less radios, built from `.fernlet`. |
 | `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` | The seal-key and identity-row helpers with `.fernlet`'s accounts. |
+| `MeshLinkAdvertisement.randomInstanceName()`, `EphemeralMeshTLSIdentity.mint(now:)` / `selfSignedCertificateDER(for:notBefore:notAfter:serial:)`, `PresenceEpochPosture.minted(at:)` / `minted(at:entropy:mintIdentity:)` / `rotated(at:)` / `rotated(at:entropy:mintIdentity:)` / `instanceName(entropy:)`, `RecipeSharePosture.minted(now:)` | The minting doors with `.fernlet`'s instance-name prefixes and common name. |
+| `PeerNameDisplay.personName(_:fingerprint:)` / `shown(_:fingerprint:placeholder:)` / `firstName(_:fingerprint:placeholder:)`, `PresenceManager.firstName(of:)` | The name display, hiding `.fernlet`'s mesh instance-name prefix. |
 
 ## Identity, Wire, Trust, And Audit
 
@@ -2217,9 +2221,9 @@ the whole presence feature.
 | Function Or Property | What It Does |
 | --- | --- |
 | `epoch` / `instanceName` / `tlsIdentity` | The three things a posture answers for one epoch: the presence epoch (`IdentityService.presenceEpoch(at:)` — the ONE presence clock, not a second counter), the service instance name to advertise, and the TLS identity to present. |
-| `minted(at:entropy:mintIdentity:)` / `minted(at:)` | Mints a posture for the epoch containing `now`. The production form uses the system CSPRNG and `EphemeralMeshTLSIdentity.mint(now:)` — the module's single certificate path, so no new cryptographic purpose and no second crypto path exist here. The certificate is minted at `IdentityService.presenceEpochStart(at: now)`, **never at `now`**: `mint(now:)` writes its argument into the certificate as `notBefore`/`notAfter` at 1 s resolution and the validator accepts any certificate, so an instant-anchored window would advertise the second this radio came up and single the device out for the rest of the epoch. |
-| `rotated(at:…)` | `self` while `now` is still inside `epoch`; an entirely fresh posture the moment it is not. There is no partial rotation and no carried field, which is what makes "nothing survives a boundary" total rather than approximate. |
-| `instanceName(entropy:)` | `instanceNamePrefix` + separator + `instanceNameEntropyByteCount` drawn bytes as lowercase hex, and nothing else — no counter, no epoch index, no timestamp, no device byte. The prefix is a frozen service token every device carries identically; the length is therefore a constant and encodes nothing. A short entropy draw is refused (`PresencePostureError.entropyUnavailable`), never padded. |
+| `minted(at:instanceNamePrefix:entropy:mintIdentity:)` / `minted(at:instanceNamePrefix:commonName:)` | Mints a posture for the epoch containing `now`, its name under the host's presence prefix (`PresenceManager`'s posture mint passes its namespace's `family.radios.presenceInstanceNamePrefix` and `tlsCommonName`). The production form uses the system CSPRNG and `EphemeralMeshTLSIdentity.mint(commonName:now:)` — the module's single certificate path, so no new cryptographic purpose and no second crypto path exist here. The certificate is minted at `IdentityService.presenceEpochStart(at: now)`, **never at `now`**: the mint writes its instant into the certificate as `notBefore`/`notAfter` at 1 s resolution and the validator accepts any certificate, so an instant-anchored window would advertise the second this radio came up and single the device out for the rest of the epoch. |
+| `rotated(at:…)` | `self` while `now` is still inside `epoch`; an entirely fresh posture the moment it is not, under the prefix (and common name) handed in again. There is no partial rotation and no carried field, which is what makes "nothing survives a boundary" total rather than approximate. |
+| `instanceName(prefix:entropy:)` / `instanceNameLength(prefix:)` | The host's presence prefix (its separator included; Fernlet's is `fn-`) + `instanceNameEntropyByteCount` drawn bytes as lowercase hex, and nothing else — no counter, no epoch index, no timestamp, no device byte. The prefix is a frozen service token every device of the family carries identically; the length (the prefix's plus 16) is therefore a constant and encodes nothing. A short entropy draw is refused (`PresencePostureError.entropyUnavailable`), never padded. |
 | `systemEntropy(_:)` / `hexadecimal(_:)` | The production CSPRNG draw (bounded by `maxEntropyByteCount`, R2) and the fixed-width encoding. |
 
 **Wall-clock anchoring is deliberate.** The epoch is `floor(unixTime / 900)` rather than a
@@ -2262,7 +2266,7 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 | --- | --- |
 | `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
-| `presencePosture` / `rotateEpochIfNeeded()` | **P9 item 2 pass 1**: the one source of this radio's epoch index, advertised instance name and TLS identity (``PresenceEpochPosture``). Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. **Pass 1 HOLDS the posture; nothing advertises it yet** — pass 2 binds the QUIC presence listener to it. |
+| `presencePosture` / `rotateEpochIfNeeded()` | **P9 item 2 pass 1**: the one source of this radio's epoch index, advertised instance name and TLS identity (``PresenceEpochPosture``), minted through `postureMint`, whose default `init` builds over the namespace's presence instance-name prefix and TLS common name. Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. **Pass 1 HOLDS the posture; nothing advertises it yet** — pass 2 binds the QUIC presence listener to it. |
 | `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. Pass 1 qualifier, now spent: that rotation was held rather than advertised until pass 2 bound the QUIC presence listener; until then the MC advertiser kept one peer ID per `start()`. |
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
 | `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the radio's eight-peer link cap. |
@@ -2480,7 +2484,8 @@ credits almost nothing, and the reboot-gap credit is capped). It is deliberately
 
 `KeepFriendsPromptSheet.swift` and `FingerprintText.swift` live in the `FernletProximityUI` module
 (ProximityKit plan step A0.1, 2026-10-01); `PeerNameDisplay.swift` stays in ProximityKit's `UI/`
-folder, because `PresenceManager.firstName(of:)` calls it from inside the package.
+folder, because `PresenceManager.firstName(of:in:)` calls it from inside the package. Both screens
+hand it `.fernlet` (FernletProximityUI depends on FernletConnections for it).
 
 ### `FernletProximityUI/KeepFriendsPromptSheet.swift`
 
@@ -2506,10 +2511,10 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 
 | Type Or Member | What It Does |
 | --- | --- |
-| `PeerNameDisplay.personName(_:fingerprint:)` | The peer's chosen name, sanitized (`ItemNameModeration.sanitizedName`), or nil when it is empty (Option 1b's withheld state), equals the peer's fingerprint ignoring case (a roster/vault row that filed the fingerprint as the name), has the canonical 16-hex fingerprint shape, or starts with `MeshLinkAdvertisement.instanceNamePrefix` (the QUIC instance name, whole or in its 24-character moderated form). |
-| `PeerNameDisplay.shown(_:fingerprint:placeholder:)` | `personName` or the localized placeholder: `.nearby` "Someone nearby" (connect rows, participants, join requests, recipe recipients) or `.met` "Someone you met" (keep-as-friend rows, Friends & Blocks). **Display only**: never persisted, never put in a roster, vault row, removal proposal or payload; those keep reading `displayNameOrFingerprint`. |
+| `PeerNameDisplay.personName(_:fingerprint:in:)` | The peer's chosen name, sanitized (`ItemNameModeration.sanitizedName`), or nil when it is empty (Option 1b's withheld state), equals the peer's fingerprint ignoring case (a roster/vault row that filed the fingerprint as the name), has the canonical 16-hex fingerprint shape, or, lowercased, starts with the passed namespace's `family.radios.meshInstanceNamePrefix` (the QUIC instance name, whole or in its 24-character moderated form; `fernlet-mesh-` under the `.fernlet` every app caller passes). |
+| `PeerNameDisplay.shown(_:fingerprint:placeholder:in:)` | `personName` or the localized placeholder: `.nearby` "Someone nearby" (connect rows, participants, join requests, recipe recipients) or `.met` "Someone you met" (keep-as-friend rows, Friends & Blocks). **Display only**: never persisted, never put in a roster, vault row, removal proposal or payload; those keep reading `displayNameOrFingerprint`. |
 | `PeerNameDisplay.text(for:)` | The placeholder alone (`ProximityUICopy.Peer`, resolved with `bundle: .module`). |
-| `PeerNameDisplay.firstName(_:fingerprint:placeholder:)` | The first word of `personName` for warm hearts copy ("Aisha" from "Aisha Bloom"), or the WHOLE placeholder when there is no name: the rule runs before the split, so the placeholder never reads "Someone". `PresenceManager.firstName(of:)` delegates to it with `.met`, so every heart sentence built on a trust-vault name (the presence refusals composed in the package, `SessionHeartStatusCopy`, Home's received-heart card) refuses a fingerprint filed as a name. |
+| `PeerNameDisplay.firstName(_:fingerprint:placeholder:in:)` | The first word of `personName` for warm hearts copy ("Aisha" from "Aisha Bloom"), or the WHOLE placeholder when there is no name: the rule runs before the split, so the placeholder never reads "Someone". `PresenceManager.firstName(of:in:)` delegates to it with `.met` and the namespace it is handed (the manager's own, or the app's `.fernlet`), so every heart sentence built on a trust-vault name (the presence refusals composed in the package, `SessionHeartStatusCopy`, Home's received-heart card) refuses a fingerprint filed as a name. |
 
 ## Shared Support
 

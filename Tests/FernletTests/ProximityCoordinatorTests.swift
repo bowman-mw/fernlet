@@ -129,7 +129,7 @@ struct ProximityCoordinatorTests {
         await coordinator.begin(role: .browser, mode: .trainer)
 
         #expect(transport.browsingStarted == true)
-        #expect(transport.lastServiceType == MultipeerServiceType.trainer)
+        #expect(transport.advertisingStarted == false, "a browser browses and advertises nothing")
         #expect(coordinator.state == .discovering)
     }
 

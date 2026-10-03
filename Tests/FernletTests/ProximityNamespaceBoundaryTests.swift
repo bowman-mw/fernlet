@@ -18,9 +18,11 @@
 //
 // Rules 2 and 3 are ratchets. A new use fails; a use that goes away fails too, until its row is
 // deleted. So both lists only shrink, to nothing, as A0.3 to A0.5 and A1 land. Between them they
-// hold what A0.2 left outside the namespace wherever it reads a feature label or spells `fernlet`:
-// the feature labels, the heart-drop and moderation keychain services and the support folder (until
-// A0.4), and the payload vocabulary and presentation strings that spell it (until A0.3).
+// hold what is still outside the namespace wherever ProximityKit reads a feature label or spells
+// `fernlet`: the feature labels, the heart-drop and moderation keychain services and the support
+// folder (until A0.4), and the payload vocabulary that spells it (until A0.3). No presentation
+// string is on either: the radios and the name display read them off the namespace, and the
+// coordinator has no display default and no per-mode service type.
 
 import Foundation
 import Testing
@@ -484,13 +486,13 @@ private extension UInt8 {
     /// Every string literal in ProximityKit code that contains `fernlet` (any case) is in
     /// ``fernletLiterals``, file by file and count by count, and every row there is still in the code.
     ///
-    /// A0.2 moved every Fernlet value ProximityKit's protocol reads into the host's namespace. What is
-    /// left is spelled in place for a reason each row names, with the plan step that takes it out:
-    /// presentation strings and payload vocabulary (A0.3), feature values (A0.4), and DEBUG test-hook
-    /// names (A1). A new Fernlet string fails here: it belongs in the host's namespace, or in the
-    /// feature's own module. A row whose literal is gone fails until it is deleted, so the list stays
-    /// the exact set (51 literals on 50 lines in 19 files when this wall landed). The scan reads
-    /// literals only: comments may say Fernlet freely.
+    /// A0.2 moved every Fernlet value ProximityKit's protocol reads into the host's namespace, and the
+    /// radios and the name display read the presentation strings off it too. What is left is spelled
+    /// in place for a reason each row names, with the plan step that takes it out: payload vocabulary
+    /// (A0.3), feature values (A0.4), and DEBUG test-hook names (A1). A new Fernlet string fails here:
+    /// it belongs in the host's namespace, or in the feature's own module. A row whose literal is gone
+    /// fails until it is deleted, so the list stays the exact set (46 literals on 45 lines in 15
+    /// files). The scan reads literals only: comments may say Fernlet freely.
     @Test func everyFernletLiteralIsAllowlistedWithItsReasonAndExitStep() throws {
         let sources = try Self.proximitySources()
         var found: [String: [String: [Int]]] = [:]
@@ -548,8 +550,6 @@ private extension UInt8 {
     static let fernletLiterals: [FernletLiteral] = [
         FernletLiteral("ClothingSharing/MeshClothingShop.swift", "fernlet.proximity.clothing.catalog", 1,
                        .clothingFormat),
-        FernletLiteral("Engine/ProximityCoordinator.swift", "Fernlet", 1, .displayNameDefault),
-        FernletLiteral("Engine/ProximityCoordinator.swift", "fernlet-friend", 1, .friendServiceLabel),
         FernletLiteral("HeartSharing/HeartPrekeyStore.swift", "com.fernlet.heartdrop", 1, .heartDropService),
         FernletLiteral("Mesh/MeshMembershipRecords.swift", "fernlet.mesh.member-admission.v1", 1, .recordKind),
         FernletLiteral("Mesh/MeshMembershipRecords.swift", "fernlet.mesh.member-departure.v1", 1, .recordKind),
@@ -589,12 +589,9 @@ private extension UInt8 {
         FernletLiteral("RecipeSharing/ProximityRecipeShareManager.swift",
                        #"No answer from \(recipient.displayName) — that Fernlet may be busy sharing with someone else."#,
                        1, .recipeShareCopy),
-        FernletLiteral("Transport/EphemeralMeshTLSIdentity.swift", "fernlet-mesh", 1, .tlsCommonName),
-        FernletLiteral("Transport/MeshLinkAdvertisement.swift", "fernlet-mesh-", 1, .instanceNamePrefix),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CONSOLE_LOG", 1, .meshDebugHook),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS", 1, .meshDebugHook),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS_BARRED", 1, .meshDebugHook),
-        FernletLiteral("Transport/PeerTransport.swift", "fernlet-coach", 1, .coachServiceType),
         FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.offer", 2, .activityFormat),
         FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.join.request", 2,
                        .activityFormat),
@@ -745,33 +742,8 @@ extension ProximityNamespaceBoundaryTests.Reason {
         the canonical serializer's activity and moderation domains, which leave with those features
         """)
 
-    // Rule 3: presentation strings and payload vocabulary (A0.3).
+    // Rule 3: payload vocabulary (A0.3).
 
-    /// The engine's display-name default.
-    static let displayNameDefault = Self(exit: .a03, why: """
-        the coordinator's display-name default, reached only when a caller passes no name (every \
-        production caller passes one); A0.3 injects the engine's defaults
-        """)
-    /// The friend mode's inert service-type label.
-    static let friendServiceLabel = Self(exit: .a03, why: """
-        serviceType(for: .friend)'s per-mode label, which no radio reads since the MultipeerConnectivity \
-        radio left; A0.3 injects serviceType(for:)
-        """)
-    /// The coach channel's service type.
-    static let coachServiceType = Self(exit: .a03, why: """
-        MultipeerServiceType.trainer, the coach channel's Bonjour service type that \
-        serviceType(for: .trainer) returns; A0.3 injects serviceType(for:)
-        """)
-    /// The ephemeral certificate's common name.
-    static let tlsCommonName = Self(exit: .a03, why: """
-        the ephemeral QUIC certificate's common name, which nothing verifies: a presentation string \
-        A0.3 injects
-        """)
-    /// The mesh and recipe radios' instance-name prefix.
-    static let instanceNamePrefix = Self(exit: .a03, why: """
-        the mesh and recipe radios' Bonjour instance-name prefix, which PeerNameDisplay hides as a \
-        name: a presentation string A0.3 injects
-        """)
     /// A membership record kind.
     static let recordKind = Self(exit: .a03, why: """
         a membership record kind, spelled as its PayloadType token and hashed into the signed \

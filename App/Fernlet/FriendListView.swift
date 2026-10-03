@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletConnections
 import SwiftUI
 import FernletDomainModel
 import FernletUI
@@ -767,7 +768,7 @@ struct FriendListView: View {
     /// The presence pipeline's status line. Names go through `SessionHeartStatusCopy.shownRecipient`:
     /// the state carries the trust-vault name, which is the fingerprint for a friend kept before
     /// their name arrived. `.failed`'s sentence is the manager's, built on
-    /// `PresenceManager.firstName(of:)`, which applies the same rule.
+    /// `PresenceManager.firstName(of:in:)`, which applies the same rule.
     private var heartStatusText: String? {
         switch store.presenceManager.heartSendState {
         case .idle:
@@ -846,7 +847,7 @@ struct FriendListView: View {
     /// - Parameter peer: A trust-vault record.
     /// - Returns: The text to render.
     private func shownName(_ peer: ProximityTrustedPeerRecord) -> String {
-        PeerNameDisplay.shown(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met)
+        PeerNameDisplay.shown(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met, in: .fernlet)
     }
 
     /// The first word of ``shownName(_:)`` for the hearts copy, or "Someone you met" whole: taking
@@ -855,7 +856,7 @@ struct FriendListView: View {
     /// - Parameter peer: A trust-vault record.
     /// - Returns: The text to interpolate.
     private func shownFirstName(_ peer: ProximityTrustedPeerRecord) -> String {
-        PeerNameDisplay.firstName(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met)
+        PeerNameDisplay.firstName(peer.displayName, fingerprint: peer.fingerprint, placeholder: .met, in: .fernlet)
     }
 
     // MARK: - Display name

@@ -11,6 +11,7 @@
 
 import Foundation
 import Testing
+import FernletConnections
 import FernletDomainModel
 @testable import ProximityKit
 @testable import Fernlet
@@ -62,17 +63,19 @@ import FernletDomainModel
     }
 
     /// The QUIC transport's random instance name, whole or in the participant projection's
-    /// 24-character moderated form, is never a name.
+    /// 24-character moderated form, is never a name. The prefix is the host namespace's, so the cell
+    /// mints and judges under `.fernlet`'s, as the app's radios and surfaces do.
     @Test func theQUICInstanceNameIsNeverShown() {
-        let instanceName = MeshLinkAdvertisement.randomInstanceName()
-        #expect(instanceName.hasPrefix(MeshLinkAdvertisement.instanceNamePrefix),
-                "the fixture is the real transport name")
-        #expect(PeerNameDisplay.personName(instanceName, fingerprint: nil) == nil)
+        let namespace = ProximityNamespace.fernlet
+        let prefix = namespace.family.radios.meshInstanceNamePrefix
+        let instanceName = MeshLinkAdvertisement.randomInstanceName(prefix: prefix)
+        #expect(instanceName.hasPrefix(prefix), "the fixture is the real transport name")
+        #expect(PeerNameDisplay.personName(instanceName, fingerprint: nil, in: namespace) == nil)
         let projected = ItemNameModeration.moderatedPeerDisplayName(instanceName)
         #expect(projected.count == ItemNameModeration.maxNameLength,
                 "the participant projection truncates it, which is the form a session row received")
-        #expect(PeerNameDisplay.personName(projected, fingerprint: nil) == nil)
-        #expect(PeerNameDisplay.shown(projected, fingerprint: nil) == PeerNameDisplay.text(for: .nearby))
+        #expect(PeerNameDisplay.personName(projected, fingerprint: nil, in: namespace) == nil)
+        #expect(PeerNameDisplay.shown(projected, fingerprint: nil, in: namespace) == PeerNameDisplay.text(for: .nearby))
     }
 
     /// The rules refuse identifiers, not hex letters: short or spaced hex-looking names are names.

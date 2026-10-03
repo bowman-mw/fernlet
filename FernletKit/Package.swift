@@ -418,11 +418,12 @@ let package = Package(
         // FernletUI so the design system stays free of the networking stack and of Photos; the edge
         // runs UI → ProximityKit, never the reverse. Deps: ProximityKit (the roster, answer and
         // name-display types) + FernletUI + FernletDomainModel (FriendPhotoPayload) +
-        // FernletFoundation (the audit log). MainActor: SwiftUI surface, with the saver's
-        // Photos-queue work marked nonisolated within.
+        // FernletFoundation (the audit log) + FernletConnections (`ProximityNamespace.fernlet`, whose
+        // mesh instance-name prefix the name display hides). MainActor: SwiftUI surface, with the
+        // saver's Photos-queue work marked nonisolated within.
         .target(
             name: "FernletProximityUI",
-            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation", "FernletConnections"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

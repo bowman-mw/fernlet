@@ -23,8 +23,10 @@ become a drop-in package for any app: it now carries no SwiftUI view and no `Fer
 keep rows' `MeshSessionRosterEntry`, the review's `SessionPhotoAnswerFailure`, and
 `PeerNameDisplay`), `FernletUI` (the design system: colour tokens, `.fernlet` fonts,
 `ChipButtonStyle`, `ActionPillButtonStyle`, `AdaptiveStack`, `confirmDestructive`,
-`FernletAnnouncer`), `FernletDomainModel` (`FriendPhotoPayload`) and `FernletFoundation`
-(`FernletAuditLog`). Only the app target consumes it. **The edge runs from the UI to ProximityKit,
+`FernletAnnouncer`), `FernletDomainModel` (`FriendPhotoPayload`), `FernletFoundation`
+(`FernletAuditLog`) and `FernletConnections` (`ProximityNamespace.fernlet`, which both screens hand
+`PeerNameDisplay` so it hides Fernlet's QUIC instance-name prefix). Only the app target consumes it.
+**The edge runs from the UI to ProximityKit,
 never the reverse**: ProximityKit cannot name anything here, so a module below can never call up
 into a screen. Through ProximityKit it reaches `PrivateMediaStore` transitively, which puts it on
 the protected side of the S3 wall: the walled `AIProviders` and `CloudKitSync` targets have no edge

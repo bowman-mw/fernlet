@@ -2,6 +2,7 @@ import SwiftUI
 import FernletUI
 import FernletDomainModel
 import ProximityKit
+import FernletConnections
 
 // Phase 2 friend minting (Docs/Proximity-Mesh-Redesign-2026-07-10.md): the per-participant
 // "keep as a friend?" affordance shown at session end. One-sided and local-only — keeping mints
@@ -60,7 +61,7 @@ private struct KeepFriendRow: View {
     /// The display name is peer-supplied wire input: ``PeerNameDisplay`` sanitizes it (control,
     /// zero-width and bidi scalars out) and turns an identifier filed as a name into the placeholder.
     private var displayName: String {
-        PeerNameDisplay.shown(candidate.displayName, fingerprint: candidate.fingerprint, placeholder: .met)
+        PeerNameDisplay.shown(candidate.displayName, fingerprint: candidate.fingerprint, placeholder: .met, in: .fernlet)
     }
 
     var body: some View {

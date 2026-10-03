@@ -20,8 +20,9 @@
 //
 // The family also carries the payload vocabulary (`Vocabulary.fernlet`, in
 // FernletPayloadVocabulary.swift) and the radios' three presentation strings: the instance-name
-// prefixes and the certificates' common name, which ProximityKit's radios and its peer-name display
-// still spell for themselves until plan step A0.3 re-points them here.
+// prefixes and the certificates' common name, which ProximityKit's radios, their postures and its
+// peer-name display read off the namespace (the app and FernletProximityUI hand the display
+// `.fernlet`).
 //
 // Every literal below is pinned by a frozen column, `ProximityNamespaceGoldenTests`' or, for the three
 // presentation strings, `ProximityVocabularyGoldenTests`', so a change here is a wire, keychain or
@@ -39,10 +40,10 @@ nonisolated extension ProximityNamespace {
     /// Fernlet's family and the Fernlet app's installation: the labels, radio values, QR scheme,
     /// payload vocabulary, identity and mesh seal-key rows, storage names and log subsystem by which
     /// ProximityKit's wire, keychain and disk formats identify Fernlet, exactly as today's code spells
-    /// them. ProximityKit's consumers still read their own copies of the vocabulary and the
-    /// presentation strings until plan step A0.3 re-points them here, and what ProximityKit still
-    /// spells or reads elsewhere (the 13 feature labels, the heart-drop and moderation keychain
-    /// services, its support folder) waits for plan step A0.4.
+    /// them. ProximityKit reads the presentation strings off it; its consumers still read their own
+    /// copies of the vocabulary until the rest of plan step A0.3 re-points them here, and what
+    /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
+    /// moderation keychain services, its support folder) waits for plan step A0.4.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an

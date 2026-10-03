@@ -399,6 +399,7 @@ struct PresenceHeartsTests {
             ranging: MockRangingProvider(),
             trustPolicy: policy,
             replayCache: ReplayCache(),
+            displayName: host.resolvedProximityDisplayName,
             timeoutSeconds: 0)
         let accepted = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
         #expect(!accepted, "seeding only: an idle coordinator is never verified, and the record stays held")
