@@ -29,6 +29,7 @@
 /Tests/FernletTests/CIGateSelectorBoundaryTests.swift     @bowman-mw
 /Tests/FernletTests/IdentityProvisioningReadTests.swift   @bowman-mw
 /Tests/FernletTests/ProximityNamespaceGoldenTests.swift   @bowman-mw
+/Tests/FernletTests/ProximityVocabularyGoldenTests.swift  @bowman-mw
 /Tests/FernletTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
