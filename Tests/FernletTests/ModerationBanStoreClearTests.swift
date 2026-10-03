@@ -9,6 +9,7 @@
 import XCTest
 import Security
 import FernletFoundation
+import FernletSocial
 @testable import ProximityKit
 
 /// Test double: a monotonic clock whose value the test drives directly.

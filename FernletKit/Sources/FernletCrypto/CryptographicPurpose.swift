@@ -90,10 +90,11 @@ public nonisolated struct CryptographicPurpose: Hashable, Sendable {
 /// step C1): `ProximityNamespaceGoldenTests` pins each to its `.fernlet` field (the same spelling
 /// and bytes, and for a signature the same acceptance), and `CryptographicDomainSeparationTests`
 /// keeps them in its all-pairs checks. Where a note below names a ProximityKit consumer, that
-/// consumer reads the twin. ProximityKit names this registry only for its 13 feature labels
-/// (hearts, presence, activities, moderation and the sealed-backup escrow) until they leave with
-/// their features (A0.4); the app's duress and probe signatures still sign through ProximityKit's
-/// identity under entries here.
+/// consumer reads the twin. ProximityKit names this registry only for its 12 feature labels
+/// (hearts, presence, activities, the moderation report and the sealed-backup escrow) until they
+/// leave with their features (A0.4, A0.5), and FernletSocial's ban store for the ban evidence's
+/// reporter tag; the app's duress and probe signatures still sign through ProximityKit's identity
+/// under entries here.
 public nonisolated enum FernletCryptoPurpose {
     /// Domains embedded in Ed25519 signature transcripts.
     ///

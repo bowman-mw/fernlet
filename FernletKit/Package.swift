@@ -2,7 +2,7 @@
 import PackageDescription
 
 // FernletKit — the local Swift package for the SPM module carve-up (plan §6).
-// The layered DAG below (21 targets, one umbrella product) IS the S3 privacy
+// The layered DAG below (28 targets, one umbrella product) IS the S3 privacy
 // wall: the walled AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) targets
 // have no dependency edge to the sealed `Private*` stores, and the build runs
 // with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import
@@ -30,7 +30,7 @@ let package = Package(
     products: [
         // The app and its tests link the umbrella product. An extension that needs only a portable
         // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
     ],
     dependencies: [
@@ -354,18 +354,6 @@ let package = Package(
             name: "AppServices",
             dependencies: ["FernletDomainModel", "AIProviders"]
         ),
-        // Layer 6 — the Proximity peer-to-peer subsystem as ONE black-box shim ([S]): mesh
-        // transport (Network.framework/QUIC; MultipeerConnectivity until 2026-09-22), identity/replay (CryptoKit Ed25519/X25519), trust
-        // vault, NI ranging, recipe-share + friend-photo managers, wire payloads, and the
-        // ProximityHost seam protocol. "Outward edges only": the 6 files with backward edges to
-        // the app (ConnectionInspector → FernletStore; the SwiftUI views on app Color/UI
-        // components + FernletStore) STAY in the app, as does ProximityHostAdapter (the
-        // FernletStore→ProximityHost conformance). Deps: PrivateMediaStore (MeshNetworkManager's
-        // photo cache) + FernletDomainModel + FernletFoundation. No FernletUI edge and no SwiftUI
-        // view: the review sheets it used to package moved to FernletProximityUI (below), which
-        // depends on this module, never the reverse.
-        // defaultIsolation(MainActor.self)
-        // (the managers are @Observable @MainActor).
         // Layer 6.5 — the lock SwiftUI surface (setup, unlock, numeric pad, and the
         // fernletLockGate modifier), moved out of the app so the lock feature is
         // module-complete (SPM carve-up §14 remaining item 2). Kept separate from
@@ -378,6 +366,26 @@ let package = Package(
                 .defaultIsolation(MainActor.self),
             ]
         ),
+        // Layer 6 — the Proximity peer-to-peer subsystem ([S]): the radios (Network.framework/QUIC
+        // over Bonjour; MultipeerConnectivity until 2026-09-22), identity, the signed envelope, sealing
+        // and replay (CryptoKit Ed25519/X25519), the session coordinator and the trust protocols its
+        // host answers, NI ranging, the protocol namespace its host supplies, the routed mesh engine
+        // and the ProximityHost seam protocol; and the Fernlet features still built into it until plan
+        // steps A0.4, A0.5 and A0.7 move them out (the mesh manager's feature parts, the heart
+        // dead-drop and ledger, presence, the recipe-share manager, the clothing shop, activities, chat
+        // and the moderation report relay). Fernlet's rules (its namespace, trust vault and session
+        // policies) are FernletConnections', and moderation's ban store and ledger, closeness, friend
+        // state and the parked chat payload are FernletSocial's: both below, both depending on this
+        // module, never the reverse. "Outward edges only": the files with backward edges to the app
+        // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
+        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
+        // PrivateMediaStore (MeshNetworkManager's photo cache) + FernletCrypto (the feature labels that
+        // leave with their features, and the `CryptographicPurpose` signing overloads) +
+        // FernletDomainModel (the features' models, and Fernlet's payload vocabulary, trusted-peer record
+        // and session mode, which it names only on the lines ProximityNamespaceBoundaryTests allowlists)
+        // + FernletFoundation (two FernletDate reads). No FernletUI edge and no SwiftUI view: the review
+        // sheets moved to FernletProximityUI (below). MainActor default: the managers are
+        // @Observable @MainActor, and the wire values and pure crypto statics are nonisolated within.
         .target(
             name: "ProximityKit",
             dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
@@ -453,6 +461,27 @@ let package = Package(
         .target(
             name: "FernletConnections",
             dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 6.5 — Fernlet's social features over ProximityKit's mechanisms
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, step A0.4): moderation's ban store,
+        // ledger and content hash, the closeness ledger, the friend-state cache and the parked
+        // live-session chat payload, moved out of ProximityKit so it holds none of them. The edge runs
+        // FernletSocial → ProximityKit, never the reverse. Deps: ProximityKit (`IdentityService`'s
+        // fingerprint, the moderation report payload's row cap, and `JSONSidecarFile`, the three
+        // ledgers' sidecar, a `package` door until A0.5) + FernletCrypto (`FernletCryptoPurpose`, whose
+        // ban-evidence reporter-tag domain the ban store hashes under) + FernletDomainModel (the
+        // moderation, closeness, friend-state and companion value types the stores keep) +
+        // FernletFoundation (`KeychainItem`, `MonotonicClock` and `FernletAuditLog`, for the ban
+        // store). No FernletConnections, CloudKit or UI edge, and no string catalog: it localizes
+        // nothing. MainActor default: the ban store and the three ledgers are main-actor @Observable
+        // classes, beside nonisolated values (the ban record, the cached friend state, the content
+        // hash, the chat payload and the ledgers' persisted shapes).
+        .target(
+            name: "FernletSocial",
+            dependencies: ["ProximityKit", "FernletCrypto", "FernletDomainModel", "FernletFoundation"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

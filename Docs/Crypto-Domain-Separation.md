@@ -763,12 +763,13 @@ labels.
   soundness rules bound each token's bytes. Fifteen mesh messages and three record kinds are spelled
   exactly like signature labels, which `ProximityNamespaceGoldenTests` holds equal so that one grep
   finds both.
-- **What still reads this registry from ProximityKit.** The 13 feature labels — hearts (4),
-  presence (2), activities (3), moderation (2) and the sealed-backup escrow (2) — on the code lines
-  `ProximityNamespaceBoundaryTests` allowlists file by file. They leave with their features: the
-  hearts', presence's, the ban evidence's reporter tag and the escrow's at plan step A0.4, and the
-  activities' three and the moderation report's signature with the mesh manager's feature parts at
-  A0.5, when that list reaches nothing. The app's duress and probe signatures still sign
+- **What still reads this registry from ProximityKit.** The 12 feature labels — hearts (4),
+  presence (2), activities (3), the moderation report's signature (1) and the sealed-backup escrow
+  (2) — on the code lines `ProximityNamespaceBoundaryTests` allowlists file by file. They leave with
+  their features: the hearts', presence's and the escrow's at plan step A0.4, and the activities'
+  three and the moderation report's signature with the mesh manager's feature parts at A0.5, when
+  that list reaches nothing. The ban evidence's reporter tag is `FernletSocial`'s ban store's, which
+  names its entry here itself. The app's duress and probe signatures still sign
   through ProximityKit's `IdentityService` under their entries here, through its
   `CryptographicPurpose` overloads.
 

@@ -1,5 +1,5 @@
 // FriendStateCache.swift
-// ProximityKit/Presence
+// FernletSocial/Presence
 //
 // Device-local cache of the fuzzy wellbeing state + avatar appearance a friend shared the last time
 // you met in person (Phase 4). Same home + stance as HeartLedger.json — a JSON sidecar in Application
@@ -10,6 +10,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// One friend's shared fuzzy wellbeing state + companion appearance, stamped with the in-person
 /// meeting it was captured at.
@@ -57,8 +58,15 @@ public final class FriendStateCache {
     /// State older than this is not shown at all — expired from the UI.
     public static let staleAfter: TimeInterval = 30 * 24 * 3600
 
-    public init(fileURL: URL? = nil, now: @escaping () -> Date = Date.init) {
-        self.file = JSONSidecarFile(fileURL: fileURL ?? Self.fileURL(in: ProximitySupportLayout.defaultDirectory))
+    /// A cache over the states persisted at `fileURL`.
+    ///
+    /// - Parameters:
+    ///   - fileURL: The sidecar file, which the caller always states: there is no default, so no
+    ///     cache silently lands on a process-wide path. Fernlet's store passes ``fileURL(in:)`` of its
+    ///     proximity sidecar root; a test passes a file of its own.
+    ///   - now: The clock a recorded state is stamped with and its staleness judged by.
+    public init(fileURL: URL, now: @escaping () -> Date = Date.init) {
+        self.file = JSONSidecarFile(fileURL: fileURL)
         self.now = now
         load()
     }
@@ -148,7 +156,7 @@ public final class FriendStateCache {
     }
 
     /// This store's file inside a given proximity-sidecar root — the ONE definition of its name, so
-    /// the production default and a scoped (per-store) root can never name different files.
+    /// the production root and a scoped (per-store) root can never name different files.
     ///
     /// Given a root rather than fixed because it is shared mutable on-disk state that a wipe reaches:
     /// `clearAll()` removes this file, and `FernletStore.resetAll` calls it (friends' cached fuzzy state + appearance

@@ -1,5 +1,6 @@
 import XCTest
 import FernletDomainModel
+import FernletSocial
 @testable import ProximityKit
 
 @MainActor

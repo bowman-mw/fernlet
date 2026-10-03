@@ -14,6 +14,7 @@ import Foundation
 import Testing
 import FernletFoundation
 import FernletDomainModel
+import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 

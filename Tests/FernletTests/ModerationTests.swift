@@ -2,6 +2,7 @@ import XCTest
 import CryptoKit
 import FernletDomainModel
 import FernletFoundation
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 

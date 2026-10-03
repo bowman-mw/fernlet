@@ -506,8 +506,8 @@ struct ProximityNamespaceGoldenTests {
     /// The directory and the three on-disk names, byte for byte — and the directory resolves under
     /// Application Support, the root the design's `Storage.defaultDirectory` names: `.fernlet`'s,
     /// which the app and the host default resolve since step A0.2.8, and
-    /// `ProximitySupportLayout.defaultDirectory`, which the heart-drop scope and the feature ledgers
-    /// still resolve, are one path.
+    /// `ProximitySupportLayout.defaultDirectory`, which the heart-drop scope still resolves, are one
+    /// path.
     @Test func everyStorageNameIsItsFrozenBytes() {
         #expect(Self.expectFrozen(.storage) >= 4)
         let expected = URL.applicationSupportDirectory

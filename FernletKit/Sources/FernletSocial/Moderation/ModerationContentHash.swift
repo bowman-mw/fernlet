@@ -1,10 +1,10 @@
 // ModerationContentHash.swift
-// ProximityKit/Moderation
+// FernletSocial/Moderation
 //
 // The stable content key a report binds to: SHA-256 over an item's *sanitized* artwork (texture grid
 // + slot). Because it hashes the pixels — not the item id, name, or price — a designer cannot escape a
 // report by relisting the same artwork under a new id/name (2026-07-11 ban memo). Lives here (not in
-// FernletDomainModel) so DomainModel stays crypto-free; ProximityKit already links CryptoKit.
+// FernletDomainModel) so DomainModel stays crypto-free; FernletSocial already links CryptoKit.
 
 import Foundation
 import CryptoKit

@@ -8,7 +8,7 @@ import Foundation
 // pure wire value type; the only in-memory holder is `SessionMessageStore`, which is deliberately NOT
 // Codable so a message can never enter a snapshot.
 //
-// WI-9: marked `nonisolated, Sendable` so ProximityKit's `.defaultIsolation(MainActor.self)` does not
+// WI-9: marked `nonisolated, Sendable` so FernletSocial's `.defaultIsolation(MainActor.self)` does not
 // MainActor-isolate this value type and its synthesized `Codable`, which would block off-main decode of
 // untrusted transport bytes (MCSession's then, the QUIC radio's now) under Swift 6. The receiver
 // sanitizes + length-caps `text` (via

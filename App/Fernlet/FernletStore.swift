@@ -1,6 +1,7 @@
 import ProximityKit
 import FernletConnections
 import FernletProximityUI
+import FernletSocial
 import CryptoKit
 import CloudKitSync
 import FernletLock

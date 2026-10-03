@@ -1,5 +1,5 @@
 // ClosenessLedger.swift
-// ProximityKit/Presence
+// FernletSocial/Presence
 //
 // Device-local record of in-person interaction counts per friend (Phase 5), the input to the
 // deterministic closeness score + close-slot assignment. Day-granularity capped counters only — no
@@ -10,6 +10,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// Device-local record of per-friend in-person interaction counts (Phase 5) — the input to the
 /// deterministic closeness score and the close-slot assignment with hysteresis.
@@ -37,8 +38,15 @@ public final class ClosenessLedger {
     static let retentionDays = 31
     static let maxTrackedFriends = 64
 
-    public init(fileURL: URL? = nil, now: @escaping () -> Date = Date.init) {
-        self.file = JSONSidecarFile(fileURL: fileURL ?? Self.fileURL(in: ProximitySupportLayout.defaultDirectory))
+    /// A ledger over the counts and slot state persisted at `fileURL`.
+    ///
+    /// - Parameters:
+    ///   - fileURL: The sidecar file, which the caller always states: there is no default, so no
+    ///     ledger silently lands on a process-wide path. Fernlet's store passes ``fileURL(in:)`` of its
+    ///     proximity sidecar root; a test passes a file of its own.
+    ///   - now: The clock its day buckets and slot evaluations are keyed by.
+    public init(fileURL: URL, now: @escaping () -> Date = Date.init) {
+        self.file = JSONSidecarFile(fileURL: fileURL)
         self.now = now
         load()
     }
@@ -188,7 +196,7 @@ public final class ClosenessLedger {
     }
 
     /// This store's file inside a given proximity-sidecar root — the ONE definition of its name, so
-    /// the production default and a scoped (per-store) root can never name different files.
+    /// the production root and a scoped (per-store) root can never name different files.
     ///
     /// Given a root rather than fixed because it is shared mutable on-disk state that a wipe reaches:
     /// `clearAll()` removes this file, and `FernletStore.resetAll` calls it (the closeness signal (in-person interaction counts + close-slot assignment)

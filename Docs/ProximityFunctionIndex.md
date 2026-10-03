@@ -1465,7 +1465,8 @@ family (`FeaturePurposes`), the only salts `IdentityService.pairSecret(with:purp
 under. The features' payload and capability tokens are still Fernlet's
 `PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the feature labels stay
 outside it until A0.4 (the activities' and the moderation report's four until A0.5), and so do the
-heart-drop and moderation keychain services and `ProximitySupportLayout`'s folder.
+heart-drop keychain service and `ProximitySupportLayout`'s folder; the moderation ban store's service
+is FernletSocial's.
 ProximityKit refuses an unsound namespace at run time (`Support/ProximityNamespaceGate.swift`,
 below). The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
@@ -1480,7 +1481,8 @@ allowlist naming its exit step, Fernlet's domain vocabulary and records (`Payloa
 the lines that leave with their features (A0.4), the mesh manager's feature parts (A0.5), the recipe
 profile (A0.7) or the session profile (A0.7 / C5), and `package` to the doors its list names (the
 presence radio's seam, its QUIC conformer, the peer channel, the epoch posture and the TXT
-vocabulary until A1; the coordinator's typed send and manual commit until A0.7). The exact per-file lists in
+vocabulary until A1; the coordinator's typed send and manual commit until A0.7; the JSON sidecar
+`FernletSocial`'s ledgers persist through until A0.5). The exact per-file lists in
 `ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
@@ -1728,9 +1730,10 @@ store to its scope's label and binding.
 ### The keychain mechanism
 
 FernletFoundation's `KeychainItem` mechanism is copied into ProximityKit member for member as
-`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 42
-references in the six key-store files (the identity's rows and escrow, the two mesh seal keys, the
-heart-drop prekey blob and sidecar seal key, the moderation bans) call it. Only the mechanism came
+`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 37
+references in the five key-store files (the identity's rows and escrow, the two mesh seal keys, the
+heart-drop prekey blob and sidecar seal key) call it; FernletSocial's moderation ban store calls
+FernletFoundation's `KeychainItem` itself. Only the mechanism came
 across; Fernlet's `Account` names, typed overloads, service constants, `loadOrCreateSymmetricKey`
 and `updateReportingStatus` stayed behind. Every query is FernletFoundation's for the same call, so
 rows written before the copy read back unchanged and a host's own `KeychainItem` still reads and
@@ -2094,12 +2097,6 @@ signed type needs a new tag; reusing one is a cross-type forgery seam.
 | `ClothingCatalogPayload` | A peer's current shop on the wire: the capped, deterministically ordered items on offer plus the anonymous designer id and display name, so a buyer can resolve "designed by <friend>" and learn the id→name mapping in person. Ephemeral by design — only items actually purchased persist. |
 | `ProximityClothingCatalog` | The received-side holder, kept in memory from receipt through the 1-hour post-session shop window. Keyed by the transport-VERIFIED sender fingerprint so a re-broadcast replaces the prior catalog instead of stacking. The shop is the inverse of recipe-share: the BUYER holds the SELLER's broadcast catalog. |
 
-### `Wire/MessagePayloads.swift`
-
-| Type | What It Does |
-| --- | --- |
-| `TempMessagePayload` | One session-scoped chat message. Always delivered sealed (`.tempMessage` is in Fernlet's sealing set, `PayloadRules.fernlet.sealingRequired`); `id` drives receive-side dedup, and `sentAt` is the sender's clock — display only, never trusted for ordering security. |
-
 ### `FernletConnections/TrainerPayloads.swift`
 
 | Type | What It Does |
@@ -2374,13 +2371,14 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 | `HeartDropStorageScope(directory:keychainService:)` | One device's heart-drop storage identity. Both halves together because `HeartDropService.wipeForDeleteAll()` destroys both — files on a private root sealed by a shared key survive another store's wipe as ciphertext nothing can open. |
 | `HeartDropStorageScope.production` | `Application Support/Fernlet` + `com.fernlet.heartdrop`, the paths and service the stores have always used. Only tests redirect it, and never by unsealing — a scoped store still seals through the real key path. |
 | `HeartDropOutbox.fileURL(in:)` / `HeartDropDedupStore.fileURL(in:)` / `HeartDropPeerBundleCache.fileURL(in:)` / `ProximityHeartLedger.fileURL(in:)` | One definition per sidecar of its file name inside a root, so the production default and a scoped root can never disagree. |
-| `ModerationLedger.fileURL(in:)` / `FriendStateCache.fileURL(in:)` / `ClosenessLedger.fileURL(in:)` / `ProximityActivityManager.fileURL(in:)` | The same seam for the four `JSONSidecarFile` stores, all cleared by `FernletStore.resetAll` (and `FriendStateCache` also by turning fuzzy-state sharing off). Unsealed, so a root is the whole fix — no keychain half. |
+| `ModerationLedger.fileURL(in:)` / `FriendStateCache.fileURL(in:)` / `ClosenessLedger.fileURL(in:)` / `ProximityActivityManager.fileURL(in:)` | The same seam for the four `JSONSidecarFile` stores (the first three FernletSocial's), all cleared by `FernletStore.resetAll` (and `FriendStateCache` also by turning fuzzy-state sharing off). Unsealed, so a root is the whole fix — no keychain half. |
 | `JSONSidecarFile.fileURL(in:name:)` | The one definition of the sidecar layout. There is deliberately no argument-less `defaultFileURL(name:)`: every owner states its root, or the omission silently rejoins the process-wide race. |
 
 ## Presence And Nearby Friends
 
-The standing `_fernlet-near2._udp` radio and the two device-local ledgers that hang off it. Everything here
-is opt-in and device-local; none of it is ever in the synced snapshot.
+The standing `_fernlet-near2._udp` radio. The two device-local ledgers its sightings and hearts feed,
+closeness and friend state, are FernletSocial's (see "FernletSocial" below). Everything here is opt-in
+and device-local; none of it is ever in the synced snapshot.
 
 ### `Presence/PresenceEpochPosture.swift`
 
@@ -2454,38 +2452,6 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 
 Every escaping `Task` captures `[weak self]` — the manager-Task lifetime rule; the owning store holds
 this `unowned`.
-
-### `Presence/FriendStateCache.swift`
-
-| Function Or Type | What It Does |
-| --- | --- |
-| `CachedFriendState` | One friend's shared fuzzy wellbeing state + companion appearance, stamped with the meeting it was captured at, and shown with "as of last time you met" staleness treatment. |
-| `record(fingerprint:fuzzyState:appearance:)` | Stores what a verified `.friendState` payload from a committed, vault-trusted friend carried. |
-| `state(for:)` | The Friends UI read. |
-| `remove(fingerprint:)` / `clearAll()` | Wired from block/revoke and from reset-everything, so a removed friend leaves nothing behind. |
-
-Persistence is a `JSONSidecarFile` in the host's proximity support directory with
-`.completeFileProtection`, deliberately **never** in the synced snapshot: a friend's struggling state
-is theirs and must not follow this user into iCloud. Entries expire from the UI after 30 days, the
-map is bounded at `maxStates` (newest kept), and decode is per-row tolerant so one unknown future
-value can never wipe the cache.
-
-### `Presence/ClosenessLedger.swift`
-
-Per-friend in-person interaction counts — the input to the deterministic closeness score and the
-close-slot assignment with hysteresis.
-
-| Function Or Property | What It Does |
-| --- | --- |
-| `recordSession` / `recordPhotoSession` / `recordShareAccepted` / `recordHeartSent` / `recordHeartReceived` | Bump a day-granularity capped counter. No timestamps, no names, no durations — this is a warmth signal, never a who-met-whom surveillance log. |
-| `closeness(fingerprint:)` / `closenessMap(for:)` | Derive closeness via `ClosenessMath` over age-bucketed daily counts. |
-| `needsDailyEvaluation` / `evaluateSlots(eligibleFingerprints:firstAcceptedAt:)` | Runs at most once per day and persists `slotState`, so hysteresis dwell survives relaunch. |
-| `isClose(fingerprint:)` | Slot membership. |
-| `remove(fingerprint:)` / `clearAll()` | Wired from block/revoke and reset-everything. |
-
-Same sidecar posture as `FriendStateCache`, never synced; retention is 31 days and at most 64 tracked
-friends (least-close dropped). Day keys pin one timezone-stable formatter/calendar pair so bucketing
-and diffing always agree.
 
 ## Group Activities
 
@@ -2562,33 +2528,9 @@ structurally impossible for a message to enter a `FernletSnapshot` (same techniq
 ## Moderation
 
 Reported clothing designs. The honest-client half (a self-ban stops this device listing) is
-convenience; the load-bearing enforcement is receiver-side.
-
-### `Moderation/ModerationContentHash.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `ModerationContentHash.of(texture:slot:)` / `of(_ item:)` | SHA-256 over an item's sanitized ARTWORK — never its id, name, or price — so a designer cannot escape a report by relisting the same artwork under a new id. Pure stateless namespace enum, CryptoKit only. |
-
-### `Moderation/ModerationLedger.swift`
-
-Device-local, append-only store of report rows: this device's own reports and retracts, plus peers'
-one-hop-verified rows. It is the evidence base `ModerationBanStore.reconcile(...)` reads.
-
-| Function | What It Does |
-| --- | --- |
-| `recordLocalReport(...)` / `recordLocalRetract(...)` | This device's own rows. Rows carry a deterministic `ModerationLedgerEntry.rowID`, so a repeat report de-dupes and a retract supersedes its report via a higher `reporterSeq`. |
-| `ingestForeign(_:)` | Upserts peer rows, keeping the higher-seq row — which makes re-delivery idempotent. |
-| `isLocallyReported(contentHash:reporterFingerprint:)` | The shop's hide-reported-items check. |
-| `clearAll()` | Reset-everything. |
-
-Bounded MAX-MIN FAIRLY rather than by age (Power-of-10 R3): at most `maxRowsPerReporter` per reporter
-fingerprint and `maxRows` overall, and on overflow the per-reporter allowance is lowered uniformly
-until it fits — so a flooding reporter is drained down to everyone else's level before a quiet
-reporter loses a single row. That is what stops a hostile peer evicting THIS device's own reports,
-without the ledger ever needing to know its own signing key. The same rule is applied on the way in
-from disk. Persistence is a `.completeFileProtection` JSON sidecar, never synced: who reported whom is
-sensitive social data.
+convenience; the load-bearing enforcement is receiver-side. The report relay below is ProximityKit's;
+the ledger it feeds, the ban store and the content hash are FernletSocial's (see "FernletSocial"
+below).
 
 ### `Moderation/ModerationReportRelay.swift`
 
@@ -2600,9 +2542,47 @@ sensitive social data.
 | `verifiedRows(from:senderSigningKey:now:)` | The `.itemReport` handler's gate: stores only rows the TRANSPORT-VERIFIED sender signed. |
 
 **No transitive relay** is the Sybil defense — each device tallies only over reports it verified
-itself. Stateless namespace enum; storage is owned by `ModerationLedger`.
+itself. Stateless namespace enum; storage is owned by FernletSocial's `ModerationLedger`.
 
-### `Moderation/ModerationBanStore.swift`
+## FernletSocial
+
+Fernlet's own social features over the proximity stack, in the `FernletSocial` module
+(`FernletKit/Sources/FernletSocial/`, ProximityKit plan step A0.4), which depends on ProximityKit and
+never the reverse: moderation's device-local records, the closeness ledger, the friend-state cache
+and the parked chat payload. Nothing here touches a radio: the mesh manager hands the verified
+moderation rows and friend-state payloads it receives to the app's closures
+(`onModerationRowsReceived`, `onFriendStateReceived`), and the app files them here. Every record is
+device-local and never synced.
+
+### `FernletSocial/Moderation/ModerationContentHash.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ModerationContentHash.of(texture:slot:)` / `of(_ item:)` | SHA-256 over an item's sanitized ARTWORK — never its id, name, or price — so a designer cannot escape a report by relisting the same artwork under a new id. Pure stateless namespace enum, CryptoKit only. |
+
+### `FernletSocial/Moderation/ModerationLedger.swift`
+
+Device-local, append-only store of report rows: this device's own reports and retracts, plus peers'
+one-hop-verified rows. It is the evidence base `ModerationBanStore.reconcile(...)` reads.
+
+| Function | What It Does |
+| --- | --- |
+| `recordLocalReport(...)` / `recordLocalRetract(...)` | This device's own rows. Rows carry a deterministic `ModerationLedgerEntry.rowID`, so a repeat report de-dupes and a retract supersedes its report via a higher `reporterSeq`. |
+| `ingestForeign(_:)` | Upserts peer rows, keeping the higher-seq row — which makes re-delivery idempotent. |
+| `isLocallyReported(contentHash:reporterFingerprint:)` | The shop's hide-reported-items check. |
+| `clearAll()` | Reset-everything. |
+
+Its file is the one its caller states (`init(fileURL:now:)` has no default; the app passes
+`fileURL(in:)` of its per-store proximity sidecar root). Bounded MAX-MIN FAIRLY rather than by age
+(Power-of-10 R3): at most `maxRowsPerReporter` per reporter fingerprint and `maxRows` overall, and
+on overflow the per-reporter allowance is lowered uniformly
+until it fits — so a flooding reporter is drained down to everyone else's level before a quiet
+reporter loses a single row. That is what stops a hostile peer evicting THIS device's own reports,
+without the ledger ever needing to know its own signing key. The same rule is applied on the way in
+from disk. Persistence is a `.completeFileProtection` JSON sidecar, never synced: who reported whom is
+sensitive social data.
+
+### `FernletSocial/Moderation/ModerationBanStore.swift`
 
 The tamper-resistant 30-day store ban for repeatedly-reported designers: self-bans (this device's
 shop) and local peer bans (their catalogs are dropped).
@@ -2622,7 +2602,47 @@ survives **device clock changes** (a credited-time countdown over `mach_continuo
 wall-clock high-water ratchet: a rollback voids wall credit and flags tampering, a forward jump
 credits almost nothing, and the reboot-gap credit is capped). It is deliberately NOT cleared by
 "Reset everything". Its exits are time served and reporters' withdrawals — see
-`Docs/Moderation-SelfBan-Recovery-2026-09-23.md`.
+`Docs/Moderation-SelfBan-Recovery-2026-09-23.md`. Its rows go through FernletFoundation's
+`KeychainItem` and its `storeBan.*` audit lines to `FernletAuditLog`.
+
+### `FernletSocial/Presence/FriendStateCache.swift`
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `CachedFriendState` | One friend's shared fuzzy wellbeing state + companion appearance, stamped with the meeting it was captured at, and shown with "as of last time you met" staleness treatment. |
+| `record(fingerprint:fuzzyState:appearance:)` | Stores what a verified `.friendState` payload from a committed, vault-trusted friend carried. |
+| `state(for:)` | The Friends UI read. |
+| `remove(fingerprint:)` / `clearAll()` | Wired from block/revoke and from reset-everything, so a removed friend leaves nothing behind. |
+
+Persistence is ProximityKit's `JSONSidecarFile` (its `package` door), at the file its caller states
+in the app's proximity sidecar root, with `.completeFileProtection`, deliberately **never** in the
+synced snapshot: a friend's struggling state
+is theirs and must not follow this user into iCloud. Entries expire from the UI after 30 days, the
+map is bounded at `maxStates` (newest kept), and decode is per-row tolerant so one unknown future
+value can never wipe the cache.
+
+### `FernletSocial/Presence/ClosenessLedger.swift`
+
+Per-friend in-person interaction counts — the input to the deterministic closeness score and the
+close-slot assignment with hysteresis.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `recordSession` / `recordPhotoSession` / `recordShareAccepted` / `recordHeartSent` / `recordHeartReceived` | Bump a day-granularity capped counter. No timestamps, no names, no durations — this is a warmth signal, never a who-met-whom surveillance log. |
+| `closeness(fingerprint:)` / `closenessMap(for:)` | Derive closeness via `ClosenessMath` over age-bucketed daily counts. |
+| `needsDailyEvaluation` / `evaluateSlots(eligibleFingerprints:firstAcceptedAt:)` | Runs at most once per day and persists `slotState`, so hysteresis dwell survives relaunch. |
+| `isClose(fingerprint:)` | Slot membership. |
+| `remove(fingerprint:)` / `clearAll()` | Wired from block/revoke and reset-everything. |
+
+Same sidecar posture as `FriendStateCache`, never synced; retention is 31 days and at most 64 tracked
+friends (least-close dropped). Day keys pin one timezone-stable formatter/calendar pair so bucketing
+and diffing always agree.
+
+### `FernletSocial/Wire/MessagePayloads.swift`
+
+| Type | What It Does |
+| --- | --- |
+| `TempMessagePayload` | One session-scoped chat message, **frozen and parked**: nothing emits or dispatches it since chat rides ProximityKit's routed store, and it stays decodable so an older peer's frame parks by name. Sealed-only (`.tempMessage` is in Fernlet's sealing set, `PayloadRules.fernlet.sealingRequired`); `id` drove receive-side dedup, and `sentAt` was the sender's clock — display only, never trusted for ordering security. |
 
 ## UI Diagnostics
 
@@ -2708,7 +2728,7 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. Its element type, Fernlet's persisted `ProximityTrustedPeerRecord`, is on `ProximityNamespaceBoundaryTests`' rule-4 list until the last feature that reads it leaves (A0.5). |
 | `allowNearbyHearts` | The in-person hearts opt-in, the one hearts setting a host answers. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one), and `MeshNetworkManager`'s session hearts do too (the send, the routed heart's ledger judgement and the hearts capability). Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. The away-delivery consent is no host requirement: the mesh and presence managers each take a `heartsAwayEnabledProvider`. |
 | `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and the three sealed heart-drop sidecars named by `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |
-| `ProximitySupportLayout.defaultDirectory` | `Application Support/Fernlet` — the ONE definition of the production path until A0.2.8, when the protocol extension's default and the app began resolving the host namespace's `installation.storage.defaultDirectory` instead (built the same way, the same folder for Fernlet); it stays for the heart-drop scope and the closeness, friend-state and moderation ledgers' default file URLs until A0.4 (the heart ledger and the activity manager take their file with no default). Unchanged from the path the photo cache and heart ledger have always used, so no shipped install is migrated by the seams that made these injectable. |
+| `ProximitySupportLayout.defaultDirectory` | `Application Support/Fernlet` — the ONE definition of the production path until A0.2.8, when the protocol extension's default and the app began resolving the host namespace's `installation.storage.defaultDirectory` instead (built the same way, the same folder for Fernlet); it stays for the heart-drop scope's production directory until A0.4 (the heart ledger, the activity manager and `FernletSocial`'s closeness, friend-state and moderation ledgers take their file with no default). Unchanged from the path the photo cache and heart ledger have always used, so no shipped install is migrated by the seams that made these injectable. |
 
 ### `PeerDisplayNames.swift`
 
@@ -2727,7 +2747,11 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | `JSONSidecarFile.save(_:)` | Encodes, creates the parent directory, and writes atomically with `.completeFileProtection`; failures are silently dropped. Unlike `ProtectedSidecar`, it does not exclude the file from backup. |
 | `JSONSidecarFile.removeFile()` | Best-effort delete for the clear-all/reset path. |
 
-Shared by `FriendStateCache`, `ClosenessLedger`, `ModerationLedger`, `ProximityActivityManager`, and the mesh photo-wall preferences.
+Shared by `ProximityActivityManager`, the mesh photo-wall preferences and FernletSocial's
+`FriendStateCache`, `ClosenessLedger` and `ModerationLedger`. Those three reach it through a `package`
+door (the type, its explicit `init(fileURL:)`, the layout and the three file operations) that closes at
+plan step A0.5, when it moves to FernletSocial with the activity manager and the photo-wall
+preferences; `ProximityNamespaceBoundaryTests`' rule 5 lists its lines.
 
 > **Correction (2026-08-20) — this section previously documented a `defaultFileURL(name:)` that was
 > deliberately deleted (`02d2ba3`, "put the last four sidecars on the per-store root"), and printed
@@ -2747,7 +2771,7 @@ Shared by `FriendStateCache`, `ClosenessLedger`, `ModerationLedger`, `ProximityA
 > `ProximityHost.proximitySupportDirectory` (the protocol extension supplies it as the default for
 > hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root that
 > defaults to the same folder). `ProximitySupportLayout.defaultDirectory` spells the same folder for
-> the heart-drop scope and the feature ledgers' defaults until A0.4.
+> the heart-drop scope's default until A0.4.
 > The `App/Fernlet/` that appeared here was a repo-restructure artefact: `9fb86a9` collapsed the
 > seven `Fernlet*` roots into `App/`, `Tests/` and `FernletKit/`, and the mechanical path rewrite
 > caught this *runtime* path as if it were a *source* path. No shipped install has ever used it.

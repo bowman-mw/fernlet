@@ -26,8 +26,8 @@ extension FernletStore: ProximityHost {
     /// plan step A0.2.3; ProximityKit reads the radios' presentation strings off it too, and the
     /// payload vocabulary it carries, its mesh engine's own frames' tokens included, while the mesh
     /// features' tokens stay Fernlet's `PayloadType` cases until A0.4, A0.5 and A0.7, the feature
-    /// labels stay outside it until A0.4 or A0.5, and the heart-drop and moderation services and
-    /// ProximityKit's support folder until A0.4). The
+    /// labels stay outside it until A0.4 or A0.5, and the heart-drop service and ProximityKit's
+    /// support folder until A0.4; the moderation ban store's service is FernletSocial's). The
     /// requirement has no default, so a host that left this out would not compile. The app's name
     /// surfaces hand `PeerNameDisplay` the same `.fernlet`.
     ///

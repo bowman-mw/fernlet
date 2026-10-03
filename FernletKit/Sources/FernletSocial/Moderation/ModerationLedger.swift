@@ -1,5 +1,5 @@
 // ModerationLedger.swift
-// ProximityKit/Moderation
+// FernletSocial/Moderation
 //
 // Device-local, append-only store of moderation reports (this device's own reports in Phase 2; peers'
 // verified reports arrive in Phase 3). A small JSON sidecar in Application Support, the same home and
@@ -10,6 +10,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// Device-local, append-only store of moderation report rows: this device's own reports and
 /// retracts plus peers' one-hop-verified rows.
@@ -50,8 +51,15 @@ public final class ModerationLedger {
     /// real use.
     static let maxRowsPerReporter = 128
 
-    public init(fileURL: URL? = nil, now: @escaping () -> Date = Date.init) {
-        self.file = JSONSidecarFile(fileURL: fileURL ?? Self.fileURL(in: ProximitySupportLayout.defaultDirectory))
+    /// A ledger over the rows persisted at `fileURL`, loaded and bounded.
+    ///
+    /// - Parameters:
+    ///   - fileURL: The sidecar file, which the caller always states: there is no default, so no
+    ///     ledger silently lands on a process-wide path. Fernlet's store passes ``fileURL(in:)`` of its
+    ///     proximity sidecar root; a test passes a file of its own.
+    ///   - now: The clock its rows are stamped with.
+    public init(fileURL: URL, now: @escaping () -> Date = Date.init) {
+        self.file = JSONSidecarFile(fileURL: fileURL)
         self.now = now
         load()
     }
@@ -221,7 +229,7 @@ public final class ModerationLedger {
     }
 
     /// This store's file inside a given proximity-sidecar root — the ONE definition of its name, so
-    /// the production default and a scoped (per-store) root can never name different files.
+    /// the production root and a scoped (per-store) root can never name different files.
     ///
     /// Given a root rather than fixed because it is shared mutable on-disk state that a wipe reaches:
     /// `clearAll()` removes this file, and `FernletStore.resetAll` calls it (device-local moderation reports (who reported whom, and the reported artwork hashes)

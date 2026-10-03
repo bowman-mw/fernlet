@@ -41,7 +41,7 @@ import Testing
 ///
 /// ## Why the module allowlist alone is not the wall
 ///
-/// **The umbrella is not porous.** There is no module called `FernletKit`: it is a PRODUCT over 27
+/// **The umbrella is not porous.** There is no module called `FernletKit`: it is a PRODUCT over 28
 /// targets and no target carries that name, so nothing can `import FernletKit`. There is no
 /// `@_exported` anywhere in the tree, `FernletDomainModel` depends only on `FernletFoundation`, and
 /// the app target builds with `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` — so a file
@@ -253,6 +253,7 @@ struct BackgroundRefreshBoundaryTests {
         "FernletUI": "the design system; a background task draws nothing.",
         "FernletProximityUI": "the in-person photo review and keep-friends screens; a background task presents nothing, and the module reaches the mesh and Photos besides.",
         "FernletConnections": "Fernlet's connection rules over the mesh, starting with its wire identity — a refresh that names them is one step from a radio, §17.2's first prohibition.",
+        "FernletSocial": "Fernlet's social features over the proximity stack (moderation's ban store and ledger, closeness, friend state) — the refresh handler reads none of them, and a refresh that names the module is one step from the radios they ride, §17.2's first prohibition.",
         "FernletCrypto": "the sealing primitives; the handler seals nothing — the widget snapshot is the benign mirror by design.",
         "CryptoSwift": "FernletLock's Scrypt KDF, the package's one external dependency; nothing here derives a key."
     ]

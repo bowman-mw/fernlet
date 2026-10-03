@@ -13,16 +13,15 @@ import Security
 ///
 /// The common substrate for Fernlet's keychain-backed secrets: `FernletLockService`'s lock
 /// credentials, the device-bound journal and Worry Box content keys, the private-media keys, the
-/// pending-narrative buffer's key, and the persisted ``StoragePreferences`` blob. All operations
-/// target generic-password items in the data-protection keychain
-/// (`kSecUseDataProtectionKeychain`), keyed by service + account.
+/// pending-narrative buffer's key, the persisted ``StoragePreferences`` blob, and FernletSocial's
+/// moderation bans (`ModerationBanStore`). All operations target generic-password items in the
+/// data-protection keychain (`kSecUseDataProtectionKeychain`), keyed by service + account.
 ///
-/// ProximityKit's key stores (the device identity and its backup-escrow rows, the mesh seal keys,
-/// the heart-drop keys and the moderation bans) no longer call this type: since ProximityKit plan
-/// step A0.2.11 they reach the keychain through ProximityKit's own copy of this mechanism,
-/// `ProximityKeychainItem`, which issues these same query dictionaries
-/// (`ProximityNamespaceGoldenTests` holds the two equal), so rows written through either read back
-/// through the other.
+/// ProximityKit's key stores (the device identity and its backup-escrow rows, the mesh seal keys
+/// and the heart-drop keys) do not call this type: since ProximityKit plan step A0.2.11 they reach
+/// the keychain through ProximityKit's own copy of this mechanism, `ProximityKeychainItem`, which
+/// issues these same query dictionaries (`ProximityNamespaceGoldenTests` holds the two equal), so
+/// rows written through either read back through the other.
 ///
 /// Two subtleties are load-bearing:
 /// - The keychain treats `kSecAttrSynchronizable` as part of an item's primary key, so an
@@ -240,14 +239,13 @@ public nonisolated enum KeychainItem {
     /// stopped the enumeration from producing them.
     ///
     /// The distinction is load-bearing exactly where a promise is being made about the row set.
-    /// ProximityKit's `ModerationBanStore.clearPeerBansForDeleteAll` is the caller it was added for:
-    /// it enumerates the moderation service to find every peer-ban row to delete, and under the
-    /// collapsing variant a failed enumeration produced an empty account list — zero deletes, zero
-    /// failures, and a CLEAN result reported to the "Delete everything" dialog over peer-ban records
-    /// still sitting in the keychain. `errSecItemNotFound` is NOT such a failure: a service that holds
-    /// nothing is a legitimately empty one, and it lands in ``EnumerationResult/rows(_:)`` as `[]`.
-    /// That clear enumerates through ProximityKit's copy of this type since its plan step A0.2.11, so
-    /// no shipping code calls this member today; only tests do.
+    /// FernletSocial's `ModerationBanStore.clearPeerBansForDeleteAll` is its shipping caller, the one
+    /// it was added for: it enumerates the moderation service to find every peer-ban row to delete,
+    /// and under the collapsing variant a failed enumeration produced an empty account list — zero
+    /// deletes, zero failures, and a CLEAN result reported to the "Delete everything" dialog over
+    /// peer-ban records still sitting in the keychain. `errSecItemNotFound` is NOT such a failure: a
+    /// service that holds nothing is a legitimately empty one, and it lands in
+    /// ``EnumerationResult/rows(_:)`` as `[]`.
     public static func loadAllDistinguishingFailure(
         service: String,
         synchronizable: SynchronizableScope = .any
@@ -276,10 +274,10 @@ public nonisolated enum KeychainItem {
     /// `errSecItemNotFound` is an empty slot, every other failing status is an unknown one — while
     /// the statuses that matter most (`errSecInteractionNotAllowed` before first unlock,
     /// `errSecNotAvailable`) cannot be provoked against a simulator keychain. Pure: it performs no
-    /// keychain call and holds no state. The wipe funnel it was written for runs through
-    /// ProximityKit's copy, which has its own classifier, so this one now runs only under
-    /// ``loadAllDistinguishingFailure(service:synchronizable:)`` and in tests, and no shipping code
-    /// reaches either.
+    /// keychain call and holds no state. It runs under
+    /// ``loadAllDistinguishingFailure(service:synchronizable:)``, so the wipe funnel's peer-ban clear it
+    /// was written for (FernletSocial's `ModerationBanStore`) reaches it; ProximityKit's copy of this
+    /// type has a classifier of its own.
     ///
     /// - Parameters:
     ///   - status: the status `SecItemCopyMatching` returned.

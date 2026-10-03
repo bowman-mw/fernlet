@@ -14,6 +14,7 @@ import ProximityKit
 import FernletConnections
 import FernletFoundation
 import FernletDomainModel
+import FernletSocial
 @testable import Fernlet
 
 @MainActor

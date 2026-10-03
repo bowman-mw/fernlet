@@ -2,6 +2,7 @@ import SwiftUI
 import FernletDomainModel
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import FernletUI
 
 /// The Group Activities screen (Phase 6 / B5). A NavigationLink sub-screen off the Friends tab — NOT a

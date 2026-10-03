@@ -80,3 +80,7 @@
 # Fernlet's wire identity (ProximityNamespace.fernlet): changing a literal breaks Fernlet's wire,
 # keychain and on-disk formats for every device already in the field
 /FernletKit/Sources/FernletConnections/       @bowman-mw
+
+# FernletSocial's moderation ban store: a keychain service whose self-ban row outlives every wipe by
+# design, and the ban evidence's reporter-tag hash domain
+/FernletKit/Sources/FernletSocial/Moderation/ModerationBanStore.swift   @bowman-mw

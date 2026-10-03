@@ -1,5 +1,6 @@
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import SwiftUI
 import FernletDomainModel
 import FernletUI

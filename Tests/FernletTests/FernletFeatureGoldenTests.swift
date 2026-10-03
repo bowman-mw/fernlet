@@ -1,8 +1,8 @@
 // FernletFeatureGoldenTests.swift
 // FernletTests
 //
-// Fernlet's features over the proximity stack (the heart dead-drop, presence, moderation's ban store
-// and ledger, closeness, friend state, and the identity's sealed-backup escrow) put bytes on the wire,
+// Fernlet's features over the proximity stack (the heart dead-drop, presence, moderation, closeness,
+// friend state, and the identity's sealed-backup escrow) put bytes on the wire,
 // in the keychain and on disk that no other suite pins, and plan step A0.4 moves every one of those
 // features or re-derives its bytes (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.4). This
 // suite holds each such byte to the value Fernlet ships: by a hand-written literal, and wherever a
@@ -27,7 +27,8 @@
 //    then.
 // 3. **The tags and the clocks.** Two heart day tags, three presence tags with their wire tokens, and
 //    the day epoch at its boundaries.
-// 4. **The ban evidence's reporter tag**, one known answer.
+// 4. **Moderation's two hashes**: the ban evidence's reporter tag and a reported artwork's content
+//    hash, a known answer each (the content hash through both its doors).
 // 5. **The sealed drop**: the drop key's known answer from primitives, then a frozen static-key drop
 //    opened through the sealer.
 // 6. **The sealed sidecar**: a frozen `FSC2` blob opened under a planted key.
@@ -95,6 +96,7 @@ import FernletFoundation
 import Foundation
 import Security
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - The tables' rows
@@ -294,7 +296,7 @@ struct FernletFeatureGoldenTests {
         }
     }
 
-    // MARK: Group 4 — the ban evidence's reporter tag
+    // MARK: Group 4 — moderation's two hashes
 
     /// SHA-256 over `fernlet.moderation.ban-evidence.reporter-tag.hash.v1` ‖ the salt 0x80…0x9f ‖
     /// alice's key-agreement key (standing in for a reporter's signing key: the tagger takes any bytes).
@@ -304,6 +306,27 @@ struct FernletFeatureGoldenTests {
     @Test func theBanReporterTagIsItsKnownAnswer() {
         let tag = ModerationBanStore.reporterTagger(salt: Self.consecutiveBytes(from: 0x80))(Self.alicePub)
         #expect(Self.hex(tag) == Self.reporterTagHex, "the reporter tag is \(Self.hex(tag))")
+    }
+
+    /// SHA-256 over a two-by-two hat's artwork in the content hash's frozen layout: `cols=2;rows=2;` ‖
+    /// `palette=2E2A24,FFFFFF;` ‖ `pixels=0,1,-1,0` ‖ `;slot=hat` (the palette's two colours, the four
+    /// cells row by row with -1 transparent, then the slot's token). The key a ledger row, a ban
+    /// record's evidence and a relayed report name an artwork by.
+    static let contentHashHex = "a5cf950e345ed4c3940878ad0d6b89d24e018fdfd2123bea6ee50fc50d2a24ce"
+
+    /// The artwork a report binds to hashes to its known answer, through the texture door and through
+    /// the item door the app's report, retract and listing checks call, which sanitizes the item first
+    /// (this artwork is already in shape, so the sanitizer leaves it as it is).
+    @Test func theReportedArtworksContentHashIsItsKnownAnswer() {
+        let texture = ItemGridTexture(cols: 2, rows: 2, palette: ["2E2A24", "FFFFFF"], pixels: [0, 1, -1, 0])
+        let byTexture = ModerationContentHash.of(texture: texture, slot: .hat)
+        #expect(Self.hex(byTexture) == Self.contentHashHex, "the content hash is \(Self.hex(byTexture))")
+        let item = CustomizationItem(
+            id: Self.uuid("D1E2F3A4-B5C6-4D7E-8F90-A1B2C3D4E5F6"), name: "Golden hat", slot: .hat,
+            texture: texture, designer: ItemDesigner(id: Self.uuid("E1F2A3B4-C5D6-4E7F-8091-A2B3C4D5E6F7")),
+            price: 5)
+        let byItem = ModerationContentHash.of(item)
+        #expect(Self.hex(byItem) == Self.contentHashHex, "the item's content hash is \(Self.hex(byItem))")
     }
 
     // MARK: Group 5 — the sealed drop

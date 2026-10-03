@@ -209,17 +209,22 @@ struct S3BoundaryTests {
     /// - ProximityKit must not import CloudKit. The mesh subsystem is the one place that holds
     ///   transport-verified peer identities and unsealed peer payloads; a CKDatabase call from inside
     ///   it would put that data on a server without passing the app-layer seal/dead-drop seam. The
-    ///   heart dead-drop is the deliberate shape: ProximityKit defines `HeartDropTransporting` and the
-    ///   app injects CloudKitSync's implementation, which only ever sees rotating day tags + ciphertext.
+    ///   heart dead-drop is the deliberate shape: FernletDomainModel declares `HeartDropTransporting`,
+    ///   and the app injects CloudKitSync's implementation into the dead-drop service it builds
+    ///   (`FernletStore.heartDropService`), so CloudKit only ever sees rotating day tags + ciphertext.
     ///   `FernletProximityUI` is held to the same rule: its review screens left ProximityKit's `UI/`
     ///   folder (ProximityKit plan step A0.1) and still render held peer photos and peer names.
     ///   `FernletConnections` is too: it holds Fernlet's protocol identity and payload vocabulary, and
     ///   Fernlet's connection rules on top of the mesh: its session trust policies and its trust vault.
+    ///   `FernletSocial` is too: it holds Fernlet's social records over the mesh (moderation's ban store
+    ///   and ledger, the closeness ledger, the friend-state cache), device-local by design, so a
+    ///   CloudKit call from inside it is how who reported whom, who feels close and a friend's shared
+    ///   state would follow the user into iCloud.
     /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
     ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
     ///   allowed to carry, and would invert that injection seam. The same holds for
     ///   `FernletConnections`, the home of Fernlet's wire identity, its payload vocabulary and its
-    ///   trust records.
+    ///   trust records, and for `FernletSocial`, the home of those device-local social records.
     ///
     /// Comments naming CloudKit are fine and expected (the dead-drop is documented in both modules) —
     /// only an actual `import` line is a breach.
@@ -230,8 +235,10 @@ struct S3BoundaryTests {
             ("FernletKit/Sources/ProximityKit", "CloudKit"),
             ("FernletKit/Sources/FernletProximityUI", "CloudKit"),
             ("FernletKit/Sources/FernletConnections", "CloudKit"),
+            ("FernletKit/Sources/FernletSocial", "CloudKit"),
             ("FernletKit/Sources/CloudKitSync", "ProximityKit"),
-            ("FernletKit/Sources/CloudKitSync", "FernletConnections")
+            ("FernletKit/Sources/CloudKitSync", "FernletConnections"),
+            ("FernletKit/Sources/CloudKitSync", "FernletSocial")
         ] {
             let moduleURL = repoRoot.appendingPathComponent(module)
             var scanned = 0

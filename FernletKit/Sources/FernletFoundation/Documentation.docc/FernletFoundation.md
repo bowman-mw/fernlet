@@ -64,13 +64,14 @@ A few invariants in this module are load-bearing for the rest of the app:
   sealed journal entry and worry.
 - **ProximityKit keeps its own copy of the keychain mechanism.** Since ProximityKit plan step
   A0.2.11 its key stores — the device identity and its backup-escrow rows, the mesh seal keys, the
-  heart-drop prekey blob and sidecar seal key, the moderation bans and the wipe's peer-ban clear —
-  reach the keychain through `ProximityKeychainItem`, a member-for-member copy that issues these
-  same query dictionaries (`ProximityNamespaceGoldenTests` reads them out of
-  `KeychainHelpers.swift` and holds the two equal), so their rows read back through either type and
-  Fernlet's tests still read and clear those services with ``KeychainItem``. The escrow and the
-  peer-ban clear were the shipping callers of `loadAll`, `loadAllDistinguishingFailure` and
-  `enumerationResult(status:matches:)`, which now have none (only tests); they stay.
+  heart-drop prekey blob and sidecar seal key — reach the keychain through `ProximityKeychainItem`,
+  a member-for-member copy that issues these same query dictionaries
+  (`ProximityNamespaceGoldenTests` reads them out of `KeychainHelpers.swift` and holds the two
+  equal), so their rows read back through either type and Fernlet's tests still read and clear
+  those services with ``KeychainItem``. The escrow was the shipping caller of `loadAll`, which now
+  has none (only tests); it stays. FernletSocial's moderation ban store, outside ProximityKit,
+  calls ``KeychainItem`` itself: its rows, and its delete-everything peer-ban clear through
+  `loadAllDistinguishingFailure` and `enumerationResult(status:matches:)`.
 - **Backup exclusion is applied in one place.** ``BackupExclusion`` toggles
   `isExcludedFromBackupKey` across a store file, its `-wal`/`-shm` sidecars, and the external
   binary `_SUPPORT` directory, shared by the sealed and synced persistence controllers so the

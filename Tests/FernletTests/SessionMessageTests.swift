@@ -15,6 +15,7 @@
 import Foundation
 import Testing
 import FernletFoundation
+import FernletSocial
 import FernletDomainModel
 import FernletPersistence
 import CloudKitSync

@@ -30,6 +30,7 @@ import CryptoKit
 import ProximityKit
 import FernletFoundation
 import FernletDomainModel
+import FernletSocial
 @testable import Fernlet
 import LocalPersistence
 
