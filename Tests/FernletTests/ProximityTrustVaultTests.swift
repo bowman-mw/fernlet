@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletDomainModel

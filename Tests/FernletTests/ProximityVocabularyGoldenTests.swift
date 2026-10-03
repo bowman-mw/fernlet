@@ -41,7 +41,8 @@
 //    mint under them and off what the name display hides, under `.fernlet` and under a namespace
 //    whose strings are its own; and the coordinator's display default and its two service types,
 //    deleted rather than moved, which no accessor reads and no transport is handed.
-// 9. **The trainer export body.** Its format token, version, JSON bytes and two size caps.
+// 9. **The trainer export body.** Its format token, version, JSON bytes and two size caps, and the
+//    trainer-mode coordinator's inbound bound, the mechanism's own, that the wire cap is.
 // 10. **The generic types.** `PayloadEncryption` and `PayloadSummary`: one envelope's schema-v1
 //     canonical bytes, both types' JSON, and the summary's decode bounds.
 // 11. **Persisted records that stay Fernlet's.** A trusted peer, a trainer audit row and a session
@@ -135,13 +136,13 @@ struct ProximityVocabularyGoldenTests {
 
     /// The tables hold every value once, in the shape the design counts: 55 payload tokens, 9
     /// capabilities, 7 session-enum values, 4 record kinds, 4 routed types, 7 presentation strings,
-    /// the trainer format and the name floor, and nine numbers.
+    /// the trainer format and the name floor, and ten numbers.
     @Test func theTablesHoldEveryValueOnce() {
         let counts = [Self.payloadRows.count, Self.capabilityRows.count, Self.sessionEnumRows.count,
                       Self.recordKindRows.count, Self.routedTypeRows.count, Self.presentationRows.count,
                       Self.trainerExportRows.count, Self.moderationRows.count]
         #expect(counts == [55, 9, 7, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
-        #expect(Self.allNumbers.count == 9, "the number tables hold \(Self.allNumbers.count) rows")
+        #expect(Self.allNumbers.count == 10, "the number tables hold \(Self.allNumbers.count) rows")
         let fields = Self.allRows.map(\.field) + Self.allNumbers.map(\.field)
         #expect(Set(fields).count == fields.count, "a field appears twice")
     }
@@ -1342,7 +1343,8 @@ struct ProximityVocabularyGoldenTests {
                              today: TrainerExportPayload(bundle: Data()).format)]
     }
 
-    /// Its version and its two size caps: 2 MiB of bundle, and twice that on the wire.
+    /// Its version and its two size caps: 2 MiB of bundle, and twice that on the wire; and the bound a
+    /// trainer-mode coordinator enforces before decoding, ProximityKit's own, which the wire cap is.
     static var trainerExportNumbers: [VocabularyGoldenNumber] {
         [
             VocabularyGoldenNumber(field: "trainerExport.version", frozen: 1,
@@ -1350,7 +1352,9 @@ struct ProximityVocabularyGoldenTests {
             VocabularyGoldenNumber(field: "trainerExport.maxBundleBytes", frozen: 2_097_152,
                                    today: TrainerExportPayload.maxBundleBytes),
             VocabularyGoldenNumber(field: "trainerExport.maxTrainerWireBytes", frozen: 4_194_304,
-                                   today: TrainerExportPayload.maxTrainerWireBytes)
+                                   today: TrainerExportPayload.maxTrainerWireBytes),
+            VocabularyGoldenNumber(field: "trainerMode.maxInboundBytes", frozen: 4_194_304,
+                                   today: ProximityCoordinator.maxTrainerModeInboundBytes)
         ]
     }
 
@@ -1361,7 +1365,7 @@ struct ProximityVocabularyGoldenTests {
     /// receipt, not merely written: a body one byte off in either is not well formed.
     @Test func theTrainerExportBodyIsItsFrozenBytes() throws {
         #expect(Self.expectFrozen(Self.trainerExportRows) == 1)
-        #expect(Self.expectFrozen(Self.trainerExportNumbers) == 3)
+        #expect(Self.expectFrozen(Self.trainerExportNumbers) == 4)
         let payload = TrainerExportPayload(bundle: Data(#"{"weeks":4}"#.utf8))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -2117,6 +2121,7 @@ private final class PresentationNamespaceHost: ProximityHost {
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
 }
 
 // MARK: - A host of one namespace on a scratch root
@@ -2154,6 +2159,7 @@ private final class ScratchNamespaceHost: ProximityHost {
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
 
     /// Removes the scratch root and both seal-key rows.
     func tearDown() {

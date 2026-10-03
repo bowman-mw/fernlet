@@ -41,7 +41,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
 | Sealing a payload to a peer, with framing | `IdentityService.seal(_:to:)` + `SealedPayloadFormat` (capability-derived, never inferred from bytes) |
 | Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
-| Coach-channel trust | `CoachSessionTrustPolicy` / `CoachSessionContract` — never `FriendSessionTrustPolicy`, whose `isTrustedProximityPeer` returns `true` unconditionally and reads the friend vault |
+| Coach-channel trust | `CoachSessionTrustPolicy` / `CoachSessionContract` (both in `FernletConnections`) — never `FriendSessionTrustPolicy`, whose `isTrustedProximityPeer` returns `true` unconditionally and reads the friend vault |
 | Proximity commit gates | `ProximityCommitDetector.ingest(distanceMeters:at:)`, `ProximityCoordinator.commitManualProximity()` |
 | Friend mesh lifecycle | `MeshNetworkManager.startJoin()`, `stopJoin()`, `leaveSession()`, `leaveSessionAfterNotifyingPeers()`. 2026-08 consolidation: the three duplicated pending-connection expiry idioms were consolidated into one `registerPendingConnection(_:)` on the MultipeerConnectivity radio — that consolidation retired with the radio in the deletion round (2026-09-22); the QUIC radio's equivalent is `MeshLinkTable`'s dial bookings — and the hand-rolled `withObservationTracking` re-arm loops in the mesh/recipe/presence managers were consolidated into `ObservationLoop.start(on:tracking:onChange:)` (ProximityKit/Engine/ObservationLoop.swift). Local advertised names come from `ProximityHost.resolvedProximityDisplayName` (ProximityKit/PeerDisplayNames.swift), which replaced the three identical private `displayName` vars. |
 | Mesh membership/admission | `MeshNetworkManager.allowAdmission(_:)`, `declineAdmission(_:)`, `handleAdmissionRequest(_:)`, `handleAdmissionGrant(_:)`. 2026-08 consolidation: the twin mesh-admission and activity-join confirmation sheets were consolidated into the shared generic `JoinPromptSheet` (App/Fernlet/JoinPromptSheet.swift, app target), and receive-side peer-name moderation now goes through `ItemNameModeration.moderatedPeerDisplayName(_:)`. |
@@ -139,6 +139,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `vocabulary` (private) | The host's payload vocabulary, read off the identity's namespace (`family.vocabulary`) at each use: the session messages the coordinator signs and dispatches by, the payload tokens it dispatches and the capability rules (ProximityKit plan step A0.3). |
 | `sendIdentityIntroduction(to:)` | Sends a signed identity introduction under the host's `session.identityIntroduction` token and title ("Hello" for Fernlet) containing ranging capability and optional discovery token — and, since Option 1b, NO display name. |
 | `handleInbound(_:)` | Decodes, trust-filters, verifies, decrypts, logs, and dispatches inbound envelopes; on a sealed-introduction connection it fails a plain envelope under either of the host's identity tokens. |
+| `maxTrainerModeInboundBytes` / `rejectsOversizedTrainerBlob(_:)` | The mechanism's own trainer-mode inbound bound (4 MiB, `public nonisolated`) and the gate that fails a trainer-mode session on a larger blob before anything is decoded, opened or inflated, audited as `envelopeRejected`. A host's coach bodies must fit inside it: Fernlet's `TrainerExportPayload` takes it as its wire cap and half of it as its bundle cap. |
 | `dispatchVerified(_:plaintext:from:cameFromSealedWrapper:)` | Parks a token outside the host's `payloads.known` (the session survives), sends the session messages' tokens to the coordinator's own handlers and any other token to the payload handler. |
 | `makeIdentityRangingPayload()` | Encodes local ranging mode and NI discovery token for handshake payloads. |
 | `sendIdentityAcknowledgement(to:)` | Sends a signed acknowledgement with local ranging details, under the host's `session.identityAcknowledge` token and title. |
@@ -1798,7 +1799,11 @@ value names `.fernlet` explicitly.
 | `normalized(_:)` | Upgrades legacy 8-character fingerprints to 16-character fingerprints when key data exists. |
 | `recordAuditWithoutSaving(_:)` | Inserts audit event and caps audit log at 500 entries. |
 
-### `FriendSessionTrustPolicy.swift`
+### `FernletConnections/FriendSessionTrustPolicy.swift`
+
+Fernlet's friend-session rule, in the `FernletConnections` module: what the app's `ProximityHost`
+adapter answers for `makeProximityTrustPolicy()`, fresh for each connection the mesh, presence and
+recipe-share managers open (each retains it, since the coordinator holds its policy `weak`).
 
 | Function | What It Does |
 | --- | --- |
@@ -1892,8 +1897,9 @@ Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog
 | `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `freshnessWindow` | Parses a scanned URL whose scheme is the caller's namespace's `family.verifyQR.urlScheme` (host `verify`, query key `d` and version 1 stay format constants), then validates shape, signature under the caller's purposes and freshness, rejecting payloads older than the 5-minute window. Since A0.2.5 `makeURL` takes the scheme off the signing identity's namespace and the static `urlScheme` is gone. |
 | `ProximityVerifySignature.message(...in:)` | The challenge/response transcript every ceremony signs, opening with the namespace's `purposes.signature.proximityQRResponseV1`, so the friend, coach and duress paths can never diverge. |
 
-### `CoachSessionTrustPolicy.swift`
+### `FernletConnections/CoachSessionTrustPolicy.swift`
 
+Fernlet's coach-channel rules, in the `FernletConnections` module.
 **No production callers yet** — the coach session manager is unbuilt (see the coach spec and `Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md` Increment 10).
 
 | Function | What It Does |
@@ -1978,16 +1984,17 @@ signed type needs a new tag; reusing one is a cross-type forgery seam.
 | --- | --- |
 | `TempMessagePayload` | One session-scoped chat message. Always delivered sealed (`.tempMessage` is in `sealingRequiredTypes`); `id` drives receive-side dedup, and `sentAt` is the sender's clock — display only, never trusted for ordering security. |
 
-### `Wire/TrainerPayloads.swift`
+### `FernletConnections/TrainerPayloads.swift`
 
 | Type | What It Does |
 | --- | --- |
-| `TrainerExportPayload` | Wire envelope body for the curated trainer/nutritionist export bundle. The bundle bytes are opaque to ProximityKit — the app owns the allowlist-projected shape — so this type only carries, bounds (`maxBundleBytes` 2 MB, `maxTrainerWireBytes` 4 MB) and shape-checks them. It is the seam the future `fernlet-coach` trainer channel will use; until that ships, the app shares the reviewed bundle as a file. |
+| `TrainerExportPayload` | Wire envelope body for the curated trainer/nutritionist export bundle: payload vocabulary of Fernlet's coach channel, so it lives in the `FernletConnections` module and ProximityKit never names it. The bundle bytes are opaque — the app owns the allowlist-projected shape — so this type only carries, bounds and shape-checks them. Both bounds derive from ProximityKit's `ProximityCoordinator.maxTrainerModeInboundBytes`: `maxTrainerWireBytes` (4 MiB) is that bound and `maxBundleBytes` (2 MiB) half of it. It is the seam the future `fernlet-coach` trainer channel will use; until that ships, the app shares the reviewed bundle as a file. |
 
-### `Trust/FriendMintingReview.swift`
+### `FernletConnections/FriendMintingReview.swift`
 
 Pure decision logic for the post-session "keep as friend" prompt (mesh redesign Phase 2), kept
 view-free so the session-end flows in `ConnectView` / `DisposableCameraView` stay unit-testable.
+Fernlet's rule over ProximityKit's session roster, so it lives in the `FernletConnections` module.
 
 | Function | What It Does |
 | --- | --- |
@@ -2562,6 +2569,7 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. |
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
+| `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
 | `proximityDisplayName`, `trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. |
 | `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
 | `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |

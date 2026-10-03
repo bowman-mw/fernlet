@@ -248,7 +248,8 @@ struct RecipeShareCodecTests {
     // ProximityRecipeShareManager created its FriendSessionTrustPolicy as a local in `handleChannelReady`
     // and passed it to a ProximityCoordinator that holds it only `weak`. The local deallocated when
     // handleChannelReady returned, so by the time an envelope arrived the coordinator's revoked/blocked-key
-    // rejection + audit calls all no-op'd against nil. The fix retains the policy on RecipeShareConnection.
+    // rejection + audit calls all no-op'd against nil. The fix retains the policy on RecipeShareConnection
+    // (today the manager asks its host for it, `makeProximityTrustPolicy()`, and still retains it there).
     // This drives a connection the manager actually built (and retains in its `connections` array); after
     // the seam returns the local policy is gone, so the coordinator's weak ref survives ONLY because the
     // connection holds it. A BLOCKED-key envelope is then dropped (`.failed("revokedKey")`) and audited —
@@ -672,6 +673,7 @@ private final class RecipeRevokedKeyTestHost: ProximityHost {
     let proximityTrustVault = ProximityTrustVault()
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

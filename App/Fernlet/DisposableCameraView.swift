@@ -7,6 +7,7 @@ import FernletConnections
 import AppServices
 import FernletUI
 import FernletProximityUI
+import FernletConnections
 import os
 
 // MARK: - Camera preview (UIViewRepresentable)

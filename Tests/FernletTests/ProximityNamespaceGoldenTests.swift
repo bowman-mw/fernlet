@@ -3784,6 +3784,7 @@ private final class ForeignNamespaceHost: ProximityHost {
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
 
     /// Removes the scratch root and both seal-key rows.
     func tearDown() {
@@ -3816,6 +3817,7 @@ private final class NamespaceDefaultsHost: ProximityHost {
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
 }
 
 /// ``NamespaceDefaultsHost`` on a sidecar root of its own: only its two storage scopes are the
@@ -3842,6 +3844,7 @@ private final class RootedNamespaceDefaultsHost: ProximityHost {
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }
     func blockProximityPeer(signingPublicKey: Data) { proximityTrustVault.block(signingPublicKey: signingPublicKey) }
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
 }
 
 // MARK: - An install binding of the test's own

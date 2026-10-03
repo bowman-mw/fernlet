@@ -201,7 +201,7 @@ jobs:
         # compiles clean and moves no other test: a namespace, namespace group or purpose built
         # outside Namespace/; `FernletCryptoPurpose` in code beyond the 20 feature lines in 7 files
         # that leave with their features in A0.4; and a `fernlet` string literal beyond an exact
-        # per-file allowlist (38 in 13 files) whose every row names why it is still there and the
+        # per-file allowlist (36 in 12 files) whose every row names why it is still there and the
         # step that removes it. A new use fails, and so does a removed one until its row goes, so
         # both lists only shrink. It rides this line because its floor is the shared `1`, so the
         # name needs no re-measure.

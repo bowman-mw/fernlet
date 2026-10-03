@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; and ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, and ``TrainerExportPayload``, the coach channel's export body.
 
 ## Overview
 
@@ -160,11 +160,40 @@ a `FernletAuditLog` capture handler verbatim before the call returns, or every t
 an event was NOT logged would pass vacuously; it also holds ProximityKit's code to naming
 `FernletAuditLog` nowhere.
 
-**What joins it later.** The rest of A0.3 adds the session trust policies and the coach channel's
-and the mesh engine's own tokens (the trainer export body, the mesh control tokens). Nothing here
-stands in for the coordinator's display name or a per-mode service type: ProximityKit has neither,
-every caller passing the host's resolved name and the radios owning discovery on the namespace's
-service types. A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
+**The session rules (plan step A0.3).** ProximityKit is mechanism: which peers a session trusts, how
+a coach pairs and what the coach channel carries are Fernlet's rules, so they live here, each with
+its name, members and behaviour as it had in ProximityKit:
+
+- ``FriendSessionTrustPolicy`` (`FriendSessionTrustPolicy.swift`), the friend radios' policy:
+  proximity is the authorization, so every peer is trusted and only a blocked key is refused (a
+  revoked-only, "Removed", peer may handshake again in person). ProximityKit's `ProximityHost`
+  requires `makeProximityTrustPolicy()` with no default, and the app's adapter answers a fresh one
+  over the store's vault for every connection the mesh, presence and recipe-share managers open;
+  each manager keeps it beside the connection, because the coordinator holds its policy `weak`.
+  Every test double answers the same.
+- ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` (`CoachSessionTrustPolicy.swift`): the
+  coach channel's remembered, mode-scoped trust (only an unrevoked, unblocked `.trainer` record whose
+  mode the build knows auto-confirms; a friend never does) and the written-down role split (Fernlet
+  browses, the coach app advertises). No production caller yet; `CoachSessionHardeningTests` holds
+  both.
+- ``FriendMintingReview`` (`FriendMintingReview.swift`): which session-end review the app presents,
+  and which roster entries it may offer as new friends, judged against the trust records when the
+  review is presented. `ConnectView`, `DisposableCameraView` and `SessionPhotoReviewCoordinator` call
+  it.
+- ``TrainerExportPayload`` (`TrainerPayloads.swift`): the coach channel's export body, with its
+  `fernlet.trainer.export` format token, its version and two caps derived from ProximityKit's
+  `ProximityCoordinator.maxTrainerModeInboundBytes`, the bound a trainer-mode coordinator enforces
+  before it decodes anything: the wire cap is that bound and the bundle cap half of it, so Fernlet's
+  body always fits inside the mechanism's limit. `ProximityVocabularyGoldenTests` pins the token, the
+  version, the body's JSON bytes and both caps beside the coordinator's bound.
+
+The protocol the policies answer (`ProximityTrustPolicy`), the vault, the roster entry and the
+coordinator stay ProximityKit's.
+
+**What joins it later.** The rest of A0.3 adds the mesh engine's own tokens (the mesh control
+tokens). Nothing here stands in for the coordinator's display name or a per-mode service type:
+ProximityKit has neither, every caller passing the host's resolved name and the radios owning
+discovery on the namespace's service types. A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
 `.fernletApp` and sharing its family), the connection profiles (friend mesh, presence, recipe,
 coach), app identities with per-app allow lists, coach relationship records and the coach link
 signing purposes; FernletCrypto's 38 twins of these labels then retire.
@@ -179,9 +208,10 @@ FernletKit after ProximityKit leaves for its own repository (plan A1), consuming
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; since
 step A0.2.9 on `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to); since
 step A0.2.10, for the audit bridge, on `FernletFoundation` (Layer 0, which `FernletAuditLog` lives
-in); and for the payload vocabulary on `FernletDomainModel` (for `PayloadType` and
-`ProximityCapability`, whose raw values it reads). It imports nothing else but Foundation and
-Security. Through ProximityKit it reaches
+in); and for the payload vocabulary and the session rules on `FernletDomainModel` (for
+`PayloadType` and `ProximityCapability`, whose raw values the vocabulary reads, and for
+`TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the policies and the
+review read). It imports nothing else but Foundation and Security. Through ProximityKit it reaches
 `PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair
@@ -192,9 +222,13 @@ ProximityKit's `Namespace/`: a changed literal here is a wire, keychain or on-di
 every device already in the field.
 
 **Isolation.** The module is main-actor by default (`defaultIsolation(MainActor.self)` in
-`Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`:
+`Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`
+but the two trust policies:
 the namespace is inert `Sendable` value data, and its readers are ProximityKit's nonisolated
 serializers, verifiers and stores; the binding adapter is a stateless `Sendable` value the column
 seal calls synchronously from inside those stores. ``FernletAuditBridge`` is a `nonisolated` struct
 for the same reason: ProximityKit's `nonisolated` stores call it synchronously, which a main-actor
-conformance would not allow.
+conformance would not allow. ``FriendMintingReview``, ``TrainerExportPayload`` and
+``CoachSessionContract`` are `nonisolated` pure values. ``FriendSessionTrustPolicy`` and
+``CoachSessionTrustPolicy`` stay main-actor classes, like the `@MainActor` protocol they conform to,
+the main-actor vault they read and the main-actor coordinator that consults them.

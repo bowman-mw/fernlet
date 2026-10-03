@@ -17,14 +17,15 @@
 //      exact per-file allowlist that names why it is still there and the plan step that removes it.
 //
 // Rules 2 and 3 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// deleted. So both lists only shrink, to nothing, as A0.3 to A0.5 and A1 land. Between them they
+// deleted. So both lists only shrink, to nothing, as A0.4, A0.5 and A1 land. Between them they
 // hold what is still outside the namespace wherever ProximityKit reads a feature label or spells
 // `fernlet`: the feature labels, the heart-drop and moderation keychain services and the support
-// folder (until A0.4), and the payload vocabulary that spells it, the coach channel's trainer-export
-// format (until A0.3). No presentation string, membership record kind or routed-type token is on
-// either: the radios and the name display read the presentation strings off the namespace, the
-// inventory digest its record kinds and the routed type registry its routed types, and the
-// coordinator has no display default and no per-mode service type.
+// folder (until A0.4). The A0.3 rows are gone, and their exit step with them: no presentation
+// string, membership record kind, routed-type token or coach-channel format is on either list,
+// because the radios and the name display read the presentation strings off the namespace, the
+// inventory digest its record kinds and the routed type registry its routed types, the coordinator
+// has no display default and no per-mode service type, and the trainer-export body lives in
+// FernletConnections.
 
 import Foundation
 import Testing
@@ -490,12 +491,13 @@ private extension UInt8 {
     ///
     /// A0.2 moved every Fernlet value ProximityKit's protocol reads into the host's namespace, and the
     /// radios and the name display read the presentation strings off it too, the inventory digest the
-    /// membership record kinds and the routed type registry the routed types. What is left is spelled
-    /// in place for a reason each row names, with the plan step that takes it out: payload vocabulary
-    /// (A0.3), feature values (A0.4), and DEBUG test-hook names (A1). A new Fernlet string fails here:
-    /// it belongs in the host's namespace, or in the feature's own module. A row whose literal is gone
-    /// fails until it is deleted, so the list stays the exact set (38 literals on 37 lines in 13
-    /// files). The scan reads literals only: comments may say Fernlet freely.
+    /// membership record kinds and the routed type registry the routed types, while the coach
+    /// channel's trainer-export body left for FernletConnections. What is left is spelled in place for
+    /// a reason each row names, with the plan step that takes it out: feature values (A0.4) and DEBUG
+    /// test-hook names (A1). A new Fernlet string fails here: it belongs in the host's namespace, or in
+    /// the feature's own module. A row whose literal is gone fails until it is deleted, so the list
+    /// stays the exact set (36 literals on 35 lines in 12 files). The scan reads literals only:
+    /// comments may say Fernlet freely.
     @Test func everyFernletLiteralIsAllowlistedWithItsReasonAndExitStep() throws {
         let sources = try Self.proximitySources()
         var found: [String: [String: [Int]]] = [:]
@@ -594,8 +596,7 @@ private extension UInt8 {
         FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.sync", 2, .activityFormat),
         FernletLiteral("Wire/ClothingSharePayloads.swift", "fernlet.proximity.clothing.catalog", 2,
                        .clothingFormat),
-        FernletLiteral("Wire/RecipeSharePayloads.swift", "fernlet.proximity.recipe", 2, .recipeFormat),
-        FernletLiteral("Wire/TrainerPayloads.swift", "fernlet.trainer.export", 2, .trainerExportFormat)
+        FernletLiteral("Wire/RecipeSharePayloads.swift", "fernlet.proximity.recipe", 2, .recipeFormat)
     ]
 
     /// `found`'s literals with the lines each is on, sorted, for a failure message.
@@ -684,8 +685,6 @@ private extension UInt8 {
 
     /// The plan step that takes a value out of ProximityKit.
     enum ExitStep: String, Sendable {
-        /// Vocabulary and rules injected by the host (plan §4 A0.3).
-        case a03 = "A0.3"
         /// Fernlet's features leave for FernletSocial (A0.4).
         case a04 = "A0.4"
         /// The routed mesh manager is split (A0.5). No row needs it today: the photo stores' keychain
@@ -734,14 +733,6 @@ extension ProximityNamespaceBoundaryTests.Reason {
     /// The serializer's feature domains.
     static let serializerFeatureDomains = Self(exit: .a04, why: """
         the canonical serializer's activity and moderation domains, which leave with those features
-        """)
-
-    // Rule 3: payload vocabulary (A0.3).
-
-    /// The trainer export body's format token.
-    static let trainerExportFormat = Self(exit: .a03, why: """
-        the coach channel's trainer-export body format, declared and checked: payload vocabulary of \
-        the coach profile, which plan §3.2 puts in FernletConnections with the rest of A0.3's vocabulary
         """)
 
     // Rule 3: feature values (A0.4).

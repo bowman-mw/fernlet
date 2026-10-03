@@ -6,6 +6,7 @@ import FernletDomainModel
 import PrivateMediaStore
 import FernletUI
 import FernletProximityUI
+import FernletConnections
 
 /// The pages the Friends album pushes onto its own `NavigationStack`, as path values.
 ///

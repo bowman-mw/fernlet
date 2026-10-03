@@ -11,6 +11,7 @@
 // gate (broadcast off by default + inbound dropped while off; capped TTL + sanitized name when on).
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletDomainModel
