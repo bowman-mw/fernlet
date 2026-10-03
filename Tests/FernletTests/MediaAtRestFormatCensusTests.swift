@@ -45,10 +45,14 @@ struct MediaAtRestFormatCensusTests {
     }
 
     /// A byte-exact PRE-domain-separation box: combined (nonce + ciphertext + tag) with no marker,
-    /// which is what the legacy writers put on disk and what the reader's `legacy-read` branch
-    /// still opens.
+    /// which is what the legacy writers put on disk and what no reader in the app opens any more.
+    ///
+    /// Sealed under a fixed all-zero nonce, because the box's first bytes are its nonce's and the
+    /// census classifies by them: a random nonce would be counted `plaintextJPEG` when it began
+    /// `FF D8 FF` (2⁻²⁴) or `v2Marked` when it began `FMA2` (2⁻³²), instead of legacy.
     private func legacySealed(_ plaintext: Data, under key: SymmetricKey) throws -> Data {
-        try #require(try AES.GCM.seal(plaintext, using: key).combined)
+        let nonce = try AES.GCM.Nonce(data: Data(count: 12))
+        return try #require(try AES.GCM.seal(plaintext, using: key, nonce: nonce).combined)
     }
 
     /// A current-format box, with the marker spelled out here rather than read from the module.

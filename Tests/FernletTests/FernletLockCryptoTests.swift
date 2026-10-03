@@ -143,7 +143,10 @@ struct FernletLockCryptoTests {
     @Test func retiredUnprefixedWrapIsRefusedByName() async throws {
         let contentKey = randomData(count: 32)
         let wrappingKey = try await verifier(passcode: "123456", salt: saltA)
-        let legacy = try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKey)).combined
+        // A fixed all-zero nonce: an unprefixed wrap's first four bytes are its nonce's, and a random
+        // one spelling `FLW2` (2⁻³²) would be read as the current format instead of refused.
+        let nonce = try ChaChaPoly.Nonce(data: Data(count: 12))
+        let legacy = try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKey), nonce: nonce).combined
         #expect(!legacy.starts(with: FernletLockCrypto.wrappedContentKeyFormatV2))
         #expect(throws: FernletLockError.contentKeyWrapFormatRetired) {
             _ = try FernletLockCrypto.unwrapContentKey(legacy, using: wrappingKey)

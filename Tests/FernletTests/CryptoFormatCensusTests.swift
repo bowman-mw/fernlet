@@ -99,9 +99,12 @@ struct CryptoFormatCensusTests {
     }
 
     /// A byte-exact `MediaAtRestCrypto` LEGACY blob: an AES-GCM combined box with no `FMA2` prefix,
-    /// which is what the pre-domain-separation writer put on disk.
+    /// which is what the pre-domain-separation writer put on disk. Sealed under a fixed all-zero
+    /// nonce, because the media census classifies by the box's first bytes, which are its nonce's: a
+    /// random nonce beginning `FF D8 FF` (2⁻²⁴) or `FMA2` (2⁻³²) would not be counted as legacy.
     private func legacyMediaBytes() throws -> Data {
-        let combined = try #require(try AES.GCM.seal(Data("photo".utf8), using: Self.fixtureKey).combined)
+        let nonce = try AES.GCM.Nonce(data: Data(count: 12))
+        let combined = try #require(try AES.GCM.seal(Data("photo".utf8), using: Self.fixtureKey, nonce: nonce).combined)
         #expect(!combined.starts(with: Data("FMA2".utf8)), "the legacy media fixture must not carry the marker")
         return combined
     }
