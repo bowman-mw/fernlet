@@ -23,8 +23,10 @@ private final class MockPresenceHeartsHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
     /// Settable so a test can toggle the hearts opt-out (the app's FernletStore backs this with
     /// `settings.allowNearbyHearts`).
     var allowNearbyHearts: Bool = true
@@ -399,6 +401,7 @@ struct PresenceHeartsTests {
             ranging: MockRangingProvider(),
             trustPolicy: policy,
             replayCache: ReplayCache(),
+            displayName: host.resolvedProximityDisplayName,
             timeoutSeconds: 0)
         let accepted = manager.evaluateConnectedCoordinatorForTesting(coordinator, peer: peer, trustPolicy: policy)
         #expect(!accepted, "seeding only: an idle coordinator is never verified, and the record stays held")

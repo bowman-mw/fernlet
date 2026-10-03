@@ -6,6 +6,7 @@ import FernletScoring
 import FoodCatalog
 import PrivateHealthStore
 import ProximityKit
+import FernletConnections
 import AppServices
 import FernletUI
 
@@ -93,7 +94,7 @@ struct AmbientCardsView: View {
                             .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
 
-                        Text("\(PresenceManager.firstName(of: heart.senderDisplayName)) sent you some warmth — a friend is thinking of you.")
+                        Text("\(PresenceManager.firstName(of: heart.senderDisplayName, in: .fernlet)) sent you some warmth — a friend is thinking of you.")
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.slate)
                             .multilineTextAlignment(.center)
@@ -125,7 +126,7 @@ struct AmbientCardsView: View {
             .buttonStyle(.plain)
             .padding(.top, 22)
             .accessibilityIdentifier("home.receivedHeart")
-            .accessibilityLabel("Good vibes from \(PresenceManager.firstName(of: heart.senderDisplayName)). Tap to tuck away.")
+            .accessibilityLabel("Good vibes from \(PresenceManager.firstName(of: heart.senderDisplayName, in: .fernlet)). Tap to tuck away.")
         }
     }
 

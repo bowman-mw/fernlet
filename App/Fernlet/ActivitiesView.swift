@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import ProximityKit
+import FernletConnections
 import FernletUI
 
 /// The Group Activities screen (Phase 6 / B5). A NavigationLink sub-screen off the Friends tab — NOT a
@@ -52,7 +53,7 @@ struct ActivitiesView: View {
                 JoinPromptSheet(
                     requests: manager.pendingJoinRequests,
                     targetName: titleForActivity(first.activityID),
-                    displayName: { PeerNameDisplay.shown($0.displayName, fingerprint: $0.verifiedFingerprint) },
+                    displayName: { PeerNameDisplay.shown($0.displayName, fingerprint: $0.verifiedFingerprint, in: .fernlet) },
                     accessibilityPrefix: "activity.join",
                     errorMessage: manager.activityError,
                     dismissError: { manager.activityError = nil },
@@ -246,7 +247,7 @@ struct ActivitiesView: View {
             ForEach(participants) { member in
                 // The member's chosen name, never their fingerprint (2026-09-29): the name, the
                 // removal copy and the monogram all read the same filtered value.
-                let memberName = PeerNameDisplay.shown(member.displayName, fingerprint: member.fingerprint)
+                let memberName = PeerNameDisplay.shown(member.displayName, fingerprint: member.fingerprint, in: .fernlet)
                 HStack(spacing: 10) {
                     memberAvatar(member, name: memberName)
                     HStack(spacing: 6) {
@@ -401,7 +402,7 @@ struct ActivitiesView: View {
     private func hostSubtitle(_ joined: ProximityActivityManager.JoinedActivity) -> String {
         let hostName = joined.lastSnapshot.participants
             .first(where: { $0.fingerprint == joined.descriptor.hostFingerprint })
-            .flatMap { PeerNameDisplay.personName($0.displayName, fingerprint: $0.fingerprint) }
+            .flatMap { PeerNameDisplay.personName($0.displayName, fingerprint: $0.fingerprint, in: .fernlet) }
         let base = hostName.map { "Hosted by \($0)" } ?? "Joined"
         let extra = subtitle(type: joined.descriptor.activityTypeToken, location: joined.descriptor.coarseLocation)
         return extra.isEmpty ? base : "\(base) · \(extra)"

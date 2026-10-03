@@ -18,6 +18,7 @@
 // any of them pass: `MeshRoutedDrainTests.theRetiredTextTransportIsGone` pins it at zero.
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 @testable import FernletCrypto

@@ -128,8 +128,10 @@ private final class RecipeQUICTestHost: ProximityHost {
     var proximityDisplayName: String { name }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }
@@ -203,7 +205,7 @@ struct RecipeShareOverQUICTests {
                 "the sid on the air is the radio's own, not a copy the owner kept")
         #expect(radio.advertisedSessionID == posture.sessionID)
         #expect(radio.advertisedInstanceNameForTesting == posture.instanceName)
-        #expect(posture.instanceName.hasPrefix(MeshLinkAdvertisement.instanceNamePrefix),
+        #expect(posture.instanceName.hasPrefix(ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix),
                 "the name is the mesh's random shape, never a device name")
 
         let second = NetworkRecipeShareSession()
@@ -612,7 +614,7 @@ struct RecipeShareOverQUICTests {
         radio.onPeerDisconnected?(nameless, "test")
         radio.onPeerLost?(nameless)
         for event in manager.diagnosticEvents {
-            #expect(!event.message.contains(MeshLinkAdvertisement.instanceNamePrefix),
+            #expect(!event.message.contains(ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix),
                     "a user-visible line named a peer by its Bonjour instance name: \(event.message)")
         }
         #expect(manager.diagnosticEvents.count >= 3, "the lines under test were actually written")

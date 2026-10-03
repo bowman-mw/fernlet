@@ -153,7 +153,7 @@ struct ProximityRecordDecodeCompatTests {
         #expect(log.unknownRoleToken == "relay")
         #expect(log.mode == .friend)
         #expect(log.unknownModeToken == "mentor")
-        #expect(log.ranging.mode == ProximityRangingMode.none)
+        #expect(log.ranging.mode == ConnectionSessionLog.RangingMode.none)
         #expect(log.ranging.unknownModeToken == "lidar")
 
         let event = try #require(log.events.first)

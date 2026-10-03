@@ -701,7 +701,7 @@ struct MeshLedgerConvergenceTests {
             ledger: try fixture.fullLedger()
         )
         let coordinator = attachSlot(to: manager, fingerprint: fixture.joiner.localFingerprint)
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         manager.onMembershipEventSentForTesting = { emitted.append($0) }
         var behind = MeshMembershipLedger.empty
         behind.admissions = behind.admissions.inserting(

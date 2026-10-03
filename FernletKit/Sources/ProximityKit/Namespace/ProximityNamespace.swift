@@ -1,11 +1,10 @@
 // ProximityNamespace.swift
 // ProximityKit/Namespace
 //
-// ProximityKit plan step A0.2.1 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2, §13 item
-// 1): the host's protocol identity (its labels, radio values, QR scheme, keychain rows, storage names
-// and log subsystem) as ONE `Sendable` value that the host builds once and hands down. Step A0.2.1
-// added the type alone; A0.2's later commits routed ProximityKit's reads of those through it, one
-// consumer family at a time, each byte-identical for Fernlet.
+// The host's protocol identity (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2 and A0.3,
+// §13 item 1): its labels, radio values, QR scheme, payload vocabulary, keychain rows, storage names,
+// log subsystem and peer-name policy as ONE `Sendable` value that the host builds once and hands
+// down, and that ProximityKit reads every one of those from, byte-identical for Fernlet.
 
 import Foundation
 
@@ -15,40 +14,65 @@ import Foundation
 /// keychain and disk formats identify the app it runs in.
 ///
 /// **Two halves.** ``family`` is what every interoperating app shares — the domain-separation labels,
-/// the radios' service types, ALPNs and heartbeat, and the QR scheme — so two apps that supply one
-/// family speak one wire. ``installation`` is what belongs to this app on this device — its keychain
-/// rows, its storage names and its log subsystem — so two apps of one family still never share a key,
-/// a file or a log stream.
+/// the radios' service types, ALPNs, heartbeat and presentation strings, the QR scheme and the payload
+/// vocabulary — so two apps that supply one family speak one wire. ``installation`` is what belongs to
+/// this app on this device — its keychain rows, its storage names, its log subsystem and how it shows a
+/// peer's name — so two apps of one family still never share a key, a file or a log stream.
 ///
 /// **Built once by the host, never looked up.** ProximityKit holds no instance, offers no default and
 /// keeps no global: no `static var`, no slot, no `@TaskLocal`. The host builds one value at its
 /// composition root and hands it down through the seams ProximityKit already has, and every reader
 /// keeps its own copy, so no read hops an actor and no reader can see a namespace its root did not
-/// hand it. A host that supplies none gets a compile error, never another app's identity. Plan step
-/// A0.2.1 added the type; since A0.2.3 the host supplies it as ``ProximityHost/proximityNamespace``
-/// and the managers keep a copy, and by the end of A0.2 ProximityKit reads from it all 39 protocol
-/// labels, the radio values, the QR scheme, the identity's and the two mesh seal keys' keychain rows,
-/// the storage names and the log subsystem. Some such strings stay outside it until a later plan
-/// step: the 13 feature labels ProximityKit reads from FernletCrypto's registry, the heart-drop and
-/// moderation keychain services and ``ProximitySupportLayout``'s folder until A0.4, and the payload
-/// vocabulary and presentation strings until A0.3. `ProximityNamespaceBoundaryTests` keeps three
-/// rules: no namespace, group or purpose is built outside `Namespace/`, `FernletCryptoPurpose` stays
-/// on its 20 allowlisted lines, and every literal that spells `fernlet` is on an exact allowlist that
-/// can only shrink.
+/// hand it. A host that supplies none gets a compile error, never another app's identity. The host
+/// supplies it as ``ProximityHost/proximityNamespace``, the managers keep a copy, and ProximityKit
+/// reads from it all 39 protocol labels, the radio values, the QR scheme, the identity's and the two
+/// mesh seal keys' keychain rows, the storage names and the log subsystem. The radios, their
+/// postures and `PeerNameDisplay` read the radios' three presentation strings off it too, and
+/// ProximityKit shows a peer's name under the installation's peer-name policy (``PeerNames``: the
+/// cap and the floor) wherever it enters except the activity manager, whose joiners' names keep
+/// `ItemNameModeration`'s fixed cap, with no floor, until plan step A0.4 moves activities out. Its
+/// family also carries the payload vocabulary
+/// (``Vocabulary``): the identity envelope seals and parks by its payload rules, the session
+/// coordinator signs and dispatches by its session messages and reads its capability rules, the mesh
+/// and presence managers advertise its wire2 token and the mesh frames by it, the inventory digest
+/// hashes its membership record kinds, the routed type registry builds its rows from its routed
+/// types, and the mesh manager signs and dispatches its engine's own frames by its mesh messages. The
+/// mesh features' payload and capability tokens are still Fernlet's `PayloadType` and
+/// `ProximityCapability` cases until plan steps A0.4 and A0.5 move them; for Fernlet the two
+/// spellings are equal, which `ProximityVocabularyGoldenTests` holds. Some strings stay outside it
+/// until plan step A0.4: the 13 feature labels ProximityKit reads from FernletCrypto's registry, the
+/// heart-drop and moderation keychain services and ``ProximitySupportLayout``'s folder.
+/// `ProximityNamespaceBoundaryTests` keeps four rules: no namespace, group or purpose is built outside
+/// `Namespace/`; `FernletCryptoPurpose` stays on its 20 allowlisted lines; every literal that spells
+/// `fernlet` is on an exact allowlist; and Fernlet's domain vocabulary and records (`PayloadType`,
+/// `ProximityCapability`, `ProximityMode`, `ItemNameModeration` and the persisted proximity records)
+/// are named only on the exact lines that leave with their features or the session profile. Each
+/// list can only shrink.
 ///
-/// **Total, and judged once.** ``init(family:installation:)`` never throws or traps: it runs every
-/// soundness rule once and records the verdict in ``soundness``. A host that prefers to fail at launch
-/// calls ``validated(family:installation:)``, which throws the same violations. ProximityKit's own
-/// run-time refusal of an unsound namespace arrives with plan step A0.3.
+/// **Total, judged once, and refused at run time.** ``init(family:installation:)`` never throws or
+/// traps: it runs every soundness rule once and records the verdict in ``soundness``. A host that
+/// prefers to fail at launch calls ``validated(family:installation:)``, which throws the same
+/// violations. ProximityKit refuses an unsound namespace at run time on its own, reading that stored
+/// verdict and failing closed: ``IdentityService/ensureProvisioned()`` and
+/// ``IdentityService/encryptGroupKey(_:for:)`` throw ``ProximityNamespaceError`` before they touch a
+/// key, and each radio's `start` throws it before it advertises, each with a named audit event
+/// (`identity.namespace.unsound`, `mesh.quic.namespaceUnsound`, `presence.quic.namespaceUnsound`,
+/// `recipe.quic.namespaceUnsound`) whose context names the door, the violation count and the first
+/// violation's case, never a value. Nothing else reads the verdict: the identity's backup-escrow
+/// API, Fernlet's sealed-backup feature until plan step A0.4, needs no provisioned key and checks
+/// none. A manager handed an identity of another namespace refuses every start of its radio, and the
+/// mesh manager every founding of a mesh, before it signs, seals or advertises anything, so that
+/// identity founds no mesh and links no peer.
 ///
 /// `nonisolated` against the module's `defaultIsolation(MainActor.self)`, like every type in
 /// `Namespace/`: inert value data, read from nonisolated code.
 public nonisolated struct ProximityNamespace: Hashable, Sendable {
 
-    /// What every interoperating app shares: the labels, the radios and the QR scheme.
+    /// What every interoperating app shares: the labels, the radios, the QR scheme and the vocabulary.
     public let family: Family
 
-    /// What belongs to this app on this device: keychain rows, storage names and the log subsystem.
+    /// What belongs to this app on this device: keychain rows, storage names, the log subsystem and the
+    /// peer-name policy.
     public let installation: Installation
 
     /// Every soundness rule's verdict, computed once by ``init(family:installation:)``.
@@ -60,7 +84,8 @@ public nonisolated struct ProximityNamespace: Hashable, Sendable {
     /// Builds a namespace and judges it.
     ///
     /// Total: it never throws or traps. Every broken rule is recorded in ``soundness`` instead, in the
-    /// order the rules run (labels, radios, QR scheme, keychain, storage, log subsystem).
+    /// order the rules run (labels, radios, QR scheme, keychain, storage, log subsystem, then the
+    /// vocabulary, the radios' presentation strings and the peer-name policy).
     ///
     /// - Parameters:
     ///   - family: What every interoperating app shares.
@@ -155,6 +180,42 @@ public nonisolated struct ProximityNamespace: Hashable, Sendable {
         case duplicateFileName(field: String, otherField: String)
         /// The log subsystem is empty.
         case emptyLogSubsystem
+        /// A token is empty, longer than its group allows, or holds a byte outside `0x21`–`0x7E`: a
+        /// payload token or membership record kind at most 255 bytes, a mesh message at most 200 (the
+        /// mesh signs it as its frame's summary title too, and a receiver's bounded summary decode
+        /// refuses a longer title), a capability token at most 32 (a receiver cuts a longer one, which
+        /// then matches nothing), a routed-type token at most 64 (a routed manifest naming a longer one
+        /// is refused). A set or list is named once, by its own path, however many of its members
+        /// break the rule.
+        case malformedToken(field: String)
+        /// Two tokens of one group have the same bytes: two of the three session payload tokens, two
+        /// capability tokens (each named by its index in `capabilities.known`), two membership record
+        /// kinds, two routed types, two mesh messages, or a session payload token and a mesh message,
+        /// which one dispatch path tells apart by token alone.
+        case duplicateToken(field: String, otherField: String)
+        /// A token a rule names is not one the vocabulary knows: a session payload token, a
+        /// `sealingRequired` member or a mesh message outside `payloads.known`, or `wire2` or an
+        /// `assumedForLegacyPeers` member outside `capabilities.known`. A set or list is named once,
+        /// by its own path.
+        case unknownToken(field: String)
+        /// A summary title is empty or longer than 200 characters, the most a receiver's bounded
+        /// summary decode accepts.
+        case malformedSummaryTitle(field: String)
+        /// An instance-name prefix is empty, holds a byte other than `a`–`z`, `0`–`9` or `-`, or
+        /// leaves too little of a 63-byte DNS-SD instance name for the hex that follows it: the mesh
+        /// prefix at most 51 bytes (12 hex characters follow), the presence prefix at most 47 (16
+        /// follow). Lowercase, because a display layer lowercases a name before comparing it with the
+        /// mesh prefix.
+        case malformedInstanceNamePrefix(field: String)
+        /// The TLS common name is empty, longer than 64 bytes (X.509's upper bound on a common name),
+        /// or not printable ASCII (`0x20`–`0x7E`).
+        case malformedCommonName
+        /// The peer-name policy is out of bounds: its cap is more than 63 characters, or shorter than an
+        /// identifier the name display must still recognize in a name cut to the cap (a key
+        /// fingerprint's 16 characters, or the family's mesh instance-name prefix), or its floor is
+        /// empty, longer than the cap, or not exactly what ProximityKit's sanitizer makes of it under
+        /// the cap, which would show a floored name differently each time it is moderated again.
+        case malformedPeerNames(field: String)
     }
 
     // MARK: - Collision
@@ -182,8 +243,9 @@ public nonisolated struct ProximityNamespace: Hashable, Sendable {
 
 // MARK: - ProximityNamespaceError
 
-/// Why ``ProximityNamespace/validated(family:installation:)`` refused a namespace: every violation its
-/// soundness recorded.
+/// Why a namespace was refused, by ``ProximityNamespace/validated(family:installation:)`` at a host's
+/// launch or by ProximityKit at run time (an identity's provisioning or group-key wrap, or a radio's
+/// start): every violation its soundness recorded.
 ///
 /// Deliberately not a `LocalizedError`: it names fields for the host's developer, never copy for a
 /// person.

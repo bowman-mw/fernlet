@@ -1,24 +1,14 @@
 // ProximityCoordinatorEnums.swift
-// SPM carve-up: the three pure String/Codable enums formerly nested inside ProximityCoordinator
-// (Role, Mode, RangingMode) hoisted DOWN as top-level public enums so the audit/trust DTOs
-// (ConnectionSessionLog, ProximityTrustedPeerRecord) can reference them without an upward edge.
-// ProximityCoordinator keeps `typealias Role = ProximityRole` (etc.) so every existing
-// `ProximityCoordinator.Role` / bare `Role` reference across the proximity subtree compiles
-// unchanged. Codable identity is by rawValue — renaming/relocating the type does NOT change the JSON.
+// SPM carve-up: the session's mode, a pure String/Codable enum formerly nested inside
+// ProximityCoordinator, as a top-level public enum here so the audit/trust DTOs
+// (ConnectionSessionLog, ProximityTrustedPeerRecord) can reference it without an upward edge.
+// ProximityCoordinator keeps `typealias Mode = ProximityMode` so every existing
+// `ProximityCoordinator.Mode` / bare `Mode` reference across the proximity subtree compiles
+// unchanged. The session's role and ranging mode are ProximityKit's own (`ProximityRole`,
+// `ProximityRangingMode`); ConnectionSessionLog keeps nested copies with the same raw values.
+// Codable identity is by rawValue — renaming/relocating the type does NOT change the JSON.
 
 import Foundation
-
-/// Which role this device played in a session (advertiser or browser).
-///
-/// The two spellings are MultipeerConnectivity's, from when it was the radio, and they are frozen:
-/// the enum is persisted by rawValue. Under QUIC the listening half is still the `advertiser`.
-///
-/// Hoisted out of the app-side ProximityCoordinator so the audit/trust DTOs can name it without an
-/// upward edge; the coordinator keeps a `Role` typealias to it.
-public nonisolated enum ProximityRole: String, Codable, Equatable, Sendable {
-    case advertiser
-    case browser
-}
 
 /// The relationship class of a proximity session: trainer or friend.
 ///
@@ -27,14 +17,4 @@ public nonisolated enum ProximityRole: String, Codable, Equatable, Sendable {
 public nonisolated enum ProximityMode: String, Codable, Equatable, Sendable {
     case trainer
     case friend
-}
-
-/// How peer distance was measured during a session: UWB, RSSI fallback, or not at all.
-///
-/// Recorded in ``ConnectionSessionLog``'s ranging info; the UWB dwell-commit is the join ritual
-/// several trust flows key off.
-public nonisolated enum ProximityRangingMode: String, Codable, Equatable, Sendable {
-    case uwb
-    case rssi
-    case none
 }

@@ -1,14 +1,25 @@
+// FriendSessionTrustPolicy.swift
+// FernletConnections
+//
+// Fernlet's friend-session trust policy: what the app's `ProximityHost` adapter answers for
+// `makeProximityTrustPolicy()`, a fresh instance for every connection the mesh, presence and
+// recipe-share managers open. It is a rule, not mechanism, so it lives with Fernlet's connection
+// rules; the protocol it answers (`ProximityTrustPolicy`) is ProximityKit's, and the vault it wraps
+// (`ProximityTrustVault`) is this module's.
+
 import Foundation
 import FernletDomainModel
+import ProximityKit
 
-/// The ``ProximityTrustPolicy`` for friend-mode radios (mesh, recipe share, presence hearts):
+/// The `ProximityTrustPolicy` for friend-mode radios (mesh, recipe share, presence hearts):
 /// physical proximity is the authorization, so every peer is "trusted" and only BLOCKED keys ban.
 ///
-/// Wraps a ``ProximityTrustVault`` and deliberately maps the revoked check onto the blocked check —
+/// Wraps a `ProximityTrustVault` and deliberately maps the revoked check onto the blocked check —
 /// a revoked-only ("Removed") peer is an unfriend, not a ban, and may handshake again in person.
 /// `isTrustedProximityPeer` is unconditionally `true` because friend sessions authorize through the
-/// UWB dwell / manual-commit proximity gate, not remembered trust. Every owning manager retains an
-/// instance per connection (the coordinator's `trustPolicy` is `weak`).
+/// UWB dwell / manual-commit proximity gate, not remembered trust. The app's `ProximityHost` adapter
+/// returns a fresh instance from `makeProximityTrustPolicy()` for every connection, and the manager
+/// that asked retains it for the connection's lifetime (the coordinator's `trustPolicy` is `weak`).
 public final class FriendSessionTrustPolicy: ProximityTrustPolicy {
     private let vault: ProximityTrustVault
 
@@ -32,7 +43,9 @@ public final class FriendSessionTrustPolicy: ProximityTrustPolicy {
     // Friend sessions authorize through the proximity gate; remembered trust is not required.
     public func isTrustedProximityPeer(signingPublicKey: Data) -> Bool { true }
 
-    public func recordTrainerAudit(_ event: TrainerAuditEvent) {
-        vault.recordTrainerAudit(event)
+    /// Keeps the coordinator's audit in the vault as Fernlet's persisted row
+    /// (`TrainerAuditEvent.init(_:)`, the module's one conversion).
+    public func recordSessionAudit(_ audit: ProximitySessionAudit) {
+        vault.recordTrainerAudit(TrainerAuditEvent(audit))
     }
 }

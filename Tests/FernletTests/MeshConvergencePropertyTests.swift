@@ -800,7 +800,7 @@ extension MeshConvergenceRun {
     /// A member develops and leaves: the signed departure is written before it is sent (§3.6), and
     /// its branch-mates learn it live.
     private func applyDeparture(_ performer: MeshConvergenceMember) async throws {
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         performer.node.manager.onMembershipEventSentForTesting = { emitted.append($0) }
         await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             await performer.node.manager.leaveSessionAfterNotifyingPeers()

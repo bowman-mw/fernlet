@@ -675,9 +675,11 @@ salts, the QUIC channel binding's TLS exporter label, two column seals, five AEA
 hash domains — is a field of `ProximityNamespace`
 (`FernletKit/Sources/ProximityKit/Namespace/`), a value the host builds once and hands down. Every
 ProximityKit reader takes its label from a copy it already holds: a manager's stored namespace, an
-identity's `purposes`, a storage scope's namespace, a verifier's own copy, or an `in purposes:`
-argument. ProximityKit keeps no instance and offers no default, so a host that supplies none fails
-to compile rather than signing under another app's labels.
+identity's `purposes`, a storage scope's namespace, a verifier's own copy (the membership verifier
+keeps the whole family, its record kinds beside its labels, and the inventory digest and the ledger
+adoption are handed one), or an `in purposes:` argument. ProximityKit keeps no instance and offers
+no default, so a host that supplies none fails to compile rather than signing under another app's
+labels.
 
 - **Labels are host-supplied source literals.** A namespace's labels are
   `ProximityCryptographicPurpose` values, minted only by the namespace's group initializers from
@@ -696,9 +698,15 @@ to compile rather than signing under another app's labels.
   with the default raw framing.
 - **Soundness is judged when a namespace is built.** Its initializer records every broken rule in
   `soundness` (labels well-formed, distinct and prefix-free among themselves; radio, QR, keychain and
-  storage values well-formed and distinct), `validated(family:installation:)` throws the same, and
+  storage values well-formed and distinct; the payload vocabulary's tokens, titles and the radios'
+  presentation strings well-formed, no token repeated within its group or left unknown by a rule
+  that names it; the installation's peer-name cap and floor within bounds), `validated(family:installation:)`
+  throws the same, and
   `familyCollisions(with:)` lets a host's tests show its labels collide with no other app's.
-  `ProximityNamespaceSoundnessTests` holds the rules.
+  `ProximityNamespaceSoundnessTests` holds the rules. ProximityKit acts on the recorded verdict at
+  run time: under an unsound namespace an identity refuses to provision and to wrap a group key, and
+  a radio refuses to start, each failing closed with a named audit event before any label is used
+  (`ProximityNamespaceGateTests`).
 - **Fernlet's namespace is `.fernlet`, in FernletConnections.** `ProximityNamespace.fernlet`
   (`FernletKit/Sources/FernletConnections/FernletProtocolNamespace.swift`) spells the 39 labels
   byte for byte as they shipped. It lives in a module that depends on ProximityKit, so ProximityKit
@@ -719,6 +727,13 @@ to compile rather than signing under another app's labels.
   deduplicated by bytes (82 distinct): no label is a byte prefix of another but for §7's one
   sealed-backup exception. Its nearest neighbour, `fernlet.mesh.epoch-heads.v1`, diverges at `.`
   versus `-`.
+- **Tokens are not labels.** The family's payload vocabulary (the payload, capability, record-kind,
+  routed-type and mesh-message tokens, and the session messages' signed titles) is plain `String`
+  wire data: ProximityKit signs, hashes, seals and dispatches by it as data that follows a label,
+  never as a domain prefix, so §2's rules for purposes do not reach it, and the namespace's own
+  soundness rules bound each token's bytes. Fifteen mesh messages and three record kinds are spelled
+  exactly like signature labels, which `ProximityNamespaceGoldenTests` holds equal so that one grep
+  finds both.
 - **What still reads this registry from ProximityKit.** The 13 feature labels — hearts (4),
   presence (2), activities (3), moderation (2) and the sealed-backup escrow (2) — on the code lines
   `ProximityNamespaceBoundaryTests` allowlists file by file. They leave with their features at plan

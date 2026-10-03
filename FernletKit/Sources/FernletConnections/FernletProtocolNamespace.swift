@@ -18,11 +18,26 @@
 // of the 39 labels, which the two mesh stores seal under through ProximityKit's copy of the column seal
 // (and under the install binding `FernletDeviceBindingAdapter` reads from `DeviceBindingID`).
 //
-// Every literal below is pinned by `ProximityNamespaceGoldenTests`' frozen column, so a change here
-// is a wire, keychain or on-disk format change for every device already in the field: it fails that
+// The family also carries the payload vocabulary (`Vocabulary.fernlet`, in
+// FernletPayloadVocabulary.swift), every group of which ProximityKit reads off the namespace (the
+// envelope's payload rules, the coordinator's session messages and capabilities, the managers' wire2
+// token, the inventory digest's record kinds, the routed type registry's routed types and the mesh
+// manager's mesh messages), and the
+// radios' three presentation strings: the instance-name prefixes and the certificates' common name, which
+// ProximityKit's radios, their postures and its peer-name display read off the namespace (the app
+// and FernletProximityUI hand the display `.fernlet`). The installation also carries the Fernlet app's
+// peer-name policy (`PeerNames.fernlet`: the 24-character cap Fernlet's item names share, read off
+// `ItemNameModeration` so it keeps one spelling, and the "A friend" floor), which ProximityKit applies
+// wherever a peer's name enters except its activity manager, whose joiners' names keep
+// `ItemNameModeration`'s cap, with no floor, until plan step A0.4 moves activities out.
+//
+// Every literal below is pinned by a frozen column, `ProximityNamespaceGoldenTests`' or, for the three
+// presentation strings and the peer-name policy, `ProximityVocabularyGoldenTests`', so a change here
+// is a wire, keychain, on-disk or display change for every device already in the field: it fails that
 // suite rather than shipping. `service:` sits directly before each keychain service literal, so the
 // discovery regex in `PrivacyWipeCoverageTests.keychainServiceLiterals(in:)` keeps finding all three.
 
+import FernletDomainModel
 import Foundation
 import ProximityKit
 
@@ -31,11 +46,15 @@ import ProximityKit
 nonisolated extension ProximityNamespace {
 
     /// Fernlet's family and the Fernlet app's installation: the labels, radio values, QR scheme,
-    /// identity and mesh seal-key rows, storage names and log subsystem by which ProximityKit's wire,
-    /// keychain and disk formats identify Fernlet, exactly as today's code spells them. What
+    /// payload vocabulary, identity and mesh seal-key rows, storage names and log subsystem by which
+    /// ProximityKit's wire, keychain and disk formats identify Fernlet, exactly as today's code spells
+    /// them. ProximityKit reads the presentation strings and every vocabulary group off it, the mesh
+    /// engine's own messages included; the mesh features' payload and capability tokens are still
+    /// `PayloadType` and `ProximityCapability` cases until plan steps A0.4 and A0.5, and what
     /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
-    /// moderation keychain services, its support folder, the payload vocabulary and presentation
-    /// strings) waits for plan steps A0.3 and A0.4.
+    /// moderation keychain services, its support folder) waits for plan step A0.4. Its installation
+    /// also carries the Fernlet app's peer-name policy, which ProximityKit shows a peer's name under
+    /// everywhere but the activity manager, until plan step A0.4.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an
@@ -48,12 +67,13 @@ nonisolated extension ProximityNamespace {
 
 nonisolated extension ProximityNamespace.Family {
 
-    /// What every app on Fernlet's wire shares: the 39 labels, the three radios and the `fernlet`
-    /// QR scheme.
+    /// What every app on Fernlet's wire shares: the 39 labels, the three radios, the `fernlet`
+    /// QR scheme and the payload vocabulary.
     public nonisolated static let fernlet = ProximityNamespace.Family(
         purposes: .fernlet,
         radios: .fernlet,
-        verifyQR: ProximityNamespace.VerifyQR(urlScheme: "fernlet")
+        verifyQR: ProximityNamespace.VerifyQR(urlScheme: "fernlet"),
+        vocabulary: .fernlet
     )
 }
 
@@ -144,12 +164,17 @@ nonisolated extension ProximityNamespace.Hash {
 nonisolated extension ProximityNamespace.Radios {
 
     /// The friend mesh, presence and recipe-share radios' Bonjour service types (each declared in
-    /// the app's `NSBonjourServices`) and ALPNs, and the mesh heartbeat datagram.
+    /// the app's `NSBonjourServices`) and ALPNs, the mesh heartbeat datagram, and the three
+    /// presentation strings: the mesh and recipe-share instance-name prefix, the presence one (`fn`
+    /// and its `-` separator together) and the ephemeral certificates' common name.
     public nonisolated static let fernlet = ProximityNamespace.Radios(
         mesh: ProximityNamespace.Radio(serviceType: "_fernlet-mesh2._udp", alpn: "fernlet-mesh-v1"),
         presence: ProximityNamespace.Radio(serviceType: "_fernlet-near2._udp", alpn: "fernlet-near-v1"),
         recipeShare: ProximityNamespace.Radio(serviceType: "_fernlet-recipe2._udp", alpn: "fernlet-recipe-v1"),
-        meshHeartbeat: Data("fernlet-mesh-heartbeat".utf8)
+        meshHeartbeat: Data("fernlet-mesh-heartbeat".utf8),
+        meshInstanceNamePrefix: "fernlet-mesh-",
+        presenceInstanceNamePrefix: "fn-",
+        tlsCommonName: "fernlet-mesh"
     )
 }
 
@@ -157,7 +182,8 @@ nonisolated extension ProximityNamespace.Radios {
 
 nonisolated extension ProximityNamespace.Installation {
 
-    /// The Fernlet app's keychain rows, storage names and log subsystem on this device.
+    /// The Fernlet app's keychain rows, storage names, log subsystem and peer-name policy on this
+    /// device.
     ///
     /// The three keychain services are rows "Delete everything" already accounts for
     /// (`Docs/PrivacyWipeCoverage.md`); each `service:` label sits directly before its literal so the
@@ -184,6 +210,18 @@ nonisolated extension ProximityNamespace.Installation {
             meshRoutedIndexFileName: "MeshRoutedIndex.sealed",
             meshRoutedChunkDirectoryName: "MeshRoutedChunks"
         ),
-        logSubsystem: "com.fernlet"
+        logSubsystem: "com.fernlet",
+        peerNames: .fernlet
+    )
+}
+
+nonisolated extension ProximityNamespace.PeerNames {
+
+    /// How the Fernlet app shows a peer's name: at most 24 characters of it, the cap Fernlet's item
+    /// names share (`ItemNameModeration.maxNameLength`, read rather than respelled, so the two keep
+    /// one spelling), and "A friend" for a name that sanitizes to nothing.
+    public nonisolated static let fernlet = ProximityNamespace.PeerNames(
+        maxLength: ItemNameModeration.maxNameLength,
+        floor: "A friend"
     )
 }

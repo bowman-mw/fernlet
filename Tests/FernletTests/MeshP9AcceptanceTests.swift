@@ -243,12 +243,12 @@ struct MeshP9EphemeralPostureAcceptanceTests {
         let first = try #require(walked.first)
         #expect(walked.map(\.epoch) == (0..<expected).map { first.epoch + UInt64($0) },
                 "the walk crossed each boundary exactly once — a skipped epoch proves nothing")
+        let prefix = ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix
         // R2: bounded by the walked postures.
         for posture in walked {
-            #expect(posture.instanceName.count == PresenceEpochPosture.instanceNameLength,
+            #expect(posture.instanceName.count == PresenceEpochPosture.instanceNameLength(prefix: prefix),
                     "a variable-length name leaks through its length alone")
-            #expect(posture.instanceName.hasPrefix(
-                PresenceEpochPosture.instanceNamePrefix + PresenceEpochPosture.instanceNameSeparator),
+            #expect(posture.instanceName.hasPrefix(prefix),
                     "the frozen service token is the only shared part of a name")
         }
 
@@ -311,11 +311,11 @@ struct MeshP9EphemeralPostureAcceptanceTests {
             MeshRoutedSourceScan.bracedBody(
                 after: "func start(advertisement: [String: String]) throws {", in: session),
             "the recipe radio's start door is gone")
-        #expect(started.contains("RecipeSharePosture.minted()"), "a fresh posture per start()")
+        #expect(started.contains("RecipeSharePosture.minted("), "a fresh posture per start()")
         let resumed = try #require(
             MeshRoutedSourceScan.bracedBody(after: "func resumeDiscovery() {", in: session),
             "the recipe radio's resume door is gone")
-        #expect(resumed.contains("RecipeSharePosture.minted()"), "and a fresh one per resume()")
+        #expect(resumed.contains("RecipeSharePosture.minted("), "and a fresh one per resume()")
 
         let one = try RecipeSharePosture.minted(now: MeshP9Acceptance.epochAnchor)
         let two = try RecipeSharePosture.minted(now: MeshP9Acceptance.epochAnchor)
@@ -482,8 +482,7 @@ struct MeshP9PresenceSwapAcceptanceTests {
         // Deliberately NOT the unit suite's `0123456789abcdef`: both suites are on the mesh line,
         // both produce `presence.quic.*` lines through the process-global capture, and two rigs
         // sharing one peer name is how an interleave turns a scoped read into a cross-suite red.
-        let peerName = PresenceEpochPosture.instanceNamePrefix
-            + PresenceEpochPosture.instanceNameSeparator + "fedcba9876543210"
+        let peerName = ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix + "fedcba9876543210"
         let serviceType = ProximityNamespace.fernlet.family.radios.presence.serviceType
         let key = MeshLinkKey("\(peerName).\(serviceType).local.")
 

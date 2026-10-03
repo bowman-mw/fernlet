@@ -351,7 +351,7 @@ struct FernletIdentityEnvelopeTests {
         }
     }
 
-    /// Phase 5: temp messages are private — `.tempMessage` is in `sealingRequiredTypes`, so an unsealed
+    /// Phase 5: temp messages are private — `.tempMessage` is in `.fernlet`'s sealing set, so an unsealed
     /// message is fail-closed at the receiver even over an already-encrypted transport.
     @Test func tempMessageEnvelopeRejectsUnsealedPayload() throws {
         let (alice, aid) = try makeIdentity()
@@ -373,7 +373,7 @@ struct FernletIdentityEnvelopeTests {
     }
 
     /// Phase 7: a trainer/nutritionist export carries health data — `.workoutCompletion` is in
-    /// `sealingRequiredTypes`, so an unsealed bundle is fail-closed at the receiver even over an
+    /// `.fernlet`'s sealing set, so an unsealed bundle is fail-closed at the receiver even over an
     /// already-encrypted transport.
     @Test func trainerExportEnvelopeRejectsUnsealedPayload() throws {
         let (alice, aid) = try makeIdentity()

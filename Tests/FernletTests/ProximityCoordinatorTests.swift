@@ -1,4 +1,5 @@
 @testable import ProximityKit
+import FernletConnections
 import FernletCrypto
 import Testing
 import FernletFoundation
@@ -129,7 +130,7 @@ struct ProximityCoordinatorTests {
         await coordinator.begin(role: .browser, mode: .trainer)
 
         #expect(transport.browsingStarted == true)
-        #expect(transport.lastServiceType == MultipeerServiceType.trainer)
+        #expect(transport.advertisingStarted == false, "a browser browses and advertises nothing")
         #expect(coordinator.state == .discovering)
     }
 
@@ -562,6 +563,43 @@ struct ProximityCoordinatorTests {
         } == true)
     }
 
+    /// The log's transport stamps are the COORDINATOR's clock readings, carried in its transport
+    /// events: connected once (a second connected report keeps the first stamp) and disconnected
+    /// when the channel drops. The inspector's own clock, pinned far from the coordinator's, stamps
+    /// neither.
+    @Test func inspectorStampsTheTransportWithTheCoordinatorsClock() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let transport = MockMultipeerTransport()
+        let inspectorClock = Date(timeIntervalSince1970: 1_000)
+        let inspector = ConnectionInspector(now: { inspectorClock })
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var currentDate = start
+        let coordinator = makeCoordinator(identity: local, transport: transport, inspector: inspector) { currentDate }
+        let peer = makePeer(name: "Remote")
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnecting(peer: peer)
+        await waitUntil { inspector.liveLog?.transport.mcSessionState == "connecting" }
+        #expect(inspector.liveLog?.transport.connectedAt == nil)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { transport.sentData.count == 1 }
+        #expect(inspector.liveLog?.transport.connectedAt == start)
+
+        currentDate = start.addingTimeInterval(5)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { inspector.liveLog?.peer?.lastSeenAt == start.addingTimeInterval(5) }
+        #expect(inspector.liveLog?.transport.connectedAt == start, "a second connected report keeps the first stamp")
+
+        currentDate = start.addingTimeInterval(9)
+        transport.simulateDisconnection()
+        await waitUntil { inspector.historicalLogs.count == 1 }
+        let logged = try #require(inspector.historicalLogs.first?.transport)
+        #expect(logged.mcSessionState == "notConnected")
+        #expect(logged.connectedAt == start)
+        #expect(logged.disconnectedAt == start.addingTimeInterval(9))
+    }
+
     @Test func tamperedIdentityIntroductionTransitionsToFailed() async throws {
         let (local, localServiceID) = try makeIdentity()
         defer { cleanup(localServiceID) }
@@ -935,7 +973,8 @@ struct ProximityCoordinatorTests {
     }
 
     /// An intro without the additive `capabilities` key (a pre-Phase-1 client) decodes to nil and
-    /// is treated as a legacy photos-only peer.
+    /// is treated as a legacy peer: under `.fernlet`'s capabilities, whose legacy assumption is
+    /// photos alone, a photos-only one.
     @Test func phase1_legacyIntroductionWithoutCapabilitiesIsPhotosOnly() async throws {
         let (local, localServiceID) = try makeIdentity()
         defer { cleanup(localServiceID) }
@@ -958,9 +997,10 @@ struct ProximityCoordinatorTests {
             return
         }
         #expect(peerIdentity.capabilities == nil)
-        #expect(peerIdentity.supports(.photos))
-        #expect(!peerIdentity.supports(.shop))
-        #expect(!peerIdentity.supports(.hearts))
+        let fernlet = ProximityNamespace.fernlet.family.vocabulary.capabilities
+        #expect(peerIdentity.supports(.photos, in: fernlet))
+        #expect(!peerIdentity.supports(.shop, in: fernlet))
+        #expect(!peerIdentity.supports(.hearts, in: fernlet))
     }
 
     /// The sender side threads its configured capability set into the intro payload.

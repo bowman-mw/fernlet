@@ -1,6 +1,7 @@
 import XCTest
 import FernletDomainModel
 import ProximityKit
+import FernletConnections
 @testable import Fernlet
 
 /// Trainer / Nutritionist export (Phase 7). Proves the curated bundle carries workouts + nutrition and is

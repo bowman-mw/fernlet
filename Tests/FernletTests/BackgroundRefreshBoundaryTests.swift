@@ -88,9 +88,11 @@ import Testing
 /// A hit becomes a needle when using it RUNS, HANDS OUT or FEEDS the prohibited machinery. A hit
 /// that only reads or writes an INERT record does not, and the excluded set is written down here
 /// rather than left unmentioned, so the cut is visible and can be re-argued: `meshSessionStorage`,
-/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximitySupportRoot`,
+/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximityTrustStore`, `proximitySupportRoot`,
 /// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
-/// protocol identity, a constant value), `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// protocol identity, a constant value), `proximityInstallBinding` (a stateless adapter over the
+/// install's binding row), `makeProximityTrustPolicy` (a fresh session trust policy over the vault,
+/// which runs nothing until a coordinator consults it), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,
@@ -98,7 +100,7 @@ import Testing
 /// `reportProximityPeer`, `isTrustedProximityPeer`, `isRevokedProximitySigningKey`,
 /// `isBlockedProximitySigningKey`, `isBlockedFingerprint`, `isProximitySellerBanned`,
 /// `isClothingItemLocallyReported`, `reconcileModerationBans`, `recomputeCloseFriendsIfNeeded`,
-/// `recordTrainerAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
+/// `recordTrainerAudit`, `recordSessionAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
 /// helpers (`recipeShareText`, `recipeShareDraft`, `proximityRecipeSharePayload`,
 /// `importProximityRecipeShare`; `savedRecipeShareText` was retired 2026-09-30); the read-only health projections (`allowedHealthCapabilities`,
 /// `visibleHealthCapabilities`, `dailyHealthScore`, `workoutExists`); and

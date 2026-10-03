@@ -418,30 +418,40 @@ let package = Package(
         // FernletUI so the design system stays free of the networking stack and of Photos; the edge
         // runs UI → ProximityKit, never the reverse. Deps: ProximityKit (the roster, answer and
         // name-display types) + FernletUI + FernletDomainModel (FriendPhotoPayload) +
-        // FernletFoundation (the audit log). MainActor: SwiftUI surface, with the saver's
-        // Photos-queue work marked nonisolated within.
+        // FernletFoundation (the audit log) + FernletConnections (`ProximityNamespace.fernlet`, whose
+        // mesh instance-name prefix the name display hides). MainActor: SwiftUI surface, with the
+        // saver's Photos-queue work marked nonisolated within.
         .target(
             name: "FernletProximityUI",
-            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation", "FernletConnections"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
         ),
         // Layer 6.5 — Fernlet's connection rules on top of ProximityKit's mechanisms
-        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). Step A0.2.2
-        // gives it one thing: `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39
-        // domain-separation labels, the radios' service types, ALPNs and heartbeat, the QR scheme,
-        // the keychain rows, the storage names and the log subsystem), byte-identical to today's
-        // literals. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
-        // never the reverse. A0.2.9 adds FernletDeviceBindingAdapter (the install binding) and
-        // A0.2.10 FernletAuditBridge (the audit sink); the payload vocabulary (A0.3), the feature
-        // purposes (A0.4) and the coach profile and link purposes (C1) join it later. Deps:
-        // ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) + FernletFoundation
-        // (FernletAuditLog, behind the bridge). MainActor default, with every type, extension and
-        // static marked nonisolated within (inert value data and stateless seams).
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). It holds
+        // `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39 domain-separation labels,
+        // the radios' service types, ALPNs, heartbeat and presentation strings, the QR scheme, the
+        // payload vocabulary, the keychain rows, the storage names, the log subsystem and the
+        // peer-name policy), byte-identical to the literals Fernlet shipped; FernletDeviceBindingAdapter
+        // (the install binding) and FernletAuditBridge (the audit sink); Fernlet's session rules
+        // (FriendSessionTrustPolicy, CoachSessionTrustPolicy and CoachSessionContract,
+        // FriendMintingReview, TrainerExportPayload, and the one conversion of ProximityKit's session
+        // audit into TrainerAuditEvent); and ProximityTrustVault, Fernlet's trusted-peer records and
+        // audit rows. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
+        // never the reverse. The feature purposes (A0.4) and the coach profile and link purposes (C1)
+        // join it later. Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
+        // FernletFoundation (FernletAuditLog, behind the bridge) + FernletDomainModel (PayloadType and
+        // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling;
+        // ItemNameModeration, whose name cap the peer-name policy reads; and TrainerAuditEvent and
+        // ProximityTrustedPeerRecord with its ProximityMode, the persisted records the vault builds and
+        // keeps and the policies and the review read). MainActor default: the vault and the two trust
+        // policies are main-actor classes, like the main-actor protocols, coordinator, managers and
+        // store they serve, beside nonisolated value data and stateless seams (the namespace and its
+        // vocabulary, the adapter, the bridge, the review, the export body and the audit conversion).
         .target(
             name: "FernletConnections",
-            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

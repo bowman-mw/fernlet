@@ -62,7 +62,8 @@ import UIKit
 import FernletDomainModel
 import FernletFoundation
 
-/// One in-flight heart connection on the presence session. Retains its `FriendSessionTrustPolicy`
+/// One in-flight heart connection on the presence session. Retains the trust policy the host made
+/// for it (`ProximityHost.makeProximityTrustPolicy()`)
 /// for the connection's lifetime so the coordinator's `weak` trustPolicy stays alive (the
 /// revoked/blocked-key envelope rejection + audit calls silently no-op otherwise) — mirrors the
 /// recipe manager's `RecipeShareConnection`.
@@ -71,7 +72,7 @@ private struct PresenceHeartConnection: Identifiable {
     let peer: PeerHandle
     let channel: NetworkPeerChannel
     let coordinator: ProximityCoordinator
-    let trustPolicy: FriendSessionTrustPolicy
+    let trustPolicy: any ProximityTrustPolicy
     /// The friend this connection is delivering a heart to (outbound). `nil` = an inbound-only
     /// connection we accepted so a friend could send US a heart.
     var intendedFriend: ProximityTrustedPeerRecord?
@@ -171,9 +172,16 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// The host's protocol identity, read once from ``store`` at construction and kept as this
     /// manager's own copy (ProximityKit plan step A0.2.3), so no later read reaches back to the
     /// host. The default identity is built from it, and since A0.2.7 so is the radio, which reads
-    /// its service type, ALPN and log subsystem off it. `nonisolated`: inert `Sendable` value data.
+    /// its service type, ALPN and log subsystem off it; the default posture mint takes its presence
+    /// instance-name prefix and TLS common name, and the hearts copy its mesh prefix, which a name
+    /// never begins with. `nonisolated`: inert `Sendable` value data.
     @ObservationIgnored nonisolated let namespace: ProximityNamespace
     @ObservationIgnored private let identity: IdentityService
+    /// Whether ``identity`` is of ``namespace``, decided once at `init`. False only when the
+    /// `identity:` parameter handed this manager an identity of another namespace: the manager still
+    /// constructs, and ``start()`` refuses every start of the radio
+    /// (`presence.identity.namespaceMismatch`), so nothing is advertised under two namespaces.
+    @ObservationIgnored private let identityIsOfNamespace: Bool
     @ObservationIgnored private let ledger: ProximityHeartLedger
     @ObservationIgnored private let replayCache = ReplayCache()
     /// Fired (with the friend's fingerprint) when a heart is successfully sent / received, so the app can
@@ -282,11 +290,11 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     /// Test seam: the posture mint, as `(posture held now, instant) -> the posture to wear`. The
     /// production default is ``PresenceEpochPosture``'s own production path — the system CSPRNG
-    /// and the module's one certificate path — and nothing in shipping code writes this. A test
-    /// substitutes a failing mint to exercise the once-per-epoch budget above.
-    @ObservationIgnored var postureMint: (PresenceEpochPosture?, Date) throws -> PresenceEpochPosture = { held, now in
-        try held?.rotated(at: now) ?? PresenceEpochPosture.minted(at: now)
-    }
+    /// and the module's one certificate path — under ``namespace``'s presence instance-name prefix
+    /// and TLS common name, and nothing in shipping code writes this. The default is set in `init`,
+    /// where it captures those two strings when it is made. A test substitutes a failing mint to
+    /// exercise the once-per-epoch budget above.
+    @ObservationIgnored var postureMint: (PresenceEpochPosture?, Date) throws -> PresenceEpochPosture
 
     public init(store: any ProximityHost, ledger: ProximityHeartLedger, identity: IdentityService? = nil) {
         self.store = store
@@ -294,9 +302,18 @@ public final class PresenceManager: ProximityPayloadHandling {
         let namespace = store.proximityNamespace
         self.namespace = namespace
         self.makeSession = { NetworkPresenceSession(namespace: namespace) }
+        let prefix = namespace.family.radios.presenceInstanceNamePrefix
+        let commonName = namespace.family.radios.tlsCommonName
+        self.postureMint = { held, now in
+            try held?.rotated(at: now, instanceNamePrefix: prefix, commonName: commonName)
+                ?? PresenceEpochPosture.minted(at: now, instanceNamePrefix: prefix, commonName: commonName)
+        }
         if let identity {
+            self.identityIsOfNamespace = ProximityNamespaceGate.checkIdentity(
+                identity, isOf: namespace, event: "presence.identity.namespaceMismatch")
             self.identity = identity
         } else {
+            self.identityIsOfNamespace = true
             let id = IdentityService(namespace: namespace)
             // Fail-soft: the manager still constructs, but a failed provisioning is NAMED (R7) —
             // otherwise every later presence tag and heart send fails with no visible cause.
@@ -331,6 +348,10 @@ public final class PresenceManager: ProximityPayloadHandling {
     public var isListening: Bool { isRunning }
 
     public func start() {
+        // One namespace per manager: an identity of another namespace starts no radio and mints no posture.
+        guard ProximityNamespaceGate.mayStart(
+            identityIsOfNamespace: identityIsOfNamespace, event: "presence.identity.namespaceMismatch"
+        ) else { return }
         guard !isRunning else { return }
         currentEpoch = rotatePosture(at: nowProvider())
         // The posture IS the radio's identity now: no posture, no name and no certificate to
@@ -461,7 +482,7 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     private func rebuildTags(epoch: UInt64) {
         currentEpoch = epoch
-        let eligible = Self.eligibleFriends(in: store.proximityTrustVault.trustedPeers)
+        let eligible = Self.eligibleFriends(in: store.trustedProximityPeers)
 
         // A tag that fails to derive silently drops that friend from presence entirely, so the
         // failures are counted and surfaced once per rebuild (R7) — count only, never an identity.
@@ -804,13 +825,18 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// First word of a friend's display name for warm copy ("Aisha" from "Aisha Bloom"). Pure, so
     /// `nonisolated`. Moved here from the deleted ProximityHeartManager.
     ///
-    /// Delegates to ``PeerNameDisplay/firstName(_:fingerprint:placeholder:)`` (2026-09-29): a friend
-    /// kept before their name arrived has their fingerprint filed AS the name, and every heart
+    /// Delegates to ``PeerNameDisplay/firstName(_:fingerprint:placeholder:in:)`` (2026-09-29): a
+    /// friend kept before their name arrived has their fingerprint filed AS the name, and every heart
     /// sentence built on this (this manager's own refusals, the app's session and Home copy) used to
     /// interpolate it. It now reads "Someone you met", which also replaces the English-only
-    /// "your friend" this answered for an empty name.
-    public nonisolated static func firstName(of displayName: String) -> String {
-        PeerNameDisplay.firstName(displayName, fingerprint: nil, placeholder: .met)
+    /// "your friend" this answered for an empty name. This manager's own calls pass its
+    /// ``namespace``; the app passes the namespace it hands ProximityKit.
+    ///
+    /// - Parameters:
+    ///   - displayName: The friend's name as stored.
+    ///   - namespace: The host's namespace, whose mesh instance-name prefix is never a name.
+    public nonisolated static func firstName(of displayName: String, in namespace: ProximityNamespace) -> String {
+        PeerNameDisplay.firstName(displayName, fingerprint: nil, placeholder: .met, in: namespace)
     }
 
     /// A friend is heart-reachable when their pairwise tag is in the presence nearby set right now.
@@ -879,7 +905,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// pipeline; drives `heartSendState`. The FriendListView button is enabled only while the
     /// friend is reachable and the 5-minute cooldown is clear — the guards here are the belt.
     public func sendHeart(to friend: ProximityTrustedPeerRecord) {
-        let firstName = Self.firstName(of: friend.displayName)
+        let firstName = Self.firstName(of: friend.displayName, in: namespace)
 
         // Send-side opt-out gate (one of the three homes of allowNearbyHearts).
         guard store.allowNearbyHearts else {
@@ -969,7 +995,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     private func expectedFriendKeyAgreementKey(forPeer peerID: UUID, intended: ProximityTrustedPeerRecord?) -> Data? {
         if let intended, !intended.keyAgreementPublicKey.isEmpty { return intended.keyAgreementPublicKey }
         guard let matched = matchedFingerprintsByPeer[peerID] else { return nil }
-        let record = store.proximityTrustVault.trustedPeers.first { peer in
+        let record = store.trustedProximityPeers.first { peer in
             peer.blockedAt == nil && peer.revokedAt == nil && !peer.keyAgreementPublicKey.isEmpty
                 && matched.contains { IdentityService.fingerprintsMatch(peer.fingerprint, $0) }
         }
@@ -1115,7 +1141,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             return
         }
 
-        let trustPolicy = FriendSessionTrustPolicy(vault: store.proximityTrustVault)
+        let trustPolicy = store.makeProximityTrustPolicy()
         let coordinator = ProximityCoordinator(
             identity: identity,
             transport: channel,
@@ -1124,7 +1150,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             trustPolicy: trustPolicy,
             replayCache: replayCache,
             displayName: displayName,
-            capabilities: [ProximityCapability.hearts.rawValue, ProximityCapability.wire2.rawValue],
+            capabilities: [ProximityCapability.hearts.rawValue, namespace.family.vocabulary.capabilities.wire2],
             sealedIntroductionPeerKeyAgreementKey: expectedFriendKA,
             timeoutSeconds: 25
         )
@@ -1195,7 +1221,7 @@ public final class PresenceManager: ProximityPayloadHandling {
                     heartSendState = .verifying(recipientName: intended.displayName)
                     spawnHostPinned { [weak self] in await self?.deliverHeart(via: connection, to: intended) }
                 } else {
-                    failHeart("Couldn't verify \(Self.firstName(of: intended.displayName)) — no heart was sent.")
+                    failHeart("Couldn't verify \(Self.firstName(of: intended.displayName, in: namespace)) — no heart was sent.")
                     teardownIDs.append(heartConnections[index].id)
                 }
             } else if !eligible {
@@ -1241,7 +1267,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         defer { teardownHeartConnection(id: connection.id) }
         // Re-check the cooldown right before the wire write (a racing send may have consumed it).
         guard ledger.canSendHeart(to: friend.fingerprint) else {
-            failHeart("You just sent \(Self.firstName(of: friend.displayName)) some warmth — hearts settle for a few minutes.")
+            failHeart("You just sent \(Self.firstName(of: friend.displayName, in: namespace)) some warmth — hearts settle for a few minutes.")
             return
         }
         do {
@@ -1379,7 +1405,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         guard nextAttempt < Self.maxHeartInviteAttempts else {
             removePendingHeartSend(for: peer)
             session?.disconnectPeer(peer)
-            failHeart("\(Self.firstName(of: friend.displayName)) didn't answer — try again in a moment.")
+            failHeart("\(Self.firstName(of: friend.displayName, in: namespace)) didn't answer — try again in a moment.")
             return
         }
         // Pre-discovery race: clear the stale invite, then re-invite after a short delay (mirrors
@@ -1456,8 +1482,9 @@ public final class PresenceManager: ProximityPayloadHandling {
         // right one to persist, never the fingerprint (the item's blind verify).
         let filedName = store.trustedProximityPeers
             .first { $0.signingPublicKey == peer.signingPublicKey }?.displayName
-        let senderName = ItemNameModeration.moderatedPeerDisplayName(
-            peer.isDisplayNameWithheld ? (filedName ?? peer.fingerprint) : peer.displayName
+        let senderName = ProximityDisplayName.peerDisplayName(
+            peer.isDisplayNameWithheld ? (filedName ?? peer.fingerprint) : peer.displayName,
+            in: namespace
         )
         // The ledger drops duplicates (same id) and enforces the 5-minute per-sender receive rate.
         if ledger.recordReceivedHeart(id: payload.id, senderDisplayName: senderName, senderFingerprint: peer.fingerprint) {
@@ -1499,14 +1526,14 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// - Parameters:
     ///   - signingPublicKey: The peer's Ed25519 signing key.
     ///   - fingerprint: The peer's fingerprint.
-    ///   - host: The host holding the trust vault and the block list.
+    ///   - host: The host answering the trust questions (its trust store) and holding the block list.
     /// - Returns: whether a heart from or to this peer may be recorded.
     static func isHeartEligible(
         signingPublicKey: Data, fingerprint: String, in host: any ProximityHost
     ) -> Bool {
-        let vault = host.proximityTrustVault
-        return vault.isTrustedProximityPeer(signingPublicKey: signingPublicKey)
-            && !vault.isBlockedProximitySigningKey(signingPublicKey)
+        let trustStore = host.proximityTrustStore
+        return trustStore.isTrustedProximityPeer(signingPublicKey: signingPublicKey)
+            && !trustStore.isBlockedProximitySigningKey(signingPublicKey)
             && !host.isBlockedFingerprint(fingerprint)
     }
 
@@ -1679,13 +1706,14 @@ public final class PresenceManager: ProximityPayloadHandling {
             transport: channel,
             ranging: ranging,
             replayCache: replayCache,
+            displayName: displayName,
             timeoutSeconds: 0)
         heartConnections.append(PresenceHeartConnection(
             id: peer.id,
             peer: peer,
             channel: channel,
             coordinator: coordinator,
-            trustPolicy: FriendSessionTrustPolicy(vault: store.proximityTrustVault),
+            trustPolicy: store.makeProximityTrustPolicy(),
             intendedFriend: nil,
             fingerprint: nil))
         teardownHeartConnection(id: peer.id)
@@ -1703,7 +1731,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     func evaluateConnectedCoordinatorForTesting(
         _ coordinator: ProximityCoordinator,
         peer: PeerHandle,
-        trustPolicy: FriendSessionTrustPolicy,
+        trustPolicy: any ProximityTrustPolicy,
         intendedFriend: ProximityTrustedPeerRecord? = nil
     ) -> Bool {
         let channelSession = session ?? NetworkPresenceSession(namespace: namespace)

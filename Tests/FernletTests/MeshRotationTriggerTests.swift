@@ -527,7 +527,7 @@ struct MeshRotationManagerTests {
     @Test func leavingEmitsASignedDeparture() async {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeMesh(manager)
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
         await manager.leaveSessionAfterNotifyingPeers()
@@ -581,7 +581,7 @@ struct MeshRotationManagerTests {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeMesh(manager)
         guard seedEpoch(manager, counter: MeshEpochBounds.counterCap) != nil else { return }
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
         await DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {

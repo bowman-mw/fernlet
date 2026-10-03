@@ -2,6 +2,8 @@ import Testing
 import Foundation
 import FernletDomainModel
 import FernletPersistence
+import ProximityKit
+import simd
 @testable import Fernlet
 
 /// The connection inspector's recorder, and the five claims that are about the store hosting it.
@@ -12,7 +14,8 @@ import FernletPersistence
 /// from, and the `replaceConnectionSessionLogs` write-back — and an inspector with no host records
 /// unconditionally and persists nowhere, which is the product default (`FernletSettings` defaults to
 /// `.live`). So every cell whose claim is about the RECORDER (the live log, the event trail, ranging
-/// subsampling, envelope byte counts, the 50-session cap, the JSON export) runs against
+/// subsampling, envelope byte counts, the transport events, ProximityKit's report converted into
+/// the log's own types, the 50-session cap, the JSON export) runs against
 /// `ConnectionInspector()` alone — the same object `FernletStore` declares as its
 /// `connectionInspector`, minus the attach. The five cells whose claim is about the HOST — the
 /// write-back landing in the store's own `connectionSessionLogs`, history re-seeded from the store
@@ -92,7 +95,7 @@ struct ConnectionInspectorTests {
 
         for index in 0..<30 {
             inspector.recordRangingSample(
-                ConnectionSessionLog.DistanceSample(
+                ProximityInspectorDistanceSample(
                     timestamp: start.addingTimeInterval(Double(index) / 30.0),
                     meters: 0.04
                 )
@@ -105,7 +108,7 @@ struct ConnectionInspectorTests {
     @Test func recordEnvelopeNeverIncludesPayloadBytes() {
         let inspector = makeRecorder()
         inspector.beginSession(role: .browser, mode: .trainer, localFingerprint: "abcd1234")
-        let record = ConnectionSessionLog.EnvelopeRecord(
+        let record = ProximityInspectorEnvelope(
             envelopeID: UUID(),
             direction: .received,
             payloadType: PayloadType.trainerPlan.rawValue,
@@ -120,6 +123,81 @@ struct ConnectionInspectorTests {
 
         #expect(inspector.liveLog?.envelopes.first?.payloadByteCount == 2048)
         #expect(inspector.liveLog?.transport.bytesReceived == 2048)
+    }
+
+    /// ProximityKit reports its transport as events and the log keeps them as it always kept them:
+    /// each state change sets `mcSessionState`, the session keeps its FIRST connected stamp (a second
+    /// connected report leaves it), each close or failure stamps `disconnectedAt` (the last wins), a
+    /// change with no stamp moves neither, and round trips keep the latest 50 in arrival order.
+    @Test func transportEventsKeepTheFirstConnectedStampAndTheLatestFiftyRoundTrips() {
+        let inspector = makeRecorder()
+        inspector.beginSession(role: .browser, mode: .trainer, localFingerprint: "abcd1234")
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        inspector.updateTransport(.stateChanged(state: "connecting", connectedAt: nil, disconnectedAt: nil))
+        #expect(inspector.liveLog?.transport.mcSessionState == "connecting")
+        #expect(inspector.liveLog?.transport.connectedAt == nil)
+        inspector.updateTransport(.stateChanged(state: "connected", connectedAt: start, disconnectedAt: nil))
+        inspector.updateTransport(.stateChanged(
+            state: "connected", connectedAt: start.addingTimeInterval(9), disconnectedAt: nil))
+        #expect(inspector.liveLog?.transport.mcSessionState == "connected")
+        #expect(inspector.liveLog?.transport.connectedAt == start)
+        #expect(inspector.liveLog?.transport.disconnectedAt == nil)
+        inspector.updateTransport(.stateChanged(
+            state: "notConnected", connectedAt: nil, disconnectedAt: start.addingTimeInterval(20)))
+        inspector.updateTransport(.stateChanged(
+            state: "failed", connectedAt: nil, disconnectedAt: start.addingTimeInterval(30)))
+        #expect(inspector.liveLog?.transport.mcSessionState == "failed")
+        #expect(inspector.liveLog?.transport.connectedAt == start)
+        #expect(inspector.liveLog?.transport.disconnectedAt == start.addingTimeInterval(30))
+
+        for index in 0..<60 {
+            inspector.updateTransport(.roundTrip(milliseconds: Double(index)))
+        }
+        #expect(inspector.liveLog?.transport.rttSamplesMs == (10..<60).map { Double($0) })
+        #expect(inspector.liveLog?.transport.averageRttMs == 34.5)
+    }
+
+    /// Everything else ProximityKit reports lands in the log's own types field for field: its role
+    /// and each ranging mode case for case, the peer line, an envelope record (its bytes counted on
+    /// the transport), and a kept distance sample with its direction split into three components.
+    @Test func theCoordinatorsReportLandsInTheLogFieldForField() throws {
+        let inspector = makeRecorder()
+        let at = Date(timeIntervalSince1970: 1_800_000_000)
+        inspector.beginSession(role: .advertiser, mode: .friend, localFingerprint: "abcd1234")
+        #expect(inspector.liveLog?.role == .advertiser)
+        let modes: [(ProximityRangingMode, ConnectionSessionLog.RangingMode)] = [(.uwb, .uwb), (.rssi, .rssi), (.none, .none)]
+        for (reported, logged) in modes {
+            inspector.updateRangingMode(reported)
+            #expect(inspector.liveLog?.ranging.mode == logged)
+        }
+
+        inspector.updatePeer(ProximityInspectorPeer(
+            displayName: "Robin", advertisedFingerprint: "a1b2c3d4", confirmedFingerprint: "e5f60718",
+            signingPublicKey: Data([1, 2, 3]), firstSeenAt: at, lastSeenAt: at.addingTimeInterval(5)))
+        #expect(inspector.liveLog?.peer == ConnectionSessionLog.PeerInfo(
+            displayName: "Robin", advertisedFingerprint: "a1b2c3d4", confirmedFingerprint: "e5f60718",
+            signingPublicKey: Data([1, 2, 3]), firstSeenAt: at, lastSeenAt: at.addingTimeInterval(5)))
+
+        let envelopeID = UUID()
+        inspector.recordEnvelope(ProximityInspectorEnvelope(
+            envelopeID: envelopeID, direction: .sent, payloadType: PayloadType.identityIntroduction.rawValue,
+            payloadByteCount: 512, timestamp: at, signatureVerified: nil, encrypted: true, summary: "Hello"))
+        let record = try #require(inspector.liveLog?.envelopes.last)
+        #expect(record == ConnectionSessionLog.EnvelopeRecord(
+            id: record.id, envelopeID: envelopeID, direction: .sent,
+            payloadType: PayloadType.identityIntroduction.rawValue, payloadByteCount: 512, timestamp: at,
+            signatureVerified: nil, encrypted: true, summary: "Hello"))
+        #expect(inspector.liveLog?.transport.bytesSent == 512)
+
+        for _ in 0..<3 {
+            inspector.recordRangingSample(ProximityInspectorDistanceSample(
+                timestamp: at, meters: 0.5, direction: simd_float3(0.5, -0.25, 0.75)))
+        }
+        let sample = try #require(inspector.liveLog?.ranging.samples.last)
+        #expect(sample.timestamp == at)
+        #expect(sample.meters == 0.5)
+        #expect([sample.directionX, sample.directionY, sample.directionZ] == [0.5, -0.25, 0.75])
     }
 
     @Test func historicalLogsCappedAt50() {

@@ -944,12 +944,14 @@ struct MeshLinkAdvertisementTests {
 
     /// The instance name is random per session, prefixed, and short enough for Bonjour's 63-byte
     /// instance-name limit. Random is the point: the archived MC peer id it replaces was stable
-    /// across launches, so a passive scanner could link sightings of one person.
+    /// across launches, so a passive scanner could link sightings of one person. The prefix is the
+    /// host's, so the cell names `.fernlet`'s.
     @Test func theInstanceNameIsRandomAndBounded() {
-        let names = (0..<8).map { _ in MeshLinkAdvertisement.randomInstanceName() }
+        let prefix = ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix
+        let names = (0..<8).map { _ in MeshLinkAdvertisement.randomInstanceName(prefix: prefix) }
         #expect(Set(names).count == names.count, "instance names must not repeat")
         for name in names {
-            #expect(name.hasPrefix(MeshLinkAdvertisement.instanceNamePrefix))
+            #expect(name.hasPrefix(prefix))
             #expect(name.utf8.count <= 63)
             #expect(name.lowercased() == name, "the token is a frozen lowercase wire value")
         }
@@ -1056,12 +1058,15 @@ struct EphemeralMeshTLSIdentityTests {
     static let anchor = Date(timeIntervalSince1970: 1_800_000_000)
 
     /// The DER this code writes is a certificate the platform parser accepts, carrying the public
-    /// key it was built from. That is the only correctness claim worth making: nothing in Fernlet
-    /// reads a peer's certificate, so "Security parses it" is exactly what has to hold.
+    /// key it was built from and the common name it was handed (`.fernlet`'s). That is the only
+    /// correctness claim worth making: nothing in Fernlet reads a peer's certificate, so "Security
+    /// parses it" is exactly what has to hold.
     @Test func theMintedCertificateParsesAndCarriesItsOwnPublicKey() throws {
         let privateKey = P256.Signing.PrivateKey()
+        let commonName = ProximityNamespace.fernlet.family.radios.tlsCommonName
         let der = try EphemeralMeshTLSIdentity.selfSignedCertificateDER(
             for: privateKey,
+            commonName: commonName,
             notBefore: Self.anchor,
             notAfter: Self.anchor.addingTimeInterval(86_400),
             serial: [0x01, 0x02, 0x03, 0x04]
@@ -1074,7 +1079,7 @@ struct EphemeralMeshTLSIdentityTests {
             Issue.record("the certificate has no readable subject summary")
             return
         }
-        #expect(summary as String == EphemeralMeshTLSIdentity.commonName)
+        #expect(summary as String == commonName)
 
         guard let publicKey = SecCertificateCopyKey(certificate),
               let external = SecKeyCopyExternalRepresentation(publicKey, nil) else {
@@ -1165,10 +1170,8 @@ struct NetworkMeshSessionTests {
         let subscription = channel.state.sink { observed.append($0) }
         defer { subscription.cancel() }
 
-        try await channel.startAdvertising(
-            serviceType: ProximityNamespace.fernlet.family.radios.mesh.serviceType, discoveryInfo: [:]
-        )
-        try await channel.startBrowsing(serviceType: ProximityNamespace.fernlet.family.radios.mesh.serviceType)
+        try await channel.startAdvertising(discoveryInfo: [:])
+        try await channel.startBrowsing()
         try await channel.invite(peer)
         channel.notifyConnected()
         channel.receive(Data([0x01]), at: Date())

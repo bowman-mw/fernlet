@@ -1,10 +1,12 @@
 import ProximityKit
+import FernletConnections
 import SwiftUI
 import UIKit
 import FernletDomainModel
 import PrivateMediaStore
 import FernletUI
 import FernletProximityUI
+import FernletConnections
 
 /// The pages the Friends album pushes onto its own `NavigationStack`, as path values.
 ///
@@ -886,7 +888,7 @@ struct FriendsView: View {
             case .connected(let p), .transferring(let p, _),
                  .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
                  .awaitingUserConfirmation(let p):
-                return PeerNameDisplay.personName(p.displayName, fingerprint: p.fingerprint)
+                return PeerNameDisplay.personName(p.displayName, fingerprint: p.fingerprint, in: .fernlet)
             default:
                 break
             }
@@ -1582,7 +1584,7 @@ private struct NearbySlotRow: View {
         switch slot.coordinator.state {
         case .awaitingProximityCommit(let p), .awaitingManualCommit(let p),
              .awaitingUserConfirmation(let p), .connected(let p), .transferring(let p, _):
-            return PeerNameDisplay.shown(p.displayName, fingerprint: p.fingerprint)
+            return PeerNameDisplay.shown(p.displayName, fingerprint: p.fingerprint, in: .fernlet)
         default:
             return PeerNameDisplay.text(for: .nearby)
         }

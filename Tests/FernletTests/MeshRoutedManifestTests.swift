@@ -982,7 +982,7 @@ struct MeshRoutedManifestSigningTests {
         )
         #expect(opened == payload)
 
-        // Positive control: the same call for a type in `sealingRequiredTypes` is fail-closed.
+        // Positive control: the same call for a type in `.fernlet`'s sealing set is fail-closed.
         let control = try FernletIdentityEnvelope.signed(
             identityService: minted.origin,
             senderDisplayName: "origin",

@@ -19,6 +19,7 @@
 // Tier 1: no rig, no radio, no simulator, no clock — every instant is an injected `Date` and every
 // random draw is an injected closure.
 
+import FernletConnections
 import Foundation
 import Security
 import Testing
@@ -113,8 +114,7 @@ struct PresenceEpochPostureTests {
         #expect(Set(certificates).count == certificates.count, "no certificate is reused across epochs")
         #expect(Set(names.map(\.count)).count == 1, "every name is the same length — length encodes nothing")
 
-        let prefixLength = PresenceEpochPosture.instanceNamePrefix.count
-            + PresenceEpochPosture.instanceNameSeparator.count
+        let prefixLength = ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix.count
         let randomHalves = names.map { String($0.dropFirst(prefixLength)) }
         #expect(Set(randomHalves).count == randomHalves.count, "the random halves are not reused either")
 
@@ -162,22 +162,21 @@ struct PresenceEpochPostureTests {
         #expect(first.tlsIdentity.certificateDER != sibling.tlsIdentity.certificateDER)
     }
 
-    /// The name's shape: a frozen service token every device carries identically, a separator, and
-    /// then entropy of a stated size and nothing else.
+    /// The name's shape: the host's frozen service token, its separator included, which every device
+    /// carries identically (`.fernlet`'s `fn-` here), and then entropy of a stated size and nothing
+    /// else.
     @Test func theNameIsAFrozenServiceTokenPlusStatedEntropy() throws {
+        let prefix = ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix
         #expect(PresenceEpochPosture.instanceNameEntropyByteCount == 8, "the stated size: 64 bits")
-        #expect(PresenceEpochPosture.instanceNameLength == 2 + 1 + 16)
+        #expect(PresenceEpochPosture.instanceNameLength(prefix: prefix) == 2 + 1 + 16)
 
         var names: Set<String> = []
         // R2: bounded.
         for _ in 0..<32 {
-            let name = try PresenceEpochPosture.instanceName(entropy: PresenceEpochPosture.systemEntropy)
-            #expect(name.hasPrefix(PresenceEpochPosture.instanceNamePrefix
-                + PresenceEpochPosture.instanceNameSeparator),
-                    "every instance carries the SAME frozen prefix")
-            #expect(name.count == PresenceEpochPosture.instanceNameLength)
-            let half = name.dropFirst(PresenceEpochPosture.instanceNamePrefix.count
-                + PresenceEpochPosture.instanceNameSeparator.count)
+            let name = try PresenceEpochPosture.instanceName(prefix: prefix, entropy: PresenceEpochPosture.systemEntropy)
+            #expect(name.hasPrefix(prefix), "every instance carries the SAME frozen prefix")
+            #expect(name.count == PresenceEpochPosture.instanceNameLength(prefix: prefix))
+            let half = name.dropFirst(prefix.count)
             #expect(half.count == 2 * PresenceEpochPosture.instanceNameEntropyByteCount)
             #expect(half.allSatisfy { $0.isHexDigit && !$0.isUppercase },
                     "the random half is lowercase hexadecimal and nothing else")
@@ -206,9 +205,12 @@ struct PresenceEpochPostureTests {
     // MARK: - The TLS identity
 
     /// The identity comes through the module's ONE certificate path: its certificate parses, and
-    /// its subject is the shared `fernlet-mesh` token rather than anything about this device.
+    /// its subject is the host's shared common name (`.fernlet`'s `fernlet-mesh`) rather than anything
+    /// about this device.
     @Test func theTLSIdentityIsTheOneCertificatePathAndNamesNoDevice() throws {
-        let posture = try PresenceEpochPosture.minted(at: Self.anchor)
+        let radios = ProximityNamespace.fernlet.family.radios
+        let posture = try PresenceEpochPosture.minted(
+            at: Self.anchor, instanceNamePrefix: radios.presenceInstanceNamePrefix, commonName: radios.tlsCommonName)
         guard let certificate = SecCertificateCreateWithData(nil, posture.tlsIdentity.certificateDER as CFData) else {
             Issue.record("the posture's certificate is not one Security will parse")
             return
@@ -217,7 +219,7 @@ struct PresenceEpochPostureTests {
             Issue.record("the posture's certificate has no readable subject")
             return
         }
-        #expect(summary as String == EphemeralMeshTLSIdentity.commonName,
+        #expect(summary as String == radios.tlsCommonName,
                 "the subject is a shared protocol token — a device-derived subject would re-link")
         #expect(!(summary as String).contains(posture.instanceName),
                 "and it does not carry the advertised name either")
@@ -235,7 +237,7 @@ struct PresenceEpochPostureTests {
 
     /// The certificate is minted at the EPOCH'S START, never at the instant the mint happens.
     ///
-    /// `EphemeralMeshTLSIdentity.mint(now:)` writes its argument into the certificate as
+    /// `EphemeralMeshTLSIdentity.mint(commonName:now:)` writes its instant into the certificate as
     /// `notBefore = now − clockSkewSeconds` and `notAfter = now + lifetimeSeconds`, at one-second
     /// resolution — and the transport's validator accepts any certificate, so both fields are
     /// readable by every device in range. Anchored to the mint instant they would say which second

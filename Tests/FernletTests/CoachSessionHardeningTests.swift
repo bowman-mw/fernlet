@@ -12,6 +12,7 @@
 import Foundation
 import Testing
 import ProximityKit
+import FernletConnections
 import FernletFoundation
 import FernletDomainModel
 @testable import Fernlet
@@ -42,11 +43,11 @@ struct CoachSessionHardeningTests {
     }
 
     final class AuditRecordingTrustPolicy: ProximityTrustPolicy {
-        var events: [TrainerAuditEvent] = []
+        var events: [ProximitySessionAudit] = []
         func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool { false }
         func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool { false }
         func isTrustedProximityPeer(signingPublicKey: Data) -> Bool { false }
-        func recordTrainerAudit(_ event: TrainerAuditEvent) { events.append(event) }
+        func recordSessionAudit(_ audit: ProximitySessionAudit) { events.append(audit) }
     }
 
     private func makeRecord(
@@ -139,10 +140,12 @@ struct CoachSessionHardeningTests {
         #expect(coordinator.state != .failed(reason: "oversized inbound payload"))
     }
 
-    /// The wire cap is derived from the bundle cap, never hand-written — and the margin is
+    /// The wire cap is the coordinator's own trainer-mode bound and the bundle cap is derived from
+    /// it, never hand-written — and the margin is
     /// pinned against the REAL inflate guard, so a future `maxInflatedByteCount` change can't
     /// silently erode it.
     @Test func trainerWireCapInvariantsHold() {
+        #expect(TrainerExportPayload.maxTrainerWireBytes == ProximityCoordinator.maxTrainerModeInboundBytes)
         #expect(TrainerExportPayload.maxTrainerWireBytes == 2 * TrainerExportPayload.maxBundleBytes)
         #expect(TrainerExportPayload.maxTrainerWireBytes < SealedPayloadFraming.maxInflatedByteCount / 2)
     }

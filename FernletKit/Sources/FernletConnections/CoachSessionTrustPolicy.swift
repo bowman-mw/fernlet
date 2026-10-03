@@ -1,11 +1,20 @@
+// CoachSessionTrustPolicy.swift
+// FernletConnections
+//
+// Fernlet's coach-channel session rules: the written-down role split and the trust policy a coach
+// coordinator consults. They are rules, not mechanism, so they live with Fernlet's connection rules;
+// the protocol the policy answers (`ProximityTrustPolicy`) and the role type are ProximityKit's, and
+// the vault it reads (`ProximityTrustVault`) is this module's.
+
 import Foundation
 import FernletDomainModel
+import ProximityKit
 
 /// Session-contract constants for the in-person coach channel (Increment 10 of
 /// Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md). The in-person mesh session is the
 /// PRIMARY coach channel (owner decision, 2026-07-26); iMessage + CloudKit are the off-week
 /// fallback.
-public enum CoachSessionContract {
+public nonisolated enum CoachSessionContract {
     /// ROLE SPLIT (decided 2026-07-26, written down so it cannot be gotten backwards): the coach
     /// runs the separate coaching app and ADVERTISES the `fernlet-coach` service; **Fernlet is
     /// the BROWSER** — it discovers the coach, completes the handshake and the verification
@@ -60,7 +69,9 @@ public final class CoachSessionTrustPolicy: ProximityTrustPolicy {
         vault.isBlockedProximitySigningKey(publicKey)
     }
 
-    public func recordTrainerAudit(_ event: TrainerAuditEvent) {
-        vault.recordTrainerAudit(event)
+    /// Keeps the coordinator's audit in the vault as Fernlet's persisted row
+    /// (`TrainerAuditEvent.init(_:)`, the module's one conversion).
+    public func recordSessionAudit(_ audit: ProximitySessionAudit) {
+        vault.recordTrainerAudit(TrainerAuditEvent(audit))
     }
 }

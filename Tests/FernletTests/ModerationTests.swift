@@ -3,6 +3,7 @@ import CryptoKit
 import FernletDomainModel
 import FernletFoundation
 @testable import ProximityKit
+import FernletConnections
 
 @MainActor
 final class ModerationTests: XCTestCase {

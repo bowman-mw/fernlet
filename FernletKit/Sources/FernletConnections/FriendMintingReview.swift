@@ -1,5 +1,13 @@
+// FriendMintingReview.swift
+// FernletConnections
+//
+// Fernlet's keep-as-friend rule for the end of an in-person session: which review the app presents,
+// and which of the session's peers it may offer as new friends. It is policy over ProximityKit's
+// session roster and Fernlet's trust records, so it lives with Fernlet's connection rules.
+
 import Foundation
 import FernletDomainModel
+import ProximityKit
 
 /// Pure decision logic for the post-session "keep as friend" prompt (Phase 2,
 /// Docs/Proximity-Mesh-Redesign-2026-07-10.md). Kept view-free so the session-end flows in

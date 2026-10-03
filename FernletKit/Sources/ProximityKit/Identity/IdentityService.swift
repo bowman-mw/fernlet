@@ -103,7 +103,13 @@ public enum IdentityError: Error, Equatable {
 ///
 /// Every instance is built from its host's ``ProximityNamespace`` (plan step A0.2.3), which names
 /// the keychain service those shared rows live under; ProximityKit holds no namespace of its own
-/// and so offers no default identity.
+/// and so offers no default identity. An identity of an unsound namespace refuses to provision and
+/// to wrap a group key (``ensureProvisioned()``, ``encryptGroupKey(_:for:)``), so it never holds its
+/// signing or key-agreement key, and nothing is signed, wrapped, sealed to a peer or opened from one
+/// under that namespace. The backup-escrow API (``provisionBackupEscrowKeyForSealing()`` and the
+/// escrow loads, derivations, reconcile and adoption beside it) checks no verdict and needs no
+/// provisioned key: it is Fernlet's sealed-backup feature, which plan step A0.4 moves out, and
+/// Fernlet's backup paths call ``ensureProvisioned()`` before it.
 @MainActor
 public final class IdentityService {
 
@@ -572,7 +578,14 @@ public final class IdentityService {
     /// Wire form: ephemeralPubKey (32 B) || nonce (12 B) || ciphertext (32 B) || tag (16 B) = 92 B total.
     /// The HKDF salt is this identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and the
     /// authenticated data `purposes.aead.meshGroupKeyWrapV2`, alone (plan step A0.2.6).
+    ///
+    /// **Refuses an unsound namespace first.** The wrap needs no provisioned key, so the refusal in
+    /// ``ensureProvisioned()`` does not cover it: under an unsound ``namespace`` it throws
+    /// ``ProximityNamespaceError`` with every violation and audits `identity.namespace.unsound` (at
+    /// `groupKeyWrap`) before anything is derived or sealed.
     public func encryptGroupKey(_ key: Data, for recipientPublicKey: Data) throws -> Data {
+        try ProximityNamespaceGate.refuseUnsound(
+            namespace.soundness, event: "identity.namespace.unsound", at: .groupKeyWrap)
         guard key.count == 32 else { throw IdentityError.sealFailed }
         guard let recipientKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipientPublicKey) else {
             throw IdentityError.sealFailed
@@ -670,7 +683,15 @@ public final class IdentityService {
     /// `errSecItemNotFound` is absence, and any other status throws
     /// ``IdentityError/keychainReadFailed(_:)`` with nothing written. The decision is
     /// ``classifyDeviceIdentityRows(signing:keyAgreement:accounts:)``, pure and tested on its own.
+    ///
+    /// **Refuses an unsound namespace first.** Before any row is read or written, an identity whose
+    /// ``namespace`` judged itself unsound throws ``ProximityNamespaceError`` with every violation and
+    /// audits `identity.namespace.unsound` (at `provision`), on every call: it never holds its signing
+    /// or key-agreement key, so nothing signs, seals to a peer or opens from one under that namespace.
+    /// The backup-escrow API needs neither key and checks no verdict (see the type's doc).
     public func ensureProvisioned() throws {
+        try ProximityNamespaceGate.refuseUnsound(
+            namespace.soundness, event: "identity.namespace.unsound", at: .provision)
         if signingKey != nil && keyAgreementKey != nil { return }
 
         let deviceOnly = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as CFString
@@ -1004,6 +1025,9 @@ public final class IdentityService {
     /// no conflicting synced key has appeared (`reconcileBackupEscrowKey`). The minted key is stored at its
     /// CONTENT-ADDRESSED account, so even if it is later promoted it can never overwrite a different
     /// (genuine) key — the publish targets this key's own slot. Returns the escrow public key.
+    ///
+    /// Reads no namespace verdict, like the rest of the escrow API: a feature path, Fernlet's sealed
+    /// backup (plan step A0.4 moves it out), whose callers run ``ensureProvisioned()`` first.
     @discardableResult
     public func provisionBackupEscrowKeyForSealing() -> Data {
         if backupEscrowKey == nil { backupEscrowKey = loadExistingEscrowKey() }

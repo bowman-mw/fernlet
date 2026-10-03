@@ -12,12 +12,13 @@ private struct RecipeShareConnection: Identifiable {
     let peer: PeerHandle
     let channel: NetworkPeerChannel
     let coordinator: ProximityCoordinator
-    /// Retained for the connection's lifetime so the coordinator's `weak` trustPolicy stays alive —
+    /// The host's trust policy for this pairing (`ProximityHost.makeProximityTrustPolicy()`),
+    /// retained for the connection's lifetime so the coordinator's `weak` trustPolicy stays alive —
     /// otherwise the revoked/blocked-key envelope rejection + audit calls silently no-op (they would
-    /// evaluate `nil?.isRevokedProximitySigningKey(...) == true` → false, and every recordTrainerAudit
+    /// evaluate `nil?.isRevokedProximitySigningKey(...) == true` → false, and every recordSessionAudit
     /// becomes a no-op). Mirrors MeshNetworkManager's `slotTrustPolicies` and the heart manager's
     /// HeartShareConnection.
-    let trustPolicy: FriendSessionTrustPolicy
+    let trustPolicy: any ProximityTrustPolicy
     var fingerprint: String?
     var verifiedKeyAgreementPublicKey: Data?
 }
@@ -81,7 +82,8 @@ public enum ProximityRecipeShareDiagnostics {
 ///
 /// Owns its own ``RecipeShareRadioSession`` (the QUIC ``NetworkRecipeShareSession`` in
 /// production), ``IdentityService`` cache, and ``ReplayCache``; each pairing gets a
-/// ``ProximityCoordinator`` with a retained ``FriendSessionTrustPolicy`` (the coordinator's trust
+/// ``ProximityCoordinator`` with a retained trust policy from the host,
+/// ``ProximityHost/makeProximityTrustPolicy()`` (the coordinator's trust
 /// ref is `weak` — dropping the retention silently disables the revoked/blocked drops). The hard
 /// 2-device cap is enforced at four layers: the inbound dialer gate, the outbound send guard, the
 /// connecting-window check, and the belt-and-braces channel admission — with the radio PAUSED
@@ -154,6 +156,11 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     /// conformer through the init seam and exercise them with no Bonjour anywhere.
     @ObservationIgnored private let session: any RecipeShareRadioSession
     @ObservationIgnored private let identity: IdentityService
+    /// Whether ``identity`` is of ``namespace``, decided once at `init`. False only when the
+    /// `identity:` seam handed this manager an identity of another namespace: the manager still
+    /// constructs, as it does when provisioning fails, and ``start()`` refuses every start of the radio
+    /// (`recipeShare.identity.namespaceMismatch`), so nothing is advertised under two namespaces.
+    @ObservationIgnored private let identityIsOfNamespace: Bool
     @ObservationIgnored private let replayCache = ReplayCache()
     @ObservationIgnored private var connections: [RecipeShareConnection] = []
     @ObservationIgnored private var discoveredPeers: [UUID: PeerHandle] = [:]
@@ -211,7 +218,9 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     /// one on a service of its own. Without it a test that exercised
     /// ``wipeIdentityForDeleteAll()`` would have wiped the TEST HOST's real identity — the test
     /// bundle runs inside the app on that Simulator and shares its keychain — so the wipe's EFFECT
-    /// was untestable here and only its existence was pinned.
+    /// was untestable here and only its existence was pinned. An identity of another namespace than
+    /// the host's is refused: the manager constructs, audits `recipeShare.identity.namespaceMismatch`
+    /// and never starts its radio.
     init(
         store: any ProximityHost,
         makeSession: (() -> any RecipeShareRadioSession)?,
@@ -222,6 +231,8 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         self.namespace = namespace
         self.session = makeSession?() ?? NetworkRecipeShareSession(namespace: namespace)
         let id = injected ?? IdentityService(namespace: namespace)
+        self.identityIsOfNamespace = ProximityNamespaceGate.checkIdentity(
+            id, isOf: namespace, event: "recipeShare.identity.namespaceMismatch")
         do {
             try id.ensureProvisioned()
         } catch {
@@ -263,6 +274,10 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     public var isListening: Bool { isRunning }
 
     public func start() {
+        // One namespace per manager: an identity of another namespace starts no radio.
+        guard ProximityNamespaceGate.mayStart(
+            identityIsOfNamespace: identityIsOfNamespace, event: "recipeShare.identity.namespaceMismatch"
+        ) else { return }
         guard !isRunning else { return }
         isRunning = true
         recordDiagnostic("Recipe share discovery started.")
@@ -451,9 +466,9 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         // multi-megabyte body is itself the denial-of-service. An honest share is far under 1 MiB
         // (see ProximityRecipeSharePayload.maxWireBytes for the derivation).
         // Peer-supplied name, rendered in the review sheet and every diagnostic below: coerce ONCE
-        // here (control/zero-width/bidi out, 24-char cap). Never coerce it before `verify` — the
-        // raw field is signature-covered.
-        let senderName = ItemNameModeration.moderatedPeerDisplayName(envelope.senderDisplayName)
+        // here (control/zero-width/bidi out, the host's peer-name cap). Never coerce it before
+        // `verify` — the raw field is signature-covered.
+        let senderName = ProximityDisplayName.peerDisplayName(envelope.senderDisplayName, in: namespace)
         guard plaintext.count <= ProximityRecipeSharePayload.maxWireBytes else {
             recordDiagnostic("Dropped an oversized recipe share from \(senderName).")
             return
@@ -587,15 +602,15 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     /// ``RecipeShareAdvertisedName`` for why a 32-Character cap is not a bound at all once these
     /// fields become a Bonjour TXT record, and why an over-long value is dropped rather than cut.
     ///
-    /// The bound narrows the wire on a second axis too: `sanitizedName` caps at
-    /// ``ItemNameModeration/maxNameLength`` (24) Characters and strips zero-width/bidi scalars,
+    /// The bound narrows the wire on a second axis too: the sanitizer caps at the namespace's
+    /// `installation.peerNames.maxLength` (Fernlet's 24) Characters and strips zero-width/bidi scalars,
     /// where MultipeerConnectivity advertised 32 raw ones. Invisible to a reader — the receiver
-    /// re-caps at 24 with the same function — but it is a narrowing, not just a re-expression.
+    /// re-caps at that cap with the same function — but it is a narrowing, not just a re-expression.
     ///
     /// A name that cannot be published at all (one grapheme wider than the byte bound) omits the
     /// `name` key rather than advertising an empty one, matching
     /// ``MeshLinkAdvertisement/publishedFields``: an absent name falls back to the peer's transport
-    /// hint, an empty one would render as the "A friend" placeholder.
+    /// hint, an empty one would render as the host's peer-name floor.
     /// The `sid` is deliberately **absent**: it belongs to the radio, which mints it with its
     /// instance name and TLS identity at every `start()` and every resume, and joins it to these
     /// fields in ``RecipeShareAdvertisement/publishedFields(from:sessionID:)``. A copy kept here
@@ -605,7 +620,7 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
             RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
             RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode
         ]
-        let name = RecipeShareAdvertisedName.publishable(displayName)
+        let name = RecipeShareAdvertisedName.publishable(displayName, in: namespace)
         if !name.isEmpty { fields[RecipeShareAdvertisement.nameKey] = name }
         return fields
     }
@@ -764,7 +779,7 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
             break
         }
         recordDiagnostic("Secure recipe-share channel opened with \(displayName(for: channel.peer)).")
-        let trustPolicy = FriendSessionTrustPolicy(vault: store.proximityTrustVault)
+        let trustPolicy = store.makeProximityTrustPolicy()
         let coordinator = ProximityCoordinator(
             identity: identity,
             transport: channel,
@@ -967,8 +982,8 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     }
 
     /// The name to show for a peer, in the picker row and in every "Connection details" line: the
-    /// row this device already drew for it, else the name it advertised, else the picker's own
-    /// "A friend" placeholder.
+    /// row this device already drew for it, else the name it advertised, else the host's peer-name
+    /// floor, the picker's own placeholder.
     ///
     /// **The one rule for naming a peer in anything a user reads**, and a function rather than
     /// `peer.displayHint` because the hint changed meaning with the transport. Under
@@ -977,15 +992,16 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     /// publishes NEITHER — `displayHint` is empty. A reader that kept the old assumption printed
     /// `fernlet-mesh-3f2a9c81b4de` into the picker and the connection log.
     ///
-    /// No new display string: the placeholder is the one
-    /// ``ItemNameModeration/moderatedPeerDisplayName(_:)`` already answers for an empty name,
-    /// which is what every other pre-handshake surface in this subsystem renders.
+    /// No new display string: the placeholder is the floor
+    /// `ProximityDisplayName.peerDisplayName(_:in:)` already answers for an empty name under the
+    /// manager's namespace, which is what every other pre-handshake surface in this subsystem renders.
     private func displayName(for peer: PeerHandle) -> String {
         if let row = nearbyRecipients.first(where: { $0.id == peer.id }) { return row.displayName }
-        return ItemNameModeration.moderatedPeerDisplayName(
+        return ProximityDisplayName.peerDisplayName(
             RecipeShareAdvertisedName.received(
                 peer.discoveryInfo?[RecipeShareAdvertisement.nameKey], hint: ""
-            )
+            ),
+            in: namespace
         )
     }
 
@@ -1337,8 +1353,8 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
 
     // MARK: - Test seam
 
-    /// Builds AND retains a connection exactly as `handleChannelReady` does — creating the
-    /// FriendSessionTrustPolicy from the store's vault and holding it on the connection struct so the
+    /// Builds AND retains a connection exactly as `handleChannelReady` does — asking the host for the
+    /// pairing's trust policy (`makeProximityTrustPolicy()`) and holding it on the connection struct so the
     /// coordinator's `weak` trustPolicy survives past this method's scope — but over an injected transport
     /// so a unit test can drive a revoked/blocked-key envelope through the coordinator. Returns the
     /// connection's coordinator. `internal` for `@testable` unit tests only: the production connection path
@@ -1351,7 +1367,7 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         transport: any PeerTransport,
         ranging: any RangingProvider
     ) -> ProximityCoordinator {
-        let trustPolicy = FriendSessionTrustPolicy(vault: store.proximityTrustVault)
+        let trustPolicy = store.makeProximityTrustPolicy()
         let coordinator = ProximityCoordinator(
             identity: identity,
             transport: transport,

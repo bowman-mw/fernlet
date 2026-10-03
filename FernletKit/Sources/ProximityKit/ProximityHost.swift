@@ -10,15 +10,30 @@ import FernletDomainModel
 ///
 /// Mirrors the existing `ProximityTrustPolicy` / `WorkoutSyncContext` host-protocol
 /// pattern. Surface is exactly what `MeshNetworkManager` + `ProximityRecipeShareManager`
-/// consume: display name, trusted peers + vault, and the block/fingerprint checks — and, since
-/// ProximityKit plan step A0.2.3, the host's protocol identity, ``proximityNamespace``, and since
-/// step A0.2.9 its install binding, ``proximityInstallBinding``: two requirements the extension
-/// below will never give a default.
+/// consume: display name, trusted peers, and the block/fingerprint checks — and four requirements
+/// the extension below will never give a default, because each is the host's identity or rule, not
+/// the mechanism's: the host's protocol identity, ``proximityNamespace``, its install binding,
+/// ``proximityInstallBinding``, its trust records, ``proximityTrustStore``, and the session trust
+/// policy every connection's coordinator consults, ``makeProximityTrustPolicy()``.
 @MainActor
 public protocol ProximityHost: AnyObject {
     var proximityDisplayName: String { get }
+    /// Every trusted-peer record the host keeps (kept, removed, blocked and reported alike), in the
+    /// host's persisted type: the managers read a friend's record from them where a feature needs one
+    /// (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch
+    /// list). The same records ``proximityTrustStore`` answers from: Fernlet's app and every test
+    /// double answer their vault's.
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { get }
-    var proximityTrustVault: ProximityTrustVault { get }
+    /// The host's durable trust records, asked the two questions this module puts to them outside a
+    /// session: whether a signing key is a remembered, unrevoked peer, and whether it is blocked
+    /// (``ProximityTrustStore`` says where each manager asks).
+    ///
+    /// **No default, like ``trustedProximityPeers``.** Which peers a device remembers is the host's
+    /// record, not the mechanism's, so ProximityKit keeps none of its own: a host that supplies none
+    /// fails to compile. Fernlet's app answers its `ProximityTrustVault` (the `FernletConnections`
+    /// module) in `ProximityHostAdapter.swift`, and every test double answers its own vault. The
+    /// managers read it at each question, so an answer always reflects the records as they are then.
+    var proximityTrustStore: any ProximityTrustStore { get }
     func isBlockedFingerprint(_ fingerprint: String) -> Bool
     func blockProximityPeer(signingPublicKey: Data)
     /// The in-person hearts opt-in (mesh redesign Phase 4b). `PresenceManager` consults it on the
@@ -77,32 +92,38 @@ public protocol ProximityHost: AnyObject {
     /// sidecar root.
     var meshRoutedStorage: MeshRoutedStorageScope { get }
 
-    /// The host's protocol identity (ProximityKit plan step A0.2.3): the labels, radio values, QR
+    /// The host's protocol identity: the labels, radio values, QR
     /// scheme, identity and mesh seal-key rows, storage names and log subsystem by which this module's
     /// wire, keychain and disk formats identify the app it runs in, as the one ``ProximityNamespace``
-    /// the host builds at its composition root. Some such strings stay outside it until a later plan
-    /// step: the feature labels, the heart-drop and moderation keychain services and
-    /// ``ProximitySupportLayout``'s folder until A0.4, the payload vocabulary and presentation strings
-    /// until A0.3. `ProximityNamespaceBoundaryTests` allowlists each feature-label read and each
-    /// literal that spells `fernlet`.
+    /// the host builds at its composition root. The radios, their postures and ``PeerNameDisplay`` read
+    /// the radios' presentation strings off it too. It also carries the payload vocabulary, which this
+    /// module reads off it as well: the envelope, the coordinator, the managers, the inventory digest,
+    /// the routed type registry and the mesh engine's own frames; the mesh features' payload and
+    /// capability tokens are still Fernlet's cases until plan steps A0.4 and A0.5. Some such strings
+    /// stay outside it until plan step A0.4:
+    /// the feature labels, the heart-drop and moderation keychain services and
+    /// ``ProximitySupportLayout``'s folder. `ProximityNamespaceBoundaryTests` allowlists each
+    /// feature-label read, each literal that spells `fernlet` and each line that still names one of
+    /// Fernlet's domain types.
     ///
     /// **Deliberately no default.** The extension below hands a host that carries no value of its
     /// own the hearts settings, the sidecar root and the two storage scopes; it hands out no
     /// namespace, and never will. ProximityKit holds no namespace instance and keeps no global, so a
     /// host that supplies none gets a compile error, never another app's identity. Fernlet's app
     /// supplies `ProximityNamespace.fernlet` (the `FernletConnections` module) in
-    /// `ProximityHostAdapter.swift`, as the test target's eleven Fernlet doubles do;
-    /// `ProximityNamespaceGoldenTests`' three hosts take theirs from the cell that builds them, another
-    /// app's in the cells that test one.
+    /// `ProximityHostAdapter.swift`, as eleven of the test target's sixteen doubles do; the other
+    /// five, `ProximityNamespaceGoldenTests`' three hosts and `ProximityVocabularyGoldenTests`' two,
+    /// take theirs from the cell that builds them: another app's, or Fernlet's with some of its groups
+    /// replaced, in the cells that test one.
     ///
     /// Read once, at construction: ``MeshNetworkManager``, ``PresenceManager`` and
     /// ``ProximityRecipeShareManager`` each keep their own copy and build the identity and the radio
-    /// they own by default from it, so no later read reaches back to the host. Since step A0.2.8 the
+    /// they own by default from it, so no later read reaches back to the host. The
     /// extension below also builds this host's default sidecar root and both storage scopes from it,
     /// and every scope carries it to the store that reads its names.
     var proximityNamespace: ProximityNamespace { get }
 
-    /// The host's install binding (ProximityKit plan step A0.2.9): the per-install bytes the two
+    /// The host's install binding: the per-install bytes the two
     /// sealed mesh stores' column seal places after the column label in every blob's authenticated
     /// data, read at each seal and each open.
     ///
@@ -115,6 +136,25 @@ public protocol ProximityHost: AnyObject {
     /// a pinned binding in the cells that test one. The extension below builds both default storage
     /// scopes with it; a host with scopes of its own hands each the same binding.
     var proximityInstallBinding: any ProximityInstallBinding { get }
+
+    /// A fresh trust policy for one connection: the ``ProximityTrustPolicy`` that the
+    /// ``ProximityCoordinator`` a manager builds for a friend-mode link consults on every inbound
+    /// envelope (the revoked-key hard fail, the blocked-key silent drop, remembered-trust
+    /// auto-confirm) and records its audit events through.
+    ///
+    /// **A new value per call, kept alive by the caller.** The coordinator holds its policy `weak`,
+    /// so ``MeshNetworkManager`` (per slot), ``PresenceManager`` (per heart connection) and
+    /// ``ProximityRecipeShareManager`` (per pairing) each call this once per connection, test seams
+    /// included, and keep the result beside that connection for its lifetime: a policy nothing
+    /// retains lets the revoked and blocked drops silently stop firing.
+    ///
+    /// **No default, like ``proximityNamespace``.** Which peers a session trusts, treats as revoked
+    /// and bans is the host's rule, not the mechanism's, so ProximityKit ships no session policy and
+    /// never falls back to one: a host that supplies none fails to compile. Fernlet's app answers
+    /// `FriendSessionTrustPolicy(vault: proximityTrustVault)` (the `FernletConnections` module, over
+    /// the store's `ProximityTrustVault`) in `ProximityHostAdapter.swift`, and every test double
+    /// answers the same over its own vault.
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy
 }
 
 public extension ProximityHost {

@@ -29,8 +29,10 @@ final class MockPresenceQUICHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
     var allowNearbyHearts: Bool = true
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
@@ -723,7 +725,8 @@ struct PresenceOverQUICTests {
 
         // A real browsed endpoint id, built exactly as Bonjour builds one.
         let hex = "0123456789abcdef"
-        let peerName = "\(PresenceEpochPosture.instanceNamePrefix)-\(hex)"
+        let presencePrefix = ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix
+        let peerName = presencePrefix + hex
         let serviceType = ProximityNamespace.fernlet.family.radios.presence.serviceType
         let endpointID = "\(peerName).\(serviceType).local."
         let key = MeshLinkKey(endpointID)
@@ -758,7 +761,7 @@ struct PresenceOverQUICTests {
         // Every fragment of the peer's identity, hunted across EVERY context value of EVERY line.
         let forbidden = [
             endpointID, peerName, hex,
-            "\(PresenceEpochPosture.instanceNamePrefix)-", serviceType
+            presencePrefix, serviceType
         ]
         for record in records {
             for (contextKey, value) in record.context {

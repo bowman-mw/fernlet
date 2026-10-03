@@ -25,6 +25,7 @@ import FernletDomainModel
 import FernletFoundation
 import ProximityKit
 import FernletProximityUI
+import FernletConnections
 
 // MARK: - SessionPhotoReviewGate
 

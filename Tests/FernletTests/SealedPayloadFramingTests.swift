@@ -11,6 +11,7 @@ import Foundation
 import Testing
 import CryptoKit
 import ProximityKit
+import FernletConnections
 import FernletFoundation
 import FernletDomainModel
 @testable import Fernlet
@@ -171,8 +172,8 @@ struct SealedPayloadFramingTests {
     // So the tests below encode a representative value of each sealed payload type (plus the envelope
     // itself) exactly the way those sites do, and assert the leading byte.
 
-    /// One representative value per `PayloadType` in `FernletIdentityEnvelope.sealingRequiredTypes`
-    /// that has a concrete payload type in this repo. Values are shape-only — nothing is signed or
+    /// One representative value per `PayloadType` in `.fernlet`'s sealing set
+    /// (`family.vocabulary.payloads.sealingRequired`) that has a concrete payload type in this repo. Values are shape-only — nothing is signed or
     /// sent — because the assertion is about the ENCODING, not the contents.
     private static func sealedPayloadRepresentatives() -> [(caseName: String, payload: any Encodable)] {
         let now = Date(timeIntervalSince1970: 1_780_000_000)
@@ -249,30 +250,15 @@ struct SealedPayloadFramingTests {
         #expect(SealedPayloadFraming.hasFrameTag(Data([0x02])))
     }
 
-    /// Coverage guard: every case listed in `FernletIdentityEnvelope.sealingRequiredTypes` must either
-    /// have a representative above or be a documented gap. `sealingRequiredTypes` is `private`, so this
-    /// reads the declaration from source — the same grep-wall stance as `PrivacyWipeCoverageTests`.
+    /// Coverage guard: every token in `.fernlet`'s sealing set must either have a representative
+    /// above or be a documented gap. The set is what the envelope's `verify` reads off its identity's
+    /// namespace (`family.vocabulary.payloads.sealingRequired`), so this reads it there, by case name.
     @Test func sealedPayloadTypeCoverageIsComplete() throws {
-        let repoRoot = RepoRoot.url
-        let source = try String(
-            contentsOf: repoRoot.appendingPathComponent("FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift"),
-            encoding: .utf8
-        )
-        guard let declaration = source.components(separatedBy: "\n")
-            .first(where: { $0.contains("sealingRequiredTypes: Set<PayloadType>") }),
-              let open = declaration.firstIndex(of: "["),
-              let close = declaration.lastIndex(of: "]") else {
-            Issue.record("Could not read `sealingRequiredTypes` from FernletIdentityEnvelope.swift — moved or reformatted? The 0x7B invariant is then unguarded.")
-            return
-        }
-        let required = Set(
-            declaration[declaration.index(after: open)..<close]
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { $0.hasPrefix(".") }
-                .map { String($0.dropFirst()) }
-        )
-        #expect(required.count >= 14, "Parsed only \(required.count) sealed types — the parse is broken, not the wall.")
+        let tokens = ProximityNamespace.fernlet.family.vocabulary.payloads.sealingRequired
+        let required = Set(tokens.compactMap { token in PayloadType(rawValue: token).map { "\($0)" } })
+        #expect(required.count == tokens.count,
+                "Sealing-required token(s) \(tokens.filter { PayloadType(rawValue: $0) == nil }.sorted()) name no PayloadType case.")
+        #expect(required.count >= 14, "Read only \(required.count) sealed types — the set lost its members, not the wall.")
 
         let covered = Set(Self.sealedPayloadRepresentatives().map(\.caseName)).union(Self.uncoveredSealedTypes)
         let unguarded = required.subtracting(covered).sorted()
