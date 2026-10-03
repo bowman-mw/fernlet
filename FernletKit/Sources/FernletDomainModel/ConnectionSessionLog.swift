@@ -2,16 +2,19 @@ import Foundation
 import simd
 
 // Carved DOWN into the FernletDomainModel module (whole file is a pure DTO) so the persistence layer
-// can reference it without an upward edge. References to the proximity enums use the canonical
-// DomainModel names (ProximityRole / ProximityMode / ProximityRangingMode), not the app-side
-// ProximityCoordinator.* typealiases. Codable identity is unchanged.
+// can reference it without an upward edge. The session's mode is the canonical DomainModel
+// ProximityMode, not the app-side ProximityCoordinator.Mode typealias; its role and ranging mode are
+// this record's own nested Role and RangingMode, copies of ProximityKit's ProximityRole and
+// ProximityRangingMode with the same raw values (ProximityKit sits above this module, so the record
+// cannot name them, and the app's ConnectionInspector converts). Codable identity is by raw value, so
+// the JSON is unchanged.
 
 /// The persisted audit record of one proximity session: peer, ranging, transport, events,
 /// envelopes, and errors.
 ///
 /// This is the record the Connection Inspector renders and `FernletSnapshot.connectionSessionLogs`
 /// stores in the synced blob — NOT a wire type; the wire enums stay strict. Its own enum fields
-/// (``ProximityRole``, ``ProximityMode``, ``ProximityRangingMode``, event kinds, envelope
+/// (``Role``, ``ProximityMode``, ``RangingMode``, event kinds, envelope
 /// direction) decode tolerantly with parked-token side channels (``EnumDecodeCompat``) so a session
 /// logged by a newer build can't brick an older paired device into read-only recovery. Pure
 /// Sendable value type; all logging logic lives app-side in the proximity subsystem.
@@ -23,7 +26,7 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
     // not the proximity wire protocol — the wire enums stay strict; only this record decodes its
     // enum fields tolerantly (freeze-on-unknown + parked-token side channel, EnumDecodeCompat) so a
     // session logged by a newer build can't brick an older paired device into read-only recovery.
-    public var role: ProximityRole
+    public var role: Role
     public var unknownRoleToken: String? = nil
     public var mode: ProximityMode
     public var unknownModeToken: String? = nil
@@ -50,7 +53,7 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         id: UUID = UUID(),
         startedAt: Date = Date(),
         endedAt: Date? = nil,
-        role: ProximityRole,
+        role: Role,
         mode: ProximityMode,
         localFingerprint: String,
         peer: PeerInfo? = nil,
@@ -83,7 +86,7 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
         // Required keys (synthesized-strict pre-compat): absence is corruption, not a newer build.
         let roleSplit = try c.decodeTolerantRequiredEnum(
-            ProximityRole.self, forKey: .role, parkedTokenKey: .unknownRoleToken, default: .browser)
+            Role.self, forKey: .role, parkedTokenKey: .unknownRoleToken, default: .browser)
         role = roleSplit.value
         unknownRoleToken = roleSplit.parkedToken
         let modeSplit = try c.decodeTolerantRequiredEnum(
@@ -98,6 +101,31 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         envelopes = try c.decode([EnvelopeRecord].self, forKey: .envelopes)
         errors = try c.decode([ErrorRecord].self, forKey: .errors)
         endState = try c.decode(String.self, forKey: .endState)
+    }
+
+    /// Which role this device played in the session: this record's own copy of ProximityKit's
+    /// `ProximityRole`.
+    ///
+    /// The same two raw values, frozen (MultipeerConnectivity's spellings, from when it was the
+    /// radio), so the JSON is the one the log always wrote. A copy, because ProximityKit sits above
+    /// this module: the app's `ConnectionInspector` maps ProximityKit's role onto it case for case.
+    /// Decoded tolerantly by ``ConnectionSessionLog/init(from:)``: an unknown role freezes to
+    /// `browser` with its token parked.
+    public enum Role: String, Codable, Equatable, Sendable {
+        case advertiser
+        case browser
+    }
+
+    /// How peer distance was measured during the session: this record's own copy of ProximityKit's
+    /// `ProximityRangingMode`.
+    ///
+    /// The same three raw values, so the JSON is unchanged; the app's `ConnectionInspector` maps
+    /// ProximityKit's mode onto it case for case. Decoded tolerantly by ``RangingInfo``: an unknown
+    /// mode freezes to `none` with its token parked.
+    public enum RangingMode: String, Codable, Equatable, Sendable {
+        case uwb
+        case rssi
+        case none
     }
 
     /// Identity snapshot of the remote peer as observed during the session.
@@ -134,7 +162,7 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
     /// `mode` decodes tolerantly (parked token) — a ranging mode minted by a newer build freezes to
     /// `.none` rather than dropping the whole log.
     public struct RangingInfo: Codable, Equatable, Sendable {
-        public var mode: ProximityRangingMode
+        public var mode: RangingMode
         public var unknownModeToken: String? = nil
         public var samples: [DistanceSample]
         public var tapConfirmedAt: Date?
@@ -142,7 +170,7 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
         public var maxDistanceMeters: Double?
 
         public init(
-            mode: ProximityRangingMode,
+            mode: RangingMode,
             samples: [DistanceSample] = [],
             tapConfirmedAt: Date? = nil,
             minDistanceMeters: Double? = nil,
@@ -159,7 +187,7 @@ public nonisolated struct ConnectionSessionLog: Identifiable, Codable, Equatable
             let c = try decoder.container(keyedBy: CodingKeys.self)
             // Required key (synthesized-strict pre-compat): absence is corruption, not a newer build.
             let modeSplit = try c.decodeTolerantRequiredEnum(
-                ProximityRangingMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .none)
+                RangingMode.self, forKey: .mode, parkedTokenKey: .unknownModeToken, default: .none)
             mode = modeSplit.value
             unknownModeToken = modeSplit.parkedToken
             samples = try c.decode([DistanceSample].self, forKey: .samples)

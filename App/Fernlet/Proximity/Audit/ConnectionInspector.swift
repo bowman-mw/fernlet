@@ -9,16 +9,23 @@ import FernletDomainModel
 ///
 /// The app-side conformer of ProximityKit's `ProximityInspectorRecording` seam — a
 /// `ProximityCoordinator` holds it weakly and streams state transitions, envelope records,
-/// ranging samples, transport updates, and errors into it. ``ConnectionInspectorView`` renders
+/// ranging samples, transport events, and errors into it. ``ConnectionInspectorView`` renders
 /// the in-flight `liveLog`; ``ConnectionInspectorHistoryView`` (Settings debug tools) lists,
 /// deletes, and JSON-exports `historicalLogs`.
 ///
 /// Responsibilities and invariants:
+/// - ProximityKit reports in its own value types (`ProximityInspectorEnvelope`,
+///   `ProximityInspectorDistanceSample`, `ProximityInspectorPeer`,
+///   `ProximityInspectorTransportEvent`, `ProximityRole`, `ProximityRangingMode`); this class
+///   converts each into the persisted `ConnectionSessionLog`'s own nested types, field for field and
+///   case for case (the converters at the end of this file). A transport state change sets the
+///   state, keeps the session's FIRST connected stamp and takes each disconnected stamp, all on the
+///   coordinator's clock; a round trip joins the latest 50.
 /// - Recording is gated on `FernletSettings.connectionInspectorMode != .disabled`, checked at
 ///   both `beginSession` and `endSession`, so disabling mid-session also drops that session.
 /// - The live log is self-bounding: events/envelopes/errors are trimmed to the last 250/250/100
-///   after every append, and ranging samples are subsampled (1 in 3) and capped at 600, so a
-///   long session can't grow without limit.
+///   after every append, ranging samples are subsampled (1 in 3) and capped at 600, and heartbeat
+///   round trips are capped at the last 50, so a long session can't grow without limit.
 /// - History is capped at the 50 newest sessions and purged past 60 days (`purgeOld`); every
 ///   mutation persists through `FernletStore.replaceConnectionSessionLogs`, whose snapshot the
 ///   initializer / `attachStore` reload on launch.
@@ -40,6 +47,8 @@ final class ConnectionInspector: ProximityInspectorRecording {
     private static let maxLiveErrors = 100
     /// Rolling cap on retained UWB distance samples for one session.
     private static let maxRangingSamples = 600
+    /// Rolling cap on retained heartbeat round-trip samples for one session.
+    private static let maxRoundTripSamples = 50
     /// How many finished sessions history keeps (newest first).
     private static let maxHistoricalSessions = 50
     /// How long a finished session survives in history before ``purgeOld()`` drops it.
@@ -78,7 +87,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         sampleSubsamplingCounter = 0
         liveLog = ConnectionSessionLog(
             startedAt: now(),
-            role: role,
+            role: ConnectionSessionLog.Role(role),
             mode: mode,
             localFingerprint: localFingerprint,
             ranging: ConnectionSessionLog.RangingInfo(mode: .none)
@@ -96,12 +105,12 @@ final class ConnectionInspector: ProximityInspectorRecording {
 
     /// Records a UWB distance sample: subsampled 1-in-3, capped at 600, and folded into the
     /// running min/max so the detail view can show the session's range.
-    func recordRangingSample(_ sample: ConnectionSessionLog.DistanceSample) {
+    func recordRangingSample(_ sample: ProximityInspectorDistanceSample) {
         guard var log = liveLog else { return }
         sampleSubsamplingCounter += 1
         guard sampleSubsamplingCounter % sampleSubsamplingStride == 0 else { return }
         let meters = sample.meters
-        log.ranging.samples.append(sample)
+        log.ranging.samples.append(ConnectionSessionLog.DistanceSample(sample))
         log.ranging.samples = Array(log.ranging.samples.suffix(Self.maxRangingSamples))
         if let currentMin = log.ranging.minDistanceMeters {
             log.ranging.minDistanceMeters = min(currentMin, meters)
@@ -118,9 +127,9 @@ final class ConnectionInspector: ProximityInspectorRecording {
     }
 
     /// Logs a sent/received signed envelope, accumulating the transport byte counters.
-    func recordEnvelope(_ record: ConnectionSessionLog.EnvelopeRecord) {
+    func recordEnvelope(_ record: ProximityInspectorEnvelope) {
         guard var log = liveLog else { return }
-        log.envelopes.append(record)
+        log.envelopes.append(ConnectionSessionLog.EnvelopeRecord(record))
         switch record.direction {
         case .sent:
             log.transport.bytesSent += record.payloadByteCount
@@ -140,21 +149,37 @@ final class ConnectionInspector: ProximityInspectorRecording {
         recordEvent(.error, message: "\(domain): \(message)")
     }
 
-    func updatePeer(_ peer: ConnectionSessionLog.PeerInfo) {
+    func updatePeer(_ peer: ProximityInspectorPeer) {
         guard var log = liveLog else { return }
-        log.peer = peer
+        log.peer = ConnectionSessionLog.PeerInfo(peer)
         liveLog = log
     }
 
-    func updateTransport(_ block: (inout ConnectionSessionLog.TransportInfo) -> Void) {
-        guard var log = liveLog else { return }
-        block(&log.transport)
-        liveLog = log
+    /// Applies one of the coordinator's transport events to the live log's transport info: a state
+    /// change sets the state, sets the connected stamp only while the session has none, and takes
+    /// every disconnected stamp (both stamps are the coordinator's clock readings); a round trip
+    /// joins the samples, which keep the latest 50.
+    func updateTransport(_ event: ProximityInspectorTransportEvent) {
+        mutateTransport { transport in
+            switch event {
+            case .stateChanged(let state, let connectedAt, let disconnectedAt):
+                transport.mcSessionState = state
+                if let connectedAt, transport.connectedAt == nil {
+                    transport.connectedAt = connectedAt
+                }
+                if let disconnectedAt {
+                    transport.disconnectedAt = disconnectedAt
+                }
+            case .roundTrip(let milliseconds):
+                transport.rttSamplesMs.append(milliseconds)
+                transport.rttSamplesMs = Array(transport.rttSamplesMs.suffix(Self.maxRoundTripSamples))
+            }
+        }
     }
 
     func updateRangingMode(_ mode: ProximityCoordinator.RangingMode) {
         guard var log = liveLog else { return }
-        log.ranging.mode = mode
+        log.ranging.mode = ConnectionSessionLog.RangingMode(mode)
         liveLog = log
     }
 
@@ -209,7 +234,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         guard liveLog != nil else { return }
         let kind = kind(for: message)
         if message.contains("connected") {
-            updateTransport { transport in
+            mutateTransport { transport in
                 transport.mcSessionState = "connected"
                 if transport.connectedAt == nil { transport.connectedAt = now() }
             }
@@ -224,6 +249,14 @@ final class ConnectionInspector: ProximityInspectorRecording {
 
     private func persistHistoricalLogs() {
         store?.replaceConnectionSessionLogs(historicalLogs)
+    }
+
+    /// Mutates the live log's transport info in place: the one write path for both the
+    /// coordinator's transport events and the "connected" status lines.
+    private func mutateTransport(_ block: (inout ConnectionSessionLog.TransportInfo) -> Void) {
+        guard var log = liveLog else { return }
+        block(&log.transport)
+        liveLog = log
     }
 
     private func trimLiveLog() {
@@ -249,5 +282,83 @@ final class ConnectionInspector: ProximityInspectorRecording {
         if message.contains("failed") { return .error }
         if message.contains("ended") { return .sessionEnded }
         return .stateTransition
+    }
+}
+
+// MARK: - ProximityKit's report, in the persisted log's own types
+//
+// ProximityKit reports a session in its own value types and the persisted log is Fernlet's
+// (`ConnectionSessionLog`, in FernletDomainModel, which sits below ProximityKit and cannot name
+// them), so the inspector converts at the seam. Every field is copied unchanged; every enum maps
+// case for case by an exhaustive switch onto the log's copy with the same raw value, so a case
+// ProximityKit adds fails to compile here instead of being logged as something else. A converted
+// row gets a fresh row ID, as every new row does.
+
+private extension ConnectionSessionLog.Role {
+    /// ProximityKit's role, case for case.
+    init(_ role: ProximityRole) {
+        switch role {
+        case .advertiser: self = .advertiser
+        case .browser: self = .browser
+        }
+    }
+}
+
+private extension ConnectionSessionLog.RangingMode {
+    /// ProximityKit's ranging mode, case for case.
+    init(_ mode: ProximityRangingMode) {
+        switch mode {
+        case .uwb: self = .uwb
+        case .rssi: self = .rssi
+        case .none: self = .none
+        }
+    }
+}
+
+private extension ConnectionSessionLog.EnvelopeRecord.Direction {
+    /// ProximityKit's envelope direction, case for case.
+    init(_ direction: ProximityInspectorEnvelope.Direction) {
+        switch direction {
+        case .sent: self = .sent
+        case .received: self = .received
+        }
+    }
+}
+
+private extension ConnectionSessionLog.EnvelopeRecord {
+    /// The coordinator's envelope record, field for field.
+    init(_ record: ProximityInspectorEnvelope) {
+        self.init(
+            envelopeID: record.envelopeID,
+            direction: Direction(record.direction),
+            payloadType: record.payloadType,
+            payloadByteCount: record.payloadByteCount,
+            timestamp: record.timestamp,
+            signatureVerified: record.signatureVerified,
+            encrypted: record.encrypted,
+            summary: record.summary
+        )
+    }
+}
+
+private extension ConnectionSessionLog.DistanceSample {
+    /// The coordinator's distance sample, field for field (the direction split into its three
+    /// stored components, as the log's own initializer does).
+    init(_ sample: ProximityInspectorDistanceSample) {
+        self.init(timestamp: sample.timestamp, meters: sample.meters, direction: sample.direction)
+    }
+}
+
+private extension ConnectionSessionLog.PeerInfo {
+    /// The coordinator's peer line, field for field.
+    init(_ peer: ProximityInspectorPeer) {
+        self.init(
+            displayName: peer.displayName,
+            advertisedFingerprint: peer.advertisedFingerprint,
+            confirmedFingerprint: peer.confirmedFingerprint,
+            signingPublicKey: peer.signingPublicKey,
+            firstSeenAt: peer.firstSeenAt,
+            lastSeenAt: peer.lastSeenAt
+        )
     }
 }

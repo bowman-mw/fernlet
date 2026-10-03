@@ -337,7 +337,9 @@ jobs:
         # bounds the namespace's soundness rules apply held to the consumers'. Its name
         # ends `GoldenTests`, so CIGateSelectorBoundaryTests demands it on a line; it rides this one
         # beside the namespace golden it continues. No compiler half either: a moved token compiles
-        # clean.
+        # clean. Since A0.3.6, which moves `ProximityRole` and `ProximityRangingMode` into ProximityKit
+        # while Fernlet's session log keeps copies of its own, it also holds those copies to
+        # ProximityKit's spellings, case for case.
         #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
@@ -409,9 +411,16 @@ jobs:
         # messages, and the mesh's sealed sends, each under a namespace whose payload rules,
         # capabilities or session messages are its own) = 220 is the ARITHMETIC CHECK, never the
         # source.
+        # RAISED 220 -> 221 at A0.3.6, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "221 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 43), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 221: passed.
+        # Run once more at 221 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 220 + 1 (the cell holding the session log's own role and ranging mode to ProximityKit's
+        # spellings) = 221 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 220 \
+          Scripts/run-gated-suites.sh crypto-goldens 221 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

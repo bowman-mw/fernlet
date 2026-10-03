@@ -589,9 +589,7 @@ what actually happened.
 
 - ``PayloadType``
 - ``ProximityCapability``
-- ``ProximityRole``
 - ``ProximityMode``
-- ``ProximityRangingMode``
 - ``ConnectionSessionLog``
 - ``ProximityTrustedPeerRecord``
 - ``TrainerAuditEvent``

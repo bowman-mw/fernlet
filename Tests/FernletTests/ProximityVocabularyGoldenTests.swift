@@ -24,7 +24,8 @@
 //    characters) by driving it; the legacy default (no list means photos alone) where the
 //    coordinator and the mesh's seats decide it; `wire2`'s role, framing sealed bodies; and the
 //    coordinator and the mesh reading all of it off the namespace they hold.
-// 4. **Session enums.** `ProximityMode`, `ProximityRole` and `ProximityRangingMode`, both ways.
+// 4. **Session enums.** `ProximityMode`, `ProximityRole` and `ProximityRangingMode`, both ways, and
+//    the session log's own copies of the last two, which spell the same values.
 // 5. **Membership record kinds.** The 4 tokens, the digest's kind-first order and one known-answer
 //    inventory digest over a ledger of one record per kind; and the digest, an identity's signed
 //    digest and a verifier's own tagging records with the record kinds of the family they hold.
@@ -705,8 +706,9 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 4 — the session enums
 
-    /// `ProximityMode`, `ProximityRole` and `ProximityRangingMode`: persisted in the trust vault and the
-    /// session log, and the ranging mode signed into every introduction's body.
+    /// `ProximityMode`, persisted in the trust vault and the session log; and ProximityKit's
+    /// `ProximityRole` and `ProximityRangingMode`, which the session log persists as copies of its own
+    /// (held to these spellings below), the ranging mode also signed into every introduction's body.
     static var sessionEnumRows: [VocabularyGoldenRow] {
         [
             VocabularyGoldenRow(field: "mode.trainer", frozen: "trainer", today: ProximityMode.trainer.rawValue),
@@ -729,6 +731,32 @@ struct ProximityVocabularyGoldenTests {
         #expect(ProximityRangingMode(rawValue: Self.frozen("rangingMode.uwb")) == .uwb)
         #expect(ProximityRangingMode(rawValue: Self.frozen("rangingMode.rssi")) == .rssi)
         #expect(ProximityRangingMode(rawValue: Self.frozen("rangingMode.none")) == ProximityRangingMode.none)
+    }
+
+    /// Fernlet's persisted session log keeps its own copies of the role and the ranging mode
+    /// (`ConnectionSessionLog.Role` and `ConnectionSessionLog.RangingMode`): FernletDomainModel sits
+    /// below ProximityKit and cannot name its enums. Each copy spells, case for case, the frozen
+    /// literal ProximityKit's enum spells, and the literal decodes back to the same case. Group 11's
+    /// session-log golden holds the JSON the copies write.
+    @Test func theSessionLogsOwnRoleAndRangingModeSpellTheFrozenValues() {
+        let roles: [(ConnectionSessionLog.Role, ProximityRole, String)] = [
+            (.advertiser, .advertiser, "role.advertiser"), (.browser, .browser, "role.browser")
+        ]
+        // R2: bounded by the two roles.
+        for (logged, reported, field) in roles {
+            #expect(logged.rawValue == Self.frozen(field), "the log's \(field) spells \(logged.rawValue)")
+            #expect(logged.rawValue == reported.rawValue, "the log's \(field) is not ProximityKit's")
+            #expect(ConnectionSessionLog.Role(rawValue: Self.frozen(field)) == logged)
+        }
+        let modes: [(ConnectionSessionLog.RangingMode, ProximityRangingMode, String)] = [
+            (.uwb, .uwb, "rangingMode.uwb"), (.rssi, .rssi, "rangingMode.rssi"), (.none, .none, "rangingMode.none")
+        ]
+        // R2: bounded by the three ranging modes.
+        for (logged, reported, field) in modes {
+            #expect(logged.rawValue == Self.frozen(field), "the log's \(field) spells \(logged.rawValue)")
+            #expect(logged.rawValue == reported.rawValue, "the log's \(field) is not ProximityKit's")
+            #expect(ConnectionSessionLog.RangingMode(rawValue: Self.frozen(field)) == logged)
+        }
     }
 
     // MARK: Group 5 — the membership record kinds

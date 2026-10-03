@@ -563,6 +563,43 @@ struct ProximityCoordinatorTests {
         } == true)
     }
 
+    /// The log's transport stamps are the COORDINATOR's clock readings, carried in its transport
+    /// events: connected once (a second connected report keeps the first stamp) and disconnected
+    /// when the channel drops. The inspector's own clock, pinned far from the coordinator's, stamps
+    /// neither.
+    @Test func inspectorStampsTheTransportWithTheCoordinatorsClock() async throws {
+        let (local, localServiceID) = try makeIdentity()
+        defer { cleanup(localServiceID) }
+        let transport = MockMultipeerTransport()
+        let inspectorClock = Date(timeIntervalSince1970: 1_000)
+        let inspector = ConnectionInspector(now: { inspectorClock })
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var currentDate = start
+        let coordinator = makeCoordinator(identity: local, transport: transport, inspector: inspector) { currentDate }
+        let peer = makePeer(name: "Remote")
+
+        await coordinator.begin(role: .browser, mode: .trainer)
+        transport.simulateConnecting(peer: peer)
+        await waitUntil { inspector.liveLog?.transport.mcSessionState == "connecting" }
+        #expect(inspector.liveLog?.transport.connectedAt == nil)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { transport.sentData.count == 1 }
+        #expect(inspector.liveLog?.transport.connectedAt == start)
+
+        currentDate = start.addingTimeInterval(5)
+        transport.simulateConnected(peer: peer)
+        await waitUntil { inspector.liveLog?.peer?.lastSeenAt == start.addingTimeInterval(5) }
+        #expect(inspector.liveLog?.transport.connectedAt == start, "a second connected report keeps the first stamp")
+
+        currentDate = start.addingTimeInterval(9)
+        transport.simulateDisconnection()
+        await waitUntil { inspector.historicalLogs.count == 1 }
+        let logged = try #require(inspector.historicalLogs.first?.transport)
+        #expect(logged.mcSessionState == "notConnected")
+        #expect(logged.connectedAt == start)
+        #expect(logged.disconnectedAt == start.addingTimeInterval(9))
+    }
+
     @Test func tamperedIdentityIntroductionTransitionsToFailed() async throws {
         let (local, localServiceID) = try makeIdentity()
         defer { cleanup(localServiceID) }

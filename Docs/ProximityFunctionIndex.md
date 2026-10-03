@@ -104,7 +104,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityInspectorRecording` default methods | Provide no-op inspector hooks so coordinator callers can implement only the diagnostics they need. |
+| `ProximityInspectorRecording` default methods | Provide no-op inspector hooks so coordinator callers can implement only the diagnostics they need. Every requirement takes this module's own report types (`ProximityInspectorEnvelope`, `ProximityInspectorDistanceSample`, `ProximityInspectorPeer`, `ProximityInspectorTransportEvent` in `Engine/ProximityInspectorReport.swift`; `ProximityRole`, `ProximityRangingMode` in `Engine/ProximitySessionEnums.swift`), never a host's log type: the app's `ConnectionInspector` converts them into `ConnectionSessionLog`. |
 | `ProximityInspectorEventRecorder.recordCoordinatorEvent(_:)` | Stores coordinator event strings for lightweight tests or diagnostics. |
 | `init(identity:transport:ranging:inspector:payloadHandler:trustPolicy:replayCache:foregroundAnchor:displayName:capabilities:sealedIntroductionPeerKeyAgreementKey:timeoutSeconds:now:)` | Wires identity, transport, ranging, diagnostics, trust policy, replay cache, foreground anchoring, timeouts, and tap/proximity detectors. `displayName` has no default: the engine has no name of its own, and every caller passes its host's resolved name. |
 | `deinit` | Cancels timeout and heartbeat tasks. |
@@ -141,11 +141,11 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `dispatchVerified(_:plaintext:from:cameFromSealedWrapper:)` | Parks a token outside the host's `payloads.known` (the session survives), sends the session messages' tokens to the coordinator's own handlers and any other token to the payload handler. |
 | `makeIdentityRangingPayload()` | Encodes local ranging mode and NI discovery token for handshake payloads. |
 | `sendIdentityAcknowledgement(to:)` | Sends a signed acknowledgement with local ranging details, under the host's `session.identityAcknowledge` token and title. |
-| `handleHeartbeat(_:plaintext:from:)` | Updates liveness, auto-confirms friend sessions after remote commit, replies to pings, and records RTT from acks. |
+| `handleHeartbeat(_:plaintext:from:)` | Updates liveness, auto-confirms friend sessions after remote commit, replies to pings, and reports each ack's round trip to the inspector (`ProximityInspectorTransportEvent.roundTrip`). |
 | `sendHeartbeatAcknowledgement(for:to:)` | Sends an unreliable signed heartbeat ack under the host's heartbeat token and reply title. |
-| `recordEnvelope(_:direction:byteCount:signatureVerified:)` | Converts envelope traffic into `ConnectionSessionLog.EnvelopeRecord` diagnostics. |
-| `updateInspectorPeer(identity:transportPeer:)` | Publishes peer display/fingerprint/key details to the inspector. |
-| `updateInspectorTransport(state:disconnected:)` | Updates the transport session state — carried in `ConnectionSessionLog.TransportInfo.mcSessionState`, whose spelling is frozen from the MultipeerConnectivity era — and the connected/disconnected timestamps in inspector transport info. |
+| `recordEnvelope(_:direction:byteCount:signatureVerified:)` | Reports envelope traffic to the inspector as a `ProximityInspectorEnvelope`. |
+| `updateInspectorPeer(identity:transportPeer:)` | Publishes peer display/fingerprint/key details to the inspector as a `ProximityInspectorPeer`. |
+| `updateInspectorTransport(state:disconnected:)` | Reports a transport state change to the inspector as `ProximityInspectorTransportEvent.stateChanged`, stamped with the coordinator's own clock (`connectedAt` when the state is `connected`, `disconnectedAt` when the channel closed or failed; with no inspector the clock is not read). Fernlet's inspector writes the state into `ConnectionSessionLog.TransportInfo.mcSessionState`, whose spelling is frozen from the MultipeerConnectivity era, and keeps the session's first connected stamp. |
 | `updateInspectorRangingMode(_:)` | Publishes current ranging mode to the inspector. |
 | `handleIdentityEnvelope(_:plaintext:from:)` | Validates advertised fingerprint, starts ranging, records peer identity (name withheld, whatever the peer sent — Option 1b; its capability list clamped by `clamped(_:in:)`), sends acknowledgement (unless the envelope is the host's acknowledgement token), and routes to friend proximity gate, trusted auto-confirm, or user confirmation. |
 | `maxAdvertisedCapabilities(in:)` / `clamped(_:in:)` | How many of a peer's capability tokens are kept, twice the host's `capabilities.known.count` (18 for Fernlet), and the clamp that keeps them, each cut to `maxCapabilityTokenLength` (32). |
@@ -1822,14 +1822,16 @@ Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog
 | --- | --- |
 | `init(store:now:)` | Loads historical logs from store and injects a clock. |
 | `attachStore(_:)` | Attaches store, reloads historical logs, and purges old entries. |
-| `beginSession(role:mode:localFingerprint:)` | Starts a live log unless inspector mode is disabled. |
+| `beginSession(role:mode:localFingerprint:)` | Starts a live log unless inspector mode is disabled, with ProximityKit's role mapped onto the log's own `Role`. |
 | `recordEvent(_:message:)` | Appends a timestamped event to the live log and trims log size. |
-| `recordRangingSample(_:)` | Subsamples distance samples, updates min/max, and records a ranging event. |
-| `recordEnvelope(_:)` | Appends envelope record, updates byte counters, and records sent/received event. |
+| `recordRangingSample(_:)` | Subsamples ProximityKit's distance samples, converts each kept one, updates min/max, and records a ranging event. |
+| `recordEnvelope(_:)` | Appends ProximityKit's envelope record, converted, updates byte counters, and records sent/received event. |
 | `recordError(domain:message:recoverable:)` | Appends an error record and event. |
-| `updatePeer(_:)` | Updates live peer info. |
-| `updateTransport(_:)` | Mutates live transport info through a closure. |
-| `updateRangingMode(_:)` | Updates live ranging mode. |
+| `updatePeer(_:)` | Updates live peer info from ProximityKit's peer line, converted. |
+| `updateTransport(_:)` | Applies one ProximityKit transport event: a state change sets the state, sets the connected stamp only while the session has none and takes every disconnected stamp (both the coordinator's clock readings); a round trip joins the samples, capped at the latest 50. |
+| `updateRangingMode(_:)` | Updates live ranging mode, ProximityKit's mapped onto the log's own `RangingMode`. |
+| `mutateTransport(_:)` | The one write path for live transport info, shared by `updateTransport(_:)` and the "connected" status lines `recordCoordinatorEvent(_:)` mines. |
+| `ConnectionSessionLog.Role`/`.RangingMode`/`.EnvelopeRecord.Direction`/`.EnvelopeRecord`/`.DistanceSample`/`.PeerInfo` `init(_:)` (private) | Convert ProximityKit's report types into the log's own: every field copied unchanged, every enum mapped case for case by an exhaustive switch. |
 | `endSession(endState:)` | Finalizes live log, inserts into historical logs, caps at 50, and persists. |
 | `deleteLogs(at:)` | Deletes historical logs at offsets and persists. |
 | `deleteLog(id:)` | Deletes one historical log by ID and persists. |
@@ -1847,6 +1849,7 @@ Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog
 | --- | --- |
 | `summary` | Computes duration, envelope count, byte count, error count, and end state. |
 | `ConnectionSessionLog.init(...)` | Creates a full session log with optional peer/ranging/transport/events/envelopes/errors. |
+| `Role` / `RangingMode` | The record's own copies of ProximityKit's `ProximityRole` and `ProximityRangingMode`: the same raw values, decoded tolerantly (`browser` and `none` with the token parked). `ProximityVocabularyGoldenTests` holds the spellings equal. |
 | `RangingInfo.init(...)` | Creates ranging state and distance summary fields. |
 | `DistanceSample.init(timestamp:meters:direction:)` | Stores distance and optional direction vector components. |
 | `TransportInfo.averageRttMs` | Computes average recorded RTT. |
