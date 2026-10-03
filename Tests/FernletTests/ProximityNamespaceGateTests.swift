@@ -26,6 +26,13 @@
 //    the namespace opens, the recipe-share radio comes up, and the mesh and presence radios hold the
 //    sound verdict their starts read. Tier 1 cannot bring those two up for real (a live listener, and
 //    the Local Network permission with it); their refusal cells prove the starts read that verdict.
+// 6. **The pair-secret door.** A declared feature salt that repeats a protocol label makes the
+//    namespace unsound, so its identity refuses to provision and the salt derives nothing.
+//    `pairSecret(with:purpose:)` refuses, with `undeclaredPurpose` and before it reads a key, every
+//    purpose its namespace does not declare as a feature salt (one never declared, the protocol's own
+//    salt, a signature label, the declared salt's bytes in another role), throws `notProvisioned`
+//    for a declared salt before provisioning, and derives under a declared salt the key both members
+//    of a pair derive, writing no audit line and no keychain row.
 //
 // Every namespace here is built from literals that belong to no shipping app ("gate"), the way
 // `ProximityNamespaceSoundnessTests` builds its fixtures: sound as written, and unsound with two
@@ -47,7 +54,8 @@ import Testing
 // MARK: - The suite
 
 /// ProximityKit's run-time refusal of an unsound namespace and its one-namespace-per-manager check, by
-/// door: what each throws, what it audits, and that it does nothing else.
+/// door: what each throws, what it audits, and that it does nothing else; and the pair-secret door,
+/// which derives only under a feature salt its namespace declares.
 @MainActor
 @Suite(.serialized)
 struct ProximityNamespaceGateTests {
@@ -370,6 +378,124 @@ struct ProximityNamespaceGateTests {
         withExtendedLifetime(ownStore) {}
     }
 
+    // MARK: The pair-secret door
+
+    /// An identity of a namespace whose declared feature salt repeats a protocol label refuses to
+    /// provision as under any unsound namespace: `ensureProvisioned()` throws the one violation, a
+    /// duplicate label naming both fields, and writes `identity.namespace.unsound` at `provision`
+    /// with that first case, before any keychain row is read or written. So the declared salt derives
+    /// nothing: the pair-secret door throws `notProvisioned` under it and writes nothing.
+    @Test func aFeatureSaltThatRepeatsAProtocolLabelLeavesItsIdentityUnprovisioned() {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let repeated = ProximityCryptographicPurpose.featureKeyDerivationSalt("gate.proximity.v1")
+        let namespace = GateFixtureApp.declaring(ProximityNamespace.FeaturePurposes(["pairV1": repeated]))
+        let violations: [ProximityNamespace.Violation] = [
+            .duplicateLabel(field: "family.purposes.keyDerivation.proximityTransportV1",
+                            otherField: "family.purposes.feature.pairV1")
+        ]
+        #expect(namespace.soundness == .unsound(violations), "the namespace records \(namespace.soundness)")
+        let identity = IdentityService(namespace: namespace, keychainService: service)
+        var thrown: ProximityNamespaceError?
+        let lines = GateAuditLines.delivered {
+            thrown = #expect(throws: ProximityNamespaceError.self, "the identity provisioned") {
+                try identity.ensureProvisioned()
+            }
+        }
+        #expect(thrown?.violations == violations, "threw \(String(describing: thrown?.violations))")
+        let line = GateAuditLines.Line(
+            event: "identity.namespace.unsound",
+            context: ["at": "provision", "violations": "1", "first": "duplicateLabel"])
+        #expect(lines == [line], "provisioning wrote \(lines)")
+        #expect(identity.localKeyAgreementPublicKey.isEmpty, "the refused identity holds a key-agreement key")
+        #expect(KeychainItem.loadAll(service: service).isEmpty, "the refused identity wrote a keychain row")
+        let peer = Curve25519.KeyAgreement.PrivateKey().publicKey
+        let derived = GateAuditLines.delivered {
+            #expect(throws: IdentityError.notProvisioned, "a salt of an unsound family derived a pair secret") {
+                _ = try identity.pairSecret(with: peer, purpose: repeated)
+            }
+        }
+        #expect(derived.isEmpty, "the pair-secret door wrote \(derived)")
+    }
+
+    /// The door derives under a feature salt its identity's namespace declares and under nothing
+    /// else, refusing with `undeclaredPurpose` before it reads a key: a salt minted and never
+    /// declared, the namespace's own protocol salt (a key-derivation salt it declares outside its
+    /// feature group), a label it declares in another role (its envelope's signature label), and the
+    /// declared salt's bytes in another role. The declaration is checked first, so an identity not yet
+    /// provisioned refuses each of those the same way, and only a declared salt meets `notProvisioned`
+    /// there. Every refusal writes no audit line and no keychain row.
+    @Test func thePairSecretDoorRefusesAPurposeItsNamespaceDoesNotDeclare() throws {
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let namespace = GateFixtureApp.declaring(GateFixtureApp.features)
+        #expect(namespace.soundness == .sound, "the declaring fixture is unsound: \(namespace.soundness)")
+        let provisioned = IdentityService(namespace: namespace, keychainService: services[0])
+        try provisioned.ensureProvisioned()
+        let unprovisioned = IdentityService(namespace: namespace, keychainService: services[1])
+        let peer = Curve25519.KeyAgreement.PrivateKey().publicKey
+        let purposes = namespace.family.purposes
+        let undeclared: [(name: String, purpose: ProximityCryptographicPurpose)] = [
+            ("a salt it never declares", .featureKeyDerivationSalt("example.feature.undeclared.v1")),
+            ("its protocol transport salt", purposes.keyDerivation.proximityTransportV1),
+            ("its envelope's signature label", purposes.signature.identityEnvelopeV2),
+            ("the declared salt's bytes as an AAD", ProximityCryptographicPurpose("gate.feature.pair.v1",
+                                                                                 role: .aeadAssociatedData))
+        ]
+        let lines = GateAuditLines.delivered {
+            // R2: bounded by the four purposes and the two identities.
+            for (name, purpose) in undeclared {
+                for identity in [provisioned, unprovisioned] {
+                    #expect(throws: IdentityError.undeclaredPurpose, "\(name) reached the key agreement") {
+                        _ = try identity.pairSecret(with: peer, purpose: purpose)
+                    }
+                }
+            }
+            #expect(throws: IdentityError.notProvisioned, "an unprovisioned identity derived a pair secret") {
+                _ = try unprovisioned.pairSecret(with: peer, purpose: GateFixtureApp.pairSalt)
+            }
+        }
+        #expect(lines.isEmpty, "the pair-secret door wrote \(lines)")
+        #expect(KeychainItem.loadAll(service: services[1]).isEmpty, "the door wrote a keychain row")
+    }
+
+    /// The door derives under a declared salt: X25519 between the two keys, then HKDF-SHA256 with the
+    /// salt's bytes, empty info and 32 bytes, so a derivation written here from a peer's side, with the
+    /// salt's literal, gives the same key, and two identities of the namespace derive one key from
+    /// either side. A second declared salt derives a second key. Nothing is audited.
+    @Test func thePairSecretDoorDerivesUnderADeclaredSaltFromEitherSide() throws {
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let tagSalt = ProximityCryptographicPurpose.featureKeyDerivationSalt("gate.feature.tag.v1")
+        let namespace = GateFixtureApp.declaring(ProximityNamespace.FeaturePurposes([
+            "pairV1": GateFixtureApp.pairSalt, "tagV1": tagSalt
+        ]))
+        #expect(namespace.soundness == .sound, "the declaring fixture is unsound: \(namespace.soundness)")
+        let alice = IdentityService(namespace: namespace, keychainService: services[0])
+        let bob = IdentityService(namespace: namespace, keychainService: services[1])
+        try alice.ensureProvisioned()
+        try bob.ensureProvisioned()
+        let alicePublic = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: alice.localKeyAgreementPublicKey)
+        let bobPublic = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: bob.localKeyAgreementPublicKey)
+        let peer = Curve25519.KeyAgreement.PrivateKey()
+        var derived: [Data] = []
+        let lines = try GateAuditLines.delivered {
+            derived = [
+                Self.bytes(of: try alice.pairSecret(with: peer.publicKey, purpose: GateFixtureApp.pairSalt)),
+                Self.bytes(of: try alice.pairSecret(with: bobPublic, purpose: GateFixtureApp.pairSalt)),
+                Self.bytes(of: try bob.pairSecret(with: alicePublic, purpose: GateFixtureApp.pairSalt)),
+                Self.bytes(of: try alice.pairSecret(with: bobPublic, purpose: tagSalt))
+            ]
+        }
+        let byHand = Self.bytes(of: try peer.sharedSecretFromKeyAgreement(with: alicePublic).hkdfDerivedSymmetricKey(
+            using: SHA256.self, salt: Data("gate.feature.pair.v1".utf8), sharedInfo: Data(), outputByteCount: 32))
+        try #require(derived.count == 4)
+        #expect(derived[0] == byHand && byHand.count == 32, "the door's key is not the declared salt's HKDF")
+        #expect(derived[1] == derived[2], "the two members of a pair derive different keys")
+        #expect(derived[3] != derived[1] && derived[3].count == 32, "a second declared salt derives the same key")
+        #expect(lines.isEmpty, "the pair-secret door wrote \(lines)")
+    }
+
     // MARK: A sound namespace passes
 
     /// An identity of a sound namespace passes both of its doors: it provisions, and the group key it
@@ -451,6 +577,11 @@ struct ProximityNamespaceGateTests {
     /// The contexts of the `event` lines among `lines`, in the order they were written.
     private static func contexts(of event: String, in lines: [GateAuditLines.Line]) -> [[String: String]] {
         lines.filter { $0.event == event }.map(\.context)
+    }
+
+    /// A symmetric key's bytes, to compare two keys.
+    private static func bytes(of key: SymmetricKey) -> Data {
+        key.withUnsafeBytes { Data($0) }
     }
 
     /// Every violation case, each carrying `field` wherever it names one, beside the name its audit
@@ -547,6 +678,7 @@ private enum GateAuditLines {
 /// An app that does not exist, "gate", its namespace built entirely from literals that belong to no
 /// shipping app, the way `ProximityNamespaceSoundnessTests` builds its fixtures. It has no legacy peers,
 /// so its legacy pair is `.refused`, and it shares no label, radio value, token or name with Fernlet.
+/// As written it declares no feature salt; the pair-secret cells declare theirs.
 private enum GateFixtureApp {
 
     /// The namespace as written: every rule passes.
@@ -554,6 +686,19 @@ private enum GateFixtureApp {
         ProximityNamespace(family: family(identityEnvelopeV2: "gate.canonical.identity-envelope.v2"),
                            installation: installation(logSubsystem: "org.example.gate"))
     }
+
+    /// The namespace as written, declaring `feature`: sound unless a declared salt repeats or prefixes
+    /// a label.
+    static func declaring(_ feature: ProximityNamespace.FeaturePurposes) -> ProximityNamespace {
+        ProximityNamespace(family: family(identityEnvelopeV2: "gate.canonical.identity-envelope.v2", feature: feature),
+                           installation: installation(logSubsystem: "org.example.gate"))
+    }
+
+    /// The salt the gate app's one feature derives its pair secrets under.
+    static let pairSalt = ProximityCryptographicPurpose.featureKeyDerivationSalt("gate.feature.pair.v1")
+
+    /// The gate app's feature group: its one pair salt.
+    static let features = ProximityNamespace.FeaturePurposes(["pairV1": pairSalt])
 
     /// The namespace with two literals broken: its envelope label holds spaces, and its log subsystem
     /// is empty.
@@ -569,12 +714,14 @@ private enum GateFixtureApp {
         .emptyLogSubsystem
     ]
 
-    /// The family, its identity envelope label given.
-    static func family(identityEnvelopeV2: StaticString) -> ProximityNamespace.Family {
+    /// The family, its identity envelope label and its feature salts given.
+    static func family(
+        identityEnvelopeV2: StaticString, feature: ProximityNamespace.FeaturePurposes = .none
+    ) -> ProximityNamespace.Family {
         ProximityNamespace.Family(
             purposes: ProximityNamespace.Purposes(
                 signature: signature(identityEnvelopeV2: identityEnvelopeV2), keyDerivation: keyDerivation(),
-                aead: aead(), hash: hash()),
+                aead: aead(), hash: hash(), feature: feature),
             radios: ProximityNamespace.Radios(
                 mesh: ProximityNamespace.Radio(serviceType: "_gate-mesh._udp", alpn: "gate-mesh-v1"),
                 presence: ProximityNamespace.Radio(serviceType: "_gate-near._udp", alpn: "gate-near-v1"),

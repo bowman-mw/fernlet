@@ -10,13 +10,15 @@
 //
 // Fifteen groups of claims:
 //
-// 1. **The golden table.** One row per value: the 39 domain-separation labels (the 38 core registry
-//    purposes plus the epoch domain, which no registry holds), the three radios' service types and
-//    ALPNs, the mesh heartbeat, the QR scheme, the identity keychain service and its four device
-//    accounts, the two seal-key rows, the storage directory and its three on-disk names, and the
-//    radios' log subsystem. Plus the QR host, which stays a ProximityKit constant but travels beside
-//    the scheme. 62 rows, each a frozen literal beside the accessor production reads: `.fernlet`'s
-//    field, or for the two seal-key services the production derivation called with `.fernlet`.
+// 1. **The golden table.** One row per value: the 41 domain-separation labels (the 39 protocol
+//    labels, which are the 38 core registry purposes and the epoch domain no registry holds, then the
+//    two feature salts `.fernlet` declares), the three radios' service types and ALPNs, the mesh
+//    heartbeat, the QR scheme, the identity keychain service and its four device accounts, the two
+//    seal-key rows, the storage directory and its three on-disk names, and the radios' log
+//    subsystem. Plus the QR host, which stays a ProximityKit constant but travels beside the scheme.
+//    64 rows, each a frozen literal beside the accessor production reads: `.fernlet`'s field, for the
+//    two seal-key services the production derivation called with `.fernlet`, and for the two feature
+//    salts the registry entry the identity's heart-drop and presence derivations read.
 // 2. **Known answers for the six labels nothing else pinned** (`fernlet.mesh.groupkey.v1`,
 //    `fernlet.mesh.groupkey.wrap.aead.v2`, `fernlet.mesh.encrypted-metadata.aead.v2`,
 //    `fernlet.mesh.routed.content-key.v1`, `fernlet.mesh.session-context.v1`,
@@ -31,10 +33,11 @@
 //    column byte `0x03`, the QR host, query key and version, the `corrupt` and `chunk` extensions):
 //    not namespace values, but each sits in code right beside one.
 // 5. **`.fernlet` against the table.** Every value it carries equals its frozen literal, every label
-//    has the role ProximityKit fixes for its field, it is sound, the 38 labels FernletCrypto's
-//    registry also declares are spelled alike and accept the same transcripts, no label of the
-//    registry's 81 and its 39 together is a byte prefix of another (CDST's sealed-backup pair aside),
-//    and reflection finds no label field `labelRows` leaves out.
+//    has the role ProximityKit fixes for its field, it is sound, the 40 labels FernletCrypto's
+//    registry also declares (38 protocol labels and both feature salts) are spelled alike and the
+//    signature twins accept the same transcripts, no label of the registry's 81 and its 41 together
+//    is a byte prefix of another (CDST's sealed-backup pair aside), and reflection finds no label
+//    field `labelRows` leaves out, the feature group's declared salts listed after the fixed ones.
 // 6. **Every hash and transcript consumer against its field's role.** The bytes each production
 //    consumer writes begin with that field's `prefixBytes`: 19 signed transcripts, 8 hash preimages
 //    and the 2 authenticated-data builders, one cell each.
@@ -193,9 +196,10 @@ struct ProximityNamespaceGoldenTests {
 
     // MARK: Group 1 — the golden table
 
-    /// The 62 rows, in the design's field order.
+    /// The 64 rows, in the design's field order.
     static var table: [NamespaceGoldenRow] {
-        signatureRows + otherLabelRows + radioRows + verifyQRRows + keychainRows + storageRows + logRows
+        signatureRows + otherLabelRows + featureLabelRows + radioRows + verifyQRRows + keychainRows
+            + storageRows + logRows
     }
 
     /// The 21 signature labels: 17 length-prefixed transcripts, the two raw-prefixed QR transcripts
@@ -313,6 +317,23 @@ struct ProximityNamespaceGoldenTests {
         ]
     }
 
+    /// The two feature salts `.fernlet` declares (`family.purposes.feature`), after the hash rows as
+    /// `labelRows` lists them: the heart dead-drop's and presence's pair-secret salts, which
+    /// ProximityKit's `pairSecret(with:purpose:)` derives under only when a namespace declares them.
+    /// The identity's heart-drop and presence derivations read the salts' FernletCrypto registry
+    /// twins, so that is what the `today` column reads; `everyFernletValueIsItsFrozenLiteral()`
+    /// holds `.fernlet`'s declared values to the same literals, and the twin cells hold the two
+    /// spellings equal.
+    private static var featureLabelRows: [NamespaceGoldenRow] {
+        let feature = "family.purposes.feature."
+        return [
+            NamespaceGoldenRow(.label, feature + "heartDropPairV1", frozen: "fernlet.heartdrop.v1",
+                               today: .text(FernletCryptoPurpose.KeyDerivation.heartDropPairV1.rawValue)),
+            NamespaceGoldenRow(.label, feature + "presencePairV1", frozen: "fernlet.presence.tag.v1",
+                               today: .text(FernletCryptoPurpose.KeyDerivation.presencePairV1.rawValue))
+        ]
+    }
+
     /// The three radios' service types and ALPNs, and the heartbeat the mesh radio filters by equality.
     ///
     /// Read off `.fernlet` since step A0.2.7, when each radio began taking them from the namespace its
@@ -427,15 +448,16 @@ struct ProximityNamespaceGoldenTests {
     /// The log subsystem's field.
     static let logSubsystemField = "installation.logSubsystem"
 
-    /// The table holds every namespace value exactly once, in the shape the design counts: 39 labels,
-    /// 7 radio values, the QR scheme and host, 9 keychain names, 4 storage names, 1 log subsystem.
+    /// The table holds every namespace value exactly once, in the shape the design counts: 41 labels
+    /// (the 39 protocol labels and the two feature salts), 7 radio values, the QR scheme and host, 9
+    /// keychain names, 4 storage names, 1 log subsystem.
     /// The labels are pairwise distinct and none is a byte prefix of another — `signingBytes` matches
     /// by `starts(with:)` and several AADs are bare concatenations, so a prefix would be a collision.
     @Test func theTableHoldsEveryNamespaceValueOnce() {
         let table = Self.table
-        #expect(table.count == 62, "the golden table has \(table.count) rows")
+        #expect(table.count == 64, "the golden table has \(table.count) rows")
         let expected: [NamespaceGoldenRow.Group: Int] = [
-            .label: 39, .radio: 7, .verifyQR: 2, .keychain: 9, .storage: 4, .logSubsystem: 1
+            .label: 41, .radio: 7, .verifyQR: 2, .keychain: 9, .storage: 4, .logSubsystem: 1
         ]
         // R2: bounded by the six groups.
         for (group, count) in expected {
@@ -447,7 +469,7 @@ struct ProximityNamespaceGoldenTests {
         let labels = table.filter { $0.group == .label }.map { Data($0.frozen.utf8) }
         #expect(Set(labels).count == labels.count, "two labels share a spelling")
         var prefixed: [String] = []
-        // R2: bounded by the 39 × 39 label pairs.
+        // R2: bounded by the 41 × 41 label pairs.
         for shorter in labels {
             for longer in labels where longer != shorter && longer.starts(with: shorter) {
                 prefixed.append("\(String(decoding: shorter, as: UTF8.self)) ⊂ \(String(decoding: longer, as: UTF8.self))")
@@ -460,9 +482,9 @@ struct ProximityNamespaceGoldenTests {
                 "an unnamed row no behaviour cell pins: \(unnamed.sorted())")
     }
 
-    /// The 39 labels, byte for byte.
+    /// The 41 labels, byte for byte.
     @Test func everyLabelIsItsFrozenSpelling() {
-        #expect(Self.expectFrozen(.label) >= 39)
+        #expect(Self.expectFrozen(.label) >= 41)
     }
 
     /// The service types, ALPNs and heartbeat of the three radios, byte for byte.
@@ -1032,20 +1054,20 @@ struct ProximityNamespaceGoldenTests {
         ]
         var values = text.mapValues { Data($0.utf8) }
         values["family.radios.meshHeartbeat"] = radios.meshHeartbeat
-        // R2: bounded by the 39 label rows.
+        // R2: bounded by the 41 label rows.
         for row in namespace.labelRows {
             values[row.field] = row.purpose.data
         }
         return values
     }
 
-    /// The value FernletConnections ships IS the literal column: exactly the table's 61 namespace
+    /// The value FernletConnections ships IS the literal column: exactly the table's 63 namespace
     /// fields, each equal to its frozen literal byte for byte, and the labels in the table's order.
     @Test func everyFernletValueIsItsFrozenLiteral() {
         let values = Self.fernletValues
         let rows = Self.table.filter { $0.field != Self.qrHostField }
-        #expect(rows.count == 61, "the table holds \(rows.count) namespace values besides the QR host")
-        #expect(values.count == 61, "`.fernlet` was read for \(values.count) fields")
+        #expect(rows.count == 63, "the table holds \(rows.count) namespace values besides the QR host")
+        #expect(values.count == 63, "`.fernlet` was read for \(values.count) fields")
         let unpinned = Set(values.keys).subtracting(rows.map(\.field)).sorted()
         let unread = Set(rows.map(\.field)).subtracting(values.keys).sorted()
         #expect(unpinned.isEmpty && unread.isEmpty, "no frozen row for \(unpinned); never read off `.fernlet`: \(unread)")
@@ -1063,8 +1085,8 @@ struct ProximityNamespaceGoldenTests {
                 "`labelRows` lists the labels in another order than the table")
     }
 
-    /// The role ProximityKit fixes for `field`, as the A0.2 design assigns it, or nil for a field the
-    /// design does not have.
+    /// The role ProximityKit fixes for `field`, as the design assigns it (every declared feature
+    /// salt's is `.keyDerivationSalt`), or nil for a field the design does not have.
     private static func designedRole(of field: String) -> ProximityCryptographicPurpose.Role? {
         let signature = "family.purposes.signature."
         let keyDerivation = "family.purposes.keyDerivation."
@@ -1086,17 +1108,19 @@ struct ProximityNamespaceGoldenTests {
         if field.hasPrefix(keyDerivation) { return .keyDerivationSalt }
         if field.hasPrefix("family.purposes.aead.") { return .aeadAssociatedData }
         if field.hasPrefix("family.purposes.hash.") { return .hashDomain(.lengthPrefixed) }
+        if field.hasPrefix("family.purposes.feature.") { return .keyDerivationSalt }
         return nil
     }
 
     /// Every `.fernlet` label carries the role its field fixes: the 17 canonical transcripts
-    /// length-prefixed, the two QR transcripts raw, the legacy pair verify-only, three salts, the
-    /// exporter label, two column seals, five AADs, the six mesh hashes length-prefixed (as
-    /// ProximityKit consumes them, not as FernletCrypto declares them) and the epoch domain raw.
+    /// length-prefixed, the two QR transcripts raw, the legacy pair verify-only, five salts (the
+    /// protocol's three and the two feature salts it declares), the exporter label, two column seals,
+    /// five AADs, the six mesh hashes length-prefixed (as ProximityKit consumes them, not as
+    /// FernletCrypto declares them) and the epoch domain raw.
     @Test func everyFernletLabelCarriesTheRoleItsFieldFixes() {
         let rows = ProximityNamespace.fernlet.labelRows
-        #expect(rows.count == 39, "`.fernlet` has \(rows.count) labels")
-        // R2: bounded by the 39 label rows.
+        #expect(rows.count == 41, "`.fernlet` has \(rows.count) labels")
+        // R2: bounded by the 41 label rows.
         for row in rows {
             #expect(row.purpose.role == Self.designedRole(of: row.field),
                     "\(row.field) has the role \(row.purpose.role), the design fixes \(String(describing: Self.designedRole(of: row.field)))")
@@ -1104,7 +1128,7 @@ struct ProximityNamespaceGoldenTests {
         let tally = Dictionary(grouping: rows, by: { $0.purpose.role }).mapValues(\.count)
         let designed: [ProximityCryptographicPurpose.Role: Int] = [
             .signature(.lengthPrefixed): 17, .signature(.rawPrefix): 2, .signature(.absent): 2,
-            .keyDerivationSalt: 3, .tlsExporterLabel: 1, .columnSeal: 2, .aeadAssociatedData: 5,
+            .keyDerivationSalt: 5, .tlsExporterLabel: 1, .columnSeal: 2, .aeadAssociatedData: 5,
             .hashDomain(.lengthPrefixed): 6, .hashDomain(.rawPrefix): 1
         ]
         #expect(tally == designed, "the roles tally \(tally), the design \(designed)")
@@ -1118,7 +1142,8 @@ struct ProximityNamespaceGoldenTests {
         #expect(validated == ProximityNamespace.fernlet)
     }
 
-    /// FernletCrypto's 38 core registry entries, each beside the `.fernlet` field that twins it.
+    /// FernletCrypto's 38 core registry entries and the two feature salts' entries, each beside the
+    /// `.fernlet` field that twins it.
     ///
     /// Written out by hand: the table's `today:` column is the one later commits re-point at the
     /// namespace itself, so it cannot double as the registry side of this comparison.
@@ -1131,6 +1156,7 @@ struct ProximityNamespaceGoldenTests {
         let derivation = "family.purposes.keyDerivation."
         let aead = "family.purposes.aead."
         let hash = "family.purposes.hash."
+        let feature = "family.purposes.feature."
         return [
             (signature + "identityEnvelopeV2", Signature.identityEnvelopeV2),
             (signature + "meshAdmissionTokenV2", Signature.meshAdmissionTokenV2),
@@ -1169,7 +1195,9 @@ struct ProximityNamespaceGoldenTests {
             (hash + "meshRoutedChunkV1", Hash.meshRoutedChunkV1),
             (hash + "meshRoutedChunkIDV1", Hash.meshRoutedChunkIDV1),
             (hash + "meshCustodyReceiptIDV1", Hash.meshCustodyReceiptIDV1),
-            (hash + "meshRecipientReceiptIDV1", Hash.meshRecipientReceiptIDV1)
+            (hash + "meshRecipientReceiptIDV1", Hash.meshRecipientReceiptIDV1),
+            (feature + "heartDropPairV1", KeyDerivation.heartDropPairV1),
+            (feature + "presencePairV1", KeyDerivation.presencePairV1)
         ]
     }
 
@@ -1179,17 +1207,18 @@ struct ProximityNamespaceGoldenTests {
         Dictionary(ProximityNamespace.fernlet.labelRows.map { ($0.field, $0.purpose) }, uniquingKeysWith: { first, _ in first })
     }
 
-    /// Each of FernletCrypto's 38 core entries and its `.fernlet` twin are the same spelling, the same
-    /// bytes. The twins retire at plan step C1; until then the two registries must not drift.
+    /// Each of FernletCrypto's 40 entries that `.fernlet` twins (its 38 core entries and the two
+    /// feature salts) and its `.fernlet` twin are the same spelling, the same bytes. The twins retire
+    /// at plan step C1; until then the two registries must not drift.
     @Test func everyCoreLabelIsSpelledLikeItsFernletCryptoTwin() {
         let twins = Self.registryTwins
         let purposes = Self.fernletPurposes
-        #expect(twins.count == 38, "\(twins.count) twins listed")
+        #expect(twins.count == 40, "\(twins.count) twins listed")
         let twinFields = Set(twins.map(\.field))
-        #expect(twinFields.count == 38, "a field is listed twice")
+        #expect(twinFields.count == 40, "a field is listed twice")
         #expect(twinFields == Set(purposes.keys).subtracting([Self.epochField]),
                 "every `.fernlet` label but the epoch domain has a registry twin, and no other field does")
-        // R2: bounded by the 38 twins.
+        // R2: bounded by the 40 twins.
         for entry in twins {
             guard let purpose = purposes[entry.field] else {
                 Issue.record("`.fernlet` has no label at \(entry.field)")
@@ -1207,7 +1236,7 @@ struct ProximityNamespaceGoldenTests {
         let purposes = Self.fernletPurposes
         let body = Data("golden transcript body".utf8)
         var compared = 0
-        // R2: bounded by the 38 twins.
+        // R2: bounded by the 40 twins.
         for entry in Self.registryTwins {
             guard let purpose = purposes[entry.field], case .signature(let framing) = purpose.role else { continue }
             compared += 1
@@ -1231,7 +1260,7 @@ struct ProximityNamespaceGoldenTests {
         #expect(compared == 21, "\(compared) signature twins compared; the design has 17 + 2 + the legacy pair")
     }
 
-    /// No label of FernletCrypto's 81 and `.fernlet`'s 39 together, deduplicated by bytes, is a byte
+    /// No label of FernletCrypto's 81 and `.fernlet`'s 41 together, deduplicated by bytes, is a byte
     /// prefix of another, but for the one pair CDST already argues safe (the two sealed-backup HKDF
     /// `info` labels). A ProximityKit label and an app label meet at every shared consumer from A0.2's
     /// routing on; this is CDST's rule run over both registries at once.
@@ -1242,11 +1271,11 @@ struct ProximityNamespaceGoldenTests {
             names[domain.purpose.data] = "FernletCryptoPurpose.\(domain.name)"
         }
         #expect(names.count == 81, "the registry holds \(names.count) distinct labels")
-        // R2: bounded by the 39 label rows.
+        // R2: bounded by the 41 label rows.
         for row in ProximityNamespace.fernlet.labelRows where names[row.purpose.data] == nil {
             names[row.purpose.data] = ".fernlet \(row.field)"
         }
-        #expect(names.count == 82, "together \(names.count) distinct labels; the 38 twins coincide and the epoch domain is new")
+        #expect(names.count == 82, "together \(names.count) distinct labels; the 40 twins coincide and the epoch domain is new")
         let exceptions = CryptographicDomainSeparationTests.prefixExceptions
         var offenders: [String] = []
         var excused = 0
@@ -1267,16 +1296,18 @@ struct ProximityNamespaceGoldenTests {
 
     /// `labelRows` lists every label `.fernlet` stores, and nothing else stores one. Read by
     /// reflection over the WHOLE namespace, so a label added to any group, or anywhere else, without
-    /// a row cannot slip past the prefix check above.
+    /// a row cannot slip past the prefix check above. The walk keeps labelled children only, so it
+    /// finds the 39 fixed fields; the feature group keeps its declared salts as a list's entries, which
+    /// `labelRows` lists after them, in their order.
     @Test func labelRowsCoverEveryLabelFieldOfFernlet() {
         let namespace = ProximityNamespace.fernlet
         var reflected: [(field: String, purpose: ProximityCryptographicPurpose)] = []
         var pending: [(path: String, value: Any)] = [(path: "", value: namespace)]
         var visits = 0
         // R2: at most 256 nodes; `.fernlet` has about 150 (its groups, 39 labels, its strings — the
-        // thirty mesh messages among them — the vocabulary's sets and lists, whose unlabeled members
-        // the walk skips, and the heartbeat's three mirror children), and the check below fails if the
-        // walk is cut short.
+        // thirty mesh messages among them — the vocabulary's sets and lists and the feature group's
+        // entries, whose unlabeled members the walk skips, and the heartbeat's three mirror children),
+        // and the check below fails if the walk is cut short.
         while visits < 256, let node = pending.popLast() {
             visits += 1
             if let purpose = node.value as? ProximityCryptographicPurpose {
@@ -1289,9 +1320,14 @@ struct ProximityNamespaceGoldenTests {
             pending.append(contentsOf: children.reversed())
         }
         #expect(pending.isEmpty, "the reflection walk stopped at \(visits) nodes with \(pending.count) left")
-        #expect(reflected.count == 39, "reflection found \(reflected.count) labels in `.fernlet`")
-        #expect(reflected.map(\.field) == namespace.labelRows.map(\.field), "labelRows and the stored labels disagree")
-        #expect(reflected.map(\.purpose) == namespace.labelRows.map(\.purpose))
+        #expect(reflected.count == 39, "reflection found \(reflected.count) labels in `.fernlet`'s fixed fields")
+        let declared = namespace.family.purposes.feature.entries.map {
+            (field: "family.purposes.feature." + $0.name, purpose: $0.purpose)
+        }
+        #expect(declared.count == 2, "`.fernlet` declares \(declared.count) feature salts")
+        let stored = reflected + declared
+        #expect(stored.map(\.field) == namespace.labelRows.map(\.field), "labelRows and the stored labels disagree")
+        #expect(stored.map(\.purpose) == namespace.labelRows.map(\.purpose))
     }
 
     // MARK: Group 6 — every hash and transcript consumer against its field's role (A0.2.2)
@@ -1695,7 +1731,7 @@ struct ProximityNamespaceGoldenTests {
     /// FernletCrypto twin alike. It refuses, with `invalidKeyData` — the error a misframed transcript
     /// has always thrown — a transcript framed for no label, the two verify-only legacy labels (they
     /// accept every transcript, so signing under one would make the identity an unscoped signing
-    /// oracle) and all 18 labels in a non-signature role.
+    /// oracle) and all 20 labels in a non-signature role, the two feature salts among them.
     @Test func theNamespaceSignRefusesVerifyOnlyAndNonSignatureLabels() throws {
         let service = Self.isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
@@ -1705,7 +1741,7 @@ struct ProximityNamespaceGoldenTests {
         let body = Data("golden transcript body".utf8)
         var signed = 0
         var refused: [ProximityCryptographicPurpose.Role: Int] = [:]
-        // R2: bounded by the 39 label rows.
+        // R2: bounded by the 41 label rows.
         for row in ProximityNamespace.fernlet.labelRows {
             let transcript = row.purpose.prefixBytes + body
             guard Self.isWritableSignatureRole(row.purpose.role) else {
@@ -1729,7 +1765,7 @@ struct ProximityNamespaceGoldenTests {
         }
         #expect(signed == 19, "\(signed) labels signed; the design has 17 canonical and 2 QR transcripts")
         let expectedRefusals: [ProximityCryptographicPurpose.Role: Int] = [
-            .signature(.absent): 2, .keyDerivationSalt: 3, .tlsExporterLabel: 1, .columnSeal: 2,
+            .signature(.absent): 2, .keyDerivationSalt: 5, .tlsExporterLabel: 1, .columnSeal: 2,
             .aeadAssociatedData: 5, .hashDomain(.lengthPrefixed): 6, .hashDomain(.rawPrefix): 1
         ]
         #expect(refused == expectedRefusals, "sign refused \(refused); the design refuses \(expectedRefusals)")
@@ -1747,7 +1783,7 @@ struct ProximityNamespaceGoldenTests {
         let body = Data("golden transcript body".utf8)
         var compared = 0
         var refusing = 0
-        // R2: bounded by the 39 label rows, three inputs each.
+        // R2: bounded by the 41 label rows, three inputs each.
         for row in ProximityNamespace.fernlet.labelRows {
             let inputs = [Self.lengthPrefixed(row.purpose.data) + body, row.purpose.data + body, body]
             let signatures = try inputs.map { try key.signature(for: $0) }
@@ -1767,7 +1803,7 @@ struct ProximityNamespaceGoldenTests {
             #expect(accepted == twinAccepted,
                     "\(row.field) verifies \(accepted) of [lp+body, label+body, body]; its twin \(twinAccepted)")
         }
-        #expect(compared == 21 && refusing == 18, "\(compared) signature labels compared and \(refusing) refusing")
+        #expect(compared == 21 && refusing == 20, "\(compared) signature labels compared and \(refusing) refusing")
     }
 
     // MARK: Group 9 — the signed transcripts read the namespace they are handed (A0.2.4)

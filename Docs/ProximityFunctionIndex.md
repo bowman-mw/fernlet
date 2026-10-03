@@ -34,6 +34,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` (one of the mesh's own frames, by `MeshPayloadRole`), `sendFeatureEnvelope(_:encodable:via:sealed:)` (a feature's payload, by its `PayloadType` token) / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
+| A pairwise secret for one of the host's features (the key its rotating tags or drops stand on) | `IdentityService.pairSecret(with:purpose:)` under a `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)` the host's namespace declares (`ProximityNamespace.FeaturePurposes`; Fernlet's two are `FernletFeaturePurposes`, in FernletConnections). Never re-roll the X25519 → HKDF chain beside it and never derive under a protocol salt: the door refuses any purpose its namespace does not declare (`IdentityError.undeclaredPurpose`), so every salt it derives under was judged by the namespace's soundness verdict. |
 | Refusing to act under an unsound namespace, or under an identity of another namespace | `ProximityNamespaceGate.refuseUnsound(_:event:at:)` (reads the namespace's stored `soundness` verdict, writes a named audit line, throws `ProximityNamespaceError`), `checkIdentity(_:isOf:event:)` and `mayStart(identityIsOfNamespace:event:)`. Never re-run a soundness rule at a new door: hold the verdict beside the values you read off the namespace and hand it to the gate. |
 | Per-recipient routed content-key wrap | `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData` (P5 item 1) — the routed sibling of `encryptGroupKey`: the same X25519 → HKDF → AES-GCM chain under the routed purposes with a manifest-binding AAD. Never re-roll the chain (item 10, P6) and never reuse the group-key purposes for it. |
 | Splitting or reassembling routed content | `MeshChunker.chunk(of:at:for:identity:)` / `.chunks(of:for:identity:)` and `MeshChunkAssembly` (P5 item 2) — the ONE chunking transport. Chunks are ordinary reliable frames that earn a QUIC transfer stream by size alone (`MeshTransferStreamTable.route(reliableByteCount:)`); do not build a second chunking path, a transfer id, a resume token or an application-visible ack. |
@@ -1449,10 +1450,12 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 ## Protocol Namespace
 
 The host-supplied protocol identity, under `ProximityKit/Namespace/` (plan steps A0.2 and A0.3):
-ProximityKit reads its 39 labels, radio values, QR scheme, identity and mesh seal-key rows, storage
-names and log subsystem off it, byte-identical for Fernlet, and every group of the payload vocabulary
-its family carries, the radios' presentation strings and the installation's peer-name policy, all
-judged by its soundness rules. The features' payload and capability tokens are still Fernlet's
+ProximityKit reads its 39 protocol labels, radio values, QR scheme, identity and mesh seal-key rows,
+storage names and log subsystem off it, byte-identical for Fernlet, and every group of the payload
+vocabulary its family carries, the radios' presentation strings and the installation's peer-name
+policy, all judged by its soundness rules, and so are the feature salts the host declares in its
+family (`FeaturePurposes`), the only salts `IdentityService.pairSecret(with:purpose:)` derives
+under. The features' payload and capability tokens are still Fernlet's
 `PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the feature labels stay
 outside it until A0.4 (the activities' and the moderation report's four until A0.5), and so do the
 heart-drop and moderation keychain services and `ProximitySupportLayout`'s folder.
@@ -1476,7 +1479,8 @@ ProximityKit declares nothing `package`). The exact per-file lists in
 
 | Function | What It Does |
 | --- | --- |
-| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers call it, so every label is a source literal. `ProximityNamespaceBoundaryTests` refuses a call anywhere else in ProximityKit. |
+| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers and `featureKeyDerivationSalt(_:)` call it, so every label is a source literal. `ProximityNamespaceBoundaryTests` refuses a call anywhere else in ProximityKit. |
+| `featureKeyDerivationSalt(_:)` (public) | The one host-callable mint: a host feature's HKDF salt from a `StaticString`, in the `.keyDerivationSalt` role. It reaches `IdentityService.pairSecret(with:purpose:)` only when the host's namespace declares it (`FeaturePurposes`), so the soundness verdict judges it with every protocol label; `ProximityNamespaceBoundaryTests` refuses a call to it in ProximityKit outside `Namespace/`. |
 | `data` | `Data(rawValue.utf8)`, no terminator, no normalization. |
 | `prefixBytes` | What the consumer writes first: `data` (raw prefix, and every role taking the label whole), the 8-byte big-endian count then `data` (length-prefixed), or nothing (`.absent`). |
 | `signingBytes(_:)` | The transcript unchanged when the role is a signature role and the transcript begins with `prefixBytes`, else nil: FernletCrypto's positional rule, refusing every non-signature role. |
@@ -1487,7 +1491,7 @@ ProximityKit declares nothing `package`). The exact per-file lists in
 | --- | --- |
 | `init(family:installation:)` | Total: stores both halves and records `soundness`, computed once. |
 | `validated(family:installation:)` | The namespace, or `throws(ProximityNamespaceError)` with every violation, for a host that prefers to fail at launch. |
-| `labelRows` | Every label with its field path (`family.purposes.<group>.<field>`), in declaration order; the legacy pair only when accepted. |
+| `labelRows` | Every label with its field path (`family.purposes.<group>.<field>`), in declaration order; the legacy pair only when accepted; then the declared feature salts (`family.purposes.feature.<name>`), in the host's order. |
 
 ### `Namespace/ProximityNamespace+Family.swift`
 
@@ -1495,7 +1499,9 @@ ProximityKit declares nothing `package`). The exact per-file lists in
 | --- | --- |
 | `Signature.init(...)`, `KeyDerivation.init(...)`, `AEAD.init(...)`, `Hash.init(...)` | Take the host's `StaticString` labels and mint each with the role its field fixes (17 canonical `.signature(.lengthPrefixed)`, 2 QR `.signature(.rawPrefix)`; 3 salts, 1 exporter label, 2 column seals; 5 AADs; 6 `.hashDomain(.lengthPrefixed)` + the epoch id `.hashDomain(.rawPrefix)`). |
 | `LegacyV1.refused` / `LegacyV1.accepted(identityEnvelopeV1:meshAdmissionTokenV1:)` | The verify-only legacy pair: absent, or both labels as `.signature(.absent)`. |
-| `Purposes.labelRows(under:)` and the per-group builders (internal) | The rows behind `ProximityNamespace.labelRows`. |
+| `Purposes.init(signature:keyDerivation:aead:hash:feature:)` | The four protocol groups and the host's feature salts, `feature` defaulting to `FeaturePurposes.none`. |
+| `FeaturePurposes.init(_:)`, `FeaturePurposes.none`, `entries`, `declares(_:)` | The HKDF salts the host's features derive pair secrets under: each a `featureKeyDerivationSalt(_:)` under a name, in the host's order (`Entry`: `name`, `purpose`); `none` declares nothing. `declares(_:)` is value equality, bytes and role, and is what `IdentityService.pairSecret(with:purpose:)` asks. |
+| `Purposes.labelRows(under:)`, `FeaturePurposes.labelRows(under:)` and the per-group builders (internal) | The rows behind `ProximityNamespace.labelRows`, the feature salts' after the hash rows. |
 | `Family.init(purposes:radios:verifyQR:vocabulary:)` | Assembles the shared half: the labels, the radios, the QR scheme and the payload vocabulary. |
 | `Radios.init(mesh:presence:recipeShare:meshHeartbeat:meshInstanceNamePrefix:presenceInstanceNamePrefix:tlsCommonName:)` | The three radios, the heartbeat and the three presentation strings: the mesh and recipe-share instance-name prefix (12 hex characters follow it), the presence one (16 follow) and the ephemeral certificates' common name. |
 
@@ -1531,8 +1537,8 @@ two spellings equal.
 
 | Function | What It Does |
 | --- | --- |
-| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem, then the vocabulary (tokens well-formed by group: payload tokens and record kinds 1–255 bytes, mesh messages 1–200 (each a payload token the mesh also signs as its frame's summary title), capability tokens 1–32, routed types 1–64, all of 0x21–0x7E; none repeated within its group, and no mesh message equal to a session token; the session tokens, the sealing set and the mesh messages in `payloads.known`, `wire2` and the legacy assumption in `capabilities.known`; summary titles 1–200 characters) and the radios' presentation strings (instance-name prefixes of `[a-z0-9-]` within the room a 63-byte DNS-SD name leaves, the common name 1–64 bytes of printable ASCII), then the installation's peer-name policy (its cap at most 63 characters and at least the longer of a key fingerprint's 16, `peerNameFingerprintLength`, and the family's mesh instance-name prefix, because `PeerNameDisplay` cuts a name to the cap before it looks for either: the one rule judged across family and installation; its floor non-empty and byte for byte what `ProximityDisplayName.sanitized(_:maxLength:)` makes of it under the cap, so no longer than the cap: the one rule that runs code outside `Namespace/`, so the floor is judged by the sanitizer every peer's name passes through). |
-| `familyCollisions(with:)` | Labels equal or byte-prefix related, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
+| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels (the declared feature salts judged with the protocol's, by the same rules), radios and heartbeat, QR scheme, keychain, storage, log subsystem, then the vocabulary (tokens well-formed by group: payload tokens and record kinds 1–255 bytes, mesh messages 1–200 (each a payload token the mesh also signs as its frame's summary title), capability tokens 1–32, routed types 1–64, all of 0x21–0x7E; none repeated within its group, and no mesh message equal to a session token; the session tokens, the sealing set and the mesh messages in `payloads.known`, `wire2` and the legacy assumption in `capabilities.known`; summary titles 1–200 characters) and the radios' presentation strings (instance-name prefixes of `[a-z0-9-]` within the room a 63-byte DNS-SD name leaves, the common name 1–64 bytes of printable ASCII), then the installation's peer-name policy (its cap at most 63 characters and at least the longer of a key fingerprint's 16, `peerNameFingerprintLength`, and the family's mesh instance-name prefix, because `PeerNameDisplay` cuts a name to the cap before it looks for either: the one rule judged across family and installation; its floor non-empty and byte for byte what `ProximityDisplayName.sanitized(_:maxLength:)` makes of it under the cap, so no longer than the cap: the one rule that runs code outside `Namespace/`, so the floor is judged by the sanitizer every peer's name passes through). |
+| `familyCollisions(with:)` | Labels equal or byte-prefix related, either family's declared feature salts included, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
 | `installationCollisions(with:)` | Equal keychain services, an equal directory name ignoring case, or an equal log subsystem. |
 
 ### `Support/ProximityNamespaceGate.swift`: the run-time gate
@@ -1545,6 +1551,8 @@ runs again), throws `ProximityNamespaceError` and writes one audit line whose co
 it needs no provisioned key and is Fernlet's sealed-backup feature, a feature path that leaves at
 A0.4, whose callers provision first. `ProximityNamespaceGateTests` holds every door to its error and
 its line, over namespaces built from literals, and the managers' identity check to its refusals.
+The pair-secret door reads no verdict either: it needs the provisioned key-agreement key, so it
+derives nothing under an unsound namespace.
 
 | Function | What It Does |
 | --- | --- |
@@ -1558,14 +1566,26 @@ its line, over namespaces built from literals, and the managers' identity check 
 Fernlet's own value, in the `FernletConnections` module, which depends on ProximityKit so ProximityKit
 can never name it. The app supplies it as its `ProximityHost.proximityNamespace` and builds every
 `IdentityService` from it. `ProximityNamespaceGoldenTests` pins every literal against its frozen
-column, every role, soundness and the 38 FernletCrypto twins.
+column, every role, soundness and the 40 FernletCrypto twins (38 protocol labels and the two feature
+salts).
 
 | Function | What It Does |
 | --- | --- |
 | `ProximityNamespace.fernlet` | Fernlet's whole protocol identity: `Family.fernlet` with `Installation.fernletApp`. |
-| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Fernlet's labels, radio values and `fernlet` QR scheme by group, byte for byte as they shipped, the legacy pair accepted; `Family.fernlet` carries `Vocabulary.fernlet`, and `Radios.fernlet` the presentation strings `fernlet-mesh-`, `fn-` and `fernlet-mesh`. |
+| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Fernlet's labels, radio values and `fernlet` QR scheme by group, byte for byte as they shipped, the legacy pair accepted; `Purposes.fernlet` also declares the two feature salts (`feature: .fernlet`, below), `Family.fernlet` carries `Vocabulary.fernlet`, and `Radios.fernlet` the presentation strings `fernlet-mesh-`, `fn-` and `fernlet-mesh`. |
 | `Installation.fernletApp` | The Fernlet app's identity and seal-key rows, storage names, log subsystem and peer-name policy. Coach adds an installation of its own beside it in plan step C1. |
 | `PeerNames.fernlet` | How the Fernlet app shows a peer's name: at most 24 characters (`ItemNameModeration.maxNameLength`, the cap Fernlet's item names share, read rather than respelled) and the floor "A friend"; `ProximityVocabularyGoldenTests` pins both. |
+
+### `FernletConnections/FernletFeaturePurposes.swift`
+
+Fernlet's feature labels that a ProximityKit door consumes: the two pair-secret salts, one spelling per
+label on Fernlet's side. `ProximityNamespaceGoldenTests` holds each declared salt to its frozen literal
+and its FernletCrypto twin; `FernletFeatureGoldenTests` pins the door's pair secrets under them.
+
+| Function | What It Does |
+| --- | --- |
+| `FernletFeaturePurposes.heartDropPairV1`, `.presencePairV1` | The heart dead-drop's and presence's pair-secret salts, `fernlet.heartdrop.v1` and `fernlet.presence.tag.v1`, each minted with `featureKeyDerivationSalt(_:)`: the purposes a caller of `IdentityService.pairSecret(with:purpose:)` passes. Twins of FernletCrypto's `KeyDerivation.heartDropPairV1` and `.presencePairV1`, which the identity's heart-drop and presence derivations still read. |
+| `ProximityNamespace.FeaturePurposes.fernlet` | `.fernlet`'s feature group: the two salts above, in that order, as `heartDropPairV1` and `presencePairV1`, judged in `.fernlet`'s one soundness verdict with the 39 protocol labels. |
 
 ### `FernletConnections/FernletPayloadVocabulary.swift`
 
@@ -1760,6 +1780,7 @@ value names `.fernlet` explicitly.
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM; since A0.2.6 the salt and AAD are the identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and `purposes.aead.meshGroupKeyWrapV2`. It needs no provisioned key, so it refuses an unsound namespace itself, first: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `groupKeyWrap`). |
 | `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`, under the same purposes. |
+| `pairSecret(with:purpose:)` | A pair secret for one of the host's features: X25519 between this device's key-agreement key and a parsed peer key, then HKDF-SHA256 with the purpose's bytes as the salt, empty info, 32 bytes, so both members of a pair derive one key. Throws `IdentityError.undeclaredPurpose` first, before any key is read, for a purpose that is not a key-derivation salt its namespace declares as a feature purpose (a protocol salt included), then `notProvisioned`; no audit line, no keychain row. |
 | `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Refuses an unsound namespace first**: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `provision`) before any row is read or written, on every call. The backup-escrow API beside it needs neither key and checks no verdict: Fernlet's sealed-backup feature, leaving at A0.4, whose callers run this first. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `ProximityKeychainItem.loadDistinguishingAbsence` (FernletFoundation's `KeychainItem` before A0.2.11), and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
 | `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` / `DeviceIdentityRead` / `loadExistingDeviceIdentity()` / `loadLegacyKeyAgreementKey()` | The pure half and the two reads of the fail-closed rule: an unreadable row wins over everything (`.unreadable`), absence on either row falls through to the mint (`.absent`), a present-but-unparseable row is `.unparseable(row:)` — minted over, but named by `identity.keychain.unparseableRow` first — and both rows found and parsed is `.found`. Since A0.2.8 the rows are the identity's `accounts` (the namespace's `installation.keychain.identity`), and the classifier names a refusing row by the `accounts:` it is handed. Tabled in `IdentityProvisioningReadTests`. |
 | `wipe()` | Deletes identity Keychain entries and clears loaded keys. |

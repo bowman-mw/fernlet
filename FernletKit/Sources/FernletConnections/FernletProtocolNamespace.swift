@@ -29,7 +29,13 @@
 // peer-name policy (`PeerNames.fernlet`: the 24-character cap Fernlet's item names share, read off
 // `ItemNameModeration` so it keeps one spelling, and the "A friend" floor), which ProximityKit applies
 // wherever a peer's name enters except its activity manager, whose joiners' names keep
-// `ItemNameModeration`'s cap, with no floor, until plan step A0.4 moves activities out.
+// `ItemNameModeration`'s cap, with no floor, until plan step A0.5 moves activities out with the mesh
+// manager's feature parts.
+//
+// The family's purposes also declare Fernlet's two feature salts (`FeaturePurposes.fernlet`, in
+// FernletFeaturePurposes.swift): the heart dead-drop's and presence's pair-secret salts, the only
+// labels ProximityKit's `IdentityService.pairSecret(with:purpose:)` derives under, judged in
+// `.fernlet`'s one soundness verdict with the 39 protocol labels.
 //
 // Every literal below is pinned by a frozen column, `ProximityNamespaceGoldenTests`' or, for the three
 // presentation strings and the peer-name policy, `ProximityVocabularyGoldenTests`', so a change here
@@ -48,13 +54,15 @@ nonisolated extension ProximityNamespace {
     /// Fernlet's family and the Fernlet app's installation: the labels, radio values, QR scheme,
     /// payload vocabulary, identity and mesh seal-key rows, storage names and log subsystem by which
     /// ProximityKit's wire, keychain and disk formats identify Fernlet, exactly as today's code spells
-    /// them. ProximityKit reads the presentation strings and every vocabulary group off it, the mesh
-    /// engine's own messages included; the mesh features' payload and capability tokens are still
-    /// `PayloadType` and `ProximityCapability` cases until plan steps A0.4 and A0.5, and what
-    /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
-    /// moderation keychain services, its support folder) waits for plan step A0.4. Its installation
-    /// also carries the Fernlet app's peer-name policy, which ProximityKit shows a peer's name under
-    /// everywhere but the activity manager, until plan step A0.4.
+    /// them, and the two feature salts ProximityKit's pair-secret door derives under. ProximityKit
+    /// reads the presentation strings and every vocabulary group off it, the mesh engine's own
+    /// messages included; the mesh features' payload and capability tokens are still `PayloadType`
+    /// and `ProximityCapability` cases until plan steps A0.4, A0.5 and A0.7, and what ProximityKit
+    /// still spells or reads elsewhere waits for its features to leave: the 13 feature labels (nine at
+    /// plan step A0.4, the activities' and the moderation report's four at A0.5), and the heart-drop
+    /// and moderation keychain services and its support folder at A0.4. Its installation also
+    /// carries the Fernlet app's peer-name policy, which ProximityKit shows a peer's name under
+    /// everywhere but the activity manager, until plan step A0.5.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an
@@ -67,8 +75,8 @@ nonisolated extension ProximityNamespace {
 
 nonisolated extension ProximityNamespace.Family {
 
-    /// What every app on Fernlet's wire shares: the 39 labels, the three radios, the `fernlet`
-    /// QR scheme and the payload vocabulary.
+    /// What every app on Fernlet's wire shares: the 39 protocol labels and the two feature salts, the
+    /// three radios, the `fernlet` QR scheme and the payload vocabulary.
     public nonisolated static let fernlet = ProximityNamespace.Family(
         purposes: .fernlet,
         radios: .fernlet,
@@ -79,12 +87,15 @@ nonisolated extension ProximityNamespace.Family {
 
 nonisolated extension ProximityNamespace.Purposes {
 
-    /// Fernlet's 39 domain-separation labels, in FernletCrypto's registry grouping.
+    /// Fernlet's 41 domain-separation labels: the 39 protocol labels, in FernletCrypto's registry
+    /// grouping, then the two feature salts its family declares (`FeaturePurposes.fernlet`, in
+    /// FernletFeaturePurposes.swift), the heart dead-drop's and presence's pair-secret salts.
     public nonisolated static let fernlet = ProximityNamespace.Purposes(
         signature: .fernlet,
         keyDerivation: .fernlet,
         aead: .fernlet,
-        hash: .fernlet
+        hash: .fernlet,
+        feature: .fernlet
     )
 }
 

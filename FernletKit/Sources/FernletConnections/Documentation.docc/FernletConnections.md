@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary and the app's peer-name policy; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
 
 ## Overview
 
@@ -13,10 +13,11 @@ is that place.
 **The namespace.** One value and its parts, in `FernletProtocolNamespace.swift`:
 
 - `ProximityNamespace.fernlet`, Fernlet's whole protocol identity, built from the two halves below.
-- `ProximityNamespace.Family.fernlet`, what every app on Fernlet's wire shares: the 39
-  domain-separation labels (`Purposes.fernlet`, grouped as `Signature`, `KeyDerivation`, `AEAD` and
-  `Hash`, each `.fernlet`), the three radios' service types, ALPNs and the mesh heartbeat with the
-  three presentation strings (`Radios.fernlet`), the `fernlet` QR scheme, and the payload vocabulary
+- `ProximityNamespace.Family.fernlet`, what every app on Fernlet's wire shares: the 39 protocol
+  labels (`Purposes.fernlet`, grouped as `Signature`, `KeyDerivation`, `AEAD` and `Hash`, each
+  `.fernlet`) and the two feature salts its `feature` group declares (`FeaturePurposes.fernlet`,
+  below), the three radios' service types, ALPNs and the mesh heartbeat with the three presentation
+  strings (`Radios.fernlet`), the `fernlet` QR scheme, and the payload vocabulary
   (`Vocabulary.fernlet`, below).
 - `ProximityNamespace.Installation.fernletApp`, what belongs to the Fernlet app on one device: the
   identity's keychain service and four accounts, the two seal-key rows, the `Fernlet` storage
@@ -24,12 +25,12 @@ is that place.
   (`PeerNames.fernlet`, below).
 
 Every literal is today's, byte for byte, and pinned: `ProximityNamespaceGoldenTests` (on the
-`crypto-goldens` CI line) compares each value with the frozen literal column written before any
-A0.2 commit, requires `ProximityNamespace.fernlet.soundness == .sound`, holds the 38 labels
-FernletCrypto's registry also declares to the same spelling and the same signing acceptance, runs
-the "no label is a byte prefix of another" check over FernletCrypto's 81 registry labels and these
-39 together, and checks that the bytes each hash and transcript consumer writes today begin with
-the field's prefix.
+`crypto-goldens` CI line) compares each value with its frozen literal column, requires
+`ProximityNamespace.fernlet.soundness == .sound`, holds the 40 labels FernletCrypto's registry also
+declares (38 protocol labels and both feature salts) to the same spelling and the signature twins to
+the same signing acceptance, runs the "no label is a byte prefix of another" check over
+FernletCrypto's 81 registry labels and these 41 together, and checks that the bytes each hash and
+transcript consumer writes today begin with the field's prefix.
 
 That `.sound` verdict is load-bearing at run time: ProximityKit refuses an unsound namespace on its
 own, failing closed with a named audit event before an identity provisions or wraps a group key and
@@ -50,10 +51,10 @@ own-photo, duress-recovery and launch paths, the readout and the DEBUG probe), t
 service's identity is built from the store's `proximityNamespace`, and the app hands `.fernlet` to
 both storage scopes and resolves its proximity root from it.
 
-ProximityKit reads every value of `Purposes.fernlet`, `Radios.fernlet`, the QR scheme and
-`Installation.fernletApp` off the namespace its reader holds, so every signature, seal, hash, id,
-advertisement, file and keychain row is spelled from `.fernlet`'s bytes, which are the ones Fernlet
-always shipped:
+ProximityKit reads every protocol label of `Purposes.fernlet` and every value of `Radios.fernlet`, the
+QR scheme and `Installation.fernletApp` off the namespace its reader holds, so every signature, seal,
+hash, id, advertisement, file and keychain row is spelled from `.fernlet`'s bytes, which are the ones
+Fernlet always shipped:
 
 - the 39 labels: the identity envelope's, the admission token's, the membership, quorum,
   key-agreement, channel-introduction, six routed and two verify-QR transcripts', the membership
@@ -81,6 +82,25 @@ cells that test one). The test target's `ProximityNamespaceTestBindings.swift` r
 `.fernlet`, the call shapes the namespace took out of ProximityKit: the identity's argument-less and
 keychain-service initializers, the serializers' and verifiers' shapes, the routed and QR shapes, the
 radios' argument-less initializers, the seal-key reads and the identity-row classifier.
+
+**The feature salts.** `FernletFeaturePurposes.swift` holds ``FernletFeaturePurposes``, Fernlet's
+feature labels that a ProximityKit door consumes: `heartDropPairV1` (`fernlet.heartdrop.v1`) and
+`presencePairV1` (`fernlet.presence.tag.v1`), the heart dead-drop's and presence's pair-secret salts,
+each minted with ProximityKit's `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)`, the one
+role a host mints for itself. `ProximityNamespace.FeaturePurposes.fernlet` declares the same two
+values, in that order, and `Purposes.fernlet` carries it as its `feature` group, so `.fernlet`'s one
+soundness verdict judges both salts with the 39 protocol labels (each is a row of `labelRows`, at
+`family.purposes.feature.<name>`, after the hash rows). ProximityKit's
+`IdentityService.pairSecret(with:purpose:)` derives a pair secret only under a salt its identity's
+namespace declares and refuses any other purpose (`IdentityError.undeclaredPurpose`), so a caller
+passes these constants and the declaration is what lets them derive: one spelling per label on
+Fernlet's side. The identity's heart-drop and presence derivations still read the salts'
+FernletCrypto registry twins, spelled identically, until those derivations leave ProximityKit with
+their features and call the door; `ProximityNamespaceGoldenTests` holds each declared salt to its
+frozen literal and its twin, and `FernletFeatureGoldenTests` pins the door's pair secrets under the
+two salts to the heart-drop and presence derivations' known answers. Fernlet's other feature labels,
+which its features hand CryptoKit themselves, stay FernletCrypto registry entries: no ProximityKit
+door consumes them.
 
 **The payload vocabulary and the presentation strings.** `Family.fernlet` also
 carries `ProximityNamespace.Vocabulary.fernlet` (`FernletPayloadVocabulary.swift`), Fernlet's shared
@@ -242,11 +262,11 @@ FernletDomainModel's vocabulary and records (`PayloadType`, `ProximityCapability
 `ProximityNamespaceBoundaryTests` allowlists: lines of its feature files and of the typed doors only
 those features go through, which leave with the features (A0.4), with the mesh manager's feature
 parts (A0.5) or with the recipe profile (A0.7), and the coordinator's session-mode alias, which the
-connection profiles replace (A0.7, C5). A0.4 makes the heart-drop and presence pair secrets' salts
-host purposes, the two feature labels a core derivation consumes. C1 adds the Coach app's
-installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
+connection profiles replace (A0.7, C5). The heart-drop and presence pair secrets leave ProximityKit
+with their features at A0.4 and then derive through the door under the two salts declared here. C1
+adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
 connection profiles (friend mesh, presence, recipe, coach), app identities with per-app allow lists,
-coach relationship records and the coach link signing purposes; FernletCrypto's 38 twins of these
+coach relationship records and the coach link signing purposes; FernletCrypto's 40 twins of these
 labels then retire.
 
 **Why `.fernlet` lives here and not in ProximityKit.** ProximityKit holds no namespace instance,

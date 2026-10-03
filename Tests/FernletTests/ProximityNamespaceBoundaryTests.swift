@@ -286,13 +286,15 @@ private extension UInt8 {
     ///
     /// ProximityKit reads the namespace its host hands down and never makes one: a namespace built
     /// anywhere else would be a default nobody supplied, and a purpose minted anywhere else a label no
-    /// namespace carries. Every way to build one is a pattern in ``constructionPatterns``, and so is
-    /// the place the patterns cannot see: an extension of, or alias for, a namespace type outside the
-    /// folder, where an unqualified initializer or `Self(` would build one by a name too short to
-    /// search for. The scan reads code only (comments and literal text removed), so prose about these
-    /// spellings is never a violation. Its floors fail an empty scan: it must read the module, find
-    /// the folder, and find there the constructions the patterns exist to catch (`Namespace/` mints
-    /// each of the 39 labels with `ProximityCryptographicPurpose(_:role:)`).
+    /// namespace carries. Every way to build one is a pattern in ``constructionPatterns`` (the host's
+    /// one mint, `featureKeyDerivationSalt(_:)`, among them: a feature salt ProximityKit minted for
+    /// itself would be a label no host declared), and so is the place the patterns cannot see: an
+    /// extension of, or alias for, a namespace type outside the folder, where an unqualified
+    /// initializer or `Self(` would build one by a name too short to search for. The scan reads code
+    /// only (comments and literal text removed), so prose about these spellings is never a violation.
+    /// Its floors fail an empty scan: it must read the module, find the folder, and find there the
+    /// constructions the patterns exist to catch (`Namespace/` mints each of the 39 labels with
+    /// `ProximityCryptographicPurpose(_:role:)`).
     @Test func noNamespaceGroupOrPurposeIsBuiltOutsideTheNamespaceFolder() throws {
         let patterns = try Self.constructionPatterns.map {
             (name: $0.name, regex: try NSRegularExpression(pattern: $0.pattern))
@@ -340,6 +342,7 @@ private extension UInt8 {
     /// - The purpose initializer's shape however it is called: a literal then `role:`, or a shorthand
     ///   `.init(` with an unlabeled argument then `role:`. (Not any unlabeled argument then `role:`:
     ///   the transport's `refusalDetail(rejection, role: role, …)` is that shape too.)
+    /// - The host's feature-salt mint, `featureKeyDerivationSalt(_:)`, however it is reached.
     /// - An extension of, or a typealias for, a namespace type.
     ///
     /// ``everyConstructionPatternSeesItsFormAndNoNeighbour()`` holds each pattern to a sample it must
@@ -349,7 +352,7 @@ private extension UInt8 {
         ("ProximityCryptographicPurpose(",
          #"(?<![A-Za-z0-9_.])ProximityCryptographicPurpose\s*(?:\.\s*init\s*)?\("#),
         ("a namespace group's initializer",
-         #"(?<![A-Za-z0-9_.])(?:ProximityNamespace\s*\.\s*)?(?:Signature|KeyDerivation|AEAD|Hash|Radios|Radio|VerifyQR|Family|Purposes|Installation|Keychain|Storage|PeerNames|Vocabulary|SessionMessages|SessionMessage|Heartbeat|PayloadRules|Capabilities|MembershipRecordKinds|RoutedTypes|MeshMessages)\s*(?:\.\s*init\s*)?\("#),
+         #"(?<![A-Za-z0-9_.])(?:ProximityNamespace\s*\.\s*)?(?:Signature|KeyDerivation|AEAD|Hash|Radios|Radio|VerifyQR|Family|Purposes|FeaturePurposes|Installation|Keychain|Storage|PeerNames|Vocabulary|SessionMessages|SessionMessage|Heartbeat|PayloadRules|Capabilities|MembershipRecordKinds|RoutedTypes|MeshMessages)\s*(?:\.\s*init\s*)?\("#),
         ("a keychain row's initializer",
          #"(?<![A-Za-z0-9_.])(?:(?:ProximityNamespace\s*\.\s*)?Keychain\s*\.\s*Row|(?:(?:ProximityNamespace\s*\.\s*)?Keychain\s*\.\s*)?IdentityRows)\s*(?:\.\s*init\s*)?\("#),
         ("LegacyV1.accepted(", #"(?<![A-Za-z0-9_])accepted\s*\(\s*identityEnvelopeV1\s*:"#),
@@ -358,6 +361,7 @@ private extension UInt8 {
          #"\.\s*init\s*\(\s*(?:family|purposes|signature|identityEnvelopeV2|proximityTransportV1|proximityTransportV2|meshInventoryDigestV1|mesh|serviceType|urlScheme|keychain|identity|service|directoryName|maxLength|session|identityIntroduction|payloadType|known|admission|photo|descriptor)\s*:"#),
         ("the purpose initializer's shape",
          #"(?:\(\s*""|\.\s*init\s*\(\s*[^\s,():]+)\s*,\s*role\s*:"#),
+        ("a feature purpose's mint", #"(?<![A-Za-z0-9_])featureKeyDerivationSalt\s*\("#),
         ("an extension of a namespace type",
          #"(?<![A-Za-z0-9_])extension\s+(?:ProximityNamespace|ProximityCryptographicPurpose)(?![A-Za-z0-9_])"#),
         ("a typealias for a namespace type",
@@ -370,8 +374,10 @@ private extension UInt8 {
     /// that pass a `role:`, a shorthand `.init(` of another type, a namespace field read, a hash, the
     /// session-message store, heartbeat payload and schedule and capability list whose names hold a
     /// vocabulary group's, the descriptor payload and a role's token lookup beside the mesh
-    /// messages' first label and type, and the peer-name coercion, the sanitizer and the name display
-    /// beside the peer-name policy's type and first label. Every sample is lexed first, as the
+    /// messages' first label and type, the peer-name coercion, the sanitizer and the name display
+    /// beside the peer-name policy's type and first label, and the salt role's switch arm and
+    /// argument, a comment naming the feature-salt mint, the pair-secret door's call and the feature
+    /// group's read beside the feature group and its mint. Every sample is lexed first, as the
     /// module's files are.
     @Test func everyConstructionPatternSeesItsFormAndNoNeighbour() throws {
         let patterns = try Dictionary(uniqueKeysWithValues: Self.constructionPatterns.map {
@@ -400,6 +406,9 @@ private extension UInt8 {
              "let names: ProximityNamespace.PeerNames = .init(maxLength: 24, floor: f)"),
             ("the purpose initializer's shape", #"Self("x.v1", role: .aeadAssociatedData)"#),
             ("the purpose initializer's shape", "let p: ProximityCryptographicPurpose = .init(spelling, role: .columnSeal)"),
+            ("a namespace group's initializer", #"let f = ProximityNamespace.FeaturePurposes(["pairV1": salt])"#),
+            ("a feature purpose's mint", #"let p = ProximityCryptographicPurpose.featureKeyDerivationSalt("x.v1")"#),
+            ("a feature purpose's mint", #"let p: ProximityCryptographicPurpose = .featureKeyDerivationSalt("x.v1")"#),
             ("an extension of a namespace type", "nonisolated extension ProximityNamespace.Storage {"),
             ("a typealias for a namespace type", "typealias Labels = ProximityNamespace.Purposes")
         ]
@@ -426,7 +435,13 @@ private extension UInt8 {
             "func token(in mesh: ProximityNamespace.MeshMessages) -> String { mesh.descriptor }",
             "let name = ProximityDisplayName.peerDisplayName(raw, in: namespace)",
             "let shown = ProximityDisplayName.sanitized(raw, maxLength: namespace.installation.peerNames.maxLength)",
-            "let name = PeerNameDisplay.personName(raw, fingerprint: nil, in: namespace)"
+            "let name = PeerNameDisplay.personName(raw, fingerprint: nil, in: namespace)",
+            "case .keyDerivationSalt, .columnSeal, .aeadAssociatedData, .tlsExporterLabel:",
+            "let salt = ProximityCryptographicPurpose.Role.keyDerivationSalt",
+            "role: .keyDerivationSalt",
+            "/// Mint a salt with featureKeyDerivationSalt(_:) and declare it in the feature group.",
+            "let secret = try identity.pairSecret(with: peerKey, purpose: purpose)",
+            "guard purpose.role == .keyDerivationSalt, purposes.feature.declares(purpose) else {"
         ]
         // R2: bounded by the neighbour and pattern lists.
         for source in neighbours {

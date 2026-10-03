@@ -22,7 +22,8 @@ which is why several of the notes below read as archaeology rather than design.
 
 **ProximityKit's own labels are not read from this registry** since its plan step A0.2
 (2026-10-02): they are fields of the namespace its host supplies, with roles ProximityKit fixes. §8
-says how that relates to the registry, which keeps 38 twins of them until they retire.
+says how that relates to the registry, which keeps 38 twins of them, and twins of the two feature
+salts Fernlet's namespace declares, until they retire.
 
 ---
 
@@ -93,7 +94,9 @@ label), `meshProbeTLSExporterV1` (`fernlet.mesh.probe.tls-exporter.v1`, the DEBU
 `meshSessionContextV1` (`fernlet.mesh.session-context.v1`, the sealed mesh-session context's column
 seal). "Consumer" lists the files that name each constant, so an unused entry is visible as an empty
 cell; for the 38 entries ProximityKit's protocol used, the consumer is now the twin label in
-ProximityKit's namespace (§8).
+ProximityKit's namespace (§8). `heartDropPairV1` and `presencePairV1` are twinned too, by the two
+feature salts `.fernlet` declares for ProximityKit's pair-secret door (§8), while `IdentityService`'s
+heart-drop and presence derivations still read the entries here.
 
 `CryptographicDomainSeparationTests.theInventoryCoversEveryDeclaredPurpose()` reads the registry off
 disk and requires its own pinned list to match, so a purpose added without a test line fails loudly.
@@ -683,10 +686,13 @@ labels.
 
 - **Labels are host-supplied source literals.** A namespace's labels are
   `ProximityCryptographicPurpose` values, minted only by the namespace's group initializers from
-  `StaticString` arguments. So, as with this registry's `fileprivate` initializer (§1), every label
+  `StaticString` arguments, or by `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)`, the
+  one host-callable mint, also from a `StaticString`, for the one role a host may mint itself (see
+  the feature salts below). So, as with this registry's `fileprivate` initializer (§1), every label
   is a reviewed literal in somebody's source: none is assembled at run time, and none arrives over
   the wire (no public initializer, no `Codable`, no decoding path). `ProximityNamespaceBoundaryTests`
-  holds ProximityKit itself to building no namespace, group or purpose outside `Namespace/`.
+  holds ProximityKit itself to building no namespace, group or purpose, and minting no feature salt,
+  outside `Namespace/`.
 - **Roles are fixed by ProximityKit.** The field a label fills decides how ProximityKit consumes
   it — a length-prefixed or raw-prefix signature transcript, a verify-only legacy label, a
   length-prefixed or raw hash preimage, an HKDF salt, a column seal, an AEAD prefix, a TLS exporter
@@ -697,7 +703,8 @@ labels.
   consumer does: the six mesh hashes are length-prefixed, though this registry declares their twins
   with the default raw framing.
 - **Soundness is judged when a namespace is built.** Its initializer records every broken rule in
-  `soundness` (labels well-formed, distinct and prefix-free among themselves; radio, QR, keychain and
+  `soundness` (labels, the declared feature salts among them, well-formed, distinct and prefix-free
+  among themselves; radio, QR, keychain and
   storage values well-formed and distinct; the payload vocabulary's tokens, titles and the radios'
   presentation strings well-formed, no token repeated within its group or left unknown by a rule
   that names it; the installation's peer-name cap and floor within bounds), `validated(family:installation:)`
@@ -707,24 +714,46 @@ labels.
   run time: under an unsound namespace an identity refuses to provision and to wrap a group key, and
   a radio refuses to start, each failing closed with a named audit event before any label is used
   (`ProximityNamespaceGateTests`).
+- **A host's feature salts are declared, and only a declared salt derives.** A host's own feature
+  that derives a pair secret (Fernlet's heart dead-drop and presence) needs an HKDF salt the protocol
+  has no field for. The host mints it with `featureKeyDerivationSalt(_:)` (role `.keyDerivationSalt`,
+  taken whole) and declares it in its family's feature group, `ProximityNamespace.FeaturePurposes`,
+  under a name: each declared salt is a row of `labelRows` at `family.purposes.feature.<name>`, after
+  the hash rows, so the namespace's one soundness verdict and `familyCollisions(with:)` judge it with
+  every protocol label. ProximityKit's one door for it, `IdentityService.pairSecret(with:purpose:)`
+  (X25519 between the two identities' keys, then HKDF-SHA256 under the salt, empty info, 32 bytes),
+  refuses any purpose its namespace does not declare as a feature salt with
+  `IdentityError.undeclaredPurpose` before it reads a key, the protocol's own salts included, so no
+  pair secret is derived under a label no verdict judged or under a protocol label. `.fernlet`
+  declares two, `fernlet.heartdrop.v1` and `fernlet.presence.tag.v1`
+  (`FernletKit/Sources/FernletConnections/FernletFeaturePurposes.swift`), twins of this registry's
+  `KeyDerivation.heartDropPairV1` and `KeyDerivation.presencePairV1`, which the identity's heart-drop
+  and presence derivations still read until those leave ProximityKit with their features.
+  `ProximityNamespaceSoundnessTests` and `ProximityNamespaceGateTests` hold the rule and the door,
+  and `FernletFeatureGoldenTests` the door's known answers under Fernlet's two salts. Only a salt a
+  ProximityKit door consumes is declared: the feature labels Fernlet's features hand CryptoKit
+  themselves stay entries here.
 - **Fernlet's namespace is `.fernlet`, in FernletConnections.** `ProximityNamespace.fernlet`
   (`FernletKit/Sources/FernletConnections/FernletProtocolNamespace.swift`) spells the 39 labels
-  byte for byte as they shipped. It lives in a module that depends on ProximityKit, so ProximityKit
-  cannot name it, and the app supplies it as its `ProximityHost.proximityNamespace`. CODEOWNERS
-  protects `Namespace/` and FernletConnections as it protects this registry.
-- **38 of the 39 are twins of entries here, kept equal until they retire.** Every `.fernlet` label
-  but the epoch-id domain has a twin in this registry with the same spelling, kept until the twins
-  retire (plan step C1). `ProximityNamespaceGoldenTests` pins each pair equal — the same spelling
-  and bytes, and for each of the 21 signature twins the same acceptance over a length-prefixed, a
-  raw-prefixed, a bare and an empty transcript — so the two cannot drift. Until then a twin's §3 row
-  describes the protocol its label serves, and the reader of that label is the `.fernlet` field.
+  byte for byte as they shipped, and declares the two feature salts beside them. It lives in a
+  module that depends on ProximityKit, so ProximityKit cannot name it, and the app supplies it as
+  its `ProximityHost.proximityNamespace`. CODEOWNERS protects `Namespace/` and FernletConnections as
+  it protects this registry.
+- **40 of `.fernlet`'s 41 labels are twins of entries here, kept equal until they retire.** Every
+  `.fernlet` label but the epoch-id domain, its two feature salts included, has a twin in this
+  registry with the same spelling, kept until the twins retire (plan step C1).
+  `ProximityNamespaceGoldenTests` pins each pair equal — the same spelling and bytes, and for each of
+  the 21 signature twins the same acceptance over a length-prefixed, a raw-prefixed, a bare and an
+  empty transcript — so the two cannot drift. Until then a twin's §3 row describes the protocol its
+  label serves, and the reader of a protocol label is the `.fernlet` field.
 - **The epoch label is a namespace label, and is now inside the joint prefix check.**
   `fernlet.mesh.epoch.v1`, the raw-prefix SHA-256 domain of every epoch id, was a ProximityKit-local
   constant (`MeshEpochBounds.derivationDomain`, deleted at plan step A0.2.6) in no registry, so no
   domain-separation test saw it. It is `.fernlet`'s `family.purposes.hash.meshEpochIDV1` now, and
   `ProximityNamespaceGoldenTests.noLabelOfTheRegistryAndFernletTogetherIsAPrefixOfAnother()` runs
-  this document's prefix rule over this registry's 81 entries and `.fernlet`'s 39 labels together,
-  deduplicated by bytes (82 distinct): no label is a byte prefix of another but for §7's one
+  this document's prefix rule over this registry's 81 entries and `.fernlet`'s 41 labels together,
+  deduplicated by bytes (82 distinct: the two feature salts are entries here already): no label is a
+  byte prefix of another but for §7's one
   sealed-backup exception. Its nearest neighbour, `fernlet.mesh.epoch-heads.v1`, diverges at `.`
   versus `-`.
 - **Tokens are not labels.** The family's payload vocabulary (the payload, capability, record-kind,
@@ -745,4 +774,6 @@ labels.
 
 Adding a ProximityKit protocol label is therefore a namespace change, not a registry change: a field
 in a `Namespace/` group (which fixes its role), the host's literal in `.fernlet`, and a golden row in
-`ProximityNamespaceGoldenTests`. §6's review questions apply unchanged.
+`ProximityNamespaceGoldenTests`. A salt a ProximityKit door derives a Fernlet feature's key under is a
+host feature salt: a `featureKeyDerivationSalt` literal declared in `.fernlet`'s feature group, with
+its golden row. §6's review questions apply unchanged.

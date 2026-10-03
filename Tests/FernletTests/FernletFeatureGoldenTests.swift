@@ -16,7 +16,7 @@
 // "Accessors" at the foot of the suite. When a value or its reader moves, only its accessor is
 // re-pointed at the path production then reads, and a moved consumer no cell drives yet gains a cell.
 //
-// Twelve groups:
+// Thirteen groups:
 //
 // 1. **The seven feature labels** the heart dead-drop, presence and the ban store hand CryptoKit
 //    themselves, each still a FernletCrypto registry entry: the heart pair salt, the sealed drop's salt,
@@ -43,6 +43,9 @@
 //     frozen token and recognizes the three tokens of the matching window as that friend.
 // 12. **The sealed-backup escrow**: the content-addressed account's known answer, and provisioning's
 //     Cases 1 to 3 to their end states, every row and its attributes.
+// 13. **The feature salts `.fernlet` declares**: the heart and presence pair salts as its family's
+//     feature group, in order, each its registry twin's bytes, and ProximityKit's generic pair-secret
+//     door deriving group 2's known answers under them, from either side.
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -846,6 +849,59 @@ struct FernletFeatureGoldenTests {
         #expect(rows.local[Self.identityAccounts.keyAgreementPublicKeyCache] == fresh, "Case 3's key cache")
         #expect(Self.attributes(of: Self.aliceEscrowAccount, under: service) == Self.synchronized)
         #expect(Self.attributes(of: Self.identityAccounts.keyAgreementPrivateKey, under: service) == Self.deviceOnly)
+    }
+
+    // MARK: Group 13 — the feature salts `.fernlet` declares
+
+    /// `.fernlet`'s family declares exactly the heart dead-drop's and presence's pair salts, in that
+    /// order, under those names: each a key-derivation salt spelled as its group 1 row's frozen
+    /// literal, byte for byte the FernletCrypto registry entry it twins, and the very value a caller
+    /// of the door passes (`FernletFeaturePurposes`).
+    @Test func fernletDeclaresTheTwoPairSaltsAsItsFeaturePurposes() {
+        let entries = ProximityNamespace.fernlet.family.purposes.feature.entries
+        let expected: [(name: String, frozen: String, twin: CryptographicPurpose)] = [
+            ("heartDropPairV1", Self.frozenLabel("KeyDerivation.heartDropPairV1"),
+             FernletCryptoPurpose.KeyDerivation.heartDropPairV1),
+            ("presencePairV1", Self.frozenLabel("KeyDerivation.presencePairV1"),
+             FernletCryptoPurpose.KeyDerivation.presencePairV1)
+        ]
+        #expect(entries.map(\.name) == expected.map(\.name), "`.fernlet` declares \(entries.map(\.name))")
+        // R2: bounded by the two declared salts.
+        for (entry, row) in zip(entries, expected) {
+            #expect(entry.purpose.rawValue == row.frozen && entry.purpose.data == Data(row.frozen.utf8),
+                    "\(entry.name) is \(entry.purpose.rawValue); its frozen spelling is \(row.frozen)")
+            #expect(entry.purpose.role == .keyDerivationSalt, "\(entry.name) is declared as \(entry.purpose.role)")
+            #expect(entry.purpose.data == row.twin.data, "\(entry.name)'s bytes are not its registry twin's")
+        }
+        #expect(entries.map(\.purpose) == [FernletFeaturePurposes.heartDropPairV1, FernletFeaturePurposes.presencePairV1],
+                "the declared salts and the constants a caller passes are two spellings")
+    }
+
+    /// Under each salt `.fernlet` declares, ProximityKit's pair-secret door gives group 2's known
+    /// answer on planted alice and on planted bob: the generic door re-derives the heart-drop and
+    /// presence pair secrets byte for byte, from either side.
+    @Test func thePairSecretDoorDerivesTheKnownAnswersUnderFernletsSalts() throws {
+        let aliceService = Self.throwawayService()
+        let bobService = Self.throwawayService()
+        defer { Self.sweep([aliceService, bobService]) }
+        let alice = try Self.plantedAlice(service: aliceService)
+        let bob = try Self.plantedIdentity(signing: Self.bobSigningRaw, keyAgreement: Self.bobKeyAgreementRaw,
+                                           service: bobService)
+        let alicePublic = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: Self.alicePub)
+        let bobPublic = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: Self.bobPub)
+        let heart = FernletFeaturePurposes.heartDropPairV1
+        let presence = FernletFeaturePurposes.presencePairV1
+        let secrets = try [
+            ("alice's heart", alice.pairSecret(with: bobPublic, purpose: heart), Self.heartPairSecretHex),
+            ("bob's heart", bob.pairSecret(with: alicePublic, purpose: heart), Self.heartPairSecretHex),
+            ("alice's presence", alice.pairSecret(with: bobPublic, purpose: presence), Self.presencePairSecretHex),
+            ("bob's presence", bob.pairSecret(with: alicePublic, purpose: presence), Self.presencePairSecretHex)
+        ]
+        // R2: bounded by the four secrets.
+        for (name, secret, frozen) in secrets {
+            let actual = Self.hex(secret.withUnsafeBytes { Data($0) })
+            #expect(actual == frozen, "\(name) pair secret through the door is \(actual)")
+        }
     }
 }
 

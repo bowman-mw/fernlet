@@ -506,9 +506,18 @@ jobs:
         # + 12 + 24), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 268:
         # passed. Run once more at 268 without FernletFeatureGoldenTests: 244 ran and the floor refused
         # it. 244 + 24 (the feature golden's cells) = 268 is the ARITHMETIC CHECK, never the source.
+        # RAISED 268 -> 276 at A0.4.1, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "276 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 15 + 26), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 276:
+        # passed. Run once more at 276 without ProximityNamespaceGateTests: 261 ran and the floor
+        # refused it. 268 + 8 (the host feature salts' cells: three in the soundness suite, a salt that
+        # repeats or prefixes a label and the salts two families share; three in the gate suite, the
+        # pair-secret door's refusals and derivation; two in the feature golden, `.fernlet`'s declared
+        # salts and the door's known answers) = 276 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 268 \
+          Scripts/run-gated-suites.sh crypto-goldens 276 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

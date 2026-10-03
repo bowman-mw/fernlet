@@ -430,17 +430,18 @@ let package = Package(
         ),
         // Layer 6.5 — Fernlet's connection rules on top of ProximityKit's mechanisms
         // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). It holds
-        // `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39 domain-separation labels,
-        // the radios' service types, ALPNs, heartbeat and presentation strings, the QR scheme, the
-        // payload vocabulary, the keychain rows, the storage names, the log subsystem and the
-        // peer-name policy), byte-identical to the literals Fernlet shipped; FernletDeviceBindingAdapter
+        // `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39 domain-separation labels and
+        // the feature salts the core's pair secret consumes, the radios' service types, ALPNs,
+        // heartbeat and presentation strings, the QR scheme, the payload vocabulary, the keychain rows,
+        // the storage names, the log subsystem and the peer-name policy), byte-identical to the
+        // literals Fernlet shipped; FernletDeviceBindingAdapter
         // (the install binding) and FernletAuditBridge (the audit sink); Fernlet's session rules
         // (FriendSessionTrustPolicy, CoachSessionTrustPolicy and CoachSessionContract,
         // FriendMintingReview, TrainerExportPayload, and the one conversion of ProximityKit's session
         // audit into TrainerAuditEvent); and ProximityTrustVault, Fernlet's trusted-peer records and
         // audit rows. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
-        // never the reverse. The feature purposes (A0.4) and the coach profile and link purposes (C1)
-        // join it later. Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
+        // never the reverse. The coach profile and link purposes join it at C1. Deps: ProximityKit +
+        // FernletCrypto (DeviceBindingID, behind the adapter) +
         // FernletFoundation (FernletAuditLog, behind the bridge) + FernletDomainModel (PayloadType and
         // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling;
         // ItemNameModeration, whose name cap the peer-name policy reads; and TrainerAuditEvent and

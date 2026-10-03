@@ -16,7 +16,9 @@ import Testing
 /// name display hides): each changes one literal of a sound namespace and expects exactly the
 /// violation that change causes, both recorded by the initializer and thrown by `validated`, then
 /// shows the rule's accepting edge. Where two rules see one change by design (a malformed session
-/// token is unknown too), the cell expects both, in rule order.
+/// token is unknown too), the cell expects both, in rule order. A declared feature salt is judged by
+/// the label rules with the protocol's labels, so two more cells declare one that repeats or prefixes
+/// a label, and a collision cell compares the salts two families declare.
 @Suite struct ProximityNamespaceSoundnessTests {
 
     // MARK: - A sound namespace
@@ -96,14 +98,16 @@ import Testing
         #expect(rows.map { $0.purpose.role } == expected.map { $0.1 })
     }
 
-    /// `labelRows` lists every label the four groups store, in declaration order, under its field's
-    /// path. Read by reflection, so a label added to a group without a row cannot pass.
+    /// `labelRows` lists every label the four protocol groups store, in declaration order, under its
+    /// field's path; this app declares no feature salt. Read by reflection, so a label added to a group
+    /// without a row cannot pass.
     @Test func labelRowsListEveryStoredLabelInDeclarationOrder() {
         let namespace = AlphaApp.namespace()
         var reflected: [(field: String, purpose: ProximityCryptographicPurpose)] = []
         var pending: [(path: String, value: Any)] = [(path: "family.purposes", value: namespace.family.purposes)]
         var visits = 0
-        // Bounded: the purposes, four groups, the legacy holder and its two labels, and 37 more labels.
+        // Bounded: the purposes, five groups (the feature group and its empty entry list among them),
+        // the legacy holder and its two labels, and 37 more labels.
         while let node = pending.popLast(), visits < 64 {
             visits += 1
             if let purpose = node.value as? ProximityCryptographicPurpose {
@@ -293,6 +297,64 @@ import Testing
                             longer: "family.purposes.aead.meshGroupKeyWrapV2")],
             family: AlphaApp.family(signature: AlphaApp.signature(identityEnvelopeV2: "alpha.mesh.groupkey.wrap")),
             note: "the shorter declared first"
+        )
+    }
+
+    /// A declared feature salt is a label like any other: one with a protocol label's bytes is a
+    /// duplicate, and so is one with another feature salt's, each named by its field path under
+    /// `family.purposes.feature`. The accepting edge: a fresh salt is sound, and its row, in the
+    /// `.keyDerivationSalt` role, follows the hash rows.
+    @Test func aFeatureSaltEqualToAnotherLabelIsRefusedByName() throws {
+        expectOnly(
+            [.duplicateLabel(field: "family.purposes.signature.meshRoutedChunkV1",
+                             otherField: "family.purposes.feature.pairV1")],
+            family: AlphaApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "pairV1": .featureKeyDerivationSalt("alpha.mesh.routed-chunk.v1")
+            ])),
+            note: "a protocol label's bytes"
+        )
+        expectOnly(
+            [.duplicateLabel(field: "family.purposes.feature.pairV1", otherField: "family.purposes.feature.tagV1")],
+            family: AlphaApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "pairV1": .featureKeyDerivationSalt("alpha.feature.pair.v1"),
+                "tagV1": .featureKeyDerivationSalt("alpha.feature.pair.v1")
+            ])),
+            note: "another feature salt's bytes"
+        )
+        let declared = ProximityNamespace(
+            family: AlphaApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "pairV1": .featureKeyDerivationSalt("alpha.feature.pair.v1")
+            ])),
+            installation: AlphaApp.installation()
+        )
+        #expect(declared.soundness == .sound)
+        let rows = declared.labelRows
+        try #require(rows.count == 40)
+        #expect(rows[38].field == "family.purposes.hash.meshEpochIDV1", "the feature row follows the hash rows")
+        #expect(rows[39].field == "family.purposes.feature.pairV1")
+        #expect(rows[39].purpose.role == .keyDerivationSalt)
+        #expect(rows[39].purpose.data == Data("alpha.feature.pair.v1".utf8))
+    }
+
+    /// A declared feature salt that begins a protocol label, or that a protocol label begins, is a
+    /// prefix like any other, whichever is shorter: the feature row, declared last, is named as the
+    /// shorter field or as the longer one.
+    @Test func aFeatureSaltThatBeginsOrExtendsAProtocolLabelIsRefusedByName() {
+        expectOnly(
+            [.labelIsPrefix(shorter: "family.purposes.feature.pairV1",
+                            longer: "family.purposes.signature.proximityQRIdentityV1")],
+            family: AlphaApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "pairV1": .featureKeyDerivationSalt("alpha.verify.qr")
+            ])),
+            note: "the feature salt the shorter"
+        )
+        expectOnly(
+            [.labelIsPrefix(shorter: "family.purposes.hash.meshEpochIDV1",
+                            longer: "family.purposes.feature.pairV1")],
+            family: AlphaApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "pairV1": .featureKeyDerivationSalt("alpha.mesh.epoch.v1.pair")
+            ])),
+            note: "the protocol label the shorter"
         )
     }
 
@@ -863,6 +925,35 @@ import Testing
         #expect(shared.allSatisfy { $0.kind == .equal && $0.field == $0.otherField })
     }
 
+    /// The feature salts each family declares are compared across families like every other label: a
+    /// salt equal to the other family's declared salt, and one that begins the other family's protocol
+    /// label, are each reported once, named by its field path in each namespace, from either side.
+    @Test func familyCollisionsReportTheFeatureSaltsTwoFamiliesShare() {
+        let alpha = ProximityNamespace(
+            family: AlphaApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "pairV1": .featureKeyDerivationSalt("shared.feature.pair.v1"),
+                "tagV1": .featureKeyDerivationSalt("bravo.verify.qr")
+            ])),
+            installation: AlphaApp.installation()
+        )
+        let bravo = ProximityNamespace(
+            family: BravoApp.family(feature: ProximityNamespace.FeaturePurposes([
+                "handshakeV1": .featureKeyDerivationSalt("shared.feature.pair.v1")
+            ])),
+            installation: BravoApp.installation()
+        )
+        #expect(alpha.soundness == .sound && bravo.soundness == .sound, "each family is sound on its own")
+        #expect(alpha.familyCollisions(with: bravo).map { Overlap($0) } == [
+            Overlap("family.purposes.feature.pairV1", "family.purposes.feature.handshakeV1", .equal),
+            Overlap("family.purposes.feature.tagV1", "family.purposes.signature.proximityQRIdentityV1", .prefix)
+        ])
+        #expect(bravo.familyCollisions(with: alpha).map { Overlap($0) } == [
+            Overlap("family.purposes.signature.proximityQRIdentityV1", "family.purposes.feature.tagV1", .prefix),
+            Overlap("family.purposes.feature.handshakeV1", "family.purposes.feature.pairV1", .equal)
+        ], "seen from the other side, the same overlaps in its own row order")
+        #expect(alpha.installationCollisions(with: bravo).isEmpty, "and the installations stay apart")
+    }
+
     /// Two unrelated apps overlap nowhere, from either side.
     @Test func twoUnrelatedAppsDoNotCollide() {
         let alpha = AlphaApp.namespace()
@@ -971,12 +1062,14 @@ private enum AlphaApp {
         keyDerivation: ProximityNamespace.KeyDerivation = AlphaApp.keyDerivation(),
         aead: ProximityNamespace.AEAD = AlphaApp.aead(),
         hash: ProximityNamespace.Hash = AlphaApp.hash(),
+        feature: ProximityNamespace.FeaturePurposes = .none,
         radios: ProximityNamespace.Radios = AlphaApp.radios(),
         urlScheme: String = "alpha",
         vocabulary: ProximityNamespace.Vocabulary = AlphaApp.vocabulary()
     ) -> ProximityNamespace.Family {
         ProximityNamespace.Family(
-            purposes: ProximityNamespace.Purposes(signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash),
+            purposes: ProximityNamespace.Purposes(
+                signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash, feature: feature),
             radios: radios,
             verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme),
             vocabulary: vocabulary
@@ -1197,6 +1290,7 @@ private enum BravoApp {
         signature: ProximityNamespace.Signature = BravoApp.signature(),
         aead: ProximityNamespace.AEAD = BravoApp.aead(),
         hash: ProximityNamespace.Hash = BravoApp.hash(),
+        feature: ProximityNamespace.FeaturePurposes = .none,
         radios: ProximityNamespace.Radios = BravoApp.radios(),
         urlScheme: String = "bravo"
     ) -> ProximityNamespace.Family {
@@ -1209,7 +1303,8 @@ private enum BravoApp {
             meshRoutedStoreV1: "bravo.mesh.routed-store.v1"
         )
         return ProximityNamespace.Family(
-            purposes: ProximityNamespace.Purposes(signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash),
+            purposes: ProximityNamespace.Purposes(
+                signature: signature, keyDerivation: keyDerivation, aead: aead, hash: hash, feature: feature),
             radios: radios,
             verifyQR: ProximityNamespace.VerifyQR(urlScheme: urlScheme),
             vocabulary: vocabulary()
