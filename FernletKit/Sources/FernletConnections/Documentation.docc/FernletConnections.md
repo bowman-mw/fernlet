@@ -152,7 +152,7 @@ looks, still hides both identifiers, and the floor to a non-empty name the sanit
 `ProximityVocabularyGoldenTests` pins both values to the literals ProximityKit shipped and holds
 ProximityKit's sanitizer to FernletDomainModel's byte for byte. The activities' titles, locations
 and joiners' names still go through `ItemNameModeration` (its fixed 24-character cap, with no floor)
-until activities leave ProximityKit (plan step A0.4). The test target's bindings file restores the
+until activities leave ProximityKit with the mesh manager's feature parts (plan step A0.5). The test target's bindings file restores the
 old call shapes of the coercion, the envelope's sender reads, the advertised recipe name and the
 session message store's ingest with `.fernlet`'s policy.
 
@@ -240,9 +240,11 @@ radios owning discovery on the namespace's service types. ProximityKit still nam
 FernletDomainModel's vocabulary and records (`PayloadType`, `ProximityCapability`,
 `ItemNameModeration`, `ProximityTrustedPeerRecord`, `ProximityMode`) only on the lines
 `ProximityNamespaceBoundaryTests` allowlists: lines of its feature files and of the typed doors only
-those features go through, which leave with the features (A0.4, A0.5), and the coordinator's
-session-mode alias, which the connection profiles replace (A0.7, C5). A0.4 makes Fernlet's feature labels host purposes. C1
-adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
+those features go through, which leave with the features (A0.4), with the mesh manager's feature
+parts (A0.5) or with the recipe profile (A0.7), and the coordinator's session-mode alias, which the
+connection profiles replace (A0.7, C5). A0.4 makes the heart-drop and presence pair secrets' salts
+host purposes, the two feature labels a core derivation consumes. C1 adds the Coach app's
+installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
 connection profiles (friend mesh, presence, recipe, coach), app identities with per-app allow lists,
 coach relationship records and the coach link signing purposes; FernletCrypto's 38 twins of these
 labels then retire.

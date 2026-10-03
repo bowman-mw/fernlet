@@ -361,6 +361,26 @@ jobs:
         # built from literals. No compiler half: a door that stopped refusing compiles clean and moves
         # no other test.
         #
+        # `FernletFeatureGoldenTests` joins them at ProximityKit plan step A0.4.0 (2026-10-03): every
+        # byte Fernlet's features over the proximity stack put on the wire, in the keychain or on disk
+        # that plan step A0.4 moves or re-derives, pinned by hand-written literal (each vector confirmed
+        # by two independent computations before it was frozen) and by driving its consumer before any
+        # of it moves: the seven feature labels the heart dead-drop, presence and the ban store hand
+        # CryptoKit themselves; the heart-drop and presence pair secrets of two planted identities from
+        # either side, and their refusals in their order; two heart day tags, three presence tags and
+        # their wire tokens, and the day epoch at its boundaries; the ban evidence's reporter tag; a
+        # frozen static-key drop the sealer opens and a frozen sidecar the sidecar seal opens under a
+        # planted key; the prekey bundle's JSON both ways and both directions of the identity
+        # introduction that gossips it; the heart-drop keychain names, the ban store's two accounts and
+        # the mesh stores' services derived beside the heart-drop service; five stores' file names and
+        # the production heart-drop scope; a closeness ledger, a friend-state cache and a moderation
+        # ledger loaded from literal JSON and two literal ban records decoded; presence's advertisement
+        # and matching window over a planted identity; and the sealed-backup escrow's content-addressed
+        # account and provisioning's Cases 1 to 3, every row and its attributes. Its name ends
+        # `GoldenTests`, so CIGateSelectorBoundaryTests demands it on a line; it rides this one beside
+        # the namespace and vocabulary goldens it continues. No compiler half either: a moved byte
+        # compiles clean.
+        #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
         # floor 1 after the strict build-for-testing (Scripts/spm-wall-check.sh, WALL CHECK PASSED),
@@ -480,16 +500,23 @@ jobs:
         # summary title's bound and the peer-name cap to the identifiers the name display hides, and
         # the gate suite's cell holding the mesh manager to founding no mesh under an identity of
         # another namespace) = 244 is the ARITHMETIC CHECK, never the source.
+        # RAISED 244 -> 268 at A0.4.0, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "268 tests in 8 suites" (6 + 13 + 19 + 104 + 40 + 50
+        # + 12 + 24), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 268:
+        # passed. Run once more at 268 without FernletFeatureGoldenTests: 244 ran and the floor refused
+        # it. 244 + 24 (the feature golden's cells) = 268 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 244 \
+          Scripts/run-gated-suites.sh crypto-goldens 268 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
             ProximityNamespaceGoldenTests \
             ProximityNamespaceSoundnessTests \
             ProximityVocabularyGoldenTests \
-            ProximityNamespaceGateTests
+            ProximityNamespaceGateTests \
+            FernletFeatureGoldenTests
 
       # The five walls below have no compiler half and ran on NO workflow until 2026-09-24 — each
       # was green only when somebody remembered to run it locally, which is the gap the mesh

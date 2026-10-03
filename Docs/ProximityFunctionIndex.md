@@ -29,7 +29,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | Need | Prefer Reusing |
 | --- | --- |
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:in:)` |
-| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:in:)` is overloaded for the identity envelope, the mesh admission token, the membership records and messages, the removal quorum, the key advertisement, the channel introduction and the six routed transcripts, each behind its own domain tag from the `in purposes:` it is handed (ProximityKit plan step A0.2); `canonicalBytes(for:)` remains only for the three Group-Activity types and a moderation row, whose tags are still FernletCrypto's until A0.4. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
+| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:in:)` is overloaded for the identity envelope, the mesh admission token, the membership records and messages, the removal quorum, the key advertisement, the channel introduction and the six routed transcripts, each behind its own domain tag from the `in purposes:` it is handed (ProximityKit plan step A0.2); `canonicalBytes(for:)` remains only for the three Group-Activity types and a moderation row, whose tags are still FernletCrypto's until A0.5. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` (one of the mesh's own frames, by `MeshPayloadRole`), `sendFeatureEnvelope(_:encodable:via:sealed:)` (a feature's payload, by its `PayloadType` token) / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are thin wrappers over it. |
@@ -302,7 +302,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | ~~`syncPhotoManifest(to:)`~~ / ~~`handlePhotoManifest(_:from:)`~~ / ~~`sendRequestedPhotos(_:to:)`~~ | **Retired by P5 item 13** — the announce/ask/answer pull protocol went with `handlePhotoManifest`'s `keyEpoch >= localJoinedEpoch` filter, which is one of the two gates that item retired **with** its path. What replaced it: the origin mints a routed item and pushes it (`originateRoutedItem`, `pushOriginatedItem`), and every later offer rides the drain's own doors, which name no epoch. The wire tokens `.friendPhotoManifest` / `.friendPhotoRequest` stay **parked** and decodable (D-13.5), so an older peer's frame is parked by name rather than mis-dispatched; nothing dispatches them. |
 | `meshToken(_:)` | The host's token for one of the manager's own frames, `role.token(in: namespace.family.vocabulary.mesh)`: what every engine send is signed under and titled with, and what every audit line about a mesh frame names. |
 | `sendEnvelope(_:encodable:via:sealed:)` / `sendEnvelopeReportingResult(_:encodable:via:sealed:)` | Post-commit send of one of the mesh's own frames, by `MeshPayloadRole`, under `meshToken(_:)`: resolves the slot's verified key-agreement key for a sealed send (returning false when it is missing) and forwards to `sendEnvelopeCore(...)` with send-failure auditing on, framing for wire2 when the slot supports the host's wire2 token. The reporting form takes the token already resolved and is what `writeMembershipFrame(_:_:to:)` calls. |
-| `sendFeatureEnvelope(_:encodable:via:sealed:)` | The same send for a feature's payload — the moderation relay, friend state, the shop's catalog and request, the activities — under the token its call site spells, Fernlet's `PayloadType` raw value, so the lines naming `PayloadType` are the feature lines that leave with their features (A0.4, A0.5). |
+| `sendFeatureEnvelope(_:encodable:via:sealed:)` | The same send for a feature's payload — the moderation relay, friend state, the shop's catalog and request, the activities — under the token its call site spells, Fernlet's `PayloadType` raw value, so the lines naming `PayloadType` are the feature lines that leave with the mesh manager's feature parts (A0.5). |
 | `sendVerifyEnvelope(_:encodable:to:via:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)` | Pre-commit ceremony send, by role (the verify challenge and response): seals to the identity carried by the gate state (the slot's verified key fields are not populated yet) through `sendEnvelopeCore(...)`, with send-failure auditing off; wire2 when the peer supports the host's wire2 token. |
 | `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)` | The shared seal+sign+send core behind the senders above and the one place a mesh envelope is signed, under the token it is handed (the summary title is that token too, byte for byte): encodes the payload, optionally seals it (wire2 or legacy; an empty key fails closed instead of downgrading to an unsealed send), signs the envelope, and sends it reliably on the slot channel; returns whether the wire write succeeded. |
 | ~~`encryptPhoto(_:key:)`~~ / ~~`decryptPhoto(_:nonce:key:)`~~ / ~~`encryptPayload(_:key:)`~~ | **Retired by P5 item 13**, and with them `AEAD.meshGroupPhotoV2`'s last consumer and the `FMGP2` marker family (`Docs/Crypto-Domain-Separation.md` carries the row that now reads "—"). Photo bytes ride the routed store under a per-recipient X25519 content-key wrap, sealed by `MeshRoutedItemSealer` under `AEAD.meshRoutedItemV1`, so branch and epoch no longer decide decryptability. Every claim these carried is re-asserted against the routed seal in `MeshRoutedItemSealTests` — round trip, layout, foreign key, tampered byte, and "a retired format is refused BY NAME" (`FMRI1` / `retiredOrForeignFormat`). |
@@ -476,7 +476,7 @@ where all three read off `PayloadType` or its label twins, so a grep for the tok
 The mesh engine's own frames by role (ProximityKit plan step A0.3): what each frame is, never how it
 is spelled. The spelling is the host's namespace's `family.vocabulary.mesh`, and this file is the one
 place a role meets its token, both ways. Feature payloads are not here: they keep Fernlet's
-`PayloadType` tokens until their features leave (A0.4, A0.5).
+`PayloadType` tokens until their features leave (A0.4, A0.5, A0.7).
 
 | Type / Function | What It Does |
 | --- | --- |
@@ -1452,20 +1452,25 @@ The host-supplied protocol identity, under `ProximityKit/Namespace/` (plan steps
 ProximityKit reads its 39 labels, radio values, QR scheme, identity and mesh seal-key rows, storage
 names and log subsystem off it, byte-identical for Fernlet, and every group of the payload vocabulary
 its family carries, the radios' presentation strings and the installation's peer-name policy, all
-judged by its soundness rules. The mesh features' payload and capability tokens are still Fernlet's
-`PayloadType` and `ProximityCapability` cases until A0.4 and A0.5; the feature labels, the heart-drop
-and moderation keychain services and `ProximitySupportLayout`'s folder stay outside it until A0.4.
+judged by its soundness rules. The features' payload and capability tokens are still Fernlet's
+`PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the feature labels stay
+outside it until A0.4 (the activities' and the moderation report's four until A0.5), and so do the
+heart-drop and moderation keychain services and `ProximitySupportLayout`'s folder.
 ProximityKit refuses an unsound namespace at run time (`Support/ProximityNamespaceGate.swift`,
 below). The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
 copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
 covers every rule below; `ProximityNamespaceGoldenTests` and `ProximityVocabularyGoldenTests` pin
-Fernlet's value and every reader; `ProximityNamespaceBoundaryTests` keeps any namespace, group or
-purpose from being built outside `Namespace/`, `FernletCryptoPurpose` to the 20 feature lines that
-leave at A0.4, every remaining `fernlet` literal to an allowlist naming its exit step, and Fernlet's
-domain vocabulary and records (`PayloadType`, `ProximityCapability`, `ProximityMode`,
-`ItemNameModeration` and the persisted proximity records) to the 58 code lines in 8 files that leave
-with their features (A0.4, A0.5) or the session profile (A0.7 / C5).
+Fernlet's value and every reader, and `FernletFeatureGoldenTests` the bytes of the features
+ProximityKit still holds; `ProximityNamespaceBoundaryTests` keeps any namespace, group or purpose from
+being built outside `Namespace/`, `FernletCryptoPurpose` to the feature lines that leave with their
+features (A0.4) or the mesh manager's feature parts (A0.5), every remaining `fernlet` literal to an
+allowlist naming its exit step, Fernlet's domain vocabulary and records (`PayloadType`,
+`ProximityCapability`, `ProximityMode`, `ItemNameModeration` and the persisted proximity records) to
+the lines that leave with their features (A0.4), the mesh manager's feature parts (A0.5), the recipe
+profile (A0.7) or the session profile (A0.7 / C5), and `package` to the doors its list names (none:
+ProximityKit declares nothing `package`). The exact per-file lists in
+`ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
 
@@ -1502,7 +1507,7 @@ and park), the session messages and the capabilities (the coordinator; the wire2
 managers' advertisements and the mesh's sealed sends), the record kinds (the inventory digest), the
 routed types (the routed type registry's rows) and the mesh messages (the mesh manager's own sends and
 its payload door, through `MeshPayloadRole`). The mesh features' tokens are still `PayloadType` and
-`ProximityCapability` cases until A0.4 and A0.5, and `ProximityVocabularyGoldenTests` holds Fernlet's
+`ProximityCapability` cases until A0.4, A0.5 and A0.7, and `ProximityVocabularyGoldenTests` holds Fernlet's
 two spellings equal.
 
 | Function | What It Does |
@@ -1519,7 +1524,7 @@ two spellings equal.
 | Function | What It Does |
 | --- | --- |
 | `Installation.init(keychain:storage:logSubsystem:peerNames:)` | Assembles what belongs to one app on one device: its keychain rows, storage names, log subsystem and peer-name policy. |
-| `PeerNames.init(maxLength:floor:)` | The app's peer-name policy: the most characters (`Character`s) a peer's sanitized name keeps, and the floor a name that sanitizes to nothing is shown and recorded as. Presentation, so the installation's and not the family's; ProximityKit applies it wherever a peer's name enters except the activity manager (its joiners' names keep `ItemNameModeration`'s fixed 24-character cap, with no floor, until A0.4) and caps the advertised recipe name with it. |
+| `PeerNames.init(maxLength:floor:)` | The app's peer-name policy: the most characters (`Character`s) a peer's sanitized name keeps, and the floor a name that sanitizes to nothing is shown and recorded as. Presentation, so the installation's and not the family's; ProximityKit applies it wherever a peer's name enters except the activity manager (its joiners' names keep `ItemNameModeration`'s fixed 24-character cap, with no floor, until A0.5) and caps the advertised recipe name with it. |
 | `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built as `ProximitySupportLayout.defaultDirectory` builds Fernlet's root. |
 
 ### `Namespace/ProximityNamespace+Soundness.swift`
@@ -1606,7 +1611,7 @@ and 10).
 
 | Function | What It Does |
 | --- | --- |
-| `canonicalBytes(for:in:)` (17 types) / `canonicalInventoryDigestBytes(for:in:)` | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. Only the four activity and moderation domains are still FernletCrypto's, until A0.4. |
+| `canonicalBytes(for:in:)` (17 types) / `canonicalInventoryDigestBytes(for:in:)` | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. Only the four activity and moderation domains are still FernletCrypto's, until A0.5. |
 | `MeshMembershipRecordVerifier.init(...family:)` / `MeshLedgerAdoption.bootstrapVerifier(...in:)` / `adopt(...in:)` / `MeshInventoryDigest.init(meshID:ledger:family:)` / `MeshAdmissionToken.verify(...in:)` | The membership verifiers and helpers that take the labels, each with no default (the first four take the whole family, whose record kinds the inventory digest also needs). The legacy pair is the family's choice: a family with `LegacyV1.refused` verifies no schema-v1 envelope and no pre-WI-6 token. |
 | `MeshRoutedManifestVerifier` / `MeshChunkVerifier` / `MeshCustodyReceiptVerifier` / `MeshRecipientReceiptVerifier` / `MeshRoutedInventoryVerifier` / `MeshRoutedDrainAnswerVerifier` / `MeshChannelIntroductionExchange` `init(...purposes:)` | Each keeps its copy of the labels as a trailing `purposes:` with no default and checks every signature (and frames the introduction transcript) under it. |
 | `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `ProximityVerifySignature.message(...in:)` | The QR's scheme and labels from the caller's namespace; see `ProximityVerification.swift` below. The QR host `verify`, the query key `d` and version 1 stay ProximityKit format constants. |
@@ -1747,7 +1752,7 @@ value names `.fernlet` explicitly.
 | `localFingerprint` | Returns fingerprint of current signing public key, or empty string before provisioning. |
 | `localSigningPublicKey` | Returns raw Ed25519 public key, or empty data before provisioning. |
 | `localKeyAgreementPublicKey` | Returns raw X25519 public key, or empty data before provisioning. |
-| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature signature labels (the activity join token, roster snapshot and moderation report) until A0.4, the app's duress and probe purposes until C1, and the tests that name them; every core label's builder signs through the namespace overload since A0.2.5. No deprecation attribute (warnings are errors). |
+| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature signature labels (the activity join token, roster snapshot and moderation report) until A0.5, the app's duress and probe purposes until C1, and the tests that name them; every core label's builder signs through the namespace overload since A0.2.5. No deprecation attribute (warnings are errors). |
 | `sign(_:purpose:)` with a `ProximityCryptographicPurpose` | The same Ed25519 boundary under a namespace label (A0.2.3). Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
 | `sealedBackupKey()` | Derives the sealed-backup symmetric key from the X25519 private key. |
 | `verify(_:of:by:purpose:)` with a `CryptographicPurpose` or a `ProximityCryptographicPurpose` | Verifies an Ed25519 signature over a transcript framed for the purpose (`signingBytes`). Under a namespace label a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. The registry overload is transitional, like its `sign`. |
@@ -2017,7 +2022,7 @@ bytes. **The field order in each function IS the schema.**
 | `canonicalBytes(for:in:)` for the membership family and `canonicalInventoryDigestBytes(for:in:)` | Since A0.2.4 the envelope, the token, the departure, removal and termination records, the inventory-digest and epoch-heads messages, the removal proposal and vote and the key advertisement write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`), and the inventory digest's preimage from `purposes.hash.meshInventoryDigestV1`; their file-level domain tags are gone. The channel introduction and the routed family moved at A0.2.5 (their own row, below); the activity and moderation tags stay until A0.4. |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
-| `canonicalBytes(for:in:)` for the channel introduction and the routed family | Since A0.2.5 the channel introduction, the manifest, the chunk, both receipts, the routed inventory digest and the drain answer write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`) too; only the activity and moderation tags remain file-level, until A0.4. |
+| `canonicalBytes(for:in:)` for the channel introduction and the routed family | Since A0.2.5 the channel introduction, the manifest, the chunk, both receipts, the routed inventory digest and the drain answer write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`) too; only the activity and moderation tags remain file-level, until A0.5. |
 | `canonicalBytes(for: MeshRoutedManifest, in:)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
 | `canonicalBytes(for: MeshChunk, in:)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
 | `canonicalBytes(for: MeshCustodyReceipt, in:)` | P5 item 3: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ custodian ‖ custodiedAt ‖ expiresAt; `signature` excluded. **Two fingerprints in two fixed positions** — the item's ORIGIN (the subject) and the CUSTODIAN (the signer) — so a receipt cannot be re-read as being about the signer's own item, and one lifted onto another origin's item fails the signature. No destination set, no chunk index, no partial count: a receipt exists only for a COMPLETE item. Field order is the schema. |
