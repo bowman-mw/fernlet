@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
 
 ## Overview
 
@@ -144,8 +144,9 @@ Bonjour instance names begin with and the one `PeerNameDisplay` never shows as a
 ephemeral certificate's common name. The radios read them from the namespace their manager hands
 them, the presence manager's posture mint from its own copy, and the name display from the
 namespace each caller passes: the app passes `.fernlet`, and so does `FernletProximityUI`, which
-depends on this module for it. `ProximityVocabularyGoldenTests` holds every `.fernlet` value to its
-frozen literal, so no spelling can drift, drives those consumers (and the inventory digest, the routed
+depends on this module for it and for the name placeholders below.
+`ProximityVocabularyGoldenTests` holds every `.fernlet` value to its frozen literal, so no
+spelling can drift, drives those consumers (and the inventory digest, the routed
 type registry and a mesh manager) under `.fernlet` and under a namespace whose strings, record kinds
 or routed types are its own, drives the envelope, the coordinator and the mesh's sealed sends under
 `.fernlet` and under a namespace whose payload rules, session messages or capabilities are its own,
@@ -174,6 +175,36 @@ and joiners' names still go through `ItemNameModeration` (its fixed 24-character
 until activities leave ProximityKit with the mesh manager's feature parts (plan step A0.5). The test target's bindings file restores the
 old call shapes of the coercion, the envelope's sender reads, the advertised recipe name and the
 session message store's ingest with `.fernlet`'s policy.
+
+**The name placeholders.** ProximityKit's `PeerNameDisplay` is the identifier filter:
+`personName(_:fingerprint:in:)` answers a peer's chosen name, sanitized under the namespace's cap,
+or nil for an empty name, the peer's fingerprint filed as a name, the fingerprint's 16-hex shape or
+the QUIC instance name, and the soundness rule above keeps the cap long enough for it to see both
+identifiers. Which plain phrase a person reads when it answers nil is Fernlet's display policy, so
+it lives here, beside the peer-name policy: `PeerNameDisplay+Placeholders.swift` extends the type
+with `Placeholder` (`.nearby`, "Someone nearby", for the connect path's rows, the session's
+participants, a join request and a recipe recipient; `.met`, "Someone you met", for the
+keep-as-friend rows and the Friends & Blocks list), `shown(_:fingerprint:placeholder:in:)` (the name,
+or the placeholder), `firstName(_:fingerprint:placeholder:in:)` (the name's first word for warm
+hearts copy, or the WHOLE placeholder, so a nameless friend never reads "Someone") and
+`text(for:)` (the placeholder alone). The app's surfaces and `FernletProximityUI`'s two screens call
+them with `in: .fernlet`, and `FernletSocial`'s `PresenceManager.firstName(of:in:)` delegates to
+`firstName` with `.met` and the namespace it holds. A placeholder is resolved display text and never
+a token: it is never persisted, put in a roster or vault row, or sent, which keep reading
+ProximityKit's `displayNameOrFingerprint`. `PeerNameDisplayTests` pins the rules, and the test
+target's bindings file restores the display's three call shapes without a namespace
+(`personName`, `shown` and `firstName`), passing `.fernlet`.
+
+**Localization.** The module owns a `Localizable.xcstrings` and one copy vault,
+`FernletConnectionsCopy` (`FernletConnectionsCopy.swift`), whose `Peer` group resolves the two
+phrases, `proximity.peer.someoneNearby` and `proximity.peer.someoneYouMet`, with
+`String(localized:defaultValue:bundle:comment:)` and `bundle: .module`: inside this module that is
+this catalog, and without it the lookup would go to `Bundle.main` and render English forever with a
+clean build. The keys keep their `proximity.peer.` spelling, because a key is a token and a renamed
+key strands its translations. `Scripts/sync-string-catalogs.sh` syncs the catalog from the code (its
+`TARGETS` line) and its `--check` proves the two match, and `LocalizationBoundaryTests` pins that the
+catalog exists and that every lookup in the package passes `bundle: .module`. The namespace's values
+are data, never copy, and reach no catalog.
 
 **The install binding.** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks
@@ -295,13 +326,17 @@ every device already in the field.
 
 **Isolation.** The module is main-actor by default (`defaultIsolation(MainActor.self)` in
 `Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`
-but the two trust policies and the vault:
+but the two trust policies, the vault and the copy vault's caseless outer namespace,
+`FernletConnectionsCopy`:
 the namespace is inert `Sendable` value data, and its readers are ProximityKit's nonisolated
 serializers, verifiers and stores; the binding adapter is a stateless `Sendable` value the column
 seal calls synchronously from inside those stores. ``FernletAuditBridge`` is a `nonisolated` struct
 for the same reason: ProximityKit's `nonisolated` stores call it synchronously, which a main-actor
 conformance would not allow. ``FriendMintingReview``, ``TrainerExportPayload`` and
-``CoachSessionContract`` are `nonisolated` pure values. ``FriendSessionTrustPolicy`` and
+``CoachSessionContract`` are `nonisolated` pure values. The name placeholders' extension is
+`nonisolated`, as the `PeerNameDisplay` it extends is (its `Placeholder` with it), and so is the
+`FernletConnectionsCopy.Peer` group it reads: a resolved display string has no actor to protect,
+and `Bundle.module` is itself nonisolated. ``FriendSessionTrustPolicy`` and
 ``CoachSessionTrustPolicy`` stay main-actor classes, like the `@MainActor` protocol they conform to,
 the main-actor vault they read and the main-actor coordinator that consults them.
 ``ProximityTrustVault`` is a main-actor `@Observable` class, like the `@MainActor`

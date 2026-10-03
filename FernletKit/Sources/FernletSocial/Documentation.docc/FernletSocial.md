@@ -223,8 +223,9 @@ per-connection trust policy, the resolved display name and the heart-eligibility
 connection over (`ProximityCoordinator`, with `ProximityPayloadHandling`, `NIRangingSession`,
 `ReplayCache`, `PeerHandle` and the coordinator's prekey-bundle hooks), the `ObservationLoop` it
 watches its coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name
-coercion `ProximityDisplayName.peerDisplayName(_:in:)`, `PeerNameDisplay.firstName` and the
-recipe-share diagnostics types its connection log rides. Three groups of `package` doors, each of
+coercion `ProximityDisplayName.peerDisplayName(_:in:)`, the name display `PeerNameDisplay` (its
+identifier filter, which `FernletConnections`' `firstName` runs first) and the recipe-share
+diagnostics types its connection log rides. Three groups of `package` doors, each of
 which `ProximityNamespaceBoundaryTests` lists with its exit: the presence radio's seam
 (`PresenceRadioSession`), its QUIC conformer (`NetworkPresenceSession`), the peer channel a heart
 connection runs over (`NetworkPeerChannel`), the epoch posture (`PresenceEpochPosture`) and the TXT
@@ -242,8 +243,10 @@ and the recipe-share manager, until A0.7.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the
-declared salts the heart-drop and presence pair secrets derive under, and
-`ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory; on
+declared salts the heart-drop and presence pair secrets derive under,
+`ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory, and
+the name placeholders, `PeerNameDisplay.firstName` among them, which presence's
+`PresenceManager.firstName(of:in:)` delegates to; on
 `FernletCrypto`, for the dead-drop's, presence's and the ban store's registry labels; on
 `FernletDomainModel`, for the heart, moderation, closeness, friend-state and companion value types
 the stores keep, the friend records the dead-drop and presence read, the dead-drop's transport seam,

@@ -428,8 +428,9 @@ let package = Package(
         // runs UI → ProximityKit, never the reverse. Deps: ProximityKit (the roster, answer and
         // name-display types) + FernletUI + FernletDomainModel (FriendPhotoPayload) +
         // FernletFoundation (the audit log) + FernletConnections (`ProximityNamespace.fernlet`, whose
-        // mesh instance-name prefix the name display hides). MainActor: SwiftUI surface, with the
-        // saver's Photos-queue work marked nonisolated within.
+        // mesh instance-name prefix the name display hides, and the name placeholders the screens
+        // render through, `PeerNameDisplay.shown`). MainActor: SwiftUI surface, with the saver's
+        // Photos-queue work marked nonisolated within.
         .target(
             name: "FernletProximityUI",
             dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation", "FernletConnections"],
@@ -447,10 +448,13 @@ let package = Package(
         // (the install binding) and FernletAuditBridge (the audit sink); Fernlet's session rules
         // (FriendSessionTrustPolicy, CoachSessionTrustPolicy and CoachSessionContract,
         // FriendMintingReview, TrainerExportPayload, and the one conversion of ProximityKit's session
-        // audit into TrainerAuditEvent); and ProximityTrustVault, Fernlet's trusted-peer records and
-        // audit rows. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
-        // never the reverse. The coach profile and link purposes join it at C1. Deps: ProximityKit +
-        // FernletCrypto (DeviceBindingID, behind the adapter) +
+        // audit into TrainerAuditEvent); ProximityTrustVault, Fernlet's trusted-peer records and
+        // audit rows; and the name placeholders, its extension of ProximityKit's PeerNameDisplay
+        // (`Placeholder`, `shown`, `firstName`, `text(for:)`, over the identifier filter that stays
+        // ProximityKit's), whose two phrases resolve against this module's own Localizable.xcstrings
+        // (FernletConnectionsCopy, `bundle: .module`). ProximityKit can never name it: the edge runs
+        // FernletConnections → ProximityKit, never the reverse. The coach profile and link purposes
+        // join it at C1. Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
         // FernletFoundation (FernletAuditLog, behind the bridge) + FernletDomainModel (PayloadType and
         // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling;
         // ItemNameModeration, whose name cap the peer-name policy reads; and TrainerAuditEvent and
@@ -458,7 +462,8 @@ let package = Package(
         // keeps and the policies and the review read). MainActor default: the vault and the two trust
         // policies are main-actor classes, like the main-actor protocols, coordinator, managers and
         // store they serve, beside nonisolated value data and stateless seams (the namespace and its
-        // vocabulary, the adapter, the bridge, the review, the export body and the audit conversion).
+        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion and
+        // the name placeholders).
         .target(
             name: "FernletConnections",
             dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
@@ -483,8 +488,9 @@ let package = Package(
         // ledgers' sidecar, until A0.5, the coordinator's typed send and manual commit until A0.7, and
         // the presence radio's seam, QUIC conformer, peer channel, epoch posture and TXT vocabulary
         // until A1) + FernletConnections (`FernletFeaturePurposes`' two declared salts, which the
-        // heart-drop and presence pair secrets derive under, and `ProximityNamespace.fernlet`, whose
-        // sidecar root is the production heart-drop scope's directory) + FernletCrypto
+        // heart-drop and presence pair secrets derive under, `ProximityNamespace.fernlet`, whose
+        // sidecar root is the production heart-drop scope's directory, and the name placeholders,
+        // `PeerNameDisplay.firstName` among them, which presence's hearts copy reads) + FernletCrypto
         // (`FernletCryptoPurpose`: the ban-evidence reporter-tag domain the ban store hashes under, the
         // sealed drop's salt, the day-tag prefix and the sidecar's authenticated data the heart
         // dead-drop hands CryptoKit, and the presence epoch-tag prefix) + FernletDomainModel (the

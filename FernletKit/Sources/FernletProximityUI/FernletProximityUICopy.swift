@@ -8,8 +8,9 @@
 //  The surfaces and their copy lived in ProximityKit (`ProximityUICopy`) until plan step A0.1
 //  (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4) moved them here. Their 28 keys moved with
 //  them into this module's own catalog, unchanged: a key is a token, and a renamed key strands every
-//  translation of it. ProximityKit keeps `ProximityUICopy` for the three strings it still hands out
-//  itself — the camera's hold-failure line and the two `PeerNameDisplay` placeholders.
+//  translation of it. ProximityKit keeps `ProximityUICopy` for the one string it still hands out
+//  itself, the camera's hold-failure line; the two `PeerNameDisplay` placeholders the screens render
+//  are FernletConnections' (`FernletConnectionsCopy`, in that module's catalog).
 //
 //  A `LocalizedStringKey` literal written inside an SPM module resolves against `Bundle.main` — the
 //  APP's bundle — which never consults this module's own catalog, so the literal renders as

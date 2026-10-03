@@ -21,11 +21,12 @@ become a drop-in package for any app: it now carries no SwiftUI view and no `Fer
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit` (the
 keep rows' `MeshSessionRosterEntry`, the review's `SessionPhotoAnswerFailure`, and
-`PeerNameDisplay`), `FernletUI` (the design system: colour tokens, `.fernlet` fonts,
-`ChipButtonStyle`, `ActionPillButtonStyle`, `AdaptiveStack`, `confirmDestructive`,
-`FernletAnnouncer`), `FernletDomainModel` (`FriendPhotoPayload`), `FernletFoundation`
-(`FernletAuditLog`) and `FernletConnections` (`ProximityNamespace.fernlet`, which both screens hand
-`PeerNameDisplay` so it hides Fernlet's QUIC instance-name prefix and shows a name under Fernlet's
+`PeerNameDisplay`, whose identifier filter is ProximityKit's), `FernletUI` (the design system:
+colour tokens, `.fernlet` fonts, `ChipButtonStyle`, `ActionPillButtonStyle`, `AdaptiveStack`,
+`confirmDestructive`, `FernletAnnouncer`), `FernletDomainModel` (`FriendPhotoPayload`),
+`FernletFoundation` (`FernletAuditLog`) and `FernletConnections` (the name placeholders, its
+extension of `PeerNameDisplay`, whose `shown` both screens call, and `ProximityNamespace.fernlet`,
+which they hand it so it hides Fernlet's QUIC instance-name prefix and shows a name under Fernlet's
 peer-name cap). Only the app target consumes it.
 **The edge runs from the UI to ProximityKit,
 never the reverse**: ProximityKit cannot name anything here, so a module below can never call up
@@ -77,8 +78,9 @@ view spells the hex out for VoiceOver. `PeerNameDisplayTests` pins that no conne
 `FernletProximityUICopy` (the review, keep-friends and save-failure copy), and every lookup passes
 `bundle: .module`; `NothingSavedError`'s message is the one key written inline. These 28 keys moved
 here from ProximityKit's catalog byte for byte, because a key is a token: a renamed key strands its
-translations. ProximityKit keeps `ProximityUICopy` for the three strings it still hands out itself
-(the camera's hold-failure line and the two `PeerNameDisplay` placeholders). The `friends.review.*`,
+translations. ProximityKit keeps `ProximityUICopy` for the one string it still hands out itself (the
+camera's hold-failure line), and the two `PeerNameDisplay` placeholders the screens show are
+`FernletConnections`' (`FernletConnectionsCopy` and that module's catalog). The `friends.review.*`,
 `friends.keepFriend.*` and `friends.keepFriends.done` accessibility identifiers are frozen tokens
 that the UI tests drive. One gap came over unchanged: the Delete all confirmation's title and message
 are English literals handed to `confirmDestructive`, which takes already-resolved strings, so they

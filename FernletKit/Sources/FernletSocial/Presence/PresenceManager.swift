@@ -58,6 +58,7 @@
 
 import Foundation
 import Observation
+import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 import ProximityKit

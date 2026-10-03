@@ -1771,7 +1771,7 @@ value names `.fernlet` explicitly.
 | `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkRecipeShareSession.init()` | The argument-less radios, built from `.fernlet`. |
 | `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` | The seal-key and identity-row helpers with `.fernlet`'s accounts. |
 | `MeshLinkAdvertisement.randomInstanceName()`, `EphemeralMeshTLSIdentity.mint(now:)` / `selfSignedCertificateDER(for:notBefore:notAfter:serial:)`, `PresenceEpochPosture.minted(at:)` / `minted(at:entropy:mintIdentity:)` / `rotated(at:)` / `rotated(at:entropy:mintIdentity:)` / `instanceName(entropy:)`, `RecipeSharePosture.minted(now:)` | The minting doors with `.fernlet`'s instance-name prefixes and common name. |
-| `PeerNameDisplay.personName(_:fingerprint:)` / `shown(_:fingerprint:placeholder:)` / `firstName(_:fingerprint:placeholder:)` | The name display, hiding `.fernlet`'s mesh instance-name prefix. |
+| `PeerNameDisplay.personName(_:fingerprint:)` / `shown(_:fingerprint:placeholder:)` / `firstName(_:fingerprint:placeholder:)` | The name display, hiding `.fernlet`'s mesh instance-name prefix (`personName` over ProximityKit's filter, `shown` and `firstName` over FernletConnections' placeholders, which the bindings file imports). |
 | `MeshRoutedTypeToken.photo` / `tempMessage` / `heart` / `control`, `MeshRoutedTypeRegistry.increment1`, `MeshRoutedAckStageTable.increment1`, `MeshRoutedManifest.signed(...)` without `types:` | The routed constants, the shipping registry and its projection as values, and the mint with that registry, each over `.fernlet`'s routed types. |
 | `ProximityCoordinator.PeerIdentity.supports(_:)` | The coordinator's capability gate under `.fernlet`'s capabilities. |
 
@@ -2741,8 +2741,11 @@ and diffing always agree.
 
 `KeepFriendsPromptSheet.swift` and `FingerprintText.swift` live in the `FernletProximityUI` module
 (ProximityKit plan step A0.1, 2026-10-01); `PeerNameDisplay.swift` stays in ProximityKit's `UI/`
-folder, because FernletSocial's `PresenceManager.firstName(of:in:)` calls it and FernletSocial depends on no UI module. Both screens
-hand it `.fernlet` (FernletProximityUI depends on FernletConnections for it).
+folder as the identifier filter, the consumer the namespace's peer-name soundness rule protects, and its
+placeholders are FernletConnections' extension of the type (`PeerNameDisplay+Placeholders.swift`, over
+that module's catalog), which the app, both screens and FernletSocial's `PresenceManager.firstName(of:in:)`
+call. Both screens hand it `.fernlet` (FernletProximityUI depends on FernletConnections for it and for
+the placeholders).
 
 ### `FernletProximityUI/KeepFriendsPromptSheet.swift`
 
@@ -2769,9 +2772,24 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | Type Or Member | What It Does |
 | --- | --- |
 | `PeerNameDisplay.personName(_:fingerprint:in:)` | The peer's chosen name, sanitized (`ProximityDisplayName.sanitized(_:maxLength:)` under the passed namespace's peer-name cap), or nil when it is empty (Option 1b's withheld state), equals the peer's fingerprint ignoring case (a roster/vault row that filed the fingerprint as the name), has the canonical 16-hex fingerprint shape, or, lowercased, starts with the passed namespace's `family.radios.meshInstanceNamePrefix` (the QUIC instance name, whole or in its moderated form, 24 characters under `.fernlet`; `fernlet-mesh-` under the `.fernlet` every app caller passes). The checks run on the name already cut to the cap, which the namespace's soundness rules keep at least the fingerprint's 16 characters (`fingerprintLength`, held equal to `ProximityNamespace.peerNameFingerprintLength` by `ProximityVocabularyGoldenTests`) and the mesh prefix's length. |
+
+### `FernletConnections/PeerNameDisplay+Placeholders.swift`
+
+The Fernlet app's half of the name display: a `nonisolated extension` of ProximityKit's `PeerNameDisplay`,
+whose phrases are Fernlet's display policy, beside `PeerNames.fernlet`.
+
+| Type Or Member | What It Does |
+| --- | --- |
+| `PeerNameDisplay.Placeholder` | Which phrase stands in for a person whose name is not known: `.nearby` (the connect path) or `.met` (someone met in an earlier session whose name never arrived). |
 | `PeerNameDisplay.shown(_:fingerprint:placeholder:in:)` | `personName` or the localized placeholder: `.nearby` "Someone nearby" (connect rows, participants, join requests, recipe recipients) or `.met` "Someone you met" (keep-as-friend rows, Friends & Blocks). **Display only**: never persisted, never put in a roster, vault row, removal proposal or payload; those keep reading `displayNameOrFingerprint`. |
-| `PeerNameDisplay.text(for:)` | The placeholder alone (`ProximityUICopy.Peer`, resolved with `bundle: .module`). |
-| `PeerNameDisplay.firstName(_:fingerprint:placeholder:in:)` | The first word of `personName` for warm hearts copy ("Aisha" from "Aisha Bloom"), or the WHOLE placeholder when there is no name: the rule runs before the split, so the placeholder never reads "Someone". `PresenceManager.firstName(of:in:)` delegates to it with `.met` and the namespace it is handed (the manager's own, or the app's `.fernlet`), so every heart sentence built on a trust-vault name (the presence refusals composed in the package, `SessionHeartStatusCopy`, Home's received-heart card) refuses a fingerprint filed as a name. |
+| `PeerNameDisplay.text(for:)` | The placeholder alone (`FernletConnectionsCopy.Peer`, resolved with `bundle: .module` against FernletConnections' catalog). |
+| `PeerNameDisplay.firstName(_:fingerprint:placeholder:in:)` | The first word of `personName` for warm hearts copy ("Aisha" from "Aisha Bloom"), or the WHOLE placeholder when there is no name: the rule runs before the split, so the placeholder never reads "Someone". FernletSocial's `PresenceManager.firstName(of:in:)` delegates to it with `.met` and the namespace it is handed (the manager's own, or the app's `.fernlet`), so every heart sentence built on a trust-vault name (the presence refusals composed in the package, `SessionHeartStatusCopy`, Home's received-heart card) refuses a fingerprint filed as a name. |
+
+### `FernletConnections/FernletConnectionsCopy.swift`
+
+| Type Or Member | What It Does |
+| --- | --- |
+| `FernletConnectionsCopy.Peer.someoneNearby` / `someoneYouMet` (internal) | The two placeholders, computed `String(localized:defaultValue:bundle:comment:)` lookups of `proximity.peer.someoneNearby` and `proximity.peer.someoneYouMet` with `bundle: .module` against the module's own `Localizable.xcstrings` (a key is a token, so they keep that spelling); `nonisolated`, as the name display is. Display copy only. |
 
 ## Shared Support
 

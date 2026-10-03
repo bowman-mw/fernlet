@@ -87,6 +87,7 @@ TARGETS=(
     "FernletUI:FernletKit/Sources/FernletUI/Localizable.xcstrings"
     "ProximityKit:FernletKit/Sources/ProximityKit/Localizable.xcstrings"
     "FernletProximityUI:FernletKit/Sources/FernletProximityUI/Localizable.xcstrings"
+    "FernletConnections:FernletKit/Sources/FernletConnections/Localizable.xcstrings"
     "AppServices:FernletKit/Sources/AppServices/Localizable.xcstrings"
     "AIProviders:FernletKit/Sources/AIProviders/Localizable.xcstrings"
     "CloudKitSync:FernletKit/Sources/CloudKitSync/Localizable.xcstrings"
