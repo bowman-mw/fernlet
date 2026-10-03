@@ -43,11 +43,11 @@ struct CoachSessionHardeningTests {
     }
 
     final class AuditRecordingTrustPolicy: ProximityTrustPolicy {
-        var events: [TrainerAuditEvent] = []
+        var events: [ProximitySessionAudit] = []
         func isRevokedProximitySigningKey(_ publicKey: Data) -> Bool { false }
         func isBlockedProximitySigningKey(_ publicKey: Data) -> Bool { false }
         func isTrustedProximityPeer(signingPublicKey: Data) -> Bool { false }
-        func recordTrainerAudit(_ event: TrainerAuditEvent) { events.append(event) }
+        func recordSessionAudit(_ audit: ProximitySessionAudit) { events.append(audit) }
     }
 
     private func makeRecord(

@@ -7551,7 +7551,14 @@ extension FernletStore {
     }
 }
 
-extension FernletStore: ProximityTrustPolicy {}
+extension FernletStore: ProximityTrustPolicy {
+    /// Keeps a coordinator's audit in the vault as Fernlet's persisted row, converted by
+    /// `FernletConnections`' one conversion (`TrainerAuditEvent.init(_:)`); the rows the app builds
+    /// itself go through ``recordTrainerAudit(_:)``.
+    func recordSessionAudit(_ audit: ProximitySessionAudit) {
+        proximityTrustVault.recordTrainerAudit(TrainerAuditEvent(audit))
+    }
+}
 
 extension FernletStore: WorkoutPlanningContext {}
 

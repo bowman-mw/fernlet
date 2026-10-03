@@ -47,7 +47,8 @@
 // 10. **The generic types.** `PayloadEncryption` and `PayloadSummary`: one envelope's schema-v1
 //     canonical bytes, both types' JSON, and the summary's decode bounds.
 // 11. **Persisted records that stay Fernlet's.** A trusted peer, a trainer audit row and a session
-//     log, each as the JSON Fernlet's repositories write, both ways.
+//     log, each as the JSON Fernlet's repositories write, both ways; and a coordinator's audit,
+//     converted, as that audit row's bytes, every kind under its persisted token.
 // 12. **Display-name sanitizing.** `ItemNameModeration.sanitizedName` over a fixed corpus, and the
 //     "A friend" floor ProximityKit puts under it.
 // 13. **`.fernlet`'s vocabulary and presentation strings.** Every token, title and presentation
@@ -1637,6 +1638,52 @@ struct ProximityVocabularyGoldenTests {
     /// A session log persists as its frozen JSON, and the JSON reads back as the log.
     @Test func aConnectionSessionLogPersistsAsItsFrozenJSON() throws {
         try Self.expectPersisted(Self.sessionLog(), as: Self.sessionLogJSON, "the session log")
+    }
+
+    /// A coordinator's audit of an envelope it took in, in ProximityKit's own type (the envelope's
+    /// token as it arrived, the coordinator's `Received <token>` message), converted by
+    /// FernletConnections' one conversion, is the frozen audit row: the same fields, and for the
+    /// fixed id and timestamp the same bytes, both ways.
+    @Test func aCoordinatorsAuditConvertsToTheFrozenAuditRow() throws {
+        let token = Self.frozen("payloadType.recipeShare")
+        let audit = ProximitySessionAudit(
+            id: Self.uuid("2B2B2B2B-3C3C-4D4D-8E8E-4F4F4F4F4F4F"), timestamp: Self.at(60), kind: .envelopeReceived,
+            peerFingerprint: "a1b2c3d4e5f60718", peerDisplayName: "Robin", payloadType: token,
+            message: "Received \(token)")
+        let row = TrainerAuditEvent(audit)
+        #expect(row == Self.trainerAuditEvent(), "the coordinator's audit converts to \(row)")
+        try Self.expectPersisted(row, as: Self.trainerAuditJSON, "the converted audit")
+    }
+
+    /// The eight kinds a coordinator reports, in declaration order, each with the token its converted
+    /// row persists under: the persisted kind of the same name.
+    static let sessionAuditKindTokens: [(kind: ProximitySessionAudit.Kind, token: String)] = [
+        (.pairingStarted, "pairingStarted"), (.stateTransition, "stateTransition"),
+        (.envelopeReceived, "envelopeReceived"), (.envelopeSent, "envelopeSent"),
+        (.envelopeRejected, "envelopeRejected"), (.revokedPeerBlocked, "revokedPeerBlocked"),
+        (.sessionEnded, "sessionEnded"), (.error, "error")
+    ]
+
+    /// Every kind a coordinator reports persists, converted, under its frozen token (the table is
+    /// exactly the kinds, so a new one fails here until it has a row), and a token no build knows
+    /// converts to no payload type with nothing parked, as the envelope's typed view reads it: the
+    /// row carries neither key.
+    @Test func everyAuditKindPersistsUnderItsTokenAndAnUnknownTokenAsNone() throws {
+        let kinds = Self.sessionAuditKindTokens.map(\.kind)
+        #expect(kinds == ProximitySessionAudit.Kind.allCases, "the kind table holds \(kinds)")
+        let encoder = RowPayloadCoders.makeEncoder()
+        // R2: bounded by the eight kinds.
+        for entry in Self.sessionAuditKindTokens {
+            let row = TrainerAuditEvent(ProximitySessionAudit(kind: entry.kind, message: "audit"))
+            let json = try String(decoding: encoder.encode(row), as: UTF8.self)
+            #expect(json.contains(#""kind":"\#(entry.token)""#), "a \(entry.kind) audit persists as \(json)")
+        }
+        let unknown = TrainerAuditEvent(ProximitySessionAudit(
+            kind: .envelopeReceived, payloadType: "example.unknown.v1", message: "Received example.unknown.v1"))
+        let json = try String(decoding: encoder.encode(unknown), as: UTF8.self)
+        #expect(unknown.payloadType == nil && unknown.unknownPayloadTypeToken == nil, "an unknown token converts to \(json)")
+        #expect(!json.contains(#""payloadType""#) && !json.contains(#""unknownPayloadTypeToken""#),
+                "an unknown token's row persists as \(json)")
     }
 
     /// `value` through the encoder Fernlet's synced repository writes with (`RowPayloadCoders`, the

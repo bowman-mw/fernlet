@@ -1,7 +1,8 @@
 // ProximityPersistenceRecords.swift
 // SPM carve-up: the two pure Codable trust/audit DTOs carved DOWN out of the app-layer
 // Proximity/Trust/TrainerAuditLog.swift so the persistence layer can reference them without an
-// upward edge. The audit-log LOGIC stays in TrainerAuditLog.swift. ProximityTrustedPeerRecord's
+// upward edge. FernletConnections converts ProximityKit's session audits into TrainerAuditEvent
+// rows (TrainerAuditEvent+SessionAudit.swift). ProximityTrustedPeerRecord's
 // `mode` field uses the canonical DomainModel enum ProximityMode (the app-side
 // ProximityCoordinator.Mode is a typealias to it). Codable identity is unchanged.
 
@@ -114,8 +115,9 @@ public nonisolated struct ProximityTrustedPeerRecord: Codable, Equatable, Identi
 ///
 /// `kind` and `payloadType` decode tolerantly with parked tokens — ``PayloadType`` grows with every
 /// in-person share feature, and an audit row stamped by a newer build must not brick the older
-/// paired device. The audit-log LOGIC stays app-side in TrainerAuditLog.swift; this is the pure
-/// DTO the persistence layer holds.
+/// paired device. ProximityKit's session coordinator reports in its own `ProximitySessionAudit`,
+/// which `FernletConnections` converts into this row (`TrainerAuditEvent+SessionAudit.swift`); the
+/// trust vault and the app build the others. This is the pure DTO the persistence layer holds.
 public nonisolated struct TrainerAuditEvent: Codable, Equatable, Identifiable, Sendable {
     /// The taxonomy of auditable trainer-pairing events, from pairing start to revocation.
     ///

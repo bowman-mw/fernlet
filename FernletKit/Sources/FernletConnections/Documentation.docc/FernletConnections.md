@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, and ``TrainerExportPayload``, the coach channel's export body.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
 
 ## Overview
 
@@ -193,9 +193,17 @@ its name, members and behaviour as it had in ProximityKit:
   before it decodes anything: the wire cap is that bound and the bundle cap half of it, so Fernlet's
   body always fits inside the mechanism's limit. `ProximityVocabularyGoldenTests` pins the token, the
   version, the body's JSON bytes and both caps beside the coordinator's bound.
+- `TrainerAuditEvent.init(_:)` (`TrainerAuditEvent+SessionAudit.swift`): the one conversion from what
+  ProximityKit's coordinator records through its policy, a `ProximitySessionAudit`, to the row
+  Fernlet's vault keeps and its snapshot persists. The id, timestamp, peer fields and message are
+  copied unchanged, the kind maps case for case by an exhaustive switch, and the envelope's token is
+  read as a `PayloadType`: a token this build does not know becomes no payload type, with nothing
+  parked. Both policies and the app's `FernletStore` record through it, and
+  `ProximityVocabularyGoldenTests` holds a converted audit to the frozen row's JSON, byte for byte,
+  and each kind to the token its row persists under.
 
-The protocol the policies answer (`ProximityTrustPolicy`), the vault, the roster entry and the
-coordinator stay ProximityKit's.
+The protocol the policies answer (`ProximityTrustPolicy`), the audit type the coordinator reports in
+(`ProximitySessionAudit`), the vault, the roster entry and the coordinator stay ProximityKit's.
 
 **What joins it later.** Nothing here stands in for the coordinator's display name or a per-mode
 service type: ProximityKit has neither, every caller passing the host's resolved name and the
@@ -215,9 +223,10 @@ FernletKit after ProximityKit leaves for its own repository (plan A1), consuming
 step A0.2.9 on `FernletCrypto` (for `DeviceBindingID`, which the binding adapter delegates to); since
 step A0.2.10, for the audit bridge, on `FernletFoundation` (Layer 0, which `FernletAuditLog` lives
 in); and for the payload vocabulary and the session rules on `FernletDomainModel` (for
-`PayloadType` and `ProximityCapability`, whose raw values the vocabulary reads, and for
+`PayloadType` and `ProximityCapability`, whose raw values the vocabulary reads, for
 `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the policies and the
-review read). It imports nothing else but Foundation and Security. Through ProximityKit it reaches
+review read, and for `TrainerAuditEvent` and `PayloadType`, which the audit conversion reads). It
+imports nothing else but Foundation and Security. Through ProximityKit it reaches
 `PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair

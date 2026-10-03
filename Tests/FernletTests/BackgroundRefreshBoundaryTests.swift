@@ -98,7 +98,7 @@ import Testing
 /// `reportProximityPeer`, `isTrustedProximityPeer`, `isRevokedProximitySigningKey`,
 /// `isBlockedProximitySigningKey`, `isBlockedFingerprint`, `isProximitySellerBanned`,
 /// `isClothingItemLocallyReported`, `reconcileModerationBans`, `recomputeCloseFriendsIfNeeded`,
-/// `recordTrainerAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
+/// `recordTrainerAudit`, `recordSessionAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
 /// helpers (`recipeShareText`, `recipeShareDraft`, `proximityRecipeSharePayload`,
 /// `importProximityRecipeShare`; `savedRecipeShareText` was retired 2026-09-30); the read-only health projections (`allowedHealthCapabilities`,
 /// `visibleHealthCapabilities`, `dailyHealthScore`, `workoutExists`); and

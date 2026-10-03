@@ -42,7 +42,9 @@ public final class FriendSessionTrustPolicy: ProximityTrustPolicy {
     // Friend sessions authorize through the proximity gate; remembered trust is not required.
     public func isTrustedProximityPeer(signingPublicKey: Data) -> Bool { true }
 
-    public func recordTrainerAudit(_ event: TrainerAuditEvent) {
-        vault.recordTrainerAudit(event)
+    /// Keeps the coordinator's audit in the vault as Fernlet's persisted row
+    /// (`TrainerAuditEvent.init(_:)`, the module's one conversion).
+    public func recordSessionAudit(_ audit: ProximitySessionAudit) {
+        vault.recordTrainerAudit(TrainerAuditEvent(audit))
     }
 }

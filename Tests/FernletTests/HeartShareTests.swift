@@ -611,7 +611,7 @@ struct HeartShareTests {
             return
         }
         #expect(reason.contains("revokedKey"))
-        // And the audit trail recorded the block (recordTrainerAudit ran because the policy was alive).
+        // And the audit trail recorded the block (recordSessionAudit ran because the policy was alive).
         #expect(vault.auditEvents.contains { $0.kind == .revokedPeerBlocked })
     }
 

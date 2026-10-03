@@ -48,7 +48,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | Mesh removal | Legacy two-party: `proposeRemoval(of:)`, `canSecondRemoval(_:)`, `secondRemoval(_:)`, `applyApprovedRemoval(_:)`. Signed quorum (P4 item 5, §10.4): `proposeSignedRemoval(of:now:)`, `voteOnSignedRemoval(_:now:)`, `evaluateRemovalQuorum(_:now:)`, `MeshRemovalQuorum` |
 | Friend photos | `MeshNetworkManager.addPhoto(_:)`, `holdSessionPhoto(_:key:live:)` (2026-09-30: every session photo is HELD in the sealed pending corpus until the person's answer; `cachePhoto` is gone), `applyPhotoAnswers(kept:discarded:now:)`, `deletePhoto(_:)`, `shareRoutedPhoto(itemID:addedAt:imageData:session:)` → `originateRoutedItem(body:typeToken:itemID:now:)` (P5 item 13 replaced `syncPhotoManifest(to:)`'s pull protocol with the routed store), `PrivateMediaStore`. 2026-08 consolidation: the three duplicated photo-save catch-ladders and alert blocks were consolidated into `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` + the `photoSaveFailureAlert(_:failure:)` view extension (ProximityKit); the media stores' hand-rolled AES-GCM seal/open now routes through the shared extension on `PrivateMediaKeyProviding` (MediaAtRestCrypto.swift); JSON sidecar state — including the photo-wall preferences store — was consolidated into `JSONSidecarFile` (ProximityKit/Support/JSONSidecarFile.swift). |
 | Recipe sharing | `ProximityRecipeShareManager.start()`, `sendRecipeShare(_:to:)`, `proximityCoordinator(_:didReceive:plaintext:from:)`; the radio's pause/resume contract and the share's state machine are `RecipeShareDiscoveryGate` / `RecipeShareTransfer` (RecipeSharing/RecipeShareTransfer.swift) |
-| Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `TrainerAuditEvent`, `ProximityRecipeShareDiagnostics` |
+| Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `ProximitySessionAudit` (what a coordinator records through its trust policy) → `TrainerAuditEvent` (Fernlet's persisted row, converted by `FernletConnections`' `TrainerAuditEvent.init(_:)`), `ProximityRecipeShareDiagnostics` |
 | Lowercase hex for a handful of bytes | `String(format: "%02x", $0)` — the idiom in the five places that already do it (`MeshEpochRef.swift`, `HeartDropPeerBundleCache.swift`, and `IdentityService.swift` ×3). **Known, deliberate exception:** `PresenceEpochPosture.hexadecimal(_:)` re-implements it privately. Two reasons it stays forked: it encodes the advertised instance name on the main actor at every epoch and `String(format:)` boxes each byte as a `CVarArg` to do it; and the value is held to a whole-FILE grep wall in `PresenceEpochPostureTests` (no second 900, no clock, no device byte, `import Foundation` and nothing else), which only means anything while every byte of the name's construction is visible in that one file. Do not consolidate it away without moving that wall. |
 | A string that is both a token and a label | FORK IT — never localize in place. See "Tokens vs. display in ProximityKit" below. |
 
@@ -108,6 +108,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `ProximityInspectorRecording` default methods | Provide no-op inspector hooks so coordinator callers can implement only the diagnostics they need. Every requirement takes this module's own report types (`ProximityInspectorEnvelope`, `ProximityInspectorDistanceSample`, `ProximityInspectorPeer`, `ProximityInspectorTransportEvent` in `Engine/ProximityInspectorReport.swift`; `ProximityRole`, `ProximityRangingMode` in `Engine/ProximitySessionEnums.swift`), never a host's log type: the app's `ConnectionInspector` converts them into `ConnectionSessionLog`. |
 | `ProximityInspectorEventRecorder.recordCoordinatorEvent(_:)` | Stores coordinator event strings for lightweight tests or diagnostics. |
 | `init(identity:transport:ranging:inspector:payloadHandler:trustPolicy:replayCache:foregroundAnchor:displayName:capabilities:sealedIntroductionPeerKeyAgreementKey:timeoutSeconds:now:)` | Wires identity, transport, ranging, diagnostics, trust policy, replay cache, foreground anchoring, timeouts, and tap/proximity detectors. `displayName` has no default: the engine has no name of its own, and every caller passes its host's resolved name. |
+| `trustPolicy?.recordSessionAudit(_:)` (ten sites) | The session audit: `prepareSession`, `send`, `handleInbound`'s rejection, `rejectsOversizedTrainerBlob`, `isRejectedByTrustPolicy`, `recordVerifiedInbound`, `transition`, `fail`, `end` and the connection-phase timeout each record a `ProximitySessionAudit` (ProximityKit's own type; the envelope's token as carried, `payloadTypeToken`), never a host's record. The policy converts it into its own row: Fernlet's, a `TrainerAuditEvent` in the vault. |
 | `deinit` | Cancels timeout and heartbeat tasks. |
 | `attachPayloadHandler(_:)` | Attaches or replaces the payload receiver after construction. |
 | `begin(role:mode:)` | Resets transport, prepares identity/session state, starts advertising or browsing, and transitions to discovery. |
@@ -1800,6 +1801,9 @@ value names `.fernlet` explicitly.
 
 ### `ProximityTrustVault.swift`
 
+Not itself a `ProximityTrustPolicy`: the host's session policies wrap it, ask it the questions
+below and keep each coordinator audit in it, converted into a `TrainerAuditEvent`.
+
 | Function | What It Does |
 | --- | --- |
 | `init(initialPeers:initialAudit:onChange:)` | Loads normalized trusted peers and initial audit events. |
@@ -1813,7 +1817,7 @@ value names `.fernlet` explicitly.
 | `block(signingPublicKey:)` | Blocks/revokes an existing key or creates a blocked placeholder record. |
 | `unblock(signingPublicKey:)` | Clears blocked/revoked flags. |
 | `revoke(signingPublicKey:)` | Marks a trusted peer revoked and records audit. |
-| `recordTrainerAudit(_:)` | Adds audit event and triggers persistence callback. |
+| `recordTrainerAudit(_:)` | Adds audit event and triggers persistence callback. The session policies call it with each coordinator audit, converted (`TrainerAuditEvent.init(_:)`). |
 | `apply(peers:audit:)` | Replaces vault state from a stored snapshot. |
 | `normalized(_:)` | Upgrades legacy 8-character fingerprints to 16-character fingerprints when key data exists. |
 | `recordAuditWithoutSaving(_:)` | Inserts audit event and caps audit log at 500 entries. |
@@ -1830,15 +1834,32 @@ recipe-share managers open (each retains it, since the coordinator holds its pol
 | `isRevokedProximitySigningKey(_:)` | Delegates revoked-key check to vault. |
 | `isBlockedProximitySigningKey(_:)` | Delegates blocked-key check to vault. |
 | `isTrustedProximityPeer(signingPublicKey:)` | Always returns true because friend sessions authorize through proximity commit. |
-| `recordTrainerAudit(_:)` | Delegates audit recording to vault. |
+| `recordSessionAudit(_:)` | Converts the coordinator's audit into Fernlet's persisted row (`TrainerAuditEvent.init(_:)`) and keeps it in the vault. |
+
+### `FernletConnections/TrainerAuditEvent+SessionAudit.swift`
+
+Fernlet's one conversion from what ProximityKit's coordinator reports to what Fernlet persists. Both
+session policies and the app's `FernletStore` record through it.
+
+| Function | What It Does |
+| --- | --- |
+| `TrainerAuditEvent.init(_:)` | A `ProximitySessionAudit` as Fernlet's audit row: id, timestamp, peer fields and message unchanged, the kind case for case, the envelope's token read as a `PayloadType` (an unknown token becomes none and nothing is parked, as the envelope's typed view reads it). `nonisolated`. `ProximityVocabularyGoldenTests` holds the result to the frozen row's JSON. |
+| `TrainerAuditEvent.Kind.init(_:)` (fileprivate) | ProximityKit's eight kinds onto the persisted kinds of the same names, by an exhaustive switch, so a kind ProximityKit adds fails to compile instead of persisting as another. |
 
 ### `TrainerAuditLog.swift`
 
 | Function | What It Does |
 | --- | --- |
 | `ProximityTrustedPeerRecord.init(...)` | Creates a persisted trust record with timestamps and optional revoked/blocked flags. |
-| `TrainerAuditEvent.init(...)` | Creates an audit event for pairing, state, envelope, revocation, ending, and error diagnostics. |
-| `ProximityTrustPolicy` methods | Define trust, revoke/block, and audit hooks consumed by `ProximityCoordinator`. |
+| `TrainerAuditEvent.init(...)` | Creates Fernlet's persisted audit row (FernletDomainModel), as the vault and the app do for their own events; a coordinator's audit arrives as a `ProximitySessionAudit` and is converted by `TrainerAuditEvent.init(_:)` above. |
+| `ProximityTrustPolicy` methods | The trust questions (`isRevokedProximitySigningKey(_:)`, `isBlockedProximitySigningKey(_:)`, `isTrustedProximityPeer(signingPublicKey:)`) and the audit door, `recordSessionAudit(_:)`, which takes ProximityKit's own `ProximitySessionAudit`, consumed by `ProximityCoordinator`. ProximityKit ships no conformer. |
+
+### `Trust/ProximitySessionAudit.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ProximitySessionAudit.init(id:timestamp:kind:peerFingerprint:peerDisplayName:payloadType:message:)` | One event a coordinator records through its trust policy; `id` and `timestamp` default to a fresh id and the wall clock, which is what the coordinator takes. `nonisolated`, `Equatable`, `Sendable`; the payload token is a plain string, so the type names no host vocabulary. |
+| `ProximitySessionAudit.Kind` | The eight kinds the coordinator reports (`pairingStarted`, `stateTransition`, `envelopeReceived`, `envelopeSent`, `envelopeRejected`, `revokedPeerBlocked`, `sessionEnded`, `error`), raw values the case names, `CaseIterable`. |
 
 ### `Support/ProximityAudit.swift`
 
@@ -1926,7 +1947,7 @@ Fernlet's coach-channel rules, in the `FernletConnections` module.
 | `CoachSessionContract.fernletRole` / `.coachAppRole` | The written-down role split (Fernlet browses, the coach app advertises) so it cannot be gotten backwards. |
 | `CoachSessionTrustPolicy.isTrustedProximityPeer(signingPublicKey:)` | Unlike `FriendSessionTrustPolicy` (which returns `true` unconditionally), auto-confirms only an unrevoked, unblocked `.trainer` vault record whose `unknownModeToken` is `nil` — `.trainer` is the decode freeze default, so a record from a newer build must not silently inherit coach privilege. |
 | `isRevokedProximitySigningKey(_:)` / `isBlockedProximitySigningKey(_:)` | Read the **coach** vault, not the friend vault. |
-| `recordTrainerAudit(_:)` | Coach-channel audit hook. |
+| `recordSessionAudit(_:)` | Coach-channel audit hook: converts the coordinator's audit (`TrainerAuditEvent.init(_:)`) and keeps it in the vault. |
 
 ### `CoachVerificationCeremony.swift`
 

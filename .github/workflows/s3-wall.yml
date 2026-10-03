@@ -339,7 +339,10 @@ jobs:
         # beside the namespace golden it continues. No compiler half either: a moved token compiles
         # clean. Since A0.3.6, which moves `ProximityRole` and `ProximityRangingMode` into ProximityKit
         # while Fernlet's session log keeps copies of its own, it also holds those copies to
-        # ProximityKit's spellings, case for case.
+        # ProximityKit's spellings, case for case. Since A0.3.10, which has the coordinator record its
+        # audit in ProximityKit's own `ProximitySessionAudit` and Fernlet convert it into the persisted
+        # `TrainerAuditEvent`, it also holds a converted audit to the frozen audit row's bytes and
+        # each of the eight kinds to the token its row persists under.
         #
         # `ProximityNamespaceGateTests` joins them at ProximityKit plan step A0.3's runtime gate
         # (2026-10-02): ProximityKit's run-time refusal of an unsound namespace, door by door — the
@@ -442,9 +445,17 @@ jobs:
         # two mesh cells: `.fernlet`'s thirty mesh messages against their frozen tokens and its known
         # set, and a mesh manager signing and dispatching by a namespace whose mesh messages are its
         # own) = 235 is the ARITHMETIC CHECK, never the source.
+        # RAISED 235 -> 237 at A0.3.10, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "237 tests in 7 suites" (6 + 13 + 19 + 104 + 37 +
+        # 47 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 237:
+        # passed. Run once more at 237 without ProximityVocabularyGoldenTests: 190 ran and the floor
+        # refused it. 235 + 2 (the cells holding a coordinator's converted audit to the frozen audit
+        # row and each audit kind to its persisted token) = 237 is the ARITHMETIC CHECK, never the
+        # source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 235 \
+          Scripts/run-gated-suites.sh crypto-goldens 237 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

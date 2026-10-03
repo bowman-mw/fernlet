@@ -202,7 +202,7 @@ struct ProximityTrustVaultTests {
         #expect(policy.isBlockedProximitySigningKey(signingKey))
         #expect(policy.isRevokedProximitySigningKey(signingKey))
 
-        policy.recordTrainerAudit(TrainerAuditEvent(kind: .error, message: "forwarded"))
+        policy.recordSessionAudit(ProximitySessionAudit(kind: .error, message: "forwarded"))
         #expect(vault.auditEvents.first?.message == "forwarded")
     }
 
