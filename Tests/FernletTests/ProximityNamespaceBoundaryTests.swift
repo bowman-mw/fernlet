@@ -27,8 +27,7 @@
 //      manager's feature parts (A0.5), with the recipe profile (A0.7) or with the session profile
 //      (A0.7 / C5): 58 lines in 8 files;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
-//      later step reshapes or closes, each row with that step (no line: ProximityKit declares nothing
-//      `package`).
+//      later step reshapes or closes, each row with that step (38 lines in 5 files).
 //
 // Rules 2 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
 // lowered or deleted. So rules 2 to 4 only shrink, to nothing, as A0.4, A0.5, A0.7, A0.7 / C5 and A1
@@ -45,7 +44,11 @@
 // token and the coordinator's typed send (until A0.7); the session mode (until A0.7 / C5); and the
 // DEBUG test-hook names (until A1). A0.3's rows are gone, and their exit step with them: no
 // presentation string, membership record kind, routed-type token or coach-channel format is on rule
-// 3's list.
+// 3's list. Rule 5 holds the other direction, the doors ProximityKit opens to Fernlet's own modules
+// while a later step reshapes what is behind them: the presence radio's seam, its QUIC conformer,
+// the peer channel the seam names, the epoch posture and the TXT vocabulary, which Fernlet's
+// presence manager drives (until A1), and the coordinator's typed send and manual commit, which
+// presence's heart delivery and the recipe-share manager call (until A0.7).
 
 import Foundation
 import Testing
@@ -874,7 +877,8 @@ private extension UInt8 {
     /// wherever it is used. So the list is exact both ways, like rules 2 to 4: a new `package` line
     /// fails until a row names why it is there and its exit, and a line that goes away fails until
     /// its row is lowered or deleted, so no door outlives its step unnoticed. ProximityKit declares
-    /// nothing `package` (no line in no file). Only code lines count, each once
+    /// `package` on 38 code lines in 5 files: the presence radio's doors (36 lines in 4 files, until
+    /// A1) and the coordinator's two (until A0.7). Only code lines count, each once
     /// (``packageDeclarationPattern``): comments and literals may say `package` freely.
     @Test func packageIsDeclaredOnlyOnTheListedLines() throws {
         let matcher = try NSRegularExpression(pattern: Self.packageDeclarationPattern)
@@ -957,9 +961,17 @@ private extension UInt8 {
         let reason: Reason
     }
 
-    /// Every file whose code declares `package`, by path under the module root: none, because
-    /// ProximityKit declares nothing `package`. A door's row names the step that closes it.
-    static let packageDeclarationLines: [String: PackageLines] = [:]
+    /// Every file whose code declares `package`, by path under the module root, each row with the
+    /// step that closes its doors: the presence radio's seam, its QUIC conformer, the peer channel the
+    /// seam names, the epoch posture and the TXT vocabulary (A1), and the coordinator's typed send and
+    /// manual commit (A0.7).
+    static let packageDeclarationLines: [String: PackageLines] = [
+        "Engine/ProximityCoordinator.swift": PackageLines(lines: 2, reason: .coordinatorDoors),
+        "Presence/PresenceAdvertisement.swift": PackageLines(lines: 4, reason: .presenceRadioSeam),
+        "Presence/PresenceEpochPosture.swift": PackageLines(lines: 5, reason: .presenceRadioSeam),
+        "Transport/NetworkMeshSession.swift": PackageLines(lines: 12, reason: .presenceRadioSeam),
+        "Transport/NetworkPresenceSession.swift": PackageLines(lines: 15, reason: .presenceRadioSeam)
+    ]
 
     // MARK: The lexer, fixtured
 
@@ -1047,13 +1059,17 @@ private extension UInt8 {
         case a05 = "A0.5"
         /// The one-to-one radio becomes a profile-driven pair session (A0.7): the recipe-share
         /// manager, its wire types and the doors only it and its radio still go through leave with
-        /// the recipe profile.
+        /// the recipe profile, and so do the coordinator's two `package` doors (rule 5), the typed
+        /// send and the manual commit that presence's heart delivery and the recipe-share manager
+        /// call, which the pair session's send and commit replace.
         case a07 = "A0.7"
         /// The pair session's coach profile arrives (A0.7 / C5): the connection profiles that
         /// Fernlet's session mode generalizes into. Only the session mode leaves here.
         case a07c5 = "A0.7 / C5"
         /// The package leaves Fernlet's tree (A1): the DEBUG test-hook names are settled then, and so
-        /// is every `package` door whose row names this exit, published as mechanism or wrapped.
+        /// are the presence radio's `package` doors (rule 5): its seam, its QUIC conformer, the peer
+        /// channel the seam names, the epoch posture and the TXT vocabulary, published as mechanism
+        /// or wrapped by a presence engine.
         case a1 = "A1"
     }
 
@@ -1284,5 +1300,21 @@ extension ProximityNamespaceBoundaryTests.Reason {
         the coordinator's `Mode` alias for Fernlet's session mode (trainer or friend): not a token but \
         a session profile, which selects the commit gate, remembered-trust auto-confirm and the \
         trainer size gate, so it generalizes with the connection profiles
+        """)
+
+    // Rule 5: the package doors (A1, A0.7).
+
+    /// The presence radio's doors.
+    static let presenceRadioSeam = Self(exit: .a1, why: """
+        the presence radio's seam, its QUIC conformer, the peer channel the seam's requirements name \
+        and presence's heart connections build a coordinator over, its epoch posture and its TXT \
+        vocabulary, which Fernlet's presence manager drives, from FernletSocial once presence moves \
+        there; package access ends when ProximityKit leaves FernletKit, so by then the seam is \
+        published as mechanism or wrapped by a presence engine
+        """)
+    /// The coordinator's doors.
+    static let coordinatorDoors = Self(exit: .a07, why: """
+        the coordinator's typed send and manual commit, which presence's heart delivery and the \
+        recipe-share manager call; the pair session's API replaces them
         """)
 }

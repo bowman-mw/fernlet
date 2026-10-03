@@ -16,7 +16,7 @@
 // "Accessors" at the foot of the suite. When a value or its reader moves, only its accessor is
 // re-pointed at the path production then reads, and a moved consumer no cell drives yet gains a cell.
 //
-// Thirteen groups:
+// Fourteen groups:
 //
 // 1. **The seven feature labels** the heart dead-drop, presence and the ban store hand CryptoKit
 //    themselves, each still a FernletCrypto registry entry: the heart pair salt, the sealed drop's salt,
@@ -31,8 +31,9 @@
 // 5. **The sealed drop**: the drop key's known answer from primitives, then a frozen static-key drop
 //    opened through the sealer.
 // 6. **The sealed sidecar**: a frozen `FSC2` blob opened under a planted key.
-// 7. **The prekey bundle**: its JSON both ways, with and without its signed prekey, and both directions
-//    of the identity introduction that gossips it.
+// 7. **The prekey bundle**: its JSON both ways, with and without its signed prekey, the prekey store's
+//    bundle types as the core wire type the introduction carries, and both directions of the identity
+//    introduction that gossips it.
 // 8. **The keychain names**: the heart-drop service and its two accounts, the ban store's two accounts
 //    by behaviour, and the mesh stores' services derived beside the heart-drop service.
 // 9. **The storage names**: five stores' file names, and the production heart-drop scope's folder and
@@ -46,6 +47,8 @@
 // 13. **The feature salts `.fernlet` declares**: the heart and presence pair salts as its family's
 //     feature group, in order, each its registry twin's bytes, and ProximityKit's generic pair-secret
 //     door deriving group 2's known answers under them, from either side.
+// 14. **The heart-eligibility predicate**: the core's check that a peer is remembered, not removed and
+//     blocked neither by key nor by fingerprint answers each of its three legs as presence's gate does.
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -67,9 +70,10 @@
 //
 // Fixed inputs: alice's key-agreement private key is the bytes 0x01…0x20 and her signing key
 // 0x21…0x40; bob's are 0x41…0x60 and 0x61…0x80; the reporter-tag salt is 0x80…0x9f, the sidecar key
-// 0xa0…0xbf and a third key-agreement key, the escrow fixture's, 0xc0…0xdf. A planted identity is its
-// signing and key-agreement private rows stored device-only at `.fernlet`'s identity accounts under a
-// throwaway service (`com.fernlet.test.ffgt.<UUID>`, swept in a `defer`), then built with
+// 0xa0…0xbf and a third key-agreement key, the escrow fixture's, 0xc0…0xdf; group 14's stranger and
+// carol hold 0xe0…0xff and 0xf0…0x0f as signing keys only, from which nothing is derived. A planted
+// identity is its signing and key-agreement private rows stored device-only at `.fernlet`'s identity
+// accounts under a throwaway service (`com.fernlet.test.ffgt.<UUID>`, swept in a `defer`), then built with
 // `IdentityService(namespace: .fernlet, keychainService:)` and provisioned, which adopts them
 // (provisioning's Case 1). Every identity here names its namespace, never a test binding
 // (ProximityNamespaceTestBindings.swift); the escrow group builds its identities through one accessor,
@@ -434,8 +438,14 @@ struct FernletFeatureGoldenTests {
     /// Each fixed bundle encodes to its frozen JSON (keys `bundleID`, `created`, `expires`,
     /// `keys[id, publicKey]`, `signedPrekey{created, expires, id, publicKey}`, default date and data
     /// strategies) and decodes back to an equal bundle. The type's name never reaches the bytes, which
-    /// ride the signed introduction, the prekey keychain blob and the sealed peer-bundle sidecar.
+    /// ride the signed introduction, the prekey keychain blob and the sealed peer-bundle sidecar; and
+    /// the prekey store's bundle types are the very types the introduction carries, so the blob and
+    /// the sidecar hold the bytes pinned here.
     @Test func thePrekeyBundleEncodesToItsFrozenJSONAndBack() throws {
+        let carried = [ObjectIdentifier(PrekeyBundle.self), ObjectIdentifier(PrekeyEntry.self),
+                       ObjectIdentifier(SignedPrekey.self)]
+        #expect(Self.prekeyStoreBundleTypes == carried,
+                "the prekey store's bundle, entry or signed prekey is not the type the introduction carries")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let cases = [("signed", Self.signedBundle, Self.signedBundleJSON), ("bare", Self.bareBundle, Self.bareBundleJSON)]
@@ -903,35 +913,112 @@ struct FernletFeatureGoldenTests {
             #expect(actual == frozen, "\(name) pair secret through the door is \(actual)")
         }
     }
+
+    // MARK: Group 14 — the heart-eligibility predicate
+
+    /// A signing key and a fingerprint no record holds. The predicate compares fingerprints as the
+    /// block list holds them, so a fingerprint here is a label and needs no key behind it.
+    static var strangerSigningKey: Data { consecutiveBytes(from: 0xe0) }
+    /// The stranger's fingerprint label.
+    static let strangerFingerprint = "e0e1e2e3e4e5e6e7"
+    /// carol's signing key, a removed friend's: the bytes 0xf0…0x0f, as a key only.
+    static var carolSigningKey: Data { consecutiveBytes(from: 0xf0) }
+    /// carol's fingerprint label.
+    static let carolFingerprint = "f0f1f2f3f4f5f6f7"
+
+    /// The vault the predicate asks: alice remembered and unblocked; bob remembered (never removed)
+    /// with his key and fingerprint blocked; carol removed and unblocked. Planted as records, so each
+    /// leg can be held apart from the others; `ProximityTrustVault.block(signingPublicKey:)` would
+    /// remove bob too.
+    static var eligibilityRecords: [ProximityTrustedPeerRecord] {
+        let met = Date(timeIntervalSince1970: 1_700_000_000)
+        return [
+            ProximityTrustedPeerRecord(
+                displayName: "Alice", fingerprint: aliceFingerprint, signingPublicKey: bytes(fromHex: aliceSigningPubHex),
+                keyAgreementPublicKey: alicePub, mode: .friend, firstAcceptedAt: met, lastSeenAt: met),
+            ProximityTrustedPeerRecord(
+                displayName: "Bob", fingerprint: bobFingerprint, signingPublicKey: bytes(fromHex: bobSigningPubHex),
+                keyAgreementPublicKey: bobPub, mode: .friend, firstAcceptedAt: met, lastSeenAt: met, blockedAt: met),
+            ProximityTrustedPeerRecord(
+                displayName: "Carol", fingerprint: carolFingerprint, signingPublicKey: carolSigningKey,
+                keyAgreementPublicKey: escrowPub, mode: .friend, firstAcceptedAt: met, lastSeenAt: met, revokedAt: met)
+        ]
+    }
+
+    /// The core's predicate answers each leg as presence's gate does, and as the frozen column says:
+    /// a remembered, unblocked key with an unblocked fingerprint is eligible; a key the vault never
+    /// met, a removed friend's key, a blocked key under an unblocked fingerprint and an unblocked key
+    /// under a blocked fingerprint are not. Over the presence suites' host (`MockPresenceQUICHost`),
+    /// never a second copy of a host.
+    @Test func theHeartEligibilityPredicateAnswersItsThreeLegsAsPresenceDoes() {
+        let host = MockPresenceQUICHost()
+        host.proximityTrustVault.apply(peers: Self.eligibilityRecords, audit: [])
+        let alice = Self.bytes(fromHex: Self.aliceSigningPubHex)
+        let bob = Self.bytes(fromHex: Self.bobSigningPubHex)
+        let rows: [(what: String, key: Data, fingerprint: String, eligible: Bool)] = [
+            ("alice, remembered and unblocked", alice, Self.aliceFingerprint, true),
+            ("a stranger the vault never met", Self.strangerSigningKey, Self.strangerFingerprint, false),
+            ("carol, removed", Self.carolSigningKey, Self.carolFingerprint, false),
+            ("bob's blocked key under an unblocked fingerprint", bob, Self.strangerFingerprint, false),
+            ("alice's key under bob's blocked fingerprint", alice, Self.bobFingerprint, false)
+        ]
+        // R2: bounded by the five rows.
+        for row in rows {
+            let core = Self.coreHeartEligibility(of: row.key, fingerprint: row.fingerprint, in: host)
+            let presence = Self.presenceHeartEligibility(of: row.key, fingerprint: row.fingerprint, in: host)
+            #expect(core == row.eligible, "the core's predicate answers \(core) for \(row.what)")
+            #expect(presence == core, "presence's gate answers \(presence) for \(row.what), the core \(core)")
+        }
+    }
 }
 
 // MARK: - Accessors
 
 extension FernletFeatureGoldenTests {
 
-    /// The gossiped prekey bundle's type, today `HeartPrekeyStore.Bundle`.
-    typealias PrekeyBundle = HeartPrekeyStore.Bundle
-    /// One one-time prekey of a bundle, today `HeartPrekeyStore.PrekeyEntry`.
-    typealias PrekeyEntry = HeartPrekeyStore.PrekeyEntry
-    /// A bundle's signed prekey, today `HeartPrekeyStore.SignedPrekey`.
-    typealias SignedPrekey = HeartPrekeyStore.SignedPrekey
+    /// The gossiped prekey bundle's type, today the core wire type `ProximityPrekeyBundle`.
+    typealias PrekeyBundle = ProximityPrekeyBundle
+    /// One one-time prekey of a bundle, today `ProximityPrekeyBundle.PrekeyEntry`.
+    typealias PrekeyEntry = ProximityPrekeyBundle.PrekeyEntry
+    /// A bundle's signed prekey, today `ProximityPrekeyBundle.SignedPrekey`.
+    typealias SignedPrekey = ProximityPrekeyBundle.SignedPrekey
+
+    /// The bundle types the heart-drop prekey store mints and keeps, today
+    /// `HeartPrekeyStore.Bundle`, `.PrekeyEntry` and `.SignedPrekey`, as object identifiers, in that
+    /// order.
+    static var prekeyStoreBundleTypes: [ObjectIdentifier] {
+        [ObjectIdentifier(HeartPrekeyStore.Bundle.self), ObjectIdentifier(HeartPrekeyStore.PrekeyEntry.self),
+         ObjectIdentifier(HeartPrekeyStore.SignedPrekey.self)]
+    }
 
     /// The static-key agreement a static-fallback drop opens through: today
-    /// `heartDropStaticAgreement(withEphemeralPublicKey:)`.
+    /// `staticKeyAgreement(withEphemeralPublicKey:)`.
     static func staticAgreement(_ identity: IdentityService, withEphemeralPublicKey key: Data) throws -> SharedSecret {
-        try identity.heartDropStaticAgreement(withEphemeralPublicKey: key)
+        try identity.staticKeyAgreement(withEphemeralPublicKey: key)
     }
 
     /// Has `coordinator` offer `bundle` in every introduction it sends: today's
-    /// `heartDropPrekeyBundleProvider`.
+    /// `introductionPrekeyBundleProvider`.
     static func offer(_ bundle: PrekeyBundle, on coordinator: ProximityCoordinator) {
-        coordinator.heartDropPrekeyBundleProvider = { bundle }
+        coordinator.introductionPrekeyBundleProvider = { bundle }
     }
 
     /// Has `coordinator` hand every bundle a peer's introduction carries to `collector`: today's
-    /// `onHeartDropPrekeyBundle`.
+    /// `onIntroductionPrekeyBundle`.
     static func collect(into collector: PrekeyBundleCollector, on coordinator: ProximityCoordinator) {
-        coordinator.onHeartDropPrekeyBundle = { sender, bundle in collector.record(sender: sender, bundle: bundle) }
+        coordinator.onIntroductionPrekeyBundle = { sender, bundle in collector.record(sender: sender, bundle: bundle) }
+    }
+
+    /// The core's heart-eligibility predicate: today
+    /// `ProximityHost.isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`.
+    static func coreHeartEligibility(of signingKey: Data, fingerprint: String, in host: any ProximityHost) -> Bool {
+        host.isTrustedUnblockedPeer(signingPublicKey: signingKey, fingerprint: fingerprint)
+    }
+
+    /// Presence's heart-eligibility gate: today
+    /// `PresenceManager.isHeartEligible(signingPublicKey:fingerprint:in:)`.
+    static func presenceHeartEligibility(of signingKey: Data, fingerprint: String, in host: any ProximityHost) -> Bool {
+        PresenceManager.isHeartEligible(signingPublicKey: signingKey, fingerprint: fingerprint, in: host)
     }
 
     /// The ONE construction of every identity the escrow group provisions: today

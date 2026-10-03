@@ -425,6 +425,9 @@ final class FernletStore {
         manager.queueAwayHeart = { [weak self] friend in
             self?.heartDropService.queueHeart(to: friend) == .queued
         }
+        // The away-delivery consent, which presence reads only for its not-nearby copy: the same
+        // provider the mesh manager is handed above.
+        manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()

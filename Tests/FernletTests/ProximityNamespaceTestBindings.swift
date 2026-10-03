@@ -2,7 +2,7 @@
 // FernletTests
 //
 // ProximityKit plan step A0.2.3 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2): the one
-// place the test target gets back the call shapes A0.2 and A0.3 take out of ProximityKit. ProximityKit
+// place the test target gets back the call shapes A0.2 to A0.4 take out of ProximityKit. ProximityKit
 // offers no namespace default, so every API that used to spell Fernlet's bytes for itself now takes
 // the host's `ProximityNamespace`, or a value read off it. The suites were written against the old
 // shapes; rather than rewrite every construction in every suite, each old shape comes back here
@@ -837,5 +837,22 @@ extension SessionMessageStore {
     ) -> Acceptance {
         receiveIncoming(id: id, senderFingerprint: senderFingerprint, senderDisplayName: senderDisplayName,
                         text: rawText, sentAt: sentAt, seenAt: seenAt, in: .fernlet)
+    }
+}
+
+// MARK: - The static key agreement (A0.4.2)
+//
+// The identity's static key agreement names no feature: it is `staticKeyAgreement(withEphemeralPublicKey:)`,
+// which the routed content-key unwrap and the heart dead-drop's static fallback both call. The suites
+// were written against its heart-drop spelling, which comes back here as a pure rename: it takes no
+// namespace, so it passes nothing at all.
+
+/// The static key agreement in the spelling the suites were written against (plan step A0.4.2). It
+/// inherits the class's main-actor isolation, as the method it restores has.
+extension IdentityService {
+
+    /// `staticKeyAgreement(withEphemeralPublicKey:)`.
+    func heartDropStaticAgreement(withEphemeralPublicKey key: Data) throws -> SharedSecret {
+        try staticKeyAgreement(withEphemeralPublicKey: key)
     }
 }

@@ -515,9 +515,16 @@ jobs:
         # repeats or prefixes a label and the salts two families share; three in the gate suite, the
         # pair-secret door's refusals and derivation; two in the feature golden, `.fernlet`'s declared
         # salts and the door's known answers) = 276 is the ARITHMETIC CHECK, never the source.
+        # RAISED 276 -> 277 at A0.4.2, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "277 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 15 + 27), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 277:
+        # passed. Run once more at 277 without FernletFeatureGoldenTests: 250 ran and the floor refused
+        # it. 276 + 1 (the feature golden's cell holding the core's heart-eligibility predicate to
+        # presence's gate, leg by leg) = 277 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 276 \
+          Scripts/run-gated-suites.sh crypto-goldens 277 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
