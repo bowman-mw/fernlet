@@ -1799,19 +1799,23 @@ value names `.fernlet` explicitly.
 | `recordIfNew(envelopeID:)` | Purges old entries, rejects duplicate IDs, and records new IDs. |
 | `purgeIfNeeded()` | Removes entries older than 24 hours and caps cache to 10,000 newest entries. |
 
-### `ProximityTrustVault.swift`
+### `FernletConnections/ProximityTrustVault.swift`
 
-Not itself a `ProximityTrustPolicy`: the host's session policies wrap it, ask it the questions
-below and keep each coordinator audit in it, converted into a `TrainerAuditEvent`.
+Fernlet's trust vault, in the `FernletConnections` module: the records it mints, normalizes and
+keeps are Fernlet's, in FernletDomainModel's persisted types, and the app's `FernletStore` owns and
+persists it. It conforms to ProximityKit's `ProximityTrustStore`, which the app's `ProximityHost`
+adapter and every test double hand over as `proximityTrustStore`. Not itself a
+`ProximityTrustPolicy`: the session policies beside it wrap it, ask it the questions below and keep
+each coordinator audit in it, converted into a `TrainerAuditEvent`.
 
 | Function | What It Does |
 | --- | --- |
 | `init(initialPeers:initialAudit:onChange:)` | Loads normalized trusted peers and initial audit events. |
 | `peer(signingPublicKey:)` | Finds trusted peer by signing key. |
 | `peer(displayName:)` | Finds most recently seen trusted peer with a display name. |
-| `isTrustedProximityPeer(signingPublicKey:)` | Returns true for a non-revoked trusted signing key. |
+| `isTrustedProximityPeer(signingPublicKey:)` | Returns true for a non-revoked trusted signing key. Answers `ProximityTrustStore` for the mesh's kept-friend gates and presence's heart eligibility. |
 | `isRevokedProximitySigningKey(_:)` | Checks whether a signing key is revoked. |
-| `isBlockedProximitySigningKey(_:)` | Checks whether a signing key is blocked. |
+| `isBlockedProximitySigningKey(_:)` | Checks whether a signing key is blocked. Answers `ProximityTrustStore` for presence's heart eligibility. |
 | `isBlockedFingerprint(_:)` | Checks blocked records by canonical or legacy fingerprint match. |
 | `trust(_:mode:)` | Adds or updates a trusted peer record and clears revocation. |
 | `block(signingPublicKey:)` | Blocks/revokes an existing key or creates a blocked placeholder record. |
@@ -1860,6 +1864,18 @@ session policies and the app's `FernletStore` record through it.
 | --- | --- |
 | `ProximitySessionAudit.init(id:timestamp:kind:peerFingerprint:peerDisplayName:payloadType:message:)` | One event a coordinator records through its trust policy; `id` and `timestamp` default to a fresh id and the wall clock, which is what the coordinator takes. `nonisolated`, `Equatable`, `Sendable`; the payload token is a plain string, so the type names no host vocabulary. |
 | `ProximitySessionAudit.Kind` | The eight kinds the coordinator reports (`pairingStarted`, `stateTransition`, `envelopeReceived`, `envelopeSent`, `envelopeRejected`, `revokedPeerBlocked`, `sessionEnded`, `error`), raw values the case names, `CaseIterable`. |
+
+### `Trust/ProximityTrustStore.swift`
+
+The host's durable trust records, as the two questions ProximityKit asks of them outside any
+session's policy. `@MainActor`; ProximityKit ships no conformer and keeps no records: the host hands
+one over as `ProximityHost.proximityTrustStore` (Fernlet's app its `ProximityTrustVault`, in
+`FernletConnections`), answering from the same records as `trustedProximityPeers`.
+
+| Function | What It Does |
+| --- | --- |
+| `isTrustedProximityPeer(signingPublicKey:)` | Whether a signing key is a remembered, unrevoked peer. `MeshNetworkManager` asks it before it takes in or sends a friend-state payload or a moderation report; `PresenceManager.isHeartEligible(signingPublicKey:fingerprint:in:)` asks it for a heart, in person or routed. |
+| `isBlockedProximitySigningKey(_:)` | Whether a signing key is blocked. `PresenceManager.isHeartEligible(signingPublicKey:fingerprint:in:)` asks it beside the host's fingerprint block list. |
 
 ### `Support/ProximityAudit.swift`
 
@@ -2610,7 +2626,8 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
-| `proximityDisplayName`, `trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. |
+| `proximityTrustStore` | The host's `ProximityTrustStore`, with **no default**: the mesh's four kept-friend gates (friend state and moderation reports, in and out) and presence's heart eligibility, which the routed heart path calls too, ask it whether a signing key is a remembered, unrevoked peer and whether it is blocked, at each question. Fernlet's adapter answers the store's `ProximityTrustVault` (`FernletConnections`), as every test double answers its own vault. |
+| `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. |
 | `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
 | `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |
 | `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and the three sealed heart-drop sidecars named by `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |

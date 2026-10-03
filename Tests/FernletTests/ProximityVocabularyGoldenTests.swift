@@ -2298,6 +2298,7 @@ private final class PresentationNamespaceHost: ProximityHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     var proximityDisplayName: String { VocabularyCoordinatorRig.displayName }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
@@ -2325,6 +2326,7 @@ private final class ScratchNamespaceHost: ProximityHost {
     let meshSessionStorage: MeshSessionStorageScope
     let meshRoutedStorage: MeshRoutedStorageScope
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     var proximityDisplayName: String { VocabularyCoordinatorRig.displayName }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 

@@ -17,6 +17,7 @@
 // the mesh's slotTrustPolicies retention is the same pattern).
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletFoundation

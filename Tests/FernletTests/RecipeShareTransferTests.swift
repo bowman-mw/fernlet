@@ -34,6 +34,7 @@ final class RecipeTransferTestHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
@@ -52,6 +53,7 @@ private final class NamedTransferTestHost: ProximityHost {
     var proximityDisplayName: String { name }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }

@@ -3,8 +3,8 @@
 //
 // Fernlet's coach-channel session rules: the written-down role split and the trust policy a coach
 // coordinator consults. They are rules, not mechanism, so they live with Fernlet's connection rules;
-// the protocol the policy answers (`ProximityTrustPolicy`), the vault it reads and the role type are
-// ProximityKit's.
+// the protocol the policy answers (`ProximityTrustPolicy`) and the role type are ProximityKit's, and
+// the vault it reads (`ProximityTrustVault`) is this module's.
 
 import Foundation
 import FernletDomainModel

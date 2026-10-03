@@ -510,6 +510,7 @@ private final class MockActivityHost: ProximityHost {
     var proximityDisplayName: String { name }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }

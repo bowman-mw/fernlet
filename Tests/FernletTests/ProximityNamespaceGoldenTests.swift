@@ -3768,6 +3768,7 @@ private final class ForeignNamespaceHost: ProximityHost {
     let meshSessionStorage: MeshSessionStorageScope
     let meshRoutedStorage: MeshRoutedStorageScope
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     var proximityDisplayName: String { "Golden" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
@@ -3810,6 +3811,7 @@ private final class NamespaceDefaultsHost: ProximityHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     var proximityDisplayName: String { "Golden" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
@@ -3833,6 +3835,7 @@ private final class RootedNamespaceDefaultsHost: ProximityHost {
     let proximityInstallBinding: any ProximityInstallBinding
     let proximitySupportDirectory: URL
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     var proximityDisplayName: String { "Golden" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 

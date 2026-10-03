@@ -88,7 +88,7 @@ import Testing
 /// A hit becomes a needle when using it RUNS, HANDS OUT or FEEDS the prohibited machinery. A hit
 /// that only reads or writes an INERT record does not, and the excluded set is written down here
 /// rather than left unmentioned, so the cut is visible and can be re-argued: `meshSessionStorage`,
-/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximitySupportRoot`,
+/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximityTrustStore`, `proximitySupportRoot`,
 /// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
 /// protocol identity, a constant value), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,

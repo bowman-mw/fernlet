@@ -4,7 +4,8 @@
 // Fernlet's friend-session trust policy: what the app's `ProximityHost` adapter answers for
 // `makeProximityTrustPolicy()`, a fresh instance for every connection the mesh, presence and
 // recipe-share managers open. It is a rule, not mechanism, so it lives with Fernlet's connection
-// rules; the protocol it answers (`ProximityTrustPolicy`) and the vault it wraps are ProximityKit's.
+// rules; the protocol it answers (`ProximityTrustPolicy`) is ProximityKit's, and the vault it wraps
+// (`ProximityTrustVault`) is this module's.
 
 import Foundation
 import FernletDomainModel

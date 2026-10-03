@@ -5,9 +5,9 @@ import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
-/// `proximityNamespace`, `proximityInstallBinding` and `makeProximityTrustPolicy()` is already
-/// satisfied by existing store
-/// members (`trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint`,
+/// `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore` and
+/// `makeProximityTrustPolicy()` is already satisfied by existing store
+/// members (`trustedProximityPeers`, `isBlockedFingerprint`,
 /// `blockProximityPeer`). Kept in the app target: this conformance is the one piece that cannot
 /// move into the future `ProximityKit` module, since it bridges the module's abstraction to the
 /// app's concrete store.
@@ -44,6 +44,12 @@ extension FernletStore: ProximityHost {
     /// `nonisolated`: the adapter is a stateless `Sendable` value, and the store's nonisolated
     /// storage-scope properties hand it to both scopes.
     nonisolated var proximityInstallBinding: any ProximityInstallBinding { FernletDeviceBindingAdapter() }
+    /// Fernlet's durable trust records, this store's `ProximityTrustVault` from `FernletConnections`:
+    /// the mesh's kept-friend gates and presence's heart eligibility ask it whether a key is a
+    /// remembered, unrevoked friend and whether it is blocked, and `trustedProximityPeers` reads the
+    /// same vault's records. The requirement has no default, so a host that left this out would not
+    /// compile.
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     /// Fernlet's friend-session rule, `FriendSessionTrustPolicy` from `FernletConnections`, fresh for
     /// each connection the mesh, presence and recipe-share managers open, over this store's vault:
     /// proximity is the authorization, so every peer is trusted and only a blocked key is refused.

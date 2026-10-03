@@ -671,6 +671,7 @@ private final class RecipeRevokedKeyTestHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }

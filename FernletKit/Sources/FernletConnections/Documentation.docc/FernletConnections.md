@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary; `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; and Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`.
 
 ## Overview
 
@@ -168,8 +168,9 @@ an event was NOT logged would pass vacuously; it also holds ProximityKit's code 
 `FernletAuditLog` nowhere.
 
 **The session rules (plan step A0.3).** ProximityKit is mechanism: which peers a session trusts, how
-a coach pairs and what the coach channel carries are Fernlet's rules, so they live here, each with
-its name, members and behaviour as it had in ProximityKit:
+a coach pairs and what the coach channel carries are Fernlet's rules, and the records they are judged
+against are Fernlet's, so they live here, each with its name, members and behaviour as it had in
+ProximityKit:
 
 - ``FriendSessionTrustPolicy`` (`FriendSessionTrustPolicy.swift`), the friend radios' policy:
   proximity is the authorization, so every peer is trusted and only a blocked key is refused (a
@@ -201,9 +202,20 @@ its name, members and behaviour as it had in ProximityKit:
   parked. Both policies and the app's `FernletStore` record through it, and
   `ProximityVocabularyGoldenTests` holds a converted audit to the frozen row's JSON, byte for byte,
   and each kind to the token its row persists under.
+- ``ProximityTrustVault`` (`ProximityTrustVault.swift`): Fernlet's records of the people its radios
+  meet, in FernletDomainModel's persisted types: kept friends, revoked ("Removed") peers, blocked keys
+  and reported sellers, keyed on the full signing key, and the audit trail, capped at 500 rows. It
+  mints them (`trust`; `block` and `report`, with a stub for a key it has never seen), re-derives a
+  legacy 8-character fingerprint from the signing key on every load and calls `onChange` after each write;
+  the app's `FernletStore` owns it, seeds it from the snapshot and saves on `onChange`. It answers
+  ProximityKit's `ProximityTrustStore`, which the app's adapter hands over as `proximityTrustStore`
+  (every test double hands over its own vault), so the mesh's kept-friend gates and presence's heart
+  eligibility ask it whether a key is a remembered, unrevoked peer and whether it is blocked; the two
+  policies above wrap it.
 
-The protocol the policies answer (`ProximityTrustPolicy`), the audit type the coordinator reports in
-(`ProximitySessionAudit`), the vault, the roster entry and the coordinator stay ProximityKit's.
+The protocols the policies and the vault answer (`ProximityTrustPolicy`, `ProximityTrustStore`), the
+audit type the coordinator reports in (`ProximitySessionAudit`), the roster entry and the coordinator
+stay ProximityKit's.
 
 **What joins it later.** Nothing here stands in for the coordinator's display name or a per-mode
 service type: ProximityKit has neither, every caller passing the host's resolved name and the
@@ -225,8 +237,9 @@ step A0.2.10, for the audit bridge, on `FernletFoundation` (Layer 0, which `Fern
 in); and for the payload vocabulary and the session rules on `FernletDomainModel` (for
 `PayloadType` and `ProximityCapability`, whose raw values the vocabulary reads, for
 `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the policies and the
-review read, and for `TrainerAuditEvent` and `PayloadType`, which the audit conversion reads). It
-imports nothing else but Foundation and Security. Through ProximityKit it reaches
+review read and the vault builds and keeps, and for `TrainerAuditEvent` and `PayloadType`, which the
+audit conversion reads). It imports nothing else but Foundation, Observation (the vault is
+`@Observable`) and Security. Through ProximityKit it reaches
 `PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair
@@ -238,7 +251,7 @@ every device already in the field.
 
 **Isolation.** The module is main-actor by default (`defaultIsolation(MainActor.self)` in
 `Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`
-but the two trust policies:
+but the two trust policies and the vault:
 the namespace is inert `Sendable` value data, and its readers are ProximityKit's nonisolated
 serializers, verifiers and stores; the binding adapter is a stateless `Sendable` value the column
 seal calls synchronously from inside those stores. ``FernletAuditBridge`` is a `nonisolated` struct
@@ -247,3 +260,6 @@ conformance would not allow. ``FriendMintingReview``, ``TrainerExportPayload`` a
 ``CoachSessionContract`` are `nonisolated` pure values. ``FriendSessionTrustPolicy`` and
 ``CoachSessionTrustPolicy`` stay main-actor classes, like the `@MainActor` protocol they conform to,
 the main-actor vault they read and the main-actor coordinator that consults them.
+``ProximityTrustVault`` is a main-actor `@Observable` class, like the `@MainActor`
+`ProximityTrustStore` it answers and the main-actor managers and store that read it: the Friends UI
+observes its records directly.

@@ -1,6 +1,17 @@
+// ProximityTrustVault.swift
+// FernletConnections
+//
+// Fernlet's trust vault: the records Fernlet keeps about the people its proximity radios meet, in
+// Fernlet's persisted types (FernletDomainModel's `ProximityTrustedPeerRecord`, with its mode and
+// report fields, and `TrainerAuditEvent`), which it mints, normalizes and caps and the app's
+// `FernletStore` persists. They are Fernlet's records, so the vault lives with Fernlet's connection
+// rules: ProximityKit asks its trust questions through its own `ProximityTrustStore`, which the vault
+// answers, and the session policies beside it wrap it.
+
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// The persistent record of every proximity relationship: kept friends, revoked ("Removed")
 /// peers, blocked keys, reported sellers, and the trainer audit trail.
@@ -13,17 +24,20 @@ import FernletDomainModel
 /// states); `trust` clears both, re-activating a removed friend. `report` stamps report metadata
 /// and, by default, blocks + revokes too.
 ///
-/// Not itself a ``ProximityTrustPolicy``: the host's session policies (Fernlet's, in
-/// `FernletConnections`) wrap it, answer a coordinator's questions from its records (its own
-/// trusted check means an active, unrevoked record) and keep each ``ProximitySessionAudit`` a
-/// coordinator reports here, converted into a `TrainerAuditEvent` (``recordTrainerAudit(_:)``).
+/// Conforms to ProximityKit's `ProximityTrustStore`: the app answers `ProximityHost.proximityTrustStore` with its
+/// vault, as every test double answers with its own, so the mesh's kept-friend gates and presence's
+/// heart eligibility ask ``isTrustedProximityPeer(signingPublicKey:)`` (an active, unrevoked record)
+/// and ``isBlockedProximitySigningKey(_:)`` here. Not itself a `ProximityTrustPolicy`: the session
+/// policies beside it (``FriendSessionTrustPolicy``, ``CoachSessionTrustPolicy``) wrap it, answer a
+/// coordinator's questions from its records and keep each `ProximitySessionAudit` a coordinator
+/// reports here, converted into a `TrainerAuditEvent` (``recordTrainerAudit(_:)``).
 /// Persistence is delegated: the app's `FernletStore` supplies `initialPeers`/`initialAudit`
 /// from the snapshot and observes `onChange` to save — the vault itself never touches disk.
 /// Audit events are capped at 500, newest first. `@MainActor @Observable`: the Friends UI reads
 /// `trustedPeers` directly.
 @MainActor
 @Observable
-public final class ProximityTrustVault {
+public final class ProximityTrustVault: ProximityTrustStore {
     /// Newest-first cap on the retained audit trail — the ONE definition, applied wherever
     /// events enter (init, snapshot apply, and each record).
     public static let maxAuditEvents = 500

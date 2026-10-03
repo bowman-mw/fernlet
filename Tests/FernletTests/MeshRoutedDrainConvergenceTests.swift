@@ -28,6 +28,7 @@ import Testing
 @testable import FernletCrypto
 import FernletDomainModel
 @testable import ProximityKit
+import FernletConnections
 @testable import Fernlet
 
 // MARK: - MeshRoutedCellFailure
