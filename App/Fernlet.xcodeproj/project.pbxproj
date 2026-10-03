@@ -471,6 +471,7 @@
 			packageReferences = (
 				684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */,
 				FE41000000000000000000A1 /* XCLocalSwiftPackageReference "../FernletKit" */,
+				681353DC307132F700C7AA77 /* XCRemoteSwiftPackageReference "proximitykit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6869C2E32FB8D39D0098A0F3 /* Products */;
@@ -1182,6 +1183,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		681353DC307132F700C7AA77 /* XCRemoteSwiftPackageReference "proximitykit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/bowman-mw/proximitykit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		684018C92FBE9AD400EFC6D6 /* XCRemoteSwiftPackageReference "CryptoSwift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/krzyzanowskim/CryptoSwift";
