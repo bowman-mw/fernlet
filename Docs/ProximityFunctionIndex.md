@@ -1722,7 +1722,7 @@ value names `.fernlet` explicitly.
 | `payloadType` / `isUnknownPayloadType` | Fernlet's typed view of `payloadTypeToken`; feature code and tests read it, while `verify` parks by the namespace. |
 | `disclosedSenderDisplayName` | The sender's sanitized name, or `nil` when it withheld one (empty field) — unlike `sanitizedSenderDisplayName`, whose "A friend" floor cannot tell withheld from blank (Option 1b, 2026-09-22). |
 
-### `PayloadType.swift`
+### `Wire/PayloadSummary.swift`
 
 | Function | What It Does |
 | --- | --- |

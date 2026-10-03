@@ -74,7 +74,7 @@ byte-identical to what already shipped and a separate reader-facing property add
   vocabulary the meal-parsing prompt hands the model, the input `WorkoutExerciseCatalog.inferType`
   matches against, and fields of the trainer export.
 
-Two more strings read exactly like UI copy and are not: ``PayloadSummary``'s `title`, `subtitle`,
+Two more strings read exactly like UI copy and are not: ProximityKit's `PayloadSummary` `title`, `subtitle`,
 and every `extraDetails` key and value are folded into the Ed25519 canonical signing bytes by
 `CanonicalSignatureSerializer` *and* render on the RECEIVER's phone (so localizing them would put
 the sender's language in someone else's audit trail); and ``CoachPlanTokens``'s frozen muscle and
@@ -589,9 +589,6 @@ what actually happened.
 
 - ``PayloadType``
 - ``ProximityCapability``
-- ``PayloadEncryption``
-- ``PayloadSummary``
-- ``DateRange``
 - ``ProximityRole``
 - ``ProximityMode``
 - ``ProximityRangingMode``
