@@ -1,16 +1,17 @@
 // ProximityVocabularyGoldenTests.swift
 // FernletTests
 //
-// ProximityKit plan step A0.3 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.3) takes
-// Fernlet's payload vocabulary and session rules out of ProximityKit's own code and has the host
-// supply them. This suite holds every token and byte string that step routes through the host to
-// the value Fernlet ships: each by a hand-written literal, and wherever a production consumer can
-// be reached without a new seam, by driving that consumer and reading what it emits.
+// ProximityKit takes Fernlet's payload vocabulary, its radios' presentation strings and its peer-name
+// policy from the host's namespace, and Fernlet's session rules and records live in the host
+// (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.3). This suite holds every token and byte
+// string ProximityKit takes from its host, and the records and bodies that stay Fernlet's, to the
+// value Fernlet ships: each by a hand-written literal, and wherever a production consumer can be
+// reached without a new seam, by driving that consumer and reading what it emits.
 //
-// THE RULE. Every row pairs a FROZEN literal with today's accessor. The literal column never
-// changes: a red row is a wire, keychain or at-rest decision, never re-pinned from Swift's output.
-// When a value moves, only its accessor is re-pointed at the path production then reads, and a
-// moved consumer no cell drives yet gains a cell. A behavioural cell needs no re-pointing at all:
+// THE RULE. Every row pairs a FROZEN literal with the accessor production reads. The literal column
+// never changes: a red row is a wire, keychain or at-rest decision, never re-pinned from Swift's
+// output. When a value moves, only its accessor is re-pointed at the path production then reads, and
+// a moved consumer no cell drives yet gains a cell. A behavioural cell needs no re-pointing at all:
 // it pins the consumer along with the value, and it reads its expectations off the frozen column.
 //
 // Thirteen groups:
@@ -95,36 +96,36 @@ import simd
 
 // MARK: - The tables' rows
 
-/// One token or byte string plan step A0.3 routes through the host: what it is, its FROZEN literal,
-/// and where today's code holds it.
+/// One token or byte string ProximityKit takes from its host, or a record value that stays Fernlet's:
+/// what it is, its FROZEN literal, and where production reads it.
 struct VocabularyGoldenRow: Sendable {
     /// A stable path naming the value, e.g. `payloadType.recipeShare` or `capability.wire2`.
     let field: String
     /// The bytes, written by hand from the A0.3 census. Never computed from a constant; never edited.
     let frozen: String
-    /// Today's accessor: **the only column a later A0.3 commit may re-point.** `nil` where no test
-    /// can name the value (an inline literal, a default argument) or where the value was deleted
-    /// rather than moved (a "deleted: no value" row); a behaviour cell pins it instead and reads its
-    /// expectation off `frozen`.
+    /// The accessor production reads: **the only column a commit that moves a value may re-point.**
+    /// `nil` where no test can name the value (an inline literal, a default argument) or where the
+    /// value was deleted rather than moved (a "deleted: no value" row); a behaviour cell pins it
+    /// instead and reads its expectation off `frozen`.
     let today: String?
 }
 
-/// One number plan step A0.3 moves or reads beside a token: a bound, a version, a cap.
+/// One number ProximityKit or Fernlet reads beside a token: a bound, a version, a cap.
 struct VocabularyGoldenNumber: Sendable {
     /// A stable path naming the value, e.g. `capability.maxAdvertised`.
     let field: String
     /// The number, written by hand. Never edited.
     let frozen: Int
-    /// Today's accessor, the only column a later commit may re-point.
+    /// The accessor production reads, the only column a commit may re-point.
     let today: Int
 }
 
 // MARK: - The suite
 
-/// Every token and byte string plan step A0.3 routes through the host, pinned by literal and by
+/// Every token and byte string ProximityKit takes from its host, pinned by literal and by
 /// behaviour, so that moving a value cannot change a byte unseen.
 ///
-/// **The rule for every later commit: re-point the `today:` column, never the `frozen:` one.** The
+/// **The rule for every commit: re-point the `today:` column, never the `frozen:` one.** The
 /// same holds for every hex vector and JSON golden here: a failing one is a WIRE or AT-REST decision,
 /// so it is never re-pinned from Swift's output to go green. Failure messages print the actual bytes
 /// so a deliberate change can be argued from them.

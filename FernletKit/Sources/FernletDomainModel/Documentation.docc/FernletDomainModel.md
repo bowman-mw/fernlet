@@ -587,6 +587,19 @@ what actually happened.
 
 ### Proximity wire and audit
 
+Fernlet's proximity vocabulary and records. ``PayloadType`` and ``ProximityCapability`` are the
+tokens FernletConnections reads into `ProximityNamespace.fernlet`'s vocabulary, which is where
+ProximityKit's core takes every token from; ``ProximityMode`` is the session mode the coordinator's
+`Mode` aliases; ``ProximityTrustedPeerRecord`` and ``TrainerAuditEvent`` are the trust records and
+audit rows Fernlet's `ProximityTrustVault` (FernletConnections) keeps and the snapshot persists, each
+audit row converted from ProximityKit's own `ProximitySessionAudit`; and ``ConnectionSessionLog`` is
+the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
+names these types and ``ItemNameModeration`` only on the lines `ProximityNamespaceBoundaryTests`
+allowlists, which leave with Fernlet's features (plan steps A0.4 and A0.5) and, for the mode, with
+the connection profiles (A0.7 and C5); `TrainerAuditEvent` and `ConnectionSessionLog` it names
+nowhere. The generic types an envelope carries (`PayloadEncryption`, `PayloadSummary` and its
+`DateRange`) and the session's role and ranging mode are ProximityKit's own.
+
 - ``PayloadType``
 - ``ProximityCapability``
 - ``ProximityMode``

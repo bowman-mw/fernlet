@@ -12,12 +12,17 @@ import Foundation
 
 /// Every versioned wire payload type the proximity subsystem exchanges, by reverse-DNS raw value.
 ///
-/// Carved down into DomainModel so the persistence/audit DTOs (``TrainerAuditEvent``,
-/// ``ConnectionSessionLog``) can reference wire types without an upward edge. Raw values ARE the
+/// Carved down into DomainModel so the persisted audit row (``TrainerAuditEvent``'s `payloadType`)
+/// can reference wire types without an upward edge; ``ConnectionSessionLog`` keeps each envelope's
+/// token as a plain string. Raw values ARE the
 /// wire identity — never rename a case. Which types must arrive sealed is Fernlet's sealing set
 /// (`PayloadRules.fernlet.sealingRequired`, in FernletConnections; ProximityKit's envelope `verify`
 /// enforces it); the per-case notes below record each payload's sealing stance and
 /// additive-compat behavior (older clients park unknown types instead of dropping the session).
+///
+/// FernletConnections reads these raw values into `ProximityNamespace.fernlet`'s vocabulary, which is
+/// where ProximityKit's core takes every token from; ProximityKit names this type only on the lines
+/// `ProximityNamespaceBoundaryTests` allowlists, each leaving with the features that use it.
 public nonisolated enum PayloadType: String, Codable, CaseIterable, Sendable {
     // Handshake
     case identityIntroduction  = "fernlet.identity.intro.v1"

@@ -706,9 +706,9 @@ type-token registry (item 11), receipts (items 3/4).
 | `MeshRoutedManifest` | The record: `meshID`, `itemID` (= `MeshDeliveryTarget.contentID` = the replay window's per-sender frame id; the routed store's union key is the PAIR `(originFingerprint, itemID)` — both signed — because any admitted member can mint under its own key reusing another origin's id, and an id already held under a different origin is refused at the store door in item 3/6, never here), `originFingerprint`, `typeToken`, `contentHash`, `size`, `createdAt`, `expiresAt` (= `hardDeadline` + grace), `destinations` (`MeshDeliveryTarget.destinations` verbatim), `keyWraps` (one per destination, same order), `signature`. Both lists are clamped to the destination cap and BOTH instants are floored to whole seconds on the memberwise init AND on decode, so an over-cap list is unrepresentable and a relay's sub-second re-encoding cannot extend liveness or produce a manifest `!=` the origin's that still verifies. Carries no epoch, branch, custody or first-seen. |
 | `isWellFormed` / `isLive(at:)` | Width/count check on untrusted bytes before the signature; liveness `now <= expiresAt` under an injected clock (the `MeshFrameReplayWindow.admit` predicate). |
 | `expiry(afterHardDeadline:)` / `floored(_:)` | The ONE expiry formula and the ONE finite-guarded floor, shared by the mint and the verifier. Both return `Date`s — no reader may `Int64(_:)` either instant, because an admitted origin can sign `1e300` and `appendDate` saturates rather than traps. |
-| `MeshRoutedManifestPayload` | The `fernlet.mesh.routed-manifest.v1` frame: the manifest and nothing else. Signed, NOT sealed (not in `sealingRequiredTypes`) so a custodian can re-broadcast it verbatim; the wraps are the confidentiality. Registered here, dispatched from item 6. |
+| `MeshRoutedManifestPayload` | The `fernlet.mesh.routed-manifest.v1` frame: the manifest and nothing else. Signed, NOT sealed (not in the host's `payloads.sealingRequired`; Fernlet's `PayloadRules.fernlet` leaves it out) so a custodian can re-broadcast it verbatim; the wraps are the confidentiality. Registered here, dispatched from item 6. |
 | `MeshRoutedManifestMintError` | Why the mint refused, by name: `noDestinations`, `tooManyDestinations` (unreachable through `MeshDeliveryTarget`'s only initializer — the derived roster caps at 8, so a target names at most 7; kept so the mint states its own bound), `originIsADestination`, `invalidTypeToken`, `invalidContentHash`, `invalidSize`, `invalidContentKey`, `missingRecipientKey(fingerprint:)`, and **P5 item 11's two registry refusals** — `sizeExceedsTypeCap(token:)` (distinct from `invalidSize`, which is the wire bound every type shares) and `unsupportedDestinationSemantics(token:)`. There is no `allCases` here (associated values), so `everyRejectionHasAFrozenDiagnostic`'s census is hand-written and a new case must be added to it in the same commit. A manifest that cannot be built for the WHOLE destination set is not built at all. |
-| `MeshRoutedManifest.signed(meshID:target:typeToken:contentHash:size:createdAt:hardDeadline:contentKey:recipientKeys:identity:types:)` | `@MainActor` mint: validates, mints one wrap per destination from the caller-supplied handshake-verified X25519 keys (a missing key refuses the whole mint), floors both instants, signs `canonicalBytes(for:)` under `Signature.meshRoutedManifestV1`, and returns a copy built from the CLAMPED unsigned fields so signed bytes == wire bytes. The signer is always the origin. **P5 item 11** added `types:`, with no default (the caller passes the registry it holds — the manager's, built from its host namespace's routed types): a REGISTERED token's row supplies the per-type cap, the destination semantics the mint may use, and the expiry rule; an UNREGISTERED one still mints under the shared wire bounds, because acceptance is a receiver-side statement. **No shipping caller reaches this mint today** — P6 is its first. |
+| `MeshRoutedManifest.signed(meshID:target:typeToken:contentHash:size:createdAt:hardDeadline:contentKey:recipientKeys:identity:types:)` | `@MainActor` mint: validates, mints one wrap per destination from the caller-supplied handshake-verified X25519 keys (a missing key refuses the whole mint), floors both instants, signs `canonicalBytes(for:)` under `Signature.meshRoutedManifestV1`, and returns a copy built from the CLAMPED unsigned fields so signed bytes == wire bytes. The signer is always the origin. **P5 item 11** added `types:`, with no default (the caller passes the registry it holds — the manager's, built from its host namespace's routed types): a REGISTERED token's row supplies the per-type cap, the destination semantics the mint may use, and the expiry rule; an UNREGISTERED one still mints under the shared wire bounds, because acceptance is a receiver-side statement. Its one shipping caller is the mesh manager's own-item mint (`mintOwnRoutedItem`, under routed origination), which passes the manager's registry. |
 
 ### `MeshRoutedManifestVerifier.swift`
 
@@ -766,7 +766,7 @@ or TTL (item 8 / increment 2), the type-token registry (item 11), backpressure (
 | `isWellFormed` / `isLive(at:)` | Widths and counts on untrusted bytes before the signature; liveness `now <= expiresAt` under an injected clock. |
 | `MeshChunk.chunkID(in:)` | The derived replay-window id, **wired by P5 item 12**; a function of the caller's purposes since A0.2.6, because a decoded chunk carries no namespace. Deterministic; equal across a retransmission, different per index or item, origin-free on purpose because `MeshFrameReplayWindow` already separates by author — so the real key is the pair `(origin, chunkID)`, and item 12 keys the author axis on `chunk.originFingerprint`, never on the forwarding envelope's sender. Not an RFC-4122 UUID — a 128-bit dedup key with `UUID`'s shape. **The 64-vs-1024 caveat is answered twice over:** the routed instance carries `sessionFramesPerPeer` (1056) ids per author, and a full axis is a named degradation the frame falls through, never a refusal. |
 | `MeshChunk.expectedPayloadByteCount(index:count:size:)` | The ONE chunk-boundary rule: every index but the last is exactly 256 KiB, the last is the remainder; nil for an out-of-range index or a `count` that disagrees with the size. |
-| `MeshChunkPayload` | The `fernlet.mesh.routed-chunk.v1` frame: the chunk and nothing else. Signed, NOT sealed (not in `sealingRequiredTypes`) — the payload is already ciphertext and a custodian must re-broadcast verbatim. Registered in item 2, dispatched from item 6. |
+| `MeshChunkPayload` | The `fernlet.mesh.routed-chunk.v1` frame: the chunk and nothing else. Signed, NOT sealed (not in the host's `payloads.sealingRequired`) — the payload is already ciphertext and a custodian must re-broadcast verbatim. Registered in item 2, dispatched from item 6. |
 
 ### `MeshChunkVerifier.swift`
 
@@ -1448,21 +1448,24 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 
 ## Protocol Namespace
 
-ProximityKit plan step A0.2: the host-supplied protocol identity, under `ProximityKit/Namespace/`,
-and every ProximityKit read of its 39 labels, radio values, QR scheme, identity and mesh seal-key
-rows, storage names and log subsystem routed through it, byte-identical for Fernlet. Its family also
-carries the payload vocabulary and the radios' presentation strings, judged by its soundness rules;
-ProximityKit's consumers still read their own constants for those until plan step A0.3 re-points
-them. The feature labels, the heart-drop and moderation keychain services and
-`ProximitySupportLayout`'s folder stay outside it until A0.4.
+The host-supplied protocol identity, under `ProximityKit/Namespace/` (plan steps A0.2 and A0.3):
+ProximityKit reads its 39 labels, radio values, QR scheme, identity and mesh seal-key rows, storage
+names and log subsystem off it, byte-identical for Fernlet, and every group of the payload vocabulary
+its family carries, the radios' presentation strings and the installation's peer-name policy, all
+judged by its soundness rules. The mesh features' payload and capability tokens are still Fernlet's
+`PayloadType` and `ProximityCapability` cases until A0.4 and A0.5; the feature labels, the heart-drop
+and moderation keychain services and `ProximitySupportLayout`'s folder stay outside it until A0.4.
 ProximityKit refuses an unsound namespace at run time (`Support/ProximityNamespaceGate.swift`,
 below). The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
 copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
-covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value and every reader;
-`ProximityNamespaceBoundaryTests` keeps any namespace, group or purpose from being built outside
-`Namespace/`, `FernletCryptoPurpose` to the 20 feature lines that leave at A0.4, and every remaining
-`fernlet` literal to an allowlist naming its exit step.
+covers every rule below; `ProximityNamespaceGoldenTests` and `ProximityVocabularyGoldenTests` pin
+Fernlet's value and every reader; `ProximityNamespaceBoundaryTests` keeps any namespace, group or
+purpose from being built outside `Namespace/`, `FernletCryptoPurpose` to the 20 feature lines that
+leave at A0.4, every remaining `fernlet` literal to an allowlist naming its exit step, and Fernlet's
+domain vocabulary and records (`PayloadType`, `ProximityCapability`, `ProximityMode`,
+`ItemNameModeration` and the persisted proximity records) to the 58 code lines in 8 files that leave
+with their features (A0.4, A0.5) or the session profile (A0.7 / C5).
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
 
@@ -1581,7 +1584,7 @@ overloads of `sign` and `verify`.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, a requirement the protocol extension **never defaults**, so a host that supplies none fails to compile instead of running under another app's identity. |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, `proximityTrustStore` and `makeProximityTrustPolicy()`, one of the four requirements the protocol extension **never defaults**, so a host that supplies none fails to compile instead of running under another app's identity. |
 | `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
 | `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`, and each builds its radio from it. |
 | `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
@@ -1854,13 +1857,23 @@ session policies and the app's `FernletStore` record through it.
 | `TrainerAuditEvent.init(_:)` | A `ProximitySessionAudit` as Fernlet's audit row: id, timestamp, peer fields and message unchanged, the kind case for case, the envelope's token read as a `PayloadType` (an unknown token becomes none and nothing is parked, as the envelope's typed view reads it). `nonisolated`. `ProximityVocabularyGoldenTests` holds the result to the frozen row's JSON. |
 | `TrainerAuditEvent.Kind.init(_:)` (fileprivate) | ProximityKit's eight kinds onto the persisted kinds of the same names, by an exhaustive switch, so a kind ProximityKit adds fails to compile instead of persisting as another. |
 
-### `TrainerAuditLog.swift`
+### `Trust/TrainerAuditLog.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityTrustPolicy` methods | The trust questions (`isRevokedProximitySigningKey(_:)`, `isBlockedProximitySigningKey(_:)`, `isTrustedProximityPeer(signingPublicKey:)`) and the audit door, `recordSessionAudit(_:)`, which takes ProximityKit's own `ProximitySessionAudit`, consumed by `ProximityCoordinator`. ProximityKit ships no conformer. |
+
+### `FernletDomainModel/ProximityPersistenceRecords.swift`
+
+Fernlet's persisted trust records and audit rows, which its `ProximityTrustVault` keeps and its
+snapshot persists. ProximityKit names the trusted-peer record only on the lines
+`ProximityNamespaceBoundaryTests` allowlists (the host's trusted-peer list and the features that read
+it) and the audit row nowhere.
 
 | Function | What It Does |
 | --- | --- |
 | `ProximityTrustedPeerRecord.init(...)` | Creates a persisted trust record with timestamps and optional revoked/blocked flags. |
-| `TrainerAuditEvent.init(...)` | Creates Fernlet's persisted audit row (FernletDomainModel), as the vault and the app do for their own events; a coordinator's audit arrives as a `ProximitySessionAudit` and is converted by `TrainerAuditEvent.init(_:)` above. |
-| `ProximityTrustPolicy` methods | The trust questions (`isRevokedProximitySigningKey(_:)`, `isBlockedProximitySigningKey(_:)`, `isTrustedProximityPeer(signingPublicKey:)`) and the audit door, `recordSessionAudit(_:)`, which takes ProximityKit's own `ProximitySessionAudit`, consumed by `ProximityCoordinator`. ProximityKit ships no conformer. |
+| `TrainerAuditEvent.init(...)` | Creates Fernlet's persisted audit row, as the vault and the app do for their own events; a coordinator's audit arrives as a `ProximitySessionAudit` and is converted by `TrainerAuditEvent.init(_:)` above. |
 
 ### `Trust/ProximitySessionAudit.swift`
 
@@ -2042,7 +2055,7 @@ signed type needs a new tag; reusing one is a cross-type forgery seam.
 
 | Type | What It Does |
 | --- | --- |
-| `TempMessagePayload` | One session-scoped chat message. Always delivered sealed (`.tempMessage` is in `sealingRequiredTypes`); `id` drives receive-side dedup, and `sentAt` is the sender's clock — display only, never trusted for ordering security. |
+| `TempMessagePayload` | One session-scoped chat message. Always delivered sealed (`.tempMessage` is in Fernlet's sealing set, `PayloadRules.fernlet.sealingRequired`); `id` drives receive-side dedup, and `sentAt` is the sender's clock — display only, never trusted for ordering security. |
 
 ### `FernletConnections/TrainerPayloads.swift`
 
@@ -2626,12 +2639,12 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 
 | Type Or Member | What It Does |
 | --- | --- |
-| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. |
+| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. Four of its requirements the extension never defaults, because each is the host's identity or rule rather than the mechanism's: `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore` and `makeProximityTrustPolicy()`. |
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
 | `proximityTrustStore` | The host's `ProximityTrustStore`, with **no default**: the mesh's four kept-friend gates (friend state and moderation reports, in and out) and presence's heart eligibility, which the routed heart path calls too, ask it whether a signing key is a remembered, unrevoked peer and whether it is blocked, at each question. Fernlet's adapter answers the store's `ProximityTrustVault` (`FernletConnections`), as every test double answers its own vault. |
-| `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. |
+| `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. Its element type, Fernlet's persisted `ProximityTrustedPeerRecord`, is on `ProximityNamespaceBoundaryTests`' rule-4 list until the last feature that reads it leaves (A0.5). |
 | `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
 | `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |
 | `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and the three sealed heart-drop sidecars named by `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |

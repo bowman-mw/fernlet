@@ -1,19 +1,22 @@
 // ProximityNamespaceGoldenTests.swift
 // FernletTests
 //
-// ProximityKit plan step A0.2.0 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2): every
-// byte string `ProximityNamespace.fernlet` carries, pinned BEFORE the later A0.2 commits re-route
-// each one through a host-supplied `ProximityNamespace`. Those commits must move no byte; this file
-// is how that claim is checked rather than asserted.
+// Every byte string `ProximityNamespace.fernlet` carries besides its payload vocabulary, its radios'
+// presentation strings and its peer-name policy, each pinned by a literal written by hand before any
+// of them moved onto the namespace (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2), and
+// every ProximityKit reader of those values held to the namespace it is handed. Moving a value onto
+// the namespace moves no byte; this file is how that claim is checked rather than asserted. The
+// vocabulary, the presentation strings and the peer-name policy are ProximityVocabularyGoldenTests'.
 //
-// Four groups of claims:
+// Fifteen groups of claims:
 //
-// 1. **The golden table.** One row per value `ProximityNamespace.fernlet` will carry: the 39
-//    domain-separation labels (the 38 core registry purposes plus the ProximityKit-local epoch
-//    domain), the three radios' service types and ALPNs, the mesh heartbeat, the QR scheme, the
-//    identity keychain service and its four device accounts, the two seal-key rows, the storage
-//    directory and its three on-disk names, and the radios' log subsystem. Plus the QR host, which
-//    stays a ProximityKit constant but travels beside the scheme. 62 rows.
+// 1. **The golden table.** One row per value: the 39 domain-separation labels (the 38 core registry
+//    purposes plus the epoch domain, which no registry holds), the three radios' service types and
+//    ALPNs, the mesh heartbeat, the QR scheme, the identity keychain service and its four device
+//    accounts, the two seal-key rows, the storage directory and its three on-disk names, and the
+//    radios' log subsystem. Plus the QR host, which stays a ProximityKit constant but travels beside
+//    the scheme. 62 rows, each a frozen literal beside the accessor production reads: `.fernlet`'s
+//    field, or for the two seal-key services the production derivation called with `.fernlet`.
 // 2. **Known answers for the six labels nothing else pinned** (`fernlet.mesh.groupkey.v1`,
 //    `fernlet.mesh.groupkey.wrap.aead.v2`, `fernlet.mesh.encrypted-metadata.aead.v2`,
 //    `fernlet.mesh.routed.content-key.v1`, `fernlet.mesh.session-context.v1`,
@@ -21,70 +24,44 @@
 //    must open, and literal-built group-key, transport, routed-key and metadata blobs that production
 //    must open. A consumer that reads the wrong field opens nothing, so these pin the CONSUMER too.
 // 3. **Transcripts, epoch ids and wire tokens.** The framed label at the front of the channel
-//    introduction and of both QR transcripts, the two epoch ids the epoch domain derives, and the
-//    payload tokens and record kinds that are spelled exactly like a signature label.
+//    introduction and of both QR transcripts, the two epoch ids the epoch domain derives, the mesh
+//    messages and record kinds of `.fernlet` that are spelled exactly like a signature label, and the
+//    two at-rest format names whose unused mirror tokens were deleted, as literal rows.
 // 4. **The format constants that stay ProximityKit's** (`FPT2`, `FGK2`, `FMGM2`, `FMRI1`, the
 //    column byte `0x03`, the QR host, query key and version, the `corrupt` and `chunk` extensions):
-//    not namespace values, but later A0.2 commits edit the code right next to each of them.
-//
-// Three more groups since step A0.2.2, when `ProximityNamespace.fernlet` arrived in
-// FernletConnections. They add cells and change no row:
-//
+//    not namespace values, but each sits in code right beside one.
 // 5. **`.fernlet` against the table.** Every value it carries equals its frozen literal, every label
 //    has the role ProximityKit fixes for its field, it is sound, the 38 labels FernletCrypto's
 //    registry also declares are spelled alike and accept the same transcripts, no label of the
 //    registry's 81 and its 39 together is a byte prefix of another (CDST's sealed-backup pair aside),
 //    and reflection finds no label field `labelRows` leaves out.
 // 6. **Every hash and transcript consumer against its field's role.** The bytes each production
-//    consumer writes today begin with that field's `prefixBytes`: 19 signed transcripts and 8 hash
-//    preimages, one cell each.
+//    consumer writes begin with that field's `prefixBytes`: 19 signed transcripts, 8 hash preimages
+//    and the 2 authenticated-data builders, one cell each.
 // 7. **A foreign namespace.** One built from another app's literals collides with `.fernlet` nowhere,
 //    and no signature purpose of either accepts a transcript framed for the other, except Fernlet's
 //    two verify-only legacy labels, which accept every transcript by construction. Its payload
 //    vocabulary and presentation strings share no string with `.fernlet`'s, whose own values
 //    ProximityVocabularyGoldenTests pins.
-//
-// One more group since step A0.2.3, when the host's supply path arrived and the identity's keychain
-// service became the first value read off the namespace. Its row's accessor is re-pointed at
-// `.fernlet`'s field; no literal moves:
-//
 // 8. **The supply path.** `IdentityService(namespace:)` takes its keychain service from the
 //    namespace it is handed (Fernlet's frozen service for `.fernlet`, another app's for another
 //    app's, an explicit service over either), and its namespace overloads of `sign` and `verify`
 //    treat each label by its role: the 19 writable signature labels sign and verify, the verify-only
 //    legacy pair verifies and never signs, and no other label does either.
-//
-// One more group since step A0.2.4, when the envelope, admission-token, membership, quorum and
-// key-agreement transcripts, the legacy pair and the membership inventory digest's hash began to read
-// their labels off the namespace. Those thirteen rows' accessors are re-pointed at `.fernlet`'s
-// fields; no literal moves:
-//
 // 9. **The signed transcripts read the namespace they are handed.** The labels the test bindings pass
 //    are `.fernlet`'s own; the membership inventory digest is hashed over its field's prefix; a
 //    schema-v1 envelope and a pre-WI-6 admission token still verify under `.fernlet`, whose family
 //    accepts its legacy peers, and are refused under a family that refuses them; an envelope and an
 //    admission token each verify under the namespace they were signed in and are refused under the
 //    other, both ways; and a membership verifier and the ledger adoption accept a foreign-signed
-//    admission, departure and digest only under the foreign labels they hold or are handed.
-//
-// One more group since step A0.2.5, when the QUIC channel introduction, the six routed transcripts and
-// the verify QR (its URL scheme and both of its labels) began to read the namespace. Those ten rows'
-// accessors are re-pointed at `.fernlet`'s fields; no literal moves:
-//
+//    admission, departure and digest only under the foreign family they hold or are handed.
 // 10. **The routed transcripts, the introduction and the QR read the namespace they are handed.** A
 //     verify QR carries its identity's scheme and parses and validates only in its own namespace; a
 //     verify response verifies only under the label it was framed in; a coach ceremony runs under its
 //     identity's namespace and a Fernlet scanner refuses another app's code; the six routed doors
 //     accept only what was signed under the labels they hold; the channel-introduction exchange frames
-//     its transcript and checks the peer's under its own copy; and the manager hands its transport
-//     the namespace whose label it signs the introduction under.
-//
-// One more group since step A0.2.6, when the routed hash and id domains, the five AEAD labels, the
-// three HKDF salts and the epoch id's domain began to read the namespace (and the ProximityKit-local
-// `MeshEpochBounds.derivationDomain` was deleted). Those fourteen rows' accessors are re-pointed at
-// `.fernlet`'s fields; no literal moves. Group 6 gains a cell for each of the two authenticated-data
-// builders that step moved:
-//
+//     its transcript and checks the peer's under its own copy; and the manager signs the channel
+//     introduction its radio frames under the namespace it built that radio from.
 // 11. **The hashes, seals, salts and the epoch read the namespace they are handed.** The routed
 //     digests and ids are SHA-256 over the field prefix of the namespace they are handed; the chunk
 //     verifier, the reassembler, the chunker and the routed store measure a chunk or an item only
@@ -93,60 +70,33 @@
 //     an identity's transport seal and group-key wrap open only for an identity of its namespace;
 //     the manager opens encrypted metadata under its host's namespace; and every epoch id is
 //     derived under the namespace's raw epoch domain.
-//
-// One more group since step A0.2.7, when the three radios began reading their service types, ALPNs,
-// heartbeat, TLS exporter label and log subsystem off the namespace their manager hands them, and the
-// mesh radio began framing and checking every channel introduction under that namespace's labels
-// (group 10's manager cell now reads them off the radio the manager builds). Those nine rows'
-// accessors are re-pointed at `.fernlet`'s fields; no literal moves:
-//
 // 12. **The radios.** Each radio holds what the namespace it was built from says (Fernlet's frozen
 //     values under `.fernlet`, another app's under another app's), and the mesh radio's heartbeat
 //     and channel-binding consumers take those values from the radio, whole.
-//
-// One more group since step A0.2.8, when the mesh stores' file names, chunk directory and seal-key
-// accounts, the production seal-key services, the hosts' default sidecar root and the identity's four
-// accounts began to read the namespace (and the two unused at-rest mirror tokens were deleted). Those
-// twelve rows' accessors are re-pointed at `.fernlet`'s fields, the two services through the
-// derivation called with `.fernlet`; no literal moves. Group 2's store cells build their scopes with
-// `.fernlet`, group 3's token cell takes the deleted tokens' pins as literal rows, and group 11's store
-// cell hands the store its labels through its scope:
-//
 // 13. **The at-rest names and rows read the namespace.** The two stores write and read their files
 //     and seal keys under the names the namespace their scope carries gives, Fernlet's or another
 //     app's; a host with no sidecar root or scope of its own gets them built from its namespace; and
 //     an identity provisions, and its provisioning rule names, the four rows its namespace names.
-//
-// One more group since step A0.2.9, when ProximityKit's copy of the column seal,
-// `ProximityColumnCrypto`, began sealing the two mesh stores under their scope namespace's column
-// labels and the install binding their scope carries (Fernlet's `FernletDeviceBindingAdapter`, over
-// `DeviceBindingID`). The two column-seal rows' accessors are re-pointed at `.fernlet`'s fields; no
-// literal moves. Every scope here carries a binding (Fernlet's adapter, unless a cell supplies its
-// own), and group 11's store helper hands its two stores one column seal:
-//
-// 14. **The column seal and the install binding.** The copy derives group 2's known column keys from
-//     `.fernlet`'s fields and opens group 2's known blobs; it and FernletCrypto's `ColumnCrypto` open
-//     each other's blobs, for both labels, both ways; it refuses exactly where `ColumnCrypto`
-//     refuses, by the same name; each store seals under its scope namespace's label and its scope's
-//     binding, and under nothing else; Fernlet's adapter answers `DeviceBindingID` at each call, a
-//     mid-operation flip included; and a host's default scopes carry the binding it supplies.
-//
-// One more group since step A0.2.11, when ProximityKit's key stores began reaching the keychain
-// through `ProximityKeychainItem`, its copy of FernletFoundation's `KeychainItem` mechanism. No row
-// is re-pointed: the rows' names have been read off the namespace since A0.2.3 and A0.2.8, and the
-// mechanism that writes them is not a namespace value:
-//
-// 15. **The keychain mechanism.** For every keychain row `.fernlet` names, each query dictionary the
-//     copy issues is the one FernletFoundation's `KeychainItem` issues for the same service and
-//     account, read out of FernletFoundation's own source; on an isolated service the copy and the
-//     original read, list and delete each other's rows, a device-only row and its synchronized twin
-//     alike; the copy fails exactly where the original fails, with the same answers and the same
-//     two audit lines; and ProximityKit's code reaches the keychain only through the copy.
+// 14. **The column seal and the install binding.** ProximityKit's copy, `ProximityColumnCrypto`,
+//     derives group 2's known column keys from `.fernlet`'s fields and opens group 2's known blobs;
+//     it and FernletCrypto's `ColumnCrypto` open each other's blobs, for both labels, both ways; it
+//     refuses exactly where `ColumnCrypto` refuses, by the same name; each store seals under its
+//     scope namespace's label and its scope's binding, and under nothing else; Fernlet's adapter
+//     answers `DeviceBindingID` at each call, a mid-operation flip included; and a host's default
+//     scopes carry the binding it supplies. Every scope here carries a binding (Fernlet's adapter,
+//     unless a cell supplies its own).
+// 15. **The keychain mechanism.** For every keychain row `.fernlet` names, each query dictionary
+//     ProximityKit's copy, `ProximityKeychainItem`, issues is the one FernletFoundation's
+//     `KeychainItem` issues for the same service and account, read out of FernletFoundation's own
+//     source; on an isolated service the copy and the original read, list and delete each other's
+//     rows, a device-only row and its synchronized twin alike; the copy fails exactly where the
+//     original fails, with the same answers and the same two audit lines; and ProximityKit's code
+//     reaches the keychain only through the copy.
 //
 // Every `IdentityService` here is built with its namespace spelled out (`namespace: .fernlet` for
 // Fernlet's), never through the test target's bindings (ProximityNamespaceTestBindings.swift): a
-// suite that pins values names the namespace it pins them under. Since step A0.2.4 the same holds for
-// the labels a consumer takes: `in: .fernlet`, `purposes: .fernlet`.
+// suite that pins values names the namespace it pins them under, and so does every consumer here
+// that takes labels (`in: .fernlet`, `purposes: .fernlet`, `family: .fernlet`).
 //
 // Every hex vector below was derived from the FORMAT by an independent Python re-implementation,
 // proved honest first by reproducing vectors the repo already pins (SealedBackupFormatPinTests' two
@@ -167,8 +117,8 @@ import Testing
 
 // MARK: - The table's row
 
-/// One value `ProximityNamespace.fernlet` will carry: the namespace field it fills, its FROZEN literal,
-/// and where today's code holds it.
+/// One value `ProximityNamespace.fernlet` carries: the namespace field it fills, its FROZEN literal,
+/// and where production reads it.
 struct NamespaceGoldenRow: Sendable {
 
     /// The part of the namespace a row belongs to; the shape cell counts rows by it.
@@ -187,7 +137,7 @@ struct NamespaceGoldenRow: Sendable {
         case logSubsystem
     }
 
-    /// Where today's code holds the value. **The only column a later A0.2 commit may edit.**
+    /// Where production reads the value. **The only column a commit that moves a value may edit.**
     enum Today: Equatable, Sendable {
         /// A value the test can name — internal ones through `@testable` — compared as its UTF-8.
         case text(String)
@@ -200,11 +150,11 @@ struct NamespaceGoldenRow: Sendable {
 
     /// Which part of the namespace the row belongs to.
     let group: Group
-    /// The `ProximityNamespace` field path the value will fill (the plan's A0.2 design spells them).
+    /// The `ProximityNamespace` field path the value fills (the plan's A0.2 design spells them).
     let field: String
     /// The bytes, written by hand from the A0.2 census. Never computed from a constant; never edited.
     let frozen: String
-    /// Today's accessor.
+    /// The accessor production reads.
     let today: Today
 
     /// One row.
@@ -227,13 +177,13 @@ struct NamespaceGoldenRow: Sendable {
 
 // MARK: - The suite
 
-/// Every byte string `ProximityNamespace.fernlet` will carry, pinned by literal before any of them
-/// moves — the gate every later A0.2 commit has to pass unchanged.
+/// Every byte string `ProximityNamespace.fernlet` carries, pinned by literal — the gate every change
+/// to a value or its reader has to pass unchanged.
 ///
-/// **The rule for every later commit: re-point the `today:` column, never the `frozen:` one.** A
-/// row's `frozen` literal was written by hand from the A0.2 census and never changes again. A commit
-/// that moves a value into the namespace edits only that row's `today` accessor — say
-/// `.text(FernletCryptoPurpose.Signature.meshRoutedChunkV1.rawValue)` becomes the namespace's field —
+/// **The rule for every commit: re-point the `today:` column, never the `frozen:` one.** A row's
+/// `frozen` literal was written by hand from the A0.2 census and never changes again. A commit that
+/// moves a value edits only that row's `today` accessor, to the path production then reads — as
+/// `.text(FernletCryptoPurpose.Signature.meshRoutedChunkV1.rawValue)` became `.fernlet`'s field —
 /// and the row has to stay green. The same holds for every hex vector here: a failing vector or row
 /// is a WIRE or AT-REST decision, so it is never re-pinned from Swift's output to go green. Failure
 /// messages print the actual bytes so a deliberate change can be argued from them.

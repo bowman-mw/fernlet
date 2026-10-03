@@ -203,8 +203,16 @@ jobs:
         # that leave with their features in A0.4; and a `fernlet` string literal beyond an exact
         # per-file allowlist (36 in 12 files) whose every row names why it is still there and the
         # step that removes it. A new use fails, and so does a removed one until its row goes, so
-        # both lists only shrink. It rides this line because its floor is the shared `1`, so the
-        # name needs no re-measure.
+        # every list only shrinks. It rides this line because its floor is the shared `1`, so the
+        # name needs no re-measure. ProximityKit plan step A0.3's walls (2026-10-03) give it a
+        # fourth rule, the ratchet that keeps A0.3's result: FernletDomainModel's `PayloadType`,
+        # `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
+        # `TrainerAuditEvent` and `ConnectionSessionLog` in ProximityKit code only on an exact
+        # per-file, per-type allowlist (58 lines in 8 files) of the lines that leave with their
+        # features (A0.4), with the mesh manager's feature parts (A0.5) or with the session profile
+        # (A0.7 / C5), its matcher fixtured both ways. The suite holds 7 cells (5 before it), and
+        # the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in
+        # 10 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
