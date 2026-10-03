@@ -7,11 +7,12 @@
 // record kinds and the routed-type tokens. Payload and capability tokens are read off
 // FernletDomainModel's `PayloadType` and `ProximityCapability`, and so are the record kinds (a record
 // kind IS the payload token of the frame that carries its record), so each keeps one spelling. The
-// routed-type tokens have no `PayloadType` twin and are spelled here alone. ProximityKit reads the
-// record kinds and the routed types off the namespace (its inventory digest hashes the one, its routed
-// type registry builds its rows from the other); its other consumers still read constants of
-// their own for the rest until plan step A0.3 re-points them here, so the session titles, which its
-// coordinator also spells for itself until then, are written here byte for byte as it writes them.
+// routed-type tokens and the session titles have no `PayloadType` twin and are spelled here alone.
+// ProximityKit reads every group off the namespace: its identity envelope seals and parks by the
+// payload rules, its coordinator signs and dispatches by the session messages and reads the capability
+// rules, its mesh and presence managers advertise the wire2 token (and the mesh frames by it), its
+// inventory digest hashes the record kinds and its routed type registry builds its rows from the
+// routed types.
 //
 // Every value is pinned by `ProximityVocabularyGoldenTests`' frozen column, so a change here is a wire
 // change for every device already in the field: it fails that suite rather than shipping. Every token

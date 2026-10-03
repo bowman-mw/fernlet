@@ -1879,7 +1879,8 @@ struct ProximityNamespaceGoldenTests {
     /// An envelope minted by `signed(identityService:...)` under one namespace verifies under an
     /// identity of that namespace and is refused `signatureInvalid` under the other, in both
     /// directions: the builder and the verifier each read their identity's `purposes`, never a fixed
-    /// label.
+    /// label. Each carries its signer's heartbeat token, one its own namespace dispatches unsealed, so
+    /// the verify that succeeds opens the payload rather than parking it.
     @Test func anEnvelopeVerifiesUnderTheNamespaceItWasSignedIn() throws {
         let fernletService = Self.isolatedIdentityService()
         let foreignService = Self.isolatedIdentityService()
@@ -1895,7 +1896,8 @@ struct ProximityNamespaceGoldenTests {
         // R2: bounded by the two directions.
         for (signer, other) in [(fernlet, foreign), (foreign, fernlet)] {
             let envelope = try FernletIdentityEnvelope.signed(
-                identityService: signer, senderDisplayName: "Golden", payloadType: .inspectorEcho,
+                identityService: signer, senderDisplayName: "Golden",
+                payloadTypeToken: signer.namespace.family.vocabulary.session.heartbeat.payloadType,
                 payloadSummary: PayloadSummary(title: "Golden"), payload: payload)
             #expect(try envelope.verify(identityService: signer, replayCache: nil) == payload,
                     "an envelope signed under \(signer.purposes.signature.identityEnvelopeV2.rawValue) did not verify there")

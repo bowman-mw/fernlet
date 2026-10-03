@@ -24,10 +24,12 @@
 // and the inventory digest), the binding passes `.fernlet` for a `ProximityNamespace.Family`:
 // `ProximityNamespace.Family.fernlet`, the value `ProximityNamespace.fernlet.family` holds (pinned
 // equal beside the purposes). Where it takes a vocabulary group (the routed type registry and its ack
-// projection), the binding reads the group off `ProximityNamespace.fernlet.family.vocabulary`.
+// projection, a peer's capability gate), the binding reads the group off
+// `ProximityNamespace.fernlet.family.vocabulary`.
 
 import CryptoKit
 import FernletConnections
+import FernletDomainModel
 import Foundation
 @testable import ProximityKit
 
@@ -761,5 +763,25 @@ extension MeshRoutedManifest {
             createdAt: createdAt, hardDeadline: hardDeadline, contentKey: contentKey,
             recipientKeys: recipientKeys, identity: identity,
             types: MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes))
+    }
+}
+
+// MARK: - The envelope's and the coordinator's vocabulary (A0.3.4)
+//
+// The envelope seals and parks by its identity's namespace's payload rules, and the coordinator signs
+// its session messages under that namespace's tokens and titles; neither changed a call shape. The
+// capability gates did: a peer's `supports` takes the host's capabilities, whose legacy assumption it
+// applies to a peer that listed none. Its old shape comes back here with `.fernlet`'s
+// `family.vocabulary.capabilities`, read off the value. A cell whose subject is the legacy
+// assumption names `.fernlet` explicitly instead.
+
+/// The coordinator's capability gate in the shape the suites were written against (plan step A0.3.4).
+/// It is main-actor, as the gate it restores is.
+extension ProximityCoordinator.PeerIdentity {
+
+    /// `supports(_:in:)` with `.fernlet`'s `family.vocabulary.capabilities`.
+    @MainActor
+    func supports(_ capability: ProximityCapability) -> Bool {
+        supports(capability, in: ProximityNamespace.fernlet.family.vocabulary.capabilities)
     }
 }

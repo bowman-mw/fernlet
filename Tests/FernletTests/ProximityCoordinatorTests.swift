@@ -1,4 +1,5 @@
 @testable import ProximityKit
+import FernletConnections
 import FernletCrypto
 import Testing
 import FernletFoundation
@@ -935,7 +936,8 @@ struct ProximityCoordinatorTests {
     }
 
     /// An intro without the additive `capabilities` key (a pre-Phase-1 client) decodes to nil and
-    /// is treated as a legacy photos-only peer.
+    /// is treated as a legacy peer: under `.fernlet`'s capabilities, whose legacy assumption is
+    /// photos alone, a photos-only one.
     @Test func phase1_legacyIntroductionWithoutCapabilitiesIsPhotosOnly() async throws {
         let (local, localServiceID) = try makeIdentity()
         defer { cleanup(localServiceID) }
@@ -958,9 +960,10 @@ struct ProximityCoordinatorTests {
             return
         }
         #expect(peerIdentity.capabilities == nil)
-        #expect(peerIdentity.supports(.photos))
-        #expect(!peerIdentity.supports(.shop))
-        #expect(!peerIdentity.supports(.hearts))
+        let fernlet = ProximityNamespace.fernlet.family.vocabulary.capabilities
+        #expect(peerIdentity.supports(.photos, in: fernlet))
+        #expect(!peerIdentity.supports(.shop, in: fernlet))
+        #expect(!peerIdentity.supports(.hearts, in: fernlet))
     }
 
     /// The sender side threads its configured capability set into the intro payload.

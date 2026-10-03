@@ -94,14 +94,17 @@ wire tokens and the rules that hang on them, each part `.fernlet`:
 
 Payload and capability tokens are read off FernletDomainModel's `PayloadType` and
 `ProximityCapability`, and so are the record kinds (a record kind IS its payload token), so each
-keeps one spelling. The routed types have no `PayloadType` twin and are spelled here alone, and the
-titles are written out byte for byte as ProximityKit's coordinator writes them. ProximityKit reads the
-record kinds and the routed types off the namespace: its inventory digest tags every record with its
-family's record kind, and its routed type registry builds its three rows from the routed types (the
-mesh manager hands it its namespace's), so ProximityKit spells neither. Its other consumers
-still read constants of their own for the rest of the vocabulary until the rest of plan step A0.3
-re-points them here: the envelope its sealing set, the coordinator its tokens, titles and capability
-rules.
+keeps one spelling. The routed types and the session titles have no `PayloadType` twin and are
+spelled here alone. ProximityKit reads every group off the namespace, so it spells none of them: its
+identity envelope refuses an unsealed envelope whose token is in the sealing set and parks one whose
+token is outside `known`; its coordinator signs its introduction, acknowledgement and heartbeat under
+the session messages' tokens and titles, dispatches by them, and reads the wire2 token, the legacy
+assumption and its receive bound (twice the capability count) off the capabilities, whose wire2
+token the mesh's sealed sends read too and the mesh and presence managers advertise; its inventory
+digest tags every record with its family's record kind; and its routed type registry builds its three
+rows from the routed types (the mesh manager hands it its namespace's). Its mesh engine's own payload
+tokens and its features' payload and capability tokens are still `PayloadType` and
+`ProximityCapability` cases until the rest of plan step A0.3 and plan steps A0.4 and A0.5 move them.
 
 `Radios.fernlet` carries the three presentation strings beside the radio values, and ProximityKit
 reads each of them off the namespace: `fernlet-mesh-`, the prefix the mesh and recipe-share radios'
@@ -113,12 +116,14 @@ namespace each caller passes: the app passes `.fernlet`, and so does `FernletPro
 depends on this module for it. `ProximityVocabularyGoldenTests` holds every `.fernlet` value to its
 frozen literal, so no spelling can drift, drives those consumers (and the inventory digest, the routed
 type registry and a mesh manager) under `.fernlet` and under a namespace whose strings, record kinds
-or routed types are its own, and holds the bounds ProximityKit's soundness rules apply to the
-bounds of the consumers they protect. `ProximityNamespace.fernlet` stays `.sound` under the vocabulary
-and presentation rules too. The test target's bindings file restores the routed suites' old call
-shapes (`MeshRoutedTypeToken`, the two `increment1` values, the mint without a registry) with
-`.fernlet`'s routed types, and the membership verifier's, the adoption's and the digest's with
-`Family.fernlet`.
+or routed types are its own, drives the envelope, the coordinator and the mesh's sealed sends under
+`.fernlet` and under a namespace whose payload rules, session messages or capabilities are its own,
+and holds the bounds ProximityKit's soundness rules apply to the bounds of the consumers they
+protect. `ProximityNamespace.fernlet` stays `.sound` under the vocabulary and presentation rules too.
+The test target's bindings file restores the routed suites' old call shapes (`MeshRoutedTypeToken`,
+the two `increment1` values, the mint without a registry) with `.fernlet`'s routed types, the
+membership verifier's, the adoption's and the digest's with `Family.fernlet`, and a peer's capability
+gate with `.fernlet`'s capabilities.
 
 **The install binding (plan step A0.2.9).** ProximityKit's copy of the column seal,
 `ProximityColumnCrypto`, mixes the install binding into every mesh blob's authenticated data, and asks

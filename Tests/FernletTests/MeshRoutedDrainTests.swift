@@ -29,6 +29,7 @@
 import Foundation
 import Testing
 @testable import FernletCrypto
+import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 @testable import ProximityKit
@@ -2530,7 +2531,7 @@ struct MeshRoutedDrainWallTests {
     /// **`PayloadType.friendHeart` is NOT parked, and that is the one place this row differs from
     /// the text row's.** Parking is what the `.tempMessage` and `.friendPhoto` retirements did
     /// because nothing else used those cases. `.friendHeart` is still LIVE: `PresenceManager` sends
-    /// and receives it, it is in `sealingRequiredTypes`, and `HeartPayload` is still used by the
+    /// and receives it, it is in `.fernlet`'s sealing set, and `HeartPayload` is still used by the
     /// presence path and by `HeartDropService`. There is nothing to park —
     /// `sealedPayloadTypeCoverageIsComplete` and the sealed-framing pins are untouched — and the
     /// presence heart path is deliberately left alone (P9's).
@@ -2560,21 +2561,15 @@ struct MeshRoutedDrainWallTests {
     /// The other half of the retirement: `PayloadType.tempMessage` is **parked, not deleted**.
     ///
     /// The `.friendPhoto` precedent (D-13.5, itself `.sessionGoodbye`'s): the case, its frozen
-    /// `rawValue` and its `sealingRequiredTypes` membership all stay, and `TempMessagePayload`
+    /// `rawValue` and its membership in `.fernlet`'s sealing set all stay, and `TempMessagePayload`
     /// stays decodable, so an older peer's frame parks by name rather than being mis-dispatched or
     /// failing a session. Six unrelated suites also use the token as their sealing-required
     /// CONTROL, so deleting it would drag them into this item.
     @Test func theLegacyTextPayloadTypeIsParkedNotDeleted() throws {
         #expect(PayloadType(rawValue: "fernlet.message.temp.v1") == .tempMessage,
                 "the wire token still decodes — a parked type is not an unknown one")
-        let wire = try RepoRoot.source("FernletKit/Sources/ProximityKit/Wire/FernletIdentityEnvelope.swift")
-        let sealingLine = try #require(
-            MeshRoutedSourceScan.codeOnly(wire)
-                .split(separator: "\n")
-                .first(where: { $0.contains("sealingRequiredTypes: Set<PayloadType>") }),
-            "sealingRequiredTypes moved — update this scan"
-        )
-        #expect(sealingLine.contains(".tempMessage"),
+        let sealing = ProximityNamespace.fernlet.family.vocabulary.payloads.sealingRequired
+        #expect(sealing.contains(PayloadType.tempMessage.rawValue),
                 "and it keeps its sealing requirement, so an unsealed legacy frame is still refused")
         let source = MeshRoutedSourceScan.codeOnly(try managerSource())
         #expect(!source.contains("registerPayloadHandler(for: .tempMessage)"),

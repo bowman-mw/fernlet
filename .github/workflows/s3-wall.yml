@@ -399,9 +399,19 @@ jobs:
         # it. 213 + 3 (the vocabulary suite's record-kind and routed-type consumer cells: the digest,
         # the registry and a mesh manager under a namespace whose record kinds and routed types are
         # its own) = 216 is the ARITHMETIC CHECK, never the source.
+        # RAISED 216 -> 220 at A0.3.4, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "220 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 42), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 220: passed.
+        # Run once more at 220 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 216 + 4 (the vocabulary suite's envelope, coordinator and mesh consumer cells: the
+        # envelope's sealing gate and park, the coordinator's capability rules and its session
+        # messages, and the mesh's sealed sends, each under a namespace whose payload rules,
+        # capabilities or session messages are its own) = 220 is the ARITHMETIC CHECK, never the
+        # source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 216 \
+          Scripts/run-gated-suites.sh crypto-goldens 220 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

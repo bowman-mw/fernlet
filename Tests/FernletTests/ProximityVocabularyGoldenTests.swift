@@ -18,10 +18,12 @@
 // 1. **Payload tokens.** All 55 `PayloadType` tokens, and a table that is exactly the type's cases.
 // 2. **The sealing rule, by behaviour.** The 17 tokens an envelope must carry sealed; every one of
 //    the 55 signed unsealed under a real identity is refused exactly when it is one of them, and a
-//    token no build knows verifies unsealed, parked and empty.
+//    token no build knows verifies unsealed, parked and empty; and the envelope seals and parks by
+//    the payload rules of its identity's namespace.
 // 3. **Capabilities.** The 9 tokens; the coordinator's receive bounds (18 kept, each cut to 32
 //    characters) by driving it; the legacy default (no list means photos alone) where the
-//    coordinator and the mesh's seats decide it; and `wire2`'s role, framing sealed bodies.
+//    coordinator and the mesh's seats decide it; `wire2`'s role, framing sealed bodies; and the
+//    coordinator and the mesh reading all of it off the namespace they hold.
 // 4. **Session enums.** `ProximityMode`, `ProximityRole` and `ProximityRangingMode`, both ways.
 // 5. **Membership record kinds.** The 4 tokens, the digest's kind-first order and one known-answer
 //    inventory digest over a ledger of one record per kind; and the digest, an identity's signed
@@ -30,7 +32,8 @@
 //    cap; and the registry, its ack-stage projection and a mesh manager building their rows from the
 //    routed types they are handed or their host holds.
 // 7. **The coordinator's session messages.** The token and title of the introduction, the
-//    acknowledgement, the heartbeat and its reply, read off what a live coordinator sends; and the
+//    acknowledgement, the heartbeat and its reply, read off what a live coordinator sends, and the
+//    coordinator signing and dispatching by its identity's namespace's session messages; and the
 //    mesh's rule that an envelope's summary title is its payload token.
 // 8. **Presentation strings.** The two instance-name prefixes and the certificate's common name,
 //    read off `.fernlet`'s radios, off what the radios, the presence manager and the minting doors
@@ -57,9 +60,10 @@
 // a table that is exactly a type's cases is what makes a new case fail here until it has a row.
 //
 // Every identity and every label-taking consumer this suite builds names its namespace explicitly
-// (`.fernlet`, group 8's namespace that differs from it in the presentation strings alone, or groups 5
-// and 6's that differs from it in its record kinds and routed types alone), never a test binding
-// (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
+// (`.fernlet`, group 8's namespace that differs from it in the presentation strings alone, groups 5
+// and 6's that differs from it in its record kinds and routed types alone, or groups 2, 3 and 7's that
+// each differ from it in their payload rules, capabilities or session messages alone), never a test
+// binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
 // below was derived from the FORMAT by an independent Python re-implementation —
 // `CanonicalByteWriter`'s fields, and Foundation's JSON output rules (keys sorted by code point,
 // `/` escaped unless `.withoutEscapingSlashes`, a whole number printed without a fraction,
@@ -270,9 +274,11 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 2 — the sealing rule, by behaviour
 
-    /// The 17 tokens an envelope must carry sealed. `FernletIdentityEnvelope.sealingRequiredTypes` is
-    /// private to the envelope, so this set is held to what `verify` does with each token rather
-    /// than to the declaration (which `SealedPayloadFramingTests` reads off disk for its own wall).
+    /// The 17 tokens an envelope must carry sealed. The envelope's `verify` reads its sealing set off
+    /// its identity's namespace, `.fernlet`'s `family.vocabulary.payloads.sealingRequired`, which group
+    /// 13 holds equal to this set whole; this group holds the set to what `verify` does with each
+    /// token (and `SealedPayloadFramingTests` and `MeshRoutedDrainWallTests` read the same set for
+    /// their own walls).
     static let sealingRequiredTokens: Set<String> = [
         "fernlet.verify.challenge.v1", "fernlet.verify.response.v1",
         "fernlet.trainer.plan.v1", "fernlet.trainer.plan.delta.v1",
@@ -346,10 +352,98 @@ struct ProximityVocabularyGoldenTests {
         #expect(opened.isEmpty, "a parked type handed back \(opened.count) bytes")
     }
 
+    /// A token no `PayloadType` case spells that ``renamedPayloadRulesNamespace()`` knows and seals.
+    static let renamedSealedToken = "golden.payload.sealed.v1"
+
+    /// A token no `PayloadType` case spells that ``renamedPayloadRulesNamespace()`` knows and leaves
+    /// unsealed.
+    static let renamedOpenToken = "golden.payload.open.v1"
+
+    /// The envelope seals and parks by the payload rules of its identity's namespace, never by a set
+    /// of its own. Under a namespace that differs from `.fernlet` in its payload rules alone, an
+    /// envelope signed unsealed is refused exactly when its token is in THAT sealing set, parked
+    /// exactly when its token is outside THAT known set, and otherwise hands back its payload,
+    /// whatever Fernlet's `PayloadType` makes of the token: the recipe share Fernlet seals opens, the
+    /// mesh descriptor Fernlet leaves unsealed is refused, the friend state Fernlet dispatches is
+    /// parked, and of the two tokens no case spells the sealed one is refused and the other opens.
+    @Test func theEnvelopeSealsAndParksByThePayloadRulesOfItsIdentitysNamespace() throws {
+        let namespace = Self.renamedPayloadRulesNamespace()
+        #expect(namespace.soundness == .sound, "the renamed namespace is unsound: \(namespace.soundness)")
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let identity = IdentityService(namespace: namespace, keychainService: service)
+        try identity.ensureProvisioned()
+        let cache = ReplayCache()
+        let expected: [(token: String, outcome: String)] = [
+            (Self.frozen("payloadType.recipeShare"), "opened"), (Self.frozen("payloadType.meshDescriptor"), "refused"),
+            (Self.frozen("payloadType.friendState"), "parked"), (Self.renamedSealedToken, "refused"),
+            (Self.renamedOpenToken, "opened")
+        ]
+        // R2: bounded by the five tokens.
+        for (token, outcome) in expected {
+            let actual = try Self.unsealedOutcome(of: token, under: identity, cache: cache)
+            #expect(actual == outcome, "\(token) was \(actual) under the renamed payload rules, not \(outcome)")
+        }
+    }
+
+    /// What `verify` does with an envelope `identity` signs UNSEALED under `token`: `refused`
+    /// (`.sealingRequired`), `parked` (verified, empty bytes back), `opened` (its payload back) or
+    /// `other bytes`.
+    private static func unsealedOutcome(
+        of token: String, under identity: IdentityService, cache: ReplayCache
+    ) throws -> String {
+        let payload = Data(token.utf8)
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: identity, senderDisplayName: "", payloadTypeToken: token,
+            payloadSummary: PayloadSummary(title: token), payload: payload)
+        do {
+            let opened = try envelope.verify(identityService: identity, replayCache: cache)
+            return opened == payload ? "opened" : opened.isEmpty ? "parked" : "other bytes"
+        } catch FernletIdentityEnvelope.VerifyError.sealingRequired {
+            return "refused"
+        }
+    }
+
+    /// `.fernlet` with its payload rules alone replaced: the recipe-share and friend-state tokens out
+    /// of the sealing set, the friend-state token out of `known`, the mesh descriptor's token sealed,
+    /// and ``renamedSealedToken`` (sealed) and ``renamedOpenToken`` known.
+    static func renamedPayloadRulesNamespace() -> ProximityNamespace {
+        let payloads = ProximityNamespace.fernlet.family.vocabulary.payloads
+        let friendState = frozen("payloadType.friendState")
+        return fernletReplacing(payloads: ProximityNamespace.PayloadRules(
+            known: payloads.known.subtracting([friendState]).union([renamedSealedToken, renamedOpenToken]),
+            sealingRequired: payloads.sealingRequired.subtracting([frozen("payloadType.recipeShare"), friendState])
+                .union([frozen("payloadType.meshDescriptor"), renamedSealedToken])))
+    }
+
+    /// `.fernlet` with the vocabulary groups given replaced and nothing else changed (groups 2, 3 and
+    /// 7), so a consumer that took one of them from anywhere but the namespace it holds would read
+    /// Fernlet's where this namespace's belongs.
+    static func fernletReplacing(
+        session: ProximityNamespace.SessionMessages? = nil,
+        payloads: ProximityNamespace.PayloadRules? = nil,
+        capabilities: ProximityNamespace.Capabilities? = nil
+    ) -> ProximityNamespace {
+        let fernlet = ProximityNamespace.fernlet
+        let vocabulary = fernlet.family.vocabulary
+        return ProximityNamespace(
+            family: ProximityNamespace.Family(
+                purposes: fernlet.family.purposes,
+                radios: fernlet.family.radios,
+                verifyQR: fernlet.family.verifyQR,
+                vocabulary: ProximityNamespace.Vocabulary(
+                    session: session ?? vocabulary.session, payloads: payloads ?? vocabulary.payloads,
+                    capabilities: capabilities ?? vocabulary.capabilities,
+                    membershipRecordKinds: vocabulary.membershipRecordKinds, routedTypes: vocabulary.routedTypes)),
+            installation: fernlet.installation)
+    }
+
     // MARK: Group 3 — the capabilities
 
     /// The nine capability tokens, implicit case names with no literal in their declaration — so a
-    /// renamed case silently renames a wire token, which these rows refuse.
+    /// renamed case silently renames a wire token, which these rows refuse. Today's accessor is each
+    /// case's raw value, which the features' gates and advertisements read, but for `wire2`: the
+    /// coordinator and the mesh read that token off `.fernlet`'s `family.vocabulary.capabilities`.
     static var capabilityRows: [VocabularyGoldenRow] {
         [
             capability(.photos, "photos"),
@@ -359,16 +453,19 @@ struct ProximityVocabularyGoldenTests {
             capability(.moderation, "moderation"),
             capability(.friendState, "friendState"),
             capability(.activities, "activities"),
-            capability(.wire2, "wire2"),
+            VocabularyGoldenRow(field: "capability.wire2", frozen: "wire2",
+                                today: ProximityNamespace.fernlet.family.vocabulary.capabilities.wire2),
             capability(.heartsAway, "heartsAway")
         ]
     }
 
-    /// The coordinator's receive bounds on a peer's capability list.
+    /// The coordinator's receive bounds on a peer's capability list: twice the count of
+    /// `.fernlet`'s capability tokens, and its own cut.
     static var capabilityBoundNumbers: [VocabularyGoldenNumber] {
         [
             VocabularyGoldenNumber(field: "capability.maxAdvertised", frozen: 18,
-                                   today: ProximityCoordinator.maxAdvertisedCapabilities),
+                                   today: ProximityCoordinator.maxAdvertisedCapabilities(
+                                       in: ProximityNamespace.fernlet.family.vocabulary.capabilities)),
             VocabularyGoldenNumber(field: "capability.maxTokenLength", frozen: 32,
                                    today: ProximityCoordinator.maxCapabilityTokenLength)
         ]
@@ -413,15 +510,18 @@ struct ProximityVocabularyGoldenTests {
 
     /// A peer whose introduction carries NO capability list is treated as supporting photos and
     /// nothing else — where `PeerIdentity` decides it, on the identity the coordinator builds from
-    /// such an introduction, and where the mesh's seats decide it. An empty list is not that peer.
+    /// such an introduction, and where the mesh's seats decide it, each asked under `.fernlet`'s
+    /// capabilities, whose legacy assumption they apply. An empty list is not that peer.
     @Test func aPeerWithNoCapabilityListSupportsExactlyPhotos() async throws {
         let photos = Self.frozen("capability.photos")
+        let fernlet = ProximityNamespace.fernlet.family.vocabulary.capabilities
         let legacy = Self.peerIdentity(capabilities: nil)
         let empty = Self.peerIdentity(capabilities: [])
         // R2: bounded by the nine capabilities.
         for capability in ProximityCapability.allCases {
-            #expect(legacy.supports(capability) == (capability.rawValue == photos), "a legacy peer and \(capability)")
-            #expect(!empty.supports(capability), "a peer that listed nothing supports \(capability)")
+            #expect(legacy.supports(capability, in: fernlet) == (capability.rawValue == photos),
+                    "a legacy peer and \(capability)")
+            #expect(!empty.supports(capability, in: fernlet), "a peer that listed nothing supports \(capability)")
         }
         let rig = try VocabularyCoordinatorRig()
         defer { rig.forgetKeychainRows() }
@@ -436,7 +536,8 @@ struct ProximityVocabularyGoldenTests {
         for slot in mesh.manager.slots {
             #expect(slot.peerCapabilities == nil, "the rig's seats carry no list")
             for capability in ProximityCapability.allCases {
-                #expect(slot.supports(capability) == (capability.rawValue == photos), "a legacy seat and \(capability)")
+                #expect(slot.supports(capability, in: fernlet) == (capability.rawValue == photos),
+                        "a legacy seat and \(capability)")
             }
         }
     }
@@ -454,12 +555,21 @@ struct ProximityVocabularyGoldenTests {
         #expect(plain.legacy == body, "a peer without wire2 was sent a framed body: \(Self.hex(plain.legacy.prefix(8)))")
     }
 
-    /// Runs a session to the commit with a peer advertising `capabilities`, has the coordinator send
-    /// `body` sealed, and opens what it sent as a legacy and as a wire2 receiver would.
+    /// Runs a `.fernlet` session to the commit with a peer advertising `capabilities`, has the
+    /// coordinator send `body` sealed, and opens what it sent as a legacy and as a wire2 receiver would.
     private static func sealedBody(
         _ body: Data, peerAdvertising capabilities: [String]
     ) async throws -> (legacy: Data, wire2: Data) {
-        let rig = try VocabularyCoordinatorRig()
+        try await sealedBody(body, peerAdvertising: capabilities, under: .fernlet)
+    }
+
+    /// Runs a session under `namespace` to the commit with a peer advertising `capabilities` (nil: an
+    /// introduction with no list at all), has the coordinator send `body` sealed, and opens what it
+    /// sent as a legacy and as a wire2 receiver would.
+    private static func sealedBody(
+        _ body: Data, peerAdvertising capabilities: [String]?, under namespace: ProximityNamespace
+    ) async throws -> (legacy: Data, wire2: Data) {
+        let rig = try VocabularyCoordinatorRig(namespace: namespace)
         defer { rig.forgetKeychainRows() }
         let introduction = VocabularyCoordinatorRig.IntroductionBody(rangingMode: "rssi", capabilities: capabilities)
         let peer = try await rig.handshake(payload: JSONEncoder().encode(introduction))
@@ -482,6 +592,115 @@ struct ProximityVocabularyGoldenTests {
             id: UUID(), displayName: "", signingPublicKey: Data(repeating: 0x01, count: 32),
             keyAgreementPublicKey: Data(repeating: 0x02, count: 32), fingerprint: "0102030405060708",
             rangingMode: .rssi, firstSeenAt: Date(timeIntervalSince1970: 1_700_000_000), capabilities: capabilities)
+    }
+
+    /// The coordinator reads its capability rules off its identity's namespace, never off Fernlet's
+    /// capability type. Under a namespace that differs from `.fernlet` in its capabilities alone —
+    /// three tokens of its own, the second its wire2 token, and a peer that lists none taken to
+    /// support the first two — the coordinator keeps twice three of a peer's tokens (each cut to 32
+    /// characters), frames the bodies it seals for a peer that advertised THAT wire2 token and for a
+    /// peer that listed nothing, and seals the body as it is for a peer that advertised Fernlet's.
+    @Test func theCoordinatorReadsItsCapabilityRulesOffItsIdentitysNamespace() async throws {
+        let namespace = Self.renamedCapabilitiesNamespace()
+        #expect(namespace.soundness == .sound, "the renamed namespace is unsound: \(namespace.soundness)")
+        let capabilities = namespace.family.vocabulary.capabilities
+        let length = Self.frozenNumber("capability.maxTokenLength")
+        let advertised = (0..<30).map {
+            String(format: "golden-capability-%02d-", $0).padding(toLength: 40, withPad: "x", startingAt: 0)
+        }
+        let rig = try VocabularyCoordinatorRig(namespace: namespace)
+        defer { rig.forgetKeychainRows() }
+        let introduction = VocabularyCoordinatorRig.IntroductionBody(rangingMode: "rssi", capabilities: advertised)
+        let peer = try await rig.handshake(payload: JSONEncoder().encode(introduction))
+        await rig.coordinator.cancel()
+        let built = try #require(peer, "the handshake reached the manual-commit gate")
+        let held = try #require(built.capabilities, "the coordinator dropped the list")
+        #expect(held == advertised.prefix(2 * capabilities.known.count).map { String($0.prefix(length)) },
+                "the coordinator kept \(held.count) tokens: \(held)")
+        let soup = Data(#"{"name":"Soup"}"#.utf8)
+        let own = try await Self.sealedBody(soup, peerAdvertising: [capabilities.wire2], under: namespace)
+        let legacy = try await Self.sealedBody(soup, peerAdvertising: nil, under: namespace)
+        let fernlets = try await Self.sealedBody(soup, peerAdvertising: [Self.frozen("capability.wire2")], under: namespace)
+        #expect(SealedPayloadFraming.hasFrameTag(own.legacy) && own.wire2 == soup,
+                "a peer advertising this namespace's wire2 token was sent \(Self.hex(own.legacy.prefix(8)))")
+        #expect(SealedPayloadFraming.hasFrameTag(legacy.legacy) && legacy.wire2 == soup,
+                "a peer this namespace assumes wire2 of was sent \(Self.hex(legacy.legacy.prefix(8)))")
+        #expect(fernlets.legacy == soup, "a peer advertising only Fernlet's token was sent \(Self.hex(fernlets.legacy.prefix(8)))")
+    }
+
+    /// The mesh frames the bodies it seals for a slot by its host's wire2 token. A manager over a host
+    /// of `.fernlet` frames the catalog it seals for a peer that advertised the frozen `wire2`; over a
+    /// host of the namespace whose capabilities alone are its own it frames the catalog for a peer that
+    /// advertised THAT namespace's wire2 token, and seals it as it is for a peer that advertised only
+    /// Fernlet's: the same slot but for the one token.
+    @Test func theMeshFramesItsSealedSendsByItsHostsWire2Token() async throws {
+        let fernletToken = Self.frozen("capability.wire2")
+        let renamed = Self.renamedCapabilitiesNamespace()
+        let renamedToken = renamed.family.vocabulary.capabilities.wire2
+        let underFernlet = try await Self.sealedCatalog(underHostOf: .fernlet, peerAdvertising: fernletToken)
+        let ownToken = try await Self.sealedCatalog(underHostOf: renamed, peerAdvertising: renamedToken)
+        let fernletsToken = try await Self.sealedCatalog(underHostOf: renamed, peerAdvertising: fernletToken)
+        #expect(SealedPayloadFraming.hasFrameTag(underFernlet),
+                "a manager of .fernlet sealed \(Self.hex(underFernlet.prefix(8))) for a wire2 peer")
+        #expect(SealedPayloadFraming.hasFrameTag(ownToken),
+                "a manager of another namespace sealed \(Self.hex(ownToken.prefix(8))) for a peer advertising its token")
+        #expect(fernletsToken.first == UInt8(ascii: "{"),
+                "a manager of another namespace framed \(Self.hex(fernletsToken.prefix(8))) for a peer advertising Fernlet's")
+    }
+
+    /// `.fernlet` with its capabilities alone replaced: three tokens of its own, the second its wire2
+    /// token, and a peer that lists none taken to support the first two.
+    static func renamedCapabilitiesNamespace() -> ProximityNamespace {
+        fernletReplacing(capabilities: ProximityNamespace.Capabilities(
+            known: ["golden-snapshots", "golden-framing", "golden-extras"], wire2: "golden-framing",
+            assumedForLegacyPeers: ["golden-snapshots", "golden-framing"]))
+    }
+
+    /// The clothing catalog a mesh manager over a scratch host of `namespace` seals for a committed
+    /// slot whose peer advertised `shop` and `wire2Token`, opened as a legacy receiver would, so a body
+    /// sealed in the wire2 framing keeps its frame tag. The manager runs on a fake radio with its
+    /// identity and the peer's on throwaway services; the host's root and seal-key rows and both
+    /// identities' rows are removed before this returns.
+    static func sealedCatalog(
+        underHostOf namespace: ProximityNamespace, peerAdvertising wire2Token: String
+    ) async throws -> Data {
+        let host = ScratchNamespaceHost(namespace: namespace)
+        defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
+        let services = [isolatedIdentityService(), isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let local = IdentityService(namespace: namespace, keychainService: services[0])
+        let peer = IdentityService(namespace: namespace, keychainService: services[1])
+        try peer.ensureProvisioned()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(), identity: local)
+        let network = FakePeerNetwork()
+        let link = network.addEndpoint(named: "vocabulary-mesh-peer")
+        let capabilities = [frozen("capability.shop"), wire2Token]
+        manager.addSlotForTesting(
+            coordinator: ProximityCoordinator(
+                identity: local, transport: MockMultipeerTransport(), ranging: MockRangingProvider(),
+                replayCache: ReplayCache(), displayName: VocabularyCoordinatorRig.displayName, timeoutSeconds: 0),
+            peer: link.handle, fingerprint: peer.localFingerprint,
+            verifiedKeyAgreementPublicKey: peer.localKeyAgreementPublicKey, peerCapabilities: capabilities,
+            channel: link.transport)
+        manager.clothingShop.isSharingEnabledProvider = { true }
+        manager.clothingShop.localCatalogProvider = {
+            ClothingCatalogPayload(designerID: UUID(), displayName: VocabularyCoordinatorRig.displayName, items: [])
+        }
+        let slot = try #require(manager.slots.first, "the manager seated the slot")
+        manager.noteSlotCommittedForShop(slot: slot, identity: ProximityCoordinator.PeerIdentity(
+            id: slot.id, displayName: VocabularyCoordinatorRig.displayName, signingPublicKey: peer.localSigningPublicKey,
+            keyAgreementPublicKey: peer.localKeyAgreementPublicKey, fingerprint: peer.localFingerprint,
+            rangingMode: .rssi, firstSeenAt: at(0), capabilities: capabilities))
+        let catalogToken = frozen("payloadType.clothingCatalog")
+        let catalog = {
+            link.transport.sentFrames.lazy
+                .compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+                .first { $0.payloadTypeToken == catalogToken }
+        }
+        await VocabularyCoordinatorRig.settle { catalog() != nil }
+        withExtendedLifetime(manager) {}   // its sends hold it weakly
+        let sent = try #require(catalog(), "the manager never sent its catalog")
+        return try peer.open(sent.payload, from: sent.senderKeyAgreementPublicKey, format: .legacy)
     }
 
     // MARK: Group 4 — the session enums
@@ -778,7 +997,9 @@ struct ProximityVocabularyGoldenTests {
         let name: String
         /// The group 1 row holding the token the message carries.
         let tokenField: String
-        /// The frozen `PayloadSummary.title`. No accessor: each is an inline literal at its send site.
+        /// The frozen `PayloadSummary.title`. The coordinator signs the message under the token and
+        /// title its identity's namespace names (`family.vocabulary.session`); group 13 holds
+        /// `.fernlet`'s to these.
         let title: String
     }
 
@@ -816,6 +1037,52 @@ struct ProximityVocabularyGoldenTests {
         }
         let name = VocabularyCoordinatorRig.displayName
         #expect(sent.map(\.senderDisplayName) == ["", "", name, name], "they named \(sent.map(\.senderDisplayName))")
+    }
+
+    /// The coordinator signs and dispatches by the session messages of its identity's namespace, never
+    /// by Fernlet's. Under a namespace that differs from `.fernlet` in its session messages alone (and
+    /// in the three tokens its payload rules add, since a session token must be one they know), a
+    /// peer's introduction under THAT namespace's token lands the coordinator at the commit gate, a
+    /// peer's ping under THAT heartbeat token is answered, and the four messages the coordinator signs
+    /// carry that namespace's tokens and titles, in the order a session sends them.
+    @Test func theCoordinatorSignsAndDispatchesByItsIdentitysSessionMessages() async throws {
+        let namespace = Self.renamedSessionNamespace()
+        #expect(namespace.soundness == .sound, "the renamed namespace is unsound: \(namespace.soundness)")
+        let session = namespace.family.vocabulary.session
+        let rig = try VocabularyCoordinatorRig(namespace: namespace)
+        defer { rig.forgetKeychainRows() }
+        let quiet = VocabularyCoordinatorRig.IntroductionBody(rangingMode: "rssi", capabilities: nil)
+        let peer = try await rig.handshake(payload: JSONEncoder().encode(quiet))
+        _ = try #require(peer, "an introduction under the namespace's own token reached the manual-commit gate")
+        await rig.coordinator.commitManualProximity()
+        await VocabularyCoordinatorRig.settle { rig.local.sentFrames.count >= 3 }
+        try await rig.deliver(rig.heartbeatPing())
+        await VocabularyCoordinatorRig.settle { rig.local.sentFrames.count >= 4 }
+        let sent = try rig.sentEnvelopes()
+        await rig.coordinator.cancel()
+        let tokens = [session.identityIntroduction.payloadType, session.identityAcknowledge.payloadType,
+                      session.heartbeat.payloadType, session.heartbeat.payloadType]
+        let titles = [session.identityIntroduction.summaryTitle, session.identityAcknowledge.summaryTitle,
+                      session.heartbeat.pingTitle, session.heartbeat.replyTitle]
+        #expect(sent.map(\.payloadTypeToken) == tokens, "the coordinator sent \(sent.map(\.payloadTypeToken))")
+        #expect(sent.map(\.payloadSummary.title) == titles, "titled \(sent.map(\.payloadSummary.title))")
+    }
+
+    /// `.fernlet` with its session messages alone replaced by three tokens and four titles of its
+    /// own, the three tokens added to what its payload rules know.
+    static func renamedSessionNamespace() -> ProximityNamespace {
+        let session = ProximityNamespace.SessionMessages(
+            identityIntroduction: ProximityNamespace.SessionMessage(
+                payloadType: "golden.session.hello.v1", summaryTitle: "Golden hello"),
+            identityAcknowledge: ProximityNamespace.SessionMessage(
+                payloadType: "golden.session.thanks.v1", summaryTitle: "Golden thanks"),
+            heartbeat: ProximityNamespace.Heartbeat(
+                payloadType: "golden.session.beat.v1", pingTitle: "Golden beat", replyTitle: "Golden beat back"))
+        let payloads = ProximityNamespace.fernlet.family.vocabulary.payloads
+        let tokens: Set<String> = [session.identityIntroduction.payloadType, session.identityAcknowledge.payloadType,
+                                   session.heartbeat.payloadType]
+        return fernletReplacing(session: session, payloads: ProximityNamespace.PayloadRules(
+            known: payloads.known.union(tokens), sealingRequired: payloads.sealingRequired))
     }
 
     /// The mesh signs every envelope at one door, titling its summary with its payload token: the
@@ -1658,7 +1925,9 @@ struct ProximityVocabularyGoldenTests {
 ///
 /// The coordinator is built with ``displayName``, the rig's own (the engine has no default name),
 /// and on a ranging provider with no UWB, so a verified introduction lands it at the manual-commit
-/// gate.
+/// gate. Both identities are of the namespace the cell hands the rig (`.fernlet` for the
+/// argument-less initializer), and the peer sends its introduction and its ping under that
+/// namespace's session messages, as a peer of its family does.
 @MainActor
 final class VocabularyCoordinatorRig {
 
@@ -1699,23 +1968,32 @@ final class VocabularyCoordinatorRig {
     let identity: IdentityService
     /// The peer's identity, which signs everything the peer sends and opens what it is sent.
     let remoteIdentity: IdentityService
+    /// The namespace both identities are of.
+    let namespace: ProximityNamespace
     /// The coordinator under test.
     let coordinator: ProximityCoordinator
     /// The two throwaway keychain services, removed by ``forgetKeychainRows()``.
     private let services: [String]
 
-    /// Two provisioned identities on throwaway services, the fabric, and the coordinator.
-    init() throws {
+    /// The rig under `.fernlet`.
+    convenience init() throws {
+        try self.init(namespace: .fernlet)
+    }
+
+    /// Two provisioned identities of `namespace` on throwaway services, the fabric, and the
+    /// coordinator.
+    init(namespace: ProximityNamespace) throws {
         let localService = ProximityVocabularyGoldenTests.isolatedIdentityService()
         let remoteService = ProximityVocabularyGoldenTests.isolatedIdentityService()
-        let localIdentity = IdentityService(namespace: .fernlet, keychainService: localService)
-        let peerIdentity = IdentityService(namespace: .fernlet, keychainService: remoteService)
+        let localIdentity = IdentityService(namespace: namespace, keychainService: localService)
+        let peerIdentity = IdentityService(namespace: namespace, keychainService: remoteService)
         try localIdentity.ensureProvisioned()
         try peerIdentity.ensureProvisioned()
         let fabric = FakePeerNetwork()
         let near = fabric.addEndpoint(named: "vocabulary-local")
         let far = fabric.addEndpoint(named: "vocabulary-remote")
         services = [localService, remoteService]
+        self.namespace = namespace
         identity = localIdentity
         remoteIdentity = peerIdentity
         network = fabric
@@ -1737,16 +2015,18 @@ final class VocabularyCoordinatorRig {
     }
 
     /// Starts the coordinator in friend mode as the browser, opens the link, and lets the peer's
-    /// introduction (built over `payload`) arrive. Returns the peer identity the coordinator holds at
-    /// the manual-commit gate, or nil when it never got there.
+    /// introduction (built over `payload`, under the rig's namespace's introduction token and title)
+    /// arrive. Returns the peer identity the coordinator holds at the manual-commit gate, or nil when
+    /// it never got there.
     func handshake(payload: Data) async throws -> ProximityCoordinator.PeerIdentity? {
         await coordinator.begin(role: .browser, mode: .friend)
         network.connect(localHandle, remoteHandle)
         network.clock.advance(by: FakePeerNetwork.defaultLatency)
         await Self.settle { self.local.sentFrames.count >= 1 }
+        let introduction = namespace.family.vocabulary.session.identityIntroduction
         try await deliver(FernletIdentityEnvelope.signed(
-            identityService: remoteIdentity, senderDisplayName: "", payloadType: .identityIntroduction,
-            payloadSummary: PayloadSummary(title: "Hello"), payload: payload))
+            identityService: remoteIdentity, senderDisplayName: "", payloadTypeToken: introduction.payloadType,
+            payloadSummary: PayloadSummary(title: introduction.summaryTitle), payload: payload))
         await Self.settle {
             if case .awaitingManualCommit = self.coordinator.state { return true }
             return false
@@ -1755,12 +2035,14 @@ final class VocabularyCoordinatorRig {
         return peer
     }
 
-    /// A ping from the peer, which a connected coordinator must answer.
+    /// A ping from the peer, under the rig's namespace's heartbeat, which a connected coordinator
+    /// must answer.
     func heartbeatPing() throws -> FernletIdentityEnvelope {
         let body = HeartbeatBody(kind: "ping", heartbeatID: UUID(), sentAt: Date())
+        let heartbeat = namespace.family.vocabulary.session.heartbeat
         return try FernletIdentityEnvelope.signed(
-            identityService: remoteIdentity, senderDisplayName: "", payloadType: .sessionHeartbeat,
-            payloadSummary: PayloadSummary(title: "Heartbeat"), payload: JSONEncoder().encode(body))
+            identityService: remoteIdentity, senderDisplayName: "", payloadTypeToken: heartbeat.payloadType,
+            payloadSummary: PayloadSummary(title: heartbeat.pingTitle), payload: JSONEncoder().encode(body))
     }
 
     /// Sends `envelope` from the peer across the fabric and runs the clock until it lands.

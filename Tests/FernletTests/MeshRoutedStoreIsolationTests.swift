@@ -432,12 +432,12 @@ struct MeshRoutedStoreIsolationTests {
     /// four forwarding gates — so a second shipping registry would be a second answer to "is this
     /// type known", and that is the one question plan §11 says must have one answer everywhere.
     ///
-    /// The member half is why `MeshNetworkManager.routedTypes` spells its fallback out in full
-    /// (`?? MeshRoutedTypeRegistry.increment1(namespace.family.vocabulary.routedTypes)`): a
+    /// The member half is why `MeshNetworkManager`'s `init` spells the registry it builds out in full
+    /// (`= MeshRoutedTypeRegistry.increment1(namespace.family.vocabulary.routedTypes)`): a
     /// leading-dot `.increment1(…)` — or a future `.increment2(…)` — is invisible to this scanner.
-    /// The mint takes its registry with no default, so the manager's fallback is the one value
-    /// position left. `theTypeRegistryScannersMatchAcrossLines` fixtures that blind spot from both
-    /// sides, asserting the manager's file still names the type in full.
+    /// The mint takes its registry with no default, so the registry the manager builds is the one
+    /// value position left. `theTypeRegistryScannersMatchAcrossLines` fixtures that blind spot from
+    /// both sides, asserting the manager's file still names the type in full.
     @Test func shippingCodeNamesOneTypeRegistry() throws {
         var constructionSites: [String] = []
         var otherValues: [String] = []
@@ -540,10 +540,10 @@ struct MeshRoutedStoreIsolationTests {
     /// dictionary, or widening `"fernlet.mesh.routed-type."`'s empty allowlist to admit any file,
     /// fails HERE rather than silently narrowing what wall 3 catches.
     ///
-    /// The member scanner's blind spot is fixtured from both sides: a leading-dot `?? .increment1(…)`
+    /// The member scanner's blind spot is fixtured from both sides: a leading-dot `= .increment1(…)`
     /// is invisible to it (the negative), and the one shipping file that holds a registry value in a
-    /// **fallback position** is asserted to spell the type out in full (the positive) — which is the
-    /// only thing keeping the blind spot documented rather than occupied.
+    /// **type-inferred position** is asserted to spell the type out in full (the positive) — which is
+    /// the only thing keeping the blind spot documented rather than occupied.
     @Test func theTypeRegistryScannersMatchAcrossLines() throws {
         let oneLine = "static let x = MeshRoutedTypeRegistry(entries: [row])"
         let wrapped = """
@@ -573,11 +573,11 @@ struct MeshRoutedStoreIsolationTests {
     /// The blind spot, both ways: the inferred form is invisible to the member scanner, and no
     /// shipping value-position read has moved into it.
     ///
-    /// `MeshNetworkManager.swift` (the `routedTypes` fallback) is the one place a registry value
+    /// `MeshNetworkManager.swift` (the registry its `init` builds) is the one place a registry value
     /// stands where a leading dot would compile — and where `shippingCodeNamesOneTypeRegistry` would
     /// then see nothing at all. The manifest mint's `types:` takes no default, so it holds none.
     private static func expectTheMemberScannersBlindSpotIsStillEmpty() throws {
-        let inferred = "routedTypeRegistryForTesting ?? .increment1(namespace.family.vocabulary.routedTypes)"
+        let inferred = "self.hostRoutedTypeRegistry = .increment1(namespace.family.vocabulary.routedTypes)"
         #expect(inferred.components(separatedBy: "MeshRoutedTypeRegistry.").count == 1,
                 "the member scanner's blind spot moved: an inferred member is now visible to it")
         let sources = try proximitySources()
