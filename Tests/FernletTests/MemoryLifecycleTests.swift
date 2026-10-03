@@ -21,6 +21,7 @@
 // No test starts a radio (the unit-test invariant for proximity); every wait uses the deadline +
 // minimum-poll-floor helper so a starved main actor cannot time it out spuriously.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import CloudKitSync
 import CoreData

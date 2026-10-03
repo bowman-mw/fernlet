@@ -21,9 +21,9 @@
 // 1. **The seven feature labels** of the heart dead-drop, presence and the ban store: the heart pair
 //    salt, the sealed drop's salt, the day-tag prefix, the sidecar's authenticated data, the presence
 //    pair salt, the presence epoch-tag prefix and the ban evidence's reporter-tag domain, each read
-//    where its feature reads it: the heart pair salt as the feature purpose `.fernlet` declares, which
-//    the heart dead-drop hands ProximityKit's pair-secret door, and the other six as the FernletCrypto
-//    registry entries their features hand CryptoKit themselves.
+//    where its feature reads it: the two pair salts as the feature purposes `.fernlet` declares, which
+//    the heart dead-drop and presence hand ProximityKit's pair-secret door, and the other five as the
+//    FernletCrypto registry entries their features hand CryptoKit themselves.
 // 2. **The pair secrets.** The heart-drop and presence pair secrets of two planted identities, from
 //    either side, and their refusals in their order: no key-agreement key first, a malformed peer key
 //    then.
@@ -172,7 +172,7 @@ struct FernletFeatureGoldenTests {
             FeatureGoldenLabelRow("AEAD.heartDropSidecarV2", frozen: "fernlet.heartdrop.sidecar.aead.v2",
                                   today: FernletCryptoPurpose.AEAD.heartDropSidecarV2),
             FeatureGoldenLabelRow("KeyDerivation.presencePairV1", frozen: "fernlet.presence.tag.v1",
-                                  today: FernletCryptoPurpose.KeyDerivation.presencePairV1),
+                                  today: FernletFeaturePurposes.presencePairV1),
             FeatureGoldenLabelRow("HMAC.presenceEpochTagV1", frozen: "fernlet.presence.epoch.v1",
                                   today: FernletCryptoPurpose.HMAC.presenceEpochTagV1),
             FeatureGoldenLabelRow("Hash.moderationBanReporterTagV1",

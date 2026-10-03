@@ -12,6 +12,7 @@
 // rotation dropping a stale advertisement, the `allowNearbyPresence` default-false + tolerant decode,
 // and the one-time first-kept-friend enable prompt (fires on 0→1, never twice).
 
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 import Foundation

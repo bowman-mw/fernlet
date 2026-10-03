@@ -268,7 +268,7 @@ struct PrivacyWipeCoverageTests {
     /// The three managers whose live in-memory identity caches must die with the keychain rows.
     private static let identitySeamFiles = [
         "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
-        "FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift",
+        "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
         "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
     ]
 

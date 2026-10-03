@@ -7,6 +7,7 @@ import FoodCatalog
 import PrivateHealthStore
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import AppServices
 import FernletUI
 

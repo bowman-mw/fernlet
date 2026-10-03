@@ -41,6 +41,7 @@ import Foundation
 import Testing
 import FernletConnections
 import FernletFoundation
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - MeshP9Acceptance
@@ -64,8 +65,9 @@ enum MeshP9Acceptance {
     /// The presence radio (item 2 pass 2).
     static let presenceSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift"
 
-    /// The presence manager — the file whose MultipeerConnectivity names pass 2 removed.
-    static let presenceManagerPath = "FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift"
+    /// The presence manager — the file whose MultipeerConnectivity names pass 2 removed. It is
+    /// FernletSocial's, and drives ProximityKit's presence radio from there.
+    static let presenceManagerPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
 
     /// The recipe radio, which also declares ``RecipeSharePosture`` (item 3 pass 2).
     static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkRecipeShareSession.swift"
@@ -519,8 +521,9 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// Rule 7's mechanical half for item 2: pass 1 changed nothing on the air, so the only proof
     /// that pass 2 ran is that the MultipeerConnectivity path is gone from this file and the QUIC
     /// seam is in it. Pinned in both directions — a file naming neither has been renamed or emptied,
-    /// not cleaned — and widened past the unit cell's single file to a walk of the whole package, so
-    /// an `extension PresenceManager` in a new file cannot reintroduce a needle silently.
+    /// not cleaned — and widened past the unit cell's single file to a walk of the whole package and
+    /// of FernletSocial, the manager's module, so an `extension PresenceManager` in a new file of
+    /// either cannot reintroduce a needle silently.
     @Test func theManagerNamesNoRetiredRadioAndReachesTheAirThroughTheSeamAlone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceManagerPath))
         // R2: bounded by the retired-radio spellings.
@@ -533,16 +536,17 @@ struct MeshP9PresenceSwapAcceptanceTests {
         #expect(manager.contains("presencePosture"), "wearing the posture pass 1 built")
 
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
+        let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
         // Anti-vacuity floors, RE-MEASURED at item 9's fix review (NOTE 4) and set within ~20%
         // of reality rather than at a round 100: 141 files here (143 before the deletion round). A floor a deleted third of the
-        // package still clears is a floor that cannot fail.
+        // package still clears is a floor that cannot fail. It holds ProximityKit's part of the walk.
         #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
-        #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit))
+        #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit + social))
                 == ["PresenceManager.swift", "NetworkPresenceSession.swift"], """
-                the presence seam has exactly two homes in the package — the manager that drives it \
-                and the conformer that is it. A third is a second owner for one radio
+                the presence seam has exactly two homes in the package and FernletSocial — the manager \
+                that drives it and the conformer that is it. A third is a second owner for one radio
                 """)
-        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit) == ["PresenceManager.swift"],
+        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["PresenceManager.swift"],
                 "and the posture is minted from one place: the manager's own epoch tick")
     }
 }
@@ -948,15 +952,17 @@ struct MeshP9McRetirementAcceptanceTests {
             route through: a second radio, a factory or a launch variable here is the seam the \
             deletion round removed coming back
             """)
-        // The WHOLE package, not the one file the seam used to live in: the four names are
-        // Fernlet's own, so neither the import wall nor `TransportNeutralityBoundaryTests`' SDK
-        // symbols would see a `MeshTransportKind` re-introduced in a new file (the deletion round's
-        // verify, finding 6). Comment-stripped sources, as every walk in this battery.
+        // The WHOLE package, not the one file the seam used to live in, and FernletSocial, whose
+        // presence manager drives the presence radio: the four names are Fernlet's own, so neither
+        // the import wall nor `TransportNeutralityBoundaryTests`' SDK symbols would see a
+        // `MeshTransportKind` re-introduced in a new file (the deletion round's verify, finding 6).
+        // Comment-stripped sources, as every walk in this battery.
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
+        let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
         // R2: bounded by the four retired identifiers.
         for retired in ["MeshTransportKind", "MeshTransportFactory", "quicSelectionEnvironmentKey",
                         "MeshMultipeerSession"] {
-            let homes = Set(MeshP7Acceptance.homes(of: retired, in: kit)).sorted()
+            let homes = Set(MeshP7Acceptance.homes(of: retired, in: kit + social)).sorted()
             #expect(homes.isEmpty, """
                 `\(retired)` is back, in \(homes). The selection seam retired with the second radio \
                 (Variant A of the survey's patch); `MeshTransportSession` and `MeshPeerChannel` are \
@@ -991,8 +997,8 @@ struct MeshP9McRetirementAcceptanceTests {
         )
     }
 
-    /// **The framework import has no home, and no framework type is named anywhere in the package or
-    /// the app.**
+    /// **The framework import has no home, and no framework type is named anywhere in the package,
+    /// FernletSocial (whose presence manager drives a radio) or the app.**
     ///
     /// `TransportNeutralityBoundaryTests` makes the same claim through a permit list it scans
     /// against — empty since the deletion round; this is a second decomposition of it — the *claim*
@@ -1006,11 +1012,12 @@ struct MeshP9McRetirementAcceptanceTests {
     /// why the ephemeral posture exists at all.
     @Test func theFrameworkImportHasNoHomeAndNoFrameworkTypeIsNamed() throws {
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
+        let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
         let app = try MeshP7Acceptance.sources(under: "App/Fernlet")
         // MEASURED floors (NOTE 4): 141 and 185 files after the deletion. See clause (b) for why not 100.
         #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
         #expect(app.count >= 140, "the app-target scan lost its files (185 when this was measured)")
-        let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: kit + app)).sorted()
+        let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: kit + social + app)).sorted()
         #expect(homes.isEmpty, """
             MultipeerConnectivity is imported in \(homes). The framework left the tree in the \
             deletion round (2026-09-22); a new import is a new dependency on a retired radio, and \
@@ -1021,7 +1028,7 @@ struct MeshP9McRetirementAcceptanceTests {
         // WHOLE-identifier wall (`TransportNeutralityBoundaryTests`) covers the rest.
         // R2: bounded by the three unambiguous framework type names.
         for symbol in ["MCNearbyServiceAdvertiser", "MCNearbyServiceBrowser", "MCSessionState"] {
-            let anywhere = Set(MeshP7Acceptance.homes(of: symbol, in: kit + app)).sorted()
+            let anywhere = Set(MeshP7Acceptance.homes(of: symbol, in: kit + social + app)).sorted()
             #expect(anywhere.isEmpty, "`\(symbol)` is named in \(anywhere); the framework is gone")
         }
     }

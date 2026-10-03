@@ -89,3 +89,7 @@
 # store's keychain service and blob, the heart-drop pair secret and day tags, the storage scope and the
 # mesh stores' keychain services derived beside it — changing a byte here breaks every drop in flight
 /FernletKit/Sources/FernletSocial/HeartSharing/                         @bowman-mw
+
+# FernletSocial's presence tags: the presence pair secret and the rotating epoch tag every friend pair
+# advertises and matches by — changing a byte here makes every pair of friends invisible to each other
+/FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw

@@ -17,8 +17,8 @@
 //    seal-key rows, the storage directory and its three on-disk names, and the radios' log
 //    subsystem. Plus the QR host, which stays a ProximityKit constant but travels beside the scheme.
 //    64 rows, each a frozen literal beside the accessor production reads: `.fernlet`'s field, but for
-//    the two feature salts, whose accessors are what each is derived under, the heart salt's
-//    `FernletFeaturePurposes` constant (FernletConnections) and the presence salt's registry entry.
+//    the two feature salts, whose accessors are what each is derived under, their
+//    `FernletFeaturePurposes` constants (FernletConnections).
 // 2. **Known answers for the six labels nothing else pinned** (`fernlet.mesh.groupkey.v1`,
 //    `fernlet.mesh.groupkey.wrap.aead.v2`, `fernlet.mesh.encrypted-metadata.aead.v2`,
 //    `fernlet.mesh.routed.content-key.v1`, `fernlet.mesh.session-context.v1`,
@@ -320,18 +320,17 @@ struct ProximityNamespaceGoldenTests {
     /// The two feature salts `.fernlet` declares (`family.purposes.feature`), after the hash rows as
     /// `labelRows` lists them: the heart dead-drop's and presence's pair-secret salts, which
     /// ProximityKit's `pairSecret(with:purpose:)` derives under only when a namespace declares them.
-    /// Each `today` column reads what production derives under: for the heart salt the
-    /// `FernletFeaturePurposes` constant FernletSocial's heart-drop pair secret passes the door, and
-    /// for the presence salt the FernletCrypto registry twin the identity's presence derivation
-    /// reads; `everyFernletValueIsItsFrozenLiteral()` holds `.fernlet`'s declared values to the same
-    /// literals, and the twin cells hold the two spellings equal.
+    /// Each `today` column reads what production derives under: the `FernletFeaturePurposes`
+    /// constant FernletSocial's heart-drop or presence pair secret passes the door;
+    /// `everyFernletValueIsItsFrozenLiteral()` holds `.fernlet`'s declared values to the same
+    /// literals, and the twin cells hold each equal to its FernletCrypto registry twin.
     private static var featureLabelRows: [NamespaceGoldenRow] {
         let feature = "family.purposes.feature."
         return [
             NamespaceGoldenRow(.label, feature + "heartDropPairV1", frozen: "fernlet.heartdrop.v1",
                                today: .text(FernletFeaturePurposes.heartDropPairV1.rawValue)),
             NamespaceGoldenRow(.label, feature + "presencePairV1", frozen: "fernlet.presence.tag.v1",
-                               today: .text(FernletCryptoPurpose.KeyDerivation.presencePairV1.rawValue))
+                               today: .text(FernletFeaturePurposes.presencePairV1.rawValue))
         ]
     }
 

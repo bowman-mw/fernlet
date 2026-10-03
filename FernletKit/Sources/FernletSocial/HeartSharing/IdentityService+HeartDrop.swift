@@ -60,9 +60,10 @@ extension IdentityService {
 }
 
 /// Big-endian (MSB-first) serialization of a 64-bit counter for the domain-separated HMAC messages
-/// of FernletSocial's rotating tags — the R9-safe replacement for
-/// `withUnsafeBytes(of: value.bigEndian)`, byte-identical to it and to the private helper
-/// ProximityKit's `IdentityService` keeps for its own tags, so every pinned tag vector still matches.
+/// of FernletSocial's rotating tags, the heart day tag here and the presence epoch tag
+/// (`Presence/IdentityService+PresenceTags.swift`) — the R9-safe replacement for
+/// `withUnsafeBytes(of: value.bigEndian)`, byte-identical to it, so every pinned tag vector still
+/// matches.
 ///
 /// `nonisolated` against the module's `defaultIsolation(MainActor.self)`: a pure function of its
 /// argument, called from the nonisolated tag statics.

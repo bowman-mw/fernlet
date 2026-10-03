@@ -597,7 +597,7 @@ FernletConnections' one conversion, while the vault builds its block, revoke and
 and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
 the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
 names these types and ``ItemNameModeration`` only on the lines `ProximityNamespaceBoundaryTests`
-allowlists, which leave with Fernlet's features (plan steps A0.4 and A0.5) and, for the mode, with
+allowlists, which leave with Fernlet's features (plan steps A0.5 and A0.7) and, for the mode, with
 the connection profiles (A0.7 and C5); `TrainerAuditEvent` and `ConnectionSessionLog` it names
 nowhere. The generic types an envelope carries (`PayloadEncryption`, `PayloadSummary` and its
 `DateRange`) and the session's role and ranging mode are ProximityKit's own.

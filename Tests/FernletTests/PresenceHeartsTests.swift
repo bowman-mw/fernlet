@@ -9,6 +9,7 @@
 // trust-gate coverage lives in HeartShareTests. No test here starts a real radio — every path is
 // driven through the no-radio seams.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 import Foundation

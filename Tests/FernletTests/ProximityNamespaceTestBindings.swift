@@ -6,7 +6,9 @@
 // offers no namespace default, so every API that used to spell Fernlet's bytes for itself now takes
 // the host's `ProximityNamespace`, or a value read off it. The suites were written against the old
 // shapes; rather than rewrite every construction in every suite, each old shape comes back here
-// once, passing Fernlet's value.
+// once, passing Fernlet's value. The shapes of the types that left ProximityKit for FernletSocial
+// follow them to `FernletSocialTestBindings.swift`, under the same rule, so this file never imports
+// FernletSocial.
 //
 // THE RULE. A binding restores a call SHAPE, never a value: it passes `ProximityNamespace.fernlet`,
 // exactly the value FernletConnections ships and the app hands ProximityKit, so a suite that goes
@@ -587,10 +589,11 @@ extension IdentityService {
 //
 // The radios' instance-name prefixes and certificate name, and the name display's prefix, are read
 // off the namespace: the minting doors take the prefix and the common name their radio or manager
-// read from its namespace, and `PeerNameDisplay` and `PresenceManager.firstName` take the namespace
-// last. Each old shape comes back here with `.fernlet`'s `family.radios` values, read off the value,
-// never respelled. A cell whose subject is a prefix or the common name passes `.fernlet`'s value
-// explicitly instead.
+// read from its namespace, and `PeerNameDisplay` takes the namespace last. Each old shape comes back
+// here with `.fernlet`'s `family.radios` values, read off the value, never respelled. A cell whose
+// subject is a prefix or the common name passes `.fernlet`'s value explicitly instead. FernletSocial's
+// `PresenceManager.firstName`, which takes the namespace last too, has its old shape in
+// `FernletSocialTestBindings.swift`.
 
 /// The mesh instance name in the shape the suites were written against (plan step A0.3.2).
 extension MeshLinkAdvertisement {
@@ -692,15 +695,6 @@ extension PeerNameDisplay {
     /// `firstName(_:fingerprint:placeholder:in: .fernlet)`.
     static func firstName(_ raw: String, fingerprint: String?, placeholder: Placeholder = .nearby) -> String {
         firstName(raw, fingerprint: fingerprint, placeholder: placeholder, in: .fernlet)
-    }
-}
-
-/// The hearts copy's first name in the shape the suites were written against (plan step A0.3.2).
-extension PresenceManager {
-
-    /// `firstName(of:in: .fernlet)`. `nonisolated`, as the function it restores is.
-    nonisolated static func firstName(of displayName: String) -> String {
-        firstName(of: displayName, in: .fernlet)
     }
 }
 

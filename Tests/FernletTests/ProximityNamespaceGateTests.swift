@@ -48,6 +48,7 @@ import Foundation
 import os
 import Testing
 @testable import FernletCrypto
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 

@@ -11,6 +11,7 @@
 // unit-test invariant for proximity — and none of these decisions was reachable at tier 1 before
 // the seam existed.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 import Combine
@@ -666,7 +667,7 @@ struct PresenceOverQUICTests {
     /// so these needles can no longer match anything. Kept anyway — they cost nothing and they are
     /// the per-manager half of the tree-wide wall (`TransportNeutralityBoundaryTests`).
     @Test func theManagerNoLongerNamesTheRetiredRadio() throws {
-        let source = try RepoRoot.source("FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift")
+        let source = try RepoRoot.source("FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift")
         let code = MeshRoutedSourceScan.codeOnly(source)
         for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "PeerChannelTransport",
                        "updateDiscoveryInfo", "serviceType", "MultipeerConnectivity"] {

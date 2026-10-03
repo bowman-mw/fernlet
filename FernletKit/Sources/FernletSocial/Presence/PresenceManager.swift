@@ -1,5 +1,5 @@
 // PresenceManager.swift
-// ProximityKit/Presence
+// FernletSocial/Presence
 //
 // The standing presence radio (mesh redesign Phase 4a/4b, Docs/Proximity-Mesh-Redesign-2026-07-10.md):
 // a continuous advertise+browse on `_fernlet-near2._udp` that lets KEPT friends recognize each other
@@ -58,9 +58,9 @@
 
 import Foundation
 import Observation
-import UIKit
 import FernletDomainModel
 import FernletFoundation
+import ProximityKit
 
 /// One in-flight heart connection on the presence session. Retains the trust policy the host made
 /// for it (`ProximityHost.makeProximityTrustPolicy()`)
@@ -290,7 +290,7 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     /// Test seam: the posture mint, as `(posture held now, instant) -> the posture to wear`. The
     /// production default is ``PresenceEpochPosture``'s own production path — the system CSPRNG
-    /// and the module's one certificate path — under ``namespace``'s presence instance-name prefix
+    /// and ProximityKit's one certificate path — under ``namespace``'s presence instance-name prefix
     /// and TLS common name, and nothing in shipping code writes this. The default is set in `init`,
     /// where it captures those two strings when it is made. A test substitutes a failing mint to
     /// exercise the once-per-epoch budget above.
@@ -320,7 +320,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             do {
                 try id.ensureProvisioned()
             } catch {
-                ProximityAudit.log(
+                FernletAuditLog.log(
                     "presence.identity.provisionFailed",
                     context: ["error": String(describing: error)]
                 )
@@ -788,7 +788,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         } catch {
             presencePosture = nil
             postureMintFailedEpoch = epoch
-            ProximityAudit.log(
+            FernletAuditLog.log(
                 "presence.posture.mintFailed",
                 context: ["error": String(describing: error)]
             )

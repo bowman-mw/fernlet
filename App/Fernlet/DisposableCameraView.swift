@@ -4,6 +4,7 @@ import UIKit
 import FernletDomainModel
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import AppServices
 import FernletUI
 import FernletProximityUI

@@ -93,6 +93,7 @@ import Foundation
 import Security
 import Testing
 import simd
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - The tables' rows

@@ -2555,7 +2555,7 @@ struct MeshRoutedDrainWallTests {
         #expect(PayloadType(rawValue: "fernlet.friend.heart.v1") == .friendHeart,
                 "the case stays with its frozen rawValue — the presence path still uses it")
         let presence = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift")
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift")
         )
         #expect(presence.contains(".friendHeart"),
                 "and it is LIVE there, which is why `.friendHeart` is not parkable")

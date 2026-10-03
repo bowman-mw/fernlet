@@ -11,6 +11,7 @@
 // an injected clock, and the pure 24h glow-decay math. Presence-specific gates (inbound invitation
 // gate, hearts-off send/receive drops) live in PresenceHeartsTests.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 import Foundation
