@@ -249,6 +249,13 @@ struct PendingRecoveryRequestSummary: Equatable, Sendable {
 /// (P7 step 9) compose it without this type knowing what a radio is — and so the whole ceremony is
 /// unit-testable by running two coordinators against each other.
 ///
+/// **The verify QR's scheme and labels are the identity's namespace's** (ProximityKit plan step
+/// A0.2.5): the scan reads `identity.namespace`, and the response transcript is built and signed or
+/// checked under `identity.purposes`, exactly as ProximityKit's own two ceremonies do. That settles
+/// who owns `fernlet.verify.response.v1`: ProximityKit's ceremony label, which Fernlet supplies
+/// through its `ProximityNamespace`. The two duress labels of ``DuressRecoveryTranscript`` stay the
+/// app's own, in FernletCrypto's registry.
+///
 /// **Audit names here are deliberately the NEUTRAL `mesh.verifyQR.*` family, not a `duressRecovery.*`
 /// one.** `FernletAuditLog` sends the event NAME to the unified log with `.auto` privacy, where it
 /// survives into a sysdiagnose — which is exactly why `FernletLockService.configureDuress` and
@@ -369,9 +376,10 @@ final class DuressRecoveryCoordinator {
         let message = ProximityVerifySignature.message(
             scannerKeyAgreementPublicKey: senderKeyAgreementPublicKey,
             challengeNonce: payload.challengeNonce,
-            qrNonce: payload.qrNonce
+            qrNonce: payload.qrNonce,
+            in: identity.purposes
         )
-        guard let signature = try? identity.sign(message, purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1) else {
+        guard let signature = try? identity.sign(message, purpose: identity.purposes.signature.proximityQRResponseV1) else {
             FernletAuditLog.log("mesh.verifyQR.signFailed")
             return nil
         }
@@ -394,8 +402,8 @@ final class DuressRecoveryCoordinator {
     /// - Returns: The challenge to seal to the scanned device's key-agreement key and send.
     func beginCustodianEnrollment(scannedURL: URL) throws -> VerifyChallengePayload {
         try ensureIdentity()
-        guard let payload = ProximityVerifyQR.parse(scannedURL),
-              ProximityVerifyQR.isValid(payload, at: now()) else {
+        guard let payload = ProximityVerifyQR.parse(scannedURL, in: identity.namespace),
+              ProximityVerifyQR.isValid(payload, at: now(), in: identity.purposes) else {
             FernletAuditLog.log("mesh.verifyQR.invalidScanned")
             throw DuressRecoveryError.invalidQRCode
         }
@@ -488,8 +496,8 @@ final class DuressRecoveryCoordinator {
               let enrolledKeyAgreement = lockService.enrolledCustodianKeyAgreementPublicKey else {
             throw DuressRecoveryError.noRecoveryMaterial
         }
-        guard let payload = ProximityVerifyQR.parse(scannedURL),
-              ProximityVerifyQR.isValid(payload, at: now()) else {
+        guard let payload = ProximityVerifyQR.parse(scannedURL, in: identity.namespace),
+              ProximityVerifyQR.isValid(payload, at: now(), in: identity.purposes) else {
             FernletAuditLog.log("mesh.verifyQR.invalidScanned")
             throw DuressRecoveryError.invalidQRCode
         }
@@ -823,10 +831,11 @@ final class DuressRecoveryCoordinator {
         let message = ProximityVerifySignature.message(
             scannerKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
             challengeNonce: round.challengeNonce,
-            qrNonce: round.qrNonce
+            qrNonce: round.qrNonce,
+            in: identity.purposes
         )
         guard IdentityService.verify(response.signature, of: message, by: round.peerSigningPublicKey,
-                                     purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1) else {
+                                     purpose: identity.purposes.signature.proximityQRResponseV1) else {
             pendingRound = nil
             FernletAuditLog.log("mesh.verifyQR.badResponseSignature")
             throw DuressRecoveryError.challengeResponseRejected

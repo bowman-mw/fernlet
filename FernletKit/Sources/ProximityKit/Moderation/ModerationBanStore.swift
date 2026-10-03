@@ -234,8 +234,8 @@ public final class ModerationBanStore {
         }
         guard save(record, account: subject.account) else { return }   // R7: an unwritten lift lifted nothing
         guard lifts else { return }
-        FernletAuditLog.log("storeBan.liftedByWithdrawal",
-                            context: ["subject": subject.label, "withdrawn": "\(withdrawn.count)"])
+        ProximityAudit.log("storeBan.liftedByWithdrawal",
+                           context: ["subject": subject.label, "withdrawn": "\(withdrawn.count)"])
     }
 
     /// The currently-qualifying artwork hashes to record IF a (re)ban should fire now, else nil. The
@@ -265,16 +265,16 @@ public final class ModerationBanStore {
     /// - Returns: false when the peer rows could not be enumerated at all, or when any enumerated
     ///   row survived its delete (R7: the funnel reports it as an incomplete store instead of
     ///   promising a clean wipe over a record still in the keychain). The enumeration leg matters
-    ///   as much as the delete leg: `KeychainItem.loadAll` collapses a failed enumeration into
+    ///   as much as the delete leg: `ProximityKeychainItem.loadAll` collapses a failed enumeration into
     ///   `[]`, which here would mean zero accounts to delete, zero failures, and a CLEAN result
     ///   reported over surviving peer bans — so this goes through
-    ///   `KeychainItem.loadAllDistinguishingFailure` instead. `errSecItemNotFound` is not a
+    ///   `ProximityKeychainItem.loadAllDistinguishingFailure` instead. `errSecItemNotFound` is not a
     ///   failure: a service holding no rows is genuinely clear. In practice the wipe runs
     ///   post-unlock in the foreground, where the data-protection keychain is available, so a real
     ///   enumeration failure is rare — but "rare" is not "reported honestly".
     public func clearPeerBansForDeleteAll() -> Bool {
         let peerAccounts: [String]
-        switch KeychainItem.loadAllDistinguishingFailure(service: service) {
+        switch ProximityKeychainItem.loadAllDistinguishingFailure(service: service) {
         case .rows(let rows):
             // Bounded: one pass over the finite row set the keychain returned. Labeled-tuple member
             // access, not destructuring — only the account names matter here, and taking them now
@@ -283,30 +283,30 @@ public final class ModerationBanStore {
         case .unreadable(let status):
             // No account names were read, so nothing identifying can reach the audit trail here even
             // by accident — only the status that stopped the enumeration.
-            FernletAuditLog.log("storeBan.peerClearEnumerationFailed", context: ["status": "\(status)"])
+            ProximityAudit.log("storeBan.peerClearEnumerationFailed", context: ["status": "\(status)"])
             return false
         }
         var failures = 0
         for account in peerAccounts
-        where KeychainItem.deleteReportingStatus(account: account, service: service) != errSecSuccess {
+        where ProximityKeychainItem.deleteReportingStatus(account: account, service: service) != errSecSuccess {
             // `deleteReportingStatus` normalizes not-found to success, so this is a genuine survivor.
             failures += 1
         }
         guard failures == 0 else {
             // Counts only — the fingerprint inside the account name is exactly the data being erased,
             // so it must not ride into the audit trail.
-            FernletAuditLog.log("storeBan.peerClearFailed",
-                                context: ["failures": "\(failures)", "total": "\(peerAccounts.count)"])
+            ProximityAudit.log("storeBan.peerClearFailed",
+                               context: ["failures": "\(failures)", "total": "\(peerAccounts.count)"])
             return false
         }
-        FernletAuditLog.log("storeBan.peerBansCleared", context: ["count": "\(peerAccounts.count)"])
+        ProximityAudit.log("storeBan.peerBansCleared", context: ["count": "\(peerAccounts.count)"])
         return true
     }
 
     /// Deliberately NOT called from "Reset everything": a self-ban must survive a data reset (that is
     /// the whole point). Exposed only for tests to clean up the shared keychain service.
     public func clearAllForTesting() {
-        KeychainItem.deleteAll(service: service)
+        ProximityKeychainItem.deleteAll(service: service)
     }
 
     // MARK: - Internals
@@ -346,7 +346,7 @@ public final class ModerationBanStore {
         record.evidenceSalt = salt
         record.priorHandledContentHashes = prior
         guard save(record, account: account) else { return }   // R7: never report an unwritten ban as applied
-        FernletAuditLog.log("storeBan.applied", context: ["subject": subject, "days": "\(durationDays)"])
+        ProximityAudit.log("storeBan.applied", context: ["subject": subject, "days": "\(durationDays)"])
     }
 
     /// The opaque tag a reporter's signing key is recorded under in ONE ban record's evidence:
@@ -388,7 +388,7 @@ public final class ModerationBanStore {
             // clock is later rolled back.
             let gap = max(0, nowWall - record.lastCheckWall)
             record.creditedWall += min(gap, Self.maxRebootGapCreditSeconds)
-            FernletAuditLog.log("storeBan.rebootFallback", context: ["account": account])
+            ProximityAudit.log("storeBan.rebootFallback", context: ["account": account])
         }
 
         record.maxObservedWall = max(record.maxObservedWall, nowWall)
@@ -399,8 +399,8 @@ public final class ModerationBanStore {
             // keeps the ban unexpired below until the wall clock climbs back to the high-water mark.
             record.creditedWall = 0
             record.tamperCount += 1
-            FernletAuditLog.log("storeBan.clockRegressionDetected",
-                                context: ["account": account, "tamperCount": "\(record.tamperCount)"])
+            ProximityAudit.log("storeBan.clockRegressionDetected",
+                               context: ["account": account, "tamperCount": "\(record.tamperCount)"])
         }
 
         record.lastCheckMonotonic = nowMono
@@ -417,13 +417,13 @@ public final class ModerationBanStore {
     }
 
     private func load(account: String) -> BanRecord? {
-        guard let data = KeychainItem.load(account: account, service: service) else { return nil }
+        guard let data = ProximityKeychainItem.load(account: account, service: service) else { return nil }
         do {
             return try JSONDecoder().decode(BanRecord.self, from: data)
         } catch {
             // Every caller reads nil as "not banned", so a corrupt row silently LIFTS a ban.
             // It still lifts (there is nothing left to enforce against), but not silently.
-            FernletAuditLog.log("storeBan.corruptRecord", context: ["account": account])
+            ProximityAudit.log("storeBan.corruptRecord", context: ["account": account])
             return nil
         }
     }
@@ -432,15 +432,15 @@ public final class ModerationBanStore {
     /// effect at all, so the caller must not report it as applied (R7).
     private func save(_ record: BanRecord, account: String) -> Bool {
         guard let data = try? JSONEncoder().encode(record) else {
-            FernletAuditLog.log("storeBan.encodeFailed", context: ["account": account])
+            ProximityAudit.log("storeBan.encodeFailed", context: ["account": account])
             return false
         }
-        let status = KeychainItem.store(
+        let status = ProximityKeychainItem.store(
             data, account: account, service: service,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, synchronizable: false)
         guard status == errSecSuccess else {
-            FernletAuditLog.log("storeBan.saveFailed",
-                                context: ["account": account, "status": "\(status)"])
+            ProximityAudit.log("storeBan.saveFailed",
+                               context: ["account": account, "status": "\(status)"])
             return false
         }
         return true

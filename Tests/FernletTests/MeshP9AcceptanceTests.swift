@@ -39,6 +39,7 @@
 
 import Foundation
 import Testing
+import FernletConnections
 import FernletFoundation
 @testable import ProximityKit
 
@@ -427,18 +428,19 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// pinned apart. The retired MultipeerConnectivity pair is pinned ABSENT, which is item 4's
     /// `[SPLIT: NOW]` half seen from this clause.
     @Test func thePresenceRadioIsItsOwnServiceAndItsPredecessorIsOffTheAir() throws {
-        #expect(NetworkPresenceSession.serviceType == "_fernlet-near2._udp")
-        #expect(NetworkPresenceSession.serviceType != NetworkMeshSession.friendServiceType)
-        #expect(NetworkPresenceSession.serviceType != NetworkRecipeShareSession.serviceType)
-        #expect(NetworkPresenceSession.alpn != NetworkMeshSession.alpn)
-        #expect(NetworkPresenceSession.alpn != NetworkRecipeShareSession.alpn)
+        let radios = ProximityNamespace.fernlet.family.radios
+        #expect(radios.presence.serviceType == "_fernlet-near2._udp")
+        #expect(radios.presence.serviceType != radios.mesh.serviceType)
+        #expect(radios.presence.serviceType != radios.recipeShare.serviceType)
+        #expect(radios.presence.alpn != radios.mesh.alpn)
+        #expect(radios.presence.alpn != radios.recipeShare.alpn)
         // PARSED, not grepped (item 9's fix review, NOTE 3): `declaredBonjourServiceTypes()` reads
         // `NSBonjourServices` as a plist array, so a type declared under a different key, in a
         // comment, or as a substring of a longer string is not mistaken for a declaration — and
         // clause (d) below already partitions the same parsed set, so the two halves of this
         // battery cannot disagree about what the app declares.
         let declared = try NoTrackingBoundaryTests.declaredBonjourServiceTypes()
-        #expect(declared.contains(NetworkPresenceSession.serviceType),
+        #expect(declared.contains(radios.presence.serviceType),
                 "the QUIC presence type is declared — without it discovery dies silently on device")
         // R2: bounded by the retired presence pair.
         for retired in ["_fernlet-near._tcp", "_fernlet-near._udp"] {
@@ -446,7 +448,9 @@ struct MeshP9PresenceSwapAcceptanceTests {
                     "`\(retired)` is still declared — no radio has browsed it since pass 2 crossed")
         }
         let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceSessionPath))
-        #expect(session.contains("alpn: Self.alpn"), "the session must actually bind its own ALPN")
+        #expect(session.contains("alpn = namespace.family.radios.presence.alpn"),
+                "the session reads its ALPN off the host's namespace, from its own radio's field")
+        #expect(session.contains("alpn: alpn"), "the session must actually bind its own ALPN")
     }
 
     /// **Every presence audit line names its peer by a salted, per-session label of a fixed shape —
@@ -480,7 +484,8 @@ struct MeshP9PresenceSwapAcceptanceTests {
         // sharing one peer name is how an interleave turns a scoped read into a cross-suite red.
         let peerName = PresenceEpochPosture.instanceNamePrefix
             + PresenceEpochPosture.instanceNameSeparator + "fedcba9876543210"
-        let key = MeshLinkKey("\(peerName).\(NetworkPresenceSession.serviceType).local.")
+        let serviceType = ProximityNamespace.fernlet.family.radios.presence.serviceType
+        let key = MeshLinkKey("\(peerName).\(serviceType).local.")
 
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
@@ -502,7 +507,7 @@ struct MeshP9PresenceSwapAcceptanceTests {
         for record in everyRig {
             for (contextKey, value) in record.context {
                 #expect(!value.contains(peerName), "\(record.event).\(contextKey) carries the peer's name")
-                #expect(!value.contains(NetworkPresenceSession.serviceType),
+                #expect(!value.contains(serviceType),
                         "\(record.event).\(contextKey) carries the endpoint id it was built from")
             }
         }
@@ -793,14 +798,15 @@ struct MeshP9RecipeSwapAcceptanceTests {
     /// listener; a missing `NSBonjourServices` entry kills discovery on device with no log and no
     /// observable state.
     @Test func theRecipeRadioIsItsOwnServiceAndItsPredecessorIsOffTheAir() throws {
-        #expect(NetworkRecipeShareSession.serviceType == "_fernlet-recipe2._udp")
-        #expect(NetworkRecipeShareSession.alpn == "fernlet-recipe-v1")
-        #expect(NetworkRecipeShareSession.serviceType != NetworkMeshSession.friendServiceType)
-        #expect(NetworkRecipeShareSession.serviceType != NetworkPresenceSession.serviceType)
-        #expect(NetworkRecipeShareSession.alpn != NetworkMeshSession.alpn)
+        let radios = ProximityNamespace.fernlet.family.radios
+        #expect(radios.recipeShare.serviceType == "_fernlet-recipe2._udp")
+        #expect(radios.recipeShare.alpn == "fernlet-recipe-v1")
+        #expect(radios.recipeShare.serviceType != radios.mesh.serviceType)
+        #expect(radios.recipeShare.serviceType != radios.presence.serviceType)
+        #expect(radios.recipeShare.alpn != radios.mesh.alpn)
         // Parsed, not grepped — the same reader clause (b) and clause (d) use (NOTE 3).
         let declared = try NoTrackingBoundaryTests.declaredBonjourServiceTypes()
-        #expect(declared.contains(NetworkRecipeShareSession.serviceType),
+        #expect(declared.contains(radios.recipeShare.serviceType),
                 "the QUIC recipe type is declared — without it discovery dies silently on device")
         // R2: bounded by the retired recipe pair.
         for retired in ["_fernlet-recipe._tcp", "_fernlet-recipe._udp"] {
@@ -808,7 +814,9 @@ struct MeshP9RecipeSwapAcceptanceTests {
                     "`\(retired)` is still declared — no radio has advertised it since pass 2 crossed")
         }
         let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
-        #expect(session.contains("alpn: Self.alpn"), "the session must actually bind its ALPN")
+        #expect(session.contains("alpn = namespace.family.radios.recipeShare.alpn"),
+                "the session reads its ALPN off the host's namespace, from its own radio's field")
+        #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
         #expect(NetworkRecipeShareSession.maxTunnels == 1,
                 "the shipped 2-device cap is what the pause/resume contract exists to preserve")
     }
@@ -889,7 +897,7 @@ struct MeshP9RecipeSwapAcceptanceTests {
 /// **deletion** landed the same day. Every cell below now asserts the zero it was written to become,
 /// in both directions: the files ABSENT, the framework imported NOWHERE, the friend pair RETIRED
 /// and the three QUIC types still declared, and the one default left — the initializer's
-/// `NetworkMeshSession()` — named in source.
+/// `NetworkMeshSession(namespace: namespace)` — named in source.
 ///
 /// **Still not a wall that lies.** A zero that is not zero cannot be written, and 9.4-NOW's own
 /// verify caught exactly that shape (a cell pinning four strings absent and forgetting the two a
@@ -905,9 +913,10 @@ struct MeshP9McRetirementAcceptanceTests {
     /// existed only to choose between two radios — `MeshTransportKind`, `MeshTransportFactory`, the
     /// `quicSelectionEnvironmentKey` read, the MC conformance — is pinned OUT of
     /// `MeshTransportSelection.swift` by identifier; and the one default the deletion left is pinned
-    /// IN by its source text: `MeshNetworkManager.init`'s `transport ?? NetworkMeshSession()`, the
-    /// line the survey called "the cutover" (its VALUE is `MeshTransportSelectionTests`'
-    /// `theAppsInitializerRunsOnTheQUICRadio`).
+    /// IN by its source text: `MeshNetworkManager.init`'s
+    /// `transport ?? NetworkMeshSession(namespace: namespace)` (built from the host's namespace since
+    /// ProximityKit plan step A0.2.7), the line the survey called "the cutover" (its VALUE is
+    /// `MeshTransportSelectionTests`' `theAppsInitializerRunsOnTheQUICRadio`).
     ///
     /// The stranger-admission needle stays, unchanged: D-4.3's refusal-made-CONDITIONAL is what let
     /// the deletion ship without losing first-meeting founding, and the unseeded pair run of
@@ -925,18 +934,20 @@ struct MeshP9McRetirementAcceptanceTests {
                 """)
         }
         // A code LINE, not a substring of the comment-stripped file: `codeOnly` drops whole-line
-        // comments only, so a trailing `// transport ?? NetworkMeshSession()` would otherwise satisfy
-        // this pin (the deletion round's verify, finding 7). The VALUE half is
+        // comments only, so a trailing `// transport ?? NetworkMeshSession(namespace: namespace)`
+        // would otherwise satisfy this pin (the deletion round's verify, finding 7). The VALUE half is
         // `MeshTransportSelectionTests.theAppsInitializerRunsOnTheQUICRadio`.
         let manager = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
+        let needle = "transport ?? NetworkMeshSession(namespace: namespace)"
         let initDefault = manager.split(separator: "\n").contains { line in
-            (line.components(separatedBy: "//").first ?? "").contains("transport ?? NetworkMeshSession()")
+            (line.components(separatedBy: "//").first ?? "").contains(needle)
         }
         #expect(initDefault, """
-            MeshNetworkManager.init no longer defaults its radio to `NetworkMeshSession()` directly. \
-            There is no selection seam left to route through: a second radio, a factory or a launch \
-            variable here is the seam the deletion round removed coming back
+            MeshNetworkManager.init no longer defaults its radio to \
+            `NetworkMeshSession(namespace: namespace)` directly. There is no selection seam left to \
+            route through: a second radio, a factory or a launch variable here is the seam the \
+            deletion round removed coming back
             """)
         // The WHOLE package, not the one file the seam used to live in: the four names are
         // Fernlet's own, so neither the import wall nor `TransportNeutralityBoundaryTests`' SDK

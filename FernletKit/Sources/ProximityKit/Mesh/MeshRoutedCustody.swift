@@ -23,7 +23,6 @@
 
 import CryptoKit
 import Foundation
-import FernletFoundation
 
 // MARK: - MeshRoutedRetryBounds
 
@@ -478,6 +477,9 @@ nonisolated extension MeshRoutedStore {
     /// index is byte-identical — **and the writer that made it removes it**, so the store's own cap
     /// keeps counting what is actually on disk.
     ///
+    /// The payload is re-hashed under the scope namespace's `family.purposes.hash.meshRoutedChunkV1`
+    /// (plan step A0.2.8; step A0.2.6 took the caller's labels while the scope carried no namespace).
+    ///
     /// - Parameters:
     ///   - chunk: The verified chunk.
     ///   - now: The injected instant.
@@ -498,13 +500,13 @@ nonisolated extension MeshRoutedStore {
             return .refused(.duplicateItemID)
         }
         let verdict = MeshChunkAdmissionRule.verdict(
-            for: chunk, payloadHash: MeshRoutedContentDigest.chunkHash(of: chunk.payload),
+            for: chunk, payloadHash: MeshRoutedContentDigest.chunkHash(of: chunk.payload, in: scope.namespace.family.purposes),
             in: stagingShape(for: chunk, existing: existing), receivedCount: existing?.receivedCount ?? 0
         )
         guard case .admitted = verdict else { return .completed(verdict) }
         guard let directoryNames = chunkDirectoryFileNames() else {
             return .unavailable(
-                .deferred(MeshRoutedDeferral(reason: .fileUnreadable, detail: Self.chunkDirectoryName))
+                .deferred(MeshRoutedDeferral(reason: .fileUnreadable, detail: chunkDirectoryName))
             )
         }
         if let refusal = capacityRefusal(
@@ -568,7 +570,7 @@ nonisolated extension MeshRoutedStore {
     /// item 3 ships no poller for, especially as a caller's retry would write a second copy.
     private func removingOrphanedChunkFile(named name: String) {
         let removed = removeChunkFile(named: name)
-        FernletAuditLog.log(
+        ProximityAudit.log(
             removed ? "mesh.routedStore.orphanRemoved" : "mesh.routedStore.orphanRemovalFailed",
             context: ["file": name]
         )
@@ -961,7 +963,7 @@ nonisolated extension MeshRoutedStore {
             return unavailability(from: error)
         }
         removeChunkFile(named: stored.fileName)
-        FernletAuditLog.log(
+        ProximityAudit.log(
             "mesh.routedStore.chunkRepaired",
             context: ["index": String(stored.descriptor.chunkIndex)]
         )
@@ -1025,7 +1027,7 @@ nonisolated extension MeshRoutedStore {
         } catch {
             return .unavailable(unavailability(from: error))
         }
-        FernletAuditLog.log("mesh.routedStore.itemDropped", context: ["reason": reason])
+        ProximityAudit.log("mesh.routedStore.itemDropped", context: ["reason": reason])
         let removal = removeChunkFiles(named: names)
         return .completed(
             MeshRoutedSweepReport(itemsRemoved: 1, chunkFilesRemoved: removal.removed,
@@ -1076,7 +1078,7 @@ nonisolated extension MeshRoutedStore {
         } catch {
             return .unavailable(unavailability(from: error))
         }
-        FernletAuditLog.log(
+        ProximityAudit.log(
             "mesh.routedStore.itemDropped", context: ["reason": reason, "items": String(removed)]
         )
         let removal = removeChunkFiles(named: names)
@@ -1104,7 +1106,7 @@ nonisolated extension MeshRoutedStore {
         }
         guard let onDisk = chunkDirectoryFileNames() else {
             return .unavailable(
-                .deferred(MeshRoutedDeferral(reason: .fileUnreadable, detail: Self.chunkDirectoryName))
+                .deferred(MeshRoutedDeferral(reason: .fileUnreadable, detail: chunkDirectoryName))
             )
         }
         let ceiling = 2 * MeshRoutedStoreFormat.maxHeldChunkFiles

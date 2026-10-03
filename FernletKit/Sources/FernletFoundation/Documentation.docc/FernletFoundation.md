@@ -48,18 +48,29 @@ A few invariants in this module are load-bearing for the rest of the app:
   launch-time write cannot persist the frozen defaults over the real blob).
 - **Keychain sync scope is part of the primary key.** ``KeychainItem`` exposes
   ``KeychainItem/SynchronizableScope`` because an iCloud-synced item and a `ThisDeviceOnly` item
-  coexist as distinct rows under one service + account; the backup-escrow reconciliation depends
-  on telling them apart, and the delete-before-add in `store` must sometimes target only one
-  variant. The same type also owns the two shared read/mint idioms that used to be per-caller
-  copies: ``KeychainItem/ReadResult`` + `loadDistinguishingAbsence` (a three-way read for the
-  heart-drop prekey blob and sidecar seal key, whose mint-on-absence path must fail closed on an
-  unreadable row rather than mint over it), its enumeration sibling ``KeychainItem/EnumerationResult``
-  + `loadAllDistinguishingFailure` (for callers that PROMISE a slot was cleared — the wipe's
-  peer-ban clear — where `loadAll`'s error-collapse-to-empty would report a clean clear over rows
-  it never saw; `errSecItemNotFound` stays a legitimate empty), and `loadOrCreateSymmetricKey` (the device-bound
-  journal and Worry Box keys), which fails closed on an unreadable row exactly like the media-key
-  provider — it returns nil rather than minting over a key it could not read, because `store` is
-  delete-then-add and a mint there would destroy every sealed journal entry and worry.
+  coexist as distinct rows under one service + account; ProximityKit's backup-escrow
+  reconciliation, which it was written for, depends on telling them apart, and the
+  delete-before-add in `store` must sometimes target only one variant. The same type also owns the
+  two shared read/mint idioms that used to be per-caller copies: ``KeychainItem/ReadResult`` +
+  `loadDistinguishingAbsence` (a three-way read for stores whose mint-on-absence path must fail
+  closed on an unreadable row rather than mint over it — the private-media keys, the
+  pending-narrative buffer's key, the lock — and for the storage-preferences launch gate), its
+  enumeration sibling ``KeychainItem/EnumerationResult`` + `loadAllDistinguishingFailure` (for
+  callers that PROMISE a slot was cleared, where `loadAll`'s error-collapse-to-empty would report a
+  clean clear over rows it never saw; `errSecItemNotFound` stays a legitimate empty), and
+  `loadOrCreateSymmetricKey` (the device-bound journal and Worry Box keys), which fails closed on an
+  unreadable row exactly like the media-key provider — it returns nil rather than minting over a
+  key it could not read, because `store` is delete-then-add and a mint there would destroy every
+  sealed journal entry and worry.
+- **ProximityKit keeps its own copy of the keychain mechanism.** Since ProximityKit plan step
+  A0.2.11 its key stores — the device identity and its backup-escrow rows, the mesh seal keys, the
+  heart-drop prekey blob and sidecar seal key, the moderation bans and the wipe's peer-ban clear —
+  reach the keychain through `ProximityKeychainItem`, a member-for-member copy that issues these
+  same query dictionaries (`ProximityNamespaceGoldenTests` reads them out of
+  `KeychainHelpers.swift` and holds the two equal), so their rows read back through either type and
+  Fernlet's tests still read and clear those services with ``KeychainItem``. The escrow and the
+  peer-ban clear were the shipping callers of `loadAll`, `loadAllDistinguishingFailure` and
+  `enumerationResult(status:matches:)`, which now have none (only tests); they stay.
 - **Backup exclusion is applied in one place.** ``BackupExclusion`` toggles
   `isExcludedFromBackupKey` across a store file, its `-wal`/`-shm` sidecars, and the external
   binary `_SUPPORT` directory, shared by the sealed and synced persistence controllers so the
@@ -78,6 +89,11 @@ A few invariants in this module are load-bearing for the rest of the app:
 - **Audit events fan out.** ``FernletAuditLog`` writes privacy-relevant events to the unified
   logger (context marked `.private`) and to a token-keyed registry of capture handlers, so
   parallel test suites can each observe every event without clobbering one another.
+  ProximityKit's lines arrive here through a sink rather than a call: since ProximityKit plan step
+  A0.2.10 it logs through its own `ProximityAudit` to the sink its host installs, and Fernlet's,
+  `FernletAuditBridge` (FernletConnections, installed by `FernletApp.init`), forwards each line to
+  ``FernletAuditLog/log(_:context:)`` unchanged and in line, so the capture handlers see it as
+  before.
 - **An environmental persistence failure is audited, never trapped.** ``PersistenceFailureAudit``
   is the one seam for a failed Core Data fetch/save/delete, file write/remove, or the payload
   encode that feeds one. Those failures are runtime conditions, not violated invariants — the

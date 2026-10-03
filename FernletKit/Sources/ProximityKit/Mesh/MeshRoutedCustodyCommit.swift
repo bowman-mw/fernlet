@@ -27,7 +27,6 @@
 
 import CryptoKit
 import Foundation
-import FernletFoundation
 
 // MARK: - MeshCustodyDurabilityWitness
 
@@ -118,7 +117,7 @@ nonisolated extension MeshRoutedStore {
     ///
     /// Always streams every chunk file in index order, compares each opened chunk against the
     /// descriptor holding its slot, and gates on `manifest.size` then `manifest.contentHash` —
-    /// exactly the checks `MeshChunkAssembly.completion(against:)` performs over in-memory bytes,
+    /// exactly the checks `MeshChunkAssembly.completion(against:in:)` performs over in-memory bytes,
     /// re-expressed over durable ones. On the FIRST success it writes `custodiedAt`; on a later call
     /// it re-runs the whole verification and re-uses the **stored** instant, so a re-mint's canonical
     /// bytes are byte-identical.
@@ -126,6 +125,10 @@ nonisolated extension MeshRoutedStore {
     /// An item whose chunk file was removed or swapped since the first commit answers `incomplete`
     /// (or the named refusal), mints no witness, and has its `custodiedAt` cleared. A failed index
     /// write mints no witness either: nothing is acknowledged for state a restart would lose.
+    ///
+    /// The streamed bytes are measured under the scope namespace's
+    /// `family.purposes.hash.meshRoutedContentV1` (plan step A0.2.8; step A0.2.6 took the caller's
+    /// labels while the scope carried no namespace).
     ///
     /// - Parameters:
     ///   - item: The signed pair.
@@ -153,7 +156,7 @@ nonisolated extension MeshRoutedStore {
         switch openKey() {
         case .available(let key): contentKey = key
         case .deferred(let reason):
-            return .unavailable(.deferred(MeshRoutedDeferral(reason: reason, detail: Self.chunkDirectoryName)))
+            return .unavailable(.deferred(MeshRoutedDeferral(reason: reason, detail: chunkDirectoryName)))
         case .refused(let cause):
             return .unavailable(.refused(MeshRoutedSealRefusal(operation: .open, cause: cause)))
         }
@@ -220,7 +223,7 @@ nonisolated extension MeshRoutedStore {
             try save(index, token: token)
         } catch {
             let cause = unavailability(from: error)
-            FernletAuditLog.log(
+            ProximityAudit.log(
                 "mesh.routedStore.custodyNotWritten",
                 context: ["cause": cause.logToken, "error": String(describing: error)]
             )
@@ -259,7 +262,7 @@ nonisolated extension MeshRoutedStore {
         token: LoadToken,
         contentKey: SymmetricKey
     ) -> MeshRoutedStreamResult {
-        var hasher = MeshRoutedContentHasher()
+        var hasher = MeshRoutedContentHasher(purposes: scope.namespace.family.purposes)
         var bytes: UInt64 = 0
         // R2: bounded by `maxChunksPerItem`.
         for slot in 0..<Int(record.chunkCount) {
@@ -299,6 +302,9 @@ nonisolated extension MeshRoutedStore {
     /// blob is returned **only** when the re-measured digest equals the manifest's, so a caller can
     /// never open bytes this store cannot re-authenticate.
     ///
+    /// The bytes are re-measured under the scope namespace's `family.purposes.hash.meshRoutedContentV1`
+    /// (plan step A0.2.8; step A0.2.6 took the caller's labels while the scope carried no namespace).
+    ///
     /// - Parameters:
     ///   - item: The signed pair.
     ///   - manifest: The origin's manifest, whose `size` and `contentHash` the bytes must meet.
@@ -320,7 +326,7 @@ nonisolated extension MeshRoutedStore {
         switch openKey() {
         case .available(let key): contentKey = key
         case .deferred(let reason):
-            return .unavailable(.deferred(MeshRoutedDeferral(reason: reason, detail: Self.chunkDirectoryName)))
+            return .unavailable(.deferred(MeshRoutedDeferral(reason: reason, detail: chunkDirectoryName)))
         case .refused(let cause):
             return .unavailable(.refused(MeshRoutedSealRefusal(operation: .open, cause: cause)))
         }
@@ -341,7 +347,7 @@ nonisolated extension MeshRoutedStore {
         token: LoadToken,
         contentKey: SymmetricKey
     ) -> MeshRoutedOutcome<Data?> {
-        var hasher = MeshRoutedContentHasher()
+        var hasher = MeshRoutedContentHasher(purposes: scope.namespace.family.purposes)
         var blob = Data()
         // R2: bounded by `maxChunksPerItem`.
         for slot in 0..<Int(record.chunkCount) {

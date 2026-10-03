@@ -11,6 +11,11 @@ The 2026-08-09 pass added the away-hearts dead-drop subsystem, the `ProtectedSid
 primitive, wire2 sealed-payload framing, the QR verification ceremony, and the coach trust/ceremony
 types (which still have no production callers).
 
+**2026-10-02 (ProximityKit plan step A0.2.12):** the "Protocol Namespace" section describes A0.2's end
+state rather than its commits: what the host supplies, how each kind of reader takes the namespace,
+the column-seal and keychain copies, and the test target's bindings in one table, with no row left
+for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in purposes:` overloads.
+
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
 > minting", "Phase 5", …). **That document does not exist in this tree.** The phase numbers are still
@@ -23,15 +28,15 @@ types (which still have no production callers).
 
 | Need | Prefer Reusing |
 | --- | --- |
-| Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:)` |
-| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:)` is overloaded for the identity envelope, the mesh admission token, the three Group-Activity types, a moderation row, the routed manifest (P5 item 1) and the routed chunk (P5 item 2), each behind its own domain tag. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
+| Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:in:)` |
+| Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:in:)` is overloaded for the identity envelope, the mesh admission token, the membership records and messages, the removal quorum, the key advertisement, the channel introduction and the six routed transcripts, each behind its own domain tag from the `in purposes:` it is handed (ProximityKit plan step A0.2); `canonicalBytes(for:)` remains only for the three Group-Activity types and a moderation row, whose tags are still FernletCrypto's until A0.4. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
 | Per-recipient routed content-key wrap | `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData` (P5 item 1) — the routed sibling of `encryptGroupKey`: the same X25519 → HKDF → AES-GCM chain under the routed purposes with a manifest-binding AAD. Never re-roll the chain (item 10, P6) and never reuse the group-key purposes for it. |
 | Splitting or reassembling routed content | `MeshChunker.chunk(of:at:for:identity:)` / `.chunks(of:for:identity:)` and `MeshChunkAssembly` (P5 item 2) — the ONE chunking transport. Chunks are ordinary reliable frames that earn a QUIC transfer stream by size alone (`MeshTransferStreamTable.route(reliableByteCount:)`); do not build a second chunking path, a transfer id, a resume token or an application-visible ack. |
-| Hashing routed content | `MeshRoutedContentDigest.contentHash(of:)` (the whole sealed blob) / `.chunkHash(of:)` (one slice) / `.chunkID(itemID:chunkIndex:)` (P5 item 2). Never a bare `SHA256.hash` for routed bytes: each digest carries its own registered `Hash` purpose, which is what stops a one-chunk item's chunk hash being replayable as its item hash. |
+| Hashing routed content | `MeshRoutedContentDigest.contentHash(of:in:)` (the whole sealed blob) / `.chunkHash(of:in:)` (one slice) / `.chunkID(itemID:chunkIndex:in:)` (P5 item 2; the caller's namespace labels since ProximityKit plan step A0.2.6). Never a bare `SHA256.hash` for routed bytes: each digest carries its own `Hash` purpose, which is what stops a one-chunk item's chunk hash being replayable as its item hash. |
 | Durable sidecar state (data of record) | `ProtectedSidecar` — classifies absent / deferred / corrupt / loaded and keeps memory authoritative on write failure. Do NOT use `JSONSidecarFile` for data of record: it collapses every read failure to `nil`. |
 | Sealing a payload to a peer, with framing | `IdentityService.seal(_:to:)` + `SealedPayloadFormat` (capability-derived, never inferred from bytes) |
 | Verifying a human holds a key | `ProximityVerifyQR` + `ProximityVerifySignature.message(...)` — shared transcript, so the friend and coach ceremonies cannot diverge |
@@ -163,7 +168,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `FriendPhotoWallPost.isCarousel` | Returns true when a post contains more than one photo. |
 | `JSONSidecarFile<FriendPhotoWallPreferences>.load()` | Loads persisted wall aggregation/cover/favorite preferences, or `nil` (caller substitutes defaults). Was `FriendPhotoWallPreferencesStore.load()`, now the shared sidecar helper in `Support/JSONSidecarFile.swift`. |
 | `JSONSidecarFile<FriendPhotoWallPreferences>.save(_:)` | Persists wall preferences with atomic protected file writes. Was `FriendPhotoWallPreferencesStore.save(_:)`. |
-| `init(store:)` | Provisions identity, initializes photo cache/preferences, loads cached photos, and configures mesh session callbacks. |
+| `init(store:)` | Reads the host's namespace once (A0.2.3) and provisions the identity built from it, initializes photo cache/preferences, loads cached photos, and configures mesh session callbacks. |
 | `spawnHostPinned(_:)` | **The mandatory spawn idiom** for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host (`swift_abortRetainUnowned` aborts the whole process). Every `Task { … }` here goes through it EXCEPT the spawns whose handle the manager stores — those form `store → manager → handle → store` if pinned (HP2) and stay plain literals with a `// host-pin: timer — <reason>` marker. `MemoryLifecycleBoundaryTests` rule ML4 fails an unmarked one. |
 | `isInSession` | Returns true when a mesh exists or any slot has a committed fingerprint — the **UI** half, true across a blip because a founded mesh outlives its links (`ConnectView`'s camera swap, `ContentView.isDisposableCameraSessionActive`, `DisposableCameraView.resumeCameraAfterCancelledReview`, `ContentView.startFriendsDiscovery`'s re-entry guard). |
 | `hasCommittedPeer` | Whether any slot holds a committed fingerprint — **"is there a peer right now"**, and nothing more (P6 item 2, narrowed by its fix). Its remaining readers all mean a peer: `ConnectView.handleCommittedPeerChange(hadPeer:hasPeer:)` (the connection choreography and the session-end-sheet abandonment — on `isInSession` that arm's `!was && now` leg is DEAD for a founded pair), `ContentView.stopFriendsDiscovery()`, the 5-minute discovery timeout's own door, and `FriendsDiscoveryEntry`'s table. The three session-end hooks and `ConnectView.presentDisconnectReviewIfNeeded()` moved OFF it onto `isSessionLive`: on `isInSession` they would never fire again once a pair founds a mesh, and on this predicate a two-second link blip ran the whole ceremony over a live session. `isInSession` keeps the surfaces that must survive a blip: the layout swap, the camera chrome, and `handleSessionSurfaceChange(wasInSession:nowInSession:)`. |
@@ -292,7 +297,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `sendVerifyEnvelope(_:encodable:to:via:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)` | Pre-commit ceremony send: seals to the identity carried by the gate state (the slot's verified key fields are not populated yet) through `sendEnvelopeCore(...)`, with send-failure auditing off. |
 | `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)` | The shared seal+sign+send core behind both senders above: encodes the payload, optionally seals it (wire2 or legacy; an empty key fails closed instead of downgrading to an unsealed send), signs the envelope, and sends it reliably on the slot channel; returns whether the wire write succeeded. |
 | ~~`encryptPhoto(_:key:)`~~ / ~~`decryptPhoto(_:nonce:key:)`~~ / ~~`encryptPayload(_:key:)`~~ | **Retired by P5 item 13**, and with them `AEAD.meshGroupPhotoV2`'s last consumer and the `FMGP2` marker family (`Docs/Crypto-Domain-Separation.md` carries the row that now reads "—"). Photo bytes ride the routed store under a per-recipient X25519 content-key wrap, sealed by `MeshRoutedItemSealer` under `AEAD.meshRoutedItemV1`, so branch and epoch no longer decide decryptability. Every claim these carried is re-asserted against the routed seal in `MeshRoutedItemSealTests` — round trip, layout, foreign key, tampered byte, and "a retired format is refused BY NAME" (`FMRI1` / `retiredOrForeignFormat`). |
-| `decryptPayload(_:nonce:key:)` | Shared AES-GCM wrapper for closed-mode metadata decryption. Same Phase 4 rule: no `FMGM2` marker ⇒ `MeshEncryptionError.legacyWireFormat`, audited as `mesh.encryptedMetadata.droppedLegacyWireFormat`. |
+| `decryptPayload(_:nonce:key:in:)` | Shared AES-GCM wrapper for closed-mode metadata decryption, authenticating `purposes.aead.meshEncryptedMetadataV2` alone — the manager hands it its stored `namespace.family.purposes` (ProximityKit plan step A0.2.6). Same Phase 4 rule: no `FMGM2` marker ⇒ `MeshEncryptionError.legacyWireFormat`, audited as `mesh.encryptedMetadata.droppedLegacyWireFormat`. |
 | ~~`sendEncryptedMetadata(_:encodable:via:)`~~ | **Retired by P5 item 13**: its only two call sites were `syncPhotoManifest` and `sendRequestedPhotos`, so the SEAL half of `AEAD.meshEncryptedMetadataV2` lost its last consumer with them. Nothing in this build sends a wrapped control frame; the receive door below stays. |
 | `handleEncryptedMetadata(_:from:slot:)` | Decrypts a closed-mode wrapper and re-dispatches the inner **control** payload — `.meshDescriptor`/`.meshStateChange` and `.meshAdmissionGrant`. **The gate retired by its ARMS, not by its clause** (D-13.5b): item 13 removed the two CONTENT arms (`.friendPhotoManifest`, `.friendPhotoRequest`) with the pull protocol, and deliberately KEPT `wrapper.keyEpoch == currentGroupKey?.epoch`, because the two surviving arms have no routed successor and deleting a compare over them would be loosening a gate in place. It is not redundant either: `decryptPayload` authenticates the metadata AEAD purpose **alone**, so a wrapper sealed under the current key but stamped with a foreign epoch would otherwise open and dispatch — including into `handleAdmissionGrant` (asserted by `MeshEncryptionTests.aCurrentKeyWrapperStampedWithAForeignEpochIsRefused`). If the door is ever judged dead the admissible move is to delete it WHOLE, with the token parked. |
 | `isLocalCoordinator()` | Elects coordinator by lowest fingerprint among local and active connected peers. |
@@ -379,9 +384,9 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | Function | What It Does |
 | --- | --- |
 | `MeshAdmissionGrantPayload.init(...)` | Creates an admission grant with optional encrypted current group key. |
-| `canonicalBytes(for token:)` | Deterministically encodes an admission token with empty signature for signing/verification. |
+| `canonicalBytes(for token:in:)` | Deterministically encodes an admission token with empty signature for signing/verification, its domain the caller's namespace's `purposes.signature.meshAdmissionTokenV2` (A0.2.4). |
 | `MeshAdmissionToken.signed(...)` | Builds and signs an expiring admission token binding mesh ID, joiner fingerprint, and joiner signing key. |
-| `MeshAdmissionToken.verify(joinerSigningPublicKey:now:)` | Validates expiry, joiner key, joiner/admitter fingerprints, and admitter signature. |
+| `MeshAdmissionToken.verify(joinerSigningPublicKey:expectedMeshID:expectedAdmitterSigningPublicKey:now:in:)` | Validates expiry, joiner key, joiner/admitter fingerprints, and admitter signature under the caller's namespace labels (`in purposes:`, no default; A0.2.4). The dual verify's legacy alternative runs under the family's verify-only `legacyV1.meshAdmissionTokenV1`, and a family that refuses legacy peers has none, so there a pre-WI-6 token is `signatureInvalid`. |
 
 ### `MeshNameGenerator.swift`
 
@@ -433,7 +438,7 @@ BEFORE the record reaches a ledger a roster is derived from.
 | `…DerivedRoster.isFinalPair` | Judged on the DERIVED roster, never the connected pair (a 2/2 split of a 4-roster is not two final pairs). |
 | `…DerivedRoster.introductionRoster(additionalBarred:)` | Hands the QUIC transport members AND barred as keys. **The shipping answer from P3 item 7**: `MeshNetworkManager.roster` is this function, so a peer with a verified removal or departure refuses as `barredMember` by name. `additionalBarred` only ever adds a refusal (the two-node lane's chaos hook). |
 | `MeshNetworkManager.legacyIntroductionRoster()` | The pre-records fallback: the gossiped descriptor's members, logged once as `mesh.introductionAuthority.legacyRosterFallback`. Reachable only with an empty ledger — tests and pre-P3 interop. |
-| `MeshLedgerAdoption.isBootstrap(_:selfFingerprint:)` / `bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)` | The joiner's ledger, pure. Bootstrap roots at the admitter's key; adopt rebases onto the offered ledger's own root once it is proven to admit this device's admitter under exactly the key its token names. |
+| `MeshLedgerAdoption.isBootstrap(_:selfFingerprint:)` / `bootstrapVerifier(meshID:ownAdmission:in:)` / `adopt(offered:ownAdmission:meshID:in:)` | The joiner's ledger, pure. Bootstrap roots at the admitter's key; adopt rebases onto the offered ledger's own root once it is proven to admit this device's admitter under exactly the key its token names. Both verify under the caller's namespace labels (`in purposes:`, A0.2.4), which the verifier they hand back keeps. |
 | `applyTermination(_:to:)` (private) | Read-time, not merge-time: a termination from a non-member is ignored; one whose signer sits on a roster larger than two downgrades to that signer's departure. Applying it at merge time would make the union order-dependent. |
 
 ### `MeshMembershipEvents.swift`
@@ -445,7 +450,7 @@ share one frozen English spelling per event, so a grep for the token finds every
 | --- | --- |
 | `MeshMembershipEventFormat` | Widths and caps every frame is checked against BEFORE a signature is verified: 64-byte signature, 32-byte digest, 32-byte key-agreement key (P6 item 1, its own constant rather than borrowed from the signing-key width), 64-char fingerprint ceiling. |
 | `MeshRecordIdentity` | One record's kind + the four fields of its total order, so the digest is computed over a kind-tagged flattening of all four sets rather than four separate hashes. |
-| `MeshInventoryDigest` | Counts + SHA-256 over the sorted identities, under `Hash.meshInventoryDigestV1`. A pure function of the record SET — a hint that decides whether a full record exchange is worth its bytes, never an authority. |
+| `MeshInventoryDigest` | Counts + SHA-256 over the sorted identities, under the namespace's `purposes.hash.meshInventoryDigestV1` (`init(meshID:ledger:purposes:)` since A0.2.4; the purposes are never stored, so the `Codable` form is unchanged). A pure function of the record SET — a hint that decides whether a full record exchange is worth its bytes, never an authority. |
 | `MeshMemberDeparturePayload` / `MeshMemberRemovalPayload` / `MeshTerminationPayload` | The three record frames. Each carries the signed record and nothing else — a second unsigned copy of the same fact is a second thing that can disagree, and the receiver re-derives quorum from its own roster anyway. The removal's voter list is clamped to §9's cap on decode as well as on init. |
 | `MeshInventoryDigestPayload` | The signed digest message: digest + sender + `sentAt` + signature, with `isWellFormed` checked on untrusted bytes first. |
 | `SignedDepartureRecord.signed(…)` / `SignedTerminationRecord.signed(…)` / `SignedRemovalRecord.signed(…)` | `@MainActor` minting factories over `IdentityService`, mirroring `MeshAdmissionToken.signed`. Verification stays `nonisolated`. |
@@ -489,6 +494,7 @@ with a low timestamp crowds a real removal out on every device it reaches.
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshMembershipRecordRejection` | Ten named refusals + frozen-English `diagnosticDescription`. A bare boolean is how "signed by a stranger" and "three votes short" become one indistinguishable non-update. |
+| `init(meshID:founderSigningPublicKey:ledger:purposes:)` / `purposes` | The verifier keeps its own copy of its host namespace's labels (A0.2.4), a trailing argument with no default; every signature below is checked under them (`purposes.signature.<field>`), and `localInventoryDigest` hashes under them. The manager passes `namespace.family.purposes`; `MeshLedgerAdoption` passes what it is handed. |
 | `insert(_: SignedAdmissionRecord)` | Verifies under the token's own `meshAdmissionTokenV2` domain (one admission format, not two); the admitter must be a current member, or the founder when the ledger is empty. `expiresAt` is NOT re-applied — it gates admission, not a durable record. |
 | `insert(_: SignedDepartureRecord)` | Self-signed by the leaver; the key comes from that member's admission record, never from the departure. |
 | `insert(_: SignedRemovalRecord)` | Re-checks plan §10.4's ⌊&#124;roster&#124;/2⌋ + 1 against THIS device's merged roster via `MeshDerivedRoster.quorumThreshold`; distinct eligible voters only, target excluded. |
@@ -508,10 +514,10 @@ fingerprint — canonical, deterministic, and short enough to ride the introduct
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshEpochBounds` | Plan §8.4's numbers in one place: counter cap 4096, keyring 3 predecessors, 5-minute grace, the 32/16 hex widths, the frozen derivation domain `fernlet.mesh.epoch.v1`. |
+| `MeshEpochBounds` | Plan §8.4's numbers in one place: counter cap 4096, keyring 3 predecessors, 5-minute grace, the 32/16 hex widths. It holds no derivation domain: the epoch id's is the caller's `purposes.hash.meshEpochIDV1` (Fernlet's `fernlet.mesh.epoch.v1`). |
 | `MeshEpochRef` | `counter` + `epochID` + `coordinatorFingerprint`. Two branches at ONE counter are two distinct values — the representability plan §8.4 needs. |
-| `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` | Derives `epochID` as SHA-256(domain ‖ meshID ‖ counter ‖ coordinator) truncated to 16 bytes, so every member of a branch computes the same id with no wire change. Returns nil over the cap or on a non-canonical fingerprint. |
-| `…successor(coordinatorFingerprint:meshID:)` | `counter + 1`, or **nil at the cap** — the documented "rotation refused; the session must end" answer. Never traps. |
+| `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:in:)` | Derives `epochID` as SHA-256(domain ‖ meshID ‖ counter ‖ coordinator) truncated to 16 bytes, so every member of a branch computes the same id with no wire change. The domain is the caller's `purposes.hash.meshEpochIDV1`, raw (read off the namespace since ProximityKit plan step A0.2.6; ProximityKit holds no epoch constant of its own). Returns nil over the cap or on a non-canonical fingerprint. |
+| `…successor(coordinatorFingerprint:meshID:in:)` | `counter + 1`, derived under the same caller's purposes, or **nil at the cap** — the documented "rotation refused; the session must end" answer. Never traps. |
 | `…canonicalString` / `init(canonical:)` / `isCanonical(_:)` | `"<counter>.<32 hex>.<16 hex>"`, canonical in both directions (no leading zeros, no uppercase) so two devices sign byte-identical strings. The parse is strict and every refusal is named. |
 | `MeshEpochRefParseError` | Five named refusals, including `counterOverCap(_:)` which carries what it saw. |
 | `MeshEpochRefOrder.precedes(_:_:)` | Total order for head sets: counter, then coordinator, then epoch id. Deterministic truncation, NOT a ranking of "better" epochs. |
@@ -554,7 +560,7 @@ owned by nothing that sends, seals or sleeps.
 | `MeshRotationTriggerBounds` | The 2-second coalescing window, and the cause ranking (`merge` > `membership` > `timer`) used when a burst collapses. |
 | `MeshRotationTriggerQueue` | `request` / `claim` / `finish` / `reset`. One trigger fires one rotation; a burst inside the window fires one; a trigger raised mid-rotation is deferred and re-armed, never dropped or run concurrently. |
 | `MeshRotationTriggerOutcome` | `scheduled` / `coalesced` / `queuedBehindInFlight` — three answers because the caller arms a task, leaves one armed, or arms nothing. |
-| `MeshRotationPolicy.plan(head:coordinatorFingerprint:meshID:presentedRoster:)` | The successor, through `MeshEpochAcceptance`. `terminate` at the counter cap; named `refuse` otherwise. |
+| `MeshRotationPolicy.plan(head:coordinatorFingerprint:meshID:presentedRoster:in:)` | The successor (or a first epoch), derived under the caller's purposes since A0.2.6, through `MeshEpochAcceptance`. `terminate` at the counter cap; named `refuse` otherwise. |
 | `MeshRotationPolicy.recipients(acked:selfFingerprint:derivedRoster:locallyRemoved:)` | **The exclusion rule.** Removed and departed members get no key; the set narrows to the derived roster once one exists. Subtractive on purpose — a positive rule over the still-empty ledger would distribute to nobody. |
 | `MeshRotationPlan` / `MeshRotationRefusal` | Rotate / terminate / refuse, with frozen-English diagnostics. |
 
@@ -694,7 +700,7 @@ reach a per-recipient static-key wrap (D14).
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedManifestRejection` | Eleven frozen English tokens: `foreignMesh`, `malformed`, `unknownTypeToken`, `originNotAdmitted`, `originRemoved`, `originKeyMismatch`, `signatureInvalid`, `wrapsDoNotMatchDestinations`, `destinationSetInvalid`, `expiryMismatch`, and **P6 item 3's** `sizeExceedsTypeCap`. Logged verbatim, never localized. `sizeExceedsTypeCap` is the one case the verifier itself never returns: the cap lives on the registry ROW and this verifier carries only the accepted-token set (a projection, D-11.1), so the manifest door raises it from the registry it already holds, immediately after `verify(_:)` answers nil. The vocabulary is shared because it is the audit surface for *a refused manifest*, whichever half of the door refused it. |
-| `MeshRoutedManifestVerifier(meshID:hardDeadline:ledger:acceptedTypeTokens:)` | Bound to one session: the mesh, its signed ceiling, the merged membership ledger, and the routed-type tokens this build will hold or forward (D13 — item 1's callers pass a fixture set, item 11 the registry's; empty means accept nothing). |
+| `MeshRoutedManifestVerifier(meshID:hardDeadline:ledger:acceptedTypeTokens:purposes:)` | Bound to one session: the mesh, its signed ceiling, the merged membership ledger, and the routed-type tokens this build will hold or forward (D13 — item 1's callers pass a fixture set, item 11 the registry's; empty means accept nothing), and since A0.2.5 its own copy of the namespace labels the origin's signature is checked under. |
 | `verify(_:)` | Ten guards in order: mesh → shape → type token accepted → admitted key (from `ledger.admissions`, by the manifest's OWN origin, never the envelope's sender) → origin not in `ledger.removals` (the same set `MeshDerivedRoster` subtracts; departures untouched) → key/fingerprint agreement → signature under `Signature.meshRoutedManifestV1` → wraps ≡ destinations → distinct set without the origin → `expiresAt` == own `hardDeadline` + grace (`Date` equality through `floored`; no `Int64` anywhere). Returns the named rejection or nil. |
 
 ### `MeshRoutedContentKeyWrapper.swift`
@@ -711,9 +717,9 @@ vault.
 | `MeshRoutedWrapBinding` | What a wrap is bound to besides its recipient: `meshID`, `itemID`, `originFingerprint`. Part of the AEAD's authenticated data, so a wrap cannot be transplanted between manifests, meshes or origins. |
 | `MeshRoutedKeyWrapError` | `invalidRecipientKey(fingerprint:)`, `invalidContentKey`, `notAddressedToMe`, `malformed`, `openFailed` — one token for every CryptoKit refusal on purpose (distinguishing them would be an oracle). Frozen English diagnostics. |
 | `makeContentKey()` | 32 random bytes from the platform CSPRNG, as `Data` (no pointer API; `MeshRoutedItemSealer` builds the `SymmetricKey` at the seal, P5 item 13 — item 2 chunks an opaque blob and never sees a key). Minted BEFORE the item is sealed and hashed. |
-| `wrap(contentKey:recipientFingerprint:recipientKeyAgreementPublicKey:binding:)` | Fresh ephemeral X25519 + fresh GCM nonce per wrap → HKDF-SHA256 (salt `KeyDerivation.meshRoutedContentKeyWrapV1`, info eph ‖ recipient) → AES-256-GCM over the 32-byte key with `additionalData` authenticated. Public keys only. |
-| `unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:)` | The inverse, refusing `notAddressedToMe` and `malformed` before any key agreement; the DH is a closure into `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` (the `HeartDropSealer.open` shape), whose own error propagates. Everything CryptoKit refuses is `openFailed`. |
-| `additionalData(binding:recipientFingerprint:)` | `AEAD.meshRoutedContentKeyWrapV1.data` (raw prefix) ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(recipient). Frozen wire-bearing bytes, pinned by an independently derived golden. |
+| `wrap(contentKey:recipientFingerprint:recipientKeyAgreementPublicKey:binding:in:)` | Fresh ephemeral X25519 + fresh GCM nonce per wrap → HKDF-SHA256 (salt `KeyDerivation.meshRoutedContentKeyWrapV1`, info eph ‖ recipient) → AES-256-GCM over the 32-byte key with `additionalData` authenticated. Public keys only. Since A0.2.6 the salt and the AAD label are the caller's `purposes`. |
+| `unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:in:)` | The inverse, under the caller's purposes since A0.2.6, refusing `notAddressedToMe` and `malformed` before any key agreement; the DH is a closure into `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` (the `HeartDropSealer.open` shape), whose own error propagates. Everything CryptoKit refuses is `openFailed`. |
+| `additionalData(binding:recipientFingerprint:in:)` | `purposes.aead.meshRoutedContentKeyWrapV1.data` (raw prefix; FernletCrypto's `AEAD.meshRoutedContentKeyWrapV1` until A0.2.6) ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(recipient). Frozen wire-bearing bytes, pinned by an independently derived golden. |
 
 ### `MeshChunk.swift`
 
@@ -731,10 +737,10 @@ or TTL (item 8 / increment 2), the type-token registry (item 11), backpressure (
 | `MeshChunkFormat.maxChunkCount` | 256 MiB / 256 KiB. Its doc names the coincidence item 9 must not collapse: 1024 routed *items* (plan §9) and 1024 *chunks in one maximal item* are two different caps that happen to be equal. |
 | `MeshChunkFormat.maxChunksInFlightPerPeer` | `MeshTransferStreamTable.maxConcurrentOutbound - 1` — **one slot of headroom** in a budget every reliable frame ≥ 64 KiB shares (friend photos above all), not a throughput target and not a guarantee: nothing reserves a slot, and `openOutbound` returning nil is indistinguishable from "sub-floor". The safe number is a tier-2 measurement; this is the v1 placeholder item 6 must not re-derive. |
 | `MeshChunkFormat.chunkCount(forSize:)` | `ceil(size / 256 KiB)`, nil for zero or above the content cap. The single definition the mint, the verifier, the assembler and `expectedPayloadByteCount` all share. The cap guard runs first, so a hostile `size` cannot overflow the ceil. |
-| `MeshRoutedContentDigest` | `contentHash(of:)` (the whole sealed blob, `Hash.meshRoutedContentV1`), `chunkHash(of:)` (one slice, `Hash.meshRoutedChunkV1`) and `chunkID(itemID:chunkIndex:)` (`Hash.meshRoutedChunkIDV1`, first 16 bytes as a `UUID`). Two domains because untagged, a ONE-chunk item's item hash and chunk hash would be the same 32 bytes. The domain prefix is writer-produced and the body is streamed into `SHA256()`, so a 256 KiB payload is never copied to be hashed. |
+| `MeshRoutedContentDigest` | `contentHash(of:in:)` (the whole sealed blob, `Hash.meshRoutedContentV1`), `chunkHash(of:in:)` (one slice, `Hash.meshRoutedChunkV1`) and `chunkID(itemID:chunkIndex:in:)` (`Hash.meshRoutedChunkIDV1`, first 16 bytes as a `UUID`), each under the caller's `purposes.hash` since A0.2.6. Two domains because untagged, a ONE-chunk item's item hash and chunk hash would be the same 32 bytes. The domain prefix is writer-produced and the body is streamed into `SHA256()`, so a 256 KiB payload is never copied to be hashed. |
 | `MeshChunk` | The record: `meshID`, `itemID`, `originFingerprint`, `contentHash` (the manifest's, copied), `chunkIndex`, `chunkCount`, `chunkHash`, `expiresAt` (the manifest's formula, never restated), `payload`, `signature`. Carries no `createdAt`, no `size`, no type token, no epoch/branch/partition, no custodian/hop/TTL and no explicit id. Both doors floor `expiresAt`; nothing is clamped — an over-long payload FAILS `isWellFormed` rather than being trimmed. |
 | `isWellFormed` / `isLive(at:)` | Widths and counts on untrusted bytes before the signature; liveness `now <= expiresAt` under an injected clock. |
-| `MeshChunk.chunkID` | The derived replay-window id, **wired by P5 item 12**. Deterministic; equal across a retransmission, different per index or item, origin-free on purpose because `MeshFrameReplayWindow` already separates by author — so the real key is the pair `(origin, chunkID)`, and item 12 keys the author axis on `chunk.originFingerprint`, never on the forwarding envelope's sender. Not an RFC-4122 UUID — a 128-bit dedup key with `UUID`'s shape. **The 64-vs-1024 caveat is answered twice over:** the routed instance carries `sessionFramesPerPeer` (1056) ids per author, and a full axis is a named degradation the frame falls through, never a refusal. |
+| `MeshChunk.chunkID(in:)` | The derived replay-window id, **wired by P5 item 12**; a function of the caller's purposes since A0.2.6, because a decoded chunk carries no namespace. Deterministic; equal across a retransmission, different per index or item, origin-free on purpose because `MeshFrameReplayWindow` already separates by author — so the real key is the pair `(origin, chunkID)`, and item 12 keys the author axis on `chunk.originFingerprint`, never on the forwarding envelope's sender. Not an RFC-4122 UUID — a 128-bit dedup key with `UUID`'s shape. **The 64-vs-1024 caveat is answered twice over:** the routed instance carries `sessionFramesPerPeer` (1056) ids per author, and a full axis is a named degradation the frame falls through, never a refusal. |
 | `MeshChunk.expectedPayloadByteCount(index:count:size:)` | The ONE chunk-boundary rule: every index but the last is exactly 256 KiB, the last is the remainder; nil for an out-of-range index or a `count` that disagrees with the size. |
 | `MeshChunkPayload` | The `fernlet.mesh.routed-chunk.v1` frame: the chunk and nothing else. Signed, NOT sealed (not in `sealingRequiredTypes`) — the payload is already ciphertext and a custodian must re-broadcast verbatim. Registered in item 2, dispatched from item 6. |
 
@@ -748,7 +754,7 @@ against the control stream, so a chunk that arrives first is verified and parked
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshChunkRejection` | Frozen English tokens: `foreignMesh`, `malformed`, `originNotAdmitted`, `originRemoved`, `originKeyMismatch`, `signatureInvalid`, `chunkHashMismatch`, `expiryMismatch`, `manifestMismatch`, `chunkCountMismatch`, `payloadLengthMismatch`. Logged verbatim, never localized. |
-| `MeshChunkVerifier(meshID:hardDeadline:ledger:manifest:)` | Bound to one session and, optionally, one **already-verified** manifest — the type never re-verifies it and it is the only authority on `itemID`, `originFingerprint`, `contentHash` and `size`. |
+| `MeshChunkVerifier(meshID:hardDeadline:ledger:manifest:purposes:)` | Bound to one session and, optionally, one **already-verified** manifest — the type never re-verifies it and it is the only authority on `itemID`, `originFingerprint`, `contentHash` and `size`. Since A0.2.5 it keeps its own copy of the namespace labels the origin's signature is checked under. |
 | `verify(_:)` | Eleven guards: mesh → shape → admitted key (from `ledger.admissions`, by the chunk's OWN origin) → origin not in `ledger.removals` (departures never consulted) → key/fingerprint agreement → signature → **then** the chunk hash (so a hash mismatch names a payload swapped under an authentic chunk) → expiry equality → and, with a manifest, the identity **triple** `(itemID, originFingerprint, contentHash)`, the chunk count and the payload length. Dropping the origin leg of the triple would let an admitted member squat another origin's item id under its own valid signature. |
 
 ### `MeshChunker.swift`
@@ -781,9 +787,9 @@ accounting must include parked, manifest-less chunks.
 | `MeshChunkRefusal` | Frozen English tokens: `foreignItem`, `countMismatch`, `indexOutOfRange`, `conflictingChunk`, `chunkHashMismatch`, `sizeOverflow`, `payloadLengthMismatch`, `notBound`, `sizeMismatch`, `contentHashMismatch`. Never user copy — item 9 owns the visible backpressure failure. |
 | `MeshChunkAdmission` / `MeshChunkBinding` / `MeshChunkCompletion` | `admitted(received:expected:)` / `duplicate(received:)` (a retransmission is a **no-op, not an error**) / `refused(_:)`; `bound` / `refused(_:)`; `complete(blob:)` / `incomplete(received:expected:)` / `refused(_:)`. |
 | `forManifest(_:)` / `forChunk(_:)` | An assembly already bound to the manifest's size, or an UNBOUND one for a chunk that arrived first (the parked case). Both take a value their verifier already accepted. |
-| `admit(_:)` | Identity triple → count → index → duplicate/conflict → chunk hash (re-checked because this is the boundary item 3 gates durable custody on) → size overflow → length rule (bound: exactly what `expectedPayloadByteCount` fixes; unbound: interior chunks are exactly 256 KiB and the last is 1 … 256 KiB, checked at the door rather than left to the verifier's precondition). **Duplicate vs conflict is decided on the signed transcript plus the payload, never on `==`:** CryptoKit's Ed25519 signing is hedged, so an honest re-mint (item 6 streams without retaining, item 8 transfers custody) differs only in the 64-byte signature, and `conflictingChunk` is an integrity claim about content. |
+| `admit(_:in:)` | Identity triple → count → index → duplicate/conflict → chunk hash (re-derived under the caller's purposes since A0.2.6, and re-checked because this is the boundary item 3 gates durable custody on) → size overflow → length rule (bound: exactly what `expectedPayloadByteCount` fixes; unbound: interior chunks are exactly 256 KiB and the last is 1 … 256 KiB, checked at the door rather than left to the verifier's precondition). **Duplicate vs conflict is decided on the signed transcript plus the payload, never on `==`:** CryptoKit's Ed25519 signing is hedged, so an honest re-mint (item 6 streams without retaining, item 8 transfers custody) differs only in the 64-byte signature, and `conflictingChunk` is an integrity claim about content. |
 | `bind(to:)` | Cross-checks the triple and the derived count, re-validates every already-held chunk's length against the now-known size in one bounded loop, and refuses **without mutating** if any fails. Idempotent. |
-| `completion(against:)` | `notBound` while unbound; `foreignItem` for another manifest; `incomplete` at the first gap (never a partial blob); `sizeMismatch` / `contentHashMismatch`; else `complete(blob:)`. **`complete` is NECESSARY, NEVER SUFFICIENT for a custody receipt**: it is a verdict over in-memory bytes, so the order is durable → complete → receipt, and durability is item 3's separate gate (plan §3.6). |
+| `completion(against:in:)` | `notBound` while unbound; `foreignItem` for another manifest; `incomplete` at the first gap (never a partial blob); `sizeMismatch` / `contentHashMismatch` (measured under the caller's purposes since A0.2.6); else `complete(blob:)`. **`complete` is NECESSARY, NEVER SUFFICIENT for a custody receipt**: it is a verdict over in-memory bytes, so the order is durable → complete → receipt, and durability is item 3's separate gate (plan §3.6). |
 
 ### `MeshChunkAdmissionRule.swift`
 
@@ -813,9 +819,9 @@ per-type size cap (P6, D-11.4).
 | --- | --- |
 | `MeshRoutedItemSealFormat` | The blob's frozen widths: `marker` (ASCII `FMRI1`, 5 bytes, cleartext, required on read AND write), `nonceByteCount` (12, shared with the wrap family), `tagByteCount` (16), `overheadByteCount` (33), `maxResidentBlobByteCount` and `maxPlaintextByteCount`, **derived** from it so the seal refuses exactly what the open would (D-13.19). Since **P6 item 3** the resident bound is a FORMULA, not a literal: `PrivateMediaStore.maxIncomingPhotoBytes` (widened from `private` in the same commit, so the 10 MB is read rather than restated) + `MeshRoutedItemBodyFormat.maxFramedHeaderByteCount` + `overheadByteCount` — i.e. the widest CIPHERTEXT a routed photo can measure. `MeshRoutedTypeRegistry.increment1`'s photo row is defined AS this constant, so the seam bound and the registry cap are one number and the manifest door's check cannot disagree with the projection's resident-blob guard. |
 | `MeshRoutedItemSealError` | Frozen English, never `LocalizedError`: `emptyPlaintext`, `plaintextTooLarge(byteCount:)`, `invalidContentKey`, `retiredOrForeignFormat`, `malformed`, `blobTooLargeToOpen(byteCount:)`, `openFailed`. The last collapses wrong-key / moved-blob / tampered-bytes into ONE token on purpose: distinguishing them is an oracle. |
-| `seal(_:contentKey:binding:typeToken:)` | The only shipping seal site. Order: non-empty → plaintext bound → key width → the primitive. The nonce is minted INSIDE, per item, never injected and never derived. Returns `marker ‖ nonce ‖ ciphertext ‖ tag` — the complete blob a manifest measures. |
-| `open(_:contentKey:binding:typeToken:)` | Order: marker (so a retired or foreign format is NAMED, not reported as a generic failure) → minimum width → resident bound, **before** any plaintext is allocated → the primitive. Every AEAD refusal collapses to `openFailed`. |
-| `additionalData(binding:typeToken:)` | `AEAD.meshRoutedItemV1.data ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(typeToken)` — byte for byte the wrap's AAD with the type token in the recipient's slot. NOT `contentHash` and NOT `size`: both are functions of the sealed blob, so binding either would be circular (C12), and both already ride the origin's signature. NOT the recipient: one key, N wraps, one blob. Pinned by an independently derived 127-byte golden. |
+| `seal(_:contentKey:binding:typeToken:in:)` | The only shipping seal site; the AAD label is the caller's `purposes.aead.meshRoutedItemV1` since A0.2.6. Order: non-empty → plaintext bound → key width → the primitive. The nonce is minted INSIDE, per item, never injected and never derived. Returns `marker ‖ nonce ‖ ciphertext ‖ tag` — the complete blob a manifest measures. |
+| `open(_:contentKey:binding:typeToken:in:)` | Under the caller's purposes since A0.2.6. Order: marker (so a retired or foreign format is NAMED, not reported as a generic failure) → minimum width → resident bound, **before** any plaintext is allocated → the primitive. Every AEAD refusal collapses to `openFailed`. |
+| `additionalData(binding:typeToken:in:)` | `purposes.aead.meshRoutedItemV1.data ‖ meshID ‖ itemID ‖ lp(origin) ‖ lp(typeToken)` — byte for byte the wrap's AAD with the type token in the recipient's slot. NOT `contentHash` and NOT `size`: both are functions of the sealed blob, so binding either would be circular (C12), and both already ride the origin's signature. NOT the recipient: one key, N wraps, one blob. Pinned by an independently derived 127-byte golden. |
 | `validatedPlaintext(_:contentKey:)` / `validateBlobShape(_:)` | Private guard chains, extracted in the `MeshChunker.validated(…)` idiom so no door into either direction skips one. |
 
 ### `MeshRoutedItemBody.swift`
@@ -874,7 +880,7 @@ being able to read what it holds.
 | --- | --- |
 | `MeshCustodyReceiptFormat` | Three widths, all **reused** from `MeshRoutedManifestFormat`: 64-byte signature, 32-byte content hash, 64-byte fingerprint ceiling. |
 | `MeshCustodyReceipt` | mesh, item, the item's ORIGIN (the subject), `contentHash`, the CUSTODIAN (the signer), the durable custody instant and the item's expiry. No key epoch, branch, hop count, TTL, destination set, chunk index or schema integer — the `.v1` in the domain IS the version. Both doors floor both instants; nothing is clamped, and the two fingerprints are width-checked in `isWellFormed` so an over-long one is a cheap `malformed` rather than a `signatureInvalid`. |
-| `MeshCustodyReceipt.receiptID` | `UUID(SHA-256(lp(Hash.meshCustodyReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(custodian))[0..<16])`. **Derived, never a wire field**, and it excludes both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id. The frame id P5 item 12 admits, under the author axis `custodianFingerprint`. **One named residual:** after a chunk repair this device refills the slot and re-mints its receipt with the same id its peers already recorded, so their windows answer `replayed` and they keep the earlier one — staleness, not a lost delivery (the claim is true again), and closing it would need a cross-device un-record, i.e. a wire change item 12 does not make. |
+| `MeshCustodyReceipt.receiptID(in:)` | A function of the caller's purposes since A0.2.6: `UUID(SHA-256(lp(Hash.meshCustodyReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(custodian))[0..<16])`. **Derived, never a wire field**, and it excludes both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id. The frame id P5 item 12 admits, under the author axis `custodianFingerprint`. **One named residual:** after a chunk repair this device refills the slot and re-mints its receipt with the same id its peers already recorded, so their windows answer `replayed` and they keep the earlier one — staleness, not a lost delivery (the claim is true again), and closing it would need a cross-device un-record, i.e. a wire change item 12 does not make. |
 | `MeshCustodyReceipt.signed(witness:manifest:identity:)` | The ONLY mint, and it takes a `MeshCustodyDurabilityWitness` — which only a returned durable write produces. `meshID` and `expiresAt` come off the manifest, `custodiedAt` off the witness. Refuses `notTheCustodian`, `witnessForAnotherItem`, `contentHashMismatch`, `originIsSelf`, `itemExpired`. There is no factory that signs somebody else's receipt. |
 | `MeshCustodyReceiptPayload` | The wire frame, `PayloadType.meshCustodyReceipt`. Signed and UNSEALED so members can forward it verbatim and converge on delivery state (plan §3.2). |
 
@@ -894,9 +900,9 @@ P5 item 3: where one device's sealed routed custody lives, and the key row that 
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing. `productionKeychainService` is `com.fernlet.mesh-routed` — its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
-| `MeshRoutedStorageScope.keychainService(besideHeartDrop:)` | Production in ⇒ production out; any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
-| `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. |
+| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:installBinding:)` is the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
+| `MeshRoutedStorageScope.keychainService(besideHeartDrop:in:)` | Production in ⇒ the namespace's production service out (A0.2.8 added `in:`); any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
+| `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). |
 | `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
 
 ### `MeshRoutedIndex.swift`
@@ -906,7 +912,7 @@ copy has got, and which sealed payload file backs each chunk. No I/O, no crypto,
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedIndexSchema` | Version **2** since P5 item 4 (the two durable ack fields), its **own** from day one — the two move on independent axes, and `MeshSessionContext` is at **3** since P6 item 1. Older or newer is `corrupt`, never migrated — a schema-1 file would otherwise be reinterpreted into a record whose `deliveredAt`/`recipientReceipts` the next save silently drops. The at-rest **token** does not move: it is the key-derivation domain. |
+| `MeshRoutedIndexSchema` | Version **2** since P5 item 4 (the two durable ack fields), its **own** from day one — the two move on independent axes, and `MeshSessionContext` is at **3** since P6 item 1. Older or newer is `corrupt`, never migrated — a schema-1 file would otherwise be reinterpreted into a record whose `deliveredAt`/`recipientReceipts` the next save silently drops. The key-derivation domain (the column seal) does not move with it; the unused at-rest **token** that mirrored it was deleted in A0.2.8, and `ProximityNamespaceGoldenTests` pins its spelling against the label. |
 | `MeshRoutedStoreFormat` | `maxItems` 1024; `maxContentBytes` = `MeshRoutedManifestFormat.maxContentByteCount` (**reused** — moving it moves a WIRE bound, because `MeshChunkFormat.maxChunkCount` is derived from it); `maxChunksPerItem` = `MeshChunkFormat.maxChunkCount`; `maxHeldChunkFiles` 4096 (file count is not bounded by bytes); `maxReceiptsPerItem` = the roster cap. |
 | `MeshRoutedIndexDecodingError` | `unsupportedSchemaVersion(_:)` and `capacityExceeded(_:)`. At rest a cap violation is a **refusal**, never a clamp: clamping would silently drop a durable record whose payload files stay on disk, possibly one a receipt was already emitted for. |
 | `MeshRoutedItemKey` | The union key — the **signed pair** `(originFingerprint, itemID)` (D11). An item id alone lets an admitted member squat another origin's id under its own key and have it verify. |
@@ -920,14 +926,14 @@ copy has got, and which sealed payload file backs each chunk. No I/O, no crypto,
 ### `MeshRoutedStore.swift`
 
 P5 item 3: the sealed sidecar's floor, mirroring `MeshSessionStore` method for method — and the only
-file in the routed store that names `ColumnCrypto`.
+file in the routed store that names `ColumnCrypto` (`ProximityColumnCrypto` since A0.2.9).
 
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedSealRefusal` / `MeshRoutedDeferral` / `MeshRoutedCorruption` | Siblings of P3's, with **identical frozen rawValues** (a test asserts the sets are equal). Separate types because `MeshSessionSealRefusal.summary` hard-codes "mesh session context". |
 | `MeshRoutedLoad` | Five states; only `loaded` and `absent` vend a `LoadToken`, whose initializer is `fileprivate` to this file — so no verb, in any other file, can mint one. |
-| `load()` | File before custody (a missing index answers `absent` without consulting the keychain), emptiness before key, a read error is never absence, and `ColumnCrypto`'s three error families stay apart: binding READ error ⇒ defer, binding absent ⇒ refuse, wrong BYTES ⇒ corrupt. Read-only: the sweeps are explicit calls. |
-| `save(_:token:)` | Seals and writes atomically at `.completeFileProtectionUntilFirstUserAuthentication`. **No write-side deferral for the install binding** — `DeviceBindingID.current()` collapses unavailable and read-error into nil, so the seal refuses, fail-closed. |
+| `load()` | File before custody (a missing index answers `absent` without consulting the keychain), emptiness before key, a read error is never absence, and `ProximityColumnCrypto`'s three error families stay apart: binding READ error (`ProximityInstallBindingReadError`) ⇒ defer, binding absent ⇒ refuse, wrong BYTES ⇒ corrupt. Read-only: the sweeps are explicit calls. |
+| `save(_:token:)` | Seals and writes atomically at `.completeFileProtectionUntilFirstUserAuthentication`. **No write-side deferral for the install binding** — the binding's `.seal` read (Fernlet's `DeviceBindingID.current()`) collapses unavailable and read-error into nil, so the seal refuses, fail-closed. |
 | `readChunkFile(expecting:contentKey:)` | Opens one payload file and compares all eight descriptor fields **and** the payload length against the slot's stored descriptor. Not redundant: the AAD is purpose ‖ install only, so every blob authenticates in any slot. Missing/unauthentic ⇒ repair; unreadable ⇒ defer, repair nothing. |
 | `quarantineCorruptIndex(_:)` | The only route from `corrupt` to a writer. Moves the bytes aside rather than deleting them, and its contract requires the caller to spend the returned token on `sweepingOrphanChunkFiles()` first — after a quarantine every payload file is an orphan. |
 | `wipeForDeleteAll(scope:)` | Index + quarantine sibling + the whole chunk directory + the keychain row, together. A missing file counts as success. |
@@ -942,7 +948,7 @@ nothing silent.
 | `MeshRoutedUnavailability` | `deferred` / `corrupt` / `refused` / `notWritten`, each with a frozen `logToken`. `isRetryable` is true for all but `corrupt` — the SAME answer `MeshSessionRestoreOutcome.isRetryable` gives its own refusal, because the dominant cause here is the pre-first-unlock window that self-heals on unlock. Bounded by `MeshRoutedRetryBounds.maxAttempts` (reused from P3). |
 | `MeshRoutedStoreRefusal` | Fifteen frozen tokens: the four capacity refusals, `duplicateItemID`, `manifestMismatch`, `unknownItem`, `itemExpired`, `chunkCountMismatch`, `heldChunkLengthMismatch`, `notADestination`, `chunkFileMismatch`, `capacityReceipts`, plus P5 item 4's `capacityRecipientReceipts` (two evidence arrays with two signer roles want two log tokens) and `unknownTypeToken` (plan §11's "unknown type tokens are rejected, not forwarded", answered at the ack seam). |
 | `admittingManifest(_:now:)` | Binds a parked set through `MeshChunkAdmissionRule.bindingVerdict`, stamps `firstSeenAt` if new, creates the delivery record. Reserves **both** budgets — bytes and file slots — from the manifest's known chunk count, so an item that could never be finished is refused now rather than half-staged. |
-| `stagingChunk(_:now:)` | Verdict through the shared rule, then the file, then the index — never the reverse. A failed index save removes the file this call just wrote and audits either way. The file cap is checked against `max(index, directory)`, so an orphan cannot hide from the cap that bounds it. |
+| `stagingChunk(_:now:)` | Verdict through the shared rule (the payload re-hashed under the scope namespace's purposes since A0.2.8; A0.2.6 took the caller's), then the file, then the index — never the reverse. A failed index save removes the file this call just wrote and audits either way. The file cap is checked against `max(index, directory)`, so an orphan cannot hide from the cap that bounds it. |
 | `recordingCustodyTransfer(item:for:receipt:now:)` | Advances each named destination to `custodied(by: receipt.custodianFingerprint)` and stores the receipt as evidence in **one** index write. There is no `to custodian:` parameter: the custodian IS the signer, so the durable state and the signature cannot disagree. Writes nothing on any refusal. |
 | `forwardableManifest(item:)` / `forwardableChunk(item:index:)` | The origin's stored, signed objects **verbatim**, one chunk resident at a time. A slot mismatch answers `chunkFileMismatch` and emits nothing. |
 | `receiptRefusal(_:against:manifest:destinations:)` / `advancingAll(_:to:in:)` / `storing(_:in:)` | Internal since **P5 item 8** so the batch hand-off door applies the identical rule; the rule has exactly one implementation. `advancingAll` keeps **refuse-batch** — nothing half-applied is what keeps an unretractable signed count honest — and the caller owes a refusal-free list. |
@@ -965,8 +971,8 @@ compile error, which is what the grep-wall in `MeshRoutedStoreIsolationTests` ex
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshCustodyDurabilityWitness` | Origin, item, the re-measured content hash, the custodian, and the STORED `custodiedAt` — not this pass's instant, so a re-mint's canonical bytes are byte-identical. |
-| `committingCustody(item:custodian:now:)` | **Always** re-streams every chunk file in index order through `MeshRoutedContentHasher`, compares each opened chunk against its slot's descriptor, and gates on size then content hash before any witness exists. Writes `custodiedAt` once. **Idempotent means "does not refuse", never "skips the check"**: an item whose file went away answers `incomplete`, mints nothing, and has its `custodiedAt` cleared. A failed stamp write mints no witness and reports the store's own `unavailability(from:)` classification — a refused seal is not an absent file (§19.5), so this writer flattens nothing the others keep apart. |
-| `assembledBlob(item:expecting:)` | P5 item 13's one reassembly READ door: one index load, one key open, every chunk streamed in index order and hashed WHILE concatenating, and the blob returned only if the digest equals `manifest.contentHash`. `forwardableChunk`'s doc rules out such an API for the FORWARD path, and rightly — one chunk resident at a time is what a sender wants — but that spelling costs an `indexForWriting()` and an `openKey()` per chunk, so a maximal item would be 1024 sealed-index loads before a byte was decrypted. Still a **ciphertext** door: it names no gate token, and the caller has already bounded `manifest.size`, so residency is bounded before the first read. |
+| `committingCustody(item:custodian:now:)` | **Always** re-streams every chunk file in index order through `MeshRoutedContentHasher` (seeded with the scope namespace's purposes since A0.2.8; A0.2.6 took the caller's), compares each opened chunk against its slot's descriptor, and gates on size then content hash before any witness exists. Writes `custodiedAt` once. **Idempotent means "does not refuse", never "skips the check"**: an item whose file went away answers `incomplete`, mints nothing, and has its `custodiedAt` cleared. A failed stamp write mints no witness and reports the store's own `unavailability(from:)` classification — a refused seal is not an absent file (§19.5), so this writer flattens nothing the others keep apart. |
+| `assembledBlob(item:expecting:)` | P5 item 13's one reassembly READ door, measuring under the scope namespace's purposes since A0.2.8 (A0.2.6 took the caller's): one index load, one key open, every chunk streamed in index order and hashed WHILE concatenating, and the blob returned only if the digest equals `manifest.contentHash`. `forwardableChunk`'s doc rules out such an API for the FORWARD path, and rightly — one chunk resident at a time is what a sender wants — but that spelling costs an `indexForWriting()` and an `openKey()` per chunk, so a maximal item would be 1024 sealed-index loads before a byte was decrypted. Still a **ciphertext** door: it names no gate token, and the caller has already bounded `manifest.size`, so residency is bounded before the first read. |
 
 ### `MeshRoutedAck.swift`
 
@@ -992,7 +998,7 @@ receipt's shape with the signer's role changed — and the ack STAGE is delibera
 | --- | --- |
 | `MeshRecipientReceiptFormat` | The three widths, **reused** from the routed family, never restated. |
 | `MeshRecipientReceipt` | mesh, item, the origin (SUBJECT), content hash, the recipient (SIGNER), the durable ack instant, expiry, signature. No stage, no epoch, no hop count, no chunk index or partial marker — destination-final is whole-item — and no schema integer: the `.v1` in the domain IS the version. Both doors floor the instants; nothing is clamped, so an over-long fingerprint stays a cheap `malformed`. |
-| `receiptID` | `UUID(SHA-256(lp(Hash.meshRecipientReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(recipient))[0..<16])` — derived, never a wire field, stable across a re-mint (the signature and `receivedAt` are excluded), and **one per `(recipient, item)`**. P5 item 12's frame id at this door, under the author axis `recipientFingerprint`. |
+| `receiptID(in:)` | A function of the caller's purposes since A0.2.6: `UUID(SHA-256(lp(Hash.meshRecipientReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(recipient))[0..<16])` — derived, never a wire field, stable across a re-mint (the signature and `receivedAt` are excluded), and **one per `(recipient, item)`**. P5 item 12's frame id at this door, under the author axis `recipientFingerprint`. |
 | `signed(witness:manifest:identity:)` | Takes a `MeshRecipientDeliveryWitness`, so no argument list mints a receipt for an acknowledgement no durable write returned. `meshID`/`expiresAt` come off the MANIFEST and `receivedAt` off the WITNESS. Five reachable refusals; no `notADestination` and no `ackStageUnsatisfied`, both of which the store door already refused before a witness existed. |
 
 ### `MeshRecipientReceiptVerifier.swift`
@@ -1245,12 +1251,12 @@ and heart callers are three lines each.
 
 ### `MeshRoutedContentHasher.swift`
 
-P5 item 3: the streaming sibling of `MeshRoutedContentDigest.contentHash(of:)` — the same domain, fed
+P5 item 3: the streaming sibling of `MeshRoutedContentDigest.contentHash(of:in:)` — the same domain, fed
 one chunk file at a time so 256 MiB is never resident. One domain, two shapes; never a second domain.
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedContentHasher` | `init()` seeds with `lp(Hash.meshRoutedContentV1)` exactly as the one-shot does; `update(_:)` feeds a slice in index order; `finalized()` is the 32-byte digest. A test pins the agreement across several split points. |
+| `MeshRoutedContentHasher` | `init(purposes:)` seeds with `lp(Hash.meshRoutedContentV1)` — the caller's `purposes.hash.meshRoutedContentV1` since A0.2.6 — exactly as the one-shot does; `update(_:)` feeds a slice in index order; `finalized()` is the 32-byte digest. A test pins the agreement across several split points. |
 
 ### `MeshSessionCeiling.swift`
 
@@ -1415,25 +1421,242 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | `NoopProximityForegroundAnchor.stop()` | Marks foreground anchoring inactive. |
 | `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded. Called once per launch from `FernletStoreLoader.startIfNeeded()`; the only remaining reader of the proximity attributes type. |
 
+## Protocol Namespace
+
+ProximityKit plan step A0.2: the host-supplied protocol identity, under `ProximityKit/Namespace/`,
+and every ProximityKit read of its 39 labels, radio values, QR scheme, identity and mesh seal-key
+rows, storage names and log subsystem routed through it, byte-identical for Fernlet. The feature
+labels, the heart-drop and moderation keychain services and `ProximitySupportLayout`'s folder stay
+outside it until A0.4, the payload vocabulary and presentation strings until A0.3.
+The host hands it in (`ProximityHost.proximityNamespace`) beside its
+install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
+copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
+covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value and every reader;
+`ProximityNamespaceBoundaryTests` keeps any namespace, group or purpose from being built outside
+`Namespace/`, `FernletCryptoPurpose` to the 20 feature lines that leave at A0.4, and every remaining
+`fernlet` literal to an allowlist naming its exit step.
+
+### `Namespace/ProximityCryptographicPurpose.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers call it, so every label is a source literal. `ProximityNamespaceBoundaryTests` refuses a call anywhere else in ProximityKit. |
+| `data` | `Data(rawValue.utf8)`, no terminator, no normalization. |
+| `prefixBytes` | What the consumer writes first: `data` (raw prefix, and every role taking the label whole), the 8-byte big-endian count then `data` (length-prefixed), or nothing (`.absent`). |
+| `signingBytes(_:)` | The transcript unchanged when the role is a signature role and the transcript begins with `prefixBytes`, else nil: FernletCrypto's positional rule, refusing every non-signature role. |
+
+### `Namespace/ProximityNamespace.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `init(family:installation:)` | Total: stores both halves and records `soundness`, computed once. |
+| `validated(family:installation:)` | The namespace, or `throws(ProximityNamespaceError)` with every violation, for a host that prefers to fail at launch. |
+| `labelRows` | Every label with its field path (`family.purposes.<group>.<field>`), in declaration order; the legacy pair only when accepted. |
+
+### `Namespace/ProximityNamespace+Family.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `Signature.init(...)`, `KeyDerivation.init(...)`, `AEAD.init(...)`, `Hash.init(...)` | Take the host's `StaticString` labels and mint each with the role its field fixes (17 canonical `.signature(.lengthPrefixed)`, 2 QR `.signature(.rawPrefix)`; 3 salts, 1 exporter label, 2 column seals; 5 AADs; 6 `.hashDomain(.lengthPrefixed)` + the epoch id `.hashDomain(.rawPrefix)`). |
+| `LegacyV1.refused` / `LegacyV1.accepted(identityEnvelopeV1:meshAdmissionTokenV1:)` | The verify-only legacy pair: absent, or both labels as `.signature(.absent)`. |
+| `Purposes.labelRows(under:)` and the per-group builders (internal) | The rows behind `ProximityNamespace.labelRows`. |
+
+### `Namespace/ProximityNamespace+Installation.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built as `ProximitySupportLayout.defaultDirectory` builds Fernlet's root. |
+
+### `Namespace/ProximityNamespace+Soundness.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem. |
+| `familyCollisions(with:)` | Labels equal or byte-prefix related, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
+| `installationCollisions(with:)` | Equal keychain services, an equal directory name ignoring case, or an equal log subsystem. |
+
+### `FernletConnections/FernletProtocolNamespace.swift`
+
+Fernlet's own value, in the `FernletConnections` module, which depends on ProximityKit so ProximityKit
+can never name it. The app supplies it as its `ProximityHost.proximityNamespace` and builds every
+`IdentityService` from it. `ProximityNamespaceGoldenTests` pins every literal against its frozen
+column, every role, soundness and the 38 FernletCrypto twins.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityNamespace.fernlet` | Fernlet's whole protocol identity: `Family.fernlet` with `Installation.fernletApp`. |
+| `Family.fernlet`, `Purposes.fernlet`, `Signature.fernlet`, `KeyDerivation.fernlet`, `AEAD.fernlet`, `Hash.fernlet`, `Radios.fernlet` | Fernlet's labels, radio values and `fernlet` QR scheme by group, byte for byte as they shipped, the legacy pair accepted. |
+| `Installation.fernletApp` | The Fernlet app's identity and seal-key rows, storage names and log subsystem. Coach adds an installation of its own beside it in plan step C1. |
+
+### The supply path
+
+How the value reaches ProximityKit: through the host seam, read once per manager, with no default
+anywhere. `ProximityNamespaceGoldenTests` pins the identity's keychain read and the namespace
+overloads of `sign` and `verify`.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, a requirement the protocol extension **never defaults**, so a host that supplies none fails to compile instead of running under another app's identity. |
+| `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
+| `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`, and each builds its radio from it. |
+| `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
+
+### Signed transcripts
+
+Every signed transcript reads its label off the namespace: the identity envelope, the admission
+token, the membership records and messages, the removal quorum, the key advertisement, the QUIC
+channel introduction, the six routed transcripts and the verify QR, the legacy pair included. Each
+reader takes the purposes it already holds: a builder its signing identity's `purposes`, the
+envelope's `verify` its `identityService`'s, a verifier its own copy, the manager its stored
+`namespace.family.purposes`; the QR's scheme and labels come from the signing identity's namespace
+or the caller's, and `CoachVerificationCeremony` and the app's duress flow scan and answer under their
+identity's. `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (groups 9
+and 10).
+
+| Function | What It Does |
+| --- | --- |
+| `canonicalBytes(for:in:)` (17 types) / `canonicalInventoryDigestBytes(for:in:)` | The serializer's domain from `in purposes:`; see `CanonicalSignatureSerializer.swift` below. Only the four activity and moderation domains are still FernletCrypto's, until A0.4. |
+| `MeshMembershipRecordVerifier.init(...purposes:)` / `MeshLedgerAdoption.bootstrapVerifier(...in:)` / `adopt(...in:)` / `MeshInventoryDigest.init(meshID:ledger:purposes:)` / `MeshAdmissionToken.verify(...in:)` | The membership verifiers and helpers that take the labels, each with no default. The legacy pair is the family's choice: a family with `LegacyV1.refused` verifies no schema-v1 envelope and no pre-WI-6 token. |
+| `MeshRoutedManifestVerifier` / `MeshChunkVerifier` / `MeshCustodyReceiptVerifier` / `MeshRecipientReceiptVerifier` / `MeshRoutedInventoryVerifier` / `MeshRoutedDrainAnswerVerifier` / `MeshChannelIntroductionExchange` `init(...purposes:)` | Each keeps its copy of the labels as a trailing `purposes:` with no default and checks every signature (and frames the introduction transcript) under it. |
+| `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `ProximityVerifySignature.message(...in:)` | The QR's scheme and labels from the caller's namespace; see `ProximityVerification.swift` below. The QR host `verify`, the query key `d` and version 1 stay ProximityKit format constants. |
+
+### Hashes, seals, salts and the epoch
+
+The routed hash and id domains, the five AEAD labels, the three HKDF salts and the epoch id's domain
+read the namespace. Stateless helpers take a trailing `in purposes:` with no default, the three ids
+that hash a label are functions (a decoded value carries no namespace), `MeshChunkVerifier`
+re-derives the chunk hash under its own copy, and `IdentityService` reads its own `purposes`. The
+manager hands every reader it calls its stored `namespace.family.purposes`; the chunker, the
+manifest's wraps and the delivery seam their identity's; the routed store its scope's (see "At rest"
+below). `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (group 11).
+
+| Function | What It Does |
+| --- | --- |
+| `MeshRoutedContentDigest.contentHash(of:in:)` / `chunkHash(of:in:)` / `chunkID(itemID:chunkIndex:in:)` / `MeshRoutedContentHasher.init(purposes:)` | The routed digests under `purposes.hash`; see `MeshChunk.swift` and `MeshRoutedContentHasher.swift`. |
+| `MeshChunk.chunkID(in:)` / `MeshCustodyReceipt.receiptID(in:)` / `MeshRecipientReceipt.receiptID(in:)` | The three derived ids, functions because a decoded value carries no namespace (`Codable` stays namespace-free). |
+| `MeshChunkAssembly.admit(_:in:)` / `completion(against:in:)` | The in-memory reassembler's two hashing verbs. |
+| `MeshRoutedItemSealer.seal/open/additionalData(...in:)` / `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData(...in:)` | The routed seals; the item seal reads `purposes.aead.meshRoutedItemV1`, the wrap `purposes.keyDerivation.meshRoutedContentKeyWrapV1` and `purposes.aead.meshRoutedContentKeyWrapV1`. |
+| `MeshEpochRef.minted(...in:)` / `successor(...in:)` / `MeshRotationPolicy.plan(...in:)` | Every epoch id derived under `purposes.hash.meshEpochIDV1`, raw; parsing and decoding an epoch derive nothing. |
+| `IdentityService.seal(_:to:format:)` / `open(_:from:format:)` / `encryptGroupKey(_:for:)` / `decryptGroupKey(_:)` | Their salts and AEAD labels come from the identity's `purposes`. |
+
+### The radios
+
+The three radios read their service types, ALPNs, the mesh heartbeat, the TLS exporter label and the
+log subsystem off the namespace their manager builds them from, once, in `init(namespace:)`. The mesh
+radio also keeps a copy of `family.purposes`, under which every channel introduction exchange it
+starts frames this side's transcript and checks the peer's, so the manager that signs a tunnel's
+introduction and the radio that checks the peer's read one namespace. `ProximityNamespaceGoldenTests`
+holds each radio to the namespace it is built from (group 12).
+
+| Function | What It Does |
+| --- | --- |
+| `NetworkMeshSession.init(namespace:)` | Keeps `serviceType`, `alpn`, `heartbeatDatagram`, `tlsExporterLabel` and `purposes` as `nonisolated let`s and a private instance `Logger` (`proximity.transport.quic`); `connectionParameters()` and `listenerParameters(identity:)` are instance methods reading the instance ALPN. |
+| `NetworkMeshSession.channelBindingHash(for:exporterLabel:)` | SHA-256 of the connection's TLS exporter secret under the label it is handed, whole (role `.tlsExporterLabel`); its one caller hands it the radio's `tlsExporterLabel`. |
+| `NetworkPresenceSession.init(namespace:)` / `NetworkRecipeShareSession.init(namespace:)` | Keep `serviceType` and `alpn` from `family.radios.presence` / `.recipeShare` and a private instance `Logger`. |
+| `MeshNetworkManager.init` / `ProximityRecipeShareManager.init` / `PresenceManager.makeSession` | Build their radio from the stored `namespace`; presence's `makeSession` is set in `init`, a closure capturing the `Sendable` value. |
+
+### At rest: names, rows and scopes
+
+The two storage scopes carry the host's namespace and install binding, and the stores, the seal-key
+helpers, the host's defaults and the identity read their names and rows off the namespace: the mesh
+stores' file names, chunk directory and seal-key accounts, the production seal-key services, the
+default sidecar root and the identity's four accounts. The routed store measures under its scope's
+labels. `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (group 13).
+
+| Function | What It Does |
+| --- | --- |
+| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `namespace`, `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)`, `keychainService(besideHeartDrop:in:)` | The scopes with the host's namespace and binding; `production(for:installBinding:)` is the namespace's `defaultDirectory` and seal-key service, and `keychainService(besideHeartDrop:in:)` maps the production heart-drop service to the namespace's (A0.4 retires that comparison). No longer `Equatable`, since a capability has no equality. The two isolation walls refuse every production spelling in tests, the shorthand `.production(for:installBinding:)` included. |
+| `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account. |
+| `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace. |
+| `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`: a store holds one source of its labels. |
+| `ProximityHost.proximitySupportDirectory` / `meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from `proximityNamespace` and `proximityInstallBinding`: the root is `installation.storage.defaultDirectory`; on it the scopes are the namespace's production scopes, on any other root their services are named after it. |
+| `IdentityService.accounts` / `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` | The four device rows' accounts, the namespace's `installation.keychain.identity`, under the identity's `keychainService`. |
+| `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement; both scopes pass `namespace: proximityNamespace`, `installBinding: proximityInstallBinding` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `.fernlet`'s `defaultDirectory`, as does `CryptoFormatCensus.Inputs.production`. |
+
+### The column seal and the install binding
+
+The two sealed mesh stores seal through `ProximityColumnCrypto`, FernletCrypto's `ColumnCrypto` V3
+seal copied into ProximityKit byte for byte, under their scope namespace's two column-seal labels and
+the install binding their scope carries, which the host injects. They catch the retryable
+`ProximityInstallBindingReadError`; neither store nor either scope file imports FernletCrypto.
+`ProximityNamespaceGoldenTests` group 14 runs the A0.2.0 column vectors through the copy, opens each
+implementation's blobs with the other, compares their refusals pairing by pairing, and holds each
+store to its scope's label and binding.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityColumnCrypto(purpose:installBinding:)` (`Support/ProximityColumnCrypto.swift`, internal) | The V3 column seal under one `.columnSeal` label and one install binding. `nonisolated`, `Sendable`; stores neither key nor binding. |
+| `ProximityColumnCrypto.seal(_:contentKey:)` / `open(_:contentKey:)` | The `Codable` pair the stores use: `JSONEncoder()` output sealed as `0x03` ‖ nonce ‖ ciphertext ‖ tag under the salt-free HKDF-SHA256 column key, `label ‖ binding` as AAD; the open classifies the marker before it reads the binding. |
+| `ProximityColumnCrypto.SealedColumnOpenError` / `SealedColumnStrictSealError` / `StoredFormat` | The original's three named open refusals (`retiredFormat`, `emptyBlob`, `installBindingMissing`), its one seal refusal (`bindingUnavailable`) and its marker classifier, without the census helpers. |
+| `ProximityColumnCrypto.deriveColumnKey(contentKey:purpose:outputByteCount:)` | The column-key derivation, internal so the golden can pin its known answers. No `deriveColumnKey(info:)`, no `init(label:)`. |
+| `ProximityInstallBinding.read(for:)` (`Support/ProximityInstallBinding.swift`) | The host's per-install binding, one synchronous read. `.seal` may mint and answers nil without a durable binding (the seal refuses); `.open` never mints, answers nil only for an absent binding (the open refuses), and throws `ProximityInstallBindingReadError` for a failed read (the open defers). |
+| `ProximityInstallBindingReadError(status:)` | The retryable read failure, mirroring `DeviceBindingID.ReadError`'s `status`. |
+| `MeshSessionStore` / `MeshRoutedStore` `crypto` (private) | `ProximityColumnCrypto` over `scope.namespace.family.purposes.keyDerivation.meshSessionContextV1` / `.meshRoutedStoreV1` and `scope.installBinding`, built per use like the name reads. |
+| `ProximityHost.proximityInstallBinding` | The host's binding, with no default, like `proximityNamespace`; the extension's default scopes carry it. |
+| `FernletDeviceBindingAdapter` (`FernletConnections/FernletDeviceBindingAdapter.swift`) | Fernlet's binding: delegates to `DeviceBindingID` at each call (`current()` for `.seal`, `currentForOpen()` for `.open`, `ReadError` translated with its status), so the row, the cache and the task-local test seam stay FernletCrypto's one. |
+
+### The keychain mechanism
+
+FernletFoundation's `KeychainItem` mechanism is copied into ProximityKit member for member as
+`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 42
+references in the six key-store files (the identity's rows and escrow, the two mesh seal keys, the
+heart-drop prekey blob and sidecar seal key, the moderation bans) call it. Only the mechanism came
+across; Fernlet's `Account` names, typed overloads, service constants, `loadOrCreateSymmetricKey`
+and `updateReportingStatus` stayed behind. Every query is FernletFoundation's for the same call, so
+rows written before the copy read back unchanged and a host's own `KeychainItem` still reads and
+clears these services. Reach the keychain from ProximityKit through this type, never
+`KeychainItem`: `ProximityNamespaceGoldenTests` group 15 fails on ProximityKit code that names it,
+holds every query dictionary to the one FernletFoundation's source spells, and checks that the two
+read, list and delete each other's rows and fail and audit alike.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityKeychainItem.store(_:account:service:accessibility:synchronizable:replacing:)` | Delete-then-add under the caller's class; `synchronizable` defaults to `false`, `replacing` (which variant the delete removes) to `.any`. Refuses an empty account, service or payload with `errSecParam`. Not discardable. |
+| `load(account:service:synchronizable:)` / `loadDistinguishingAbsence(account:service:synchronizable:)` | The single-row read: `Data?`, or the three-way `ReadResult` (`found`, `absent`, `unreadable(OSStatus)`) the mint-on-absent stores use to fail closed. An empty name is `nil` / `.unreadable(errSecParam)`. |
+| `loadAll(service:synchronizable:)` / `loadAllDistinguishingFailure(service:synchronizable:)` / `enumerationResult(status:matches:)` | Every row under a service, collapsing a failed enumeration into `[]` or reporting it as `EnumerationResult.unreadable`; the classifier is pure, so the statuses a simulator cannot produce are testable. |
+| `delete(account:service:synchronizable:)` / `deleteReportingStatus(account:service:synchronizable:)` | One row (or one synchronizable variant of it); not-found is success. `delete` audits any other failure through `ProximityAudit` as `keychain.delete.failed` (`service`, `account`, `status`). |
+| `deleteAll(service:)` / `deleteAllReportingStatus(service:)` | Every row under a service, both variants; not-found is success. `deleteAll` audits a failure as `keychain.deleteAll.failed` (`service`, `status`). |
+| `SynchronizableScope` (`.any`, `.synced`, `.local`) | Which variant a read or delete matches: `kSecAttrSynchronizableAny`, `true` or `false`. |
+| `addQuery` / `readQuery` / `enumerationQuery` / `deleteQuery` / `deleteAllQuery` | The five query dictionaries, each built in one place and issued by every member of its shape, so the golden compares the dictionaries production issues. |
+
+### The test target's bindings (`Tests/FernletTests/ProximityNamespaceTestBindings.swift`)
+
+The call shapes A0.2 took out of ProximityKit, restored for the suites by passing `.fernlet`
+(`ProximityNamespace.Purposes.fernlet` where a reader takes the labels, which the golden pins equal to
+`ProximityNamespace.fernlet.family.purposes`). A binding restores a call shape, never a value; a test
+that pins a value names `.fernlet` explicitly.
+
+| Function | What It Does |
+| --- | --- |
+| `IdentityService.init()` / `init(keychainService:)` | An identity under `.fernlet`. |
+| `canonicalBytes(for:)` (17 types), `canonicalInventoryDigestBytes(for:)` | The serializer's overloads with `.fernlet`'s labels. |
+| `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)`, the six routed verifiers' and `MeshChannelIntroductionExchange`'s initializers without `purposes:` | The verifiers and helpers with `.fernlet`'s labels. |
+| `ProximityVerifyQR.urlScheme` / `parse(_:)` / `isValid(_:at:)`, `ProximityVerifySignature.message(scannerKeyAgreementPublicKey:challengeNonce:qrNonce:)` | The verify QR in `.fernlet`. |
+| `MeshRoutedContentDigest.contentHash(of:)` / `chunkHash(of:)` / `chunkID(itemID:chunkIndex:)`, `MeshChunk.chunkID` / `MeshCustodyReceipt.receiptID` / `MeshRecipientReceipt.receiptID` as properties, `MeshRoutedContentHasher.init()`, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, the six item-seal and key-wrap doors, `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` / `successor(coordinatorFingerprint:meshID:)`, `MeshRotationPolicy.plan(...)` | The hashes, seals and epoch under `.fernlet`'s labels. |
+| `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkRecipeShareSession.init()` | The argument-less radios, built from `.fernlet`. |
+| `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` | The seal-key and identity-row helpers with `.fernlet`'s accounts. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `init(keychainService:)` | Configures the Keychain service namespace. |
+| `init(namespace:keychainService:)` | Builds an identity under the host's `ProximityNamespace` (plan step A0.2.3). A `nil` service — every shipping path — is `namespace.installation.keychain.identity.service`, `com.fernlet.identity` under `.fernlet`; a test passes a throwaway service of its own. Replaced `init(keychainService:)` and its `"com.fernlet.identity"` default, so ProximityKit spells no app's service. Touches no keychain row. |
+| `namespace` / `purposes` | The namespace the identity was built with (`nonisolated let`) and its labels, `namespace.family.purposes` (`nonisolated`). |
 | `localFingerprint` | Returns fingerprint of current signing public key, or empty string before provisioning. |
 | `localSigningPublicKey` | Returns raw Ed25519 public key, or empty data before provisioning. |
 | `localKeyAgreementPublicKey` | Returns raw X25519 public key, or empty data before provisioning. |
-| `sign(_:)` | Signs bytes with local Ed25519 private key. |
+| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature signature labels (the activity join token, roster snapshot and moderation report) until A0.4, the app's duress and probe purposes until C1, and the tests that name them; every core label's builder signs through the namespace overload since A0.2.5. No deprecation attribute (warnings are errors). |
+| `sign(_:purpose:)` with a `ProximityCryptographicPurpose` | The same Ed25519 boundary under a namespace label (A0.2.3). Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
 | `sealedBackupKey()` | Derives the sealed-backup symmetric key from the X25519 private key. |
-| `verify(_:of:by:)` | Verifies an Ed25519 signature against raw public key bytes. |
-| `seal(_:to:)` | Pairwise-seals payload using ephemeral X25519 ECDH, HKDF-SHA256, and ChaChaPoly. |
+| `verify(_:of:by:purpose:)` with a `CryptographicPurpose` or a `ProximityCryptographicPurpose` | Verifies an Ed25519 signature over a transcript framed for the purpose (`signingBytes`). Under a namespace label a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. The registry overload is transitional, like its `sign`. |
+| `seal(_:to:)` | Pairwise-seals payload using ephemeral X25519 ECDH, HKDF-SHA256, and ChaChaPoly; since A0.2.6 the salt is the identity's `purposes.keyDerivation.proximityTransportV1` and the AAD `purposes.aead.proximityTransportV2` ‖ sender. |
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
-| `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM. |
-| `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`. |
-| `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `KeychainItem.loadDistinguishingAbsence`, and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
-| `classifyDeviceIdentityRows(signing:keyAgreement:)` / `DeviceIdentityRead` / `loadExistingDeviceIdentity()` / `loadLegacyKeyAgreementKey()` | The pure half and the two reads of the fail-closed rule: an unreadable row wins over everything (`.unreadable`), absence on either row falls through to the mint (`.absent`), a present-but-unparseable row is `.unparseable(row:)` — minted over, but named by `identity.keychain.unparseableRow` first — and both rows found and parsed is `.found`. Tabled in `IdentityProvisioningReadTests`. |
+| `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM; since A0.2.6 the salt and AAD are the identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and `purposes.aead.meshGroupKeyWrapV2`. |
+| `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`, under the same purposes. |
+| `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `ProximityKeychainItem.loadDistinguishingAbsence` (FernletFoundation's `KeychainItem` before A0.2.11), and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
+| `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` / `DeviceIdentityRead` / `loadExistingDeviceIdentity()` / `loadLegacyKeyAgreementKey()` | The pure half and the two reads of the fail-closed rule: an unreadable row wins over everything (`.unreadable`), absence on either row falls through to the mint (`.absent`), a present-but-unparseable row is `.unparseable(row:)` — minted over, but named by `identity.keychain.unparseableRow` first — and both rows found and parsed is `.found`. Since A0.2.8 the rows are the identity's `accounts` (the namespace's `installation.keychain.identity`), and the classifier names a refusing row by the `accounts:` it is handed. Tabled in `IdentityProvisioningReadTests`. |
 | `wipe()` | Deletes identity Keychain entries and clears loaded keys. |
 | `fingerprint(of:)` | Returns a 16-character lowercase SHA-256 prefix for a public key. |
 | `fingerprintsMatch(_:_:)` | Matches 16-character fingerprints and legacy 8-character prefixes. |
@@ -1442,8 +1665,8 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 
 | Function | What It Does |
 | --- | --- |
-| `canonicalBytes(for envelope:)` | Deterministically encodes an envelope with empty signature for signing/verification. |
-| `verify(identityService:replayCache:)` | Validates schema, expiry, signature, recipient, required sealing, replay status, and decrypts payload if sealed. |
+| `canonicalBytes(for envelope:in:)` | Deterministically encodes an envelope with empty signature for signing/verification, its domain the identity's namespace's `purposes.signature.identityEnvelopeV2` (A0.2.4). |
+| `verify(identityService:replayCache:)` | Validates schema, expiry, signature, recipient, required sealing, replay status, and decrypts payload if sealed. The signature is checked under `identityService.purposes` (A0.2.4): `identityEnvelopeV2`, or for a schema-v1 envelope the verify-only `legacyV1.identityEnvelopeV1`, which a family that refuses legacy peers lacks — there a schema-v1 envelope is `signatureInvalid`. |
 | `signed(...)` | Builds and signs a schema-version-1 identity envelope. |
 | `disclosedSenderDisplayName` | The sender's sanitized name, or `nil` when it withheld one (empty field) — unlike `sanitizedSenderDisplayName`, whose "A friend" floor cannot tell withheld from blank (Option 1b, 2026-09-22). |
 
@@ -1522,6 +1745,25 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | `TrainerAuditEvent.init(...)` | Creates an audit event for pairing, state, envelope, revocation, ending, and error diagnostics. |
 | `ProximityTrustPolicy` methods | Define trust, revoke/block, and audit hooks consumed by `ProximityCoordinator`. |
 
+### `Support/ProximityAudit.swift`
+
+ProximityKit plan step A0.2, the audit sink: every audit line this module writes goes through here to
+the sink the host installed. Not the persisted trainer audit above, and not Fernlet's AI audit log.
+Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog`:
+`ProximityAuditBridgeTests` fails on any ProximityKit code that names `FernletAuditLog`.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityAuditSink.record(_:context:)` | The host's requirement: record one event, synchronously and on the caller's executor (`nonisolated`, `Sendable`, non-throwing). |
+| `ProximityAudit.install(_:)` | The host installs its sink once at launch; a later call replaces it. Until the first call every line is dropped. |
+| `ProximityAudit.log(_:context:)` (internal) | The module's only audit entry point (`context` defaults to `[:]`): reads the sink under the slot's `Mutex`, calls it after releasing the lock, before returning; drops the line when no sink is installed. |
+
+### `FernletConnections/FernletAuditBridge.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `FernletAuditBridge.record(_:context:)` | Fernlet's sink: `FernletAuditLog.log(event, context: context)`, unchanged and in line, so every `FernletAuditLog` capture handler sees ProximityKit's lines. `FernletApp.init` installs it first, unconditionally. |
+
 ### `ConnectionInspector.swift`
 
 | Function | What It Does |
@@ -1572,9 +1814,9 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | Function | What It Does |
 | --- | --- |
 | `ProximityVerifyQR.makeURL(identity:now:)` | Mints this device's signed `fernlet://verify` URL (signing key, key-agreement key, timestamp, random nonce, signature) and returns it with the nonce to match a response against. |
-| `ProximityVerifyQR.canonicalBytes(...)` | The domain-tagged (`fernlet.verify.qr.v1`) byte sequence the QR signature covers. |
-| `ProximityVerifyQR.parse(...)` / `freshnessWindow` | Parses and validates a scanned URL, rejecting payloads older than the 5-minute window. |
-| `ProximityVerifySignature.message(...)` | The challenge/response transcript both ceremonies sign, so the friend and coach paths can never diverge. |
+| `ProximityVerifyQR.canonicalBytes(...in:)` | The byte sequence the QR signature covers, opening with the namespace's `purposes.signature.proximityQRIdentityV1` raw (`fernlet.verify.qr.v1` for Fernlet; A0.2.5). |
+| `ProximityVerifyQR.parse(_:in:)` / `isValid(_:at:in:)` / `freshnessWindow` | Parses a scanned URL whose scheme is the caller's namespace's `family.verifyQR.urlScheme` (host `verify`, query key `d` and version 1 stay format constants), then validates shape, signature under the caller's purposes and freshness, rejecting payloads older than the 5-minute window. Since A0.2.5 `makeURL` takes the scheme off the signing identity's namespace and the static `urlScheme` is gone. |
+| `ProximityVerifySignature.message(...in:)` | The challenge/response transcript every ceremony signs, opening with the namespace's `purposes.signature.proximityQRResponseV1`, so the friend, coach and duress paths can never diverge. |
 
 ### `CoachSessionTrustPolicy.swift`
 
@@ -1598,6 +1840,7 @@ shipping code and `ProximityCoordinator`'s unconditional default.
 | `handleChallenge(...)` | Verifies the incoming challenge against the displayed nonce and signs the transcript — sign-after-check ordering is load-bearing. |
 | `beginVerification(...)` | Starts a round against a scanned QR, minting the challenge nonce. |
 | `handleResponse(...)` | Validates the peer's response; **a wrong-peer response must be dropped without clearing the pending round**, or an attacker could cancel a legitimate ceremony. |
+| (all of the above) | Since A0.2.5 the ceremony scans, signs and checks under its identity's namespace: `parse(_:in: identity.namespace)`, and `isValid` and the response transcript under `identity.purposes`. |
 
 ### `Wire/CanonicalSignatureSerializer.swift`
 
@@ -1613,13 +1856,15 @@ bytes. **The field order in each function IS the schema.**
 
 | Function | What It Does |
 | --- | --- |
-| `canonicalBytes(for: FernletIdentityEnvelope)` | Canonical v2 bytes for an envelope (schema v2+); the `signature` field is excluded, being the output of signing these bytes. Writes `payloadSummary`'s title/subtitle/extraDetails — the reason that summary is frozen English. |
-| `canonicalBytes(for: MeshAdmissionToken)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
+| `canonicalBytes(for: FernletIdentityEnvelope, in:)` | Canonical v2 bytes for an envelope (schema v2+); the `signature` field is excluded, being the output of signing these bytes. Writes `payloadSummary`'s title/subtitle/extraDetails — the reason that summary is frozen English. |
+| `canonicalBytes(for: MeshAdmissionToken, in:)` | Canonical v2 bytes for an admission token; `admitterSignature` excluded. |
+| `canonicalBytes(for:in:)` for the membership family and `canonicalInventoryDigestBytes(for:in:)` | Since A0.2.4 the envelope, the token, the departure, removal and termination records, the inventory-digest and epoch-heads messages, the removal proposal and vote and the key advertisement write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`), and the inventory digest's preimage from `purposes.hash.meshInventoryDigestV1`; their file-level domain tags are gone. The channel introduction and the routed family moved at A0.2.5 (their own row, below); the activity and moderation tags stay until A0.4. |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
-| `canonicalBytes(for: MeshRoutedManifest)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
-| `canonicalBytes(for: MeshChunk)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
-| `canonicalBytes(for: MeshCustodyReceipt)` | P5 item 3: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ custodian ‖ custodiedAt ‖ expiresAt; `signature` excluded. **Two fingerprints in two fixed positions** — the item's ORIGIN (the subject) and the CUSTODIAN (the signer) — so a receipt cannot be re-read as being about the signer's own item, and one lifted onto another origin's item fails the signature. No destination set, no chunk index, no partial count: a receipt exists only for a COMPLETE item. Field order is the schema. |
+| `canonicalBytes(for:in:)` for the channel introduction and the routed family | Since A0.2.5 the channel introduction, the manifest, the chunk, both receipts, the routed inventory digest and the drain answer write their domain from the caller's `ProximityNamespace.Purposes` (`purposes.signature.<field>`) too; only the activity and moderation tags remain file-level, until A0.4. |
+| `canonicalBytes(for: MeshRoutedManifest, in:)` | P5 item 1: domain ‖ meshID ‖ itemID ‖ origin ‖ typeToken ‖ lp(hash) ‖ size ‖ createdAt ‖ expiresAt ‖ count-prefixed destinations ‖ count-prefixed wraps (recipient, eph, nonce, sealedKey); `signature` excluded. Field order is the schema. |
+| `canonicalBytes(for: MeshChunk, in:)` | P5 item 2: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ u64(chunkIndex) ‖ u64(chunkCount) ‖ lp(chunkHash) ‖ expiresAt. **Both `payload` and `signature` excluded** — the payload is bound THROUGH `chunkHash`, so a 256 KiB slice costs 32 transcript bytes with the same authenticity. Field order is the schema. |
+| `canonicalBytes(for: MeshCustodyReceipt, in:)` | P5 item 3: domain ‖ meshID ‖ itemID ‖ origin ‖ lp(contentHash) ‖ custodian ‖ custodiedAt ‖ expiresAt; `signature` excluded. **Two fingerprints in two fixed positions** — the item's ORIGIN (the subject) and the CUSTODIAN (the signer) — so a receipt cannot be re-read as being about the signer's own item, and one lifted onto another origin's item fails the signature. No destination set, no chunk index, no partial count: a receipt exists only for a COMPLETE item. Field order is the schema. |
 | `legacyCanonicalBytes(for:)` (envelope, token) | The exact pre-WI-6 `JSONEncoder` configuration, retained ONLY to VERIFY signatures minted by in-field peers on older builds. Never used to sign; do not change its configuration — its byte output is a compatibility contract with already-signed data. |
 | `CanonicalByteWriter` | The append-only binary writer (`appendByte`/`appendInt64`/`appendUUID`/`appendString`/`appendLengthPrefixed`/`appendDate`, optional presence bytes, byte-ordered maps). |
 | `canonicalUTF8Ordered(_:_:)` | Byte-lexicographic key ordering — unambiguous and identical on every stack, unlike `.sortedKeys`' UTF-16 ordering. |
@@ -1706,7 +1951,10 @@ view-free so the session-end flows in `ConnectView` / `DisposableCameraView` sta
 | `PrivateMediaKeyProviding.mediaKey()` | Supplies the symmetric key for `PrivateMediaStore`; injectable for tests. |
 | `KeychainPrivateMediaKeyProvider.mediaKey()` | Loads or generates a 256-bit AES key stored backup-restorable (`kSecAttrAccessibleAfterFirstUnlock`); caches it in memory. |
 
-### `FriendPhotoReviewSheet.swift`
+### `FernletProximityUI/FriendPhotoReviewSheet.swift`
+
+In the `FernletProximityUI` module since ProximityKit plan step A0.1 (2026-10-01), with the other two
+screens that left ProximityKit's `UI/` folder; its copy is `FernletProximityUICopy`.
 
 | Function | What It Does |
 | --- | --- |
@@ -1746,7 +1994,7 @@ frame.
 | --- | --- |
 | `ProximityRecipeShareDiagnosticEvent.init(...)` | Creates a timestamped diagnostic event. |
 | `ProximityRecipeShareDiagnostics.appending(_:to:maxCount:)` | Appends and caps diagnostics to the newest events. |
-| `init(store:)` / `init(store:makeSession:)` | Provisions identity, builds the radio and configures its callbacks. `makeSession` is the **test seam** (pass 2): an optional closure resolved in the init body — a `@MainActor` type cannot be a default-argument value — so a unit test hands in an in-memory `RecipeShareRadioSession` and every gate, pause and discovery callback is reachable with no Bonjour. Shipping code calls `init(store:)`. |
+| `init(store:)` / `init(store:makeSession:)` | Reads the host's namespace once (A0.2.3), provisions the identity built from it, builds the radio and configures its callbacks. `makeSession` is the **test seam** (pass 2): an optional closure resolved in the init body — a `@MainActor` type cannot be a default-argument value — so a unit test hands in an in-memory `RecipeShareRadioSession` and every gate, pause and discovery callback is reachable with no Bonjour. Shipping code calls `init(store:)`. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
 | `start()` | Starts recipe-share discovery/advertising and observation if not already running. The radio's `start(advertisement:)` THROWS (pass 2), and a failure goes straight through `handleTransportError(_:)`'s stand-down door so `isListening` tells the truth. |
 | `stop()` | Stops discovery/session, cancels tasks, clears recipients/connections/status. A share still in flight is published first (`finishShareEndedByTeardown()`): `interrupted` before its send began, `sendIncomplete` after. |
@@ -2197,7 +2445,11 @@ credits almost nothing, and the reboot-gap credit is capped). It is deliberately
 
 ## Session And Friend UI
 
-### `UI/KeepFriendsPromptSheet.swift`
+`KeepFriendsPromptSheet.swift` and `FingerprintText.swift` live in the `FernletProximityUI` module
+(ProximityKit plan step A0.1, 2026-10-01); `PeerNameDisplay.swift` stays in ProximityKit's `UI/`
+folder, because `PresenceManager.firstName(of:)` calls it from inside the package.
+
+### `FernletProximityUI/KeepFriendsPromptSheet.swift`
 
 The per-participant "keep as a friend?" affordance at session end. One-sided and local-only: keeping
 mints a trust-vault record on THIS device only, skipping does nothing, and the peer is never notified
@@ -2211,7 +2463,7 @@ either way.
 Which of the two appears is decided by `FriendMintingReview.sessionEndReview(...)`, and the candidate
 list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 
-### `UI/FingerprintText.swift`
+### `FernletProximityUI/FingerprintText.swift`
 
 | Type | What It Does |
 | --- | --- |
@@ -2233,11 +2485,13 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | Type Or Member | What It Does |
 | --- | --- |
 | `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. |
+| `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
+| `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `proximityDisplayName`, `trustedProximityPeers`, `proximityTrustVault`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. |
 | `allowNearbyHearts` | The in-person hearts opt-in. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one) — the two non-UI homes of the setting. Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. |
 | `heartsAwayDeliveryEnabled` | The away-delivery opt-in, consulted here only for COPY, so a failed send doesn't tell a user who turned away delivery ON that "hearts travel in person for now". Enforcement lives in `HeartDropService.queueHeart`/`syncNow`. |
 | `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and the three sealed heart-drop sidecars named by `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |
-| `ProximitySupportLayout.defaultDirectory` | `Application Support/Fernlet` — the ONE definition of the production path, and the default the protocol extension hands hosts that do not redirect it. Unchanged from the path the photo cache and heart ledger have always used, so no shipped install is migrated by the seams that made these injectable. |
+| `ProximitySupportLayout.defaultDirectory` | `Application Support/Fernlet` — the ONE definition of the production path until A0.2.8, when the protocol extension's default and the app began resolving the host namespace's `installation.storage.defaultDirectory` instead (built the same way, the same folder for Fernlet); it stays for the heart-drop scope and the feature ledgers until A0.4. Unchanged from the path the photo cache and heart ledger have always used, so no shipped install is migrated by the seams that made these injectable. |
 
 ### `PeerDisplayNames.swift`
 
@@ -2270,10 +2524,12 @@ Shared by `FriendStateCache`, `ClosenessLedger`, `ModerationLedger`, `ProximityA
 > states its root, the same way every heart-drop caller states its `HeartDropStorageScope`. The
 > in-source comment where `defaultFileURL(name:)` used to be says so; do not re-add it.
 >
-> The production root is `Application Support/Fernlet`, defined once in
-> `ProximitySupportLayout.defaultDirectory` and reached through
+> The production root is `Application Support/Fernlet`, the host namespace's
+> `installation.storage.defaultDirectory` (`.fernlet` names the folder `Fernlet`), reached through
 > `ProximityHost.proximitySupportDirectory` (the protocol extension supplies it as the default for
-> hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root).
+> hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root that
+> defaults to the same folder). `ProximitySupportLayout.defaultDirectory` spells the same folder for
+> the heart-drop scope and the feature ledgers' defaults until A0.4.
 > The `App/Fernlet/` that appeared here was a repo-restructure artefact: `9fb86a9` collapsed the
 > seven `Fernlet*` roots into `App/`, `Tests/` and `FernletKit/`, and the mechanical path rewrite
 > caught this *runtime* path as if it were a *source* path. No shipped install has ever used it.

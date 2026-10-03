@@ -168,6 +168,11 @@ public final class PresenceManager: ProximityPayloadHandling {
     static let heartReinviteDelaySeconds: TimeInterval = 2
 
     @ObservationIgnored private unowned let store: any ProximityHost
+    /// The host's protocol identity, read once from ``store`` at construction and kept as this
+    /// manager's own copy (ProximityKit plan step A0.2.3), so no later read reaches back to the
+    /// host. The default identity is built from it, and since A0.2.7 so is the radio, which reads
+    /// its service type, ALPN and log subsystem off it. `nonisolated`: inert `Sendable` value data.
+    @ObservationIgnored nonisolated let namespace: ProximityNamespace
     @ObservationIgnored private let identity: IdentityService
     @ObservationIgnored private let ledger: ProximityHeartLedger
     @ObservationIgnored private let replayCache = ReplayCache()
@@ -180,8 +185,9 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// presence radio and nothing in shipping code writes this — the counterpart of the mesh's
     /// retired `MeshTransportFactory` seam, for a manager that only ever has one answer. A test
     /// substitutes an in-memory fake so the advertise, republish, dial and stand-down decisions
-    /// are reachable without starting Bonjour.
-    @ObservationIgnored var makeSession: () -> any PresenceRadioSession = { NetworkPresenceSession() }
+    /// are reachable without starting Bonjour. The default is set in `init`, where it captures
+    /// ``namespace`` when it is made, so every radio it builds speaks the host's wire.
+    @ObservationIgnored var makeSession: () -> any PresenceRadioSession
     @ObservationIgnored private(set) var isRunning = false
 
     /// Live heart connections (outbound sends in flight + inbound accepts). Keyed by peer UUID.
@@ -285,16 +291,19 @@ public final class PresenceManager: ProximityPayloadHandling {
     public init(store: any ProximityHost, ledger: ProximityHeartLedger, identity: IdentityService? = nil) {
         self.store = store
         self.ledger = ledger
+        let namespace = store.proximityNamespace
+        self.namespace = namespace
+        self.makeSession = { NetworkPresenceSession(namespace: namespace) }
         if let identity {
             self.identity = identity
         } else {
-            let id = IdentityService()
+            let id = IdentityService(namespace: namespace)
             // Fail-soft: the manager still constructs, but a failed provisioning is NAMED (R7) —
             // otherwise every later presence tag and heart send fails with no visible cause.
             do {
                 try id.ensureProvisioned()
             } catch {
-                FernletAuditLog.log(
+                ProximityAudit.log(
                     "presence.identity.provisionFailed",
                     context: ["error": String(describing: error)]
                 )
@@ -758,7 +767,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         } catch {
             presencePosture = nil
             postureMintFailedEpoch = epoch
-            FernletAuditLog.log(
+            ProximityAudit.log(
                 "presence.posture.mintFailed",
                 context: ["error": String(describing: error)]
             )
@@ -1663,7 +1672,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// teardown path a completed/failed send runs. Afterward the peer, if still advertising, must
     /// remain both reachable and sendable.
     func simulateHeartConnectionTeardownForTesting(peer: PeerHandle, ranging: any RangingProvider) {
-        let channelSession = session ?? NetworkPresenceSession()
+        let channelSession = session ?? NetworkPresenceSession(namespace: namespace)
         let channel = channelSession.channel(for: peer)
         let coordinator = ProximityCoordinator(
             identity: identity,
@@ -1697,7 +1706,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         trustPolicy: FriendSessionTrustPolicy,
         intendedFriend: ProximityTrustedPeerRecord? = nil
     ) -> Bool {
-        let channelSession = session ?? NetworkPresenceSession()
+        let channelSession = session ?? NetworkPresenceSession(namespace: namespace)
         heartConnections.append(PresenceHeartConnection(
             id: peer.id,
             peer: peer,

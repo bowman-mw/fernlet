@@ -150,9 +150,40 @@ nonisolated func canonicalUTF8Ordered(_ lhs: String, _ rhs: String) -> Bool {
 
 // MARK: - Domain tags
 
-// Distinct per signed type so a signature over one type cannot validate over the other.
-private nonisolated let canonicalEnvelopeDomain = FernletCryptoPurpose.Signature.identityEnvelopeV2.data
-private nonisolated let canonicalAdmissionTokenDomain = FernletCryptoPurpose.Signature.meshAdmissionTokenV2.data
+// Distinct per signed type so a signature over one type cannot validate over another.
+//
+// Since ProximityKit plan step A0.2.4 ten signed types take their domain from the host's namespace —
+// the `in purposes: ProximityNamespace.Purposes` their overloads below require — and not from a tag
+// here, as does the membership inventory digest's records hash (`purposes.hash.meshInventoryDigestV1`):
+// the identity envelope, the admission token and the membership family. The membership domains
+// (network migration P3, plan §8.3) are one per record kind, so a departure signature can never
+// validate as a termination — the difference between a member removing itself and a member ending the
+// mesh for everyone. The key advertisement's (P6 item 1) must above all differ from the departure's:
+// both are self-signed statements over (mesh, fingerprint, instant), so only the domain stops "here is
+// my key" from being replayable as "I have left", a permanent, grow-only eviction. The quorum's two
+// (P4 item 5, plan §10.4) differ from each other and from the completed removal's: a proposal binds
+// `proposalID → (mesh, target, proposer)`, a vote agrees with one, and `meshMemberRemovalV1` signs the
+// permanent record, so if any two cross-validated one signed object could be replayed as another. The
+// namespace fixes each of them as `.signature(.lengthPrefixed)`, and its soundness rules hold every
+// label pairwise distinct and prefix-free.
+//
+// Since step A0.2.5 the QUIC channel introduction and the six routed transcripts take theirs from the
+// namespace too, `purposes.signature.<field>`. The introduction's (network migration P2) is distinct
+// from the DEBUG probe's spelling by registry construction, so a spike build can never mint bytes a
+// shipping peer would accept. Each routed domain (P5 items 1–6, plan §11) differs from the one it
+// would otherwise be replayed as: the origin-signed manifest from every membership frame's, so "what I
+// am sending" is never "what I hold" (the inventory digest) or "what epoch I am on"; a chunk ("these
+// bytes are part of it") from the manifest ("who it is for, who can open it") it travels beside, or a
+// destination set or a key wrap could be swapped under an authentic-looking transfer; the custody
+// receipt, the one routed record signed by somebody other than the item's origin, from the manifest's
+// and the chunk's; the recipient receipt ("it reached me") from the custody receipt ("I am holding
+// it"), the custody-is-not-delivery distinction plan §11 requires in every surface; the routed
+// inventory digest ("what content I am carrying, and for whom") from the membership one ("what
+// records I hold"); and the drain answer ("we are in sync") from the routed inventory digest ("here is
+// everything I hold"), or a stale quiescence bit could close a merge window that should still be
+// open. The four tags left below are the activity and moderation features', which move with their
+// features at A0.4.
+//
 // Group Activities (Phase 6). Distinct tags so an activity descriptor hash, a join token, and a roster
 // snapshot can never cross-validate one another (or the mesh types above).
 private nonisolated let canonicalActivityDescriptorDomain = FernletCryptoPurpose.Signature.activityDescriptorV2.data
@@ -161,85 +192,16 @@ private nonisolated let canonicalActivityRosterSnapshotDomain = FernletCryptoPur
 // Moderation report row (Phase 3b). Distinct tag so a report signature can never cross-validate any
 // other signed type.
 private nonisolated let canonicalModerationReportDomain = FernletCryptoPurpose.Signature.moderationReportV2.data
-// QUIC mesh channel introduction (network migration P2). Distinct from the DEBUG probe's spelling by
-// registry construction, so a spike build can never mint bytes a shipping peer would accept.
-private nonisolated let canonicalMeshChannelIntroductionDomain =
-    FernletCryptoPurpose.Signature.meshChannelIntroductionV1.data
-// Membership events (network migration P3, plan §8.3). One domain per record kind, so a departure
-// signature can never validate as a termination — the difference between a member removing itself
-// and a member ending the mesh for everyone.
-private nonisolated let canonicalMeshMemberDepartureDomain =
-    FernletCryptoPurpose.Signature.meshMemberDepartureV1.data
-private nonisolated let canonicalMeshMemberRemovalDomain =
-    FernletCryptoPurpose.Signature.meshMemberRemovalV1.data
-private nonisolated let canonicalMeshTerminatedDomain =
-    FernletCryptoPurpose.Signature.meshTerminatedV1.data
-private nonisolated let canonicalMeshInventoryDigestDomain =
-    FernletCryptoPurpose.Signature.meshInventoryDigestV1.data
-private nonisolated let canonicalMeshInventoryDigestHashDomain =
-    FernletCryptoPurpose.Hash.meshInventoryDigestV1.data
-private nonisolated let canonicalMeshEpochHeadsDomain =
-    FernletCryptoPurpose.Signature.meshEpochHeadsV1.data
-// Key advertisement (network migration P6 item 1). Its own domain, and the one it must be distinct
-// from is the DEPARTURE's: both are self-signed statements over (mesh, fingerprint, instant), so
-// only the domain stops "here is my key" from being replayable as "I have left" — a permanent,
-// grow-only eviction.
-private nonisolated let canonicalMeshKeyAgreementDomain =
-    FernletCryptoPurpose.Signature.meshKeyAgreementV1.data
-// Quorum under partition (network migration P4 item 5, plan §10.4). Two more domains, distinct from
-// each other and from the completed removal's: a proposal binds `proposalID → (mesh, target,
-// proposer)` and a vote agrees with one, while `meshMemberRemovalV1` signs the permanent record. If
-// any two of the three cross-validated, one signed object could be replayed as another.
-private nonisolated let canonicalMeshRemovalProposalDomain =
-    FernletCryptoPurpose.Signature.meshRemovalProposalV1.data
-private nonisolated let canonicalMeshRemovalVoteDomain =
-    FernletCryptoPurpose.Signature.meshRemovalVoteV1.data
-// P5 item 1 (plan §11): the routed-content manifest is signed by the ORIGIN only and forwarded
-// verbatim; its domain must be distinct from every membership frame's so "what I am sending"
-// can never be replayed as "what I hold" (the inventory digest) or "what epoch I am on".
-private nonisolated let canonicalMeshRoutedManifestDomain = FernletCryptoPurpose.Signature.meshRoutedManifestV1.data
-// P5 item 2 (plan §11): one slice of that item's ciphertext. Its own domain, distinct from the
-// manifest's, because the two travel together for every routed item and describe different things —
-// a manifest says who an item is for and who can open it, a chunk says "these bytes are part of it".
-// A signature that satisfied both could let one stand in for the other, which is how a destination
-// set or a key wrap would be swapped under an authentic-looking transfer.
-private nonisolated let canonicalMeshRoutedChunkDomain = FernletCryptoPurpose.Signature.meshRoutedChunkV1.data
-// P5 item 3 (plan §11, §3.6): a custodian's statement that it durably holds one item's complete
-// ciphertext. Its own domain, distinct from the manifest's and the chunk's, because it is the one
-// routed record signed by somebody other than the item's origin — a signature that satisfied both
-// this and the chunk domain would let "I am holding it" be replayed as "these bytes are part of it",
-// under the wrong key.
-private nonisolated let canonicalMeshCustodyReceiptDomain =
-    FernletCryptoPurpose.Signature.meshCustodyReceiptV1.data
-// P5 item 4 (plan §11, §3.6): a destination's statement that one item reached it, finally. Its own
-// domain, distinct from the custody receipt's, because the two receipts are the same shape with two
-// signer roles — a signature satisfying both would let "it reached me" be replayed as "I am holding
-// it", under the wrong key, and that is precisely the custody-is-not-delivery distinction plan §11
-// requires in every surface.
-private nonisolated let canonicalMeshRecipientReceiptDomain =
-    FernletCryptoPurpose.Signature.meshRecipientReceiptV1.data
-// P5 item 5 (plan §11, §10.3): an advertiser's summary of the ROUTED CONTENT it holds. Its own
-// domain, and the one it must be distinct from is the MEMBERSHIP inventory digest's — the two
-// summarise different things under one English word, so a signature satisfying both would let "what
-// records I hold" be replayed as "what content I am carrying, and for whom".
-private nonisolated let canonicalMeshRoutedInventoryDomain =
-    FernletCryptoPurpose.Signature.meshRoutedInventoryDigestV1.data
-// P5 item 6 (plan §11, §10.3, §22.1): one device's answer to another's routed-inventory
-// advertisement — which advertisement, and whether the answerer's own delta against it is empty.
-// Its own domain, and the one it must be distinct from is the ROUTED INVENTORY DIGEST's: that
-// signs what a disk holds, this the result of comparing two such statements. A signature satisfying
-// both would let "we are in sync" be replayed as "here is everything I hold", and would let a stale
-// quiescence bit close a merge window that should still be open.
-private nonisolated let canonicalMeshRoutedDrainAnswerDomain =
-    FernletCryptoPurpose.Signature.meshRoutedDrainAnswerV1.data
 
 // MARK: - Identity envelope
 
 /// Canonical signing bytes for a `FernletIdentityEnvelope` (schema v2+). The `signature` field is
-/// excluded entirely (it is the output of signing these bytes).
-public nonisolated func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
+/// excluded entirely (it is the output of signing these bytes). The domain is the host namespace's
+/// `purposes.signature.identityEnvelopeV2` (plan step A0.2.4).
+public nonisolated func canonicalBytes(for envelope: FernletIdentityEnvelope,
+                                       in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalEnvelopeDomain)
+    writer.appendLengthPrefixed(purposes.signature.identityEnvelopeV2.data)
     writer.appendInt64(Int64(envelope.schemaVersion))
     writer.appendUUID(envelope.envelopeID)
     writer.appendLengthPrefixed(envelope.senderSigningPublicKey)
@@ -301,10 +263,12 @@ private nonisolated func appendCanonical(_ writer: inout CanonicalByteWriter, _ 
 // MARK: - Mesh admission token
 
 /// Canonical signing bytes for a `MeshAdmissionToken` (canonical v2). The `admitterSignature` field
-/// is excluded entirely (it is the output of signing these bytes).
-public nonisolated func canonicalBytes(for token: MeshAdmissionToken) -> Data {
+/// is excluded entirely (it is the output of signing these bytes). The domain is the host namespace's
+/// `purposes.signature.meshAdmissionTokenV2` (plan step A0.2.4).
+public nonisolated func canonicalBytes(for token: MeshAdmissionToken,
+                                       in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalAdmissionTokenDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshAdmissionTokenV2.data)
     writer.appendUUID(token.meshID)
     writer.appendString(token.joinerFingerprint)
     writer.appendLengthPrefixed(token.joinerSigningPublicKey)
@@ -421,10 +385,13 @@ public nonisolated func canonicalBytes(for entry: ModerationLedgerEntry) -> Data
 /// mismatch is what broke silently in `91c3956`.
 ///
 /// There is no signature field to exclude: the signature lives on ``MeshChannelIntroduction``, which
-/// is the frame, not the transcript.
-nonisolated func canonicalBytes(for transcript: MeshChannelIntroductionTranscript) -> Data {
+/// is the frame, not the transcript. The domain is the host namespace's
+/// `purposes.signature.meshChannelIntroductionV1` (plan step A0.2.5).
+nonisolated func canonicalBytes(
+    for transcript: MeshChannelIntroductionTranscript, in purposes: ProximityNamespace.Purposes
+) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshChannelIntroductionDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshChannelIntroductionV1.data)
     writer.appendInt64(Int64(transcript.protocolVersion))
     writer.appendUUID(transcript.meshID)
     writer.appendString(transcript.epochRef)
@@ -447,13 +414,16 @@ nonisolated func canonicalBytes(for transcript: MeshChannelIntroductionTranscrip
 // `MeshAdmissionToken`: the signature is the OUTPUT of signing these bytes. The admission record
 // has no encoder here because it wraps a `MeshAdmissionToken` whole and is signed under the
 // already-registered `meshAdmissionTokenV2` domain — one admission format, not two.
+//
+// Since ProximityKit plan step A0.2.4 every encoder below, through the key advertisement's, writes
+// its domain from the host's namespace: `purposes.signature.<field>`, one field per kind.
 
 /// Canonical signing bytes for a ``SignedDepartureRecord`` — the leaver's own statement that it
 /// left (plan §8.3). The custody summary is bound in: what a leaver claims to have handed to whom
 /// is part of what it signed, so a relay cannot rewrite the hand-off while re-gossiping the record.
-nonisolated func canonicalBytes(for record: SignedDepartureRecord) -> Data {
+nonisolated func canonicalBytes(for record: SignedDepartureRecord, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshMemberDepartureDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshMemberDepartureV1.data)
     writer.appendUUID(record.meshID)
     writer.appendString(record.memberFingerprint)
     writer.appendDate(record.occurredAt)
@@ -471,9 +441,9 @@ nonisolated func canonicalBytes(for record: SignedDepartureRecord) -> Data {
 /// The voter list is bound in array order, which is the order the record's initializer preserves,
 /// so the tallier signs the exact evidence a receiver re-checks. A relay that reordered or trimmed
 /// the voters would invalidate the signature rather than quietly weakening the quorum.
-nonisolated func canonicalBytes(for record: SignedRemovalRecord) -> Data {
+nonisolated func canonicalBytes(for record: SignedRemovalRecord, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshMemberRemovalDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshMemberRemovalV1.data)
     writer.appendUUID(record.meshID)
     writer.appendString(record.memberFingerprint)
     writer.appendUUID(record.proposalID)
@@ -490,9 +460,9 @@ nonisolated func canonicalBytes(for record: SignedRemovalRecord) -> Data {
 /// Canonical signing bytes for a ``SignedTerminationRecord`` — a final-pair member ending the mesh
 /// (plan §8.3). `rosterAtSigning` is bound in so the audit trail is signed, not merely carried;
 /// the downgrade rule still judges against the RECEIVER's merged roster (``MeshDerivedRoster``).
-nonisolated func canonicalBytes(for record: SignedTerminationRecord) -> Data {
+nonisolated func canonicalBytes(for record: SignedTerminationRecord, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshTerminatedDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshTerminatedV1.data)
     writer.appendUUID(record.meshID)
     writer.appendString(record.memberFingerprint)
     writer.appendUInt64(UInt64(record.rosterAtSigning.count))
@@ -506,10 +476,10 @@ nonisolated func canonicalBytes(for record: SignedTerminationRecord) -> Data {
 
 /// Canonical signing bytes for a ``MeshInventoryDigestPayload`` (plan §10.5). The digest's own
 /// hash is bound as opaque bytes — it was already domain-separated when it was computed, by
-/// ``canonicalInventoryDigestBytes(for:)``.
-nonisolated func canonicalBytes(for payload: MeshInventoryDigestPayload) -> Data {
+/// ``canonicalInventoryDigestBytes(for:in:)``.
+nonisolated func canonicalBytes(for payload: MeshInventoryDigestPayload, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshInventoryDigestDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshInventoryDigestV1.data)
     writer.appendUUID(payload.digest.meshID)
     writer.appendString(payload.senderFingerprint)
     writer.appendDate(payload.sentAt)
@@ -528,9 +498,9 @@ nonisolated func canonicalBytes(for payload: MeshInventoryDigestPayload) -> Data
 /// ``MeshEpochRef/canonicalString`` produces and the one a peer parses back — so two devices
 /// holding the same head set sign over identical bytes, and the count is written first so a
 /// re-partitioning of the same characters cannot produce the same transcript.
-nonisolated func canonicalBytes(for payload: MeshEpochHeadsPayload) -> Data {
+nonisolated func canonicalBytes(for payload: MeshEpochHeadsPayload, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshEpochHeadsDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshEpochHeadsV1.data)
     writer.appendUUID(payload.meshID)
     writer.appendString(payload.senderFingerprint)
     writer.appendDate(payload.sentAt)
@@ -550,9 +520,11 @@ nonisolated func canonicalBytes(for payload: MeshEpochHeadsPayload) -> Data {
 /// as **opaque length-prefixed bytes**, never as a string, so a 32-byte blob can never be read as a
 /// count; and `advertisedAt` is bound because it is the set's dedup and order input — an unbound
 /// stamp could be re-dated by a relay.
-nonisolated func canonicalBytes(for advertisement: SignedKeyAgreementAdvertisement) -> Data {
+nonisolated func canonicalBytes(
+    for advertisement: SignedKeyAgreementAdvertisement, in purposes: ProximityNamespace.Purposes
+) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshKeyAgreementDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshKeyAgreementV1.data)
     writer.appendUUID(advertisement.meshID)
     writer.appendString(advertisement.memberFingerprint)
     writer.appendLengthPrefixed(advertisement.keyAgreementPublicKey)
@@ -567,9 +539,9 @@ nonisolated func canonicalBytes(for advertisement: SignedKeyAgreementAdvertiseme
 /// valid transcript for the mirror-image proposal, and `issuedAt` is bound because it is audited —
 /// the five-minute window is measured at the receiver from first-seen, so binding the stamp costs
 /// nothing and an unbound one could be rewritten by a relay.
-nonisolated func canonicalBytes(for proposal: SignedRemovalProposal) -> Data {
+nonisolated func canonicalBytes(for proposal: SignedRemovalProposal, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRemovalProposalDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRemovalProposalV1.data)
     writer.appendUUID(proposal.meshID)
     writer.appendUUID(proposal.proposalID)
     writer.appendString(proposal.targetFingerprint)
@@ -585,9 +557,9 @@ nonisolated func canonicalBytes(for proposal: SignedRemovalProposal) -> Data {
 /// domain, so the two transcripts cannot be mistaken for one another even though they are the same
 /// shape. Binding the target here is what makes a vote countable only against the proposal it
 /// actually agrees with.
-nonisolated func canonicalBytes(for vote: SignedRemovalVote) -> Data {
+nonisolated func canonicalBytes(for vote: SignedRemovalVote, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRemovalVoteDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRemovalVoteV1.data)
     writer.appendUUID(vote.meshID)
     writer.appendUUID(vote.proposalID)
     writer.appendString(vote.targetFingerprint)
@@ -599,6 +571,9 @@ nonisolated func canonicalBytes(for vote: SignedRemovalVote) -> Data {
 
 // MARK: - Routed content (network migration P5 item 1, plan §11)
 
+// Since ProximityKit plan step A0.2.5 every encoder below writes its domain from the host's namespace:
+// `purposes.signature.<field>`, one field per routed type.
+
 /// Canonical signing bytes for a ``MeshRoutedManifest`` — the origin's description of one routed
 /// item (plan §11). **Field order IS the schema**: identity first (mesh, item, origin), then the
 /// descriptor (type token, hash, size), then the two instants, then the two count-prefixed lists.
@@ -607,9 +582,9 @@ nonisolated func canonicalBytes(for vote: SignedRemovalVote) -> Data {
 /// field, so a relay that reordered, trimmed, relabelled or re-clamped either list would
 /// invalidate the signature rather than quietly changing who the item is for or who can open it.
 /// Signed by the origin only; a custodian forwards these exact fields and never re-derives them.
-nonisolated func canonicalBytes(for manifest: MeshRoutedManifest) -> Data {
+nonisolated func canonicalBytes(for manifest: MeshRoutedManifest, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRoutedManifestDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRoutedManifestV1.data)
     writer.appendUUID(manifest.meshID)
     writer.appendUUID(manifest.itemID)
     writer.appendString(manifest.originFingerprint)
@@ -639,9 +614,9 @@ nonisolated func canonicalBytes(for manifest: MeshRoutedManifest) -> Data {
 /// transcript rather than 256 KiB copied into a signing buffer, with the same authenticity, since a
 /// receiver checks the hash against the bytes it holds. The `signature` is excluded as ever.
 /// Signed by the origin only; a custodian forwards these exact fields and never re-derives them.
-nonisolated func canonicalBytes(for chunk: MeshChunk) -> Data {
+nonisolated func canonicalBytes(for chunk: MeshChunk, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRoutedChunkDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRoutedChunkV1.data)
     writer.appendUUID(chunk.meshID)
     writer.appendUUID(chunk.itemID)
     writer.appendString(chunk.originFingerprint)
@@ -666,9 +641,9 @@ nonisolated func canonicalBytes(for chunk: MeshChunk) -> Data {
 /// exists only for a COMPLETE item, so a count would be a second source of truth under one signature.
 /// The `signature` is excluded as ever. Signed by the custodian only; relays forward these exact
 /// fields and never re-derive them.
-nonisolated func canonicalBytes(for receipt: MeshCustodyReceipt) -> Data {
+nonisolated func canonicalBytes(for receipt: MeshCustodyReceipt, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshCustodyReceiptDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshCustodyReceiptV1.data)
     writer.appendUUID(receipt.meshID)
     writer.appendUUID(receipt.itemID)
     writer.appendString(receipt.originFingerprint)
@@ -691,9 +666,9 @@ nonisolated func canonicalBytes(for receipt: MeshCustodyReceipt) -> Data {
 /// origin-signed type token, never signed by the recipient — and no chunk index or partial count: a
 /// recipient receipt is whole-item, one per `(recipient, item)`. The `signature` is excluded as ever.
 /// Signed by the recipient only; relays forward these exact fields and never re-derive them.
-nonisolated func canonicalBytes(for receipt: MeshRecipientReceipt) -> Data {
+nonisolated func canonicalBytes(for receipt: MeshRecipientReceipt, in purposes: ProximityNamespace.Purposes) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRecipientReceiptDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRecipientReceiptV1.data)
     writer.appendUUID(receipt.meshID)
     writer.appendUUID(receipt.itemID)
     writer.appendString(receipt.originFingerprint)
@@ -716,9 +691,11 @@ nonisolated func canonicalBytes(for receipt: MeshRecipientReceipt) -> Data {
 /// what makes two encodings of one held set impossible. `sentAt` is bound in, so a stale digest
 /// cannot be replayed as fresh; the `signature` is excluded as ever. Signed by the advertiser only:
 /// it is a statement about that device's own disk and nobody forwards it on its behalf.
-nonisolated func canonicalBytes(for payload: MeshRoutedInventoryPayload) -> Data {
+nonisolated func canonicalBytes(
+    for payload: MeshRoutedInventoryPayload, in purposes: ProximityNamespace.Purposes
+) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRoutedInventoryDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRoutedInventoryDigestV1.data)
     writer.appendUUID(payload.inventory.meshID)
     writer.appendUInt64(UInt64(payload.inventory.members.count))
     for member in payload.inventory.members {
@@ -744,9 +721,11 @@ nonisolated func canonicalBytes(for payload: MeshRoutedInventoryPayload) -> Data
 /// which is what makes the receiver's exact-equality binding check possible at all. The bit is one
 /// byte, `1` or `0`, never a string — a frozen token would be a second spelling of a Bool. The
 /// `signature` is excluded as ever.
-nonisolated func canonicalBytes(for payload: MeshRoutedDrainAnswerPayload) -> Data {
+nonisolated func canonicalBytes(
+    for payload: MeshRoutedDrainAnswerPayload, in purposes: ProximityNamespace.Purposes
+) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshRoutedDrainAnswerDomain)
+    writer.appendLengthPrefixed(purposes.signature.meshRoutedDrainAnswerV1.data)
     writer.appendUUID(payload.answer.meshID)
     writer.appendString(payload.answer.advertiserFingerprint)
     writer.appendDate(payload.answer.advertisedAt)
@@ -788,14 +767,17 @@ private nonisolated func appendCanonical(_ writer: inout CanonicalByteWriter, _ 
     writer.appendLengthPrefixed(wrap.sealedKey)
 }
 
-/// The bytes a ``MeshInventoryDigest`` hashes, under the Hash-family purpose that names them.
+/// The bytes a ``MeshInventoryDigest`` hashes, under the Hash-family purpose that names them: the
+/// host namespace's `purposes.hash.meshInventoryDigestV1` (plan step A0.2.4).
 ///
 /// Every record contributes its kind token and the four fields that give the record set its total
 /// order, in that set's own deterministic order — so two ledgers holding the same records produce
 /// the same bytes on any device, and one extra or one missing record changes them.
-nonisolated func canonicalInventoryDigestBytes(for identities: [MeshRecordIdentity]) -> Data {
+nonisolated func canonicalInventoryDigestBytes(
+    for identities: [MeshRecordIdentity], in purposes: ProximityNamespace.Purposes
+) -> Data {
     var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalMeshInventoryDigestHashDomain)
+    writer.appendLengthPrefixed(purposes.hash.meshInventoryDigestV1.data)
     writer.appendUInt64(UInt64(identities.count))
     for identity in identities {
         writer.appendString(identity.kind.rawValue)

@@ -1655,7 +1655,7 @@ struct LocalizationBoundaryTests {
     /// Inside an SPM module, SwiftUI resolves a `LocalizedStringKey` against `Bundle.main` unless a
     /// `bundle:` argument is passed — and most of these APIs have no `bundle:` parameter at all, so
     /// the only correct form is to resolve first (a copy vault: `FernletUICopy`, `FernletLockCopy`,
-    /// `ProximityUICopy`) or to wrap in `Text(_:bundle:)`.
+    /// `FernletProximityUICopy`) or to wrap in `Text(_:bundle:)`.
     ///
     /// This is the exact sibling of ``everyPackageLocalizedStringPassesModuleBundle()`` and exists
     /// because that test could not see SwiftUI. `CLAUDE.md`'s localization-wall paragraph has always
@@ -1684,7 +1684,7 @@ struct LocalizationBoundaryTests {
             \(offenders.count) SwiftUI display literal(s) inside FernletKit resolve against \
             Bundle.main and will render untranslated English FOREVER — clean build, no warning, no \
             other failing test. Resolve through the module's copy vault (FernletUICopy, \
-            FernletLockCopy, ProximityUICopy) with `String(localized:…, bundle: .module)`, or pass \
+            FernletLockCopy, FernletProximityUICopy) with `String(localized:…, bundle: .module)`, or pass \
             `Text("…", bundle: .module)`:
             \(offenders.map(\.report).sorted().joined(separator: "\n"))
             """
@@ -1792,7 +1792,7 @@ struct LocalizationBoundaryTests {
 
         let resolvedProperty = """
         private var explainerText: String {
-            saveToPhotos == nil ? ProximityUICopy.Review.explainerSave : ProximityUICopy.Review.explainerKeep
+            saveToPhotos == nil ? FernletProximityUICopy.Review.explainerSave : FernletProximityUICopy.Review.explainerKeep
         }
         """
         #expect(Self.localizedStringKeyLiteralDeclarations(in: resolvedProperty).isEmpty)
@@ -2522,7 +2522,7 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
                      key: "ui.capture.cover.recording",
                      source: "CaptureProtectedModifier.coverText, §4.0"),
-        HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
                      key: "proximity.keepFriends.keeping",
                      source: "the keep-as-friend chip's ternary literal, §4.0"),
         HarvestedKey(catalog: "FernletKit/Sources/AppServices/Localizable.xcstrings",
@@ -2575,7 +2575,7 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "FernletKit/Sources/FernletUI/Localizable.xcstrings",
                      key: "ui.coins.balance",
                      source: "the coin pill's spoken balance"),
-        HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
                      key: "proximity.review.deleteAll",
                      source: "the photo review sheet's destructive button"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
@@ -2611,7 +2611,7 @@ struct LocalizationBoundaryTests {
                      source: "the mesh continuation card's friend count"),
         // Session photos (2026-09-30): harvested by the round's catalog sync with a bare `%lld`, their
         // English `one`/`other` blocks authored in the same commit.
-        HarvestedKey(catalog: "FernletKit/Sources/ProximityKit/Localizable.xcstrings",
+        HarvestedKey(catalog: "FernletKit/Sources/FernletProximityUI/Localizable.xcstrings",
                      key: "proximity.review.unreadable",
                      source: "the photo review's couldn't-be-opened notice (session photos, 2026-09-30)"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
@@ -2745,8 +2745,11 @@ struct LocalizationBoundaryTests {
     /// Their absence is SILENT in exactly the way ``theDomainModelStringCatalogStillExists()``
     /// describes: every `String(localized:…, bundle: .module)` in `FernletUI` and `ProximityKit`
     /// keeps compiling and keeps returning its `defaultValue`. Nothing else would notice.
+    /// `FernletProximityUI` is pinned with them: ProximityKit's review sheet, keep-friends prompt
+    /// and photo-save alert moved there with 28 of its 31 keys (ProximityKit plan step A0.1), so
+    /// most of what §4.0 put in ProximityKit's catalog now lives in that module's.
     @Test func theModuleStringCatalogsAddedBySection40StillExist() {
-        for module in ["FernletUI", "ProximityKit", "AppServices"] {
+        for module in ["FernletUI", "ProximityKit", "FernletProximityUI", "AppServices"] {
             let catalog = RepoRoot.url("FernletKit/Sources/\(module)/Localizable.xcstrings")
             #expect(
                 FileManager.default.fileExists(atPath: catalog.path),

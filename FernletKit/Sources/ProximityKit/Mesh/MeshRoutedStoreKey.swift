@@ -11,21 +11,24 @@
 // files then open for nobody.
 //
 // Its OWN keychain service, not a lodger under `com.fernlet.mesh-session`: one fate per service is
-// the only arrangement a service-wide `KeychainItem.deleteAll(service:)` can express honestly, and
+// the only arrangement a service-wide `ProximityKeychainItem.deleteAll(service:)` can express honestly, and
 // sharing would let a session wipe silently orphan routed ciphertext this device is holding for
 // other people.
 
 import CryptoKit
 import Foundation
-import FernletCrypto
-import FernletFoundation
 import Security
 
 // MARK: - MeshRoutedStorageScope
 
 /// The storage identity of one device's sealed routed-content store: the directory holding
 /// `MeshRoutedIndex.sealed` (with its `.corrupt` quarantine sibling and the `MeshRoutedChunks`
-/// payload directory) and the keychain service holding the key that seals them.
+/// payload directory) and the keychain service holding the key that seals them, plus the host's
+/// ``ProximityNamespace``, whose `installation.storage` and `installation.keychain` name the index,
+/// the chunk directory and the key's account, and whose `family.purposes` the store measures under
+/// (plan step A0.2.8; Fernlet's names are the ones above) and seals under (plan step A0.2.9), and the
+/// host's ``ProximityInstallBinding``, which every seal and open of those files reads (plan step
+/// A0.2.9).
 ///
 /// **Why the two travel together.** ``MeshRoutedStore/wipeForDeleteAll(scope:)`` destroys both, so
 /// isolating one without the other isolates nothing: files on a private root sealed by a shared key
@@ -39,15 +42,17 @@ import Security
 /// (`PhotoDirectoryIsolationTests`), and this scope is what keeps it from gaining a new member —
 /// `MeshRoutedStoreIsolationTests` is the grep-wall that enforces it.
 ///
-/// `nonisolated` against the module's `defaultIsolation(MainActor.self)`: inert configuration, read
-/// from nonisolated stores and from `FernletStore`'s nonisolated stored properties.
-public nonisolated struct MeshRoutedStorageScope: Sendable, Equatable {
+/// `nonisolated` against the module's `defaultIsolation(MainActor.self)`: configuration, read from
+/// nonisolated stores and from `FernletStore`'s nonisolated stored properties. Not `Equatable` since
+/// plan step A0.2.9: it carries the host's install binding, a capability with no equality.
+public nonisolated struct MeshRoutedStorageScope: Sendable {
 
-    /// The production keychain service. Its own service, not a lodger under
-    /// `com.fernlet.mesh-session`: delete-all takes this one whole
-    /// (`KeychainItem.deleteAll(service:)`), and one service per fate is the only arrangement a
-    /// service-wide delete can express honestly.
-    public static let productionKeychainService = "com.fernlet.mesh-routed"
+    /// The host's protocol identity: the store reads its index file name, its chunk directory name
+    /// and its seal key's account off `installation`, and the labels it hashes chunks and items under
+    /// off `family.purposes` (plan step A0.2.8), and seals its files under
+    /// `family.purposes.keyDerivation.meshRoutedStoreV1` (plan step A0.2.9). Not an isolation axis —
+    /// ``directory`` and ``keychainService`` are.
+    public let namespace: ProximityNamespace
 
     /// Directory holding `MeshRoutedIndex.sealed`, its `.corrupt` quarantine sibling, and the
     /// `MeshRoutedChunks` directory of sealed payload files.
@@ -56,22 +61,53 @@ public nonisolated struct MeshRoutedStorageScope: Sendable, Equatable {
     /// Keychain service holding the seal key for everything under ``directory``.
     public let keychainService: String
 
-    /// Builds a scope from a directory and a keychain service.
+    /// The host's install binding, which the store's column seal reads at every seal and every open
+    /// and places after the column label in each file's authenticated data (plan step A0.2.9). Not an
+    /// isolation axis either: one install has one binding, which every scope of the host carries.
+    public let installBinding: any ProximityInstallBinding
+
+    /// Builds a scope from the host's namespace, a directory, a keychain service and its install
+    /// binding.
     ///
     /// - Parameters:
+    ///   - namespace: The host's protocol identity, which names the files and the key's account and
+    ///     holds the labels the store measures and seals under.
     ///   - directory: Where the sealed index, its quarantine sibling and the chunk directory live.
     ///   - keychainService: Keychain service holding those files' seal key.
-    public init(directory: URL, keychainService: String) {
+    ///   - installBinding: The host's install binding, which the files are sealed and opened under.
+    public init(
+        namespace: ProximityNamespace,
+        directory: URL,
+        keychainService: String,
+        installBinding: any ProximityInstallBinding
+    ) {
+        self.namespace = namespace
         self.directory = directory
         self.keychainService = keychainService
+        self.installBinding = installBinding
     }
 
-    /// The shipped scope: `Application Support/Fernlet` (the path every proximity sidecar already
-    /// uses) plus ``productionKeychainService``.
-    public static var production: MeshRoutedStorageScope {
+    /// The shipped scope of a host: the namespace's `installation.storage.defaultDirectory` (for
+    /// Fernlet `Application Support/Fernlet`, the path every proximity sidecar already uses) plus its
+    /// `installation.keychain.meshRoutedSealKey.service` (for Fernlet `com.fernlet.mesh-routed`: its
+    /// own service, not a lodger under the mesh-session one, because delete-all takes this one whole
+    /// and one service per fate is the only arrangement a service-wide delete can express honestly).
+    /// Replaces the static `production` and `productionKeychainService` (plan step A0.2.8); takes the
+    /// host's install binding since plan step A0.2.9.
+    ///
+    /// - Parameters:
+    ///   - namespace: The host's protocol identity.
+    ///   - installBinding: The host's install binding.
+    /// - Returns: The namespace's production scope.
+    public static func production(
+        for namespace: ProximityNamespace,
+        installBinding: any ProximityInstallBinding
+    ) -> MeshRoutedStorageScope {
         MeshRoutedStorageScope(
-            directory: ProximitySupportLayout.defaultDirectory,
-            keychainService: productionKeychainService
+            namespace: namespace,
+            directory: namespace.installation.storage.defaultDirectory,
+            keychainService: namespace.installation.keychain.meshRoutedSealKey.service,
+            installBinding: installBinding
         )
     }
 
@@ -84,12 +120,19 @@ public nonisolated struct MeshRoutedStorageScope: Sendable, Equatable {
     /// hearts is isolated for routed custody for free — and one that is not fails an existing wall
     /// rather than silently sharing this key.
     ///
-    /// - Parameter heartDropService: The store's heart-drop keychain service.
-    /// - Returns: ``productionKeychainService`` when the input is the production heart-drop
-    ///   service; a distinct sibling of the caller's isolated service otherwise.
-    public static func keychainService(besideHeartDrop heartDropService: String) -> String {
+    /// - Parameters:
+    ///   - heartDropService: The store's heart-drop keychain service.
+    ///   - namespace: The host's protocol identity, whose production seal-key service the
+    ///     production heart-drop service maps to.
+    /// - Returns: The namespace's `installation.keychain.meshRoutedSealKey.service` when the input is
+    ///   the production heart-drop service; a distinct sibling of the caller's isolated service
+    ///   otherwise.
+    public static func keychainService(
+        besideHeartDrop heartDropService: String,
+        in namespace: ProximityNamespace
+    ) -> String {
         heartDropService == HeartPrekeyStore.keychainService
-            ? productionKeychainService
+            ? namespace.installation.keychain.meshRoutedSealKey.service
             : heartDropService + ".mesh-routed"
     }
 }
@@ -130,17 +173,14 @@ nonisolated enum MeshRoutedSealKeyOutcome: Sendable {
 ///   the background while the device is locked, and a `WhenUnlocked` key would make every
 ///   background custody write unsealable — which, under durable-before-acknowledged (plan §3.6),
 ///   means unacknowledgeable.
-/// - **ThisDeviceOnly**, because the sealed bytes are device-bound anyway: `ColumnCrypto`'s v3
-///   format authenticates this install's `DeviceBindingID`, so a key restored onto another phone
-///   would open nothing.
+/// - **ThisDeviceOnly**, because the sealed bytes are device-bound anyway: `ProximityColumnCrypto`'s
+///   V3 format authenticates this install's binding (the host's ``ProximityInstallBinding``; Fernlet's
+///   `DeviceBindingID`), so a key restored onto another phone would open nothing.
 ///
 /// The key is read on every use with no in-memory cache, so a wiped key can never be resurrected by
 /// a stale copy. There is deliberately no argument-less production variant: every caller states its
-/// scope.
+/// scope's service and account.
 nonisolated enum MeshRoutedSealKey {
-
-    /// The single account under the scope's service.
-    static let keychainAccount = "meshRoutedStoreKey"
 
     /// Key length in bytes.
     static let keyByteCount = 32
@@ -148,11 +188,14 @@ nonisolated enum MeshRoutedSealKey {
     /// Reads the key for OPENING existing sealed bytes. Never mints: a fresh random key opens
     /// nothing, and writing one would install a row that later looks authoritative.
     ///
-    /// - Parameter service: The scope's keychain service.
+    /// - Parameters:
+    ///   - service: The scope's keychain service.
+    ///   - account: The row's account, the scope namespace's
+    ///     `installation.keychain.meshRoutedSealKey.account` (plan step A0.2.8).
     /// - Returns: The key, a deferral (keychain unreadable — retry), or a refusal (row absent or
     ///   malformed, so these bytes are terminally unopenable).
-    static func forOpen(service: String) -> MeshRoutedSealKeyOutcome {
-        switch KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
+    static func forOpen(service: String, account: String) -> MeshRoutedSealKeyOutcome {
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service) {
         case .found(let data) where data.count == keyByteCount:
             return .available(SymmetricKey(data: data))
         case .found:
@@ -171,10 +214,13 @@ nonisolated enum MeshRoutedSealKey {
     /// nil ⇒ mint" would, during the window before the first post-boot unlock, replace the real key
     /// and turn every sealed chunk file into permanent garbage with no failure signal.
     ///
-    /// - Parameter service: The scope's keychain service.
+    /// - Parameters:
+    ///   - service: The scope's keychain service.
+    ///   - account: The row's account, the scope namespace's
+    ///     `installation.keychain.meshRoutedSealKey.account` (plan step A0.2.8).
     /// - Returns: The key, a deferral, or a refusal naming why no key could be established.
-    static func forSeal(service: String) -> MeshRoutedSealKeyOutcome {
-        switch KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
+    static func forSeal(service: String, account: String) -> MeshRoutedSealKeyOutcome {
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service) {
         case .found(let data) where data.count == keyByteCount:
             return .available(SymmetricKey(data: data))
         case .found:
@@ -183,7 +229,7 @@ nonisolated enum MeshRoutedSealKey {
         case .unreadable:
             return .deferred(.sealKeyTransientlyUnreadable)
         case .absent:
-            return mint(service: service)
+            return mint(service: service, account: account)
         }
     }
 
@@ -192,7 +238,7 @@ nonisolated enum MeshRoutedSealKey {
     ///
     /// - Parameter service: The scope's keychain service.
     static func wipe(service: String) {
-        KeychainItem.deleteAll(service: service)
+        ProximityKeychainItem.deleteAll(service: service)
     }
 
     /// Mints, stores and READ-BACK-VERIFIES a fresh key.
@@ -200,14 +246,14 @@ nonisolated enum MeshRoutedSealKey {
     /// The verify is not ceremony: a full or locked keychain can silently drop the row, and sealing
     /// against an unverified key writes ciphertext nothing can ever open — which, for a store whose
     /// whole job is durable custody, is a receipt for bytes that are already lost.
-    private static func mint(service: String) -> MeshRoutedSealKeyOutcome {
+    private static func mint(service: String, account: String) -> MeshRoutedSealKeyOutcome {
         // R5/R9: mint the raw bytes and build the key from them, so no `withUnsafeBytes` export of
         // a CryptoKit key is needed. `UInt8.random(in:)` draws from `SystemRandomNumberGenerator`,
         // the platform CSPRNG — the same source `SymmetricKey` uses.
         let keyData = Data((0..<keyByteCount).map { _ in UInt8.random(in: UInt8.min...UInt8.max) })
-        let status = KeychainItem.store(
+        let status = ProximityKeychainItem.store(
             keyData,
-            account: keychainAccount,
+            account: account,
             service: service,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             synchronizable: false
@@ -215,11 +261,11 @@ nonisolated enum MeshRoutedSealKey {
         guard status == errSecSuccess else {
             return .deferred(.sealKeyTransientlyUnreadable)
         }
-        guard case .found(let echoed) = KeychainItem.loadDistinguishingAbsence(
-            account: keychainAccount,
+        guard case .found(let echoed) = ProximityKeychainItem.loadDistinguishingAbsence(
+            account: account,
             service: service
         ), echoed == keyData else {
-            FernletAuditLog.log("mesh.routedStore.sealKey.verifyFailed")
+            ProximityAudit.log("mesh.routedStore.sealKey.verifyFailed")
             return .refused(.sealKeyNotPersisted)
         }
         return .available(SymmetricKey(data: keyData))

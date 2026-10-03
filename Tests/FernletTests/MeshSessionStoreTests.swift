@@ -19,6 +19,7 @@
 // keychain service). `MeshSessionStoreIsolationTests` is the grep-wall that keeps it that way.
 
 import CryptoKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletFoundation
@@ -38,12 +39,17 @@ enum MeshSessionStoreFixtures {
     static let installB = Data(repeating: 0xB9, count: 16)
 
     /// A scope nobody else in the process shares: temp directory + a `.test.` keychain service
-    /// (the spelling `PrivacyWipeCoverageTests`' service discovery deliberately skips).
+    /// (the spelling `PrivacyWipeCoverageTests`' service discovery deliberately skips), under
+    /// Fernlet's namespace, so the store writes Fernlet's file name and seal-key account (plan step
+    /// A0.2.8), and Fernlet's install binding, so the store seals and opens under whatever
+    /// `DeviceBindingID.$testOverride` answers at that moment (plan step A0.2.9).
     static func scope() -> MeshSessionStorageScope {
         MeshSessionStorageScope(
+            namespace: .fernlet,
             directory: FileManager.default.temporaryDirectory
                 .appendingPathComponent("MeshSessionStore-\(UUID().uuidString)", isDirectory: true),
-            keychainService: "com.fernlet.mesh-session.test.\(UUID().uuidString)"
+            keychainService: "com.fernlet.mesh-session.test.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter()
         )
     }
 
@@ -173,7 +179,7 @@ struct MeshSessionStoreRoundTripTests {
         }
         #expect(reloaded.developedLocally, "the atomic overwrite kept the older context")
         let siblings = try FileManager.default.contentsOfDirectory(atPath: scope.directory.path)
-        #expect(siblings.filter { !$0.hasPrefix(".") } == [MeshSessionStore.fileName],
+        #expect(siblings.filter { !$0.hasPrefix(".") } == [store.fileName],
                 "an atomic write left something beside the file: \(siblings)")
     }
 

@@ -2,6 +2,7 @@ import ProximityKit
 import SwiftUI
 import FernletDomainModel
 import FernletUI
+import FernletProximityUI
 
 /// The segment filter for the trusted-peer list: everyone, active friends, or blocked peers.
 ///

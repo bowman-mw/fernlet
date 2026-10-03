@@ -184,12 +184,34 @@ jobs:
         # exported or sent to friends", it has no compiler half, and this step's floor is the shared `1`,
         # so the name needs no re-measure (the line ran 88 tests in 8 suites on the round's integrated
         # tree).
+        #
+        # `ProximityAuditBridgeTests` joins them at ProximityKit plan step A0.2's audit sink
+        # (2026-10-02). ProximityKit now writes every audit line to the sink its host installs and
+        # drops it while none is; Fernlet's, `FernletAuditBridge`, is installed by
+        # `FernletApp.init`. A missing install compiles clean, and every capture test that asserts
+        # an event was NOT logged would then pass vacuously, so this canary (a ProximityKit line
+        # reaches a `FernletAuditLog` capture handler, unchanged and before the call returns),
+        # together with its scan that ProximityKit code names `FernletAuditLog` nowhere, must run on
+        # every push. It rides this line because its floor is the shared `1`, so the name needs no
+        # re-measure.
+        #
+        # `ProximityNamespaceBoundaryTests` joins them at ProximityKit plan step A0.2.12, walls and
+        # cleanup (2026-10-02): the ratchet that keeps A0.2's result from eroding. A pure SOURCE scan
+        # of FernletKit/Sources/ProximityKit with no compiler half, because each thing it refuses
+        # compiles clean and moves no other test: a namespace, namespace group or purpose built
+        # outside Namespace/; `FernletCryptoPurpose` in code beyond the 20 feature lines in 7 files
+        # that leave with their features in A0.4; and a `fernlet` string literal beyond an exact
+        # per-file allowlist (51 in 19 files) whose every row names why it is still there and the
+        # step that removes it. A new use fails, and so does a removed one until its row goes, so
+        # both lists only shrink. It rides this line because its floor is the shared `1`, so the
+        # name needs no re-measure.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
             AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
             CompanionRefreshSchedulingTests CompanionRefreshPipelineTests \
-            WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests
+            WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests \
+            ProximityAuditBridgeTests ProximityNamespaceBoundaryTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
@@ -247,12 +269,99 @@ jobs:
         # never be re-pinned. All three ran only when somebody remembered to run the full suite
         # locally until 2026-09-11. Floor = the measured count at that date; RAISE it when a vector
         # or a purpose is added.
+        # `ProximityNamespaceGoldenTests` joins them at ProximityKit plan step A0.2.0 (2026-10-02):
+        # every byte string ProximityNamespace.fernlet will carry (the 39 labels, the radios'
+        # service types, ALPNs and heartbeat, the QR scheme and host, the keychain rows, the storage
+        # names, the log subsystem), pinned by literal before any A0.2 commit moves one, with known
+        # answers for the six core labels nothing else pinned. Its name ends `GoldenTests`, so
+        # CIGateSelectorBoundaryTests demands it on a line; it rides this one because it is a domain
+        # and framing golden, not a mesh wire vector. Since A0.2.2 it also holds the shipped value,
+        # FernletConnections' `ProximityNamespace.fernlet`, to that table: every value, role and
+        # FernletCrypto twin, soundness, the byte-prefix check over both registries together, and one
+        # role-versus-consumer cell per hash and transcript consumer. Since A0.2.3 it also pins the
+        # host's supply path: `IdentityService(namespace:)` reads its keychain service off the
+        # namespace it is handed (the one value that step moves), and the namespace overloads of
+        # `sign` and `verify` treat every `.fernlet` label by its role. Since A0.2.4, which moves the
+        # envelope, admission-token, membership, quorum and key-agreement labels, the legacy pair and
+        # the inventory digest's hash onto the namespace, it holds those readers to the namespace they
+        # are handed: a schema-v1 envelope and a pre-WI-6 token verify under `.fernlet` and are refused
+        # by a family that refuses legacy peers, and an envelope, a token, a membership verifier and
+        # the ledger adoption accept only what was signed under their own labels. Since A0.2.5, which
+        # moves the channel-introduction, routed and verify-QR labels and the QR scheme, it holds those
+        # readers the same way: a verify QR parses and validates only in its own namespace, a verify
+        # response and a coach ceremony run under their identity's labels, and the six routed doors,
+        # the introduction exchange and the manager's introduction signature use the labels they hold.
+        # Since A0.2.6, which moves the routed hash and id domains, the five AEAD labels, the three HKDF
+        # salts and the epoch id's domain, it holds those readers too: the routed digests and ids, the
+        # chunk doors, the chunker and the routed store measure under the labels they hold or are
+        # handed; the item seal, the key wrap and an identity's transport seal and group-key wrap open
+        # only under the labels they were sealed under; a manager of another app's namespace opens
+        # encrypted metadata under that namespace's label; and every epoch id is derived under the
+        # namespace's raw epoch domain. Since A0.2.7, which moves the three radios' service types,
+        # ALPNs, heartbeat, TLS exporter label and log subsystem, it also pins the radios: each holds
+        # the values of the namespace it is built from and logs under its subsystem, and the mesh
+        # radio frames and checks every channel introduction under that namespace's labels. Since
+        # A0.2.8, which moves the mesh stores' file names and seal-key accounts, the production
+        # seal-key services, the hosts' default sidecar root and the identity's four accounts, it holds
+        # those readers too: the two stores write and read under the names the namespace their scope
+        # carries gives, a host's default root and scopes are built from its namespace, and an identity
+        # keeps, and names, the four rows its namespace names. Since A0.2.9, which copies
+        # `ColumnCrypto` into ProximityKit (`ProximityColumnCrypto`) and injects the install binding,
+        # it holds the copy to the original: the A0.2.0 column vectors run through it, it and
+        # FernletCrypto's `ColumnCrypto` open each other's blobs for both mesh labels, both ways, and
+        # refuse alike, each store seals under its scope namespace's label and its scope's binding,
+        # and Fernlet's adapter answers `DeviceBindingID` at each call. Since A0.2.11, which copies
+        # FernletFoundation's `KeychainItem` mechanism into ProximityKit (`ProximityKeychainItem`), it
+        # holds that copy to the original too: for each of `.fernlet`'s keychain rows every query
+        # dictionary the copy issues is the one FernletFoundation's source spells, the two read, list
+        # and delete each other's rows (a device-only row and its synchronized twin alike), they fail
+        # and audit alike, and ProximityKit's code names `KeychainItem` nowhere.
+        #
+        # `ProximityNamespaceSoundnessTests` joins at ProximityKit plan step A0.2.1 (2026-10-02): the
+        # soundness rules, byte rules and collision checks of ProximityKit's protocol namespace — the
+        # label registry A0.2's later commits route every read through — over namespaces built only
+        # from literals. Like the three above it has no compiler half: a loosened rule compiles clean
+        # and moves no other test.
+        #
+        # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
+        # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
+        # floor 1 after the strict build-for-testing (Scripts/spm-wall-check.sh, WALL CHECK PASSED),
+        # read off its own result bundle: "153 tests in 5 suites" (6 + 13 + 19 + 86 + 29), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 153: passed. Run once more
+        # at 153 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it, so a name
+        # cannot leave this line quietly. 38 + 86 + 29 = 153 is the ARITHMETIC CHECK, never the source.
+        # RAISED 153 -> 155 at A0.2.7, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact five-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "155 tests in 5 suites" (6 + 13 + 19 + 88 + 29),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 155: passed. Run
+        # once more at 155 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
+        # 153 + 2 (the radios' two cells) = 155 is the ARITHMETIC CHECK, never the source.
+        # RAISED 155 -> 158 at A0.2.8, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact five-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "158 tests in 5 suites" (6 + 13 + 19 + 91 + 29),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 158: passed. Run
+        # once more at 158 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
+        # 155 + 3 (the at-rest group's three cells) = 158 is the ARITHMETIC CHECK, never the source.
+        # RAISED 158 -> 165 at A0.2.9, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact five-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "165 tests in 5 suites" (6 + 13 + 19 + 98 + 29),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 165: passed. Run
+        # once more at 165 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
+        # 158 + 7 (the column-seal group's seven cells) = 165 is the ARITHMETIC CHECK, never the source.
+        # RAISED 165 -> 170 at A0.2.11, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact five-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "170 tests in 5 suites" (6 + 13 + 19 + 103 + 29),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 170: passed. Run
+        # once more at 170 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
+        # 165 + 5 (the keychain group's five cells) = 170 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 38 \
+          Scripts/run-gated-suites.sh crypto-goldens 170 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
-            MeshMembershipEventGoldenTests
+            MeshMembershipEventGoldenTests \
+            ProximityNamespaceGoldenTests \
+            ProximityNamespaceSoundnessTests
 
       # The five walls below have no compiler half and ran on NO workflow until 2026-09-24 — each
       # was green only when somebody remembered to run it locally, which is the gap the mesh

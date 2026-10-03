@@ -234,7 +234,7 @@ struct ReviewHostsExportFailureSourceWallTests {
         #expect(!camera.contains("PhotoSaveFailureAcknowledgement("), "the camera constructs no acknowledgement of its own")
         #expect(camera.contains("reviewCoordinator.developSaveFailureAcknowledgement"), "it waits on the coordinator's")
         let sheet = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/UI/FriendPhotoReviewSheet.swift"))
+            try RepoRoot.source("FernletKit/Sources/FernletProximityUI/FriendPhotoReviewSheet.swift"))
         #expect(sheet.contains(".interactiveDismissDisabled(isBusy)"), "no review is swiped away while its answer runs")
     }
 }

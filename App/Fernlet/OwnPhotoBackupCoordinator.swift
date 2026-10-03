@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletConnections
 import CloudKitSync
 import FernletFoundation
 import FernletCrypto
@@ -86,7 +87,8 @@ final class OwnPhotoBackupCoordinator {
     private unowned let host: any OwnPhotoBackupContext
     private let documentsDirectory: URL
     /// Builds the identity photo records are sealed/opened under. Injectable ONLY so tests can point
-    /// it at a throwaway keychain service; production leaves it nil and gets `IdentityService()`.
+    /// it at a throwaway keychain service; production leaves it nil and gets
+    /// `IdentityService(namespace: .fernlet)`.
     private let identityFactory: (() -> IdentityService)?
     /// Builds the CloudKit transport. Injectable ONLY so tests can drive the real service over a
     /// mock record database — the half that decides what actually reaches iCloud.
@@ -259,7 +261,7 @@ final class OwnPhotoBackupCoordinator {
     }
 
     private func makeIdentity(escrowMode: EscrowMode) -> (identity: IdentityService, escrowReady: Bool)? {
-        let identity = identityFactory?() ?? IdentityService()
+        let identity = identityFactory?() ?? IdentityService(namespace: .fernlet)
         do { try identity.ensureProvisioned() } catch { return nil }
         switch escrowMode {
         case .none:

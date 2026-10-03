@@ -30,7 +30,7 @@ let package = Package(
     products: [
         // The app and its tests link the umbrella product. An extension that needs only a portable
         // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
     ],
     dependencies: [
@@ -204,7 +204,7 @@ let package = Package(
         // structs/classes). No FernletCrypto dep — these seal via CryptoKit directly with
         // their own keychain key, not ColumnCrypto. FriendPhotoPayload (their wire DTO) was
         // hoisted to FernletDomainModel in the C1 prep. The SwiftUI FriendPhotoReviewSheet
-        // lives in ProximityKit's UI/ folder.
+        // lives in FernletProximityUI.
         .target(
             name: "PrivateMediaStore",
             dependencies: ["FernletCrypto", "FernletFoundation", "FernletDomainModel"]
@@ -361,8 +361,9 @@ let package = Package(
         // the app (ConnectionInspector → FernletStore; the SwiftUI views on app Color/UI
         // components + FernletStore) STAY in the app, as does ProximityHostAdapter (the
         // FernletStore→ProximityHost conformance). Deps: PrivateMediaStore (MeshNetworkManager's
-        // photo cache) + FernletDomainModel + FernletFoundation + FernletUI (the packaged UI/
-        // sheets — FriendPhotoReviewSheet, KeepFriendsPromptSheet — use the design system).
+        // photo cache) + FernletDomainModel + FernletFoundation. No FernletUI edge and no SwiftUI
+        // view: the review sheets it used to package moved to FernletProximityUI (below), which
+        // depends on this module, never the reverse.
         // defaultIsolation(MainActor.self)
         // (the managers are @Observable @MainActor).
         // Layer 6.5 — the lock SwiftUI surface (setup, unlock, numeric pad, and the
@@ -379,7 +380,7 @@ let package = Package(
         ),
         .target(
             name: "ProximityKit",
-            dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation", "FernletUI"],
+            dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
                 // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).
@@ -408,6 +409,41 @@ let package = Package(
                 //
                 // HealthKitGateway still uses `.v5` independently for its HealthKit `@Sendable`
                 // query-completion handler captures; that is a separate target.
+            ]
+        ),
+        // Layer 6.5 — the in-person review screens (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md
+        // step A0.1): FriendPhotoReviewSheet with its tile, the add-only Photos saver and the shared
+        // save-failure alert, KeepFriendsPromptSheet, and FingerprintText, moved out of ProximityKit's
+        // UI/ folder so ProximityKit carries no SwiftUI view and no FernletUI edge. Kept separate from
+        // FernletUI so the design system stays free of the networking stack and of Photos; the edge
+        // runs UI → ProximityKit, never the reverse. Deps: ProximityKit (the roster, answer and
+        // name-display types) + FernletUI + FernletDomainModel (FriendPhotoPayload) +
+        // FernletFoundation (the audit log). MainActor: SwiftUI surface, with the saver's
+        // Photos-queue work marked nonisolated within.
+        .target(
+            name: "FernletProximityUI",
+            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 6.5 — Fernlet's connection rules on top of ProximityKit's mechanisms
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). Step A0.2.2
+        // gives it one thing: `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39
+        // domain-separation labels, the radios' service types, ALPNs and heartbeat, the QR scheme,
+        // the keychain rows, the storage names and the log subsystem), byte-identical to today's
+        // literals. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
+        // never the reverse. A0.2.9 adds FernletDeviceBindingAdapter (the install binding) and
+        // A0.2.10 FernletAuditBridge (the audit sink); the payload vocabulary (A0.3), the feature
+        // purposes (A0.4) and the coach profile and link purposes (C1) join it later. Deps:
+        // ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) + FernletFoundation
+        // (FernletAuditLog, behind the bridge). MainActor default, with every type, extension and
+        // static marked nonisolated within (inert value data and stateless seams).
+        .target(
+            name: "FernletConnections",
+            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
             ]
         ),
     ]

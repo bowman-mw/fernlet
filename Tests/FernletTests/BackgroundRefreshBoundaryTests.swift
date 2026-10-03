@@ -41,7 +41,7 @@ import Testing
 ///
 /// ## Why the module allowlist alone is not the wall
 ///
-/// **The umbrella is not porous.** There is no module called `FernletKit`: it is a PRODUCT over 25
+/// **The umbrella is not porous.** There is no module called `FernletKit`: it is a PRODUCT over 27
 /// targets and no target carries that name, so nothing can `import FernletKit`. There is no
 /// `@_exported` anywhere in the tree, `FernletDomainModel` depends only on `FernletFoundation`, and
 /// the app target builds with `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` — so a file
@@ -89,7 +89,8 @@ import Testing
 /// that only reads or writes an INERT record does not, and the excluded set is written down here
 /// rather than left unmentioned, so the cut is visible and can be re-argued: `meshSessionStorage`,
 /// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximitySupportRoot`,
-/// `proximitySupportDirectory`, `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
+/// protocol identity, a constant value), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,
@@ -248,6 +249,8 @@ struct BackgroundRefreshBoundaryTests {
         "FernletScoring": "the scoring engine; §17.2's companion recompute is deterministic over state the store already scored.",
         "FoodCatalog": "the USDA catalog and its bundled sqlite — not something to open inside a ≤ 30 s opportunistic task.",
         "FernletUI": "the design system; a background task draws nothing.",
+        "FernletProximityUI": "the in-person photo review and keep-friends screens; a background task presents nothing, and the module reaches the mesh and Photos besides.",
+        "FernletConnections": "Fernlet's connection rules over the mesh, starting with its wire identity — a refresh that names them is one step from a radio, §17.2's first prohibition.",
         "FernletCrypto": "the sealing primitives; the handler seals nothing — the widget snapshot is the benign mirror by design.",
         "CryptoSwift": "FernletLock's Scrypt KDF, the package's one external dependency; nothing here derives a key."
     ]

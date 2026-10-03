@@ -2,7 +2,6 @@ import Foundation
 import CryptoKit
 import FernletCrypto
 import Security
-import FernletFoundation
 
 /// Keychain-backed ChaChaPoly seal for the heart-drop sidecars (Increment 4 of
 /// Docs/Plan-Prekeys-ProtectedLoad-CoachMesh-2026-07-26.md).
@@ -20,7 +19,7 @@ import FernletFoundation
 /// for the store that writer must write, moving the key's accessibility in the same commit.
 ///
 /// Wipe: the key lives under the existing `com.fernlet.heartdrop` service, so
-/// `HeartPrekeyStore.wipeForDeleteAll()`'s `KeychainItem.deleteAll(service:)` already removes it
+/// `HeartPrekeyStore.wipeForDeleteAll()`'s `ProximityKeychainItem.deleteAll(service:)` already removes it
 /// — no new wipe-manifest row (the service is a documented `knownKeychainServices` entry).
 public enum HeartDropSidecarSeal {
 
@@ -104,14 +103,14 @@ public enum HeartDropSidecarSeal {
     /// lost but not which format lost it.
     private static func refusal(for data: Data) -> SidecarSeal.SealError {
         guard data.starts(with: legacyMagic) else { return .openFailed }
-        FernletAuditLog.log("heartdrop.sidecar.legacyFormatRefused")
+        ProximityAudit.log("heartdrop.sidecar.legacyFormatRefused")
         return .legacyFormatRetired
     }
 
     // MARK: - Key management
 
     private static func loadKeyForOpen(service: String) throws -> SymmetricKey {
-        switch KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
         case .found(let data) where data.count == 32:
             return SymmetricKey(data: data)
         case .found:
@@ -125,7 +124,7 @@ public enum HeartDropSidecarSeal {
     }
 
     private static func loadOrMintKey(service: String) throws -> SymmetricKey {
-        switch KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
         case .found(let data) where data.count == 32:
             return SymmetricKey(data: data)
         case .found:
@@ -140,7 +139,7 @@ public enum HeartDropSidecarSeal {
             // uses.
             let keyData = Data((0..<32).map { _ in UInt8.random(in: UInt8.min...UInt8.max) })
             let key = SymmetricKey(data: keyData)
-            let status = KeychainItem.store(
+            let status = ProximityKeychainItem.store(
                 keyData,
                 account: keychainAccount,
                 service: service,
@@ -153,8 +152,8 @@ public enum HeartDropSidecarSeal {
             // Read-back-verify BEFORE sealing anything: a full or locked keychain can silently
             // drop the row, and sealing against an unverified key writes ciphertext nothing can
             // ever open (bitchat's MessageOutboxStore does the same).
-            guard case .found(let echoed) = KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service), echoed == keyData else {
-                FernletAuditLog.log("heartdrop.sidecarKey.verifyFailed")
+            guard case .found(let echoed) = ProximityKeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service), echoed == keyData else {
+                ProximityAudit.log("heartdrop.sidecarKey.verifyFailed")
                 throw SidecarSeal.SealError.sealFailed
             }
             return key

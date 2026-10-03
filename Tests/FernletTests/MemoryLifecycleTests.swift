@@ -25,6 +25,7 @@
 import CloudKitSync
 import CoreData
 import CryptoKit
+import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 import FernletPersistence
@@ -57,6 +58,8 @@ private final class MockLifecycleHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

@@ -15,16 +15,28 @@ social exhaust (who you met, who sent you warmth, who you reported) lives in dev
 files that are deliberately **never** part of the synced snapshot.
 
 **Position in the FernletKit graph and the S3 wall.** The `ProximityKit` target depends on
-`PrivateMediaStore` (the sealed photo index behind the mesh photo cache), `FernletDomainModel`,
-`FernletFoundation`, and `FernletUI` (for the two SwiftUI review sheets). It therefore sits on
+`PrivateMediaStore` (the sealed photo index behind the mesh photo cache), `FernletCrypto` (since plan
+step A0.2 only for the feature labels that leave with their features and for the
+`CryptographicPurpose` signing overloads; see "Protocol namespace" below), `FernletDomainModel` (the
+payload vocabulary and the feature models) and `FernletFoundation` (two `FernletDate` reads and the
+moderation clock). It therefore sits on
 the *protected* side of the S3 privacy wall: it may reach a sealed `Private*` store, and the
 walled `AIProviders` / `CloudKitSync` targets can never import it (nor it them — the dead-drop's
 CloudKit transport is injected app-side through the `HeartDropTransporting` seam, so this module
 only ever hands ciphertext + rotating day tags outward). Its one seam back to app state is the
 ``ProximityHost`` protocol, which `FernletStore` conforms to via an app-side adapter; the
-"outward edges only" rule keeps the module a black box the app drives, never the reverse. Note
-the target-comment in `FernletKit/Package.swift` predates the `FernletUI` edge — the dependency
-list in the manifest is the truth.
+"outward edges only" rule keeps the module a black box the app drives, never the reverse.
+
+**No SwiftUI view and no `FernletUI` edge** (step A0.1 of
+`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md`, the first step towards ProximityKit as a
+drop-in package of its own). The three screens this module used to ship from its `UI/` folder — the
+session-end photo review with its Photos saver and save-failure alert, the keep-as-friend prompt,
+and the fingerprint view — moved to the `FernletProximityUI` module, which depends on this one and
+never the reverse. ``PeerNameDisplay`` deliberately stayed in `UI/`: it imports neither SwiftUI nor
+`FernletUI`, `PresenceManager.firstName(of:)` calls it (a module below cannot call up into
+`FernletProximityUI`), and it reads this module's internal `MeshLinkAdvertisement.instanceNamePrefix`.
+It is Fernlet display policy rather than mechanism, though, so it should follow `PresenceManager`
+out of ProximityKit to FernletKit with the feature code in the plan's step A0.4.
 
 **How a session forms.** A radio owner (``MeshNetworkManager`` for the friend mesh,
 ``ProximityRecipeShareManager`` for recipe pairing, ``PresenceManager`` for presence hearts)
@@ -179,8 +191,8 @@ Group Activities (``ProximityActivityManager``, whose authorization is a host-si
 invitee-key-bound token rather than the shared handshake). Feature payloads dispatch through a
 registry whose committed-slot gate is the security boundary — behind the payload door's attribution
 rule, which every frame of every family passes first (see the seat invariant above); the session end promotes the roster
-AND the session's unreviewed photos into the keep-as-friend review (``FriendMintingReview``,
-``KeepFriendsPromptSheet``, ``FriendPhotoReviewSheet``). **Nothing is on the wall until the person
+AND the session's unreviewed photos into the keep-as-friend review (``FriendMintingReview`` here,
+`KeepFriendsPromptSheet` and `FriendPhotoReviewSheet` in `FernletProximityUI`). **Nothing is on the wall until the person
 chooses** (2026-09-30, the owner: "None of the photos should be saved to the camera roll until this
 selection has been made", and the review must survive a process kill). Every session photo — taken
 here or received from a peer — is HELD from the moment it exists in the sealed pending corpus
@@ -220,11 +232,11 @@ only the candidate half, so a batch with photos still pending stays up. **The ap
 (session photos U3): one app-level presenter shows the session-end review in its own overlay window,
 above every tab and sheet, from these observable facts — `pendingFriendReview`, `isSessionLive`,
 `heldPhotosCanBeShown`, `isInSession` — never over a live session and never under a duress decoy.
-The package's half is ``FriendPhotoReviewSheet``'s: an optional `notNow` (the overlay's "Not now",
+The package's half is `FriendPhotoReviewSheet`'s (in `FernletProximityUI` since plan step A0.1): an optional `notNow` (the overlay's "Not now",
 which answers nothing and is also VoiceOver's escape gesture there; the camera's Develop sheet
 passes nil and keeps its own swipe-down, which is disabled while an answer runs), the title as a heading, spoken tile labels naming the
 sender through ``PeerNameDisplay``, and an "Ending the session..." working line
-(``FriendPhotoReviewWorkingMessage/endingSession``) while the host waits for the ended mesh to be
+(`FriendPhotoReviewWorkingMessage.endingSession`) while the host waits for the ended mesh to be
 left. The sheet reads `\.scenePhase` for its snapshot cover; a host outside the SwiftUI scene (the
 overlay window) injects it.
 **"The session end" is the MESH ending — ``MeshNetworkManager/isSessionLive``
@@ -248,9 +260,9 @@ the record, though a local link failure ends the link too; the outcome is audite
 best effort, not a delivery guarantee: a partner suspended at that moment reads nothing and ends by
 its own five-minute give-up, and a pair whose roster is not yet two — the founding window before the
 admission grant lands — sends a departure, which is not waited on.
-Photo-library save failures surface through one shared mapping —
-``FriendPhotoLibrarySaver``'s `userFacingFailure(for:photoCount:)` producing a
-``PhotoSaveFailure`` rendered by the `photoSaveFailureAlert(_:failure:)` view modifier — so every
+Photo-library save failures surface through one shared mapping in `FernletProximityUI` —
+`FriendPhotoLibrarySaver`'s `userFacingFailure(for:photoCount:)` producing a
+`PhotoSaveFailure` rendered by the `photoSaveFailureAlert(_:failure:)` view modifier — so every
 save surface (review sheets and the album carousel) shows identical wording.
 
 **Store bans answer to their evidence (2026-09-24).** ``ModerationBanStore/reconcile(rows:localSigningKey:)``
@@ -330,10 +342,10 @@ preferences, ``ProximityHeartLedger``, the three sealed heart-drop stores, ``Mod
 ``FriendStateCache``, ``ClosenessLedger`` and ``ProximityActivityManager``'s ledger. There is
 deliberately no argument-less default on ``JSONSidecarFile``: every owner states its root, because a
 default that silently resolves to the process-wide `Application Support/Fernlet` is exactly how a
-store rejoins the shared-root race, and the omission compiles. The root defaults to
-``ProximitySupportLayout/defaultDirectory`` (`Application Support/Fernlet`, the path the cache has
-always used). The indirection exists because the wall's index is re-saved WHOLE on every keep or
-delete and re-read by every manager at init — on a single process-wide path, one live
+store rejoins the shared-root race, and the omission compiles. The root defaults to the host
+namespace's `installation.storage.defaultDirectory` (for Fernlet `Application Support/Fernlet`, the
+path the cache has always used). The indirection exists because the wall's index is re-saved WHOLE
+on every keep or delete and re-read by every manager at init — on a single process-wide path, one live
 ``MeshNetworkManager`` inherits and then overwrites another's album. That is invisible in the app,
 which has one manager, and a live cross-suite race under the test runner, where suites share a
 process. Routing the root through the host means every `MeshNetworkManager(store:)` inherits its
@@ -410,7 +422,7 @@ and a new manager in this subsystem inherits all three:
 
 ### Localization: nothing on the wire is display copy
 
-The module owns a `Localizable.xcstrings` (added by the 2026-08-22 accessibility review's §4.0) and one copy vault, `ProximityUICopy`, for the three SwiftUI surfaces it ships — the friend-photo review sheet, the keep-friends prompt, and the photo-save failure alert — plus the two name placeholders ``PeerNameDisplay`` hands the app's in-person surfaces ("Someone nearby", "Someone you met"; `ProximityUICopy.Peer`, nonisolated because the helper is). A placeholder is resolved display text and never a token: it must not be persisted, put in a roster or vault row, or sent. Those were bare literals, and a `LocalizedStringKey` literal inside an SPM module resolves against `Bundle.main`, which never consults this module's catalog: untranslatable English with a clean build. Six of them were hiding inside ternaries (`Button(isKept ? "Keeping" : "Keep")`) or in `LocalizedStringKey`-typed properties, where no call-site scan could see them; `LocalizationBoundaryTests.packageDisplayLiteralsPassModuleBundle()` now catches both shapes. **The vault is display copy only.** Nothing below may go in it.
+The module owns a `Localizable.xcstrings` (added by the 2026-08-22 accessibility review's §4.0) and one copy vault, `ProximityUICopy`, for the three strings it hands out already resolved: the camera's hold-failure line (`ProximityUICopy.Camera`, which `MeshNetworkManager` publishes as `meshError`) and the two name placeholders ``PeerNameDisplay`` hands the app's in-person surfaces ("Someone nearby", "Someone you met"; `ProximityUICopy.Peer`, nonisolated because the helper is). A placeholder is resolved display text and never a token: it must not be persisted, put in a roster or vault row, or sent. The vault used to serve the three SwiftUI surfaces this module shipped — the friend-photo review sheet, the keep-friends prompt, and the photo-save failure alert — and their 28 keys moved with them, byte for byte, to `FernletProximityUI` (`FernletProximityUICopy` and that module's own catalog) in plan step A0.1. Those strings were bare literals once, and a `LocalizedStringKey` literal inside an SPM module resolves against `Bundle.main`, which never consults the module's catalog: untranslatable English with a clean build. Six of them were hiding inside ternaries (`Button(isKept ? "Keeping" : "Keep")`) or in `LocalizedStringKey`-typed properties, where no call-site scan could see them; `LocalizationBoundaryTests.packageDisplayLiteralsPassModuleBundle()` now catches both shapes. **The vault is display copy only.** Nothing below may go in it.
 
 This module ships English sentences that a bulk localization pass will read as UI strings and that
 must never become `String(localized:)`. Every ``PayloadSummary`` title — "Recipe share",
@@ -428,19 +440,196 @@ RECEIVING side: map that token to a `String(localized:)` label at render time, a
 raw summary for tokens this build has no case for (`isUnknownPayloadType` — a newer peer's payload
 type has no local label). Senders keep emitting frozen English forever.
 
+### Protocol namespace: what the host supplies
+
+``ProximityNamespace`` (`Namespace/`) holds the byte strings by which this module's wire, keychain
+and disk formats identify the app it runs in: the 39 labels, the three radios' values, the QR
+scheme, the identity's and the two mesh seal keys' keychain rows, the storage names and the log
+subsystem. Plan step A0.2 of `Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` moved every read of
+those in this module onto it, each byte-identical for Fernlet. Some such strings stay outside it
+until a later step (see "What A0.2 left for later" below): the 13 feature labels this module reads
+from FernletCrypto's registry, the heart-drop and moderation keychain services and
+``ProximitySupportLayout``'s `Fernlet` folder until A0.4, and the payload vocabulary and
+presentation strings until A0.3. `ProximityNamespaceBoundaryTests` allowlists each feature-label
+read and each literal that spells `fernlet`, with the step that removes it. Beside it the
+host supplies two things this module used to take from Fernlet's own modules, the install binding
+the sealed mesh stores seal under and the sink audit lines go to, and two mechanisms were copied in
+rather than shared: the column seal and the keychain item. This module holds no instance of the
+namespace or the binding and offers no default for either: no global, no slot, no `@TaskLocal`. The
+audit sink alone lives in one process-wide slot, ``ProximityAudit`` (see "The audit sink" below).
+
+**What the namespace holds.** Its ``ProximityNamespace/Family`` is what every interoperating app
+shares: the 39 domain-separation labels as ``ProximityCryptographicPurpose`` values
+(``ProximityNamespace/Purposes``: 21 signature transcripts with the verify-only legacy pair, three
+HKDF salts, the QUIC channel binding's TLS exporter label, the two column seals, five AEAD labels and
+seven hash domains, the epoch id's among them), the three radios' service types and ALPNs and the
+mesh heartbeat (``ProximityNamespace/Radios``), and the verify QR's URL scheme. Its
+``ProximityNamespace/Installation`` is what belongs to one app on one device: the identity's
+keychain service and its four accounts, the two seal-key rows, the default directory name and the
+three storage names, and the radios' log subsystem. Two apps that share a family speak one wire and
+still never share a key, a file or a log stream. What names a format rather than an app stays this
+module's: the QR host `verify`, its query key `d` and version 1, the `FPT2`, `FGK2`, `FMGM2` and
+`FMRI1` markers, the column byte `0x03`, the `corrupt` and `chunk` extensions, and each keychain
+row's accessibility and synchronizable class, which the key-custody walls read in this module's code.
+
+**Labels are the host's literals; roles are this module's.** A label is a `StaticString` source
+literal handed to a group initializer, the only door that mints a ``ProximityCryptographicPurpose``
+(its own initializer is internal, and it has no `Codable` conformance and no decoding path), so every
+label is a reviewed spelling in the host's source: none is assembled at run time and none arrives
+over the wire. The field it fills fixes its ``ProximityCryptographicPurpose/Role`` (a length-prefixed
+or raw-prefix signature transcript, the verify-only `.absent` legacy pair, a length-prefixed or raw
+hash preimage, an HKDF salt, a column seal, an AEAD prefix, the exporter label), so a host supplies
+bytes and never decides how this module consumes them, and a label in a non-signature role verifies
+nothing. The initializer is total and records ``ProximityNamespace/soundness`` (labels well-formed,
+distinct and prefix-free; radio, QR, keychain and storage values well-formed and distinct);
+``ProximityNamespace/validated(family:installation:)`` throws the same violations, and
+``ProximityNamespace/familyCollisions(with:)`` and ``ProximityNamespace/installationCollisions(with:)``
+let a host's own tests show it overlaps no other app. This module does not yet refuse an unsound
+namespace at run time; that arrives with plan step A0.3.
+
+**How a host supplies it.** ``ProximityHost/proximityNamespace`` and
+``ProximityHost/proximityInstallBinding`` are two of the seven ``ProximityHost`` requirements with no
+default in the protocol extension (the others are the display name, the trusted peers, the vault,
+`isBlockedFingerprint(_:)` and `blockProximityPeer(signingPublicKey:)`), and the two it will never
+default, so a host that leaves either out fails to compile instead of running under another app's
+identity or binding. The extension's five defaults are the two hearts settings, the sidecar root
+(`installation.storage.defaultDirectory`, built from the namespace) and both mesh storage scopes
+(built from the namespace and the binding). Fernlet's values are not in this module and never will
+be: `ProximityNamespace.fernlet` and `FernletDeviceBindingAdapter` live in `FernletConnections`,
+which depends on this module, so ProximityKit cannot name them. Fernlet's app answers both in
+`ProximityHostAdapter.swift`, as the test target's eleven Fernlet doubles do;
+`ProximityNamespaceGoldenTests`' three hosts take the namespace, and two of them the binding, from
+the cell that builds them, so a cell can run one under another app's namespace or a pinned binding.
+
+**How each kind of reader gets it.** Every reader keeps, or is handed, its own copy, read from a
+value it already holds, so no read hops an actor and no reader can see a namespace its root did not
+hand it:
+
+| Reader | How it reads the namespace |
+| --- | --- |
+| ``MeshNetworkManager``, ``PresenceManager``, ``ProximityRecipeShareManager`` | Read ``ProximityHost/proximityNamespace`` once in `init` and keep a `nonisolated let namespace`; build their default identity and their radio from it, and hand it, or its `family.purposes`, to every reader they call. |
+| ``IdentityService`` | Takes it in ``IdentityService/init(namespace:keychainService:)`` (a `nil` service means the namespace's identity service) and keeps it with its ``IdentityService/purposes``: it signs, seals, opens and wraps under its own labels and keeps its four device rows under the namespace's accounts. Its ``ProximityCryptographicPurpose`` overloads of `sign` and `verify` treat a label by its role, and `sign` refuses a verify-only or non-signature label. |
+| Builders: envelopes, admission tokens, membership records and messages, the removal quorum, key advertisements, routed items, chunks and receipts, the verify QR | Sign under their signing identity's ``IdentityService/purposes``. |
+| Verifiers: `MeshMembershipRecordVerifier`, the six routed verifiers, `MeshChannelIntroductionExchange` | Keep their own copy, a trailing `purposes:` with no default. |
+| Stateless helpers: the serializer's `canonicalBytes(for:in:)` overloads and `canonicalInventoryDigestBytes`, ``MeshRoutedContentDigest``, ``MeshChunkAssembly``, the item seal and the content-key wrap, ``ProximityVerifyQR/parse(_:in:)``, ``MeshEpochRef/minted(counter:coordinatorFingerprint:meshID:in:)`` | Take `in purposes:` (or `in:` a namespace) last. |
+| Ids that hash a label: ``MeshChunk/chunkID(in:)``, ``MeshCustodyReceipt/receiptID(in:)``, ``MeshRecipientReceipt/receiptID(in:)`` | Are functions, not stored properties: a value decoded off the wire carries no namespace, so `Codable` stays namespace-free. |
+| The radios: `NetworkMeshSession`, `NetworkPresenceSession`, `NetworkRecipeShareSession` | Take `init(namespace:)` and read their service type, ALPN, heartbeat, exporter label and log subsystem there, once; the mesh radio keeps `family.purposes` for the channel introductions it frames and checks. |
+| Storage scopes: ``MeshSessionStorageScope``, ``MeshRoutedStorageScope`` | Carry the namespace and the install binding (`init(namespace:directory:keychainService:installBinding:)`, ``MeshSessionStorageScope/production(for:installBinding:)``); the two stores read their file names, seal-key accounts and column-seal labels off `scope.namespace`. |
+| Closures that cross an actor | Capture the `Sendable` value when they are made, as ``PresenceManager``'s radio factory does. |
+
+**What pins it.** `ProximityNamespaceGoldenTests`, on the crypto-goldens CI line, holds every value
+`.fernlet` carries to the literal Fernlet shipped before A0.2 (62 rows), each label's role and its
+FernletCrypto twin, soundness, the byte-prefix check over FernletCrypto's 81 registry labels and
+`.fernlet`'s 39 together, one role-versus-consumer cell per hash and transcript consumer, and the
+readers above under `.fernlet` and under a foreign namespace. `ProximityNamespaceSoundnessTests`
+holds the soundness and collision rules over namespaces built only from literals.
+`ProximityNamespaceBoundaryTests`, on the s3-grep CI line, keeps the result from eroding: no
+namespace, group or purpose is built in this module outside `Namespace/`; `FernletCryptoPurpose` is
+named only on the 20 code lines in 7 files that read the feature labels leaving at A0.4; and every
+remaining string literal that spells `fernlet` (51 in 19 files) is on an exact allowlist that names
+why it is still here and the plan step that removes it. Both lists can only shrink.
+
+**The install binding and the column seal.** The two sealed mesh stores seal through
+``ProximityColumnCrypto`` (`Support/`), FernletCrypto's `ColumnCrypto` V3 format copied byte for
+byte: the `0x03` ‖ nonce ‖ ciphertext ‖ tag blob, the salt-free HKDF-SHA256 column key with the label
+as `info`, `label ‖ binding` as the authenticated data, the marker classified before the binding is
+read, and the open's three named refusals and the seal's one. It takes a label in the
+``ProximityCryptographicPurpose/Role/columnSeal`` role, so ``MeshSessionStore`` seals under its scope
+namespace's `family.purposes.keyDerivation.meshSessionContextV1` and ``MeshRoutedStore`` under
+`.meshRoutedStoreV1`. The binding comes from the host as a ``ProximityInstallBinding``: one
+synchronous ``ProximityInstallBinding/read(for:)`` whose ``ProximityInstallBindingAccess/seal``
+answer may mint and is `nil` without a durable binding (the seal refuses, owner decision D4), and
+whose ``ProximityInstallBindingAccess/open`` answer never mints, is `nil` for an absent binding (the
+open refuses) and throws the retryable ``ProximityInstallBindingReadError`` for a failed read (the
+open defers). It reaches the stores through their scopes, which are not `Equatable`, since a
+capability has no equality. This module keeps no binding row of its own: an install has one binding,
+shared with whatever else its host seals under it. Fernlet's `FernletDeviceBindingAdapter` delegates
+to FernletCrypto's `DeviceBindingID` at each call, so the row Fernlet's private stores share, its
+cache and its task-local test seam stay the only ones, and an override flipped in the middle of an
+operation still reaches the stores. The golden runs the column vectors pinned before A0.2 through the
+copy and checks that it and `ColumnCrypto` open each other's blobs and refuse alike.
+
+**The keychain mechanism.** This module's key stores (the identity's four device rows and its
+backup-escrow rows, the two mesh seal keys, the heart-drop prekey blob and sidecar seal key, the
+moderation bans) reach the keychain through ``ProximityKeychainItem`` (`Support/`), FernletFoundation's
+`KeychainItem` mechanism copied member for member: delete-then-add `store` with its `synchronizable:`
+and `replacing:` scopes, `load`, `loadDistinguishingAbsence`, `loadAll`,
+`loadAllDistinguishingFailure`, `delete`, `deleteReportingStatus`, `deleteAll` and
+`deleteAllReportingStatus`, with the same empty-name guards and status handling. Each query
+dictionary is built in one place and is FernletFoundation's for the same call, so every row written
+before the copy reads back unchanged and a host may still read or clear these services with its own
+accessor, as Fernlet's tests do. Fernlet's catalogue stayed behind (its `Account` names, typed
+overloads and service constants, the device sealing-key mint): the copy holds no account, service or
+accessibility class of its own, and each store passes its row's names and class, where the
+key-custody walls read them. A failed `delete` or `deleteAll` is audited as `keychain.delete.failed`
+or `keychain.deleteAll.failed`, with FernletFoundation's context keys. The golden holds every query
+dictionary to the one FernletFoundation's source spells.
+
+**The audit sink.** This module writes its audit lines (frozen English event names such as
+`mesh.routedDrain.rejected`, with counts, reasons and salted labels as context, which a sink keeps
+private because a few lines name a peer) through ``ProximityAudit``, which hands each one to the
+``ProximityAuditSink`` the host installed with ``ProximityAudit/install(_:)``. It names no host's log
+and keeps none of its own: with no sink installed, a line is dropped. Delivery is synchronous, on the
+emitting executor, with no hop: the sink is read under a `Mutex` the slot owns and called after the
+lock is released, so it may re-enter or block, and the requirement is `nonisolated` because the
+routed and session stores that log are `nonisolated` value types. Unlike the namespace it is a
+process-wide slot: audit lines come from over four hundred call sites, including static helpers that
+hold no host, and a host's tests build this module's objects directly and still need to see every
+line, so one install at launch reaches all of them. Fernlet's sink is `FernletAuditBridge` in
+`FernletConnections`, installed first thing in `FernletApp.init` and not behind the UI-test harness
+check, so the unit tests, hosted in the app, see every line in `FernletAuditLog`'s capture registry
+exactly as they did when this module named `FernletAuditLog` itself. `ProximityAuditBridgeTests` is
+the canary for that install: every test asserting that an event was not logged would pass vacuously
+without it.
+
+**What A0.2 left for later.**
+
+- **A0.3** injects the vocabulary and the presentation strings. Beside the namespace, as a second
+  host requirement: the `PayloadType` tokens, capability raw values, the sealing set, the routed-type
+  rows (`MeshRoutedTypeToken`'s spellings among them) and the membership record kinds. Per host: the Bonjour
+  instance prefixes (`fernlet-mesh-` and `fn-`), the ephemeral certificate's common name, the
+  coordinator's `"Fernlet"` display default and `serviceType(for:)`. And this module starts refusing
+  an unsound namespace, failing closed in `ensureProvisioned()`, `encryptGroupKey` and every radio's
+  `start`.
+- **A0.4** moves Fernlet's features out, and with them the 13 feature labels this module still reads
+  from FernletCrypto's registry (hearts, presence, activities, moderation and the sealed-backup
+  escrow; the heart-drop and presence derivations become a generic `pairSecret(purpose:)` and
+  `epochTag(purpose:)` called with host purposes), the heart-drop and moderation keychain services,
+  the feature payload formats, `ProximitySupportLayout.defaultDirectory` together with
+  `keychainService(besideHeartDrop:in:)`'s comparison against the heart-drop service, and the
+  `FernletFoundation` edge (two `FernletDate` reads and the moderation clock).
+- **A0.5** splits the routed mesh manager, and the photo code takes the `PrivateMediaStore` edge
+  (`com.fernlet.private-media`) with it.
+- **Later.** FernletCrypto's 38 twins of the namespace labels retire at plan step C1, with the app's
+  duress and probe purposes; `IdentityService`'s `CryptographicPurpose` overloads of `sign` and
+  `verify` serve those and the feature labels until then. The DEBUG test-hook names are settled when
+  the package leaves Fernlet's tree (A1).
+
 ## Topics
 
 ### Host seam and app integration
 
 - ``ProximityHost``
+- ``ProximityInstallBinding``
+- ``ProximityInstallBindingAccess``
+- ``ProximityInstallBindingReadError``
 - ``ProximitySupportLayout``
 - ``MeshContinuationRaising``
 - ``MeshSessionContinuationReading``
+- ``ProximityAudit``
+- ``ProximityAuditSink``
+
+### Protocol namespace
+
+- ``ProximityNamespace``
+- ``ProximityCryptographicPurpose``
+- ``ProximityNamespaceError``
 
 ### Identity and signing
 
 - ``IdentityService``
 - ``IdentityError``
+- ``ProximityKeychainItem``
 - ``ReplayCache``
 
 ### Wire envelope and sealing
@@ -538,8 +727,8 @@ pair. A per-transfer stream keeps two writes because it has exactly one writer, 
 any app frame crosses a QUIC tunnel, both ends exchange a `MeshChannelHello` and then Ed25519
 signatures over one `MeshChannelIntroductionTranscript` — purpose ‖ version ‖ meshID ‖ epochRef ‖
 both signing public keys ‖ both nonces ‖ the SHA-256 of this connection's TLS exporter secret —
-serialized by `canonicalBytes(for:)` under
-`FernletCryptoPurpose.Signature.meshChannelIntroductionV1`. `MeshChannelIntroductionExchange` holds
+serialized by `canonicalBytes(for:in:)` under the host namespace's
+`purposes.signature.meshChannelIntroductionV1` (step A0.2.5). `MeshChannelIntroductionExchange` holds
 the whole decision as a value type: a foreign mesh, a diverged epoch, a roster-absent or barred key,
 a replayed nonce, a mismatched channel binding and an invalid signature each name themselves, and
 every one tears the tunnel down. **The epoch gate is strict as of P3 item 4** (plan §20.1): P2's
@@ -549,7 +738,10 @@ matched. Every non-empty reference must now be a canonical `MeshEpochRef` (check
 widths, so a bad one is `malformedHello`), equality is equality of the whole value, and the joiner
 that holds no key is a named branch of `MeshEpochAcceptance.introductionVerdict` rather than a
 short-circuit that skipped the comparison. `MeshIntroductionAuthority` is the seam that supplies the mesh id,
-epoch reference, roster and signing key; a session without one authenticates nobody and therefore
+epoch reference, roster and signing key; the labels the exchange frames and checks under are the
+radio's own copy of its namespace's `family.purposes`, read in `init(namespace:)`, and they match the
+label `signChannelIntroduction` signs under because the manager builds its radio from the namespace
+it stores and signs under. A session without an authority authenticates nobody and therefore
 admits nobody. The verified `sid` it yields is what lets an inbound tunnel be matched to the browsed
 advertisement it came from, so duplicate-tunnel suppression ranks the pair instead of admitting both.
 
@@ -1403,8 +1595,10 @@ from one source and cannot drift, which is the failure item 4's forward-compat n
   argument and a branch on a *resolved* value stay legal, and a `switch` on a token does not.
 
 **Membership wire tokens (plan §8.3), and the one vocabulary rule.** A record kind's `rawValue`,
-the `PayloadType` it travels as, and the `FernletCryptoPurpose` it is signed under are the SAME
-frozen English spelling, so one grep finds every layer that touches those bytes:
+the `PayloadType` it travels as, and the namespace signature label it is signed under
+(`purposes.signature.<field>`; `.fernlet` spells each exactly as its `FernletCryptoPurpose` twin,
+pinned equal until C1) are, in Fernlet's namespace, the SAME frozen English spelling, so one grep
+finds every layer that touches those bytes:
 
 | token | record | signed by | crypto domain |
 | --- | --- | --- | --- |
@@ -1537,8 +1731,11 @@ reaches the manager as an ordinary roster change that rotates the key.
 old blanket "ProximityKit persists nothing" rule (plan §17.3), and the reversal is narrow on
 purpose. `MeshSessionContext` — mesh id, protocol version, `createdAt`/`hardDeadline`, the
 membership ledger, epoch heads, the develop bar — is sealed at rest by ``MeshSessionStore`` under
-`FernletCryptoPurpose.KeyDerivation.meshSessionContextV1`, on a per-instance
-``MeshSessionStorageScope`` (directory *and* keychain service, so a wipe takes both together).
+its scope namespace's `family.purposes.keyDerivation.meshSessionContextV1` (Fernlet's
+`fernlet.mesh.session-context.v1`, FernletCrypto's registry purpose until step A0.2.9), on a
+per-instance ``MeshSessionStorageScope`` (directory *and* keychain service, so a wipe takes both
+together; since step A0.2.8 it also carries the host's namespace, which names the file and the seal
+key's account, and since step A0.2.9 the host's install binding).
 `MeshGroupKey`, `PeerSlot`, `MeshSessionRosterEntry`/`MeshFriendReviewBatch` and the
 `SessionMessageStore` transcript are **still never persisted**, and `MeshGroupKey`'s doc guard is
 now load-bearing by contrast: content never depends on the control key, so resume reconnects and
@@ -1547,22 +1744,25 @@ rotates rather than reloading a secret.
 P5 item 3 added the **second** durable surface, on the same floor and with its own everything:
 ``MeshRoutedStore`` seals `MeshRoutedIndex.sealed` (the catalogue of routed items this device is
 holding for other people, their delivery maps and the receipts other members signed) plus one
-`MeshRoutedChunks/<uuid>.chunk` file per held slice, under
-`FernletCryptoPurpose.KeyDerivation.meshRoutedStoreV1`, on a per-instance ``MeshRoutedStorageScope``
+`MeshRoutedChunks/<uuid>.chunk` file per held slice, under its scope namespace's
+`family.purposes.keyDerivation.meshRoutedStoreV1` (Fernlet's `fernlet.mesh.routed-store.v1`,
+FernletCrypto's registry purpose until step A0.2.9), on a per-instance ``MeshRoutedStorageScope``
 whose keychain service is its **own** (`com.fernlet.mesh-routed`) rather than a lodger under the
 session's — one fate per service is the only arrangement a service-wide delete can express honestly.
 Its schema is its own from day one (``MeshRoutedIndexSchema``, version **2** since P5 item 4 added the
 durable ack instant and the recipient-receipt evidence set — an older file is `corrupt`, never
 migrated, because reinterpreting one would produce a record whose two new fields the next save
-silently drops; the at-rest *token* does not move, since it names the key-derivation domain);
+silently drops; the column seal does not move, since it is the key-derivation domain — the unused
+at-rest *token* that mirrored it was deleted in step A0.2.8);
 `MeshSessionContext` stays at schema 2 and gains nothing. Chunk file names are opaque random UUIDs recorded in the index, so no
-fingerprint, item id, index or hash appears in a path component; and because `ColumnCrypto`'s AAD is
+fingerprint, item id, index or hash appears in a path component; and because ``ProximityColumnCrypto``'s AAD is
 purpose ‖ install binding with **no file name in it**, every read compares the opened chunk's
 descriptor and payload length against the ones holding its slot — a comparison that is not redundant
 and must not be removed.
 
-**Loading either of them has five states, and three of them are not "empty".** `ColumnCrypto` is
-V3-only and *refuses* to seal without a `DeviceBindingID` (owner decision D4), so before first unlock
+**Loading either of them has five states, and three of them are not "empty".** ``ProximityColumnCrypto`` is
+V3-only and *refuses* to seal without the host's install binding (Fernlet's `DeviceBindingID`; owner
+decision D4), so before first unlock
 neither file can be written at all. ``MeshRoutedLoad`` mirrors ``MeshSessionLoad`` case for case and
 its refusal, deferral and corruption vocabularies carry the **same frozen rawValues** (a test asserts
 the sets are equal), because invariant 7 is stated once and enforced everywhere:
@@ -1803,7 +2003,7 @@ Three consequences worth stating outright:
   rather than at the next evaluation. It runs no detector and raises no event — a merge is not a
   reachability change.
 - **A restart merges rather than rebuilding.** `restoreMembershipLedger(from:)` puts the sealed
-  ledger back through ``MeshLedgerAdoption/adopt(offered:ownAdmission:meshID:)`` — a
+  ledger back through ``MeshLedgerAdoption/adopt(offered:ownAdmission:meshID:in:)`` — a
   re-verification from the ledger's own self-admitted root, not a trust — so a relaunched member has
   something to merge *from* instead of dropping every membership frame `droppedNoLedger`. Schema
   stays at **2**; nothing new is written.
@@ -1954,7 +2154,7 @@ built with — which since item 11 is ``MeshRoutedTypeRegistry``'s `tokens`, the
 ack-stage table projects. The routed store keys on the signed pair
 `(originFingerprint, itemID)`, never on `itemID` alone — the frame is unsealed and any admitted
 member can mint under its own key reusing another origin's id. Verification needs public material only;
-``MeshRoutedContentKeyWrapper/unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:)``
+``MeshRoutedContentKeyWrapper/unwrap(_:binding:localFingerprint:localKeyAgreementPublicKey:staticAgreement:in:)``
 is the separate, private-key half. The type carries no epoch, branch, custody or first-seen; nothing
 persists it yet (item 3); nothing dispatches it yet (item 6).
 
@@ -1967,7 +2167,7 @@ from the signed transcript and bound **through** `chunkHash`, so a 256 KiB slice
 bytes and a custodian forwards the exact object — signature included — inside its own envelope. Two
 domain-tagged digests keep the item hash and a slice hash apart even for a one-chunk item
 (``MeshRoutedContentDigest``), and the replay-window id P5 item 12 keys on is **derived**
-(``MeshChunk/chunkID``), never a wire field — `SHA-256(purpose ‖ itemID ‖ index)`, with the origin
+(``MeshChunk/chunkID(in:)``), never a wire field — `SHA-256(purpose ‖ itemID ‖ index)`, with the origin
 deliberately left out because the window separates by author, so the real key is the pair
 `(origin, chunkID)`. Item 12's routed instance is sized on that pair: 1056 ids per author carries a
 maximal item's 1024 chunks plus its manifest, and a full axis falls through rather than refusing, so
@@ -2124,7 +2324,7 @@ about the **origin's** item — the one routed record whose subject did not auth
 mesh, item, origin, the item's `contentHash`, the custodian, the durable custody instant and the
 item's expiry, and nothing else: no destination set, no chunk index, no hop count, no key epoch, no
 schema integer (the `.v1` in the domain *is* the version). Its dedup id
-(``MeshCustodyReceipt/receiptID``) is derived from `(itemID, origin, custodian)`, excluding both the
+(``MeshCustodyReceipt/receiptID(in:)``) is derived from `(itemID, origin, custodian)`, excluding both the
 hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id.
 
 The order is a **type rule, not a comment**: the mint takes a ``MeshCustodyDurabilityWitness``, whose
@@ -2238,6 +2438,7 @@ back out of the ledger**. A developed, departed or terminated mesh is barred fro
 - ``MeshNetworkManager``
 - ``MeshSessionStore``
 - ``MeshSessionStorageScope``
+- ``ProximityColumnCrypto``
 - ``MeshSessionState``
 - ``MeshSessionEvent``
 - ``MeshSessionEffect``
@@ -2500,12 +2701,6 @@ the retired wire payload, **frozen and parked** (decoded, never dispatched, neve
 
 - ``TrainerExportPayload``
 
-### Review UI
+### Peer names on screen
 
 - ``PeerNameDisplay``
-- ``KeepFriendsPromptSheet``
-- ``FriendPhotoReviewSheet``
-- ``FriendPhotoReviewWorkingMessage``
-- ``FriendPhotoLibrarySaver``
-- ``PhotoSaveFailure``
-- ``FingerprintText``

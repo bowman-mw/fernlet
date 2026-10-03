@@ -1,8 +1,9 @@
 // KeychainHelpers.swift
 // Fernlet
 //
-// Generic Keychain accessors shared by FernletLockService and IdentityService.
-// Lock-specific typed wrappers (LockKeychainKey) live in FernletLockService.swift.
+// Generic Keychain accessors shared by Fernlet's key and preference stores (FernletLockService among
+// them). ProximityKit's stores use ProximityKit's own copy, ProximityKeychainItem, since its plan step
+// A0.2.11. Lock-specific typed wrappers (LockKeychainKey) live in FernletLockService.swift.
 
 import CryptoKit
 import Foundation
@@ -10,17 +11,25 @@ import Security
 
 /// Generic data-protection Keychain accessors shared by Fernlet's key and preference stores.
 ///
-/// The common substrate for every keychain-backed secret in the app: `FernletLockService`'s lock
-/// credentials, `IdentityService`'s mesh identity and backup-escrow keys, the device-bound
-/// journal and Worry Box content keys, and the persisted ``StoragePreferences`` blob. All
-/// operations target generic-password items in the data-protection keychain
+/// The common substrate for Fernlet's keychain-backed secrets: `FernletLockService`'s lock
+/// credentials, the device-bound journal and Worry Box content keys, the private-media keys, the
+/// pending-narrative buffer's key, and the persisted ``StoragePreferences`` blob. All operations
+/// target generic-password items in the data-protection keychain
 /// (`kSecUseDataProtectionKeychain`), keyed by service + account.
+///
+/// ProximityKit's key stores (the device identity and its backup-escrow rows, the mesh seal keys,
+/// the heart-drop keys and the moderation bans) no longer call this type: since ProximityKit plan
+/// step A0.2.11 they reach the keychain through ProximityKit's own copy of this mechanism,
+/// `ProximityKeychainItem`, which issues these same query dictionaries
+/// (`ProximityNamespaceGoldenTests` holds the two equal), so rows written through either read back
+/// through the other.
 ///
 /// Two subtleties are load-bearing:
 /// - The keychain treats `kSecAttrSynchronizable` as part of an item's primary key, so an
 ///   iCloud-synced item and a `ThisDeviceOnly` item can coexist under the same service + account
-///   as two distinct rows. ``SynchronizableScope`` lets callers target one variant; the
-///   backup-escrow reconciliation depends on telling them apart.
+///   as two distinct rows. ``SynchronizableScope`` lets callers target one variant; ProximityKit's
+///   backup-escrow reconciliation, which it was written for, depends on telling them apart, and
+///   now does so through ProximityKit's copy (no shipping caller of this type passes a scope).
 /// - ``store(_:account:service:accessibility:synchronizable:replacing:)`` is delete-then-add, and
 ///   its `replacing` scope controls which variant the delete removes — pass a narrow scope when
 ///   promoting an escrow item so a genuine key that just synced in is not clobbered.
@@ -53,8 +62,10 @@ public nonisolated enum KeychainItem {
     /// historical behavior (`kSecAttrSynchronizableAny`). `.synced` / `.local` let a caller distinguish
     /// an iCloud-Keychain-replicated item from a `ThisDeviceOnly` one when BOTH can exist under the same
     /// service+account — the keychain treats `kSecAttrSynchronizable` as part of an item's primary key,
-    /// so a synced item and a device-only item with the same account coexist as two distinct rows. The
-    /// backup-escrow reconciliation relies on telling them apart (see IdentityService).
+    /// so a synced item and a device-only item with the same account coexist as two distinct rows.
+    /// ProximityKit's backup-escrow reconciliation relies on telling them apart (see its
+    /// IdentityService, which does so through ProximityKit's copy of this type since its plan step
+    /// A0.2.11).
     public enum SynchronizableScope {
         /// Match either variant (`kSecAttrSynchronizableAny`) — the historical default behavior.
         case any
@@ -113,9 +124,10 @@ public nonisolated enum KeychainItem {
 
     /// Stores `data`, first removing any colliding item. `replacing` controls WHICH synchronizable
     /// variant is removed before the add: the default `.any` matches the historical "overwrite whatever
-    /// is there" behavior. Pass `.local` (or `.synced`) to remove only that variant — used when
+    /// is there" behavior. Pass `.local` (or `.synced`) to remove only that variant — written for
     /// promoting a `ThisDeviceOnly` escrow item to `synchronizable` without risking the removal of a
-    /// genuine key that just synced in under the same account.
+    /// genuine key that just synced in under the same account (ProximityKit's escrow promotion, which
+    /// goes through ProximityKit's copy of this type since its plan step A0.2.11).
     ///
     /// - Returns: the `SecItemAdd` status (`errSecSuccess` on success). Not discardable (R7): a
     ///   failed add means the secret was never persisted, and every caller here is minting key
@@ -166,8 +178,10 @@ public nonisolated enum KeychainItem {
     /// distinguishing the three outcomes ``load(account:service:synchronizable:)`` collapses:
     /// ``ReadResult/found(_:)`` with the item's data, ``ReadResult/absent`` when no item exists,
     /// and ``ReadResult/unreadable(_:)`` carrying the failing `OSStatus`. Used by stores whose
-    /// mint-fresh-on-absent path must fail closed on a transient read error (the heart-drop
-    /// prekey blob and the sidecar seal key) and by
+    /// mint-fresh-on-absent path must fail closed on a transient read error (the private-media keys
+    /// and the pending-narrative buffer's key; the heart-drop prekey blob and sidecar seal key it was
+    /// written for read through ProximityKit's copy of this type since its plan step A0.2.11), by the
+    /// lock service and the journal backup's device-key read, and by
     /// `StoragePreferencesStore.persistedBlobState`, the backup-exclusion launch gate's read —
     /// which must not treat a pre-first-unlock `errSecInteractionNotAllowed` as "never stored".
     public static func loadDistinguishingAbsence(
@@ -201,11 +215,13 @@ public nonisolated enum KeychainItem {
     }
 
     /// Enumerates EVERY generic-password item under `service` (optionally restricted to a synchronizable
-    /// scope), returning each item's account + data. Used by the content-addressed backup-escrow store:
-    /// because each escrow key lives at an account derived from its own public key, divergent keys land on
-    /// DIFFERENT accounts and coexist rather than overwrite one another — so the reconcile path must
-    /// enumerate to discover the full set (a fresh device does not know the account name a priori). Query
-    /// `.synced` and `.local` separately to learn each row's sync status. Returns `[]` on no match/error.
+    /// scope), returning each item's account + data. Written for the content-addressed backup-escrow
+    /// store: because each escrow key lives at an account derived from its own public key, divergent keys
+    /// land on DIFFERENT accounts and coexist rather than overwrite one another — so the reconcile path
+    /// must enumerate to discover the full set (a fresh device does not know the account name a priori).
+    /// Query `.synced` and `.local` separately to learn each row's sync status. Returns `[]` on no
+    /// match/error. That store is ProximityKit's, and it enumerates through ProximityKit's copy of this
+    /// type since its plan step A0.2.11, so no shipping code calls this member today; only tests do.
     ///
     /// - Important: the error collapse is the whole difference from
     ///   ``loadAllDistinguishingFailure(service:synchronizable:)``, and it is only safe where an
@@ -224,12 +240,14 @@ public nonisolated enum KeychainItem {
     /// stopped the enumeration from producing them.
     ///
     /// The distinction is load-bearing exactly where a promise is being made about the row set.
-    /// `ModerationBanStore.clearPeerBansForDeleteAll` is the caller it was added for: it enumerates
-    /// the moderation service to find every peer-ban row to delete, and under the collapsing
-    /// variant a failed enumeration produced an empty account list — zero deletes, zero failures,
-    /// and a CLEAN result reported to the "Delete everything" dialog over peer-ban records still
-    /// sitting in the keychain. `errSecItemNotFound` is NOT such a failure: a service that holds
+    /// ProximityKit's `ModerationBanStore.clearPeerBansForDeleteAll` is the caller it was added for:
+    /// it enumerates the moderation service to find every peer-ban row to delete, and under the
+    /// collapsing variant a failed enumeration produced an empty account list — zero deletes, zero
+    /// failures, and a CLEAN result reported to the "Delete everything" dialog over peer-ban records
+    /// still sitting in the keychain. `errSecItemNotFound` is NOT such a failure: a service that holds
     /// nothing is a legitimately empty one, and it lands in ``EnumerationResult/rows(_:)`` as `[]`.
+    /// That clear enumerates through ProximityKit's copy of this type since its plan step A0.2.11, so
+    /// no shipping code calls this member today; only tests do.
     public static func loadAllDistinguishingFailure(
         service: String,
         synchronizable: SynchronizableScope = .any
@@ -258,7 +276,10 @@ public nonisolated enum KeychainItem {
     /// `errSecItemNotFound` is an empty slot, every other failing status is an unknown one — while
     /// the statuses that matter most (`errSecInteractionNotAllowed` before first unlock,
     /// `errSecNotAvailable`) cannot be provoked against a simulator keychain. Pure: it performs no
-    /// keychain call and holds no state.
+    /// keychain call and holds no state. The wipe funnel it was written for runs through
+    /// ProximityKit's copy, which has its own classifier, so this one now runs only under
+    /// ``loadAllDistinguishingFailure(service:synchronizable:)`` and in tests, and no shipping code
+    /// reaches either.
     ///
     /// - Parameters:
     ///   - status: the status `SecItemCopyMatching` returned.

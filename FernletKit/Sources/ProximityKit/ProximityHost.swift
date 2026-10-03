@@ -10,7 +10,10 @@ import FernletDomainModel
 ///
 /// Mirrors the existing `ProximityTrustPolicy` / `WorkoutSyncContext` host-protocol
 /// pattern. Surface is exactly what `MeshNetworkManager` + `ProximityRecipeShareManager`
-/// consume: display name, trusted peers + vault, and the block/fingerprint checks.
+/// consume: display name, trusted peers + vault, and the block/fingerprint checks — and, since
+/// ProximityKit plan step A0.2.3, the host's protocol identity, ``proximityNamespace``, and since
+/// step A0.2.9 its install binding, ``proximityInstallBinding``: two requirements the extension
+/// below will never give a default.
 @MainActor
 public protocol ProximityHost: AnyObject {
     var proximityDisplayName: String { get }
@@ -73,45 +76,98 @@ public protocol ProximityHost: AnyObject {
     /// ``meshSessionStorage`` is; the default below keeps a test double's scope private to its own
     /// sidecar root.
     var meshRoutedStorage: MeshRoutedStorageScope { get }
+
+    /// The host's protocol identity (ProximityKit plan step A0.2.3): the labels, radio values, QR
+    /// scheme, identity and mesh seal-key rows, storage names and log subsystem by which this module's
+    /// wire, keychain and disk formats identify the app it runs in, as the one ``ProximityNamespace``
+    /// the host builds at its composition root. Some such strings stay outside it until a later plan
+    /// step: the feature labels, the heart-drop and moderation keychain services and
+    /// ``ProximitySupportLayout``'s folder until A0.4, the payload vocabulary and presentation strings
+    /// until A0.3. `ProximityNamespaceBoundaryTests` allowlists each feature-label read and each
+    /// literal that spells `fernlet`.
+    ///
+    /// **Deliberately no default.** The extension below hands a host that carries no value of its
+    /// own the hearts settings, the sidecar root and the two storage scopes; it hands out no
+    /// namespace, and never will. ProximityKit holds no namespace instance and keeps no global, so a
+    /// host that supplies none gets a compile error, never another app's identity. Fernlet's app
+    /// supplies `ProximityNamespace.fernlet` (the `FernletConnections` module) in
+    /// `ProximityHostAdapter.swift`, as the test target's eleven Fernlet doubles do;
+    /// `ProximityNamespaceGoldenTests`' three hosts take theirs from the cell that builds them, another
+    /// app's in the cells that test one.
+    ///
+    /// Read once, at construction: ``MeshNetworkManager``, ``PresenceManager`` and
+    /// ``ProximityRecipeShareManager`` each keep their own copy and build the identity and the radio
+    /// they own by default from it, so no later read reaches back to the host. Since step A0.2.8 the
+    /// extension below also builds this host's default sidecar root and both storage scopes from it,
+    /// and every scope carries it to the store that reads its names.
+    var proximityNamespace: ProximityNamespace { get }
+
+    /// The host's install binding (ProximityKit plan step A0.2.9): the per-install bytes the two
+    /// sealed mesh stores' column seal places after the column label in every blob's authenticated
+    /// data, read at each seal and each open.
+    ///
+    /// **No default, like ``proximityNamespace``.** An install has one binding, shared with whatever
+    /// else the host seals under it, so ProximityKit keeps no row of its own and never falls back to
+    /// one: a host that supplies none fails to compile. Fernlet's app answers
+    /// `FernletDeviceBindingAdapter()` (the `FernletConnections` module, delegating to FernletCrypto's
+    /// `DeviceBindingID`) in `ProximityHostAdapter.swift`, as the test target's doubles do, but for
+    /// the two `ProximityNamespaceGoldenTests` hosts that take theirs from the cell that builds them,
+    /// a pinned binding in the cells that test one. The extension below builds both default storage
+    /// scopes with it; a host with scopes of its own hands each the same binding.
+    var proximityInstallBinding: any ProximityInstallBinding { get }
 }
 
 public extension ProximityHost {
 
-    /// Default for hosts that do not carry their own scope (test doubles). Production resolves to
+    /// Default for hosts that do not carry their own scope (test doubles), built from the host's
+    /// namespace (plan step A0.2.8) and install binding (plan step A0.2.9). On the namespace's
+    /// default directory it is the namespace's production scope — for Fernlet
     /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged; a host on any other
     /// sidecar root gets a service named after that root, so it can never wipe — or be wiped by —
     /// the production row or another double's.
     var meshSessionStorage: MeshSessionStorageScope {
+        let namespace = proximityNamespace
         let directory = proximitySupportDirectory
-        guard directory != ProximitySupportLayout.defaultDirectory else {
+        guard directory != namespace.installation.storage.defaultDirectory else {
             return MeshSessionStorageScope(
+                namespace: namespace,
                 directory: directory,
-                keychainService: MeshSessionStorageScope.productionKeychainService
+                keychainService: namespace.installation.keychain.meshSessionSealKey.service,
+                installBinding: proximityInstallBinding
             )
         }
         return MeshSessionStorageScope(
+            namespace: namespace,
             directory: directory,
-            keychainService: MeshSessionStorageScope.productionKeychainService
-                + ".host." + directory.lastPathComponent
+            keychainService: namespace.installation.keychain.meshSessionSealKey.service
+                + ".host." + directory.lastPathComponent,
+            installBinding: proximityInstallBinding
         )
     }
 
-    /// Default for hosts that do not carry their own routed scope (test doubles). Production
-    /// resolves to `Application Support/Fernlet` + `com.fernlet.mesh-routed`, unchanged; a host on
-    /// any other sidecar root gets a service named after that root, so it can never wipe — or be
-    /// wiped by — the production row or another double's.
+    /// Default for hosts that do not carry their own routed scope (test doubles), built from the
+    /// host's namespace (plan step A0.2.8) and install binding (plan step A0.2.9). On the
+    /// namespace's default directory it is the namespace's production scope — for Fernlet
+    /// `Application Support/Fernlet` + `com.fernlet.mesh-routed`, unchanged; a host on any other
+    /// sidecar root gets a service named after that root, so it can never wipe — or be wiped by —
+    /// the production row or another double's.
     var meshRoutedStorage: MeshRoutedStorageScope {
+        let namespace = proximityNamespace
         let directory = proximitySupportDirectory
-        guard directory != ProximitySupportLayout.defaultDirectory else {
+        guard directory != namespace.installation.storage.defaultDirectory else {
             return MeshRoutedStorageScope(
+                namespace: namespace,
                 directory: directory,
-                keychainService: MeshRoutedStorageScope.productionKeychainService
+                keychainService: namespace.installation.keychain.meshRoutedSealKey.service,
+                installBinding: proximityInstallBinding
             )
         }
         return MeshRoutedStorageScope(
+            namespace: namespace,
             directory: directory,
-            keychainService: MeshRoutedStorageScope.productionKeychainService
-                + ".host." + directory.lastPathComponent
+            keychainService: namespace.installation.keychain.meshRoutedSealKey.service
+                + ".host." + directory.lastPathComponent,
+            installBinding: proximityInstallBinding
         )
     }
     /// Default for hosts that predate the hearts opt-out (e.g. test doubles). The app's
@@ -120,20 +176,28 @@ public extension ProximityHost {
     /// Default for hosts that predate away delivery (test doubles). The app overrides it.
     var heartsAwayDeliveryEnabled: Bool { false }
     /// The production sidecar home, and the default for hosts that don't redirect it (test doubles
-    /// that never touch the wall). The app's `FernletStore` overrides it with a per-instance root.
-    var proximitySupportDirectory: URL { ProximitySupportLayout.defaultDirectory }
+    /// that never touch the wall): the host namespace's `installation.storage.defaultDirectory` (plan
+    /// step A0.2.8; for Fernlet `Application Support/Fernlet`, unchanged). The app's `FernletStore`
+    /// overrides it with a per-instance root.
+    var proximitySupportDirectory: URL { proximityNamespace.installation.storage.defaultDirectory }
 }
 
 /// Where the proximity subsystem's on-disk sidecars live. Split out of `MeshNetworkManager`'s
-/// initializer so the production path has ONE definition that both the app and the default
-/// ``ProximityHost/proximitySupportDirectory`` resolve to.
+/// initializer so the production path had ONE definition that both the app and the default
+/// ``ProximityHost/proximitySupportDirectory`` resolved to. Since plan step A0.2.8 those two, and the
+/// mesh stores' production scopes, resolve the host namespace's
+/// `installation.storage.defaultDirectory` instead, built the same way (Fernlet's spells the same
+/// folder); this one stays for the heart-drop scope's and the feature ledgers' defaults until their
+/// features leave in plan step A0.4.
 public enum ProximitySupportLayout {
     /// `Application Support/Fernlet` — unchanged from the path the mesh photo cache, the heart
     /// ledger and the heart-drop sidecars have always used, so no shipped install is migrated by the
     /// seams that made these injectable.
     /// `nonisolated` against the target's `defaultIsolation(MainActor.self)`: a pure path
-    /// computation, read from the nonisolated stored properties and static defaults that resolve
-    /// production paths (`HeartDropStorageScope.production`, `FernletStore.proximitySupportRoot`).
+    /// computation, read by the nonisolated static default `HeartDropStorageScope.production`. The
+    /// main-actor feature ledgers (`ProximityHeartLedger`, `FriendStateCache`, `ClosenessLedger`,
+    /// `ModerationLedger`, `ProximityActivityManager`) read it too, for their initializers' default
+    /// file URLs.
     public nonisolated static var defaultDirectory: URL {
         // `URL.applicationSupportDirectory` is the non-optional accessor for exactly the path the
         // optional `FileManager.urls(for:in:).first` resolved to (R5: no force unwrap).

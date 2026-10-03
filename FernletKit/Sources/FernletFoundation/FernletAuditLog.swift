@@ -7,7 +7,10 @@ import os
 /// `PendingNarrativeBuffer` drain, CloudKit sync, HealthKit sync, snapshot saves, and the
 /// Proximity identity/trust/heart-drop stack — reports through ``log(_:context:)`` rather than
 /// ad-hoc `print`s, so the audit-completeness tests can assert that a given flow emitted its
-/// expected trail. Events go to the unified `os.Logger` (subsystem `com.fernlet`, category
+/// expected trail. ProximityKit names no log of its own since its plan step A0.2.10: it writes to
+/// the sink its host installs (`ProximityAudit`), and Fernlet's, `FernletAuditBridge` in
+/// FernletConnections, installed by `FernletApp.init`, hands each line here unchanged, in line.
+/// Events go to the unified `os.Logger` (subsystem `com.fernlet`, category
 /// `audit`) with the free-form context marked `.private`, and are additionally fanned out to
 /// every registered capture handler.
 ///

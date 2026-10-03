@@ -174,13 +174,38 @@ import Testing
     /// under a correction, their reach (the recipe surfaces only), the wipe and the closed list of
     /// writers. All four pinned by name in ``wallLines`` too, since `-only-testing:` would skip a
     /// dropped one silently.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.2.0 (2026-10-02): `crypto-goldens` 3 → 4, for
+    /// `ProximityNamespaceGoldenTests` — every byte string `ProximityNamespace.fernlet` will carry,
+    /// pinned by literal before any A0.2 commit moves one. Its name ends `GoldenTests`, so
+    /// ``everyWireGoldenSuiteIsGated()`` demands it on SOME line; this entry and its ``wallLines``
+    /// pin are what hold it on this one. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.2.1 (2026-10-02): `crypto-goldens` 4 → 5, for
+    /// `ProximityNamespaceSoundnessTests` — the soundness rules, byte rules and collision checks of
+    /// ProximityKit's protocol namespace, the label registry every later A0.2 commit routes reads
+    /// through. A rule loosened there compiles clean and changes no other test's outcome. Pinned by
+    /// name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.2's audit sink (2026-10-02): `s3-grep` 8 → 9, for
+    /// `ProximityAuditBridgeTests` — the canary that a ProximityKit audit line reaches
+    /// `FernletAuditLog` through the bridge `FernletApp.init` installs. A missing install compiles
+    /// clean and turns every "this event was not logged" assertion vacuous. The step's floor stays
+    /// the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.2.12, walls and cleanup (2026-10-02): `s3-grep`
+    /// 9 → 10, for `ProximityNamespaceBoundaryTests` — the ratchet that keeps ProximityKit reading
+    /// its host's namespace: no namespace, group or purpose built outside `Namespace/`,
+    /// `FernletCryptoPurpose` only on the feature lines that leave in A0.4, and every `fernlet`
+    /// literal on an exact allowlist with its exit step. Each thing it refuses compiles clean. The
+    /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 8,
+        "s3-grep": 10,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
-        "crypto-goldens": 3,
+        "crypto-goldens": 5,
         "privacy-wipe": 4,
         "accessibility": 1,
         "memory-lifecycle": 1,
@@ -200,14 +225,16 @@ import Testing
     /// suite here is a wall with no compiler half — the `MeshRoutedDrainWallTests` argument — so its
     /// line leaving, or it leaving its line, must red rather than go quiet.
     private static let wallLines: [String: [String]] = [
-        "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests"],
+        "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
+                    "ProximityNamespaceBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
         "key-custody": ["KeyCustodyBoundaryTests", "ColumnCryptoDeviceBindingTests",
                         "SealedBackupFormatPinTests", "IdentityProvisioningReadTests"],
         "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
-                           "MeshMembershipEventGoldenTests"],
+                           "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests",
+                           "ProximityNamespaceSoundnessTests"],
         "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
                          "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
         "accessibility": ["AccessibilityBoundaryTests"],
@@ -372,8 +399,9 @@ import Testing
     @Test func everyWireGoldenSuiteIsGated() throws {
         let gated = Set(Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath)).flatMap(\.suites))
         let goldens = try Self.declaredTopLevelTypes().filter { $0.hasSuffix("GoldenTests") }
-        // MEASURED at 2026-09-24 by reading the tree: nine declarations.
-        #expect(goldens.count >= 9, "the golden suites shrank: \(goldens.count) declared")
+        // MEASURED at 2026-09-24 by reading the tree: nine declarations. RE-MEASURED at ProximityKit
+        // plan step A0.2.0 (2026-10-02): ten, with `ProximityNamespaceGoldenTests`.
+        #expect(goldens.count >= 10, "the golden suites shrank: \(goldens.count) declared")
         let ungated = goldens.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Golden suites declared in Tests/FernletTests but named on no line of \

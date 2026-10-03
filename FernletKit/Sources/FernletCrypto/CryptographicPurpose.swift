@@ -78,6 +78,22 @@ public nonisolated struct CryptographicPurpose: Hashable, Sendable {
 /// Keep existing spellings exactly: changing one changes a key, a digest, or the bytes an
 /// existing signature verifies. A new spelling therefore needs an explicit versioned write format
 /// and a legacy read path at its consumer.
+///
+/// **38 entries are twins now.** ProximityKit's protocol labels — the identity envelope,
+/// admission, membership, quorum, key-agreement, channel-introduction, routed and verify-QR
+/// signatures with the verify-only legacy pair, the transport, group-key, routed key-wrap and
+/// TLS-exporter derivations, the two mesh column seals, the five transport and mesh AEAD labels
+/// and the six mesh hashes — are no longer read from here. Since ProximityKit plan step A0.2 every
+/// ProximityKit reader takes its label from the namespace its host hands down, and Fernlet's,
+/// `ProximityNamespace.fernlet` in FernletConnections, spells each of these 38 identically (beside
+/// the epoch-id domain, which this registry never held). They stay as twins until they retire (plan
+/// step C1): `ProximityNamespaceGoldenTests` pins each to its `.fernlet` field (the same spelling
+/// and bytes, and for a signature the same acceptance), and `CryptographicDomainSeparationTests`
+/// keeps them in its all-pairs checks. Where a note below names a ProximityKit consumer, that
+/// consumer reads the twin. ProximityKit names this registry only for its 13 feature labels
+/// (hearts, presence, activities, moderation and the sealed-backup escrow) until they leave with
+/// their features (A0.4); the app's duress and probe signatures still sign through ProximityKit's
+/// identity under entries here.
 public nonisolated enum FernletCryptoPurpose {
     /// Domains embedded in Ed25519 signature transcripts.
     ///
@@ -284,9 +300,11 @@ public nonisolated enum FernletCryptoPurpose {
         /// The production TLS-exporter label for the QUIC mesh channel binding (plan §7.2), the
         /// shipping counterpart to ``meshProbeTLSExporterV1``. Keeping the two apart is what stops a
         /// spike build and a shipping build deriving the same binding secret from the same
-        /// connection. **In use since P2 item 7**: `NetworkMeshSession.channelBindingHash(for:)`
-        /// hands it to `sec_protocol_metadata_create_secret` and signs the SHA-256 of the result
-        /// into ``FernletCryptoPurpose/Signature/meshChannelIntroductionV1``'s transcript.
+        /// connection. **In use since P2 item 7**, as the label the mesh radio's channel binding hands
+        /// to `sec_protocol_metadata_create_secret`, whose secret's SHA-256 is signed into
+        /// ``FernletCryptoPurpose/Signature/meshChannelIntroductionV1``'s transcript. Since
+        /// ProximityKit plan step A0.2.7 `NetworkMeshSession` reads it as this entry's twin off its
+        /// host's namespace (`channelBindingHash(for:exporterLabel:)`): the same bytes.
         public static let meshTLSExporterV1 = CryptographicPurpose("fernlet.mesh.tls-exporter.v1")
         /// **Written since P5 item 1.** P5's per-recipient content-key wrap (plan §11): the
         /// X25519 shared secret between the origin and one destination is run through HKDF under
@@ -294,10 +312,13 @@ public nonisolated enum FernletCryptoPurpose {
         /// ``FernletCryptoPurpose/AEAD/meshGroupKeyWrapV2`` pair — a derivation purpose plus the
         /// AEAD purpose that authenticates the wrap.
         public static let meshRoutedContentKeyWrapV1 = CryptographicPurpose("fernlet.mesh.routed.content-key.v1")
-        /// The sealed `MeshSessionContext` sidecar (P3 item 2, plan §8.1). Handed to
-        /// ``ColumnCrypto/init(purpose:)``, so it is BOTH the HKDF `info` that derives the file's
-        /// column key from the mesh-session seal key AND — inside the v3 at-rest format — half of
-        /// the additional authenticated data, beside this install's ``DeviceBindingID``.
+        /// The sealed `MeshSessionContext` sidecar (P3 item 2, plan §8.1). Its column seal, so it is
+        /// BOTH the HKDF `info` that derives the file's column key from the mesh-session seal key
+        /// AND — inside the v3 at-rest format — half of the additional authenticated data, beside
+        /// this install's ``DeviceBindingID``. Handed to ``ColumnCrypto/init(purpose:)`` until
+        /// ProximityKit plan step A0.2.9; since then `MeshSessionStore` seals through ProximityKit's
+        /// byte-for-byte copy of the column seal under this entry's twin in its host's namespace,
+        /// so the sealed bytes are unchanged.
         ///
         /// Its own domain rather than a reuse of ``meshGroupKeyWrapV1``: the group key is
         /// memory-only and dies with the process, while this seals the one durable thing a mesh
@@ -307,10 +328,12 @@ public nonisolated enum FernletCryptoPurpose {
         public static let meshSessionContextV1 = CryptographicPurpose("fernlet.mesh.session-context.v1")
         /// **Written since P5 item 3.** The sealed routed-content store (plan §11, §19.5) — its
         /// `MeshRoutedIndex.sealed` catalogue and every `MeshRoutedChunks/<uuid>.chunk` payload
-        /// file. Handed to ``ColumnCrypto/init(purpose:)``, so it is BOTH the HKDF `info` that
-        /// derives each file's column key from the routed seal key AND — inside the v3 at-rest
-        /// format — half of the additional authenticated data, beside this install's
-        /// ``DeviceBindingID``.
+        /// file. Its column seal, so it is BOTH the HKDF `info` that derives each file's column key
+        /// from the routed seal key AND — inside the v3 at-rest format — half of the additional
+        /// authenticated data, beside this install's ``DeviceBindingID``. Handed to
+        /// ``ColumnCrypto/init(purpose:)`` until ProximityKit plan step A0.2.9; since then
+        /// `MeshRoutedStore` seals through ProximityKit's byte-for-byte copy of the column seal under
+        /// this entry's twin in its host's namespace, so the sealed bytes are unchanged.
         ///
         /// Its own domain rather than a reuse of ``meshSessionContextV1``: the two surfaces have
         /// separate keychain services and separate fates, and sharing a domain would let a session

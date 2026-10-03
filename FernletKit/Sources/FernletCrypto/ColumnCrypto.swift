@@ -32,6 +32,14 @@ import Foundation
 /// ``ColumnCryptoStoredFormat``, so a refusal can name what it refused; they are simply no
 /// longer opened. See ``SealedColumnOpenError``.
 ///
+/// **ProximityKit seals through its own copy.** ProximityKit's two sealed mesh stores (the
+/// mesh-session context and the routed store) sealed through this type until ProximityKit plan
+/// step A0.2.9; since then they seal through `ProximityColumnCrypto`, this V3 format copied byte
+/// for byte into ProximityKit and keyed by the column-seal labels of the namespace their host
+/// supplies. `ProximityNamespaceGoldenTests` holds the two to each other: each opens the other's
+/// blobs, for both mesh labels, both ways, and they refuse alike. A change to this format or to
+/// its refusals must land in both.
+///
 /// Explicitly `nonisolated` (overriding this module's MainActor default isolation):
 /// it is a pure, stateless crypto value type called synchronously from the
 /// `NSManagedObjectContext.performAndWait` closures of the (nonisolated) sealed-store

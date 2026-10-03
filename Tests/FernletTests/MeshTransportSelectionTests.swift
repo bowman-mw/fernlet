@@ -33,7 +33,8 @@ struct MeshTransportSelectionTests {
     /// fail the moment the initializer's one default moved. Since the deletion round (2026-09-22)
     /// retired the second conformer with the selection seam, there is nothing left for it to move
     /// TO except a mistake; this is the cutover's red-once #1, kept as the VALUE half of
-    /// `MeshP9McRetirementAcceptanceTests`' source pin on `transport ?? NetworkMeshSession()`.
+    /// `MeshP9McRetirementAcceptanceTests`' source pin on
+    /// `transport ?? NetworkMeshSession(namespace: namespace)`.
     @Test func theAppsInitializerRunsOnTheQUICRadio() {
         let manager = MeshNetworkManager(store: store)
 

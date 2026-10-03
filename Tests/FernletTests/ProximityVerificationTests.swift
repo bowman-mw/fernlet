@@ -10,6 +10,7 @@
 import Foundation
 import Testing
 import CryptoKit
+import FernletConnections
 import FernletCrypto
 @testable import ProximityKit
 import FernletDomainModel
@@ -30,19 +31,24 @@ struct ProximityVerificationTests {
         return (service, serviceID)
     }
 
+    /// Pins the QR's scheme, so it names the namespace it pins it under: an identity of `.fernlet`
+    /// (ProximityKit plan step A0.2.5 moved the scheme onto the host's namespace), whose code parses
+    /// and validates in `.fernlet`.
     @Test func verifyQRRoundTripsAndValidates() throws {
-        let (identity, serviceID) = try makeIdentity()
+        let serviceID = "com.fernlet.identity.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
+        let identity = IdentityService(namespace: .fernlet, keychainService: serviceID)
+        try identity.ensureProvisioned()
 
         let made = try ProximityVerifyQR.makeURL(identity: identity)
         #expect(made.url.scheme == "fernlet")
         #expect(made.nonce.count == 16)
 
-        let parsed = try #require(ProximityVerifyQR.parse(made.url))
+        let parsed = try #require(ProximityVerifyQR.parse(made.url, in: .fernlet))
         #expect(parsed.signingPublicKey == identity.localSigningPublicKey)
         #expect(parsed.keyAgreementPublicKey == identity.localKeyAgreementPublicKey)
         #expect(parsed.nonce == made.nonce)
-        #expect(ProximityVerifyQR.isValid(parsed))
+        #expect(ProximityVerifyQR.isValid(parsed, in: .fernlet))
     }
 
     @Test func verifyQRRejectsTamperStalenessAndForeignURLs() throws {

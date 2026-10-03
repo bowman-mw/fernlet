@@ -28,6 +28,8 @@
 /Tests/FernletTests/CodeOwnersResolutionTests.swift      @bowman-mw
 /Tests/FernletTests/CIGateSelectorBoundaryTests.swift     @bowman-mw
 /Tests/FernletTests/IdentityProvisioningReadTests.swift   @bowman-mw
+/Tests/FernletTests/ProximityNamespaceGoldenTests.swift   @bowman-mw
+/Tests/FernletTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
 # job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned
@@ -65,3 +67,13 @@
 # Key custody and at-rest formats (what the tripwire/format tests protect)
 /FernletKit/Sources/FernletCrypto/            @bowman-mw
 /FernletKit/Sources/FernletLock/              @bowman-mw
+# ProximityKit's copy of ColumnCrypto's V3 seal and its DeviceBindingID seam: the mesh stores' at-rest format, owned like FernletCrypto's originals
+/FernletKit/Sources/ProximityKit/Support/ProximityColumnCrypto.swift   @bowman-mw
+/FernletKit/Sources/ProximityKit/Support/ProximityInstallBinding.swift @bowman-mw
+
+# ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
+/FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw
+
+# Fernlet's wire identity (ProximityNamespace.fernlet): changing a literal breaks Fernlet's wire,
+# keychain and on-disk formats for every device already in the field
+/FernletKit/Sources/FernletConnections/       @bowman-mw

@@ -823,7 +823,7 @@ struct MeshRoutedDeliveryDurabilityTests {
             Issue.record("an unwritable index answered \(outcome)")
             return
         }
-        #expect(detail != MeshRoutedStore.indexFileName, "the failure must name the write error, not the file")
+        #expect(detail != rig.store.indexFileName, "the failure must name the write error, not the file")
         #expect(detail.isEmpty == false)
         #expect(try Data(contentsOf: rig.store.indexURL) == before, "the previous index must be byte-identical")
         // …and no receipt exists for anything a restart would lose.

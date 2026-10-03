@@ -21,7 +21,6 @@
 // `routedAccessGate`), any store, any canonical-store mutation, any clock. What comes out is a
 // value; who may be TOLD about it is the manager's second predicate.
 
-import CryptoKit
 import Foundation
 
 // MARK: - MeshRoutedDeliveryError
@@ -216,7 +215,8 @@ nonisolated enum MeshRoutedItemDelivery {
     /// - Parameters:
     ///   - blob: The reassembled ciphertext.
     ///   - manifest: The origin's signed manifest.
-    ///   - identity: This device's identity.
+    ///   - identity: This device's identity. Since ProximityKit plan step A0.2.6 the wrap opens and
+    ///     the blob is authenticated under its namespace's `purposes`, the labels it was minted under.
     ///   - mayDecryptRoutedContent: `MeshNetworkManager.mayDecryptRoutedContent`, the first guard.
     /// - Returns: the sealed item's plaintext, un-decoded.
     /// - Throws: ``MeshRoutedDeliveryError/notPermitted``, ``MeshRoutedDeliveryError/notAddressedToMe``,
@@ -242,10 +242,11 @@ nonisolated enum MeshRoutedItemDelivery {
             binding: binding,
             localFingerprint: localFingerprint,
             localKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
-            staticAgreement: identity.heartDropStaticAgreement(withEphemeralPublicKey:)
+            staticAgreement: identity.heartDropStaticAgreement(withEphemeralPublicKey:),
+            in: identity.purposes
         )
         return try MeshRoutedItemSealer.open(
-            blob, contentKey: contentKey, binding: binding, typeToken: manifest.typeToken
+            blob, contentKey: contentKey, binding: binding, typeToken: manifest.typeToken, in: identity.purposes
         )
     }
 }

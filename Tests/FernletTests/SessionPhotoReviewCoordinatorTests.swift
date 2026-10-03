@@ -31,6 +31,7 @@ import UIKit
 import FernletDomainModel
 import PrivateMediaStore
 @testable import ProximityKit
+import FernletProximityUI
 @testable import Fernlet
 
 // MARK: - Recorders

@@ -2,7 +2,6 @@ import Foundation
 import Observation
 import UIKit
 import FernletDomainModel
-import FernletFoundation
 
 /// One live recipe-share pairing: the peer, its channel + coordinator, and (once the handshake
 /// completes) the verified fingerprint and KA key.
@@ -144,6 +143,11 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     public private(set) var engagedRecipientID: UUID?
 
     @ObservationIgnored private unowned let store: any ProximityHost
+    /// The host's protocol identity, read once from ``store`` at construction and kept as this
+    /// manager's own copy (ProximityKit plan step A0.2.3), so no later read reaches back to the
+    /// host. The default identity is built from it, and since A0.2.7 so is the radio, which reads
+    /// its service type, ALPN and log subsystem off it. `nonisolated`: inert `Sendable` value data.
+    @ObservationIgnored nonisolated let namespace: ProximityNamespace
     /// The radio this manager drives. Built once, at construction, because several of this
     /// manager's decisions (the inbound gate, the pause flag, a discovery callback) are reachable
     /// before `start()` ever runs — which is also what lets a unit test hand in an in-memory
@@ -202,8 +206,9 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
     /// `@MainActor` and a main-actor type cannot be a default-argument value.
     ///
     /// `identity` is the same seam `PresenceManager` and `MeshNetworkManager` already take (owner-calls
-    /// item 4c, 2026-09-22): nil is this device's own identity on the production keychain service,
-    /// and a test passes one on a service of its own. Without it a test that exercised
+    /// item 4c, 2026-09-22): nil is this device's own identity, built from the host's
+    /// ``ProximityHost/proximityNamespace`` on its production keychain service, and a test passes
+    /// one on a service of its own. Without it a test that exercised
     /// ``wipeIdentityForDeleteAll()`` would have wiped the TEST HOST's real identity — the test
     /// bundle runs inside the app on that Simulator and shares its keychain — so the wipe's EFFECT
     /// was untestable here and only its existence was pinned.
@@ -212,16 +217,18 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
         makeSession: (() -> any RecipeShareRadioSession)?,
         identity injected: IdentityService? = nil
     ) {
-        self.session = makeSession?() ?? NetworkRecipeShareSession()
         self.store = store
-        let id = injected ?? IdentityService()
+        let namespace = store.proximityNamespace
+        self.namespace = namespace
+        self.session = makeSession?() ?? NetworkRecipeShareSession(namespace: namespace)
+        let id = injected ?? IdentityService(namespace: namespace)
         do {
             try id.ensureProvisioned()
         } catch {
             // Benign: every session start re-attempts provisioning and fails visibly
             // (`fail(error.localizedDescription)`) — but the FIRST failure must not vanish.
-            FernletAuditLog.log("recipeShare.identity.provisionFailed",
-                                context: ["error": String(describing: error)])
+            ProximityAudit.log("recipeShare.identity.provisionFailed",
+                               context: ["error": String(describing: error)])
         }
         self.identity = id
         setupSession()

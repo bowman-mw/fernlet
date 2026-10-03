@@ -10,15 +10,17 @@
 
 import CryptoKit
 import Foundation
-import FernletCrypto
-import FernletFoundation
 import Security
 
 // MARK: - MeshSessionStorageScope
 
 /// The storage identity of one device's sealed mesh-session state: the directory holding
 /// `MeshSessionContext.sealed` (and its `.corrupt` quarantine sibling) and the keychain service
-/// holding the key that seals it.
+/// holding the key that seals it, plus the host's ``ProximityNamespace``, whose
+/// `installation.storage` and `installation.keychain` name the file and the key's account (plan step
+/// A0.2.8; Fernlet's are the names above) and whose `family.purposes` holds the file's column seal,
+/// and the host's ``ProximityInstallBinding``, which every seal and open of the file reads (plan step
+/// A0.2.9).
 ///
 /// **Why the two travel together.** `MeshSessionStore.wipeForDeleteAll(scope:)` destroys both, so
 /// isolating one without the other isolates nothing: files on a private root sealed by a shared key
@@ -31,15 +33,18 @@ import Security
 /// shared-disk-root flake family (`PhotoDirectoryIsolationTests`), and this scope is what keeps it
 /// from gaining a new member — `MeshSessionStoreIsolationTests` is the grep-wall that enforces it.
 ///
-/// `nonisolated` against the module's `defaultIsolation(MainActor.self)`: inert configuration, read
-/// from nonisolated stores and from `FernletStore`'s nonisolated stored properties.
-public nonisolated struct MeshSessionStorageScope: Sendable, Equatable {
+/// `nonisolated` against the module's `defaultIsolation(MainActor.self)`: configuration, read from
+/// nonisolated stores and from `FernletStore`'s nonisolated stored properties. Not `Equatable` since
+/// plan step A0.2.9: it carries the host's install binding, a capability with no equality.
+public nonisolated struct MeshSessionStorageScope: Sendable {
 
-    /// The production keychain service. Its own service, not a lodger under
-    /// `com.fernlet.heartdrop`: delete-all takes this one whole (`KeychainItem.deleteAll(service:)`)
-    /// while the heart-drop service has a different survivor story, and one service per fate is the
-    /// only arrangement a service-wide delete can express honestly.
-    public static let productionKeychainService = "com.fernlet.mesh-session"
+    /// The host's protocol identity: the store reads its file name off
+    /// `installation.storage.meshSessionContextFileName` and its seal key's account off
+    /// `installation.keychain.meshSessionSealKey.account` (plan step A0.2.8), and seals the file under
+    /// `family.purposes.keyDerivation.meshSessionContextV1` (plan step A0.2.9). None of it is an
+    /// isolation axis — ``directory`` and ``keychainService`` are — so two scopes of one host differ
+    /// in those two alone.
+    public let namespace: ProximityNamespace
 
     /// Directory holding `MeshSessionContext.sealed` and its `.corrupt` quarantine sibling.
     public let directory: URL
@@ -47,22 +52,54 @@ public nonisolated struct MeshSessionStorageScope: Sendable, Equatable {
     /// Keychain service holding the seal key for the files in ``directory``.
     public let keychainService: String
 
-    /// Builds a scope from a directory and a keychain service.
+    /// The host's install binding, which the store's column seal reads at every seal and every open
+    /// and places after the column label in the file's authenticated data (plan step A0.2.9). Not an
+    /// isolation axis either: one install has one binding, which every scope of the host carries.
+    public let installBinding: any ProximityInstallBinding
+
+    /// Builds a scope from the host's namespace, a directory, a keychain service and its install
+    /// binding.
     ///
     /// - Parameters:
+    ///   - namespace: The host's protocol identity, which names the file and the key's account and
+    ///     holds the file's column seal.
     ///   - directory: Where the sealed context file lives.
     ///   - keychainService: Keychain service holding that file's seal key.
-    public init(directory: URL, keychainService: String) {
+    ///   - installBinding: The host's install binding, which the file is sealed and opened under.
+    public init(
+        namespace: ProximityNamespace,
+        directory: URL,
+        keychainService: String,
+        installBinding: any ProximityInstallBinding
+    ) {
+        self.namespace = namespace
         self.directory = directory
         self.keychainService = keychainService
+        self.installBinding = installBinding
     }
 
-    /// The shipped scope: `Application Support/Fernlet` (the path every proximity sidecar already
-    /// uses) plus ``productionKeychainService``.
-    public static var production: MeshSessionStorageScope {
+    /// The shipped scope of a host: the namespace's `installation.storage.defaultDirectory` (for
+    /// Fernlet `Application Support/Fernlet`, the path every proximity sidecar already uses) plus its
+    /// `installation.keychain.meshSessionSealKey.service` (for Fernlet `com.fernlet.mesh-session`: its
+    /// own service, not a lodger under `com.fernlet.heartdrop`, because delete-all takes this one
+    /// whole while the heart-drop service has a different survivor story, and one service per fate
+    /// is the only arrangement a service-wide delete can express honestly). Replaces the static
+    /// `production` and `productionKeychainService` (plan step A0.2.8); takes the host's install
+    /// binding since plan step A0.2.9.
+    ///
+    /// - Parameters:
+    ///   - namespace: The host's protocol identity.
+    ///   - installBinding: The host's install binding.
+    /// - Returns: The namespace's production scope.
+    public static func production(
+        for namespace: ProximityNamespace,
+        installBinding: any ProximityInstallBinding
+    ) -> MeshSessionStorageScope {
         MeshSessionStorageScope(
-            directory: ProximitySupportLayout.defaultDirectory,
-            keychainService: productionKeychainService
+            namespace: namespace,
+            directory: namespace.installation.storage.defaultDirectory,
+            keychainService: namespace.installation.keychain.meshSessionSealKey.service,
+            installBinding: installBinding
         )
     }
 
@@ -75,12 +112,19 @@ public nonisolated struct MeshSessionStorageScope: Sendable, Equatable {
     /// hearts is isolated for mesh-session state for free — and one that is not fails an existing
     /// wall rather than silently sharing this key.
     ///
-    /// - Parameter heartDropService: The store's heart-drop keychain service.
-    /// - Returns: ``productionKeychainService`` when the input is the production heart-drop
-    ///   service; a distinct sibling of the caller's isolated service otherwise.
-    public static func keychainService(besideHeartDrop heartDropService: String) -> String {
+    /// - Parameters:
+    ///   - heartDropService: The store's heart-drop keychain service.
+    ///   - namespace: The host's protocol identity, whose production seal-key service the
+    ///     production heart-drop service maps to.
+    /// - Returns: The namespace's `installation.keychain.meshSessionSealKey.service` when the input
+    ///   is the production heart-drop service; a distinct sibling of the caller's isolated service
+    ///   otherwise.
+    public static func keychainService(
+        besideHeartDrop heartDropService: String,
+        in namespace: ProximityNamespace
+    ) -> String {
         heartDropService == HeartPrekeyStore.keychainService
-            ? productionKeychainService
+            ? namespace.installation.keychain.meshSessionSealKey.service
             : heartDropService + ".mesh-session"
     }
 }
@@ -122,18 +166,17 @@ nonisolated enum MeshSessionSealKeyOutcome: Sendable {
 ///   the background while the device is locked (plan §8.2's `continuingInBackground`), and a
 ///   `WhenUnlocked` key would make every background membership acceptance unsealable — which,
 ///   under durable-before-acknowledged (plan §3.6), means unacceptable.
-/// - **ThisDeviceOnly**, because the sealed bytes are device-bound anyway: `ColumnCrypto`'s v3
-///   format authenticates this install's `DeviceBindingID`, so a key restored onto another phone
-///   would open nothing. A backup-restorable row would be a promise the ciphertext cannot keep.
+/// - **ThisDeviceOnly**, because the sealed bytes are device-bound anyway: `ProximityColumnCrypto`'s
+///   V3 format authenticates this install's binding (the host's ``ProximityInstallBinding``; Fernlet's
+///   `DeviceBindingID`), so a key restored onto another phone would open nothing. A
+///   backup-restorable row would be a promise the ciphertext cannot keep.
 ///
 /// The key is read on every use with no in-memory cache, so a wiped key can never be resurrected by
 /// a stale copy — the same rule ``HeartDropSidecarSeal`` follows.
 ///
-/// There is deliberately no argument-less production variant: every caller states its scope.
+/// There is deliberately no argument-less production variant: every caller states its scope's service
+/// and account.
 nonisolated enum MeshSessionSealKey {
-
-    /// The single account under the scope's service.
-    static let keychainAccount = "meshSessionContextKey"
 
     /// Key length in bytes.
     static let keyByteCount = 32
@@ -141,11 +184,14 @@ nonisolated enum MeshSessionSealKey {
     /// Reads the key for OPENING an existing sealed file. Never mints: a fresh random key opens
     /// nothing, and writing one would install a row that later looks authoritative.
     ///
-    /// - Parameter service: The scope's keychain service.
+    /// - Parameters:
+    ///   - service: The scope's keychain service.
+    ///   - account: The row's account, the scope namespace's
+    ///     `installation.keychain.meshSessionSealKey.account` (plan step A0.2.8).
     /// - Returns: The key, a deferral (keychain unreadable — retry), or a refusal (row absent or
     ///   malformed, so these bytes are terminally unopenable).
-    static func forOpen(service: String) -> MeshSessionSealKeyOutcome {
-        switch KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
+    static func forOpen(service: String, account: String) -> MeshSessionSealKeyOutcome {
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service) {
         case .found(let data) where data.count == keyByteCount:
             return .available(SymmetricKey(data: data))
         case .found:
@@ -164,10 +210,13 @@ nonisolated enum MeshSessionSealKey {
     /// nil ⇒ mint" would, during the window before the first post-boot unlock, replace the real key
     /// and turn every sealed context into permanent garbage with no failure signal.
     ///
-    /// - Parameter service: The scope's keychain service.
+    /// - Parameters:
+    ///   - service: The scope's keychain service.
+    ///   - account: The row's account, the scope namespace's
+    ///     `installation.keychain.meshSessionSealKey.account` (plan step A0.2.8).
     /// - Returns: The key, a deferral, or a refusal naming why no key could be established.
-    static func forSeal(service: String) -> MeshSessionSealKeyOutcome {
-        switch KeychainItem.loadDistinguishingAbsence(account: keychainAccount, service: service) {
+    static func forSeal(service: String, account: String) -> MeshSessionSealKeyOutcome {
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service) {
         case .found(let data) where data.count == keyByteCount:
             return .available(SymmetricKey(data: data))
         case .found:
@@ -176,7 +225,7 @@ nonisolated enum MeshSessionSealKey {
         case .unreadable:
             return .deferred(.sealKeyTransientlyUnreadable)
         case .absent:
-            return mint(service: service)
+            return mint(service: service, account: account)
         }
     }
 
@@ -185,21 +234,21 @@ nonisolated enum MeshSessionSealKey {
     ///
     /// - Parameter service: The scope's keychain service.
     static func wipe(service: String) {
-        KeychainItem.deleteAll(service: service)
+        ProximityKeychainItem.deleteAll(service: service)
     }
 
     /// Mints, stores and READ-BACK-VERIFIES a fresh key.
     ///
     /// The verify is not ceremony: a full or locked keychain can silently drop the row, and sealing
     /// against an unverified key writes ciphertext nothing can ever open.
-    private static func mint(service: String) -> MeshSessionSealKeyOutcome {
+    private static func mint(service: String, account: String) -> MeshSessionSealKeyOutcome {
         // R5/R9: mint the raw bytes and build the key from them, so no `withUnsafeBytes` export of
         // a CryptoKit key is needed. `UInt8.random(in:)` draws from `SystemRandomNumberGenerator`,
         // the platform CSPRNG — the same source `SymmetricKey` uses.
         let keyData = Data((0..<keyByteCount).map { _ in UInt8.random(in: UInt8.min...UInt8.max) })
-        let status = KeychainItem.store(
+        let status = ProximityKeychainItem.store(
             keyData,
-            account: keychainAccount,
+            account: account,
             service: service,
             accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             synchronizable: false
@@ -207,11 +256,11 @@ nonisolated enum MeshSessionSealKey {
         guard status == errSecSuccess else {
             return .deferred(.sealKeyTransientlyUnreadable)
         }
-        guard case .found(let echoed) = KeychainItem.loadDistinguishingAbsence(
-            account: keychainAccount,
+        guard case .found(let echoed) = ProximityKeychainItem.loadDistinguishingAbsence(
+            account: account,
             service: service
         ), echoed == keyData else {
-            FernletAuditLog.log("mesh.sessionContext.sealKey.verifyFailed")
+            ProximityAudit.log("mesh.sessionContext.sealKey.verifyFailed")
             return .refused(.sealKeyNotPersisted)
         }
         return .available(SymmetricKey(data: keyData))

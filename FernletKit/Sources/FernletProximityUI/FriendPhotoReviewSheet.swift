@@ -4,6 +4,7 @@ import Photos
 import UIKit
 import FernletDomainModel
 import FernletFoundation
+import ProximityKit
 import os
 
 /// One selectable photo thumbnail in the session-end review grid.
@@ -206,7 +207,7 @@ public struct FriendPhotoReviewSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             header
 
-            Text(verbatim: ProximityUICopy.Review.explainerPending)
+            Text(verbatim: FernletProximityUICopy.Review.explainerPending)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -226,10 +227,10 @@ public struct FriendPhotoReviewSheet: View {
                     .buttonStyle(.plain)
                     // Who took it (a withheld name reads as the placeholder, never a fingerprint)
                     // and what a double-tap does; the tile carries `.isSelected` itself.
-                    .accessibilityLabel(Text(verbatim: ProximityUICopy.Review.tileLabel(
+                    .accessibilityLabel(Text(verbatim: FernletProximityUICopy.Review.tileLabel(
                         PeerNameDisplay.shown(photo.senderName, fingerprint: photo.senderFingerprint, placeholder: .met)
                     )))
-                    .accessibilityHint(Text(verbatim: ProximityUICopy.Review.tileHint))
+                    .accessibilityHint(Text(verbatim: FernletProximityUICopy.Review.tileHint))
                 }
             }
 
@@ -248,13 +249,13 @@ public struct FriendPhotoReviewSheet: View {
     /// The title — a VoiceOver heading — and, when the host offers it, the "Not now" text button.
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(verbatim: ProximityUICopy.Review.title)
+            Text(verbatim: FernletProximityUICopy.Review.title)
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 8)
             if let notNow {
-                Button(ProximityUICopy.Review.notNow) { notNow() }
+                Button(FernletProximityUICopy.Review.notNow) { notNow() }
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.mossInk)
                     .frame(minHeight: 44)
@@ -277,7 +278,7 @@ public struct FriendPhotoReviewSheet: View {
                     .accessibilityIdentifier(line.identifier)
             }
             Toggle(isOn: $alsoSaveToPhotos) {
-                Text(verbatim: ProximityUICopy.Review.alsoSaveToPhotosToggle)
+                Text(verbatim: FernletProximityUICopy.Review.alsoSaveToPhotosToggle)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
             }
@@ -291,7 +292,7 @@ public struct FriendPhotoReviewSheet: View {
                 .buttonStyle(ActionPillButtonStyle(.destructive))
                 .disabled(isBusy)
                 .accessibilityIdentifier("friends.review.deleteAll")
-                Button(ProximityUICopy.Review.keepSelected) {
+                Button(FernletProximityUICopy.Review.keepSelected) {
                     runExclusively { await keepSelected() }
                 }
                 .buttonStyle(ActionPillButtonStyle(.primary))
@@ -316,29 +317,29 @@ public struct FriendPhotoReviewSheet: View {
         switch workingMessage {
         case .savingToPhotos:
             return FriendPhotoReviewStatusLine(
-                text: ProximityUICopy.Review.savingToPhotos, identifier: "friends.review.working", isFailure: false
+                text: FernletProximityUICopy.Review.savingToPhotos, identifier: "friends.review.working", isFailure: false
             )
         case .endingSession:
             return FriendPhotoReviewStatusLine(
-                text: ProximityUICopy.Review.endingSession, identifier: "friends.review.working", isFailure: false
+                text: FernletProximityUICopy.Review.endingSession, identifier: "friends.review.working", isFailure: false
             )
         case nil:
             break
         }
         if !keepAvailable {
             return FriendPhotoReviewStatusLine(
-                text: ProximityUICopy.Review.keepUnavailable, identifier: "friends.review.keepUnavailable",
+                text: FernletProximityUICopy.Review.keepUnavailable, identifier: "friends.review.keepUnavailable",
                 isFailure: true
             )
         }
         if answerFailure != nil {
             return FriendPhotoReviewStatusLine(
-                text: ProximityUICopy.Review.answerFailed, identifier: "friends.review.answerFailed", isFailure: true
+                text: FernletProximityUICopy.Review.answerFailed, identifier: "friends.review.answerFailed", isFailure: true
             )
         }
         guard unreadableCount > 0 else { return nil }
         return FriendPhotoReviewStatusLine(
-            text: ProximityUICopy.Review.unreadable(unreadableCount), identifier: "friends.review.unreadable",
+            text: FernletProximityUICopy.Review.unreadable(unreadableCount), identifier: "friends.review.unreadable",
             isFailure: true
         )
     }
@@ -397,19 +398,19 @@ public struct FriendPhotoReviewSheet: View {
                 Image(systemName: "lock.fill")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(Color.slate)
-                Text(verbatim: ProximityUICopy.Review.snapshotCover)
+                Text(verbatim: FernletProximityUICopy.Review.snapshotCover)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: ProximityUICopy.Review.snapshotCover))
+        .accessibilityLabel(Text(verbatim: FernletProximityUICopy.Review.snapshotCover))
         .accessibilityIdentifier("friends.review.snapshotCover")
     }
 
     /// "Delete all 12" — the count is what turns a mis-tap into a visible amount of loss.
     private var deleteAllLabel: String {
-        photos.count == 1 ? ProximityUICopy.Review.deleteOne : ProximityUICopy.Review.deleteAll(photos.count)
+        photos.count == 1 ? FernletProximityUICopy.Review.deleteOne : FernletProximityUICopy.Review.deleteAll(photos.count)
     }
 
     private func toggle(_ id: UUID) {
@@ -475,8 +476,8 @@ public enum FriendPhotoLibrarySaver {
 
     // `nonisolated` + an explicit `@Sendable` change block so this work does NOT inherit the
     // target's default MainActor isolation (FernletKit/Package.swift sets
-    // `.defaultIsolation(MainActor.self)` on ProximityKit). Photos runs `performChanges` on its
-    // own private serial queue; a MainActor-inheriting block trips the Swift executor
+    // `.defaultIsolation(MainActor.self)` on FernletProximityUI). Photos runs `performChanges`
+    // on its own private serial queue; a MainActor-inheriting block trips the Swift executor
     // precondition (`dispatch_assert_queue_fail`) — the build-19 TestFlight crash. Everything the
     // block touches is created locally; `photos` is Sendable.
     public nonisolated static func save(_ photos: [FriendPhotoPayload]) async throws {
@@ -530,7 +531,7 @@ public struct PhotoSaveFailure: Equatable {
     /// (`bundle: .module`, review §4.0), and a stored constant would freeze whichever language the
     /// process launched in.
     public static var generic: PhotoSaveFailure {
-        PhotoSaveFailure(message: ProximityUICopy.SaveFailure.generic, offersSettings: false)
+        PhotoSaveFailure(message: FernletProximityUICopy.SaveFailure.generic, offersSettings: false)
     }
 }
 
@@ -545,15 +546,15 @@ extension FriendPhotoLibrarySaver {
     public static func userFacingFailure(for error: Error, photoCount: Int) -> PhotoSaveFailure {
         if (error as? CocoaError)?.code == .userCancelled {
             return PhotoSaveFailure(
-                message: ProximityUICopy.SaveFailure.permissionDenied,
+                message: FernletProximityUICopy.SaveFailure.permissionDenied,
                 offersSettings: true
             )
         }
         if error is NothingSavedError {
             return PhotoSaveFailure(
                 message: photoCount == 1
-                    ? ProximityUICopy.SaveFailure.corruptedOne
-                    : ProximityUICopy.SaveFailure.corruptedMany,
+                    ? FernletProximityUICopy.SaveFailure.corruptedOne
+                    : FernletProximityUICopy.SaveFailure.corruptedMany,
                 offersSettings: false
             )
         }
@@ -575,14 +576,14 @@ extension View {
     ) -> some View {
         alert(title, isPresented: failure.isPresent()) {
             if failure.wrappedValue?.offersSettings == true {
-                Button(ProximityUICopy.SaveFailure.openSettings) {
+                Button(FernletProximityUICopy.SaveFailure.openSettings) {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                     failure.wrappedValue = nil
                 }
             }
-            Button(ProximityUICopy.SaveFailure.ok, role: .cancel) { failure.wrappedValue = nil }
+            Button(FernletProximityUICopy.SaveFailure.ok, role: .cancel) { failure.wrappedValue = nil }
         } message: {
             // `verbatim:` because `PhotoSaveFailure.message` is a caller-supplied, already-final
             // sentence — the hosts assemble it. The label also states that plainly, which is what

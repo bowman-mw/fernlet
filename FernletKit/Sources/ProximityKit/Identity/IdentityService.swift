@@ -17,23 +17,19 @@
 
 import Foundation
 import FernletCrypto
-import FernletFoundation
 import CryptoKit
 import Security
-import FernletDomainModel
 
 // MARK: - Keychain key identifiers
 
-/// Fixed keychain account names for the identity key material (content-addressed escrow slots
-/// are derived separately from the escrow key's own public key).
+/// The fixed keychain account name of the legacy escrow row (content-addressed escrow slots are
+/// derived separately from the escrow key's own public key). The four device-identity accounts are
+/// the host namespace's `installation.keychain.identity` since ProximityKit plan step A0.2.8 — see
+/// ``IdentityService/accounts`` — and the escrow rows leave with the backup side in step A0.4.
 ///
 /// The `backupEscrowPrivateKey` account is legacy: read for back-compat, never written by this
 /// build.
 private enum IdentityKeychainKey: String {
-    case signingPrivateKey          = "signingPrivateKey"
-    case keyAgreementPrivateKey     = "keyAgreementPrivateKey"
-    case signingPublicKeyCache      = "signingPublicKeyCache"
-    case keyAgreementPublicKeyCache = "keyAgreementPublicKeyCache"
     case backupEscrowPrivateKey     = "backupEscrowPrivateKey"
 }
 
@@ -60,7 +56,7 @@ public enum IdentityError: Error, Equatable {
     /// A keychain READ the identity depends on failed with an `OSStatus` other than
     /// `errSecItemNotFound`, carrying that status. Raised by ``IdentityService/ensureProvisioned()``
     /// instead of treating the row as absent: every non-`found` answer there leads to a mint, and a
-    /// mint `KeychainItem.store`s each identity row **delete-then-add** — so a transient read error
+    /// mint `ProximityKeychainItem.store`s each identity row **delete-then-add** — so a transient read error
     /// (`errSecInteractionNotAllowed` before first unlock, `errSecNotAvailable`, an I/O failure)
     /// that fell through would overwrite the live identity and silently orphan every trust
     /// relationship built on it. Nothing is written when this is thrown; the next launch retries.
@@ -104,6 +100,10 @@ public enum IdentityError: Error, Equatable {
 /// share, heart-drop service) over the same keychain rows; `wipe()` clears the rows plus THIS
 /// instance's cache, so delete-all must call it on every live instance. `@MainActor`; the pure
 /// crypto statics (`verify`, `fingerprint`, tag derivations) are `nonisolated` for off-main use.
+///
+/// Every instance is built from its host's ``ProximityNamespace`` (plan step A0.2.3), which names
+/// the keychain service those shared rows live under; ProximityKit holds no namespace of its own
+/// and so offers no default identity.
 @MainActor
 public final class IdentityService {
 
@@ -118,14 +118,56 @@ public final class IdentityService {
     /// recognised by length only, so it can be refused by name rather than opened (Phase 4).
     private nonisolated static let groupKeyWrapFormatV2 = Data("FGK2".utf8)
 
+    /// The host's protocol identity, which this identity signs, seals and keeps its rows under
+    /// (ProximityKit plan step A0.2.3).
+    ///
+    /// Handed in at construction and never looked up: ProximityKit holds no namespace of its own, so
+    /// an identity is always built from its host's. Since step A0.2.3 the identity reads its default
+    /// ``keychainService`` off it, and since A0.2.4 the builders that sign with this identity (the
+    /// envelope, the admission token, the membership, quorum and key-agreement records) and the
+    /// envelope's `verify` read their labels from its ``purposes``; since A0.2.5 the six routed
+    /// builders do too, and a verify QR made from this identity carries this namespace's scheme and
+    /// QR label (the coach and duress ceremonies scan and answer under it as well); and since A0.2.6
+    /// the identity's own transport ``seal(_:to:format:)`` and ``open(_:from:format:)`` and its
+    /// group-key ``encryptGroupKey(_:for:)`` and ``decryptGroupKey(_:)`` take their HKDF salts and
+    /// AEAD labels from its ``purposes``, as do the routed chunks, content hashes and key wraps its
+    /// builders mint; and since A0.2.8 the identity's four device rows' ``accounts``, each
+    /// byte-identical for Fernlet. `nonisolated`: inert `Sendable` value data, which the nonisolated verifiers and
+    /// serializers read without a hop to the main actor.
+    public nonisolated let namespace: ProximityNamespace
+
+    /// The namespace's domain-separation labels, `namespace.family.purposes`, by consumer family.
+    public nonisolated var purposes: ProximityNamespace.Purposes { namespace.family.purposes }
+
+    /// The accounts of this identity's four device rows, the namespace's
+    /// `installation.keychain.identity` (plan step A0.2.8): the signing and key-agreement private keys
+    /// and their public-key caches. They sit under ``keychainService``, never under the rows' own
+    /// `service`, so a test's throwaway service holds the namespace's accounts too.
+    nonisolated var accounts: ProximityNamespace.Keychain.IdentityRows { namespace.installation.keychain.identity }
+
+    /// The keychain service holding this identity's rows: the namespace's identity service, unless
+    /// the initializer was handed another (a test's throwaway service).
     public let keychainService: String
 
     private var signingKey: Curve25519.Signing.PrivateKey?
     private var keyAgreementKey: Curve25519.KeyAgreement.PrivateKey?
     private var backupEscrowKey: Curve25519.KeyAgreement.PrivateKey?
 
-    public init(keychainService: String = "com.fernlet.identity") {
-        self.keychainService = keychainService
+    /// An identity under the host's namespace. Reads and writes nothing: ``ensureProvisioned()``
+    /// does that.
+    ///
+    /// Replaces `init(keychainService: String = "com.fernlet.identity")` (plan step A0.2.3). The
+    /// literal that default spelled is the namespace's `installation.keychain.identity.service` now,
+    /// so a shipping identity keeps the very same rows and ProximityKit spells no app's service.
+    ///
+    /// - Parameters:
+    ///   - namespace: The host's protocol identity. No default: every host supplies its own.
+    ///   - keychainService: The service holding the identity's rows, or `nil` — every shipping path —
+    ///     for the namespace's identity service. A test passes a throwaway service of its own, so it
+    ///     never touches the device's real identity.
+    public init(namespace: ProximityNamespace, keychainService: String? = nil) {
+        self.namespace = namespace
+        self.keychainService = keychainService ?? namespace.installation.keychain.identity.service
     }
 
     // MARK: - Public surface
@@ -154,10 +196,58 @@ public final class IdentityService {
     /// Signs an already domain-tagged transcript. The typed purpose is checked against the bytes at
     /// this one raw Ed25519 boundary, so a new caller cannot accidentally turn the identity into an
     /// unscoped signing oracle.
+    ///
+    /// **Transitional** (plan step A0.2.3). A namespace label signs through the
+    /// `ProximityCryptographicPurpose` overload below; this one stays for FernletCrypto's registry:
+    /// the feature labels until plan step A0.4, the app's duress and probe purposes until C1, and
+    /// the tests that name them. Every core label's builder signs through the namespace overload
+    /// since step A0.2.5.
+    /// The purpose's type picks the overload. No deprecation attribute: warnings are errors.
     public func sign(_ data: Data, purpose: CryptographicPurpose) throws -> Data {
         guard let key = signingKey else { throw IdentityError.notProvisioned }
         guard let signingBytes = purpose.signingBytes(data) else { throw IdentityError.invalidKeyData }
         return try key.signature(for: signingBytes)
+    }
+
+    /// Signs an already domain-tagged transcript under a namespace signature label.
+    ///
+    /// The same single raw Ed25519 boundary as the `CryptographicPurpose` overload, with the same
+    /// positional check that the transcript begins with the label's prefix (`signingBytes`). The
+    /// label's role lets it refuse two things that overload cannot tell apart:
+    /// - a verify-only label, `.signature(.absent)` (the legacy pair), which accepts every
+    ///   transcript, so signing under it would make this identity an unscoped signing oracle;
+    /// - a label in a non-signature role — a hash domain, a salt, a column seal, an AAD or an
+    ///   exporter label — which never authorizes a signature.
+    ///
+    /// - Parameters:
+    ///   - data: The transcript, already framed with `purpose`'s prefix.
+    ///   - purpose: A `.signature(.lengthPrefixed)` or `.signature(.rawPrefix)` label.
+    /// - Returns: The Ed25519 signature over `data`, which is signed unchanged.
+    /// - Throws: ``IdentityError/notProvisioned`` before ``ensureProvisioned()`` has run; otherwise
+    ///   ``IdentityError/invalidKeyData`` — the error a misframed transcript has always thrown — for
+    ///   a misframed transcript, a verify-only label or a non-signature role.
+    public func sign(_ data: Data, purpose: ProximityCryptographicPurpose) throws -> Data {
+        guard let key = signingKey else { throw IdentityError.notProvisioned }
+        guard Self.signsUnder(purpose.role), let signingBytes = purpose.signingBytes(data) else {
+            throw IdentityError.invalidKeyData
+        }
+        return try key.signature(for: signingBytes)
+    }
+
+    /// Whether a new transcript may be signed under `role`: a length-prefixed or raw-prefix signature
+    /// role, and nothing else. Exhaustive on purpose, so a role added to
+    /// ``ProximityCryptographicPurpose/Role`` is classified here before anything can sign under it.
+    ///
+    /// - Parameter role: The role of the label a caller asked to sign under.
+    /// - Returns: `true` only for `.signature(.lengthPrefixed)` and `.signature(.rawPrefix)`.
+    private nonisolated static func signsUnder(_ role: ProximityCryptographicPurpose.Role) -> Bool {
+        switch role {
+        case .signature(.lengthPrefixed), .signature(.rawPrefix):
+            return true
+        case .signature(.absent), .hashDomain, .keyDerivationSalt, .columnSeal, .aeadAssociatedData,
+             .tlsExporterLabel:
+            return false
+        }
     }
 
     /// Sealed-backup key derivation, **record-format v1** (the legacy static derivation).
@@ -217,11 +307,15 @@ public final class IdentityService {
         )
     }
 
-    // WI-9: the three pure crypto statics below are `nonisolated` — they read no instance/actor state
+    // WI-9: the pure crypto statics below are `nonisolated` — they read no instance/actor state
     // (only their parameters + CryptoKit), so signature verification and fingerprinting can run off the
     // main actor. Required by the `nonisolated` `MeshAdmissionToken.verify` and the off-main verify path.
     /// Verifies an already domain-tagged transcript. Legacy read purposes are explicitly marked in
     /// the registry; all current transcript purposes must be embedded in the supplied bytes.
+    ///
+    /// **Transitional** (plan step A0.2.3), like the `CryptographicPurpose` `sign`: a namespace label
+    /// verifies through the `ProximityCryptographicPurpose` overload below, and this one stays for
+    /// FernletCrypto's registry until the labels it serves move.
     public nonisolated static func verify(
         _ signature: Data,
         of data: Data,
@@ -233,10 +327,38 @@ public final class IdentityService {
         return publicKey.isValidSignature(signature, for: signingBytes)
     }
 
+    /// Verifies a signature over an already domain-tagged transcript under a namespace signature
+    /// label.
+    ///
+    /// The transcript must begin with the label's prefix (`signingBytes`), so a label in a
+    /// non-signature role verifies nothing. A verify-only `.signature(.absent)` label — the legacy
+    /// pair — accepts every transcript: that is what reading a format from before domain separation
+    /// takes, and why `sign` refuses one.
+    ///
+    /// - Parameters:
+    ///   - signature: The Ed25519 signature to check.
+    ///   - data: The transcript the signature claims to cover.
+    ///   - publicKeyData: The signer's raw Ed25519 public key.
+    ///   - purpose: The signature label `data` is framed for.
+    /// - Returns: Whether `signature` is valid for `data` under `publicKeyData`, with `data` framed for
+    ///   `purpose`.
+    public nonisolated static func verify(
+        _ signature: Data,
+        of data: Data,
+        by publicKeyData: Data,
+        purpose: ProximityCryptographicPurpose
+    ) -> Bool {
+        guard let publicKey = try? Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData) else { return false }
+        guard let signingBytes = purpose.signingBytes(data) else { return false }
+        return publicKey.isValidSignature(signature, for: signingBytes)
+    }
+
     /// X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305 seal with forward secrecy.
     /// Wire form: ephemeralPubKey (32 B) || sealedBox.combined (nonce 12 B || ciphertext || tag 16 B).
     /// `format: .wire2` deflate-compresses + bucket-pads the plaintext before sealing
     /// (`SealedPayloadFraming`); pass it only when the peer advertised the `wire2` capability.
+    /// The HKDF salt is this identity's `purposes.keyDerivation.proximityTransportV1` and the
+    /// authenticated data `purposes.aead.proximityTransportV2` ‖ the sender's key (plan step A0.2.6).
     public func seal(_ plaintext: Data, to peerKeyAgreementPublicKey: Data, format: SealedPayloadFormat = .legacy) throws -> Data {
         guard let senderKey = keyAgreementKey else { throw IdentityError.notProvisioned }
         guard let peerPubKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: peerKeyAgreementPublicKey) else {
@@ -252,12 +374,12 @@ public final class IdentityService {
         let sharedSecret = try ephemeralKey.sharedSecretFromKeyAgreement(with: peerPubKey)
         let symKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
-            salt: FernletCryptoPurpose.KeyDerivation.proximityTransportV1.data,
+            salt: purposes.keyDerivation.proximityTransportV1.data,
             sharedInfo: senderKey.publicKey.rawRepresentation + peerKeyAgreementPublicKey,
             outputByteCount: 32
         )
 
-        let aad = FernletCryptoPurpose.AEAD.proximityTransportV2.data
+        let aad = purposes.aead.proximityTransportV2.data
             + senderKey.publicKey.rawRepresentation
         let sealedBox = try ChaChaPoly.seal(body, using: symKey, authenticating: aad)
         return Self.proximityTransportFormatV2 + ephemeralKey.publicKey.rawRepresentation + sealedBox.combined
@@ -291,7 +413,7 @@ public final class IdentityService {
         let sharedSecret = try recipientKey.sharedSecretFromKeyAgreement(with: ephemeralPeerPubKey)
         let symKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
-            salt: FernletCryptoPurpose.KeyDerivation.proximityTransportV1.data,
+            salt: purposes.keyDerivation.proximityTransportV1.data,
             sharedInfo: peerKeyAgreementPublicKey + recipientKey.publicKey.rawRepresentation,
             outputByteCount: 32
         )
@@ -299,7 +421,7 @@ public final class IdentityService {
         let plaintext: Data
         do {
             let sealedBox = try ChaChaPoly.SealedBox(combined: combined)
-            let aad = FernletCryptoPurpose.AEAD.proximityTransportV2.data + peerKeyAgreementPublicKey
+            let aad = purposes.aead.proximityTransportV2.data + peerKeyAgreementPublicKey
             plaintext = try ChaChaPoly.open(sealedBox, using: symKey, authenticating: aad)
         } catch {
             throw IdentityError.openFailed
@@ -448,6 +570,8 @@ public final class IdentityService {
 
     /// Wraps a 32-byte group key for one recipient using ephemeral X25519 ECDH → HKDF-SHA256 → AES-256-GCM.
     /// Wire form: ephemeralPubKey (32 B) || nonce (12 B) || ciphertext (32 B) || tag (16 B) = 92 B total.
+    /// The HKDF salt is this identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and the
+    /// authenticated data `purposes.aead.meshGroupKeyWrapV2`, alone (plan step A0.2.6).
     public func encryptGroupKey(_ key: Data, for recipientPublicKey: Data) throws -> Data {
         guard key.count == 32 else { throw IdentityError.sealFailed }
         guard let recipientKey = try? Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipientPublicKey) else {
@@ -457,7 +581,7 @@ public final class IdentityService {
         let sharedSecret = try ephemeralKey.sharedSecretFromKeyAgreement(with: recipientKey)
         let symKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
-            salt: FernletCryptoPurpose.KeyDerivation.meshGroupKeyWrapV1.data,
+            salt: purposes.keyDerivation.meshGroupKeyWrapV1.data,
             sharedInfo: ephemeralKey.publicKey.rawRepresentation + recipientPublicKey,
             outputByteCount: 32
         )
@@ -466,7 +590,7 @@ public final class IdentityService {
             key,
             using: symKey,
             nonce: gcmNonce,
-            authenticating: FernletCryptoPurpose.AEAD.meshGroupKeyWrapV2.data
+            authenticating: purposes.aead.meshGroupKeyWrapV2.data
         )
 
         var bundle = Self.groupKeyWrapFormatV2
@@ -507,7 +631,7 @@ public final class IdentityService {
         let recipientPublicKey = recipientKey.publicKey.rawRepresentation
         let symKey = sharedSecret.hkdfDerivedSymmetricKey(
             using: SHA256.self,
-            salt: FernletCryptoPurpose.KeyDerivation.meshGroupKeyWrapV1.data,
+            salt: purposes.keyDerivation.meshGroupKeyWrapV1.data,
             sharedInfo: Data(ephPubData) + recipientPublicKey,
             outputByteCount: 32
         )
@@ -518,7 +642,7 @@ public final class IdentityService {
             return try AES.GCM.open(
                 sealedBox,
                 using: symKey,
-                authenticating: FernletCryptoPurpose.AEAD.meshGroupKeyWrapV2.data
+                authenticating: purposes.aead.meshGroupKeyWrapV2.data
             )
         } catch {
             throw IdentityError.openFailed
@@ -541,11 +665,11 @@ public final class IdentityService {
     /// The open/restore path must never mint (see `loadBackupEscrowKeyForOpen`).
     ///
     /// **Fail closed on an unreadable row (F-1, P5 close-out).** Every case below Case 1 mints, and a
-    /// mint `KeychainItem.store`s each identity row delete-then-add. The two identity-row reads and
-    /// Case 3's legacy read therefore use `KeychainItem.loadDistinguishingAbsence`: only
+    /// mint `ProximityKeychainItem.store`s each identity row delete-then-add. The two identity-row reads and
+    /// Case 3's legacy read therefore use `ProximityKeychainItem.loadDistinguishingAbsence`: only
     /// `errSecItemNotFound` is absence, and any other status throws
     /// ``IdentityError/keychainReadFailed(_:)`` with nothing written. The decision is
-    /// ``classifyDeviceIdentityRows(signing:keyAgreement:)``, pure and tested on its own.
+    /// ``classifyDeviceIdentityRows(signing:keyAgreement:accounts:)``, pure and tested on its own.
     public func ensureProvisioned() throws {
         if signingKey != nil && keyAgreementKey != nil { return }
 
@@ -628,15 +752,18 @@ public final class IdentityService {
     /// The pure half of Case 1: classifies the two identity-row reads.
     ///
     /// - Parameters:
-    ///   - signing: The `signingPrivateKey` row's read.
-    ///   - keyAgreement: The `keyAgreementPrivateKey` row's read.
+    ///   - signing: The signing private key row's read.
+    ///   - keyAgreement: The key-agreement private key row's read.
+    ///   - accounts: The identity's accounts (``accounts``), which name the row a refusal carries
+    ///     (plan step A0.2.8).
     /// - Returns: what provisioning may do — see ``DeviceIdentityRead`` for the precedence.
     static func classifyDeviceIdentityRows(
-        signing: KeychainItem.ReadResult,
-        keyAgreement: KeychainItem.ReadResult
+        signing: ProximityKeychainItem.ReadResult,
+        keyAgreement: ProximityKeychainItem.ReadResult,
+        accounts: ProximityNamespace.Keychain.IdentityRows
     ) -> DeviceIdentityRead {
-        let signingRow = IdentityKeychainKey.signingPrivateKey.rawValue
-        let keyAgreementRow = IdentityKeychainKey.keyAgreementPrivateKey.rawValue
+        let signingRow = accounts.signingPrivateKey
+        let keyAgreementRow = accounts.keyAgreementPrivateKey
         if case .unreadable(let status) = signing {
             return .unreadable(row: signingRow, status: status)
         }
@@ -661,26 +788,26 @@ public final class IdentityService {
     /// Throws ``IdentityError/keychainReadFailed(_:)`` when either row is **unreadable**: a
     /// transient keychain error is not absence, and the mint cases delete-then-add every identity
     /// row, so falling through would destroy the live identity. Reads with
-    /// `KeychainItem.loadDistinguishingAbsence`, never the nil-collapsing `load` — the wall in
+    /// `ProximityKeychainItem.loadDistinguishingAbsence`, never the nil-collapsing `load` — the wall in
     /// `IdentityProvisioningReadTests` pins that.
     private func loadExistingDeviceIdentity() throws
     -> (signing: Curve25519.Signing.PrivateKey, keyAgreement: Curve25519.KeyAgreement.PrivateKey)? {
-        let signingRow = KeychainItem.loadDistinguishingAbsence(
-            account: IdentityKeychainKey.signingPrivateKey.rawValue, service: keychainService
+        let signingRow = ProximityKeychainItem.loadDistinguishingAbsence(
+            account: accounts.signingPrivateKey, service: keychainService
         )
-        let keyAgreementRow = KeychainItem.loadDistinguishingAbsence(
-            account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue, service: keychainService
+        let keyAgreementRow = ProximityKeychainItem.loadDistinguishingAbsence(
+            account: accounts.keyAgreementPrivateKey, service: keychainService
         )
-        switch Self.classifyDeviceIdentityRows(signing: signingRow, keyAgreement: keyAgreementRow) {
+        switch Self.classifyDeviceIdentityRows(signing: signingRow, keyAgreement: keyAgreementRow, accounts: accounts) {
         case .found(let signing, let keyAgreement):
             return (signing, keyAgreement)
         case .absent:
             return nil
         case .unparseable(let row):
-            FernletAuditLog.log("identity.keychain.unparseableRow", context: ["row": row, "stage": "provisioning"])
+            ProximityAudit.log("identity.keychain.unparseableRow", context: ["row": row, "stage": "provisioning"])
             return nil
         case .unreadable(let row, let status):
-            FernletAuditLog.log("identity.keychain.readFailed", context: [
+            ProximityAudit.log("identity.keychain.readFailed", context: [
                 "row": row, "stage": "provisioning", "status": "\(status)"
             ])
             throw IdentityError.keychainReadFailed(status)
@@ -689,21 +816,21 @@ public final class IdentityService {
 
     /// Case 3's read of the legacy synced key-agreement row, on the same fail-closed rule as
     /// ``loadExistingDeviceIdentity()``: an unreadable row throws rather than falling through to
-    /// Case 4, whose `KeychainItem.store(…, replacing: .any)` would delete the synced row it could
+    /// Case 4, whose `ProximityKeychainItem.store(…, replacing: .any)` would delete the synced row it could
     /// not read. Absent, or present but unparseable, is nil — Case 4 is then the right answer.
     private func loadLegacyKeyAgreementKey() throws -> Curve25519.KeyAgreement.PrivateKey? {
-        let row = IdentityKeychainKey.keyAgreementPrivateKey.rawValue
-        switch KeychainItem.loadDistinguishingAbsence(account: row, service: keychainService) {
+        let row = accounts.keyAgreementPrivateKey
+        switch ProximityKeychainItem.loadDistinguishingAbsence(account: row, service: keychainService) {
         case .absent:
             return nil
         case .found(let data):
             guard let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: data) else {
-                FernletAuditLog.log("identity.keychain.unparseableRow", context: ["row": row, "stage": "legacyKeyAgreement"])
+                ProximityAudit.log("identity.keychain.unparseableRow", context: ["row": row, "stage": "legacyKeyAgreement"])
                 return nil
             }
             return key
         case .unreadable(let status):
-            FernletAuditLog.log("identity.keychain.readFailed", context: [
+            ProximityAudit.log("identity.keychain.readFailed", context: [
                 "row": row, "stage": "legacyKeyAgreement", "status": "\(status)"
             ])
             throw IdentityError.keychainReadFailed(status)
@@ -717,14 +844,14 @@ public final class IdentityService {
         _ keyAgreement: Curve25519.KeyAgreement.PrivateKey,
         accessibility: CFString
     ) {
-        let status = KeychainItem.store(keyAgreement.rawRepresentation,
-                                        account: IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
-                                        service: keychainService,
-                                        accessibility: accessibility,
-                                        synchronizable: false)
+        let status = ProximityKeychainItem.store(keyAgreement.rawRepresentation,
+                                                 account: accounts.keyAgreementPrivateKey,
+                                                 service: keychainService,
+                                                 accessibility: accessibility,
+                                                 synchronizable: false)
         guard status != errSecSuccess else { return }
-        FernletAuditLog.log("identity.keychain.storeFailed", context: [
-            "row": IdentityKeychainKey.keyAgreementPrivateKey.rawValue,
+        ProximityAudit.log("identity.keychain.storeFailed", context: [
+            "row": accounts.keyAgreementPrivateKey,
             "stage": "deviceOnlyMigration",
             "status": "\(status)"
         ])
@@ -734,13 +861,13 @@ public final class IdentityService {
     /// Throws on a failed write so the caller does not adopt an escrow key that is not on disk —
     /// sealing under a key nothing persisted makes those backups permanently unrecoverable.
     private func promoteLegacyKeyAgreementKeyToEscrow(_ legacyKey: Curve25519.KeyAgreement.PrivateKey) throws {
-        let status = KeychainItem.store(legacyKey.rawRepresentation,
-                                        account: Self.escrowKeychainAccount(forPublicKey: legacyKey.publicKey.rawRepresentation),
-                                        service: keychainService,
-                                        accessibility: kSecAttrAccessibleAfterFirstUnlock,
-                                        synchronizable: true)
+        let status = ProximityKeychainItem.store(legacyKey.rawRepresentation,
+                                                 account: Self.escrowKeychainAccount(forPublicKey: legacyKey.publicKey.rawRepresentation),
+                                                 service: keychainService,
+                                                 accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                                 synchronizable: true)
         guard status != errSecSuccess else { return }
-        FernletAuditLog.log("identity.escrow.legacyPromoteFailed", context: ["status": "\(status)"])
+        ProximityAudit.log("identity.escrow.legacyPromoteFailed", context: ["status": "\(status)"])
         throw IdentityError.keychainWriteFailed
     }
 
@@ -754,17 +881,17 @@ public final class IdentityService {
         accessibility: CFString
     ) throws {
         let rows: [(account: String, data: Data)] = [
-            (IdentityKeychainKey.signingPrivateKey.rawValue, signing.rawRepresentation),
-            (IdentityKeychainKey.signingPublicKeyCache.rawValue, signing.publicKey.rawRepresentation),
-            (IdentityKeychainKey.keyAgreementPrivateKey.rawValue, keyAgreement.rawRepresentation),
-            (IdentityKeychainKey.keyAgreementPublicKeyCache.rawValue, keyAgreement.publicKey.rawRepresentation)
+            (accounts.signingPrivateKey, signing.rawRepresentation),
+            (accounts.signingPublicKeyCache, signing.publicKey.rawRepresentation),
+            (accounts.keyAgreementPrivateKey, keyAgreement.rawRepresentation),
+            (accounts.keyAgreementPublicKeyCache, keyAgreement.publicKey.rawRepresentation)
         ]
         for row in rows {
-            let status = KeychainItem.store(row.data, account: row.account,
-                                            service: keychainService, accessibility: accessibility)
+            let status = ProximityKeychainItem.store(row.data, account: row.account,
+                                                     service: keychainService, accessibility: accessibility)
             guard status == errSecSuccess else {
-                FernletAuditLog.log("identity.keychain.storeFailed",
-                                    context: ["row": row.account, "status": "\(status)"])
+                ProximityAudit.log("identity.keychain.storeFailed",
+                                   context: ["row": row.account, "status": "\(status)"])
                 throw IdentityError.keychainWriteFailed
             }
         }
@@ -838,20 +965,20 @@ public final class IdentityService {
                                                contentAddressed: isContentAddressed)
             }
         }
-        for (account, data) in KeychainItem.loadAll(service: keychainService, synchronizable: .synced)
+        for (account, data) in ProximityKeychainItem.loadAll(service: keychainService, synchronizable: .synced)
         where account.hasPrefix(Self.escrowSlotPrefix) {
             ingest(account: account, data: data, synced: true)
         }
-        for (account, data) in KeychainItem.loadAll(service: keychainService, synchronizable: .local)
+        for (account, data) in ProximityKeychainItem.loadAll(service: keychainService, synchronizable: .local)
         where account.hasPrefix(Self.escrowSlotPrefix) {
             ingest(account: account, data: data, synced: false)
         }
         // Legacy fixed account — READ ONLY for back-compat with pre-content-addressing devices.
         let legacy = IdentityKeychainKey.backupEscrowPrivateKey.rawValue
-        if let data = KeychainItem.load(account: legacy, service: keychainService, synchronizable: .synced) {
+        if let data = ProximityKeychainItem.load(account: legacy, service: keychainService, synchronizable: .synced) {
             ingest(account: legacy, data: data, synced: true)
         }
-        if let data = KeychainItem.load(account: legacy, service: keychainService, synchronizable: .local) {
+        if let data = ProximityKeychainItem.load(account: legacy, service: keychainService, synchronizable: .local) {
             ingest(account: legacy, data: data, synced: false)
         }
         return byData.values.sorted { lhs, rhs in
@@ -883,26 +1010,26 @@ public final class IdentityService {
         if backupEscrowKey == nil {
             let minted = Curve25519.KeyAgreement.PrivateKey()
             let account = Self.escrowKeychainAccount(forPublicKey: minted.publicKey.rawRepresentation)
-            let status = KeychainItem.store(minted.rawRepresentation,
-                                            account: account,
-                                            service: keychainService,
-                                            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-                                            synchronizable: false)
+            let status = ProximityKeychainItem.store(minted.rawRepresentation,
+                                                     account: account,
+                                                     service: keychainService,
+                                                     accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                                                     synchronizable: false)
             // Adopt the minted key ONLY once it is provably on disk. Adopting an unwritten key
             // seals every backup generation under a key that exists nowhere after relaunch —
             // permanently unrecoverable records. Empty return = "no escrow key", which the seal
             // path already treats as refuse-to-seal (`sealedBackupKey` throws `notProvisioned`).
             guard status == errSecSuccess else {
-                FernletAuditLog.log("identity.escrow.mintFailed", context: ["status": "\(status)"])
+                ProximityAudit.log("identity.escrow.mintFailed", context: ["status": "\(status)"])
                 return Data()
             }
-            guard KeychainItem.load(account: account, service: keychainService, synchronizable: .local)
+            guard ProximityKeychainItem.load(account: account, service: keychainService, synchronizable: .local)
                     == minted.rawRepresentation else {
-                FernletAuditLog.log("identity.escrow.mintVerifyFailed")
+                ProximityAudit.log("identity.escrow.mintVerifyFailed")
                 return Data()
             }
             backupEscrowKey = minted
-            FernletAuditLog.log("identity.escrow.mintedLocal")
+            ProximityAudit.log("identity.escrow.mintedLocal")
         }
         return backupEscrowKey?.publicKey.rawRepresentation ?? Data()
     }
@@ -992,8 +1119,8 @@ public final class IdentityService {
                 // account (the publish below would otherwise leave it lingering). Removing only the .local
                 // row for THIS key's account cannot disturb any other (different) key.
                 if only.hasLocalRow && only.contentAddressed {
-                    KeychainItem.delete(account: Self.escrowKeychainAccount(forPublicKey: only.publicKey),
-                                        service: keychainService, synchronizable: .local)
+                    ProximityKeychainItem.delete(account: Self.escrowKeychainAccount(forPublicKey: only.publicKey),
+                                                 service: keychainService, synchronizable: .local)
                 }
                 // Migrate a genuine key that still lives ONLY at the legacy fixed account onto its
                 // content-addressed slot, so legacy-origin keys gain the same overwrite-immunity as newly
@@ -1003,17 +1130,17 @@ public final class IdentityService {
                 // raises no false conflict and preserves zero-config recovery. Idempotent: once a CA row
                 // exists, `only.contentAddressed` is true and this no-ops.
                 if !only.contentAddressed {
-                    let status = KeychainItem.store(only.data,
-                                                    account: Self.escrowKeychainAccount(forPublicKey: only.publicKey),
-                                                    service: keychainService,
-                                                    accessibility: kSecAttrAccessibleAfterFirstUnlock,
-                                                    synchronizable: true, replacing: .local)
+                    let status = ProximityKeychainItem.store(only.data,
+                                                             account: Self.escrowKeychainAccount(forPublicKey: only.publicKey),
+                                                             service: keychainService,
+                                                             accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                                             synchronizable: true, replacing: .local)
                     // Log what actually happened: the pre-fix code logged the migration as done
                     // even when nothing was written.
                     if status == errSecSuccess {
-                        FernletAuditLog.log("identity.escrow.migratedLegacyToContentAddressed")
+                        ProximityAudit.log("identity.escrow.migratedLegacyToContentAddressed")
                     } else {
-                        FernletAuditLog.log("identity.escrow.migrateFailed", context: ["status": "\(status)"])
+                        ProximityAudit.log("identity.escrow.migrateFailed", context: ["status": "\(status)"])
                     }
                 }
                 return .usingSynced
@@ -1025,15 +1152,15 @@ public final class IdentityService {
             // removed only after the publish is confirmed. The old delete-then-add order meant a failed
             // publish destroyed that last copy.
             let account = Self.escrowKeychainAccount(forPublicKey: only.publicKey)
-            let status = KeychainItem.store(only.data, account: account, service: keychainService,
-                                            accessibility: kSecAttrAccessibleAfterFirstUnlock,
-                                            synchronizable: true, replacing: .synced)
+            let status = ProximityKeychainItem.store(only.data, account: account, service: keychainService,
+                                                     accessibility: kSecAttrAccessibleAfterFirstUnlock,
+                                                     synchronizable: true, replacing: .synced)
             guard status == errSecSuccess else {
-                FernletAuditLog.log("identity.escrow.promoteFailed", context: ["status": "\(status)"])
+                ProximityAudit.log("identity.escrow.promoteFailed", context: ["status": "\(status)"])
                 return .promotedLocal
             }
-            KeychainItem.delete(account: account, service: keychainService, synchronizable: .local)
-            FernletAuditLog.log("identity.escrow.promotedLocal")
+            ProximityKeychainItem.delete(account: account, service: keychainService, synchronizable: .local)
+            ProximityAudit.log("identity.escrow.promotedLocal")
             return .promotedLocal
         default:
             // ≥2 distinct keys coexist — content-addressing kept them all alive (none overwrote another).
@@ -1041,7 +1168,7 @@ public final class IdentityService {
             // the user resolves via `adoptSyncedBackupEscrowKey`. Restore meanwhile still works against any
             // of the surviving keys, so no data is stranded while the conflict is unresolved.
             backupEscrowKey = candidates[0].key
-            FernletAuditLog.log("identity.escrow.conflictDetected")
+            ProximityAudit.log("identity.escrow.conflictDetected")
             return .conflict
         }
     }
@@ -1056,11 +1183,11 @@ public final class IdentityService {
         let candidates = gatherEscrowCandidates()
         guard let chosen = candidates.first(where: { $0.synced }) else { return nil }
         for candidate in candidates where !candidate.synced && candidate.contentAddressed && candidate.data != chosen.data {
-            KeychainItem.delete(account: Self.escrowKeychainAccount(forPublicKey: candidate.publicKey),
-                                service: keychainService, synchronizable: .local)
+            ProximityKeychainItem.delete(account: Self.escrowKeychainAccount(forPublicKey: candidate.publicKey),
+                                         service: keychainService, synchronizable: .local)
         }
         backupEscrowKey = chosen.key
-        FernletAuditLog.log("identity.escrow.adoptedSynced")
+        ProximityAudit.log("identity.escrow.adoptedSynced")
         return chosen.publicKey
     }
 
@@ -1073,12 +1200,12 @@ public final class IdentityService {
     ///
     /// - Throws: ``IdentityError/keychainDeleteFailed(_:)`` when the keychain rows survive.
     public func wipe() throws {
-        let status = KeychainItem.deleteAllReportingStatus(service: keychainService)
+        let status = ProximityKeychainItem.deleteAllReportingStatus(service: keychainService)
         signingKey = nil
         keyAgreementKey = nil
         backupEscrowKey = nil
         guard status != errSecSuccess else { return }
-        FernletAuditLog.log("identity.wipe.keychainDeleteFailed", context: ["status": "\(status)"])
+        ProximityAudit.log("identity.wipe.keychainDeleteFailed", context: ["status": "\(status)"])
         throw IdentityError.keychainDeleteFailed(status)
     }
 

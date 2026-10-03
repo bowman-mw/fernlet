@@ -13,6 +13,7 @@
 // drive it over `FakeRecipeShareRadioSession`, the in-memory conformer of the seam pass 2 added.
 
 @testable import ProximityKit
+import FernletConnections
 import Combine
 import Foundation
 import Testing
@@ -127,6 +128,8 @@ private final class RecipeQUICTestHost: ProximityHost {
     var proximityDisplayName: String { name }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }
@@ -963,16 +966,19 @@ struct RecipeShareOverQUICTests {
     /// shared ALPN would let a recipe dial complete a TLS handshake with a mesh or presence
     /// listener.
     @Test func theRecipeServiceTypeIsItsOwnAndIsDeclared() throws {
-        #expect(NetworkRecipeShareSession.serviceType == "_fernlet-recipe2._udp")
-        #expect(NetworkRecipeShareSession.alpn == "fernlet-recipe-v1")
-        #expect(NetworkRecipeShareSession.serviceType != NetworkMeshSession.friendServiceType)
-        #expect(NetworkRecipeShareSession.serviceType != NetworkPresenceSession.serviceType)
-        #expect(NetworkRecipeShareSession.alpn != NetworkMeshSession.alpn)
-        #expect(NetworkRecipeShareSession.alpn != NetworkPresenceSession.alpn)
+        let radios = ProximityNamespace.fernlet.family.radios
+        #expect(radios.recipeShare.serviceType == "_fernlet-recipe2._udp")
+        #expect(radios.recipeShare.alpn == "fernlet-recipe-v1")
+        #expect(radios.recipeShare.serviceType != radios.mesh.serviceType)
+        #expect(radios.recipeShare.serviceType != radios.presence.serviceType)
+        #expect(radios.recipeShare.alpn != radios.mesh.alpn)
+        #expect(radios.recipeShare.alpn != radios.presence.alpn)
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
-        #expect(plist.contains("<string>\(NetworkRecipeShareSession.serviceType)</string>"))
+        #expect(plist.contains("<string>\(radios.recipeShare.serviceType)</string>"))
         let session = try Self.sessionSource()
-        #expect(session.contains("alpn: Self.alpn"), "the session must actually bind its ALPN")
+        #expect(session.contains("alpn = namespace.family.radios.recipeShare.alpn"),
+                "the session reads its ALPN off the host's namespace, from its own radio's field")
+        #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
     }
 
     // MARK: - Helpers

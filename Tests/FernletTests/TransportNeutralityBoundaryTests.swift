@@ -18,9 +18,11 @@ struct TransportNeutralityBoundaryTests {
 
     /// Everything that must stay free of the framework. The three radio managers are the ones that
     /// actually dropped their import in P1; the wire and engine roots are scanned so a new file
-    /// cannot introduce one.
+    /// cannot introduce one. `FernletProximityUI` holds the review screens that left ProximityKit's
+    /// `UI/` folder (ProximityKit plan step A0.1), so it stays scanned with the rest.
     private static let scanRoots = [
         "FernletKit/Sources/ProximityKit",
+        "FernletKit/Sources/FernletProximityUI",
         "App/Fernlet"
     ]
 
