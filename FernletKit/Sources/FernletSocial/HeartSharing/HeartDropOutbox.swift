@@ -1,4 +1,5 @@
 import Foundation
+import ProximityKit
 
 /// Persisted sender-side queue for offline heart drops + the durable receive dedup
 /// (bitchat adoptions Increment 3). Two small JSON sidecars beside `HeartLedger.json` —

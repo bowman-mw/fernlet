@@ -24,6 +24,7 @@
 // is the wall that notices.
 
 import FernletConnections
+import FernletSocial
 import Foundation
 import Testing
 @testable import ProximityKit

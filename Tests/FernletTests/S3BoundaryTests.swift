@@ -219,7 +219,8 @@ struct S3BoundaryTests {
     ///   `FernletSocial` is too: it holds Fernlet's social records over the mesh (moderation's ban store
     ///   and ledger, the closeness ledger, the friend-state cache), device-local by design, so a
     ///   CloudKit call from inside it is how who reported whom, who feels close and a friend's shared
-    ///   state would follow the user into iCloud.
+    ///   state would follow the user into iCloud; and it holds the heart dead-drop service itself,
+    ///   whose one CloudKit leg is the injected transport above.
     /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
     ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
     ///   allowed to carry, and would invert that injection seam. The same holds for

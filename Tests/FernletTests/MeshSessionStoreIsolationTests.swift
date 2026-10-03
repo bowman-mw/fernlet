@@ -25,6 +25,7 @@
 //     flake appearing three suites away.
 
 import FernletConnections
+import FernletSocial
 import Foundation
 import Testing
 @testable import ProximityKit

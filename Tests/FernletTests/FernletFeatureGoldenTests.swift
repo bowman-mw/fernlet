@@ -18,10 +18,12 @@
 //
 // Fourteen groups:
 //
-// 1. **The seven feature labels** the heart dead-drop, presence and the ban store hand CryptoKit
-//    themselves, each still a FernletCrypto registry entry: the heart pair salt, the sealed drop's salt,
-//    the day-tag prefix, the sidecar's authenticated data, the presence pair salt, the presence
-//    epoch-tag prefix and the ban evidence's reporter-tag domain.
+// 1. **The seven feature labels** of the heart dead-drop, presence and the ban store: the heart pair
+//    salt, the sealed drop's salt, the day-tag prefix, the sidecar's authenticated data, the presence
+//    pair salt, the presence epoch-tag prefix and the ban evidence's reporter-tag domain, each read
+//    where its feature reads it: the heart pair salt as the feature purpose `.fernlet` declares, which
+//    the heart dead-drop hands ProximityKit's pair-secret door, and the other six as the FernletCrypto
+//    registry entries their features hand CryptoKit themselves.
 // 2. **The pair secrets.** The heart-drop and presence pair secrets of two planted identities, from
 //    either side, and their refusals in their order: no key-agreement key first, a malformed peer key
 //    then.
@@ -101,8 +103,8 @@ import Testing
 
 // MARK: - The tables' rows
 
-/// One feature label a Fernlet feature hands CryptoKit itself: the registry entry it is, its FROZEN
-/// spelling, and the spelling and bytes production reads.
+/// One feature label of a Fernlet feature: the registry entry it is or twins, its FROZEN spelling, and
+/// the spelling and bytes production reads.
 struct FeatureGoldenLabelRow: Sendable {
     /// The registry entry, as `Group.name`.
     let field: String
@@ -111,11 +113,20 @@ struct FeatureGoldenLabelRow: Sendable {
     /// The spelling of the accessor production reads: **the only column a commit that moves the label
     /// may re-point.**
     let todayText: String
-    /// The bytes that accessor hands CryptoKit.
+    /// The bytes that accessor hands CryptoKit, itself or through a ProximityKit door.
     let todayData: Data
 
     /// A row whose accessor is a FernletCrypto registry entry.
     init(_ field: String, frozen: String, today: CryptographicPurpose) {
+        self.field = field
+        self.frozen = frozen
+        todayText = today.rawValue
+        todayData = today.data
+    }
+
+    /// A row whose accessor is a feature purpose a host declares, the salt a ProximityKit door derives
+    /// under.
+    init(_ field: String, frozen: String, today: ProximityCryptographicPurpose) {
         self.field = field
         self.frozen = frozen
         todayText = today.rawValue
@@ -153,7 +164,7 @@ struct FernletFeatureGoldenTests {
     static var labelRows: [FeatureGoldenLabelRow] {
         [
             FeatureGoldenLabelRow("KeyDerivation.heartDropPairV1", frozen: "fernlet.heartdrop.v1",
-                                  today: FernletCryptoPurpose.KeyDerivation.heartDropPairV1),
+                                  today: FernletFeaturePurposes.heartDropPairV1),
             FeatureGoldenLabelRow("KeyDerivation.heartDropOuterSealV1", frozen: "fernlet.heartdrop.seal.v1",
                                   today: FernletCryptoPurpose.KeyDerivation.heartDropOuterSealV1),
             FeatureGoldenLabelRow("HMAC.heartDropDayTagV1", frozen: "fernlet.heartdrop.day.v1",
@@ -606,18 +617,16 @@ struct FernletFeatureGoldenTests {
         ]
     }
 
-    /// The production heart-drop scope's folder, and the folder of the default sidecar root, each read
-    /// where production reads it.
+    /// The production heart-drop scope's folder, read where production reads it.
     static var productionFolders: [(field: String, today: URL)] {
         [
-            ("heartDropStorageScope.production.directory", HeartDropStorageScope.production.directory),
-            ("proximitySupportLayout.defaultDirectory", ProximitySupportLayout.defaultDirectory)
+            ("heartDropStorageScope.production.directory", HeartDropStorageScope.production.directory)
         ]
     }
 
     /// Each store's file is its frozen name directly inside the root it is handed; the production
-    /// heart-drop scope and the default sidecar root are `Application Support/Fernlet`, and the scope's
-    /// service is the heart-drop service. Nothing shipped is migrated by a move that keeps them.
+    /// heart-drop scope is `Application Support/Fernlet`, and its service is the heart-drop service.
+    /// Nothing shipped is migrated by a move that keeps them.
     @Test func theStoresFileNamesAndTheProductionHeartDropScopeAreFrozen() {
         let root = Self.scratchDirectory()
         #expect(Self.expectFrozen(Self.fileNameRows(in: root)) == 5)
@@ -627,7 +636,7 @@ struct FernletFeatureGoldenTests {
         #expect(fileURLs.allSatisfy { $0.deletingLastPathComponent().path == root.path },
                 "a store's file is not directly inside its root: \(fileURLs.map(\.path))")
         let folder = URL.applicationSupportDirectory.appendingPathComponent("Fernlet", isDirectory: true)
-        // R2: bounded by the two folders.
+        // R2: bounded by the production folders.
         for row in Self.productionFolders {
             #expect(row.today == folder, "\(row.field) is \(row.today.path), not \(folder.path)")
         }

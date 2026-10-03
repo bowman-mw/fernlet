@@ -26,6 +26,7 @@ import FernletLock
 import PrivateMediaStore
 import PrivateStoreCore
 import ProximityKit
+import FernletSocial
 @testable import Fernlet
 
 /// Pins ``CryptoFormatCensus``: the five-surface fold, the sixth (uncountable) row, and the

@@ -27,6 +27,7 @@ import FernletLock
 import PrivateMediaStore
 import PrivateStoreCore
 import ProximityKit
+import FernletSocial
 @testable import Fernlet
 
 /// Pins ``Phase3ReadoutSession`` — the checklist, the fences, the caps, and the clear.

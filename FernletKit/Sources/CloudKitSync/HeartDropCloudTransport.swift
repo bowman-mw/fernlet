@@ -7,13 +7,13 @@ import FernletFoundation
 /// Docs/Plan-Bitchat-Adoptions-2026-07-25.md) — the app's first public-DB use.
 ///
 /// The production conformer of the `HeartDropTransporting` seam (declared in
-/// `FernletDomainModel`), driven by `HeartDropService` in `ProximityKit`: upload one sealed drop
+/// `FernletDomainModel`), driven by `HeartDropService` in `FernletSocial`: upload one sealed drop
 /// per tag, fetch drops for a friend's tag window with per-chunk anti-starvation budgeting, and
 /// delete own records after pickup. `@unchecked Sendable` over two immutable, documented
 /// thread-safe CloudKit references only.
 ///
 /// Wall note (S3): this type sees only pseudonymous rotating day tags and sealed blobs; every
-/// byte of crypto lives on the ProximityKit side of the `HeartDropTransporting` seam declared in
+/// byte of crypto lives on the FernletSocial side of the `HeartDropTransporting` seam declared in
 /// FernletDomainModel. Known accepted residual: public-DB records carry a `creatorUserRecordID`, a
 /// per-container STABLE pseudonymous id. Tags are uncorrelatable across days, but the CREATOR is
 /// not — a dashboard observer gets one anonymous account's send-activity timeline, and its distinct

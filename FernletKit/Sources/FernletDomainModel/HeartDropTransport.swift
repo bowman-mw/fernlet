@@ -4,9 +4,9 @@ import Foundation
 // Docs/Plan-Bitchat-Adoptions-2026-07-25.md).
 //
 // Lives in FernletDomainModel for the same reason `HeartPayload` does (see HeartSharing.swift):
-// this module is a dependency of BOTH ProximityKit (which does all sealing/tag crypto and must
-// never import CloudKit) and CloudKitSync (which ferries opaque records and must never reach the
-// sealed side). The S3 wall stays intact by construction — the transport sees only
+// this module is a dependency of BOTH FernletSocial (whose heart dead-drop does all sealing/tag
+// crypto and must never import CloudKit) and CloudKitSync (which ferries opaque records and must
+// never reach the sealed side). The S3 wall stays intact by construction — the transport sees only
 // pseudonymous day tags and ciphertext.
 
 /// An opaque dead-drop record: a rotating pairwise day tag and a sealed blob. The transport
@@ -42,11 +42,11 @@ public nonisolated protocol HeartDropTransporting: Sendable {
 }
 
 /// Wire-size bounds for the heart dead-drop, shared by the three parties that must agree on them:
-/// ProximityKit's sealer (which enforces them when writing), CloudKitSync's ferry (which must not
+/// FernletSocial's sealer (which enforces them when writing), CloudKitSync's ferry (which must not
 /// upload or ingest more), and the receiver's pre-decrypt gate.
 ///
 /// They live HERE rather than on `HeartDropSealer` because CloudKitSync must never import
-/// ProximityKit — that pair is a hard S3-wall failure (Tests/FernletTests/S3BoundaryTests.swift),
+/// FernletSocial — that pair is a hard S3-wall failure (Tests/FernletTests/S3BoundaryTests.swift),
 /// and FernletDomainModel is the one module both sides already depend on.
 public nonisolated enum HeartDropWireLimits {
     /// Hard cap on ONE record's sealed wire bytes. A heart is ~256 B of payload by construction and

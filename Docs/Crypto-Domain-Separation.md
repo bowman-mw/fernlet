@@ -95,8 +95,9 @@ label), `meshProbeTLSExporterV1` (`fernlet.mesh.probe.tls-exporter.v1`, the DEBU
 seal). "Consumer" lists the files that name each constant, so an unused entry is visible as an empty
 cell; for the 38 entries ProximityKit's protocol used, the consumer is now the twin label in
 ProximityKit's namespace (§8). `heartDropPairV1` and `presencePairV1` are twinned too, by the two
-feature salts `.fernlet` declares for ProximityKit's pair-secret door (§8), while `IdentityService`'s
-heart-drop and presence derivations still read the entries here.
+feature salts `.fernlet` declares for ProximityKit's pair-secret door (§8): FernletSocial's heart-drop
+pair secret derives under the declared twin, while `IdentityService`'s presence derivation still
+reads its entry here.
 
 `CryptographicDomainSeparationTests.theInventoryCoversEveryDeclaredPurpose()` reads the registry off
 disk and requires its own pinned list to match, so a purpose added without a test line fails loudly.
@@ -135,7 +136,7 @@ on the reasoning.
 | `sealedBackupLegacyV1` | `com.fernlet.sealed-backup` | `IdentityService` |
 | `sealedBackupV2` | `com.fernlet.sealed-backup.v2` | `IdentityService` |
 | `proximityTransportV1` | `fernlet.proximity.v1` | `IdentityService` |
-| `heartDropPairV1` | `fernlet.heartdrop.v1` | `IdentityService` |
+| `heartDropPairV1` | `fernlet.heartdrop.v1` | — (FernletSocial's `IdentityService+HeartDrop` derives under its twin, `FernletFeaturePurposes.heartDropPairV1`; §8) |
 | `presencePairV1` | `fernlet.presence.tag.v1` | `IdentityService` |
 | `meshGroupKeyWrapV1` | `fernlet.mesh.groupkey.v1` | `IdentityService` |
 | `meshRoutedContentKeyWrapV1` | `fernlet.mesh.routed.content-key.v1` | `MeshRoutedContentKeyWrapper` |
@@ -152,7 +153,7 @@ on the reasoning.
 
 | Constant | Spelling | Consumer |
 |---|---|---|
-| `heartDropDayTagV1` | `fernlet.heartdrop.day.v1` | `IdentityService` |
+| `heartDropDayTagV1` | `fernlet.heartdrop.day.v1` | `IdentityService+HeartDrop` (FernletSocial) |
 | `presenceEpochTagV1` | `fernlet.presence.epoch.v1` | `IdentityService` |
 
 #### AEAD
@@ -727,8 +728,9 @@ labels.
   pair secret is derived under a label no verdict judged or under a protocol label. `.fernlet`
   declares two, `fernlet.heartdrop.v1` and `fernlet.presence.tag.v1`
   (`FernletKit/Sources/FernletConnections/FernletFeaturePurposes.swift`), twins of this registry's
-  `KeyDerivation.heartDropPairV1` and `KeyDerivation.presencePairV1`, which the identity's heart-drop
-  and presence derivations still read until those leave ProximityKit with their features.
+  `KeyDerivation.heartDropPairV1` and `KeyDerivation.presencePairV1`. FernletSocial's heart-drop pair
+  secret passes the declared heart salt to the door; the identity's presence derivation still reads
+  its twin here until it leaves ProximityKit with presence.
   `ProximityNamespaceSoundnessTests` and `ProximityNamespaceGateTests` hold the rule and the door,
   and `FernletFeatureGoldenTests` the door's known answers under Fernlet's two salts. Only a salt a
   ProximityKit door consumes is declared: the feature labels Fernlet's features hand CryptoKit
@@ -763,13 +765,14 @@ labels.
   soundness rules bound each token's bytes. Fifteen mesh messages and three record kinds are spelled
   exactly like signature labels, which `ProximityNamespaceGoldenTests` holds equal so that one grep
   finds both.
-- **What still reads this registry from ProximityKit.** The 12 feature labels — hearts (4),
-  presence (2), activities (3), the moderation report's signature (1) and the sealed-backup escrow
-  (2) — on the code lines `ProximityNamespaceBoundaryTests` allowlists file by file. They leave with
-  their features: the hearts', presence's and the escrow's at plan step A0.4, and the activities'
-  three and the moderation report's signature with the mesh manager's feature parts at A0.5, when
-  that list reaches nothing. The ban evidence's reporter tag is `FernletSocial`'s ban store's, which
-  names its entry here itself. The app's duress and probe signatures still sign
+- **What still reads this registry from ProximityKit.** The 8 feature labels — presence (2),
+  activities (3), the moderation report's signature (1) and the sealed-backup escrow (2) — on the
+  code lines `ProximityNamespaceBoundaryTests` allowlists file by file. They leave with their
+  features: presence's and the escrow's at plan step A0.4, and the activities' three and the
+  moderation report's signature with the mesh manager's feature parts at A0.5, when that list
+  reaches nothing. `FernletSocial` names its own entries here: the heart dead-drop's sealed-drop
+  salt, day-tag prefix and sidecar authenticated data, and the ban store's evidence reporter tag.
+  The app's duress and probe signatures still sign
   through ProximityKit's `IdentityService` under their entries here, through its
   `CryptographicPurpose` overloads.
 

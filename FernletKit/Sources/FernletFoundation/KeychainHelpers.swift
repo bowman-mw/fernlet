@@ -14,14 +14,15 @@ import Security
 /// The common substrate for Fernlet's keychain-backed secrets: `FernletLockService`'s lock
 /// credentials, the device-bound journal and Worry Box content keys, the private-media keys, the
 /// pending-narrative buffer's key, the persisted ``StoragePreferences`` blob, and FernletSocial's
-/// moderation bans (`ModerationBanStore`). All operations target generic-password items in the
+/// moderation bans (`ModerationBanStore`) and heart-drop keys (`HeartPrekeyStore`'s prekey blob and
+/// `HeartDropSidecarSeal`'s sidecar seal key). All operations target generic-password items in the
 /// data-protection keychain (`kSecUseDataProtectionKeychain`), keyed by service + account.
 ///
-/// ProximityKit's key stores (the device identity and its backup-escrow rows, the mesh seal keys
-/// and the heart-drop keys) do not call this type: since ProximityKit plan step A0.2.11 they reach
-/// the keychain through ProximityKit's own copy of this mechanism, `ProximityKeychainItem`, which
-/// issues these same query dictionaries (`ProximityNamespaceGoldenTests` holds the two equal), so
-/// rows written through either read back through the other.
+/// ProximityKit's key stores (the device identity and its backup-escrow rows, and the mesh seal
+/// keys) do not call this type: since ProximityKit plan step A0.2.11 they reach the keychain through
+/// ProximityKit's own copy of this mechanism, `ProximityKeychainItem`, which issues these same query
+/// dictionaries (`ProximityNamespaceGoldenTests` holds the two equal), so rows written through
+/// either read back through the other.
 ///
 /// Two subtleties are load-bearing:
 /// - The keychain treats `kSecAttrSynchronizable` as part of an item's primary key, so an
@@ -177,10 +178,10 @@ public nonisolated enum KeychainItem {
     /// distinguishing the three outcomes ``load(account:service:synchronizable:)`` collapses:
     /// ``ReadResult/found(_:)`` with the item's data, ``ReadResult/absent`` when no item exists,
     /// and ``ReadResult/unreadable(_:)`` carrying the failing `OSStatus`. Used by stores whose
-    /// mint-fresh-on-absent path must fail closed on a transient read error (the private-media keys
-    /// and the pending-narrative buffer's key; the heart-drop prekey blob and sidecar seal key it was
-    /// written for read through ProximityKit's copy of this type since its plan step A0.2.11), by the
-    /// lock service and the journal backup's device-key read, and by
+    /// mint-fresh-on-absent path must fail closed on a transient read error (the private-media keys,
+    /// the pending-narrative buffer's key, and FernletSocial's heart-drop prekey blob and sidecar seal
+    /// key, which it was written for), by the lock service and the journal backup's device-key read,
+    /// and by
     /// `StoragePreferencesStore.persistedBlobState`, the backup-exclusion launch gate's read —
     /// which must not treat a pre-first-unlock `errSecInteractionNotAllowed` as "never stored".
     public static func loadDistinguishingAbsence(

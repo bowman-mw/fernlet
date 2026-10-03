@@ -58,9 +58,9 @@ nonisolated extension ProximityNamespace {
     /// reads the presentation strings and every vocabulary group off it, the mesh engine's own
     /// messages included; the mesh features' payload and capability tokens are still `PayloadType`
     /// and `ProximityCapability` cases until plan steps A0.4, A0.5 and A0.7, and what ProximityKit
-    /// still spells or reads elsewhere waits for its features to leave: the 12 feature labels (eight
-    /// at plan step A0.4, the activities' and the moderation report's four at A0.5), and the
-    /// heart-drop keychain service and its support folder at A0.4. Its installation also carries the
+    /// still spells or reads elsewhere waits for its features to leave: the 8 feature labels
+    /// (presence's and the sealed-backup escrow's four at plan step A0.4, the activities' and the
+    /// moderation report's four at A0.5). Its installation also carries the
     /// Fernlet app's peer-name policy, which ProximityKit shows a peer's name under everywhere but
     /// the activity manager, until plan step A0.5.
     ///

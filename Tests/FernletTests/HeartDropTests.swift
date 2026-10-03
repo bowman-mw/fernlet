@@ -24,6 +24,7 @@ import Security
 import ProximityKit
 import FernletFoundation
 import FernletDomainModel
+import FernletSocial
 import CloudKit
 @testable import CloudKitSync
 @testable import Fernlet
@@ -376,7 +377,7 @@ struct HeartDropTests {
     }
 
     /// The sealer, the receiver's pre-decrypt gate and the CloudKit ferry must agree on the wire
-    /// bound, and CloudKitSync cannot import ProximityKit to check — the shared constant in
+    /// bound, and CloudKitSync cannot import FernletSocial to check — the shared constant in
     /// FernletDomainModel is the only thing holding them together, so pin it.
     @Test func wireLimitsAreTheSingleSourceOfTruth() {
         #expect(HeartDropSealer.maxWireByteCount == HeartDropWireLimits.maxRecordByteCount)
@@ -411,7 +412,7 @@ struct HeartDropTests {
     @Test func prekeyStoreRecoversFromACorruptBlob() throws {
         let serviceID = "com.fernlet.heartdrop.test.\(UUID().uuidString)"
         defer { KeychainItem.deleteAll(service: serviceID) }
-        // Account name mirrors HeartPrekeyStore.keychainAccount (internal to ProximityKit).
+        // Account name mirrors HeartPrekeyStore.keychainAccount (internal to FernletSocial).
         #expect(KeychainItem.store(
             Data("not json".utf8),
             account: "prekeyPrivateHalves",

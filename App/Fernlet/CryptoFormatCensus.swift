@@ -25,6 +25,7 @@
 import FernletConnections
 import FernletFoundation
 import FernletLock
+import FernletSocial
 import Foundation
 import PrivateMediaStore
 import PrivateStoreCore
@@ -60,7 +61,7 @@ nonisolated enum CryptoFormatCensusSurface: String, Sendable, CaseIterable, Iden
     case mediaAtRest
     /// `FernletLock/FernletLockService` — the one scrypt-wrapped content key in the keychain.
     case lockContentKeyWrap
-    /// `ProximityKit/HeartSharing/HeartDropSidecarKey` — the four heart-drop sidecar files.
+    /// `FernletSocial/HeartSharing/HeartDropSidecarKey` — the four heart-drop sidecar files.
     case heartDropSidecars
     /// `App/Fernlet/SealedPhotoBackupService` — the iCloud sealed-photo manifest. Present and
     /// uncountable; see ``CryptoFormatCensus/sealedPhotoBackupRow``.

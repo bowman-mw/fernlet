@@ -54,7 +54,8 @@ A few invariants in this module are load-bearing for the rest of the app:
   two shared read/mint idioms that used to be per-caller copies: ``KeychainItem/ReadResult`` +
   `loadDistinguishingAbsence` (a three-way read for stores whose mint-on-absence path must fail
   closed on an unreadable row rather than mint over it — the private-media keys, the
-  pending-narrative buffer's key, the lock — and for the storage-preferences launch gate), its
+  pending-narrative buffer's key, the lock, FernletSocial's heart-drop prekey blob and sidecar seal
+  key — and for the storage-preferences launch gate), its
   enumeration sibling ``KeychainItem/EnumerationResult`` + `loadAllDistinguishingFailure` (for
   callers that PROMISE a slot was cleared, where `loadAll`'s error-collapse-to-empty would report a
   clean clear over rows it never saw; `errSecItemNotFound` stays a legitimate empty), and
@@ -63,15 +64,16 @@ A few invariants in this module are load-bearing for the rest of the app:
   key it could not read, because `store` is delete-then-add and a mint there would destroy every
   sealed journal entry and worry.
 - **ProximityKit keeps its own copy of the keychain mechanism.** Since ProximityKit plan step
-  A0.2.11 its key stores — the device identity and its backup-escrow rows, the mesh seal keys, the
-  heart-drop prekey blob and sidecar seal key — reach the keychain through `ProximityKeychainItem`,
+  A0.2.11 its key stores — the device identity and its backup-escrow rows, and the mesh seal keys —
+  reach the keychain through `ProximityKeychainItem`,
   a member-for-member copy that issues these same query dictionaries
   (`ProximityNamespaceGoldenTests` reads them out of `KeychainHelpers.swift` and holds the two
   equal), so their rows read back through either type and Fernlet's tests still read and clear
   those services with ``KeychainItem``. The escrow was the shipping caller of `loadAll`, which now
-  has none (only tests); it stays. FernletSocial's moderation ban store, outside ProximityKit,
-  calls ``KeychainItem`` itself: its rows, and its delete-everything peer-ban clear through
-  `loadAllDistinguishingFailure` and `enumerationResult(status:matches:)`.
+  has none (only tests); it stays. FernletSocial's stores, outside ProximityKit, call
+  ``KeychainItem`` themselves: the moderation ban store's rows, and its delete-everything peer-ban
+  clear through `loadAllDistinguishingFailure` and `enumerationResult(status:matches:)`, and the
+  heart dead-drop's prekey blob and sidecar seal key.
 - **Backup exclusion is applied in one place.** ``BackupExclusion`` toggles
   `isExcludedFromBackupKey` across a store file, its `-wal`/`-shm` sidecars, and the external
   binary `_SUPPORT` directory, shared by the sealed and synced persistence controllers so the

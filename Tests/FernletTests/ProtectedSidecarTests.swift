@@ -14,6 +14,7 @@ import Testing
 import CryptoKit
 import ProximityKit
 import FernletFoundation
+import FernletSocial
 
 @MainActor
 @Suite(.serialized)

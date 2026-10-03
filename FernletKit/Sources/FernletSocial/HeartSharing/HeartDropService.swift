@@ -1,6 +1,8 @@
 import Foundation
 import CryptoKit
 import FernletDomainModel
+import FernletFoundation
+import ProximityKit
 
 /// Offline "away" hearts over the CloudKit public-DB dead-drop (bitchat adoptions Increment 3,
 /// Docs/Plan-Bitchat-Adoptions-2026-07-25.md; architecture decided 2026-06 as the
@@ -136,10 +138,9 @@ public final class HeartDropService {
 
     /// The dead-drop service over one host's ledger, consent, roster and identity.
     ///
-    /// `identity` has no default since ProximityKit plan step A0.2.3: ProximityKit holds no
-    /// namespace to build one from, so the host passes the identity built from its own (the app's
-    /// `FernletStore.heartDropService` passes `IdentityService(namespace: proximityNamespace)`, and
-    /// every test passes one on a throwaway keychain service).
+    /// `identity` has no default: the host passes the identity built from its own namespace (the
+    /// app's `FernletStore.heartDropService` passes `IdentityService(namespace: proximityNamespace)`,
+    /// and every test passes one on a throwaway keychain service).
     public init(
         ledger: ProximityHeartLedger,
         isEnabled: @escaping () -> Bool,
@@ -167,8 +168,8 @@ public final class HeartDropService {
             // `heartDropPairSecret`, `staticKeyAgreement`) throws and maps to `.failed`
             // or a skip — but the ROOT cause has to be recorded, or a service that fails every
             // send looks unexplained.
-            ProximityAudit.log("heartdrop.identity.provisionFailed",
-                               context: ["error": String(describing: error)])
+            FernletAuditLog.log("heartdrop.identity.provisionFailed",
+                                context: ["error": String(describing: error)])
         }
         self.prekeys = prekeys ?? HeartPrekeyStore(keychainService: storage.keychainService, now: now)
         // Stores this service builds itself are ALWAYS sealed at rest (Increment 4) — `storage`
@@ -228,7 +229,7 @@ public final class HeartDropService {
         do {
             pairSecret = try identity.heartDropPairSecret(with: friend.keyAgreementPublicKey)
         } catch {
-            ProximityAudit.log("heartdrop.queue.failed", context: [
+            FernletAuditLog.log("heartdrop.queue.failed", context: [
                 "stage": "pairSecret", "error": String(describing: error)
             ])
             return .failed
@@ -297,7 +298,7 @@ public final class HeartDropService {
                 orStaticKey: staticKey
             )
         } catch {
-            ProximityAudit.log("heartdrop.queue.failed", context: [
+            FernletAuditLog.log("heartdrop.queue.failed", context: [
                 "stage": "seal", "error": String(describing: error)
             ])
             return nil
@@ -356,7 +357,7 @@ public final class HeartDropService {
             )
             return try JSONEncoder().encode(envelope)
         } catch {
-            ProximityAudit.log("heartdrop.queue.failed", context: [
+            FernletAuditLog.log("heartdrop.queue.failed", context: [
                 "stage": "sign", "error": String(describing: error)
             ])
             return nil
@@ -371,7 +372,7 @@ public final class HeartDropService {
         case nil: prekeyKind = "static"
         case .some(let used): prekeyKind = used.isOneTime ? "one-time" : "signed"
         }
-        ProximityAudit.log("heartdrop.queued", context: ["prekey": prekeyKind])
+        FernletAuditLog.log("heartdrop.queued", context: ["prekey": prekeyKind])
     }
 
     /// Hearts waiting for this friend (drives the "will be delivered" row state).
@@ -485,7 +486,7 @@ public final class HeartDropService {
                 guard !Task.isCancelled, isEnabled() else {
                     // The record is on the server but the outbox may be gone; the record name is
                     // lost with it, so log the orphan rather than write it back into a wiped store.
-                    ProximityAudit.log("heartdrop.upload.orphaned")
+                    FernletAuditLog.log("heartdrop.upload.orphaned")
                     return
                 }
                 if !outbox.markUploaded(id: entry.id, recordName: recordName) {
@@ -494,7 +495,7 @@ public final class HeartDropService {
                     // `.completeFileProtection` write failed. The name survives in the outbox's
                     // memory as the truth and a later persist commits it — but until then it is
                     // not durable, so say so and stop uploading more.
-                    ProximityAudit.log("heartdrop.upload.orphaned", context: ["reason": "persistFailed"])
+                    FernletAuditLog.log("heartdrop.upload.orphaned", context: ["reason": "persistFailed"])
                     outboxRevision += 1
                     refreshStorageProblemNow()
                     break
@@ -588,7 +589,7 @@ public final class HeartDropService {
             } catch {
                 // A friend whose KA key cannot derive a pair secret is skipped EVERY sync — their
                 // hearts would never be fetched, with nothing to explain it.
-                ProximityAudit.log("heartdrop.fetch.pairSecretFailed", context: [
+                FernletAuditLog.log("heartdrop.fetch.pairSecretFailed", context: [
                     "friend": friend.fingerprint, "error": String(describing: error)
                 ])
                 continue
@@ -610,7 +611,7 @@ public final class HeartDropService {
             // Nothing-silent: a failing fetch means incoming hearts stop arriving. COUNTED, so a
             // persistent outage surfaces the same way a persistent upload failure does — the log
             // line alone was invisible to the person waiting for hearts that never came.
-            ProximityAudit.log("heartdrop.fetch.failed", context: ["error": String(describing: error)])
+            FernletAuditLog.log("heartdrop.fetch.failed", context: ["error": String(describing: error)])
             fetchFailureStreak += 1
             if fetchFailingSince == nil { fetchFailingSince = now() }
             return
@@ -643,7 +644,7 @@ public final class HeartDropService {
         // any authenticated iCloud user, so a fat record under a known tag is a denial-of-service
         // attempt, not a heart.
         guard record.payload.count <= HeartDropSealer.maxWireByteCount else {
-            ProximityAudit.log("heartdrop.rejected", context: [
+            FernletAuditLog.log("heartdrop.rejected", context: [
                 "reason": "oversized", "bytes": "\(record.payload.count)"
             ])
             return
@@ -656,7 +657,7 @@ public final class HeartDropService {
         guard let sender = expectedSender,
               envelope.senderSigningPublicKey == sender.signingPublicKey,
               sender.blockedAt == nil, sender.revokedAt == nil else {
-            ProximityAudit.log("heartdrop.rejected", context: ["reason": "senderMismatch"])
+            FernletAuditLog.log("heartdrop.rejected", context: ["reason": "senderMismatch"])
             return
         }
         guard let heart = verifiedHeartPayload(of: envelope) else { return }
@@ -672,7 +673,7 @@ public final class HeartDropService {
         guard createdAt <= currentTime.addingTimeInterval(Self.createdAtSkewTolerance),
               createdAt >= currentTime.addingTimeInterval(
                   -(HeartDropOutbox.entryLifetime + Self.createdAtSkewTolerance)) else {
-            ProximityAudit.log("heartdrop.rejected", context: ["reason": "createdAt-outside-window"])
+            FernletAuditLog.log("heartdrop.rejected", context: ["reason": "createdAt-outside-window"])
             return
         }
         // Durable dedup — the ledger's 48 h retention can't stop a week-later re-fetch. Marked only
@@ -704,7 +705,7 @@ public final class HeartDropService {
             senderDisplayName: sender.displayName,
             senderFingerprint: sender.fingerprint
         ) {
-            ProximityAudit.log("heartdrop.received")
+            FernletAuditLog.log("heartdrop.received")
         }
     }
 
@@ -721,7 +722,7 @@ public final class HeartDropService {
             )
             return try JSONDecoder().decode(FernletIdentityEnvelope.self, from: inner)
         } catch {
-            ProximityAudit.log("heartdrop.rejected", context: [
+            FernletAuditLog.log("heartdrop.rejected", context: [
                 "reason": "openFailed", "error": String(describing: error)
             ])
             return nil
@@ -737,12 +738,12 @@ public final class HeartDropService {
             let plaintext = try envelope.verify(identityService: identity, replayCache: nil)
             let heart = try JSONDecoder().decode(HeartPayload.self, from: plaintext)
             guard HeartPayload.isValidDayKey(heart.sentAtDayKey) else {
-                ProximityAudit.log("heartdrop.rejected", context: ["reason": "invalidDayKey"])
+                FernletAuditLog.log("heartdrop.rejected", context: ["reason": "invalidDayKey"])
                 return nil
             }
             return heart
         } catch {
-            ProximityAudit.log("heartdrop.rejected", context: [
+            FernletAuditLog.log("heartdrop.rejected", context: [
                 "reason": "verifyFailed", "error": String(describing: error)
             ])
             return nil
@@ -762,7 +763,7 @@ public final class HeartDropService {
             } catch {
                 // Retried on the next pass; logged so a permanently failing cleanup is visible,
                 // exactly as the purge path already logs its own delete failure.
-                ProximityAudit.log("heartdrop.cleanup.deleteFailed", context: [
+                FernletAuditLog.log("heartdrop.cleanup.deleteFailed", context: [
                     "records": "\(uploadedNames.count)", "error": String(describing: error)
                 ])
                 return
@@ -772,7 +773,7 @@ public final class HeartDropService {
         outbox.remove(ids: expired.map(\.id))
         if neverUploaded > 0 {
             undeliveredCount += neverUploaded
-            ProximityAudit.log("heartdrop.undeliverable", context: ["count": "\(neverUploaded)"])
+            FernletAuditLog.log("heartdrop.undeliverable", context: ["count": "\(neverUploaded)"])
         }
         outboxRevision += 1
     }
@@ -814,7 +815,7 @@ public final class HeartDropService {
         // memory and re-persists with the dirty value (review finding, 2026-07-26).
         outbox.retryLoad()
         guard outbox.isLoaded, let doomed = outbox.snapshot() else {
-            ProximityAudit.log("heartdrop.purge.outboxUnavailable")
+            FernletAuditLog.log("heartdrop.purge.outboxUnavailable")
             return false
         }
         let recordNames = doomed.compactMap(\.recordName)
@@ -829,7 +830,7 @@ public final class HeartDropService {
         do {
             try await transport.deleteOwnRecords(recordNames: recordNames)
         } catch {
-            ProximityAudit.log("heartdrop.purge.failed", context: [
+            FernletAuditLog.log("heartdrop.purge.failed", context: [
                 "records": "\(recordNames.count)", "error": String(describing: error)
             ])
             return false
@@ -846,7 +847,7 @@ public final class HeartDropService {
         if generation == purgeGeneration, !isEnabled() {
             clearAllDeliveryState()
         }
-        ProximityAudit.log("heartdrop.purged", context: [
+        FernletAuditLog.log("heartdrop.purged", context: [
             "records": "\(recordNames.count)", "entries": "\(removed)"
         ])
         return true
@@ -890,8 +891,8 @@ public final class HeartDropService {
         } catch {
             // Delete-all must never fail silently: proximity keys surviving "delete everything"
             // is exactly the state the wipe coverage doc exists to prevent.
-            ProximityAudit.log("heartdrop.wipe.identityWipeFailed",
-                               context: ["error": String(describing: error)])
+            FernletAuditLog.log("heartdrop.wipe.identityWipeFailed",
+                                context: ["error": String(describing: error)])
         }
         undeliveredCount = 0
         deliveryProblem = nil

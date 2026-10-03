@@ -94,9 +94,9 @@ soundness verdict judges both salts with the 39 protocol labels (each is a row o
 `IdentityService.pairSecret(with:purpose:)` derives a pair secret only under a salt its identity's
 namespace declares and refuses any other purpose (`IdentityError.undeclaredPurpose`), so a caller
 passes these constants and the declaration is what lets them derive: one spelling per label on
-Fernlet's side. The identity's heart-drop and presence derivations still read the salts'
-FernletCrypto registry twins, spelled identically, until those derivations leave ProximityKit with
-their features and call the door; `ProximityNamespaceGoldenTests` holds each declared salt to its
+Fernlet's side. `FernletSocial`'s heart-drop pair secret passes `heartDropPairV1` to the door; the
+identity's presence derivation still reads its salt's FernletCrypto registry twin, spelled
+identically, until it leaves ProximityKit with presence and calls the door; `ProximityNamespaceGoldenTests` holds each declared salt to its
 frozen literal and its twin, and `FernletFeatureGoldenTests` pins the door's pair secrets under the
 two salts to the heart-drop and presence derivations' known answers. Fernlet's other feature labels,
 which its features hand CryptoKit themselves, stay FernletCrypto registry entries: no ProximityKit
@@ -262,8 +262,9 @@ FernletDomainModel's vocabulary and records (`PayloadType`, `ProximityCapability
 `ProximityNamespaceBoundaryTests` allowlists: lines of its feature files and of the typed doors only
 those features go through, which leave with the features (A0.4), with the mesh manager's feature
 parts (A0.5) or with the recipe profile (A0.7), and the coordinator's session-mode alias, which the
-connection profiles replace (A0.7, C5). The heart-drop and presence pair secrets leave ProximityKit
-with their features at A0.4 and then derive through the door under the two salts declared here. C1
+connection profiles replace (A0.7, C5). The heart-drop pair secret derives through the door under
+the heart salt declared here, from `FernletSocial`; presence's leaves ProximityKit with presence at
+A0.4 and then derives the same way under the presence salt. C1
 adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
 connection profiles (friend mesh, presence, recipe, coach), app identities with per-app allow lists,
 coach relationship records and the coach link signing purposes; FernletCrypto's 40 twins of these

@@ -25,6 +25,7 @@ import FernletLock
 import PrivateMediaStore
 import PrivateStoreCore
 import ProximityKit
+import FernletSocial
 @testable import Fernlet
 
 /// Pins ``Phase3GateReadoutBuilder``, ``MediaResidueAudit`` and ``Phase3GateReportBuilder``.

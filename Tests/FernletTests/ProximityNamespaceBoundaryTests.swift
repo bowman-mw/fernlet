@@ -16,26 +16,25 @@
 //   1. no namespace, namespace group or purpose is built in ProximityKit outside `Namespace/`;
 //   2. `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
 //      their features (A0.4) or with the mesh manager's feature parts (A0.5), an exact per-file
-//      allowlist (19 lines in 6 files);
+//      allowlist (14 lines in 4 files);
 //   3. every remaining string literal in ProximityKit code that contains `fernlet` (any case) is on an
 //      exact per-file allowlist that names why it is still there and the plan step that removes it
-//      (35 literals on 34 lines in 11 files);
+//      (33 literals on 32 lines in 9 files);
 //   4. Fernlet's domain vocabulary and records, FernletDomainModel's `PayloadType`,
 //      `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
 //      `TrainerAuditEvent` and `ConnectionSessionLog`, are named in ProximityKit code only on an exact
 //      per-file, per-type allowlist of the lines that leave with their features (A0.4), with the mesh
 //      manager's feature parts (A0.5), with the recipe profile (A0.7) or with the session profile
-//      (A0.7 / C5): 58 lines in 8 files;
+//      (A0.7 / C5): 49 lines in 7 files;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step (44 lines in 6 files).
 //
 // Rules 2 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
 // lowered or deleted. So rules 2 to 4 only shrink, to nothing, as A0.4, A0.5, A0.7, A0.7 / C5 and A1
 // land, and a `package` door's row lives exactly as long as the door.
-// Between them they hold what ProximityKit still takes from Fernlet rather than from its host: the
-// labels, payload type and format, hearts capability and friend records of the heart dead-drop and
-// presence, the sealed-backup escrow's labels, the
-// heart-drop keychain service and the support folder (until A0.4); what the mesh manager builds,
+// Between them they hold what ProximityKit still takes from Fernlet rather than from its host:
+// presence's labels, payload format, hearts capability and friend records, and the sealed-backup
+// escrow's labels (until A0.4); what the mesh manager builds,
 // decodes or calls (the clothing shop, the activity manager and the moderation report relay, with
 // their payload formats, their labels and the canonical serializer's domains for them) and its own
 // feature sends, capability list and session hearts, with the two typed capability gates and the
@@ -461,12 +460,11 @@ private extension UInt8 {
     /// `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
     /// their features: exactly ``featurePurposeLines``, file by file, line count and purposes read.
     ///
-    /// Every protocol label ProximityKit reads is the namespace's. What is left are the 12 feature
-    /// labels, on 19 code lines in 6 files, each row with the step its lines leave at: the heart
-    /// dead-drop's, presence's and the sealed-backup escrow's with their features in plan step A0.4,
-    /// and the activities' and the moderation report's, with the canonical
-    /// serializer's domains for them, with the mesh manager's feature parts in A0.5, because the mesh
-    /// manager decodes those payloads and calls their signers. A new line fails, and so does a
+    /// Every protocol label ProximityKit reads is the namespace's. What is left are the 8 feature
+    /// labels, on 14 code lines in 4 files, each row with the step its lines leave at: presence's and
+    /// the sealed-backup escrow's with their features in plan step A0.4, and the activities' and the
+    /// moderation report's, with the canonical serializer's domains for them, with the mesh manager's
+    /// feature parts in A0.5, because the mesh manager decodes those payloads and calls their signers. A new line fails, and so does a
     /// protocol purpose read again on a line that was a feature's; a line that goes away fails until
     /// its count is lowered or its row deleted, so the list only shrinks and reaches nothing at A0.5.
     /// Comments may name the registry; only code lines count.
@@ -515,15 +513,10 @@ private extension UInt8 {
 
     /// Every file whose code still names `FernletCryptoPurpose`, by path under the module root.
     static let featurePurposeLines: [String: FeaturePurposeLines] = [
-        "HeartSharing/HeartDropSealer.swift": FeaturePurposeLines(
-            lines: 1, purposes: ["KeyDerivation.heartDropOuterSealV1"], reason: .heartLabels),
-        "HeartSharing/HeartDropSidecarKey.swift": FeaturePurposeLines(
-            lines: 2, purposes: ["AEAD.heartDropSidecarV2"], reason: .heartLabels),
         "Identity/IdentityService.swift": FeaturePurposeLines(
-            lines: 6,
+            lines: 4,
             purposes: [
                 "KeyDerivation.sealedBackupV2", "KeyDerivation.sealedBackupLegacyV1",
-                "KeyDerivation.heartDropPairV1", "HMAC.heartDropDayTagV1",
                 "KeyDerivation.presencePairV1", "HMAC.presenceEpochTagV1"
             ],
             reason: .identityFeatureDerivations),
@@ -555,7 +548,7 @@ private extension UInt8 {
     /// values (A0.4), the values of what the mesh manager builds or decodes (A0.5) and of the
     /// recipe-share manager (A0.7), and DEBUG test-hook names (A1). A new Fernlet string fails here:
     /// it belongs in the host's namespace, or in the feature's own module. A row whose literal is gone
-    /// fails until it is deleted, so the list stays the exact set (35 literals on 34 lines in 11
+    /// fails until it is deleted, so the list stays the exact set (33 literals on 32 lines in 9
     /// files). The scan reads literals only: comments may say Fernlet freely.
     @Test func everyFernletLiteralIsAllowlistedWithItsReasonAndExitStep() throws {
         let sources = try Self.proximitySources()
@@ -614,14 +607,12 @@ private extension UInt8 {
     static let fernletLiterals: [FernletLiteral] = [
         FernletLiteral("ClothingSharing/MeshClothingShop.swift", "fernlet.proximity.clothing.catalog", 1,
                        .clothingFormat),
-        FernletLiteral("HeartSharing/HeartPrekeyStore.swift", "com.fernlet.heartdrop", 1, .heartDropService),
         FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_OPEN", 1, .uiTestHook),
         FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_ADMISSION", 2, .uiTestHook),
         FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_CLOSED", 1, .uiTestHook),
         FernletLiteral("Moderation/ModerationReportRelay.swift", "fernlet.proximity.moderation.report", 2,
                        .moderationFormat),
         FernletLiteral("Presence/PresenceManager.swift", "fernlet.proximity.heart", 1, .heartFormat),
-        FernletLiteral("ProximityHost.swift", "Fernlet", 1, .supportDirectory),
         FernletLiteral("RecipeSharing/ProximityRecipeShareManager.swift",
                        #"Connected to \(name) — recipe sharing links two Fernlets at a time."#, 1,
                        .recipeShareCopy),
@@ -680,14 +671,14 @@ private extension UInt8 {
     /// token off the namespace its host hands down, asks the host's trust store and per-connection
     /// session policy its trust questions, records its own session audit, reports its own inspector
     /// values and sanitizes a peer's name with its own copy of the sanitizer, under the namespace's
-    /// peer-name policy. What is left names a type on the lines of the feature files that leave in
-    /// A0.4 (the heart dead-drop and presence); on the activity manager and the mesh manager's feature
+    /// peer-name policy. What is left names a type on the lines of the feature file that leaves in
+    /// A0.4 (presence); on the activity manager and the mesh manager's feature
     /// parts, which leave in A0.5 with the typed doors only they go through (the two capability gates
     /// and the host's trusted-peer list); on the typed doors only Fernlet's features and the
     /// recipe-share manager go through (the envelope's typed view of its token and the coordinator's
     /// typed send), which leave with the recipe profile (A0.7); and on the session mode's alias, which
-    /// generalizes with the connection profiles (A0.7 / C5): 58 code lines in 8 files when this rule
-    /// landed. A new line fails, and so does a type named in a file whose rows name only others; a
+    /// generalizes with the connection profiles (A0.7 / C5): 49 code lines in 7 files. A new line
+    /// fails, and so does a type named in a file whose rows name only others; a
     /// line that goes away fails until its row is lowered or deleted, so the list only shrinks. A type
     /// no row names (`TrainerAuditEvent`, `ConnectionSessionLog`) fails on its first line. Only code
     /// lines count: comments and literals may name the types, and an implicit member (`.friendHeart`)
@@ -844,8 +835,6 @@ private extension UInt8 {
         DomainTypeLines("Engine/ProximityCoordinator.swift", "PayloadType", 1, .coordinatorTypedSend),
         DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityCapability", 1, .peerCapabilityGate),
         DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityMode", 1, .sessionMode),
-        DomainTypeLines("HeartSharing/HeartDropService.swift", "PayloadType", 1, .heartDropEnvelope),
-        DomainTypeLines("HeartSharing/HeartDropService.swift", "ProximityTrustedPeerRecord", 8, .heartDropFriends),
         DomainTypeLines("Mesh/MeshNetworkManager.swift", "PayloadType", 6, .meshFeatureSends),
         DomainTypeLines("Mesh/MeshNetworkManager.swift", "ProximityCapability", 8, .meshCapabilityList),
         DomainTypeLines("Mesh/MeshNetworkManager.swift", "ProximityTrustedPeerRecord", 3, .meshSessionHearts),
@@ -1047,8 +1036,8 @@ private extension UInt8 {
 
     /// The plan step that takes a value out of ProximityKit.
     enum ExitStep: String, Sendable {
-        /// Fernlet's features still here leave for FernletSocial (A0.4): the heart dead-drop and
-        /// presence, with the sealed-backup escrow leaving for the App.
+        /// Fernlet's features still here leave (A0.4): presence for FernletSocial, and the
+        /// sealed-backup escrow for the App.
         case a04 = "A0.4"
         /// The routed mesh manager is split and its feature parts leave (A0.5), and with them what it
         /// builds, decodes or calls: the clothing shop, the activity manager and the moderation report
@@ -1090,17 +1079,12 @@ extension ProximityNamespaceBoundaryTests.Reason {
 
     // Rule 2: the feature labels that leave with their features (A0.4).
 
-    /// Hearts' labels.
-    static let heartLabels = Self(exit: .a04, why: """
-        hearts: the sealed drop's HKDF salt and the sidecar's authenticated data; the heart dead-drop \
-        moves to FernletSocial, which names the registry's purposes itself
-        """)
     /// IdentityService's feature derivations.
     static let identityFeatureDerivations = Self(exit: .a04, why: """
-        IdentityService's feature derivations: the heart-drop and presence pair secrets become the \
-        generic `pairSecret(with:purpose:)` under the host's declared feature salts and their tags \
-        move to FernletSocial with their features, and the sealed-backup escrow's two HKDF info labels \
-        leave with the escrow for the App's backup side
+        IdentityService's feature derivations: the presence pair secret becomes the generic \
+        `pairSecret(with:purpose:)` under the host's declared feature salt and its tag moves to \
+        FernletSocial with presence, and the sealed-backup escrow's two HKDF info labels leave with the \
+        escrow for the App's backup side
         """)
 
     // Rule 2: the labels of what the mesh manager decodes and calls (A0.5).
@@ -1126,18 +1110,6 @@ extension ProximityNamespaceBoundaryTests.Reason {
 
     // Rule 3: feature values (A0.4).
 
-    /// The heart-drop keychain service.
-    static let heartDropService = Self(exit: .a04, why: """
-        the heart-drop keychain service (`HeartPrekeyStore.keychainService`), beside which the app \
-        derives the mesh stores' services; the prekey store moves to FernletSocial with that \
-        derivation
-        """)
-    /// The default support folder.
-    static let supportDirectory = Self(exit: .a04, why: """
-        ProximitySupportLayout.defaultDirectory's folder, Application Support/Fernlet: the default \
-        root of the heart-drop scope (the mesh stores read the namespace's directoryName since \
-        A0.2.8, and every ledger takes its file from its caller); it leaves with the heart dead-drop
-        """)
     /// The heart payload's format token.
     static let heartFormat = Self(exit: .a04, why: """
         the heart payload's format, checked on receipt; presence moves to FernletSocial
@@ -1193,16 +1165,6 @@ extension ProximityNamespaceBoundaryTests.Reason {
 
     // Rule 4: the feature files (A0.4).
 
-    /// The dead-drop's heart envelope.
-    static let heartDropEnvelope = Self(exit: .a04, why: """
-        the dead-drop heart envelope's summary title, its payload type's token; hearts move to \
-        FernletSocial
-        """)
-    /// The dead-drop's friends.
-    static let heartDropFriends = Self(exit: .a04, why: """
-        the dead-drop's friend records (who a heart is queued for, whose tags are scanned, who an \
-        incoming heart may be from); hearts move to FernletSocial
-        """)
     /// Presence's advertised capability.
     static let presenceCapability = Self(exit: .a04, why: """
         the hearts capability a presence heart connection advertises beside the host's wire2 token; \

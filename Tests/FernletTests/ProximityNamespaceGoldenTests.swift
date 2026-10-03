@@ -16,9 +16,9 @@
 //    heartbeat, the QR scheme, the identity keychain service and its four device accounts, the two
 //    seal-key rows, the storage directory and its three on-disk names, and the radios' log
 //    subsystem. Plus the QR host, which stays a ProximityKit constant but travels beside the scheme.
-//    64 rows, each a frozen literal beside the accessor production reads: `.fernlet`'s field, for the
-//    two seal-key services the production derivation called with `.fernlet`, and for the two feature
-//    salts the registry entry the identity's heart-drop and presence derivations read.
+//    64 rows, each a frozen literal beside the accessor production reads: `.fernlet`'s field, but for
+//    the two feature salts, whose accessors are what each is derived under, the heart salt's
+//    `FernletFeaturePurposes` constant (FernletConnections) and the presence salt's registry entry.
 // 2. **Known answers for the six labels nothing else pinned** (`fernlet.mesh.groupkey.v1`,
 //    `fernlet.mesh.groupkey.wrap.aead.v2`, `fernlet.mesh.encrypted-metadata.aead.v2`,
 //    `fernlet.mesh.routed.content-key.v1`, `fernlet.mesh.session-context.v1`,
@@ -320,15 +320,16 @@ struct ProximityNamespaceGoldenTests {
     /// The two feature salts `.fernlet` declares (`family.purposes.feature`), after the hash rows as
     /// `labelRows` lists them: the heart dead-drop's and presence's pair-secret salts, which
     /// ProximityKit's `pairSecret(with:purpose:)` derives under only when a namespace declares them.
-    /// The identity's heart-drop and presence derivations read the salts' FernletCrypto registry
-    /// twins, so that is what the `today` column reads; `everyFernletValueIsItsFrozenLiteral()`
-    /// holds `.fernlet`'s declared values to the same literals, and the twin cells hold the two
-    /// spellings equal.
+    /// Each `today` column reads what production derives under: for the heart salt the
+    /// `FernletFeaturePurposes` constant FernletSocial's heart-drop pair secret passes the door, and
+    /// for the presence salt the FernletCrypto registry twin the identity's presence derivation
+    /// reads; `everyFernletValueIsItsFrozenLiteral()` holds `.fernlet`'s declared values to the same
+    /// literals, and the twin cells hold the two spellings equal.
     private static var featureLabelRows: [NamespaceGoldenRow] {
         let feature = "family.purposes.feature."
         return [
             NamespaceGoldenRow(.label, feature + "heartDropPairV1", frozen: "fernlet.heartdrop.v1",
-                               today: .text(FernletCryptoPurpose.KeyDerivation.heartDropPairV1.rawValue)),
+                               today: .text(FernletFeaturePurposes.heartDropPairV1.rawValue)),
             NamespaceGoldenRow(.label, feature + "presencePairV1", frozen: "fernlet.presence.tag.v1",
                                today: .text(FernletCryptoPurpose.KeyDerivation.presencePairV1.rawValue))
         ]
@@ -374,14 +375,15 @@ struct ProximityNamespaceGoldenTests {
     ///
     /// The identity service is read off `.fernlet` since step A0.2.3, when `IdentityService` began
     /// taking it from the host's namespace (``theIdentityKeychainServiceIsReadOffTheNamespace()``
-    /// pins that read). Since step A0.2.8 the four accounts and both seal-key accounts are read off
-    /// `.fernlet` too, as the identity and the stores read them off the namespace they hold, and the
-    /// two seal-key services through the derivation the app and the isolation walls use, called with
-    /// `.fernlet` (the production heart-drop service in, the namespace's production service out): the
-    /// production scopes' own spellings are banned by substring in every other test file.
+    /// pins that read). Since step A0.2.8 the four accounts and both seal-key rows are read off
+    /// `.fernlet` too, as the identity and the stores read them off the namespace they hold: a
+    /// production scope's service is the namespace's (`production(for:installBinding:)` reads it), and
+    /// that is what the two service rows read, never a production scope, whose spellings are banned by
+    /// substring in every other test file. The app's derivation of those services beside its
+    /// heart-drop service is FernletSocial's, which this suite never imports: the isolation walls and
+    /// `FernletFeatureGoldenTests` pin it.
     private static var keychainRows: [NamespaceGoldenRow] {
         let identity = "installation.keychain.identity."
-        let heartDrop = HeartPrekeyStore.keychainService
         let fernlet = ProximityNamespace.fernlet.installation.keychain
         return [
             NamespaceGoldenRow(.keychain, identity + "service", frozen: "com.fernlet.identity",
@@ -396,12 +398,12 @@ struct ProximityNamespaceGoldenTests {
                                today: .text(fernlet.identity.keyAgreementPublicKeyCache)),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshSessionSealKey.service",
                                frozen: "com.fernlet.mesh-session",
-                               today: .text(MeshSessionStorageScope.keychainService(besideHeartDrop: heartDrop, in: .fernlet))),
+                               today: .text(fernlet.meshSessionSealKey.service)),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshSessionSealKey.account", frozen: "meshSessionContextKey",
                                today: .text(fernlet.meshSessionSealKey.account)),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshRoutedSealKey.service",
                                frozen: "com.fernlet.mesh-routed",
-                               today: .text(MeshRoutedStorageScope.keychainService(besideHeartDrop: heartDrop, in: .fernlet))),
+                               today: .text(fernlet.meshRoutedSealKey.service)),
             NamespaceGoldenRow(.keychain, "installation.keychain.meshRoutedSealKey.account", frozen: "meshRoutedStoreKey",
                                today: .text(fernlet.meshRoutedSealKey.account))
         ]
@@ -504,18 +506,15 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// The directory and the three on-disk names, byte for byte — and the directory resolves under
-    /// Application Support, the root the design's `Storage.defaultDirectory` names: `.fernlet`'s,
-    /// which the app and the host default resolve since step A0.2.8, and
-    /// `ProximitySupportLayout.defaultDirectory`, which the heart-drop scope still resolves, are one
-    /// path.
+    /// Application Support, the root the design's `Storage.defaultDirectory` names: `.fernlet`'s, the
+    /// one sidecar root, which the app, the host default and FernletSocial's production heart-drop
+    /// scope resolve (`FernletFeatureGoldenTests` pins that scope's folder).
     @Test func everyStorageNameIsItsFrozenBytes() {
         #expect(Self.expectFrozen(.storage) >= 4)
         let expected = URL.applicationSupportDirectory
             .appendingPathComponent(Self.frozen("installation.storage.directoryName"), isDirectory: true)
         let namespaceRoot = ProximityNamespace.fernlet.installation.storage.defaultDirectory
         #expect(namespaceRoot == expected, "the namespace's sidecar root is \(namespaceRoot.path), not \(expected.path)")
-        #expect(ProximitySupportLayout.defaultDirectory == expected,
-                "the proximity sidecar root is \(ProximitySupportLayout.defaultDirectory.path), not \(expected.path)")
     }
 
     /// The four identity accounts, by what a real provision writes: `IdentityKeychainKey` is private,

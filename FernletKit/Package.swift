@@ -371,12 +371,12 @@ let package = Package(
         // and replay (CryptoKit Ed25519/X25519), the session coordinator and the trust protocols its
         // host answers, NI ranging, the protocol namespace its host supplies, the routed mesh engine
         // and the ProximityHost seam protocol; and the Fernlet features still built into it until plan
-        // steps A0.4, A0.5 and A0.7 move them out (the mesh manager's feature parts, the heart
-        // dead-drop and ledger, presence, the recipe-share manager, the clothing shop, activities, chat
-        // and the moderation report relay). Fernlet's rules (its namespace, trust vault and session
-        // policies) are FernletConnections', and moderation's ban store and ledger, closeness, friend
-        // state and the parked chat payload are FernletSocial's: both below, both depending on this
-        // module, never the reverse. "Outward edges only": the files with backward edges to the app
+        // steps A0.4, A0.5 and A0.7 move them out (the mesh manager's feature parts, the heart ledger,
+        // presence, the recipe-share manager, the clothing shop, activities, chat and the moderation
+        // report relay). Fernlet's rules (its namespace, trust vault and session policies) are
+        // FernletConnections', and the heart dead-drop, moderation's ban store and ledger, closeness,
+        // friend state and the parked chat payload are FernletSocial's: both below, both depending on
+        // this module, never the reverse. "Outward edges only": the files with backward edges to the app
         // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
         // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
         // PrivateMediaStore (MeshNetworkManager's photo cache) + FernletCrypto (the feature labels that
@@ -466,22 +466,34 @@ let package = Package(
             ]
         ),
         // Layer 6.5 — Fernlet's social features over ProximityKit's mechanisms
-        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, step A0.4): moderation's ban store,
-        // ledger and content hash, the closeness ledger, the friend-state cache and the parked
-        // live-session chat payload, moved out of ProximityKit so it holds none of them. The edge runs
-        // FernletSocial → ProximityKit, never the reverse. Deps: ProximityKit (`IdentityService`'s
-        // fingerprint, the moderation report payload's row cap, and `JSONSidecarFile`, the three
-        // ledgers' sidecar, a `package` door until A0.5) + FernletCrypto (`FernletCryptoPurpose`, whose
-        // ban-evidence reporter-tag domain the ban store hashes under) + FernletDomainModel (the
-        // moderation, closeness, friend-state and companion value types the stores keep) +
-        // FernletFoundation (`KeychainItem`, `MonotonicClock` and `FernletAuditLog`, for the ban
-        // store). No FernletConnections, CloudKit or UI edge, and no string catalog: it localizes
-        // nothing. MainActor default: the ban store and the three ledgers are main-actor @Observable
-        // classes, beside nonisolated values (the ban record, the cached friend state, the content
-        // hash, the chat payload and the ledgers' persisted shapes).
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, step A0.4): the heart dead-drop (its
+        // service, sealer, prekey store, outbox and dedup store, peer-bundle cache, sidecar seal,
+        // storage scope and format census, the identity's heart-drop derivations, and the mesh stores'
+        // keychain services derived beside the heart-drop service), moderation's ban store, ledger and
+        // content hash, the closeness ledger, the friend-state cache and the parked live-session chat
+        // payload, moved out of ProximityKit so it holds none of them. The edge runs FernletSocial →
+        // ProximityKit, never the reverse. Deps: ProximityKit (`IdentityService` with its fingerprint,
+        // pair-secret door and static key agreement, the envelope, the protected sidecar, sealed-payload
+        // framing, the heart ledger, the prekey bundle and the mesh storage scopes, the moderation
+        // report payload's row cap, and `JSONSidecarFile`, the three ledgers' sidecar, a `package` door
+        // until A0.5) + FernletConnections (`FernletFeaturePurposes.heartDropPairV1`, the declared salt
+        // the heart-drop pair secret derives under, and `ProximityNamespace.fernlet`, whose sidecar root
+        // is the production heart-drop scope's directory) + FernletCrypto (`FernletCryptoPurpose`: the
+        // ban-evidence reporter-tag domain the ban store hashes under, and the sealed drop's salt, the
+        // day-tag prefix and the sidecar's authenticated data the heart dead-drop hands CryptoKit) +
+        // FernletDomainModel (the moderation, closeness, friend-state, companion and heart value types
+        // the stores keep, and the friend records and transport seam the dead-drop reads and is
+        // handed) + FernletFoundation (`KeychainItem`, `MonotonicClock` and `FernletAuditLog`, for the
+        // ban store and the heart dead-drop). No CloudKit or UI edge (the dead-drop's CloudKit
+        // transport is injected by the app), and no string catalog: it localizes nothing. MainActor
+        // default: the ban store, the three ledgers, the dead-drop's service and its four stores are
+        // main-actor classes (the ban store, the ledgers and the service @Observable), beside
+        // nonisolated values (the ban record, the cached friend state, the content hash, the chat
+        // payload, the ledgers' persisted shapes, the sealer, the storage scope, the format census and
+        // the tag derivations).
         .target(
             name: "FernletSocial",
-            dependencies: ["ProximityKit", "FernletCrypto", "FernletDomainModel", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletConnections", "FernletCrypto", "FernletDomainModel", "FernletFoundation"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

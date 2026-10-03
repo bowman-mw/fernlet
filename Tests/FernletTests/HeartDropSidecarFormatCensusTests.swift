@@ -27,6 +27,7 @@ import CryptoKit
 import Security
 import ProximityKit
 import FernletFoundation
+import FernletSocial
 
 @MainActor
 struct HeartDropSidecarFormatCensusTests {
@@ -43,9 +44,9 @@ struct HeartDropSidecarFormatCensusTests {
 
     /// A byte-exact `FSC1` legacy sidecar blob: the legacy magic, then a ChaCha20-Poly1305 box
     /// sealed with NO authenticated data — which is precisely why the format could not be
-    /// relabelled in place and had to become a read-only rung (`HeartDropSidecarKey.swift:32-33`).
+    /// relabelled in place and had to become a read-only rung (`HeartDropSidecarKey.swift:34-35`).
     /// The layout mirrors the current writer exactly, minus the domain binding: prefix + combined
-    /// box (`HeartDropSidecarKey.swift:66-78`).
+    /// box (`HeartDropSidecarKey.swift:83-95`).
     private func legacyBlob(_ plaintext: Data, key: SymmetricKey) throws -> Data {
         // cryptographic-domain: legacy-read — this fixture reproduces the pre-91c3956 unbound box
         // on purpose; it is the only way to exercise the legacy branch this round plans to delete.
@@ -55,7 +56,7 @@ struct HeartDropSidecarFormatCensusTests {
 
     /// Mints a 32-byte seal key and files it where `HeartDropSidecarSeal` looks for it, so a
     /// planted legacy blob can be opened through the real seal. Returns the key for building the
-    /// fixture. The account literal matches `HeartDropSidecarKey.swift:31` (same literal
+    /// fixture. The account literal matches `HeartDropSidecarKey.swift:32` (same literal
     /// `HeartDropTests` uses to assert the wipe took the key).
     private func plantSealKey(service: String) -> SymmetricKey {
         let keyData = Data((0..<32).map { _ in UInt8.random(in: UInt8.min...UInt8.max) })

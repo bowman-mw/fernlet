@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import FernletCrypto
 import FernletDomainModel
+import ProximityKit
 
 /// Outer seal for offline heart drops (bitchat adoptions Increment 3,
 /// Docs/Plan-Bitchat-Adoptions-2026-07-25.md).
@@ -48,7 +49,7 @@ public nonisolated enum HeartDropSealer {
     /// `open` therefore hands `SealedPayloadFraming.unframe` the matching
     /// `HeartDropWireLimits.maxInflatedByteCount` instead of relying on that default.
     ///
-    /// Aliased to `HeartDropWireLimits` so the ProximityKit sealer, the receiver's pre-decrypt gate
+    /// Aliased to `HeartDropWireLimits` so the FernletSocial sealer, the receiver's pre-decrypt gate
     /// and the CloudKitSync ferry cannot drift apart — CloudKitSync may not import this module.
     public static let maxWireByteCount = HeartDropWireLimits.maxRecordByteCount
 

@@ -2,9 +2,9 @@
 // FernletDomainModel
 //
 // Wire model + presentation math for "send good vibes" hearts between friends (spec §10,
-// proximity-only v1). The payload lives here — not in ProximityKit — so the Phase-6 remote
-// dead-drop (CloudKitSync carrying pre-sealed envelopes) can reference the type without an
-// edge into the proximity subsystem, mirroring how PayloadType itself was carved down.
+// proximity-only v1). The payload lives here — not in ProximityKit or FernletSocial — so the
+// Phase-6 remote dead-drop (CloudKitSync carrying pre-sealed envelopes) can reference the type
+// without an edge into the proximity subsystem, mirroring how PayloadType itself was carved down.
 
 import Foundation
 

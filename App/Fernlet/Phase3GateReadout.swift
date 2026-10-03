@@ -34,6 +34,7 @@
 import CloudKitSync
 import FernletFoundation
 import FernletLock
+import FernletSocial
 import Foundation
 import PrivateMediaStore
 import PrivateStoreCore
@@ -104,7 +105,7 @@ nonisolated enum Phase3Gate: String, Sendable, CaseIterable, Identifiable {
     case mediaAtRest
     /// `FernletLock/FernletLockService` — the one scrypt-wrapped content key.
     case lockContentKeyWrap
-    /// `ProximityKit/HeartSharing/HeartDropSidecarKey` — the per-row sidecar gate.
+    /// `FernletSocial/HeartSharing/HeartDropSidecarKey` — the per-row sidecar gate.
     case heartDropSidecars
     /// `App/Fernlet/SealedPhotoBackupService` — `minimumEntryHashVersion >= 2` per corpus.
     case sealedPhotoBackup

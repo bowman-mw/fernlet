@@ -1,5 +1,5 @@
 // HeartDropSidecarFormatCensus.swift
-// ProximityKit/HeartSharing
+// FernletSocial/HeartSharing
 //
 // Phase 0 of Docs/Plan-Crypto-Standardization-2026-08-27.md for the `HeartDropSidecarKey` surface
 // (Class A, row 6 of the plan's §2 table).
@@ -21,7 +21,7 @@ import Foundation
 /// zero legacy files on real upgraded devices, so the count must be produced honestly or not at all.
 ///
 /// **Why it needs no key.** Classification is a pure prefix comparison: the seal's own
-/// `isSealed` closure (`HeartDropSidecarKey.swift:48`) is exactly
+/// `isSealed` closure (`HeartDropSidecarKey.swift:62`) is exactly
 /// `starts(with: magic) || starts(with: legacyMagic)`, evaluated before any keychain access. The
 /// census therefore reads no keychain row AT ALL, which is not merely an optimization — it is what
 /// keeps the count correct on the device that most needs counting: one whose seal key was wiped or
@@ -60,20 +60,20 @@ public nonisolated enum HeartDropSidecarFormatCensus {
     /// each name, and it stays in agreement by CONSTRUCTION: ``url(in:)`` calls those definitions
     /// rather than repeating their literals.
     ///
-    ///  - ``outbox`` — `HeartDropOutbox.fileURL(in:)`, `HeartDropOutbox.swift:296-298`
+    ///  - ``outbox`` — `HeartDropOutbox.fileURL(in:)`, `HeartDropOutbox.swift:297-299`
     ///  - ``peerBundles`` — `HeartDropPeerBundleCache.fileURL(in:)`,
-    ///    `HeartDropPeerBundleCache.swift:84-86`
-    ///  - ``dedup`` — `HeartDropDedupStore.fileURL(in:)`, `HeartDropOutbox.swift:381-383`
+    ///    `HeartDropPeerBundleCache.swift:85-87`
+    ///  - ``dedup`` — `HeartDropDedupStore.fileURL(in:)`, `HeartDropOutbox.swift:382-384`
     ///  - ``outboxQuarantine`` — the outbox file plus ``quarantinePathExtension``, the suffix
     ///    `ProtectedSidecar` appends (`ProtectedSidecar.swift:158`). ONLY the outbox can produce
     ///    one: it is the single store constructed with `quarantinesUnreadableSealedData: true`
-    ///    (`HeartDropOutbox.swift:93`); the other two delete unopenable sealed bytes instead of
+    ///    (`HeartDropOutbox.swift:94`); the other two delete unopenable sealed bytes instead of
     ///    parking them (`ProtectedSidecar.swift:447-450`).
     ///
     /// **Why the census enumerates known names instead of sweeping the directory.** The scope
     /// directory is shared: `HeartLedger.json`, the presence/closeness ledgers, the friend photo
     /// wall's cache and its preferences all live beside these files (see
-    /// `ProximitySupportLayout.defaultDirectory`, `ProximityHost.swift:75`). A sweep would classify
+    /// `HeartDropStorageScope.production`, on `.fernlet`'s sidecar root). A sweep would classify
     /// unrelated files as "unsealed" and inflate the very number Phase 3 is gated on. Four names,
     /// ever — if a fourth sidecar is added, it is added here in the same commit as its store.
     public nonisolated enum Sidecar: String, Sendable, Equatable, CaseIterable {

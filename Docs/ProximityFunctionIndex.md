@@ -31,7 +31,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | Signed peer-to-peer payloads | `FernletIdentityEnvelope.signed(...)`, `FernletIdentityEnvelope.verify(...)`, `canonicalBytes(for:in:)` |
 | Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:in:)` is overloaded for the identity envelope, the mesh admission token, the membership records and messages, the removal quorum, the key advertisement, the channel introduction and the six routed transcripts, each behind its own domain tag from the `in purposes:` it is handed (ProximityKit plan step A0.2); `canonicalBytes(for:)` remains only for the three Group-Activity types and a moderation row, whose tags are still FernletCrypto's until A0.5. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
-| A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
+| A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for FernletSocial's sealed heart-drop files, their `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
 | Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` (one of the mesh's own frames, by `MeshPayloadRole`), `sendFeatureEnvelope(_:encodable:via:sealed:)` (a feature's payload, by its `PayloadType` token) / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
 | A pairwise secret for one of the host's features (the key its rotating tags or drops stand on) | `IdentityService.pairSecret(with:purpose:)` under a `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)` the host's namespace declares (`ProximityNamespace.FeaturePurposes`; Fernlet's two are `FernletFeaturePurposes`, in FernletConnections). Never re-roll the X25519 → HKDF chain beside it and never derive under a protocol salt: the door refuses any purpose its namespace does not declare (`IdentityError.undeclaredPurpose`), so every salt it derives under was judged by the namespace's soundness verdict. |
@@ -51,7 +51,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | Friend photos | `MeshNetworkManager.addPhoto(_:)`, `holdSessionPhoto(_:key:live:)` (2026-09-30: every session photo is HELD in the sealed pending corpus until the person's answer; `cachePhoto` is gone), `applyPhotoAnswers(kept:discarded:now:)`, `deletePhoto(_:)`, `shareRoutedPhoto(itemID:addedAt:imageData:session:)` → `originateRoutedItem(body:typeToken:itemID:now:)` (P5 item 13 replaced `syncPhotoManifest(to:)`'s pull protocol with the routed store), `PrivateMediaStore`. 2026-08 consolidation: the three duplicated photo-save catch-ladders and alert blocks were consolidated into `FriendPhotoLibrarySaver.userFacingFailure(for:photoCount:)` + the `photoSaveFailureAlert(_:failure:)` view extension (ProximityKit); the media stores' hand-rolled AES-GCM seal/open now routes through the shared extension on `PrivateMediaKeyProviding` (MediaAtRestCrypto.swift); JSON sidecar state — including the photo-wall preferences store — was consolidated into `JSONSidecarFile` (ProximityKit/Support/JSONSidecarFile.swift). |
 | Recipe sharing | `ProximityRecipeShareManager.start()`, `sendRecipeShare(_:to:)`, `proximityCoordinator(_:didReceive:plaintext:from:)`; the radio's pause/resume contract and the share's state machine are `RecipeShareDiscoveryGate` / `RecipeShareTransfer` (RecipeSharing/RecipeShareTransfer.swift) |
 | Audit/diagnostics | `ConnectionInspector`, `ConnectionSessionLog`, `ProximitySessionAudit` (what a coordinator records through its trust policy) → `TrainerAuditEvent` (Fernlet's persisted row, converted by `FernletConnections`' `TrainerAuditEvent.init(_:)`), `ProximityRecipeShareDiagnostics` |
-| Lowercase hex for a handful of bytes | `String(format: "%02x", $0)` — the idiom in the five places that already do it (`MeshEpochRef.swift`, `HeartDropPeerBundleCache.swift`, and `IdentityService.swift` ×3). **Known, deliberate exception:** `PresenceEpochPosture.hexadecimal(_:)` re-implements it privately. Two reasons it stays forked: it encodes the advertised instance name on the main actor at every epoch and `String(format:)` boxes each byte as a `CVarArg` to do it; and the value is held to a whole-FILE grep wall in `PresenceEpochPostureTests` (no second 900, no clock, no device byte, `import Foundation` and nothing else), which only means anything while every byte of the name's construction is visible in that one file. Do not consolidate it away without moving that wall. |
+| Lowercase hex for a handful of bytes | `String(format: "%02x", $0)` — the idiom in the five places that already do it (`MeshEpochRef.swift`, `IdentityService.swift` ×2, and FernletSocial's `HeartDropPeerBundleCache.swift` and `IdentityService+HeartDrop.swift`). **Known, deliberate exception:** `PresenceEpochPosture.hexadecimal(_:)` re-implements it privately. Two reasons it stays forked: it encodes the advertised instance name on the main actor at every epoch and `String(format:)` boxes each byte as a `CVarArg` to do it; and the value is held to a whole-FILE grep wall in `PresenceEpochPostureTests` (no second 900, no clock, no device byte, `import Foundation` and nothing else), which only means anything while every byte of the name's construction is visible in that one file. Do not consolidate it away without moving that wall. |
 | A string that is both a token and a label | FORK IT — never localize in place. See "Tokens vs. display in ProximityKit" below. |
 
 ### Tokens vs. display in ProximityKit
@@ -928,7 +928,6 @@ P5 item 3: where one device's sealed routed custody lives, and the key row that 
 | Type / Function | What It Does |
 | --- | --- |
 | `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:installBinding:)` is the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
-| `MeshRoutedStorageScope.keychainService(besideHeartDrop:in:)` | Production in ⇒ the namespace's production service out (A0.2.8 added `in:`); any isolated heart-drop service ⇒ a distinct sibling. This is what lets `FernletStore` DERIVE the scope from seams the test walls already enforce instead of adding a fourth injectable one. |
 | `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). |
 | `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
 
@@ -1464,9 +1463,9 @@ policy, all judged by its soundness rules, and so are the feature salts the host
 family (`FeaturePurposes`), the only salts `IdentityService.pairSecret(with:purpose:)` derives
 under. The features' payload and capability tokens are still Fernlet's
 `PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the feature labels stay
-outside it until A0.4 (the activities' and the moderation report's four until A0.5), and so do the
-heart-drop keychain service and `ProximitySupportLayout`'s folder; the moderation ban store's service
-is FernletSocial's.
+outside it until A0.4 (presence's and the sealed-backup escrow's; the activities' and the moderation
+report's four until A0.5); the heart dead-drop's keychain service and the moderation ban store's are
+FernletSocial's.
 ProximityKit refuses an unsound namespace at run time (`Support/ProximityNamespaceGate.swift`,
 below). The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
@@ -1541,7 +1540,7 @@ two spellings equal.
 | --- | --- |
 | `Installation.init(keychain:storage:logSubsystem:peerNames:)` | Assembles what belongs to one app on one device: its keychain rows, storage names, log subsystem and peer-name policy. |
 | `PeerNames.init(maxLength:floor:)` | The app's peer-name policy: the most characters (`Character`s) a peer's sanitized name keeps, and the floor a name that sanitizes to nothing is shown and recorded as. Presentation, so the installation's and not the family's; ProximityKit applies it wherever a peer's name enters except the activity manager (its joiners' names keep `ItemNameModeration`'s fixed 24-character cap, with no floor, until A0.5) and caps the advertised recipe name with it. |
-| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built as `ProximitySupportLayout.defaultDirectory` builds Fernlet's root. |
+| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built the way Fernlet's proximity sidecar root has always been built; FernletSocial's production heart-drop scope reads `.fernlet`'s. |
 
 ### `Namespace/ProximityNamespace+Soundness.swift`
 
@@ -1598,7 +1597,7 @@ and its FernletCrypto twin; `FernletFeatureGoldenTests` pins the door's pair sec
 
 | Function | What It Does |
 | --- | --- |
-| `FernletFeaturePurposes.heartDropPairV1`, `.presencePairV1` | The heart dead-drop's and presence's pair-secret salts, `fernlet.heartdrop.v1` and `fernlet.presence.tag.v1`, each minted with `featureKeyDerivationSalt(_:)`: the purposes a caller of `IdentityService.pairSecret(with:purpose:)` passes. Twins of FernletCrypto's `KeyDerivation.heartDropPairV1` and `.presencePairV1`, which the identity's heart-drop and presence derivations still read. |
+| `FernletFeaturePurposes.heartDropPairV1`, `.presencePairV1` | The heart dead-drop's and presence's pair-secret salts, `fernlet.heartdrop.v1` and `fernlet.presence.tag.v1`, each minted with `featureKeyDerivationSalt(_:)`: the purposes a caller of `IdentityService.pairSecret(with:purpose:)` passes. Twins of FernletCrypto's `KeyDerivation.heartDropPairV1` and `.presencePairV1`. FernletSocial's `heartDropPairSecret(with:)` passes `heartDropPairV1`; the identity's presence derivation still reads the presence twin. |
 | `ProximityNamespace.FeaturePurposes.fernlet` | `.fernlet`'s feature group: the two salts above, in that order, as `heartDropPairV1` and `presencePairV1`, judged in `.fernlet`'s one soundness verdict with the 39 protocol labels. |
 
 ### `FernletConnections/FernletPayloadVocabulary.swift`
@@ -1697,7 +1696,7 @@ labels. `ProximityNamespaceGoldenTests` holds each reader to the namespace it is
 
 | Function | What It Does |
 | --- | --- |
-| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `namespace`, `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)`, `keychainService(besideHeartDrop:in:)` | The scopes with the host's namespace and binding; `production(for:installBinding:)` is the namespace's `defaultDirectory` and seal-key service, and `keychainService(besideHeartDrop:in:)` maps the production heart-drop service to the namespace's (A0.4 retires that comparison). No longer `Equatable`, since a capability has no equality. The two isolation walls refuse every production spelling in tests, the shorthand `.production(for:installBinding:)` included. |
+| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `namespace`, `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)` | The scopes with the host's namespace and binding; `production(for:installBinding:)` is the namespace's `defaultDirectory` and seal-key service (FernletSocial's `keychainService(besideHeartDrop:in:)` extensions map the production heart-drop service to it). No longer `Equatable`, since a capability has no equality. The two isolation walls refuse every production spelling in tests, the shorthand `.production(for:installBinding:)` included. |
 | `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account. |
 | `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace. |
 | `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`: a store holds one source of its labels. |
@@ -1730,10 +1729,10 @@ store to its scope's label and binding.
 ### The keychain mechanism
 
 FernletFoundation's `KeychainItem` mechanism is copied into ProximityKit member for member as
-`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 37
-references in the five key-store files (the identity's rows and escrow, the two mesh seal keys, the
-heart-drop prekey blob and sidecar seal key) call it; FernletSocial's moderation ban store calls
-FernletFoundation's `KeychainItem` itself. Only the mechanism came
+`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 30
+references in the three key-store files (the identity's rows and escrow, and the two mesh seal keys)
+call it; FernletSocial's stores (the moderation ban store, the heart-drop prekey blob and sidecar seal
+key) call FernletFoundation's `KeychainItem` themselves. Only the mechanism came
 across; Fernlet's `Account` names, typed overloads, service constants, `loadOrCreateSymmetricKey`
 and `updateReportingStatus` stayed behind. Every query is FernletFoundation's for the same call, so
 rows written before the copy read back unchanged and a host's own `KeychainItem` still reads and
@@ -1795,13 +1794,13 @@ value names `.fernlet` explicitly.
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM; since A0.2.6 the salt and AAD are the identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and `purposes.aead.meshGroupKeyWrapV2`. It needs no provisioned key, so it refuses an unsound namespace itself, first: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `groupKeyWrap`). |
 | `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`, under the same purposes. |
-| `pairSecret(with:purpose:)` | A pair secret for one of the host's features: X25519 between this device's key-agreement key and a parsed peer key, then HKDF-SHA256 with the purpose's bytes as the salt, empty info, 32 bytes, so both members of a pair derive one key. Throws `IdentityError.undeclaredPurpose` first, before any key is read, for a purpose that is not a key-derivation salt its namespace declares as a feature purpose (a protocol salt included), then `notProvisioned`; no audit line, no keychain row. |
+| `pairSecret(with:purpose:)` | A pair secret for one of the host's features (FernletSocial's `heartDropPairSecret(with:)` derives through it): X25519 between this device's key-agreement key and a parsed peer key, then HKDF-SHA256 with the purpose's bytes as the salt, empty info, 32 bytes, so both members of a pair derive one key. Throws `IdentityError.undeclaredPurpose` first, before any key is read, for a purpose that is not a key-derivation salt its namespace declares as a feature purpose (a protocol salt included), then `notProvisioned`; no audit line, no keychain row. |
 | `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Refuses an unsound namespace first**: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `provision`) before any row is read or written, on every call. The backup-escrow API beside it needs neither key and checks no verdict: Fernlet's sealed-backup feature, leaving at A0.4, whose callers run this first. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `ProximityKeychainItem.loadDistinguishingAbsence` (FernletFoundation's `KeychainItem` before A0.2.11), and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
 | `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` / `DeviceIdentityRead` / `loadExistingDeviceIdentity()` / `loadLegacyKeyAgreementKey()` | The pure half and the two reads of the fail-closed rule: an unreadable row wins over everything (`.unreadable`), absence on either row falls through to the mint (`.absent`), a present-but-unparseable row is `.unparseable(row:)` — minted over, but named by `identity.keychain.unparseableRow` first — and both rows found and parsed is `.found`. Since A0.2.8 the rows are the identity's `accounts` (the namespace's `installation.keychain.identity`), and the classifier names a refusing row by the `accounts:` it is handed. Tabled in `IdentityProvisioningReadTests`. |
 | `wipe()` | Deletes identity Keychain entries and clears loaded keys. |
 | `fingerprint(of:)` | Returns a 16-character lowercase SHA-256 prefix for a public key. |
 | `fingerprintsMatch(_:_:)` | Matches 16-character fingerprints and legacy 8-character prefixes. |
-| `staticKeyAgreement(withEphemeralPublicKey:)` | X25519 of the identity's static key-agreement private key with a sender's ephemeral key, answered as the raw shared secret: the closure two ephemeral-static opens take, so the private key never leaves the identity. Its callers are the routed content-key unwrap (`MeshRoutedContentKeyWrapper.unwrap`, from `MeshRoutedItemDelivery`) and the heart dead-drop's static-key fallback (`HeartDropSealer.open`, from `HeartDropService`). Throws `notProvisioned` without a key-agreement key and `openFailed` for a malformed ephemeral key. The test target keeps its old `heartDropStaticAgreement(withEphemeralPublicKey:)` spelling as a binding. |
+| `staticKeyAgreement(withEphemeralPublicKey:)` | X25519 of the identity's static key-agreement private key with a sender's ephemeral key, answered as the raw shared secret: the closure two ephemeral-static opens take, so the private key never leaves the identity. Its callers are the routed content-key unwrap (`MeshRoutedContentKeyWrapper.unwrap`, from `MeshRoutedItemDelivery`) and FernletSocial's heart dead-drop static-key fallback (`HeartDropSealer.open`, from `HeartDropService`). Throws `notProvisioned` without a key-agreement key and `openFailed` for a malformed ephemeral key. The test target keeps its old `heartDropStaticAgreement(withEphemeralPublicKey:)` spelling as a binding. |
 
 ### `FernletIdentityEnvelope.swift`
 
@@ -2262,17 +2261,16 @@ frame.
 | `duplicateWarning` | Detects duplicate local recipe or saved recipe by name/source URL. |
 | `importShare()` | Imports payload through store, dismisses pending share, or shows import error. |
 
-## Away Hearts (Offline Dead-Drop)
+## Hearts
 
-Shipped in the bitchat-adoptions round (Increment 3) and hardened in the prekeys/protected-load round
-(Increments 1–7). All crypto lives here on the sealed side of the S3 wall; the injected
-`HeartDropTransporting` conformer (`CloudKitSync/HeartDropCloudTransport`) only ever sees a rotating
-day tag and ciphertext. Opt-in via `heartsAwayDelivery`, default OFF.
+The heart ledger every heart transport shares, the prekey bundle the identity introduction gossips,
+and the durable sidecar the ledger and FernletSocial's heart-drop sidecars load through. The offline
+dead-drop that uses all three is FernletSocial's (see "FernletSocial" below).
 
 ### `HeartSharing/ProximityHeartLedger.swift`
 
-The device-local ledger every heart transport shares — presence, in-session mesh, and the dead-drop
-below all rate-limit and de-dupe through this one type, which is why it sits at the top of this
+The device-local ledger every heart transport shares — presence, in-session mesh, and FernletSocial's
+dead-drop all rate-limit and de-dupe through this one type, which is why it sits at the top of this
 section rather than inside any one of them.
 
 | Function Or Property | What It Does |
@@ -2289,67 +2287,15 @@ section rather than inside any one of them.
 | `MeshHeartLedgerProof` / `commitProof(for:)` | P5 item 4: the ledger's own answer, **read-only**, to "did the write land and is this gift in what was stored?" — non-nil only when the sidecar state is `.ready` (memory and disk agree) and the gift is in the STORED received hearts. The proof's initializer is `fileprivate` to this file, so a routed heart receipt cannot be minted on a caller-supplied `Bool` for a gift the ledger never stored. No write path, no second receive path, no rule re-derived. |
 | `clearAll()` | Wired from reset-everything. Retention is 48 h / 32 hearts. |
 
-### `HeartDropService.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `queueHeart(to:)` | The entry point: picks a prekey (or the static key), seals, and enqueues — returning a `QueueOutcome` that includes `storageUnavailable` when the sidecar refuses to persist, so nothing is silently dropped. |
-| `currentLocalBundle()` / `storePeerBundle(_:friendSigningKey:)` | Gossip the local prekey bundle and cache a peer's; a peer bundle is only ever stored from a verified, signed identity intro. |
-| `syncNow(force:)` / `syncOnce()` | Trigger a sync pass; coalesced internally so overlapping calls collapse into one run. |
-| `flush(_:)` | Uploads pending drops and **stops and surfaces** when a record name cannot be persisted — the fix for orphaned public-DB records. |
-| `fetchIncoming(_:)` / `openIncoming(_:expectedSender:)` | Fetch a friend's tag window and open drops, re-gating wire size before key agreement. |
-| `pendingCount(for:)` / `acknowledgeDeliveryProblem()` | Surfacing hooks for the two UI paths. |
-| `cleanup(_:)` | Expiry sweep of this device's own uploaded records. |
-
-### `HeartDropSealer.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `HeartDropSealer.seal(...)` | Builds the versioned wire form `[version][prekeyID (all-zeros = static key)][ciphertext]`. |
-| `HeartDropSealer.open(...)` | Opens a drop, **gating payload size before key agreement** (the ordering the coach path still needs to adopt for `TrainerExportPayload`). |
-
-### `HeartPrekeyStore.swift`
-
-Its `Bundle`, `PrekeyEntry` and `SignedPrekey` are typealiases of the core wire type
-`ProximityPrekeyBundle` (`Wire/ProximityPrekeyBundle.swift`, below) and its two nested types, so the
-bundle the store mints is the very type the identity introduction carries, and the keychain blob and
-the peer-bundle sidecar hold its JSON.
-
-| Function | What It Does |
-| --- | --- |
-| `currentBundle()` | The local bundle of one-time X25519 prekeys plus the X3DH-style signed prekey, minted in batches of 16. |
-| `privateKey(forPrekeyID:)` | Resolves a private half for opening; private halves live in one keychain blob (`AfterFirstUnlockThisDeviceOnly`, never synchronizable). |
-| `pruneRetainedKeys()` | Ages out keys past the 29-day retention window. |
-| `wipeForDeleteAll()` | Delete-all coverage — identity/prekey material must die with the wipe. |
-
 ### `Wire/ProximityPrekeyBundle.swift`
 
 | Type | What It Is |
 | --- | --- |
 | `ProximityPrekeyBundle` / `.PrekeyEntry` / `.SignedPrekey` | The prekey bundle the signed identity introduction gossips, public halves only (`bundleID`, `created`, `expires`, `keys` of `id` and `publicKey`, and the optional `signedPrekey` of `id`, `publicKey`, `created` and `expires`), `public nonisolated`, `Codable`, `Equatable` and `Sendable`, each with its public initializer. Carried opaquely: the coordinator encodes what `introductionPrekeyBundleProvider` returns under the introduction's frozen `heartDropPrekeyBundle` key and hands a verified introduction's bundle to `onIntroductionPrekeyBundle`, reading no field. The JSON is its stored properties' keys and no type name, pinned both ways by `FernletFeatureGoldenTests`. |
 
-### `HeartDropOutbox.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `enqueue(_:)` / `hasCapacity(forFriendSigningKey:)` / `hasDailyCapacity(...)` | Bounded, per-friend and per-day admission. |
-| `pendingUploads()` / `markUploaded(id:recordName:)` / `recordAttempt(id:)` | The upload cycle; `markUploaded` reports persist failure to the caller rather than swallowing it. |
-| `expiredEntries()` / `remove(ids:)` / `removeUnchanged(_:)` | Expiry and compare-and-remove, so a concurrent enqueue is not clobbered. |
-| `snapshot()` / `uploadedRecordNames()` | Return **`nil` when the sidecar is unloaded** — never an empty array, which would read as "nothing queued". |
-| `retryLoad()` / `acknowledgeDataLoss()` / `wipeForDeleteAll()` | Recovery and wipe hooks. |
-
-### `HeartDropPeerBundleCache.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `store(bundle:forFriendSigningKey:)` | Caches a gossiped bundle keyed by the sender's full signing key. |
-| `consumePrekey(forFriendSigningKey:)` | Consumes a one-time prekey, falling back to the signed prekey and then the static key. |
-| `returnPrekey(id:forFriendSigningKey:)` | Returns a prekey when the send that reserved it fails, so a failed send does not burn forward secrecy. |
-| `retryLoad()` / `wipeForDeleteAll()` | Recovery and wipe hooks. |
-
 ### `ProtectedSidecar.swift`
 
-The durability primitive behind all of the above. Prefer this over `JSONSidecarFile` for any data of record.
+The durability primitive behind the heart ledger above and FernletSocial's heart-drop sidecars. Prefer this over `JSONSidecarFile` for any data of record.
 
 | Function | What It Does |
 | --- | --- |
@@ -2357,22 +2303,6 @@ The durability primitive behind all of the above. Prefer this over `JSONSidecarF
 | `mutate(_:)` | Mutates and persists, returning a `MutateOutcome`; **on write failure memory stays the truth and re-persists** rather than re-reading, which would discard an unpersisted record name. |
 | `mutateIfPersisted(_:)` | Fail-closed variant for callers that must not proceed on an unpersisted store. |
 | `retryLoad()` / `acknowledgeDataLoss()` / `wipe()` | Recovery from a deferred (device-locked) or corrupt file, and the wipe path. |
-
-### `HeartDropSidecarKey.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `HeartDropSidecarSeal.make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration (that leg SURVIVES — it is the v0 plaintext generation, not the retired ciphertext one); protection class stays `.completeFileProtection`. Requires `FSC2` since crypto-standardization Phase 3: an `FSC1` row is refused as `SidecarSeal.SealError.legacyFormatRetired`, audit-logged before it is thrown so `ProtectedSidecar` quarantines rather than defers forever, and the Phase 2.2 migrator went with the reader it converted through. `legacyMagic` and its `isSealed` clause are KEPT and load-bearing — that predicate is what splits sealed from plaintext-v0, so a marker that stopped classifying would send ciphertext down the plaintext branch into the *corrupt* path. Every caller states its service (via `HeartDropStorageScope`); there is deliberately no argument-less production variant. |
-
-### `HeartDropStorageScope.swift`
-
-| Function | What It Does |
-| --- | --- |
-| `HeartDropStorageScope(directory:keychainService:)` | One device's heart-drop storage identity. Both halves together because `HeartDropService.wipeForDeleteAll()` destroys both — files on a private root sealed by a shared key survive another store's wipe as ciphertext nothing can open. |
-| `HeartDropStorageScope.production` | `Application Support/Fernlet` + `com.fernlet.heartdrop`, the paths and service the stores have always used. Only tests redirect it, and never by unsealing — a scoped store still seals through the real key path. |
-| `HeartDropOutbox.fileURL(in:)` / `HeartDropDedupStore.fileURL(in:)` / `HeartDropPeerBundleCache.fileURL(in:)` / `ProximityHeartLedger.fileURL(in:)` | One definition per sidecar of its file name inside a root, so the production default and a scoped root can never disagree. |
-| `ModerationLedger.fileURL(in:)` / `FriendStateCache.fileURL(in:)` / `ClosenessLedger.fileURL(in:)` / `ProximityActivityManager.fileURL(in:)` | The same seam for the four `JSONSidecarFile` stores (the first three FernletSocial's), all cleared by `FernletStore.resetAll` (and `FriendStateCache` also by turning fuzzy-state sharing off). Unsealed, so a root is the whole fix — no keychain half. |
-| `JSONSidecarFile.fileURL(in:name:)` | The one definition of the sidecar layout. There is deliberately no argument-less `defaultFileURL(name:)`: every owner states its root, or the omission silently rejoins the process-wide race. |
 
 ## Presence And Nearby Friends
 
@@ -2444,7 +2374,7 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
 | `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the radio's eight-peer link cap. |
 | `heartAffordance(...)` (`nonisolated static`) | The friend row's decision about which heart affordance to show. Takes the away-delivery setting as an explicit parameter rather than reading it off the host, so the affordance and the enforcement cannot drift apart. |
-| `queueAwayHeart` / `heartDropBundleProvider` / `onPeerPrekeyBundle` | The dead-drop seams: race-window sends and prekey-bundle gossip (a `ProximityPrekeyBundle`, wired into each heart connection's coordinator as its `introductionPrekeyBundleProvider` / `onIntroductionPrekeyBundle`) are handed to `HeartDropService` (see Away Hearts) instead of being reimplemented here. |
+| `queueAwayHeart` / `heartDropBundleProvider` / `onPeerPrekeyBundle` | The dead-drop seams: race-window sends and prekey-bundle gossip (a `ProximityPrekeyBundle`, wired into each heart connection's coordinator as its `introductionPrekeyBundleProvider` / `onIntroductionPrekeyBundle`) are handed to FernletSocial's `HeartDropService` (see "FernletSocial") instead of being reimplemented here. |
 | `heartsAwayEnabledProvider` | The away-delivery consent, wired by the app (`settings.heartsAwayDelivery`), nil reading as off: read only for the not-nearby copy (`notNearbyHeartMessage(firstName:)`), so a failed send does not tell a user who turned away delivery on that hearts travel in person. The host carries no such requirement. |
 | `isHeartEligible(signingPublicKey:fingerprint:in:)` / `isHeartEligibleFriend(_:in:)` | Presence's heart gate, delegating to the core predicate `ProximityHost.isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`, which the mesh's routed heart path asks too. |
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | Receive side. Accepts invitations only from tag-matched peers, and enforces the `allowNearbyHearts` opt-out, the trusted-friend gate, and the shared `ProximityHeartLedger` 5-minute receive window. |
@@ -2548,11 +2478,112 @@ itself. Stateless namespace enum; storage is owned by FernletSocial's `Moderatio
 
 Fernlet's own social features over the proximity stack, in the `FernletSocial` module
 (`FernletKit/Sources/FernletSocial/`, ProximityKit plan step A0.4), which depends on ProximityKit and
-never the reverse: moderation's device-local records, the closeness ledger, the friend-state cache
-and the parked chat payload. Nothing here touches a radio: the mesh manager hands the verified
+never the reverse: the heart dead-drop, moderation's device-local records, the closeness ledger, the
+friend-state cache and the parked chat payload. Nothing here touches a radio: the mesh manager hands the verified
 moderation rows and friend-state payloads it receives to the app's closures
 (`onModerationRowsReceived`, `onFriendStateReceived`), and the app files them here. Every record is
-device-local and never synced.
+device-local and never synced; a sealed heart drop is the one thing that leaves the device.
+
+The heart dead-drop (`HeartSharing/`), shipped in the bitchat-adoptions round (Increment 3) and
+hardened in the prekeys/protected-load round (Increments 1–7), is the one feature here that leaves
+the device: all its crypto lives on the sealed side of the S3 wall, and the injected
+`HeartDropTransporting` conformer (`CloudKitSync/HeartDropCloudTransport`) only ever sees a rotating
+day tag and ciphertext. Opt-in via `heartsAwayDelivery`, default OFF. It records into ProximityKit's
+`ProximityHeartLedger`, gossips its `ProximityPrekeyBundle` and loads its sidecars through its
+`ProtectedSidecar` (see "Hearts" above).
+
+### `FernletSocial/HeartSharing/HeartDropService.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `queueHeart(to:)` | The entry point: picks a prekey (or the static key), seals, and enqueues — returning a `QueueOutcome` that includes `storageUnavailable` when the sidecar refuses to persist, so nothing is silently dropped. |
+| `currentLocalBundle()` / `storePeerBundle(_:friendSigningKey:)` | Gossip the local prekey bundle and cache a peer's; a peer bundle is only ever stored from a verified, signed identity intro. |
+| `syncNow(force:)` / `syncOnce()` | Trigger a sync pass; coalesced internally so overlapping calls collapse into one run. |
+| `flush(_:)` | Uploads pending drops and **stops and surfaces** when a record name cannot be persisted — the fix for orphaned public-DB records. |
+| `fetchIncoming(_:)` / `openIncoming(_:expectedSender:)` | Fetch a friend's tag window and open drops, re-gating wire size before key agreement. |
+| `pendingCount(for:)` / `acknowledgeDeliveryProblem()` | Surfacing hooks for the two UI paths. |
+| `cleanup(_:)` | Expiry sweep of this device's own uploaded records. |
+
+### `FernletSocial/HeartSharing/HeartDropSealer.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `HeartDropSealer.seal(...)` | Builds the versioned wire form `[version][prekeyID (all-zeros = static key)][ciphertext]`. |
+| `HeartDropSealer.open(...)` | Opens a drop, **gating payload size before key agreement** (the ordering the coach path still needs to adopt for `TrainerExportPayload`). |
+
+### `FernletSocial/HeartSharing/HeartPrekeyStore.swift`
+
+Its `Bundle`, `PrekeyEntry` and `SignedPrekey` are typealiases of ProximityKit's wire type
+`ProximityPrekeyBundle` (`Wire/ProximityPrekeyBundle.swift`, under "Hearts") and its two nested
+types, so the bundle the store mints is the very type the identity introduction carries, and the
+keychain blob (under `com.fernlet.heartdrop`, through FernletFoundation's `KeychainItem`) and the
+peer-bundle sidecar hold its JSON.
+
+| Function | What It Does |
+| --- | --- |
+| `currentBundle()` | The local bundle of one-time X25519 prekeys plus the X3DH-style signed prekey, minted in batches of 16. |
+| `privateKey(forPrekeyID:)` | Resolves a private half for opening; private halves live in one keychain blob (`AfterFirstUnlockThisDeviceOnly`, never synchronizable). |
+| `pruneRetainedKeys()` | Ages out keys past the 29-day retention window. |
+| `wipeForDeleteAll()` | Delete-all coverage — identity/prekey material must die with the wipe. |
+
+### `FernletSocial/HeartSharing/HeartDropOutbox.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `enqueue(_:)` / `hasCapacity(forFriendSigningKey:)` / `hasDailyCapacity(...)` | Bounded, per-friend and per-day admission. |
+| `pendingUploads()` / `markUploaded(id:recordName:)` / `recordAttempt(id:)` | The upload cycle; `markUploaded` reports persist failure to the caller rather than swallowing it. |
+| `expiredEntries()` / `remove(ids:)` / `removeUnchanged(_:)` | Expiry and compare-and-remove, so a concurrent enqueue is not clobbered. |
+| `snapshot()` / `uploadedRecordNames()` | Return **`nil` when the sidecar is unloaded** — never an empty array, which would read as "nothing queued". |
+| `retryLoad()` / `acknowledgeDataLoss()` / `wipeForDeleteAll()` | Recovery and wipe hooks. |
+
+### `FernletSocial/HeartSharing/HeartDropPeerBundleCache.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `store(bundle:forFriendSigningKey:)` | Caches a gossiped bundle keyed by the sender's full signing key. |
+| `consumePrekey(forFriendSigningKey:)` | Consumes a one-time prekey, falling back to the signed prekey and then the static key. |
+| `returnPrekey(id:forFriendSigningKey:)` | Returns a prekey when the send that reserved it fails, so a failed send does not burn forward secrecy. |
+| `retryLoad()` / `wipeForDeleteAll()` | Recovery and wipe hooks. |
+
+### `FernletSocial/HeartSharing/HeartDropSidecarKey.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `HeartDropSidecarSeal.make(keychainService:)` | The keychain-backed ChaChaPoly seal for the sidecars at rest — plaintext versions were a timestamped log of who the user sent affection to. Read-back verified; one-way plaintext→sealed migration (that leg SURVIVES — it is the v0 plaintext generation, not the retired ciphertext one); protection class stays `.completeFileProtection`. Requires `FSC2` since crypto-standardization Phase 3: an `FSC1` row is refused as `SidecarSeal.SealError.legacyFormatRetired`, audit-logged before it is thrown so `ProtectedSidecar` quarantines rather than defers forever, and the Phase 2.2 migrator went with the reader it converted through. `legacyMagic` and its `isSealed` clause are KEPT and load-bearing — that predicate is what splits sealed from plaintext-v0, so a marker that stopped classifying would send ciphertext down the plaintext branch into the *corrupt* path. Every caller states its service (via `HeartDropStorageScope`); there is deliberately no argument-less production variant. |
+
+### `FernletSocial/HeartSharing/HeartDropStorageScope.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `HeartDropStorageScope(directory:keychainService:)` | One device's heart-drop storage identity. Both halves together because `HeartDropService.wipeForDeleteAll()` destroys both — files on a private root sealed by a shared key survive another store's wipe as ciphertext nothing can open. |
+| `HeartDropStorageScope.production` | `Application Support/Fernlet` + `com.fernlet.heartdrop`, the paths and service the stores have always used: the directory is `ProximityNamespace.fernlet`'s `installation.storage.defaultDirectory`. Only tests redirect it, and never by unsealing — a scoped store still seals through the real key path. |
+| `HeartDropOutbox.fileURL(in:)` / `HeartDropDedupStore.fileURL(in:)` / `HeartDropPeerBundleCache.fileURL(in:)` / `ProximityHeartLedger.fileURL(in:)` | One definition per sidecar of its file name inside a root, so the production default and a scoped root can never disagree. |
+| `ModerationLedger.fileURL(in:)` / `FriendStateCache.fileURL(in:)` / `ClosenessLedger.fileURL(in:)` / `ProximityActivityManager.fileURL(in:)` | The same seam for the four `JSONSidecarFile` stores (the first three FernletSocial's), all cleared by `FernletStore.resetAll` (and `FriendStateCache` also by turning fuzzy-state sharing off). Unsealed, so a root is the whole fix — no keychain half. |
+| `JSONSidecarFile.fileURL(in:name:)` | The one definition of the sidecar layout. There is deliberately no argument-less `defaultFileURL(name:)`: every owner states its root, or the omission silently rejoins the process-wide race. |
+
+### `FernletSocial/HeartSharing/HeartDropSidecarFormatCensus.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `HeartDropSidecarFormatCensus.survey(in:)` (a directory or a `HeartDropStorageScope`) | Read-only census of the four known files (outbox, peer bundles, dedup, the outbox's quarantine), each named by the store that owns it, classified by its four marker bytes alone: `v2Sealed` (`FSC2`), `legacySealed` (`FSC1`), `unsealedOrUnrecognized`, `empty`, `unreadable` (indeterminate, never zero) or `absent`. Reads no keychain row and decodes nothing. |
+| `Report.isConclusive` / `isClean` | Conclusive only when every file was read; clean only on positive evidence (nothing legacy, nothing unrecognized, nothing unread). The app's DEBUG crypto-format census and Phase-3 gate readout read it. |
+
+### `FernletSocial/HeartSharing/IdentityService+HeartDrop.swift`
+
+The dead-drop's derivations, as extensions of ProximityKit's `IdentityService` with the names and signatures they always had, so every caller kept its spelling. `FernletFeatureGoldenTests` pins each to known answers.
+
+| Function | What It Does |
+| --- | --- |
+| `IdentityService.heartDropDayEpoch(at:)` | `floor(unixTime / 86 400)`: the UTC day the day tags rotate on. `nonisolated`. |
+| `heartDropPairSecret(with:)` | The pair secret both friends derive: `IdentityService.pairSecret(with:purpose:)` under `FernletFeaturePurposes.heartDropPairV1` (`fernlet.heartdrop.v1`). Throws `notProvisioned` first when the identity holds no key-agreement key, then `sealFailed` for a friend key that is not a raw X25519 key (the error the dead-drop's audit lines name), then the door's own. |
+| `IdentityService.heartDropTag(pairSecret:dayEpoch:senderKeyAgreementPublicKey:)` | A drop's record tag: HMAC-SHA256 keyed by the pair secret over `fernlet.heartdrop.day.v1` ‖ be64(day) ‖ the SENDER's key-agreement key, its first 16 bytes as lowercase hex, so a pair's two directions differ. `nonisolated`. |
+| `TagCounterBytes.bigEndian(_:)` (internal) | The eight big-endian bytes of a counter, byte-identical to `withUnsafeBytes(of: value.bigEndian)` and to `IdentityService`'s private helper. |
+
+### `FernletSocial/HeartSharing/MeshStorageScopes+HeartDrop.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `MeshSessionStorageScope.keychainService(besideHeartDrop:in:)` / `MeshRoutedStorageScope.keychainService(besideHeartDrop:in:)` | Production heart-drop service in ⇒ the namespace's `meshSessionSealKey` / `meshRoutedSealKey` service out; any isolated heart-drop service ⇒ `<service>.mesh-session` / `<service>.mesh-routed`. This is what lets `FernletStore` DERIVE its two mesh scopes from seams the test walls already enforce instead of adding a fourth injectable one. `nonisolated` (`FernletStore`'s scope properties are). |
 
 ### `FernletSocial/Moderation/ModerationContentHash.swift`
 
@@ -2727,8 +2758,7 @@ list by `FriendMintingReview.eligibleCandidates(...)` — not by the views.
 | `proximityTrustStore` | The host's `ProximityTrustStore`, with **no default**: the mesh's four kept-friend gates (friend state and moderation reports, in and out) and the heart-eligibility predicate `isTrustedUnblockedPeer(signingPublicKey:fingerprint:)` (a public extension in `Trust/ProximityTrustStore.swift`), which presence's gate and the routed heart path both ask, ask it whether a signing key is a remembered, unrevoked peer and whether it is blocked, at each question. Fernlet's adapter answers the store's `ProximityTrustVault` (`FernletConnections`), as every test double answers its own vault. |
 | `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. Its element type, Fernlet's persisted `ProximityTrustedPeerRecord`, is on `ProximityNamespaceBoundaryTests`' rule-4 list until the last feature that reads it leaves (A0.5). |
 | `allowNearbyHearts` | The in-person hearts opt-in, the one hearts setting a host answers. `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one), and `MeshNetworkManager`'s session hearts do too (the send, the routed heart's ledger judgement and the hearts capability). Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. The away-delivery consent is no host requirement: the mesh and presence managers each take a `heartsAwayEnabledProvider`. |
-| `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and the three sealed heart-drop sidecars named by `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |
-| `ProximitySupportLayout.defaultDirectory` | `Application Support/Fernlet` — the ONE definition of the production path until A0.2.8, when the protocol extension's default and the app began resolving the host namespace's `installation.storage.defaultDirectory` instead (built the same way, the same folder for Fernlet); it stays for the heart-drop scope's production directory until A0.4 (the heart ledger, the activity manager and `FernletSocial`'s closeness, friend-state and moderation ledgers take their file with no default). Unchanged from the path the photo cache and heart ledger have always used, so no shipped install is migrated by the seams that made these injectable. |
+| `proximitySupportDirectory` | Root for the subsystem's on-disk sidecars (the friend photo-wall cache and its preferences, `HeartLedger.json`, the activity ledger, and FernletSocial's three sealed heart-drop sidecars named by its `HeartDropStorageScope`). It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every `MeshNetworkManager(store:)` site inherits its store's isolation for free. |
 
 ### `PeerDisplayNames.swift`
 
@@ -2763,15 +2793,15 @@ preferences; `ProximityNamespaceBoundaryTests`' rule 5 lists its lines.
 > shared *mutable on-disk state* that wipes reach, the test runner puts many stores in one process,
 > and a default that silently resolves to the process-wide root would let one store read and
 > overwrite another's file — while compiling cleanly, because the omission is invisible. Every owner
-> states its root, the same way every heart-drop caller states its `HeartDropStorageScope`. The
+> states its root, the same way every heart-drop caller states FernletSocial's `HeartDropStorageScope`. The
 > in-source comment where `defaultFileURL(name:)` used to be says so; do not re-add it.
 >
 > The production root is `Application Support/Fernlet`, the host namespace's
 > `installation.storage.defaultDirectory` (`.fernlet` names the folder `Fernlet`), reached through
 > `ProximityHost.proximitySupportDirectory` (the protocol extension supplies it as the default for
 > hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root that
-> defaults to the same folder). `ProximitySupportLayout.defaultDirectory` spells the same folder for
-> the heart-drop scope's default until A0.4.
+> defaults to the same folder). FernletSocial's production heart-drop scope reads the same folder off
+> `.fernlet`.
 > The `App/Fernlet/` that appeared here was a repo-restructure artefact: `9fb86a9` collapsed the
 > seven `Fernlet*` roots into `App/`, `Tests/` and `FernletKit/`, and the mechanical path rewrite
 > caught this *runtime* path as if it were a *source* path. No shipped install has ever used it.

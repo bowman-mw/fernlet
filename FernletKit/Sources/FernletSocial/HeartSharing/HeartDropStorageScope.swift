@@ -1,11 +1,13 @@
 // HeartDropStorageScope.swift
-// ProximityKit/HeartSharing
+// FernletSocial/HeartSharing
 //
 // Where ONE device's heart-drop state lives — the sidecar directory and the keychain service that
 // holds the key sealing it. Both halves in one value because `HeartDropService.wipeForDeleteAll()`
 // destroys both, so isolating one without the other isolates nothing.
 
 import Foundation
+import FernletConnections
+import ProximityKit
 
 /// The storage identity of one device's heart-drop state: the directory holding the three sidecars
 /// (outbox, peer bundles, dedup) and the keychain service holding both the prekey private halves
@@ -15,7 +17,7 @@ import Foundation
 /// ``HeartDropSidecarSeal`` keeps its key under the same `com.fernlet.heartdrop` service as
 /// ``HeartPrekeyStore``'s blob precisely so both share the delete-all fate —
 /// `HeartDropService.wipeForDeleteAll()` removes the files AND, via
-/// `HeartPrekeyStore.wipeForDeleteAll()`'s `ProximityKeychainItem.deleteAll(service:)`, the key. A scope that
+/// `HeartPrekeyStore.wipeForDeleteAll()`'s `KeychainItem.deleteAll(service:)`, the key. A scope that
 /// isolated only the directory would therefore be cosmetic: a wipe elsewhere in the process still
 /// deletes the shared key, and the isolated file then fails to open — the outbox quarantines it and
 /// latches `dataLossOccurred`, which is strictly worse than losing the file outright.
@@ -48,11 +50,12 @@ public nonisolated struct HeartDropStorageScope: Sendable, Equatable {
     }
 
     /// The shipped scope: `Application Support/Fernlet` + `com.fernlet.heartdrop`, i.e. exactly the
-    /// paths and service the heart-drop stores have always used. Nothing installed is migrated by
-    /// the seam that made this injectable.
+    /// paths and service the heart-drop stores have always used. The directory is
+    /// `ProximityNamespace.fernlet`'s `installation.storage.defaultDirectory`, the root Fernlet's
+    /// proximity sidecars share. Nothing installed is migrated by the seam that made this injectable.
     public static var production: HeartDropStorageScope {
         HeartDropStorageScope(
-            directory: ProximitySupportLayout.defaultDirectory,
+            directory: ProximityNamespace.fernlet.installation.storage.defaultDirectory,
             keychainService: HeartPrekeyStore.keychainService
         )
     }

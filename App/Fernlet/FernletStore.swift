@@ -377,7 +377,7 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var closenessLedger =
         ClosenessLedger(fileURL: ClosenessLedger.fileURL(in: proximitySupportRoot))
     /// Offline "away" hearts via the CloudKit public-DB dead-drop (bitchat adoptions Increment 3).
-    /// All crypto lives on the ProximityKit side; `HeartDropCloudTransport` (CloudKitSync) ferries
+    /// All crypto lives on the FernletSocial side; `HeartDropCloudTransport` (CloudKitSync) ferries
     /// only rotating day tags + sealed blobs — the S3 wall seam is `HeartDropTransporting` in
     /// FernletDomainModel. Consent-gated by `settings.heartsAwayDelivery` at queue AND fetch;
     /// shares the SAME heart ledger as the live paths so the 5-minute cooldown stays one gate.
@@ -534,8 +534,8 @@ final class FernletStore {
     /// `sensitiveVisibilityDefaults`: that suite is shared with `AgeAssuranceStore` because both are
     /// sensitive-surface state, and a daily AI-call count is neither.
     @ObservationIgnored let aiQuotaDefaults: UserDefaults
-    /// The two halves above as the one value ProximityKit takes, so the heart-drop stores this store
-    /// builds can never end up half-isolated.
+    /// The two halves above as the one value FernletSocial's heart dead-drop takes, so the heart-drop
+    /// stores this store builds can never end up half-isolated.
     @ObservationIgnored nonisolated var heartDropStorage: HeartDropStorageScope {
         HeartDropStorageScope(directory: proximitySupportRoot, keychainService: heartDropKeychainService)
     }

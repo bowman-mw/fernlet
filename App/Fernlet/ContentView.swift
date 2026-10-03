@@ -7,6 +7,7 @@
 
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import CloudKitSync
 import HealthKit
 import SwiftUI

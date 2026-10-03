@@ -84,3 +84,8 @@
 # FernletSocial's moderation ban store: a keychain service whose self-ban row outlives every wipe by
 # design, and the ban evidence's reporter-tag hash domain
 /FernletKit/Sources/FernletSocial/Moderation/ModerationBanStore.swift   @bowman-mw
+
+# FernletSocial's heart dead-drop: the drop's outer seal and the sidecars' at-rest seal, the prekey
+# store's keychain service and blob, the heart-drop pair secret and day tags, the storage scope and the
+# mesh stores' keychain services derived beside it — changing a byte here breaks every drop in flight
+/FernletKit/Sources/FernletSocial/HeartSharing/                         @bowman-mw

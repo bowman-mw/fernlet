@@ -32,9 +32,9 @@ portable exchange boundary, also the Messages extension's own product), `Fernlet
 and `FernletConnections` (Fernlet's connection rules on top of `ProximityKit`'s mechanisms, which
 depends on `ProximityKit` and never the reverse; its first value is `ProximityNamespace.fernlet`,
 Fernlet's protocol identity: step A0.2.2 of the same plan), and `FernletSocial` (Fernlet's social
-features on top of `ProximityKit`, which also depends on it and never the reverse: moderation's ledger,
-ban store and content hash, closeness and friend state, moved out of `ProximityKit` in step A0.4 of the
-same plan). Not built:
+features on top of `ProximityKit`, which also depends on it and never the reverse: the heart dead-drop,
+moderation's ledger, ban store and content hash, closeness and friend state, moved out of `ProximityKit`
+in step A0.4 of the same plan). Not built:
 `Onboarding` — the onboarding state machine and its views stayed in the app target
 (`App/Fernlet/Onboarding*.swift`). Narrower than planned: `FernletUI` is the **design system**
 (theme, primitives, components, `ModelColors`, `CaptureProtection`), not "all SwiftUI screens" —
