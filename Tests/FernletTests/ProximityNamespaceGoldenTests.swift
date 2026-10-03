@@ -942,10 +942,11 @@ struct ProximityNamespaceGoldenTests {
         #expect(first.canonicalString == "7.355c877a3834ff2b9b86b074fccaf2e7.00000000000000aa")
     }
 
-    /// The wire tokens spelled exactly like a signature label — fifteen `PayloadType` tokens and three
-    /// of `.fernlet`'s membership record kinds — still equal the frozen label. `meshKeyAgreement` and
-    /// `verifyResponse` had no such pin before this suite. The fourth record kind equals no label; it
-    /// is hashed into the signed inventory digest, so it is pinned by literal beside them.
+    /// The wire tokens spelled exactly like a signature label — fifteen of `.fernlet`'s mesh messages,
+    /// the tokens the mesh manager signs those frames under, and three of its membership record kinds
+    /// — still equal the frozen label. The key-agreement and verify-response tokens had no such pin
+    /// before this suite. The fourth record kind equals no label; it is hashed into the signed
+    /// inventory digest, so it is pinned by literal beside them.
     ///
     /// Two at-rest format names join them as literal rows since step A0.2.8, which deleted the unused
     /// mirror tokens that spelled them (`MeshSessionContextSchema.token`, `MeshRoutedIndexSchema.token`,
@@ -955,24 +956,23 @@ struct ProximityNamespaceGoldenTests {
     @Test func theWireTokensSpelledLikeALabelStillEqualIt() {
         let signature = "family.purposes.signature."
         let kinds = ProximityNamespace.fernlet.family.vocabulary.membershipRecordKinds
+        let mesh = ProximityNamespace.fernlet.family.vocabulary.mesh
         let vocabulary: [(token: String, spelling: String, label: String)] = [
-            ("PayloadType.verifyResponse", PayloadType.verifyResponse.rawValue, "proximityQRResponseV1"),
-            ("PayloadType.meshKeyAgreement", PayloadType.meshKeyAgreement.rawValue, "meshKeyAgreementV1"),
-            ("PayloadType.meshMemberDeparture", PayloadType.meshMemberDeparture.rawValue, "meshMemberDepartureV1"),
-            ("PayloadType.meshMemberRemoval", PayloadType.meshMemberRemoval.rawValue, "meshMemberRemovalV1"),
-            ("PayloadType.meshTerminated", PayloadType.meshTerminated.rawValue, "meshTerminatedV1"),
-            ("PayloadType.meshInventoryDigest", PayloadType.meshInventoryDigest.rawValue, "meshInventoryDigestV1"),
-            ("PayloadType.meshEpochHeads", PayloadType.meshEpochHeads.rawValue, "meshEpochHeadsV1"),
-            ("PayloadType.meshRemovalProposalSigned", PayloadType.meshRemovalProposalSigned.rawValue,
-             "meshRemovalProposalV1"),
-            ("PayloadType.meshRemovalVote", PayloadType.meshRemovalVote.rawValue, "meshRemovalVoteV1"),
-            ("PayloadType.meshRoutedManifest", PayloadType.meshRoutedManifest.rawValue, "meshRoutedManifestV1"),
-            ("PayloadType.meshRoutedChunk", PayloadType.meshRoutedChunk.rawValue, "meshRoutedChunkV1"),
-            ("PayloadType.meshCustodyReceipt", PayloadType.meshCustodyReceipt.rawValue, "meshCustodyReceiptV1"),
-            ("PayloadType.meshRecipientReceipt", PayloadType.meshRecipientReceipt.rawValue, "meshRecipientReceiptV1"),
-            ("PayloadType.meshRoutedInventoryDigest", PayloadType.meshRoutedInventoryDigest.rawValue,
-             "meshRoutedInventoryDigestV1"),
-            ("PayloadType.meshRoutedDrainAnswer", PayloadType.meshRoutedDrainAnswer.rawValue, "meshRoutedDrainAnswerV1"),
+            ("mesh.verifyResponse", mesh.verifyResponse, "proximityQRResponseV1"),
+            ("mesh.keyAgreement", mesh.keyAgreement, "meshKeyAgreementV1"),
+            ("mesh.memberDeparture", mesh.memberDeparture, "meshMemberDepartureV1"),
+            ("mesh.memberRemoval", mesh.memberRemoval, "meshMemberRemovalV1"),
+            ("mesh.terminated", mesh.terminated, "meshTerminatedV1"),
+            ("mesh.inventoryDigest", mesh.inventoryDigest, "meshInventoryDigestV1"),
+            ("mesh.epochHeads", mesh.epochHeads, "meshEpochHeadsV1"),
+            ("mesh.removalProposalSigned", mesh.removalProposalSigned, "meshRemovalProposalV1"),
+            ("mesh.removalVote", mesh.removalVote, "meshRemovalVoteV1"),
+            ("mesh.routedManifest", mesh.routedManifest, "meshRoutedManifestV1"),
+            ("mesh.routedChunk", mesh.routedChunk, "meshRoutedChunkV1"),
+            ("mesh.custodyReceipt", mesh.custodyReceipt, "meshCustodyReceiptV1"),
+            ("mesh.recipientReceipt", mesh.recipientReceipt, "meshRecipientReceiptV1"),
+            ("mesh.routedInventoryDigest", mesh.routedInventoryDigest, "meshRoutedInventoryDigestV1"),
+            ("mesh.routedDrainAnswer", mesh.routedDrainAnswer, "meshRoutedDrainAnswerV1"),
             ("membershipRecordKinds.departure", kinds.departure, "meshMemberDepartureV1"),
             ("membershipRecordKinds.removal", kinds.removal, "meshMemberRemovalV1"),
             ("membershipRecordKinds.termination", kinds.termination, "meshTerminatedV1")
@@ -1323,9 +1323,10 @@ struct ProximityNamespaceGoldenTests {
         var reflected: [(field: String, purpose: ProximityCryptographicPurpose)] = []
         var pending: [(path: String, value: Any)] = [(path: "", value: namespace)]
         var visits = 0
-        // R2: at most 256 nodes; `.fernlet` has about 120 (its groups, 39 labels, its strings, the
-        // vocabulary's sets and lists, whose unlabeled members the walk skips, and the heartbeat's
-        // three mirror children), and the check below fails if the walk is cut short.
+        // R2: at most 256 nodes; `.fernlet` has about 150 (its groups, 39 labels, its strings — the
+        // thirty mesh messages among them — the vocabulary's sets and lists, whose unlabeled members
+        // the walk skips, and the heartbeat's three mirror children), and the check below fails if the
+        // walk is cut short.
         while visits < 256, let node = pending.popLast() {
             visits += 1
             if let purpose = node.value as? ProximityCryptographicPurpose {
@@ -1709,6 +1710,7 @@ struct ProximityNamespaceGoldenTests {
         strings.formUnion(vocabulary.payloads.sealingRequired)
         strings.formUnion(vocabulary.capabilities.known)
         strings.formUnion(vocabulary.capabilities.assumedForLegacyPeers)
+        strings.formUnion(vocabulary.mesh.fields.map(\.value))
         return strings
     }
 
@@ -2341,7 +2343,8 @@ struct ProximityNamespaceGoldenTests {
     /// admitter — its token checked and its group key unwrapped under that namespace — and is then
     /// handed two wrappers sealed under the joined group key: one under that app's metadata label,
     /// which opens and renames the mesh, and a control under Fernlet's, stamped later so it would win
-    /// the name if it opened. It does not.
+    /// the name if it opened. It does not. Every frame travels under that app's mesh messages, which
+    /// are what the manager dispatches by.
     @Test func theManagerOpensEncryptedMetadataUnderItsHostsNamespace() async throws {
         let foreign = ForeignAppNamespace.namespace()
         let host = ForeignNamespaceHost(namespace: foreign)
@@ -3329,12 +3332,13 @@ struct ProximityNamespaceGoldenTests {
 
     /// Seals `descriptor` as `FMGM2` ‖ AES-256-GCM(ciphertext ‖ tag) under the group key with `label`
     /// as the AAD — the marker and the label spelled from literals, never from production constants —
-    /// and hands the wrapper to the manager's inbound door.
+    /// and hands the wrapper to the manager's inbound door. The inner descriptor and the wrapper travel
+    /// under the manager's namespace's mesh messages, as a peer of its family sends them.
     private static func deliverMetadata(_ descriptor: MeshDescriptor, label: String, groupKey: Data, nonce: Data,
                                         epoch: Int, to manager: MeshNetworkManager,
                                         on coordinator: ProximityCoordinator) throws {
         let inner = try JSONEncoder().encode(EncryptedMetadataInner(
-            payloadType: PayloadType.meshDescriptor.rawValue,
+            payloadType: manager.namespace.family.vocabulary.mesh.descriptor,
             payload: try JSONEncoder().encode(MeshStateChangePayload(descriptor: descriptor))))
         let box = try AES.GCM.seal(inner, using: SymmetricKey(data: groupKey), nonce: try AES.GCM.Nonce(data: nonce),
                                    authenticating: Data(label.utf8))
@@ -3343,18 +3347,19 @@ struct ProximityNamespaceGoldenTests {
         try deliver(.meshEncryptedMetadata, wrapper, to: manager, on: coordinator, from: nil)
     }
 
-    /// Hands one already-verified envelope to the manager, as the coordinator does.
+    /// Hands one already-verified envelope to the manager, as the coordinator does, under the manager's
+    /// namespace's token for `role`: the token a peer of its family sends that frame under.
     private static func deliver<Payload: Encodable>(
-        _ type: PayloadType, _ payload: Payload, to manager: MeshNetworkManager,
+        _ role: MeshPayloadRole, _ payload: Payload, to manager: MeshNetworkManager,
         on coordinator: ProximityCoordinator, from peer: ProximityCoordinator.PeerIdentity?
     ) throws {
         let plaintext = try JSONEncoder().encode(payload)
         let envelope = FernletIdentityEnvelope(
             schemaVersion: FernletIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
             senderSigningPublicKey: Data(), senderKeyAgreementPublicKey: Data(), senderDisplayName: "Peer",
-            recipientFingerprint: nil, payloadType: type, payloadEncryption: .none,
-            payloadSummary: PayloadSummary(title: "Golden"), payload: plaintext, createdAt: Date(),
-            expiresAt: nil, signature: Data())
+            recipientFingerprint: nil, payloadTypeToken: role.token(in: manager.namespace.family.vocabulary.mesh),
+            payloadEncryption: .none, payloadSummary: PayloadSummary(title: "Golden"), payload: plaintext,
+            createdAt: Date(), expiresAt: nil, signature: Data())
         manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: peer)
     }
 
@@ -3964,10 +3969,11 @@ private enum ForeignAppNamespace {
     }
 
     /// Its payload vocabulary: its own session messages and titles, five payload tokens of which two
-    /// must arrive sealed, three capabilities with no legacy peers to assume anything for, and its own
-    /// record kinds and routed types.
+    /// must arrive sealed and its thirty mesh messages, three capabilities with no legacy peers to
+    /// assume anything for, and its own record kinds and routed types.
     static func vocabulary() -> ProximityNamespace.Vocabulary {
-        ProximityNamespace.Vocabulary(
+        let meshToken = { (name: String) in "acme.mesh.\(name).v1" }
+        return ProximityNamespace.Vocabulary(
             session: ProximityNamespace.SessionMessages(
                 identityIntroduction: ProximityNamespace.SessionMessage(payloadType: "acme.hello.v1", summaryTitle: "Hi"),
                 identityAcknowledge: ProximityNamespace.SessionMessage(payloadType: "acme.welcome.v1",
@@ -3975,7 +3981,8 @@ private enum ForeignAppNamespace {
                 heartbeat: ProximityNamespace.Heartbeat(payloadType: "acme.beat.v1", pingTitle: "Ping",
                                                         replyTitle: "Pong")),
             payloads: ProximityNamespace.PayloadRules(
-                known: ["acme.hello.v1", "acme.welcome.v1", "acme.beat.v1", "acme.note.v1", "acme.sketch.v1"],
+                known: Set(["acme.hello.v1", "acme.welcome.v1", "acme.beat.v1", "acme.note.v1", "acme.sketch.v1"]
+                           + ProximityNamespace.MeshMessages.tokens(meshToken)),
                 sealingRequired: ["acme.note.v1", "acme.sketch.v1"]),
             capabilities: ProximityNamespace.Capabilities(
                 known: ["notes", "sketches", "framing"], wire2: "framing", assumedForLegacyPeers: []),
@@ -3984,7 +3991,8 @@ private enum ForeignAppNamespace {
                 removal: "acme.member.removed.v1", termination: "acme.group.ended.v1"),
             routedTypes: ProximityNamespace.RoutedTypes(
                 photo: "acme.routed.picture.v1", tempMessage: "acme.routed.note.v1",
-                heart: "acme.routed.wave.v1", control: "acme.routed.control.v1")
+                heart: "acme.routed.wave.v1", control: "acme.routed.control.v1"),
+            mesh: .spelled(meshToken)
         )
     }
 }

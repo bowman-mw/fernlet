@@ -433,9 +433,18 @@ jobs:
         # passed. Run once more at 232 without ProximityNamespaceGateTests: 221 ran and the floor
         # refused it. 221 + 11 (the gate suite's cells) = 232 is the ARITHMETIC CHECK, never the
         # source.
+        # RAISED 232 -> 235 at A0.3.9, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "235 tests in 7 suites" (6 + 13 + 19 + 104 + 37 +
+        # 45 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 235:
+        # passed. Run once more at 235 without ProximityVocabularyGoldenTests: 190 ran and the floor
+        # refused it. 232 + 3 (the soundness suite's mesh field-name cell, and the vocabulary suite's
+        # two mesh cells: `.fernlet`'s thirty mesh messages against their frozen tokens and its known
+        # set, and a mesh manager signing and dispatching by a namespace whose mesh messages are its
+        # own) = 235 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 232 \
+          Scripts/run-gated-suites.sh crypto-goldens 235 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

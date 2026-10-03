@@ -61,7 +61,7 @@ extension MeshRoutedDrainRig {
     /// outcome — plus once per custodian inside the best-effort push. The list saturates at its last
     /// instant, so a short list simply hands every later read the same one.
     @discardableResult
-    func develop(_ index: Int, clock instants: [Date]) async -> [PayloadType] {
+    func develop(_ index: Int, clock instants: [Date]) async -> [MeshPayloadRole] {
         let collected = MeshCustodyHandoffEmissions()
         nodes[index].manager.onMembershipEventSentForTesting = { collected.append($0) }
         let stepped = MeshTerminationFixtures.SteppedClock(instants)
@@ -114,10 +114,10 @@ extension MeshRoutedDrainRig {
 final class MeshCustodyHandoffEmissions {
 
     /// What was emitted, in order.
-    private(set) var emitted: [PayloadType] = []
+    private(set) var emitted: [MeshPayloadRole] = []
 
     /// Records one emission.
-    func append(_ type: PayloadType) { emitted.append(type) }
+    func append(_ type: MeshPayloadRole) { emitted.append(type) }
 }
 
 /// Collects audit lines WITH their context for one test, installed on entry and removed by token on
@@ -243,7 +243,7 @@ struct MeshCustodyHandoffScenario {
     /// The development. The transfer happens inside `leaveSessionAfterNotifyingPeers`, between the
     /// window-open and outcome clock reads, and the departure record carries what actually moved.
     @discardableResult
-    func developInsideTheWindow(at base: Date) async throws -> [PayloadType] {
+    func developInsideTheWindow(at base: Date) async throws -> [MeshPayloadRole] {
         let emitted = await rig.develop(
             Self.origin,
             clock: [base, base.addingTimeInterval(3), base.addingTimeInterval(3)]

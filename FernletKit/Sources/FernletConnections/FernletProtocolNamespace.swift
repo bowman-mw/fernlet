@@ -21,7 +21,8 @@
 // The family also carries the payload vocabulary (`Vocabulary.fernlet`, in
 // FernletPayloadVocabulary.swift), every group of which ProximityKit reads off the namespace (the
 // envelope's payload rules, the coordinator's session messages and capabilities, the managers' wire2
-// token, the inventory digest's record kinds and the routed type registry's routed types), and the
+// token, the inventory digest's record kinds, the routed type registry's routed types and the mesh
+// manager's mesh messages), and the
 // radios' three presentation strings: the instance-name prefixes and the certificates' common name, which
 // ProximityKit's radios, their postures and its peer-name display read off the namespace (the app
 // and FernletProximityUI hand the display `.fernlet`).
@@ -42,11 +43,11 @@ nonisolated extension ProximityNamespace {
     /// Fernlet's family and the Fernlet app's installation: the labels, radio values, QR scheme,
     /// payload vocabulary, identity and mesh seal-key rows, storage names and log subsystem by which
     /// ProximityKit's wire, keychain and disk formats identify Fernlet, exactly as today's code spells
-    /// them. ProximityKit reads the presentation strings and every vocabulary group off it; the mesh
-    /// engine's own payload tokens and its features' payload and capability tokens are still
-    /// `PayloadType` and `ProximityCapability` cases until the rest of plan step A0.3 and plan steps
-    /// A0.4 and A0.5, and what ProximityKit still spells or reads elsewhere (the 13 feature labels,
-    /// the heart-drop and moderation keychain services, its support folder) waits for plan step A0.4.
+    /// them. ProximityKit reads the presentation strings and every vocabulary group off it, the mesh
+    /// engine's own messages included; the mesh features' payload and capability tokens are still
+    /// `PayloadType` and `ProximityCapability` cases until plan steps A0.4 and A0.5, and what
+    /// ProximityKit still spells or reads elsewhere (the 13 feature labels, the heart-drop and
+    /// moderation keychain services, its support folder) waits for plan step A0.4.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an

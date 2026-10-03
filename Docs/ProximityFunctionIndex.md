@@ -32,7 +32,7 @@ for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in
 | Canonical bytes for anything signed | `CanonicalSignatureSerializer` (ProximityKit/Wire) — `canonicalBytes(for:in:)` is overloaded for the identity envelope, the mesh admission token, the membership records and messages, the removal quorum, the key advertisement, the channel introduction and the six routed transcripts, each behind its own domain tag from the `in purposes:` it is handed (ProximityKit plan step A0.2); `canonicalBytes(for:)` remains only for the three Group-Activity types and a moderation row, whose tags are still FernletCrypto's until A0.4. Never hand-roll a signing input and never reach for `JSONEncoder(.sortedKeys)`: that is the pre-WI-6 encoder, kept only as `legacyCanonicalBytes(for:)` to *verify* envelopes minted by peers that predate the change, and never to sign. |
 | Wire strings that look like display strings | KEEP THEM ENGLISH. `PayloadSummary.title`/`subtitle`/`extraDetails` are written into the canonical signing bytes by `CanonicalSignatureSerializer.appendCanonical(_:_:)` **and** rendered in the RECEIVER's Connection Inspector — see the localization row below and the doc comment on `FernletIdentityEnvelope.payloadSummary`. |
 | A device-local sidecar file's location | `JSONSidecarFile.fileURL(in:name:)` against the owner's `ProximityHost.proximitySupportDirectory` (or, for the sealed heart-drop files, its `HeartDropStorageScope`). There is deliberately **no** argument-less default — see the `Support/JSONSidecarFile.swift` section for why re-adding one would be a regression. |
-| Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are now thin wrappers over it. |
+| Pairwise sealed payloads | `IdentityService.seal(_:to:)`, `IdentityService.open(_:from:)`, `ProximityCoordinator.sendPayload(...)`, `MeshNetworkManager.sendEnvelope(...)`. 2026-08 consolidation: MeshNetworkManager's two duplicated seal+sign+send builders were consolidated into the private `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)`; keep calling `sendEnvelope(_:encodable:via:sealed:)` (one of the mesh's own frames, by `MeshPayloadRole`), `sendFeatureEnvelope(_:encodable:via:sealed:)` (a feature's payload, by its `PayloadType` token) / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)`, which are thin wrappers over it. |
 | Mesh group-key wrapping | `IdentityService.encryptGroupKey(_:for:)`, `IdentityService.decryptGroupKey(_:)`, `MeshNetworkManager.initiateRotation(cause:)` |
 | Refusing to act under an unsound namespace, or under an identity of another namespace | `ProximityNamespaceGate.refuseUnsound(_:event:at:)` (reads the namespace's stored `soundness` verdict, writes a named audit line, throws `ProximityNamespaceError`), `checkIdentity(_:isOf:event:)` and `mayStart(identityIsOfNamespace:event:)`. Never re-run a soundness rule at a new door: hold the verdict beside the values you read off the namespace and hand it to the gate. |
 | Per-recipient routed content-key wrap | `MeshRoutedContentKeyWrapper.wrap/unwrap/additionalData` (P5 item 1) — the routed sibling of `encryptGroupKey`: the same X25519 → HKDF → AES-GCM chain under the routed purposes with a manifest-binding AAD. Never re-roll the chain (item 10, P6) and never reuse the group-key purposes for it. |
@@ -234,7 +234,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `allowAdmission(_:)` | Adds an approved requester to the mesh descriptor, then hands the wire work to `grantAdmission(to:meshID:)`. |
 | `grantAdmission(to:meshID:)` / `wrappedKeyForGrant(to:)` | Signs the admission token, wraps the group key to the slot's handshake-verified KA key, **files the admission record durably**, then sends the grant and broadcasts the descriptor. The filing precedes the answer (plan §3.6). |
 | `declineAdmission(_:)` | Removes a pending admission request. |
-| `proximityCoordinator(_:didReceive:plaintext:from:)` | Mesh payload dispatcher for descriptors, admission, photos, manifests, vouchers, removals, encrypted metadata, beacons, key rotation, acks, and goodbye. **The payload door** (2026-09-23): before any family sees a frame, `attributableSlot(for:envelope:credited:type:)` must answer a slot — see the next row. |
+| `proximityCoordinator(_:didReceive:plaintext:from:)` | Mesh payload dispatcher for descriptors, admission, photos, manifests, vouchers, removals, encrypted metadata, beacons, key rotation, acks, and goodbye. It reads the envelope's token against its host's namespace: a token outside `payloads.known` parks; one inside it resolves to its `MeshPayloadRole` by the namespace's mesh messages (`MeshPayloadRole.role(for:in:)`) and the switch runs on the role, a token that names no role going to the feature registry, which is keyed by token (`registerPayloadHandler(for:)` registers a `PayloadType` case's raw value). **The payload door** (2026-09-23): before any family sees a frame, `attributableSlot(for:envelope:credited:type:)` must answer a slot — see the next row. |
 | `attributableSlot(for:envelope:credited:type:)` / `frameAttributionRefusal(signer:credited:seated:proven:)` | **2026-09-23.** The coordinator verifies each envelope against the key the envelope itself names, then credits it to `connectedIdentity ?? pendingPeerIdentity` without comparing the two — so a frame signed by one key was credited to another, and the credited identity could be one the transport never proved (a replayed introduction before any commit; a seated link re-committed as somebody else in the hop before the seat pass evicts it). The door answers the slot only when neither the envelope's **signer** nor the **credited** identity contradicts an anchor this device holds a proof for: the slot's **seated** key (committed slots) and the key the tunnel **proved** (`MeshTransportSession.verifiedSigningPublicKey(for:)`). With no anchor nothing is judged and each family's own gate stands. A coordinator that no longer holds a slot is refused too — a slot is removed synchronously while its coordinator is cancelled a hop later, and the admission request (the one family that took a slotless frame) used to take a queued frame in the name the seat had just refused. Dropped frames are audited `mesh.dispatch.droppedUnattributable` (`type`, `reason` = `signerNotSeated` / `creditedNotSeated` / `signerNotProven` / `creditedNotProven` / `noSlot`, `held`), one line per frame like every drop at this door. Nothing honest fails it: every envelope on a link is signed by the link peer's own key, and the mesh relays content inside its own envelopes, never another device's envelope. |
 | `vouchLabel(for:)` | Returns a friend-of-friend label from unexpired vouch cache. |
 | `block(_:)` | Finds a participant's signing key and blocks it in the store/vault. |
@@ -299,13 +299,15 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `persistPhotoWallPreferences()` | Saves wall preferences through the store's `JSONSidecarFile<FriendPhotoWallPreferences>`. |
 | ~~`isPhotoFromCurrentSession(_:)`~~ | **Retired 2026-09-30** with its last caller: it keyed "live" on the peer-supplied optional `header.session`; the projection now asks `isSessionLive && manifest.meshID == currentMesh?.meshID`, the SIGNED mesh id. |
 | ~~`syncPhotoManifest(to:)`~~ / ~~`handlePhotoManifest(_:from:)`~~ / ~~`sendRequestedPhotos(_:to:)`~~ | **Retired by P5 item 13** — the announce/ask/answer pull protocol went with `handlePhotoManifest`'s `keyEpoch >= localJoinedEpoch` filter, which is one of the two gates that item retired **with** its path. What replaced it: the origin mints a routed item and pushes it (`originateRoutedItem`, `pushOriginatedItem`), and every later offer rides the drain's own doors, which name no epoch. The wire tokens `.friendPhotoManifest` / `.friendPhotoRequest` stay **parked** and decodable (D-13.5), so an older peer's frame is parked by name rather than mis-dispatched; nothing dispatches them. |
-| `sendEnvelope(_:encodable:via:sealed:)` | Post-commit send: resolves the slot's verified key-agreement key for a sealed send (returning false when it is missing) and forwards to `sendEnvelopeCore(...)` with send-failure auditing on, framing for wire2 when the slot supports the host's wire2 token. |
-| `sendVerifyEnvelope(_:encodable:to:via:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)` | Pre-commit ceremony send: seals to the identity carried by the gate state (the slot's verified key fields are not populated yet) through `sendEnvelopeCore(...)`, with send-failure auditing off; wire2 when the peer supports the host's wire2 token. |
-| `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)` | The shared seal+sign+send core behind both senders above: encodes the payload, optionally seals it (wire2 or legacy; an empty key fails closed instead of downgrading to an unsealed send), signs the envelope, and sends it reliably on the slot channel; returns whether the wire write succeeded. |
+| `meshToken(_:)` | The host's token for one of the manager's own frames, `role.token(in: namespace.family.vocabulary.mesh)`: what every engine send is signed under and titled with, and what every audit line about a mesh frame names. |
+| `sendEnvelope(_:encodable:via:sealed:)` / `sendEnvelopeReportingResult(_:encodable:via:sealed:)` | Post-commit send of one of the mesh's own frames, by `MeshPayloadRole`, under `meshToken(_:)`: resolves the slot's verified key-agreement key for a sealed send (returning false when it is missing) and forwards to `sendEnvelopeCore(...)` with send-failure auditing on, framing for wire2 when the slot supports the host's wire2 token. The reporting form takes the token already resolved and is what `writeMembershipFrame(_:_:to:)` calls. |
+| `sendFeatureEnvelope(_:encodable:via:sealed:)` | The same send for a feature's payload — the moderation relay, friend state, the shop's catalog and request, the activities — under the token its call site spells, Fernlet's `PayloadType` raw value, so the lines naming `PayloadType` are the feature lines that leave with their features (A0.4, A0.5). |
+| `sendVerifyEnvelope(_:encodable:to:via:)` / `sendVerifyEnvelope(_:encodable:toKeyAgreementKey:fingerprint:supportsWire2:via:)` | Pre-commit ceremony send, by role (the verify challenge and response): seals to the identity carried by the gate state (the slot's verified key fields are not populated yet) through `sendEnvelopeCore(...)`, with send-failure auditing off; wire2 when the peer supports the host's wire2 token. |
+| `sendEnvelopeCore(_:encodable:sealTo:fingerprint:via:auditSendFailure:)` | The shared seal+sign+send core behind the senders above and the one place a mesh envelope is signed, under the token it is handed (the summary title is that token too, byte for byte): encodes the payload, optionally seals it (wire2 or legacy; an empty key fails closed instead of downgrading to an unsealed send), signs the envelope, and sends it reliably on the slot channel; returns whether the wire write succeeded. |
 | ~~`encryptPhoto(_:key:)`~~ / ~~`decryptPhoto(_:nonce:key:)`~~ / ~~`encryptPayload(_:key:)`~~ | **Retired by P5 item 13**, and with them `AEAD.meshGroupPhotoV2`'s last consumer and the `FMGP2` marker family (`Docs/Crypto-Domain-Separation.md` carries the row that now reads "—"). Photo bytes ride the routed store under a per-recipient X25519 content-key wrap, sealed by `MeshRoutedItemSealer` under `AEAD.meshRoutedItemV1`, so branch and epoch no longer decide decryptability. Every claim these carried is re-asserted against the routed seal in `MeshRoutedItemSealTests` — round trip, layout, foreign key, tampered byte, and "a retired format is refused BY NAME" (`FMRI1` / `retiredOrForeignFormat`). |
 | `decryptPayload(_:nonce:key:in:)` | Shared AES-GCM wrapper for closed-mode metadata decryption, authenticating `purposes.aead.meshEncryptedMetadataV2` alone — the manager hands it its stored `namespace.family.purposes` (ProximityKit plan step A0.2.6). Same Phase 4 rule: no `FMGM2` marker ⇒ `MeshEncryptionError.legacyWireFormat`, audited as `mesh.encryptedMetadata.droppedLegacyWireFormat`. |
 | ~~`sendEncryptedMetadata(_:encodable:via:)`~~ | **Retired by P5 item 13**: its only two call sites were `syncPhotoManifest` and `sendRequestedPhotos`, so the SEAL half of `AEAD.meshEncryptedMetadataV2` lost its last consumer with them. Nothing in this build sends a wrapped control frame; the receive door below stays. |
-| `handleEncryptedMetadata(_:from:slot:)` | Decrypts a closed-mode wrapper and re-dispatches the inner **control** payload — `.meshDescriptor`/`.meshStateChange` and `.meshAdmissionGrant`. **The gate retired by its ARMS, not by its clause** (D-13.5b): item 13 removed the two CONTENT arms (`.friendPhotoManifest`, `.friendPhotoRequest`) with the pull protocol, and deliberately KEPT `wrapper.keyEpoch == currentGroupKey?.epoch`, because the two surviving arms have no routed successor and deleting a compare over them would be loosening a gate in place. It is not redundant either: `decryptPayload` authenticates the metadata AEAD purpose **alone**, so a wrapper sealed under the current key but stamped with a foreign epoch would otherwise open and dispatch — including into `handleAdmissionGrant` (asserted by `MeshEncryptionTests.aCurrentKeyWrapperStampedWithAForeignEpochIsRefused`). If the door is ever judged dead the admissible move is to delete it WHOLE, with the token parked. |
+| `handleEncryptedMetadata(_:from:slot:)` | Decrypts a closed-mode wrapper and re-dispatches the inner **control** payload — `.meshDescriptor`/`.meshStateChange` and `.meshAdmissionGrant`, the inner token resolved to its `MeshPayloadRole` by the host's mesh messages as at the plaintext door. **The gate retired by its ARMS, not by its clause** (D-13.5b): item 13 removed the two CONTENT arms (`.friendPhotoManifest`, `.friendPhotoRequest`) with the pull protocol, and deliberately KEPT `wrapper.keyEpoch == currentGroupKey?.epoch`, because the two surviving arms have no routed successor and deleting a compare over them would be loosening a gate in place. It is not redundant either: `decryptPayload` authenticates the metadata AEAD purpose **alone**, so a wrapper sealed under the current key but stamped with a foreign epoch would otherwise open and dispatch — including into `handleAdmissionGrant` (asserted by `MeshEncryptionTests.aCurrentKeyWrapperStampedWithAForeignEpochIsRefused`). If the door is ever judged dead the admissible move is to delete it WHOLE, with the token parked. |
 | `isLocalCoordinator()` | Elects coordinator by lowest fingerprint among local and active connected peers. |
 | `isElectedCoordinator(_:)` | Checks whether a fingerprint is the currently elected coordinator. |
 | `startBeaconLoop()` | Runs a periodic task that broadcasts coordinator beacons or checks liveness. |
@@ -450,8 +452,9 @@ BEFORE the record reaches a ledger a roster is derived from.
 
 ### `MeshMembershipEvents.swift`
 
-The membership events that MOVE (plan §8.3, §10.5). Record kind, `PayloadType` and crypto domain
-share one frozen English spelling per event, so a grep for the token finds every layer.
+The membership events that MOVE (plan §8.3, §10.5). Record kind, mesh message (the token the frame
+travels under) and crypto domain share one frozen English spelling per event in Fernlet's namespace,
+where all three read off `PayloadType` or its label twins, so a grep for the token finds every layer.
 
 | Type / Function | What It Does |
 | --- | --- |
@@ -464,8 +467,21 @@ share one frozen English spelling per event, so a grep for the token finds every
 | `MeshInventoryDigestPayload.signed(…)` | Computes this device's digest for a ledger and signs it. |
 | `MeshEpochHeadsPayload` | The signed `fernlet.mesh.epoch-heads.v1` message (P4 item 3): mesh + head set (clamped to `MeshSessionContextSchema.maxEpochHeads`) + sender + `sentAt` + signature, `isWellFormed` first. Carries no key and no record; `sentAt` is bound into the signature and read by nothing that decides anything, which is what makes the merge's minter provably clock-free. |
 | `MeshEpochHeadsPayload.signed(…)` | Signs this device's live head set under `Signature.meshEpochHeadsV1`. |
-| `MeshMembershipGoodbyeInterop` | The legacy `fernlet.session.bye.v1` rule: **parsed, never emitted**, and `departureRecord(forGoodbyeFrom:)` is ALWAYS nil — an unsigned frame must not be able to subtract a member from a signed roster (disconnect ≠ removal, §8.2). |
+| `MeshMembershipGoodbyeInterop` | The legacy goodbye rule (Fernlet's `fernlet.session.bye.v1`): **parsed, never emitted**, and `departureRecord(forGoodbyeFrom:)` is ALWAYS nil — an unsigned frame must not be able to subtract a member from a signed roster (disconnect ≠ removal, §8.2). `payloadType` names the frame by role, `MeshPayloadRole.sessionGoodbye`; its token is the host's mesh message. |
 | `MeshLegacyGoodbyeOutcome` | One case, `.disconnected`. The strongest statement an unsigned goodbye can support. |
+
+### `MeshPayloadRole.swift`
+
+The mesh engine's own frames by role (ProximityKit plan step A0.3): what each frame is, never how it
+is spelled. The spelling is the host's namespace's `family.vocabulary.mesh`, and this file is the one
+place a role meets its token, both ways. Feature payloads are not here: they keep Fernlet's
+`PayloadType` tokens until their features leave (A0.4, A0.5).
+
+| Type / Function | What It Does |
+| --- | --- |
+| `MeshPayloadRole` | Thirty cases, one per mesh message — the membership, admission, routed-delivery, group-key and verify-ceremony frames and the legacy goodbye — each named as Fernlet's matching `PayloadType` case, so the manager's switches and the source walls that pin their text read as before. No raw value and no `Codable`: a role reaches the wire or an audit line only through its host's token. |
+| `token(in:)` | The role's token in the mesh messages the caller holds, by an exhaustive switch: what a frame of the role is signed under and titled with. |
+| `role(for:in:)` | The role a received token plays, or nil for a token that names none of the mesh's own messages (a feature's, which the payload door hands to its registry). A bounded search over the thirty cases; the namespace's soundness holds the tokens distinct, so at most one matches. |
 
 ### `MeshKeyAgreementAdvertisement.swift`
 
@@ -621,7 +637,7 @@ value derived before anything is signed.
 
 | Function / property | Behavior |
 | --- | --- |
-| `MeshDevelopmentEnding` | `departure` or `termination`, plus the frozen wire token and the two session events each implies (`departureRequested`/`departureSent`, `terminationRequested(.finalPairTermination)`/`terminationSent`). Frozen English; never display copy. |
+| `MeshDevelopmentEnding` | `departure` or `termination`, plus the membership frame each emits, by role (`membershipEvent`, a `MeshPayloadRole` whose token is the host's), and the two session events each implies (`departureRequested`/`departureSent`, `terminationRequested(.finalPairTermination)`/`terminationSent`). Frozen English; never display copy. |
 | `MeshDevelopmentPlan.init(roster:branch:selfFingerprint:startedAt:)` | The ending comes from the **merged derived roster** (`isFinalPair`); the custodians come from the **branch view** (`presentFingerprints − self`). The connected-peer count is not a member of the type, so the mistake §10.6 forbids cannot be made at a call site. No ledger ⇒ departure; no branch view ⇒ every roster member assumed reachable. |
 | `handoffDeadline` / `handoffHasExpired(at:)` / `handoffOutcome(finishedAt:)` | §10.6's 15-second window as a deadline and a pure comparison — no timer, no sleep. `completed` / `noReachableCustodian` / `windowExpired` are all named answers; the unreachable branch is never in the target set, so nothing waits on it. |
 | `handoffSummary` | The nothing-transferred answer — custodians named, `handedOffItemCount` zero. A termination, a store that could not be read, a blocked emit, or a device holding no routed content. Kept beside the one-argument form so "zero" is never spelled at a call site. |
@@ -889,7 +905,7 @@ being able to read what it holds.
 | `MeshCustodyReceipt` | mesh, item, the item's ORIGIN (the subject), `contentHash`, the CUSTODIAN (the signer), the durable custody instant and the item's expiry. No key epoch, branch, hop count, TTL, destination set, chunk index or schema integer — the `.v1` in the domain IS the version. Both doors floor both instants; nothing is clamped, and the two fingerprints are width-checked in `isWellFormed` so an over-long one is a cheap `malformed` rather than a `signatureInvalid`. |
 | `MeshCustodyReceipt.receiptID(in:)` | A function of the caller's purposes since A0.2.6: `UUID(SHA-256(lp(Hash.meshCustodyReceiptIDV1) ‖ uuid(itemID) ‖ lp(origin) ‖ lp(custodian))[0..<16])`. **Derived, never a wire field**, and it excludes both the hedged signature and `custodiedAt`, so a re-mint of the same claim is the same id. The frame id P5 item 12 admits, under the author axis `custodianFingerprint`. **One named residual:** after a chunk repair this device refills the slot and re-mints its receipt with the same id its peers already recorded, so their windows answer `replayed` and they keep the earlier one — staleness, not a lost delivery (the claim is true again), and closing it would need a cross-device un-record, i.e. a wire change item 12 does not make. |
 | `MeshCustodyReceipt.signed(witness:manifest:identity:)` | The ONLY mint, and it takes a `MeshCustodyDurabilityWitness` — which only a returned durable write produces. `meshID` and `expiresAt` come off the manifest, `custodiedAt` off the witness. Refuses `notTheCustodian`, `witnessForAnotherItem`, `contentHashMismatch`, `originIsSelf`, `itemExpired`. There is no factory that signs somebody else's receipt. |
-| `MeshCustodyReceiptPayload` | The wire frame, `PayloadType.meshCustodyReceipt`. Signed and UNSEALED so members can forward it verbatim and converge on delivery state (plan §3.2). |
+| `MeshCustodyReceiptPayload` | The wire frame, `MeshPayloadRole.meshCustodyReceipt` (Fernlet's token, `PayloadType.meshCustodyReceipt`'s). Signed and UNSEALED so members can forward it verbatim and converge on delivery state (plan §3.2). |
 
 ### `MeshCustodyReceiptVerifier.swift`
 
@@ -1479,18 +1495,20 @@ covers every rule below; `ProximityNamespaceGoldenTests` pins Fernlet's value an
 The family's payload vocabulary: plain `String` tokens, wire data rather than labels, which no
 decoder produces. ProximityKit reads every group here: the payload rules (the envelope's sealing gate
 and park), the session messages and the capabilities (the coordinator; the wire2 token also the
-managers' advertisements and the mesh's sealed sends), the record kinds (the inventory digest) and the
-routed types (the routed type registry's rows). The mesh engine's own payload tokens and the features'
-tokens are still `PayloadType` and `ProximityCapability` cases until the rest of plan step A0.3, A0.4
-and A0.5, and `ProximityVocabularyGoldenTests` holds Fernlet's two spellings equal.
+managers' advertisements and the mesh's sealed sends), the record kinds (the inventory digest), the
+routed types (the routed type registry's rows) and the mesh messages (the mesh manager's own sends and
+its payload door, through `MeshPayloadRole`). The mesh features' tokens are still `PayloadType` and
+`ProximityCapability` cases until A0.4 and A0.5, and `ProximityVocabularyGoldenTests` holds Fernlet's
+two spellings equal.
 
 | Function | What It Does |
 | --- | --- |
-| `Vocabulary.init(session:payloads:capabilities:membershipRecordKinds:routedTypes:)` | Assembles the five groups. |
+| `Vocabulary.init(session:payloads:capabilities:membershipRecordKinds:routedTypes:mesh:)` | Assembles the six groups. |
 | `SessionMessages.init(identityIntroduction:identityAcknowledge:heartbeat:)`, `SessionMessage.init(payloadType:summaryTitle:)`, `Heartbeat.init(payloadType:pingTitle:replyTitle:)` | The coordinator's introduction, acknowledgement and heartbeat: each payload token with the summary title signed into its envelope (a wire token, never localized). |
 | `PayloadRules.init(known:sealingRequired:)` | Every payload token the host dispatches (any other authenticates but is parked) and those whose payload must arrive sealed. |
 | `Capabilities.init(known:wire2:assumedForLegacyPeers:)` | The capability tokens in order (a receiver keeps twice as many), the wire2 framing's token, and what a peer whose introduction lists none supports. |
 | `MembershipRecordKinds.init(admission:departure:removal:termination:)`, `RoutedTypes.init(photo:tempMessage:heart:control:)` | The four record kinds the signed inventory digest hashes, and the routed engine's three registered types and its reserved control type. |
+| `MeshMessages.init(descriptor:…:sessionGoodbye:)` | The mesh engine's thirty messages: one payload token per frame its membership, admission, routed-delivery, group-key and verify-ceremony doors sign and dispatch, and the legacy goodbye it parses and never sends. Each is a payload token the host knows, distinct from the others and from the session messages' tokens. |
 
 ### `Namespace/ProximityNamespace+Installation.swift`
 
@@ -1502,7 +1520,7 @@ and A0.5, and `ProximityVocabularyGoldenTests` holds Fernlet's two spellings equ
 
 | Function | What It Does |
 | --- | --- |
-| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem, then the vocabulary (tokens well-formed by group: payload tokens and record kinds 1–255 bytes, capability tokens 1–32, routed types 1–64, all of 0x21–0x7E; none repeated within its group; the session tokens and sealing set in `payloads.known`, `wire2` and the legacy assumption in `capabilities.known`; summary titles 1–200 characters) and the radios' presentation strings (instance-name prefixes of `[a-z0-9-]` within the room a 63-byte DNS-SD name leaves, the common name 1–64 bytes of printable ASCII). |
+| `judge(family:installation:)` (internal) | Runs every rule once, in order: labels, radios and heartbeat, QR scheme, keychain, storage, log subsystem, then the vocabulary (tokens well-formed by group: payload tokens and record kinds 1–255 bytes, capability tokens 1–32, routed types 1–64, all of 0x21–0x7E, the mesh messages counted as payload tokens; none repeated within its group, and no mesh message equal to a session token; the session tokens, the sealing set and the mesh messages in `payloads.known`, `wire2` and the legacy assumption in `capabilities.known`; summary titles 1–200 characters) and the radios' presentation strings (instance-name prefixes of `[a-z0-9-]` within the room a 63-byte DNS-SD name leaves, the common name 1–64 bytes of printable ASCII). |
 | `familyCollisions(with:)` | Labels equal or byte-prefix related, and equal service types (across radios), ALPNs, heartbeat or scheme (ignoring case); this namespace's field first. |
 | `installationCollisions(with:)` | Equal keychain services, an equal directory name ignoring case, or an equal log subsystem. |
 
@@ -1536,19 +1554,20 @@ column, every role, soundness and the 38 FernletCrypto twins.
 
 ### `FernletConnections/FernletPayloadVocabulary.swift`
 
-Fernlet's payload vocabulary, which `Family.fernlet` carries. Payload and capability tokens and the
-record kinds are read off FernletDomainModel's `PayloadType` and `ProximityCapability`, so each keeps
-one spelling; the routed types and the session titles are spelled here alone. ProximityKit reads every
-group off the namespace.
+Fernlet's payload vocabulary, which `Family.fernlet` carries. Payload and capability tokens, the
+record kinds and the mesh messages are read off FernletDomainModel's `PayloadType` and
+`ProximityCapability`, so each keeps one spelling; the routed types and the session titles are spelled
+here alone. ProximityKit reads every group off the namespace.
 `ProximityVocabularyGoldenTests` pins every value against its frozen column.
 
 | Function | What It Does |
 | --- | --- |
-| `Vocabulary.fernlet` | The five groups below, each `.fernlet`. |
+| `Vocabulary.fernlet` | The six groups below, each `.fernlet`. |
 | `SessionMessages.fernlet` | The introduction ("Hello"), the acknowledgement ("Identity acknowledged") and the heartbeat ("Heartbeat", answered "Heartbeat ack"), under their `PayloadType` tokens. |
 | `PayloadRules.fernlet` | Every `PayloadType` token, and the seventeen whose payload must arrive sealed. |
 | `Capabilities.fernlet` | Every `ProximityCapability` token in declaration order, `wire2`, and photos alone for a legacy peer. |
 | `MembershipRecordKinds.fernlet`, `RoutedTypes.fernlet` | The four record kinds, each the `PayloadType` token of the frame that carries its record, and the four routed-type tokens, which ProximityKit's routed type registry builds its rows from. |
+| `MeshMessages.fernlet` | The mesh engine's thirty messages, each the `PayloadType` token Fernlet's mesh signs and dispatches that frame under; fifteen of them also spell a signature label, and four are the record kinds above. |
 
 ### The supply path
 

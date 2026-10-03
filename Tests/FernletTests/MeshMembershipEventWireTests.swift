@@ -986,11 +986,13 @@ struct MeshLegacyGoodbyeInteropTests {
     }
 
     /// The token stays frozen and parked: a retired wire spelling must never be re-used for a
-    /// different meaning, and the new departure token is a different string.
+    /// different meaning, and the new departure token is a different string. The rule names the
+    /// frame by role; Fernlet's token for it is `.fernlet`'s mesh message.
     @Test func theGoodbyeTokenStaysFrozenAndDistinct() {
-        #expect(MeshMembershipGoodbyeInterop.payloadType.rawValue == "fernlet.session.bye.v1")
+        let mesh = ProximityNamespace.fernlet.family.vocabulary.mesh
+        #expect(MeshMembershipGoodbyeInterop.payloadType.token(in: mesh) == "fernlet.session.bye.v1")
         #expect(
-            MeshMembershipGoodbyeInterop.payloadType.rawValue != PayloadType.meshMemberDeparture.rawValue
+            MeshMembershipGoodbyeInterop.payloadType.token(in: mesh) != PayloadType.meshMemberDeparture.rawValue
         )
     }
 
@@ -1232,7 +1234,7 @@ struct MeshMemberRemovalFrameTests {
         let manager = MeshNetworkManager(store: store)
         manager.currentMesh = makeMesh(manager)
         attachSlot(to: manager, fingerprint: "fp-witness")
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
         DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {

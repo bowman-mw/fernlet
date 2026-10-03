@@ -34,8 +34,9 @@
 //    routed types they are handed or their host holds.
 // 7. **The coordinator's session messages.** The token and title of the introduction, the
 //    acknowledgement, the heartbeat and its reply, read off what a live coordinator sends, and the
-//    coordinator signing and dispatching by its identity's namespace's session messages; and the
-//    mesh's rule that an envelope's summary title is its payload token.
+//    coordinator signing and dispatching by its identity's namespace's session messages; the mesh's
+//    rule that an envelope's summary title is its payload token; and the mesh signing and
+//    dispatching its own frames by its host namespace's mesh messages.
 // 8. **Presentation strings.** The two instance-name prefixes and the certificate's common name,
 //    read off `.fernlet`'s radios, off what the radios, the presence manager and the minting doors
 //    mint under them and off what the name display hides, under `.fernlet` and under a namespace
@@ -51,8 +52,10 @@
 //     "A friend" floor ProximityKit puts under it.
 // 13. **`.fernlet`'s vocabulary and presentation strings.** Every token, title and presentation
 //     string FernletConnections ships in `ProximityNamespace.fernlet` equals its frozen literal, its
-//     token sets and lists are the frozen tables whole, reflection finds no field left unpinned, and
-//     the bounds the namespace's soundness rules apply are those of the consumers they protect.
+//     thirty mesh messages among them (each also one of the tokens it knows, and each the token of
+//     the mesh role of its `PayloadType` case's name), its token sets and lists are the frozen tables
+//     whole, reflection finds no field left unpinned, and the bounds the namespace's soundness rules
+//     apply are those of the consumers they protect.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -64,8 +67,8 @@
 // Every identity and every label-taking consumer this suite builds names its namespace explicitly
 // (`.fernlet`, group 8's namespace that differs from it in the presentation strings alone, groups 5
 // and 6's that differs from it in its record kinds and routed types alone, or groups 2, 3 and 7's that
-// each differ from it in their payload rules, capabilities or session messages alone), never a test
-// binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
+// each differ from it in their payload rules, capabilities, session messages or mesh messages alone),
+// never a test binding (ProximityNamespaceTestBindings.swift). Every hex vector and JSON golden
 // below was derived from the FORMAT by an independent Python re-implementation —
 // `CanonicalByteWriter`'s fields, and Foundation's JSON output rules (keys sorted by code point,
 // `/` escaped unless `.withoutEscapingSlashes`, a whole number printed without a fraction,
@@ -152,7 +155,9 @@ struct ProximityVocabularyGoldenTests {
     /// All 55 `PayloadType` tokens, in declaration order. Pieces of this table also have literal pins
     /// elsewhere — the fifteen spelled like a signature label in ProximityNamespaceGoldenTests group 3,
     /// the activity tokens in `ActivityTests`, the parked tokens in `MeshNetworkManagerTests` and
-    /// `MeshRoutedDrainWallTests` — but this is the one place every token meets its case.
+    /// `MeshRoutedDrainWallTests` — but this is the one place every token meets its case. The mesh
+    /// manager reads thirty of them, its own frames', off `.fernlet`'s mesh messages, which group 13
+    /// holds to these rows; the features' are still read off their cases.
     static var payloadRows: [VocabularyGoldenRow] {
         handshakeAndTrainerRows + featureRows + meshControlRows + membershipRows + routedAndRotationRows
     }
@@ -424,7 +429,8 @@ struct ProximityVocabularyGoldenTests {
     static func fernletReplacing(
         session: ProximityNamespace.SessionMessages? = nil,
         payloads: ProximityNamespace.PayloadRules? = nil,
-        capabilities: ProximityNamespace.Capabilities? = nil
+        capabilities: ProximityNamespace.Capabilities? = nil,
+        mesh: ProximityNamespace.MeshMessages? = nil
     ) -> ProximityNamespace {
         let fernlet = ProximityNamespace.fernlet
         let vocabulary = fernlet.family.vocabulary
@@ -436,7 +442,8 @@ struct ProximityVocabularyGoldenTests {
                 vocabulary: ProximityNamespace.Vocabulary(
                     session: session ?? vocabulary.session, payloads: payloads ?? vocabulary.payloads,
                     capabilities: capabilities ?? vocabulary.capabilities,
-                    membershipRecordKinds: vocabulary.membershipRecordKinds, routedTypes: vocabulary.routedTypes)),
+                    membershipRecordKinds: vocabulary.membershipRecordKinds, routedTypes: vocabulary.routedTypes,
+                    mesh: mesh ?? vocabulary.mesh)),
             installation: fernlet.installation)
     }
 
@@ -909,7 +916,8 @@ struct ProximityVocabularyGoldenTests {
                         removal: "golden.kind.a-removed.v1", termination: "golden.kind.c-ended.v1"),
                     routedTypes: ProximityNamespace.RoutedTypes(
                         photo: "golden.routed.picture.v1", tempMessage: "golden.routed.note.v1",
-                        heart: "golden.routed.wave.v1", control: "golden.routed.signal.v1"))),
+                        heart: "golden.routed.wave.v1", control: "golden.routed.signal.v1"),
+                    mesh: vocabulary.mesh)),
             installation: fernlet.installation)
     }
 
@@ -1129,6 +1137,68 @@ struct ProximityVocabularyGoldenTests {
             #expect(envelope.payloadSummary.title == envelope.payloadTypeToken,
                     "a mesh \(envelope.payloadTypeToken) envelope is titled \(envelope.payloadSummary.title)")
         }
+    }
+
+    /// The mesh signs and dispatches its own frames by its host namespace's mesh messages, never by
+    /// Fernlet's `PayloadType`. Over a host of a namespace whose mesh messages alone are its own (the
+    /// thirty tokens added to what its payload rules know), the coordinator beacon goes out under THAT
+    /// namespace's beacon token, titled with it; a goodbye under Fernlet's frozen goodbye token, which
+    /// that namespace still knows but as no message of its mesh, closes nothing; and a goodbye under
+    /// THAT namespace's goodbye token closes the link.
+    @Test func theMeshSignsAndDispatchesByItsHostNamespacesMeshMessages() async throws {
+        let namespace = Self.renamedMeshMessagesNamespace()
+        #expect(namespace.soundness == .sound, "the renamed namespace is unsound: \(namespace.soundness)")
+        let mesh = namespace.family.vocabulary.mesh
+        let host = ScratchNamespaceHost(namespace: namespace)
+        defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
+        let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
+        defer { services.forEach { KeychainItem.deleteAll(service: $0) } }
+        let local = IdentityService(namespace: namespace, keychainService: services[0])
+        let peer = IdentityService(namespace: namespace, keychainService: services[1])
+        try peer.ensureProvisioned()
+        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(), identity: local)
+        let network = FakePeerNetwork()
+        let link = network.addEndpoint(named: "vocabulary-mesh-renamed")
+        let coordinator = ProximityCoordinator(
+            identity: local, transport: MockMultipeerTransport(), ranging: MockRangingProvider(),
+            replayCache: ReplayCache(), displayName: VocabularyCoordinatorRig.displayName, timeoutSeconds: 0)
+        manager.addSlotForTesting(coordinator: coordinator, peer: link.handle, fingerprint: peer.localFingerprint,
+                                  channel: link.transport)
+        manager.broadcastCoordinatorBeaconForTesting()
+        let beacon = {
+            link.transport.sentFrames.lazy
+                .compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+                .first { $0.payloadTypeToken == mesh.coordinatorBeacon }
+        }
+        await VocabularyCoordinatorRig.settle { beacon() != nil }
+        let sent = try #require(beacon(), "no beacon went out under the namespace's own token")
+        #expect(sent.payloadSummary.title == mesh.coordinatorBeacon, "the beacon is titled \(sent.payloadSummary.title)")
+        let fernlets = try Self.goodbye(under: Self.frozen("payloadType.sessionGoodbye"), from: peer)
+        manager.proximityCoordinator(coordinator, didReceive: fernlets, plaintext: Data("{}".utf8), from: nil)
+        #expect(manager.slots.count == 1, "a goodbye under Fernlet's token closed the link")
+        let own = try Self.goodbye(under: mesh.sessionGoodbye, from: peer)
+        manager.proximityCoordinator(coordinator, didReceive: own, plaintext: Data("{}".utf8), from: nil)
+        #expect(manager.slots.isEmpty, "a goodbye under the namespace's own token left the link open")
+        withExtendedLifetime(manager) {}   // its sends hold it weakly
+    }
+
+    /// `.fernlet` with its mesh messages alone replaced by thirty tokens of its own, which its payload
+    /// rules know beside Fernlet's: Fernlet's mesh tokens stay known, as no message of this mesh.
+    static func renamedMeshMessagesNamespace() -> ProximityNamespace {
+        let payloads = ProximityNamespace.fernlet.family.vocabulary.payloads
+        let meshToken = { (name: String) in "golden.mesh.\(name).v1" }
+        return fernletReplacing(
+            payloads: ProximityNamespace.PayloadRules(
+                known: payloads.known.union(ProximityNamespace.MeshMessages.tokens(meshToken)),
+                sealingRequired: payloads.sealingRequired),
+            mesh: .spelled(meshToken))
+    }
+
+    /// An unsealed goodbye under `token`, signed by `sender`, as a peer of a pre-departure build sends it.
+    static func goodbye(under token: String, from sender: IdentityService) throws -> FernletIdentityEnvelope {
+        try FernletIdentityEnvelope.signed(
+            identityService: sender, senderDisplayName: "", payloadTypeToken: token,
+            payloadSummary: PayloadSummary(title: token), payload: Data("{}".utf8))
     }
 
     // MARK: Group 8 — the presentation strings
@@ -1791,6 +1861,76 @@ struct ProximityVocabularyGoldenTests {
         }
     }
 
+    /// `.fernlet`'s thirty mesh messages, each beside the frozen group 1 row of the `PayloadType` case
+    /// Fernlet's mesh sends that frame under: the tokens the mesh manager signs and dispatches its own
+    /// frames by, read off `family.vocabulary.mesh`.
+    static var fernletMeshValues: [FernletValue] {
+        let mesh = ProximityNamespace.fernlet.family.vocabulary.mesh
+        let rows: [(field: String, shipped: String, row: String)] = [
+            ("descriptor", mesh.descriptor, "meshDescriptor"),
+            ("admissionGrant", mesh.admissionGrant, "meshAdmissionGrant"),
+            ("admissionRequest", mesh.admissionRequest, "meshAdmissionRequest"),
+            ("stateChange", mesh.stateChange, "meshStateChange"),
+            ("friendVouchList", mesh.friendVouchList, "meshFriendVouchList"),
+            ("removalProposal", mesh.removalProposal, "meshRemovalProposal"),
+            ("removalSecond", mesh.removalSecond, "meshRemovalSecond"),
+            ("memberDeparture", mesh.memberDeparture, "meshMemberDeparture"),
+            ("memberAdmission", mesh.memberAdmission, "meshMemberAdmission"),
+            ("memberRemoval", mesh.memberRemoval, "meshMemberRemoval"),
+            ("terminated", mesh.terminated, "meshTerminated"),
+            ("inventoryDigest", mesh.inventoryDigest, "meshInventoryDigest"),
+            ("epochHeads", mesh.epochHeads, "meshEpochHeads"),
+            ("keyAgreement", mesh.keyAgreement, "meshKeyAgreement"),
+            ("removalProposalSigned", mesh.removalProposalSigned, "meshRemovalProposalSigned"),
+            ("removalVote", mesh.removalVote, "meshRemovalVote"),
+            ("routedManifest", mesh.routedManifest, "meshRoutedManifest"),
+            ("routedChunk", mesh.routedChunk, "meshRoutedChunk"),
+            ("custodyReceipt", mesh.custodyReceipt, "meshCustodyReceipt"),
+            ("recipientReceipt", mesh.recipientReceipt, "meshRecipientReceipt"),
+            ("routedInventoryDigest", mesh.routedInventoryDigest, "meshRoutedInventoryDigest"),
+            ("routedDrainAnswer", mesh.routedDrainAnswer, "meshRoutedDrainAnswer"),
+            ("keyRotation", mesh.keyRotation, "meshKeyRotation"),
+            ("keyAck", mesh.keyAck, "meshKeyAck"),
+            ("rotationSync", mesh.rotationSync, "meshRotationSync"),
+            ("encryptedMetadata", mesh.encryptedMetadata, "meshEncryptedMetadata"),
+            ("coordinatorBeacon", mesh.coordinatorBeacon, "meshCoordinatorBeacon"),
+            ("verifyChallenge", mesh.verifyChallenge, "verifyChallenge"),
+            ("verifyResponse", mesh.verifyResponse, "verifyResponse"),
+            ("sessionGoodbye", mesh.sessionGoodbye, "sessionGoodbye")
+        ]
+        // R2: bounded by the thirty rows.
+        return rows.map {
+            FernletValue(field: "family.vocabulary.mesh." + $0.field, shipped: $0.shipped,
+                         frozen: frozen("payloadType." + $0.row))
+        }
+    }
+
+    /// Each of `.fernlet`'s thirty mesh messages is its frozen token byte for byte and one of the
+    /// tokens `.fernlet` knows, so the mesh manager reading its frames' tokens off the namespace moves
+    /// no byte and parks none of its own frames. Every role resolves to that token and back, and the
+    /// token decodes to the `PayloadType` case of the role's name.
+    @Test func everyFernletMeshMessageIsItsFrozenTokenAndKnown() {
+        let values = Self.fernletMeshValues
+        let known = ProximityNamespace.fernlet.family.vocabulary.payloads.known
+        #expect(values.count == 30 && Set(values.map(\.frozen)).count == 30, "\(values.count) mesh messages compared")
+        // R2: bounded by the thirty values.
+        for value in values {
+            #expect(!value.frozen.isEmpty && Data(value.shipped.utf8) == Data(value.frozen.utf8), """
+                ProximityNamespace.fernlet's \(value.field) is "\(value.shipped)"; its frozen token is \
+                "\(value.frozen)". The literal never moves: fix FernletConnections.
+                """)
+            #expect(known.contains(value.shipped), "\(value.field) is not a token .fernlet knows")
+        }
+        let mesh = ProximityNamespace.fernlet.family.vocabulary.mesh
+        #expect(MeshPayloadRole.allCases.count == values.count, "\(MeshPayloadRole.allCases.count) roles")
+        // R2: bounded by the thirty roles.
+        for role in MeshPayloadRole.allCases {
+            let token = role.token(in: mesh)
+            #expect(MeshPayloadRole.role(for: token, in: mesh) == role, "\(role)'s token resolves to another role")
+            #expect(PayloadType(rawValue: token).map { "\($0)" } == "\(role)", "\(role)'s token is \(token)")
+        }
+    }
+
     /// `.fernlet`'s token sets and lists are the frozen tables whole: `known` is the 55 payload tokens,
     /// exactly `PayloadType`'s cases; the sealing set is the 17; the capabilities are the nine in
     /// declaration order, photos alone assumed for a legacy peer; and twice their count is the
@@ -1821,9 +1961,9 @@ struct ProximityVocabularyGoldenTests {
         let family = ProximityNamespace.fernlet.family
         let reflected = Self.reflectedLeaves(of: family.vocabulary, under: "family.vocabulary")
             + Self.reflectedLeaves(of: family.radios, under: "family.radios")
-        let pinned = Set(Self.fernletValues.map(\.field))
+        let pinned = Set(Self.fernletValues.map(\.field)).union(Self.fernletMeshValues.map(\.field))
             .union(Self.wholeVocabularyFields).union(Self.radioFieldsTheNamespaceGoldenPins)
-        #expect(reflected.count == 30, "reflection found \(reflected.count) leaves: \(reflected.sorted())")
+        #expect(reflected.count == 60, "reflection found \(reflected.count) leaves: \(reflected.sorted())")
         #expect(Set(reflected) == pinned, """
             reflected but unpinned: \(Set(reflected).subtracting(pinned).sorted()); \
             pinned but not reflected: \(pinned.subtracting(reflected).sorted())
@@ -1868,7 +2008,7 @@ struct ProximityVocabularyGoldenTests {
         var leaves: [String] = []
         var pending: [(path: String, value: Any)] = [(path: root, value: value)]
         var visits = 0
-        // R2: at most 128 nodes; the vocabulary and the radios hold about 45 between them.
+        // R2: at most 128 nodes; the vocabulary and the radios hold 74 between them.
         while visits < 128, let node = pending.popLast() {
             visits += 1
             if node.value is String || node.value is Set<String> || node.value is [String] || node.value is Data {

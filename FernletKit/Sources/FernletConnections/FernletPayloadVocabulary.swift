@@ -4,15 +4,16 @@
 // Fernlet's payload vocabulary as ONE `ProximityNamespace.Vocabulary` value, `.fernlet`, which
 // `ProximityNamespace.Family.fernlet` carries: the coordinator's three session messages, every payload
 // token and the seventeen whose payload must arrive sealed, the capability tokens, the membership
-// record kinds and the routed-type tokens. Payload and capability tokens are read off
-// FernletDomainModel's `PayloadType` and `ProximityCapability`, and so are the record kinds (a record
-// kind IS the payload token of the frame that carries its record), so each keeps one spelling. The
-// routed-type tokens and the session titles have no `PayloadType` twin and are spelled here alone.
-// ProximityKit reads every group off the namespace: its identity envelope seals and parks by the
-// payload rules, its coordinator signs and dispatches by the session messages and reads the capability
-// rules, its mesh and presence managers advertise the wire2 token (and the mesh frames by it), its
-// inventory digest hashes the record kinds and its routed type registry builds its rows from the
-// routed types.
+// record kinds, the routed-type tokens and the mesh engine's thirty messages. Payload and capability
+// tokens are read off FernletDomainModel's `PayloadType` and `ProximityCapability`, and so are the
+// record kinds (a record kind IS the payload token of the frame that carries its record) and the mesh
+// messages, so each keeps one spelling. The routed-type tokens and the session titles have no
+// `PayloadType` twin and are spelled here alone. ProximityKit reads every group off the namespace: its
+// identity envelope seals and parks by the payload rules, its coordinator signs and dispatches by the
+// session messages and reads the capability rules, its mesh and presence managers advertise the wire2
+// token (and the mesh frames by it), its inventory digest hashes the record kinds, its routed type
+// registry builds its rows from the routed types and its mesh manager signs and dispatches its
+// engine's own frames by the mesh messages.
 //
 // Every value is pinned by `ProximityVocabularyGoldenTests`' frozen column, so a change here is a wire
 // change for every device already in the field: it fails that suite rather than shipping. Every token
@@ -26,7 +27,7 @@ import ProximityKit
 nonisolated extension ProximityNamespace.Vocabulary {
 
     /// Fernlet's payload vocabulary: the session messages, the payload rules, the capabilities, the
-    /// membership record kinds and the routed types, each `.fernlet`.
+    /// membership record kinds, the routed types and the mesh messages, each `.fernlet`.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins `ProximityNamespace.fernlet` as
     /// `.sound`, vocabulary included).
@@ -35,7 +36,8 @@ nonisolated extension ProximityNamespace.Vocabulary {
         payloads: .fernlet,
         capabilities: .fernlet,
         membershipRecordKinds: .fernlet,
-        routedTypes: .fernlet
+        routedTypes: .fernlet,
+        mesh: .fernlet
     )
 }
 
@@ -106,5 +108,44 @@ nonisolated extension ProximityNamespace.RoutedTypes {
         tempMessage: "fernlet.mesh.routed-type.temp-message.v1",
         heart: "fernlet.mesh.routed-type.heart.v1",
         control: "fernlet.mesh.routed-type.control.v1"
+    )
+}
+
+nonisolated extension ProximityNamespace.MeshMessages {
+
+    /// The mesh engine's thirty messages, each the `PayloadType` token Fernlet's mesh signs and
+    /// dispatches its frame under, so each keeps one spelling: four of them are also the record kinds
+    /// above, and fifteen spell a signature label (`ProximityNamespaceGoldenTests` holds the pairs).
+    public nonisolated static let fernlet = ProximityNamespace.MeshMessages(
+        descriptor: PayloadType.meshDescriptor.rawValue,
+        admissionGrant: PayloadType.meshAdmissionGrant.rawValue,
+        admissionRequest: PayloadType.meshAdmissionRequest.rawValue,
+        stateChange: PayloadType.meshStateChange.rawValue,
+        friendVouchList: PayloadType.meshFriendVouchList.rawValue,
+        removalProposal: PayloadType.meshRemovalProposal.rawValue,
+        removalSecond: PayloadType.meshRemovalSecond.rawValue,
+        memberDeparture: PayloadType.meshMemberDeparture.rawValue,
+        memberAdmission: PayloadType.meshMemberAdmission.rawValue,
+        memberRemoval: PayloadType.meshMemberRemoval.rawValue,
+        terminated: PayloadType.meshTerminated.rawValue,
+        inventoryDigest: PayloadType.meshInventoryDigest.rawValue,
+        epochHeads: PayloadType.meshEpochHeads.rawValue,
+        keyAgreement: PayloadType.meshKeyAgreement.rawValue,
+        removalProposalSigned: PayloadType.meshRemovalProposalSigned.rawValue,
+        removalVote: PayloadType.meshRemovalVote.rawValue,
+        routedManifest: PayloadType.meshRoutedManifest.rawValue,
+        routedChunk: PayloadType.meshRoutedChunk.rawValue,
+        custodyReceipt: PayloadType.meshCustodyReceipt.rawValue,
+        recipientReceipt: PayloadType.meshRecipientReceipt.rawValue,
+        routedInventoryDigest: PayloadType.meshRoutedInventoryDigest.rawValue,
+        routedDrainAnswer: PayloadType.meshRoutedDrainAnswer.rawValue,
+        keyRotation: PayloadType.meshKeyRotation.rawValue,
+        keyAck: PayloadType.meshKeyAck.rawValue,
+        rotationSync: PayloadType.meshRotationSync.rawValue,
+        encryptedMetadata: PayloadType.meshEncryptedMetadata.rawValue,
+        coordinatorBeacon: PayloadType.meshCoordinatorBeacon.rawValue,
+        verifyChallenge: PayloadType.verifyChallenge.rawValue,
+        verifyResponse: PayloadType.verifyResponse.rawValue,
+        sessionGoodbye: PayloadType.sessionGoodbye.rawValue
     )
 }

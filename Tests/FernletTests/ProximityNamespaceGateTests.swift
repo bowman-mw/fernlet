@@ -578,10 +578,11 @@ private enum GateFixtureApp {
     }
 
     /// Its payload vocabulary: its own session messages and titles, four payload tokens of which one
-    /// must arrive sealed, two capabilities with no legacy peers to assume anything for, and its own
-    /// record kinds and routed types.
+    /// must arrive sealed and its thirty mesh messages, two capabilities with no legacy peers to assume
+    /// anything for, and its own record kinds and routed types.
     static func vocabulary() -> ProximityNamespace.Vocabulary {
-        ProximityNamespace.Vocabulary(
+        let meshToken = { (name: String) in "gate.mesh.\(name).v1" }
+        return ProximityNamespace.Vocabulary(
             session: ProximityNamespace.SessionMessages(
                 identityIntroduction: ProximityNamespace.SessionMessage(
                     payloadType: "gate.session.hello.v1", summaryTitle: "Gate hello"),
@@ -590,7 +591,8 @@ private enum GateFixtureApp {
                 heartbeat: ProximityNamespace.Heartbeat(
                     payloadType: "gate.session.beat.v1", pingTitle: "Gate beat", replyTitle: "Gate beat back")),
             payloads: ProximityNamespace.PayloadRules(
-                known: ["gate.session.hello.v1", "gate.session.welcome.v1", "gate.session.beat.v1", "gate.note.v1"],
+                known: Set(["gate.session.hello.v1", "gate.session.welcome.v1", "gate.session.beat.v1", "gate.note.v1"]
+                           + ProximityNamespace.MeshMessages.tokens(meshToken)),
                 sealingRequired: ["gate.note.v1"]),
             capabilities: ProximityNamespace.Capabilities(
                 known: ["gate-notes", "gate-framing"], wire2: "gate-framing", assumedForLegacyPeers: []),
@@ -599,7 +601,8 @@ private enum GateFixtureApp {
                 removal: "gate.member.removed.v1", termination: "gate.group.ended.v1"),
             routedTypes: ProximityNamespace.RoutedTypes(
                 photo: "gate.routed.picture.v1", tempMessage: "gate.routed.note.v1",
-                heart: "gate.routed.wave.v1", control: "gate.routed.control.v1")
+                heart: "gate.routed.wave.v1", control: "gate.routed.control.v1"),
+            mesh: .spelled(meshToken)
         )
     }
 

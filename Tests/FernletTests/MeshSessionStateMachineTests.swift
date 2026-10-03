@@ -783,7 +783,7 @@ struct MeshSessionLifecycleManagerTests {
             let created = Date()
             manager.currentMesh = makeMesh(manager, createdAt: created)
             let deadline = created.addingTimeInterval(MeshSessionCeiling.ceilingSeconds)
-            var emitted: [PayloadType] = []
+            var emitted: [MeshPayloadRole] = []
             manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
             await DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {
@@ -829,7 +829,7 @@ struct MeshSessionLifecycleManagerTests {
         let manager = MeshNetworkManager(store: store)
         let mesh = makeMesh(manager)
         manager.currentMesh = mesh
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
         await DeviceBindingID.$testOverride.withValue(.identifier(Self.install)) {

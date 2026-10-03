@@ -326,13 +326,13 @@ private extension UInt8 {
         ("ProximityCryptographicPurpose(",
          #"(?<![A-Za-z0-9_.])ProximityCryptographicPurpose\s*(?:\.\s*init\s*)?\("#),
         ("a namespace group's initializer",
-         #"(?<![A-Za-z0-9_.])(?:ProximityNamespace\s*\.\s*)?(?:Signature|KeyDerivation|AEAD|Hash|Radios|Radio|VerifyQR|Family|Purposes|Installation|Keychain|Storage|Vocabulary|SessionMessages|SessionMessage|Heartbeat|PayloadRules|Capabilities|MembershipRecordKinds|RoutedTypes)\s*(?:\.\s*init\s*)?\("#),
+         #"(?<![A-Za-z0-9_.])(?:ProximityNamespace\s*\.\s*)?(?:Signature|KeyDerivation|AEAD|Hash|Radios|Radio|VerifyQR|Family|Purposes|Installation|Keychain|Storage|Vocabulary|SessionMessages|SessionMessage|Heartbeat|PayloadRules|Capabilities|MembershipRecordKinds|RoutedTypes|MeshMessages)\s*(?:\.\s*init\s*)?\("#),
         ("a keychain row's initializer",
          #"(?<![A-Za-z0-9_.])(?:(?:ProximityNamespace\s*\.\s*)?Keychain\s*\.\s*Row|(?:(?:ProximityNamespace\s*\.\s*)?Keychain\s*\.\s*)?IdentityRows)\s*(?:\.\s*init\s*)?\("#),
         ("LegacyV1.accepted(", #"(?<![A-Za-z0-9_])accepted\s*\(\s*identityEnvelopeV1\s*:"#),
         ("ProximityNamespace.validated(", #"(?<![A-Za-z0-9_])validated\s*\(\s*family\s*:"#),
         ("a namespace initializer's shorthand .init(",
-         #"\.\s*init\s*\(\s*(?:family|purposes|signature|identityEnvelopeV2|proximityTransportV1|proximityTransportV2|meshInventoryDigestV1|mesh|serviceType|urlScheme|keychain|identity|service|directoryName|session|identityIntroduction|payloadType|known|admission|photo)\s*:"#),
+         #"\.\s*init\s*\(\s*(?:family|purposes|signature|identityEnvelopeV2|proximityTransportV1|proximityTransportV2|meshInventoryDigestV1|mesh|serviceType|urlScheme|keychain|identity|service|directoryName|session|identityIntroduction|payloadType|known|admission|photo|descriptor)\s*:"#),
         ("the purpose initializer's shape",
          #"(?:\(\s*""|\.\s*init\s*\(\s*[^\s,():]+)\s*,\s*role\s*:"#),
         ("an extension of a namespace type",
@@ -344,9 +344,10 @@ private extension UInt8 {
     /// Rule 1's patterns, fixtured both ways, because the matcher is the wall: each sees its own
     /// construction forms (named, `.init`, shorthand, wrapped), and none sees the nearest code in
     /// today's tree that is not a construction — another type's nested `Radio(`, the transport's calls
-    /// that pass a `role:`, a shorthand `.init(` of another type, a namespace field read, a hash, and
-    /// the session-message store, heartbeat payload and schedule and capability list whose names hold
-    /// a vocabulary group's. Every sample is lexed first, as the module's files are.
+    /// that pass a `role:`, a shorthand `.init(` of another type, a namespace field read, a hash, the
+    /// session-message store, heartbeat payload and schedule and capability list whose names hold a
+    /// vocabulary group's, and the descriptor payload and a role's token lookup beside the mesh
+    /// messages' first label and type. Every sample is lexed first, as the module's files are.
     @Test func everyConstructionPatternSeesItsFormAndNoNeighbour() throws {
         let patterns = try Dictionary(uniqueKeysWithValues: Self.constructionPatterns.map {
             ($0.name, try NSRegularExpression(pattern: $0.pattern))
@@ -359,6 +360,7 @@ private extension UInt8 {
             ("a namespace group's initializer", #"Hash.init(meshInventoryDigestV1: "a", meshRoutedContentV1: "b")"#),
             ("a namespace group's initializer", "let beat = ProximityNamespace.Heartbeat(payloadType: t, pingTitle: p, replyTitle: r)"),
             ("a namespace group's initializer", "let kinds = MembershipRecordKinds.init(admission: a, departure: d)"),
+            ("a namespace group's initializer", "let mesh = ProximityNamespace.MeshMessages(descriptor: d, admissionGrant: g)"),
             ("a keychain row's initializer", "let row = ProximityNamespace.Keychain.Row(service: s, account: a)"),
             ("a keychain row's initializer", "let rows = IdentityRows(service: s, signingPrivateKey: k)"),
             ("LegacyV1.accepted(", #"legacyV1: .accepted(identityEnvelopeV1: "a", meshAdmissionTokenV1: "b")"#),
@@ -366,6 +368,8 @@ private extension UInt8 {
             ("a namespace initializer's shorthand .init(", "let r: ProximityNamespace.Radio = .init(serviceType: s, alpn: a)"),
             ("a namespace initializer's shorthand .init(",
              "let rules: ProximityNamespace.PayloadRules = .init(known: k, sealingRequired: s)"),
+            ("a namespace initializer's shorthand .init(",
+             "let mesh: ProximityNamespace.MeshMessages = .init(descriptor: d, admissionGrant: g)"),
             ("the purpose initializer's shape", #"Self("x.v1", role: .aeadAssociatedData)"#),
             ("the purpose initializer's shape", "let p: ProximityCryptographicPurpose = .init(spelling, role: .columnSeal)"),
             ("an extension of a namespace type", "nonisolated extension ProximityNamespace.Storage {"),
@@ -389,7 +393,9 @@ private extension UInt8 {
             "public let sessionMessages = SessionMessageStore()",
             "private var heartbeats = MeshHeartbeatSchedule()",
             "let payload = SessionHeartbeatPayload(kind: .ack, heartbeatID: UUID(), sentAt: now, responseTo: heartbeatID)",
-            "capabilities: localCapabilities(),"
+            "capabilities: localCapabilities(),",
+            "await sendMeshDescriptor(to: slot); let payload = MeshStateChangePayload(descriptor: mesh)",
+            "func token(in mesh: ProximityNamespace.MeshMessages) -> String { mesh.descriptor }"
         ]
         // R2: bounded by the neighbour and pattern lists.
         for source in neighbours {

@@ -538,7 +538,7 @@ struct MeshP3SessionAcceptanceTests {
             let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
             let created = MeshP3Acceptance.base
             manager.currentMesh = MeshP3Acceptance.mesh(for: manager, createdAt: created)
-            var emitted: [PayloadType] = []
+            var emitted: [MeshPayloadRole] = []
             manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
             await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -879,7 +879,7 @@ struct MeshP3InteropAcceptanceTests {
         let rosterBefore = manager.membershipVerifier?.roster
 
         try MeshP3Acceptance.deliver(
-            Data("{}".utf8), type: MeshMembershipGoodbyeInterop.payloadType,
+            Data("{}".utf8), type: .sessionGoodbye,
             to: manager, from: fixture.joiner, over: slot.coordinator
         )
 
@@ -956,7 +956,7 @@ struct MeshP3InteropAcceptanceTests {
             fingerprint: fixture.joiner.localFingerprint
         ) == false, "C's departure lands on A")
 
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         manager.onMembershipEventSentForTesting = { emitted.append($0) }
         let admitterSlot = MeshP3Acceptance.attachSlot(
             to: manager, fingerprint: fixture.admitter.localFingerprint

@@ -265,9 +265,12 @@ struct MeshRoutedDrainRig {
         )
         var slot = node.manager.slots.first { $0.coordinator === coordinator }
         if !committedSlot { slot?.fingerprint = nil }
+        // The door takes the frame's role, which the manager reads off its namespace's mesh messages.
+        let role = try #require(MeshPayloadRole.role(
+            for: type.rawValue, in: ProximityNamespace.fernlet.family.vocabulary.mesh), "\(type) is no mesh role")
         DeviceBindingID.$testOverride.withValue(binding) {
             node.manager.dispatchRoutedPayload(
-                type, plaintext: plaintext, decoder: JSONDecoder(), slot: slot, now: now
+                role, plaintext: plaintext, decoder: JSONDecoder(), slot: slot, now: now
             )
         }
     }

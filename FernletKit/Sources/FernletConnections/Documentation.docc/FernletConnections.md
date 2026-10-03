@@ -98,20 +98,26 @@ wire tokens and the rules that hang on them, each part `.fernlet`:
 - `MembershipRecordKinds.fernlet`, the four record kinds the inventory digest hashes, each the
   `PayloadType` token of the frame that carries its record, and `RoutedTypes.fernlet`, the routed
   engine's photo, temporary-message, heart and reserved control types.
+- `MeshMessages.fernlet`, the mesh engine's thirty messages: the membership, admission,
+  routed-delivery, group-key and verify-ceremony frames and the legacy goodbye it parses, each under
+  the `PayloadType` token Fernlet's mesh has always sent it under.
 
 Payload and capability tokens are read off FernletDomainModel's `PayloadType` and
-`ProximityCapability`, and so are the record kinds (a record kind IS its payload token), so each
-keeps one spelling. The routed types and the session titles have no `PayloadType` twin and are
-spelled here alone. ProximityKit reads every group off the namespace, so it spells none of them: its
-identity envelope refuses an unsealed envelope whose token is in the sealing set and parks one whose
-token is outside `known`; its coordinator signs its introduction, acknowledgement and heartbeat under
-the session messages' tokens and titles, dispatches by them, and reads the wire2 token, the legacy
-assumption and its receive bound (twice the capability count) off the capabilities, whose wire2
-token the mesh's sealed sends read too and the mesh and presence managers advertise; its inventory
-digest tags every record with its family's record kind; and its routed type registry builds its three
-rows from the routed types (the mesh manager hands it its namespace's). Its mesh engine's own payload
-tokens and its features' payload and capability tokens are still `PayloadType` and
-`ProximityCapability` cases until the rest of plan step A0.3 and plan steps A0.4 and A0.5 move them.
+`ProximityCapability`, and so are the record kinds (a record kind IS its payload token) and the mesh
+messages, so each keeps one spelling. The routed types and the session titles have no `PayloadType`
+twin and are spelled here alone. ProximityKit reads every group off the namespace, so it spells none
+of them: its identity envelope refuses an unsealed envelope whose token is in the sealing set and
+parks one whose token is outside `known`; its coordinator signs its introduction, acknowledgement and
+heartbeat under the session messages' tokens and titles, dispatches by them, and reads the wire2
+token, the legacy assumption and its receive bound (twice the capability count) off the capabilities,
+whose wire2 token the mesh's sealed sends read too and the mesh and presence managers advertise; its
+inventory digest tags every record with its family's record kind; its routed type registry builds its
+three rows from the routed types (the mesh manager hands it its namespace's); and its mesh manager
+names each of its own frames by role (`MeshPayloadRole`), signs it under the mesh messages' token
+for that role and resolves every token its payload door receives back to a role by them. Its mesh
+features' payload and capability tokens are still `PayloadType` and `ProximityCapability` cases until
+plan steps A0.4 and A0.5 move them: the manager sends a feature's payload under the case's token and
+keeps its feature handlers by token.
 
 `Radios.fernlet` carries the three presentation strings beside the radio values, and ProximityKit
 reads each of them off the namespace: `fernlet-mesh-`, the prefix the mesh and recipe-share radios'
@@ -125,6 +131,7 @@ frozen literal, so no spelling can drift, drives those consumers (and the invent
 type registry and a mesh manager) under `.fernlet` and under a namespace whose strings, record kinds
 or routed types are its own, drives the envelope, the coordinator and the mesh's sealed sends under
 `.fernlet` and under a namespace whose payload rules, session messages or capabilities are its own,
+drives a mesh manager's own sends and dispatch under a namespace whose mesh messages are its own,
 and holds the bounds ProximityKit's soundness rules apply to the bounds of the consumers they
 protect. `ProximityNamespace.fernlet` stays `.sound` under the vocabulary and presentation rules too.
 The test target's bindings file restores the routed suites' old call shapes (`MeshRoutedTypeToken`,
@@ -190,10 +197,9 @@ its name, members and behaviour as it had in ProximityKit:
 The protocol the policies answer (`ProximityTrustPolicy`), the vault, the roster entry and the
 coordinator stay ProximityKit's.
 
-**What joins it later.** The rest of A0.3 adds the mesh engine's own tokens (the mesh control
-tokens). Nothing here stands in for the coordinator's display name or a per-mode service type:
-ProximityKit has neither, every caller passing the host's resolved name and the radios owning
-discovery on the namespace's service types. A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
+**What joins it later.** Nothing here stands in for the coordinator's display name or a per-mode
+service type: ProximityKit has neither, every caller passing the host's resolved name and the
+radios owning discovery on the namespace's service types. A0.4 makes Fernlet's feature labels host purposes. C1 adds the Coach app's installation (`fernletCoach`, beside
 `.fernletApp` and sharing its family), the connection profiles (friend mesh, presence, recipe,
 coach), app identities with per-app allow lists, coach relationship records and the coach link
 signing purposes; FernletCrypto's 38 twins of these labels then retire.
