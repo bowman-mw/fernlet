@@ -1,6 +1,7 @@
 import ProximityKit
 import FernletConnections
 import FernletProximityUI
+import FernletSocial
 import CryptoKit
 import CloudKitSync
 import FernletLock
@@ -376,7 +377,7 @@ final class FernletStore {
     @ObservationIgnored private(set) lazy var closenessLedger =
         ClosenessLedger(fileURL: ClosenessLedger.fileURL(in: proximitySupportRoot))
     /// Offline "away" hearts via the CloudKit public-DB dead-drop (bitchat adoptions Increment 3).
-    /// All crypto lives on the ProximityKit side; `HeartDropCloudTransport` (CloudKitSync) ferries
+    /// All crypto lives on the FernletSocial side; `HeartDropCloudTransport` (CloudKitSync) ferries
     /// only rotating day tags + sealed blobs — the S3 wall seam is `HeartDropTransporting` in
     /// FernletDomainModel. Consent-gated by `settings.heartsAwayDelivery` at queue AND fetch;
     /// shares the SAME heart ledger as the live paths so the 5-minute cooldown stays one gate.
@@ -391,10 +392,10 @@ final class FernletStore {
             },
             localDayKey: { FernletDate.dayKey(for: $0) },
             displayName: { [weak self] in self?.proximityDisplayName ?? "" },
-            // This device's identity under the host's namespace (`.fernlet`, so the unchanged
-            // `com.fernlet.identity` rows): the service's identity has no default since ProximityKit
-            // plan step A0.2.3.
-            identity: IdentityService(namespace: proximityNamespace),
+            // This device's identity from the app's one factory (`.fernlet`, so the unchanged
+            // `com.fernlet.identity` rows, carrying the sealed-backup escrow key): the service's
+            // identity has no default since ProximityKit plan step A0.2.3.
+            identity: .fernletApp(),
             // Files AND seal key on this store's own scope: `wipeForDeleteAll` destroys both, so
             // under the parallel test runner one store's "delete everything" would otherwise empty
             // every other live store's outbox and delete the key their sidecars are sealed with.
@@ -425,6 +426,9 @@ final class FernletStore {
         manager.queueAwayHeart = { [weak self] friend in
             self?.heartDropService.queueHeart(to: friend) == .queued
         }
+        // The away-delivery consent, which presence reads only for its not-nearby copy: the same
+        // provider the mesh manager is handed above.
+        manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
@@ -530,8 +534,8 @@ final class FernletStore {
     /// `sensitiveVisibilityDefaults`: that suite is shared with `AgeAssuranceStore` because both are
     /// sensitive-surface state, and a daily AI-call count is neither.
     @ObservationIgnored let aiQuotaDefaults: UserDefaults
-    /// The two halves above as the one value ProximityKit takes, so the heart-drop stores this store
-    /// builds can never end up half-isolated.
+    /// The two halves above as the one value FernletSocial's heart dead-drop takes, so the heart-drop
+    /// stores this store builds can never end up half-isolated.
     @ObservationIgnored nonisolated var heartDropStorage: HeartDropStorageScope {
         HeartDropStorageScope(directory: proximitySupportRoot, keychainService: heartDropKeychainService)
     }
@@ -7551,7 +7555,14 @@ extension FernletStore {
     }
 }
 
-extension FernletStore: ProximityTrustPolicy {}
+extension FernletStore: ProximityTrustPolicy {
+    /// Keeps a coordinator's audit in the vault as Fernlet's persisted row, converted by
+    /// `FernletConnections`' one conversion (`TrainerAuditEvent.init(_:)`); the rows the app builds
+    /// itself go through ``recordTrainerAudit(_:)``.
+    func recordSessionAudit(_ audit: ProximitySessionAudit) {
+        proximityTrustVault.recordTrainerAudit(TrainerAuditEvent(audit))
+    }
+}
 
 extension FernletStore: WorkoutPlanningContext {}
 

@@ -29,7 +29,10 @@
 /Tests/FernletTests/CIGateSelectorBoundaryTests.swift     @bowman-mw
 /Tests/FernletTests/IdentityProvisioningReadTests.swift   @bowman-mw
 /Tests/FernletTests/ProximityNamespaceGoldenTests.swift   @bowman-mw
+/Tests/FernletTests/ProximityVocabularyGoldenTests.swift  @bowman-mw
 /Tests/FernletTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
+/Tests/FernletTests/ProximityNamespaceGateTests.swift     @bowman-mw
+/Tests/FernletTests/FernletFeatureGoldenTests.swift       @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
 # job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned
@@ -77,3 +80,23 @@
 # Fernlet's wire identity (ProximityNamespace.fernlet): changing a literal breaks Fernlet's wire,
 # keychain and on-disk formats for every device already in the field
 /FernletKit/Sources/FernletConnections/       @bowman-mw
+
+# FernletSocial's moderation ban store: a keychain service whose self-ban row outlives every wipe by
+# design, and the ban evidence's reporter-tag hash domain
+/FernletKit/Sources/FernletSocial/Moderation/ModerationBanStore.swift   @bowman-mw
+
+# FernletSocial's heart dead-drop: the drop's outer seal and the sidecars' at-rest seal, the prekey
+# store's keychain service and blob, the heart-drop pair secret and day tags, the storage scope and the
+# mesh stores' keychain services derived beside it — changing a byte here breaks every drop in flight
+/FernletKit/Sources/FernletSocial/HeartSharing/                         @bowman-mw
+
+# FernletSocial's presence tags: the presence pair secret and the rotating epoch tag every friend pair
+# advertises and matches by — changing a byte here makes every pair of friends invisible to each other
+/FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
+
+# The sealed-backup escrow: the app's escrow key (its content-addressed iCloud Keychain rows, the one
+# synchronizable key, its HKDF derivations, and the order it promotes a previous build's key before a
+# mint overwrites the row) and the identity's provisioning participant seam it rides — a mistake here
+# can destroy a user's backup key on a device that never ran the build
+/App/Fernlet/SealedBackupEscrowKey.swift                                        @bowman-mw
+/FernletKit/Sources/ProximityKit/Identity/IdentityProvisioningParticipant.swift @bowman-mw

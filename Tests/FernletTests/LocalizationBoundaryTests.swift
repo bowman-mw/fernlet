@@ -1655,7 +1655,7 @@ struct LocalizationBoundaryTests {
     /// Inside an SPM module, SwiftUI resolves a `LocalizedStringKey` against `Bundle.main` unless a
     /// `bundle:` argument is passed — and most of these APIs have no `bundle:` parameter at all, so
     /// the only correct form is to resolve first (a copy vault: `FernletUICopy`, `FernletLockCopy`,
-    /// `FernletProximityUICopy`) or to wrap in `Text(_:bundle:)`.
+    /// `FernletProximityUICopy`, `FernletConnectionsCopy`) or to wrap in `Text(_:bundle:)`.
     ///
     /// This is the exact sibling of ``everyPackageLocalizedStringPassesModuleBundle()`` and exists
     /// because that test could not see SwiftUI. `CLAUDE.md`'s localization-wall paragraph has always
@@ -1684,8 +1684,8 @@ struct LocalizationBoundaryTests {
             \(offenders.count) SwiftUI display literal(s) inside FernletKit resolve against \
             Bundle.main and will render untranslated English FOREVER — clean build, no warning, no \
             other failing test. Resolve through the module's copy vault (FernletUICopy, \
-            FernletLockCopy, FernletProximityUICopy) with `String(localized:…, bundle: .module)`, or pass \
-            `Text("…", bundle: .module)`:
+            FernletLockCopy, FernletProximityUICopy, FernletConnectionsCopy) with \
+            `String(localized:…, bundle: .module)`, or pass `Text("…", bundle: .module)`:
             \(offenders.map(\.report).sorted().joined(separator: "\n"))
             """
         )
@@ -2747,9 +2747,12 @@ struct LocalizationBoundaryTests {
     /// keeps compiling and keeps returning its `defaultValue`. Nothing else would notice.
     /// `FernletProximityUI` is pinned with them: ProximityKit's review sheet, keep-friends prompt
     /// and photo-save alert moved there with 28 of its 31 keys (ProximityKit plan step A0.1), so
-    /// most of what §4.0 put in ProximityKit's catalog now lives in that module's.
+    /// most of what §4.0 put in ProximityKit's catalog now lives in that module's. So is
+    /// `FernletConnections`, whose catalog holds the two name placeholders
+    /// `PeerNameDisplay.text(for:)` resolves (`FernletConnectionsCopy.Peer`, keys `proximity.peer.*`),
+    /// the rest of what §4.0 put there; ProximityKit's keeps the camera's hold-failure line.
     @Test func theModuleStringCatalogsAddedBySection40StillExist() {
-        for module in ["FernletUI", "ProximityKit", "FernletProximityUI", "AppServices"] {
+        for module in ["FernletUI", "ProximityKit", "FernletProximityUI", "FernletConnections", "AppServices"] {
             let catalog = RepoRoot.url("FernletKit/Sources/\(module)/Localizable.xcstrings")
             #expect(
                 FileManager.default.fileExists(atPath: catalog.path),

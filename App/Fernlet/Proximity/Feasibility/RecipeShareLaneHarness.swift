@@ -22,6 +22,7 @@
 //
 
 import CoreGraphics
+import FernletConnections
 import FernletDomainModel
 import Foundation
 import ProximityKit
@@ -224,10 +225,12 @@ enum RecipeShareLaneHarness {
     /// (Power of 10 rule 2).
     static let maxTicks = 600
 
-    /// The ephemeral instance-name prefix the radios wear. Held here as a literal on purpose: this
-    /// is the token the lane asserts NEVER reaches a user-facing string, and a harness that read it
-    /// from the transport would stop being an independent check of that claim.
-    static let instanceNameToken = "fernlet-mesh-"
+    /// The ephemeral instance-name prefix the radios wear: `.fernlet`'s
+    /// `family.radios.meshInstanceNamePrefix`, the value the app hands them (`fernlet-mesh-`, which
+    /// `ProximityVocabularyGoldenTests` pins). This is the token the lane asserts NEVER reaches a
+    /// user-facing string. Read off the host's namespace, never off the transport: a harness that
+    /// read it from the radio would stop being an independent check of that claim.
+    static let instanceNameToken = ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix
 
     /// The synthesized recipe's name. A frozen token so both transcripts can be grepped for it, and
     /// deliberately not prose: it is never localized and never a display decision.

@@ -2,7 +2,7 @@
 // ProximityKit
 //
 // The single home of the coordinator-state observation loop that MeshNetworkManager,
-// ProximityRecipeShareManager, and PresenceManager previously each hand-rolled
+// ProximityRecipeShareManager, and PresenceManager (FernletSocial's) previously each hand-rolled
 // (byte-identical machinery whose leak-fix comment had drifted to only one copy —
 // exactly the hand-propagation hazard this extraction removes).
 
@@ -10,7 +10,8 @@ import Observation
 
 /// The shared `withObservationTracking` re-arm loop behind the proximity managers'
 /// coordinator-state observers (`MeshNetworkManager.startObserving`,
-/// `ProximityRecipeShareManager.startObserving`, `PresenceManager.startHeartObserving`).
+/// `ProximityRecipeShareManager.startObserving` and FernletSocial's
+/// `PresenceManager.startHeartObserving`).
 ///
 /// Each iteration registers the caller's tracked reads, suspends until Observation reports a
 /// change, then runs the caller's check on the main actor and re-arms. The owner is held
@@ -20,11 +21,22 @@ import Observation
 /// parameter with weak-self caller closures, which would reintroduce the suspended-task leak
 /// documented below; and do not hoist a `guard let owner` above the await, which reintroduces
 /// the pin (``MemoryLifecycleTests`` covers both).
+///
+/// Public, as settled mechanism: it is the one sanctioned home of `withObservationTracking` in the
+/// shipping tree (`MemoryLifecycleBoundaryTests` rule ML3), so a host's manager that watches the
+/// coordinators it owns uses it rather than hand-rolling a loop. Main-actor, like the managers it
+/// serves.
 @MainActor
-enum ObservationLoop {
+public enum ObservationLoop {
 
     /// Start the observation loop for `owner` and return the loop task (callers store it and
     /// `cancel()` it in their stop paths, exactly as they did with the hand-rolled loops).
+    ///
+    /// The contract: the loop holds `owner` weakly across every suspension and ends, without calling
+    /// `onChange` again, once `owner` is gone or the returned task is cancelled; it calls `onChange`
+    /// after a change to a value `tracking` read, once per arming (changes that land before it runs
+    /// are coalesced into that one call), and never merely for arming; and it finishes its stream on
+    /// cancellation, so a cancelled loop leaves no suspended task behind.
     ///
     /// - Parameters:
     ///   - owner: The manager whose state is observed. Captured `weak`; each iteration begins
@@ -34,7 +46,7 @@ enum ObservationLoop {
     ///   - onChange: The post-change check(s), run on the main actor after each observed
     ///     mutation (willSet → yield → next main-actor hop → check); must not retain `owner`.
     /// - Returns: The unstructured loop task, already running.
-    static func start<Owner: AnyObject>(
+    public static func start<Owner: AnyObject>(
         on owner: Owner,
         tracking: @escaping @MainActor (Owner) -> Void,
         onChange: @escaping @MainActor (Owner) -> Void

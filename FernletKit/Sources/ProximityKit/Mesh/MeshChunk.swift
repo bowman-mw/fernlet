@@ -186,8 +186,8 @@ nonisolated enum MeshRoutedContentDigest {
     }
 
     /// The first 16 bytes of `data` as a `UUID`, via the tuple form — never `withUnsafeBytes`
-    /// (Power of 10 R9). A parallel 16-byte reader to `HeartDropSealer.uuid(from:)`, which is
-    /// heart-drop vocabulary with no other caller, rather than a duplicated policy.
+    /// (Power of 10 R9). A parallel 16-byte reader to FernletSocial's `HeartDropSealer.uuid(from:)`,
+    /// which is heart-drop vocabulary with no other caller, rather than a duplicated policy.
     private static func uuid(fromFirst16 data: Data) -> UUID {
         guard data.count >= 16 else { return zeroID }
         let bytes = [UInt8](data.prefix(16))
@@ -407,7 +407,7 @@ nonisolated struct MeshChunk: Codable, Equatable, Sendable {
 
 // MARK: - MeshChunkPayload
 
-/// The wire frame for a ``MeshChunk`` — `PayloadType.meshRoutedChunk`, signed and UNSEALED like
+/// The wire frame for a ``MeshChunk`` — `MeshPayloadRole.meshRoutedChunk`, signed and UNSEALED like
 /// the routed manifest beside it so a custodian can re-broadcast it verbatim; the payload is
 /// already ciphertext under the item's own content key, and pairwise sealing would make a chunk
 /// readable only by its first hop. Carries no second claim about the origin: the record already

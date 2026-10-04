@@ -161,7 +161,7 @@ nonisolated enum MeshRoutedItemDelivery {
     /// body id **is** the gift id `ProximityHeartLedger` dedups on and `MeshRoutedHeartAck` proves,
     /// so a body carrying another member's gift id would offer the ledger a judgement about someone
     /// else's heart under this origin's signature. It is the enforcement half of
-    /// ``MeshRoutedTypeToken/heart``'s frozen `itemID == giftID` contract.
+    /// ``ProximityNamespace/RoutedTypes/heart``'s frozen `itemID == giftID` contract.
     ///
     /// - Parameters:
     ///   - blob: The reassembled ciphertext, already re-hashed against `manifest.contentHash` by
@@ -242,7 +242,7 @@ nonisolated enum MeshRoutedItemDelivery {
             binding: binding,
             localFingerprint: localFingerprint,
             localKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
-            staticAgreement: identity.heartDropStaticAgreement(withEphemeralPublicKey:),
+            staticAgreement: identity.staticKeyAgreement(withEphemeralPublicKey:),
             in: identity.purposes
         )
         return try MeshRoutedItemSealer.open(

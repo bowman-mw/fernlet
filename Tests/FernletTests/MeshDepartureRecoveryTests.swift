@@ -463,7 +463,7 @@ struct MeshDepartureWorkedExample {
 
     /// B develops and leaves. Its signed departure reaches **A only**; then B's radio is gone.
     func departB(at now: Date) async throws {
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         nodeB.manager.onMembershipEventSentForTesting = { emitted.append($0) }
         await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             await nodeB.manager.leaveSessionAfterNotifyingPeers()

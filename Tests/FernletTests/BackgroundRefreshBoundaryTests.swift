@@ -41,7 +41,7 @@ import Testing
 ///
 /// ## Why the module allowlist alone is not the wall
 ///
-/// **The umbrella is not porous.** There is no module called `FernletKit`: it is a PRODUCT over 27
+/// **The umbrella is not porous.** There is no module called `FernletKit`: it is a PRODUCT over 28
 /// targets and no target carries that name, so nothing can `import FernletKit`. There is no
 /// `@_exported` anywhere in the tree, `FernletDomainModel` depends only on `FernletFoundation`, and
 /// the app target builds with `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` — so a file
@@ -88,9 +88,12 @@ import Testing
 /// A hit becomes a needle when using it RUNS, HANDS OUT or FEEDS the prohibited machinery. A hit
 /// that only reads or writes an INERT record does not, and the excluded set is written down here
 /// rather than left unmentioned, so the cut is visible and can be re-argued: `meshSessionStorage`,
-/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximitySupportRoot`,
+/// `meshRoutedStorage`, `heartDropStorage`, `proximityTrustVault`, `proximityTrustStore`, `proximitySupportRoot`,
 /// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
-/// protocol identity, a constant value), `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// protocol identity, a constant value), `proximityInstallBinding` (a stateless adapter over the
+/// install's binding row), `makeProximityTrustPolicy` (a fresh session trust policy over the vault,
+/// which runs nothing until a coordinator consults it), `makeProximityIdentity` (a fresh identity over
+/// the store's rows, which provisions nothing until asked), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,
@@ -98,7 +101,7 @@ import Testing
 /// `reportProximityPeer`, `isTrustedProximityPeer`, `isRevokedProximitySigningKey`,
 /// `isBlockedProximitySigningKey`, `isBlockedFingerprint`, `isProximitySellerBanned`,
 /// `isClothingItemLocallyReported`, `reconcileModerationBans`, `recomputeCloseFriendsIfNeeded`,
-/// `recordTrainerAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
+/// `recordTrainerAudit`, `recordSessionAudit`, `trainerAuditEvents`, `fundMediaAtRestWitness`); the recipe-share text
 /// helpers (`recipeShareText`, `recipeShareDraft`, `proximityRecipeSharePayload`,
 /// `importProximityRecipeShare`; `savedRecipeShareText` was retired 2026-09-30); the read-only health projections (`allowedHealthCapabilities`,
 /// `visibleHealthCapabilities`, `dailyHealthScore`, `workoutExists`); and
@@ -251,6 +254,7 @@ struct BackgroundRefreshBoundaryTests {
         "FernletUI": "the design system; a background task draws nothing.",
         "FernletProximityUI": "the in-person photo review and keep-friends screens; a background task presents nothing, and the module reaches the mesh and Photos besides.",
         "FernletConnections": "Fernlet's connection rules over the mesh, starting with its wire identity — a refresh that names them is one step from a radio, §17.2's first prohibition.",
+        "FernletSocial": "Fernlet's social features over the proximity stack (moderation's ban store and ledger, closeness, friend state, the heart dead-drop, whose sync reaches CloudKit, and presence's radio manager) — the refresh handler reads none of them, and a refresh that names the module is one step from the radios they ride, §17.2's first prohibition.",
         "FernletCrypto": "the sealing primitives; the handler seals nothing — the widget snapshot is the benign mirror by design.",
         "CryptoSwift": "FernletLock's Scrypt KDF, the package's one external dependency; nothing here derives a key."
     ]

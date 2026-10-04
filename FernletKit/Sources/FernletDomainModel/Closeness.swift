@@ -2,7 +2,7 @@
 // FernletDomainModel
 //
 // Deterministic (no-AI) closeness math + the close-friend slot assignment (spec §10 friend tiers,
-// 2026-07-11 closeness memo). Pure value types + functions so both the ProximityKit ledger and the
+// 2026-07-11 closeness memo). Pure value types + functions so both the FernletSocial ledger and the
 // app can compute closeness and slots without a calendar or any I/O. Everything is integer counts ×
 // fixed rational weights — bit-for-bit reproducible.
 
@@ -35,7 +35,7 @@ public nonisolated struct FriendInteractionDayCounts: Codable, Equatable, Sendab
 
 /// Deterministic trailing-30-day closeness scoring over per-day interaction counts.
 ///
-/// Pure integer/rational math — no calendar, clock, or I/O — so the ProximityKit ledger and the app
+/// Pure integer/rational math — no calendar, clock, or I/O — so the FernletSocial ledger and the app
 /// compute bit-for-bit identical closeness from the same ``FriendInteractionDayCounts`` rows.
 public nonisolated enum ClosenessMath {
     public static let windowDays = 30

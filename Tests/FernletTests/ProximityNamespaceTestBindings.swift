@@ -2,53 +2,42 @@
 // FernletTests
 //
 // ProximityKit plan step A0.2.3 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2): the one
-// place the test target gets back the call shapes A0.2 takes out of ProximityKit. ProximityKit offers
-// no namespace default, so every API that used to spell Fernlet's bytes for itself now takes the
-// host's `ProximityNamespace`. The suites were written against the old shapes; rather than rewrite
-// every construction in every suite, each old shape comes back here once, passing Fernlet's value.
+// place the test target gets back the call shapes A0.2 to A0.4 took out of ProximityKit. ProximityKit
+// offers no namespace default, so every API that used to spell Fernlet's bytes for itself now takes
+// the host's `ProximityNamespace`, or a value read off it. The suites were written against the old
+// shapes; rather than rewrite every construction in every suite, each old shape comes back here
+// once, passing Fernlet's value. The shapes of the types that left ProximityKit for FernletSocial
+// follow them to `FernletSocialTestBindings.swift`, under the same rule, so this file never imports
+// FernletSocial; and the identity's two initializers, which carry Fernlet's custody (the app's
+// sealed-backup escrow key, the identity's provisioning participant), are in
+// `FernletAppTestBindings.swift`, so it never imports the app either. The host doubles' identity door,
+// which carries no custody at all, is here, at the foot of the file.
 //
 // THE RULE. A binding restores a call SHAPE, never a value: it passes `ProximityNamespace.fernlet`,
 // exactly the value FernletConnections ships and the app hands ProximityKit, so a suite that goes
-// through one sees the bytes it always saw, and nothing here may pass anything else or compute a
-// label, a row or a name of its own. A test that PINS a value does not lean on a binding: it names
-// `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is visibly
-// Fernlet's and still reads correctly once a binding is retired. Each A0.2 commit added its
-// bindings to this file, beside the API it restores.
+// through one sees the bytes it always saw, and nothing here may pass anything else (but the host
+// doubles' identity door, which passes the double's own namespace, as the shape it restores did) or
+// compute a label, a row or a name of its own. A test that PINS a value does not lean on a binding:
+// it names `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is
+// visibly Fernlet's and still reads correctly once a binding is retired. Each plan-step commit adds
+// its bindings to this file, beside the API it restores.
 //
 // Where an API takes the namespace's labels rather than the whole namespace (step A0.2.4 on), the
 // binding passes `.fernlet` for a `ProximityNamespace.Purposes`: FernletConnections'
 // `ProximityNamespace.Purposes.fernlet`, the very value `ProximityNamespace.fernlet.family.purposes`
-// holds (ProximityNamespaceGoldenTests pins the two equal).
+// holds (ProximityNamespaceGoldenTests pins the two equal). Where it takes the family, because it
+// needs the vocabulary's record kinds beside the labels (the membership verifier, the ledger adoption
+// and the inventory digest), the binding passes `.fernlet` for a `ProximityNamespace.Family`:
+// `ProximityNamespace.Family.fernlet`, the value `ProximityNamespace.fernlet.family` holds (pinned
+// equal beside the purposes). Where it takes a vocabulary group (the routed type registry and its ack
+// projection, a peer's capability gate), the binding reads the group off
+// `ProximityNamespace.fernlet.family.vocabulary`.
 
 import CryptoKit
 import FernletConnections
+import FernletDomainModel
 import Foundation
 @testable import ProximityKit
-
-// MARK: - IdentityService (A0.2.3)
-
-/// The two `IdentityService` initializers the suites were written against, restored over
-/// `init(namespace:keychainService:)` with Fernlet's namespace (plan step A0.2.3).
-///
-/// A binding restores a call shape, never a value; a test that pins a value names `.fernlet`
-/// explicitly instead of calling one of these. Both inherit the class's main-actor isolation, as the
-/// initializers they replace had.
-extension IdentityService {
-
-    /// `IdentityService(namespace: .fernlet)`: this device's identity on Fernlet's identity service,
-    /// the identity the retired argument-less initializer built.
-    convenience init() {
-        self.init(namespace: .fernlet)
-    }
-
-    /// `IdentityService(namespace: .fernlet, keychainService:)`: an identity on a keychain service of
-    /// the test's own, the identity the retired `init(keychainService:)` built.
-    ///
-    /// - Parameter keychainService: The test's own service, usually a throwaway one.
-    convenience init(keychainService: String) {
-        self.init(namespace: .fernlet, keychainService: keychainService)
-    }
-}
 
 // MARK: - Signed transcripts I: the canonical bytes (A0.2.4)
 //
@@ -115,10 +104,12 @@ func canonicalInventoryDigestBytes(for identities: [MeshRecordIdentity]) -> Data
 // MARK: - Signed transcripts I: verifiers and helpers (A0.2.4)
 
 /// The verifier initializer the suites were written against, restored over
-/// `init(meshID:founderSigningPublicKey:ledger:purposes:)` with Fernlet's labels (plan step A0.2.4).
+/// `init(meshID:founderSigningPublicKey:ledger:family:)` with Fernlet's family (plan steps A0.2.4 and
+/// A0.3.3).
 extension MeshMembershipRecordVerifier {
 
-    /// A verifier keeping Fernlet's labels as its copy, otherwise exactly the retired initializer.
+    /// A verifier keeping Fernlet's family (its labels and record kinds) as its copy, otherwise
+    /// exactly the retired initializer.
     ///
     /// - Parameters:
     ///   - meshID: The mesh every accepted record must name.
@@ -126,12 +117,12 @@ extension MeshMembershipRecordVerifier {
     ///   - ledger: The records to start from.
     init(meshID: UUID, founderSigningPublicKey: Data? = nil, ledger: MeshMembershipLedger = .empty) {
         self.init(meshID: meshID, founderSigningPublicKey: founderSigningPublicKey, ledger: ledger,
-                  purposes: .fernlet)
+                  family: .fernlet)
     }
 }
 
 /// The joiner's two ledger steps in the shapes the suites were written against, restored over their
-/// `in purposes:` forms with Fernlet's labels (plan step A0.2.4).
+/// `in family:` forms with Fernlet's family (plan steps A0.2.4 and A0.3.3).
 extension MeshLedgerAdoption {
 
     /// `bootstrapVerifier(meshID:ownAdmission:in: .fernlet)`.
@@ -148,12 +139,12 @@ extension MeshLedgerAdoption {
 }
 
 /// The digest initializer the suites were written against, restored over
-/// `init(meshID:ledger:purposes:)` with Fernlet's labels (plan step A0.2.4).
+/// `init(meshID:ledger:family:)` with Fernlet's family (plan steps A0.2.4 and A0.3.3).
 extension MeshInventoryDigest {
 
-    /// The digest of `ledger`, its records hash under Fernlet's labels.
+    /// The digest of `ledger`, its records hash under Fernlet's labels over Fernlet's record kinds.
     init(meshID: UUID, ledger: MeshMembershipLedger) {
-        self.init(meshID: meshID, ledger: ledger, purposes: .fernlet)
+        self.init(meshID: meshID, ledger: ledger, family: .fernlet)
     }
 }
 
@@ -570,5 +561,296 @@ extension IdentityService {
     ) -> DeviceIdentityRead {
         classifyDeviceIdentityRows(signing: signing, keyAgreement: keyAgreement,
                                    accounts: ProximityNamespace.fernlet.installation.keychain.identity)
+    }
+}
+
+// MARK: - Presentation strings (A0.3.2)
+//
+// The radios' instance-name prefixes and certificate name, and the name display's prefix, are read
+// off the namespace: the minting doors take the prefix and the common name their radio or manager
+// read from its namespace, and `PeerNameDisplay` takes the namespace last. Each old shape comes back
+// here with `.fernlet`'s `family.radios` values, read off the value, never respelled. A cell whose
+// subject is a prefix or the common name passes `.fernlet`'s value explicitly instead. FernletSocial's
+// `PresenceManager.firstName`, which takes the namespace last too, has its old shape in
+// `FernletSocialTestBindings.swift`.
+
+/// The mesh instance name in the shape the suites were written against (plan step A0.3.2).
+extension MeshLinkAdvertisement {
+
+    /// `randomInstanceName(prefix:)` with `.fernlet`'s `family.radios.meshInstanceNamePrefix`.
+    static func randomInstanceName() -> String {
+        randomInstanceName(prefix: ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix)
+    }
+}
+
+/// The certificate path's two doors in the shapes the suites were written against (plan step
+/// A0.3.2), with `.fernlet`'s common name.
+extension EphemeralMeshTLSIdentity {
+
+    /// `mint(commonName:now:)` with `.fernlet`'s `family.radios.tlsCommonName`.
+    static func mint(now: Date = Date()) throws -> Minted {
+        try mint(commonName: ProximityNamespace.fernlet.family.radios.tlsCommonName, now: now)
+    }
+
+    /// `selfSignedCertificateDER(for:commonName:notBefore:notAfter:serial:)` with `.fernlet`'s
+    /// `family.radios.tlsCommonName`.
+    static func selfSignedCertificateDER(
+        for privateKey: P256.Signing.PrivateKey, notBefore: Date, notAfter: Date, serial: [UInt8]
+    ) throws -> Data {
+        try selfSignedCertificateDER(
+            for: privateKey, commonName: ProximityNamespace.fernlet.family.radios.tlsCommonName,
+            notBefore: notBefore, notAfter: notAfter, serial: serial)
+    }
+}
+
+/// The presence posture's minting, rotation and naming doors in the shapes the suites were written
+/// against (plan step A0.3.2), with `.fernlet`'s presence prefix and, where a door mints the
+/// certificate itself, its common name.
+extension PresenceEpochPosture {
+
+    /// `minted(at:instanceNamePrefix:commonName:)` with `.fernlet`'s values.
+    static func minted(at now: Date) throws -> PresenceEpochPosture {
+        let radios = ProximityNamespace.fernlet.family.radios
+        return try minted(
+            at: now, instanceNamePrefix: radios.presenceInstanceNamePrefix, commonName: radios.tlsCommonName)
+    }
+
+    /// `minted(at:instanceNamePrefix:entropy:mintIdentity:)` with `.fernlet`'s presence prefix.
+    static func minted(
+        at now: Date, entropy: (Int) -> [UInt8], mintIdentity: (Date) throws -> EphemeralMeshTLSIdentity.Minted
+    ) throws -> PresenceEpochPosture {
+        try minted(
+            at: now, instanceNamePrefix: ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix,
+            entropy: entropy, mintIdentity: mintIdentity)
+    }
+
+    /// `rotated(at:instanceNamePrefix:commonName:)` with `.fernlet`'s values.
+    func rotated(at now: Date) throws -> PresenceEpochPosture {
+        let radios = ProximityNamespace.fernlet.family.radios
+        return try rotated(
+            at: now, instanceNamePrefix: radios.presenceInstanceNamePrefix, commonName: radios.tlsCommonName)
+    }
+
+    /// `rotated(at:instanceNamePrefix:entropy:mintIdentity:)` with `.fernlet`'s presence prefix.
+    func rotated(
+        at now: Date, entropy: (Int) -> [UInt8], mintIdentity: (Date) throws -> EphemeralMeshTLSIdentity.Minted
+    ) throws -> PresenceEpochPosture {
+        try rotated(
+            at: now, instanceNamePrefix: ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix,
+            entropy: entropy, mintIdentity: mintIdentity)
+    }
+
+    /// `instanceName(prefix:entropy:)` with `.fernlet`'s presence prefix.
+    static func instanceName(entropy: (Int) -> [UInt8]) throws -> String {
+        try instanceName(prefix: ProximityNamespace.fernlet.family.radios.presenceInstanceNamePrefix, entropy: entropy)
+    }
+}
+
+/// The recipe posture's mint in the shape the suites were written against (plan step A0.3.2).
+extension RecipeSharePosture {
+
+    /// `minted(instanceNamePrefix:commonName:now:)` with `.fernlet`'s mesh prefix and common name.
+    static func minted(now: Date = Date()) throws -> RecipeSharePosture {
+        let radios = ProximityNamespace.fernlet.family.radios
+        return try minted(
+            instanceNamePrefix: radios.meshInstanceNamePrefix, commonName: radios.tlsCommonName, now: now)
+    }
+}
+
+/// The name display's three rules in the shapes the suites were written against (plan step
+/// A0.3.2), each recognizing `.fernlet`'s mesh instance-name prefix.
+extension PeerNameDisplay {
+
+    /// `personName(_:fingerprint:in: .fernlet)`.
+    static func personName(_ raw: String, fingerprint: String?) -> String? {
+        personName(raw, fingerprint: fingerprint, in: .fernlet)
+    }
+
+    /// `shown(_:fingerprint:placeholder:in: .fernlet)`.
+    static func shown(_ raw: String, fingerprint: String?, placeholder: Placeholder = .nearby) -> String {
+        shown(raw, fingerprint: fingerprint, placeholder: placeholder, in: .fernlet)
+    }
+
+    /// `firstName(_:fingerprint:placeholder:in: .fernlet)`.
+    static func firstName(_ raw: String, fingerprint: String?, placeholder: Placeholder = .nearby) -> String {
+        firstName(raw, fingerprint: fingerprint, placeholder: placeholder, in: .fernlet)
+    }
+}
+
+// MARK: - Record kinds and routed types (A0.3.3)
+//
+// ProximityKit spells no routed type: the routed type registry builds its rows from the routed types
+// it is handed, its ack-stage projection likewise, and the manifest mint takes its registry with no
+// default. The routed-type constants, the two `increment1` values and the mint's old shape come back
+// here with `.fernlet`'s `family.vocabulary.routedTypes`, read off the value, never respelled. A cell
+// whose subject is a token's spelling, or a registry's tokens, names `.fernlet` explicitly instead.
+// (The membership record kinds need no binding of their own: the verifier, the adoption and the
+// digest above take Fernlet's family, record kinds included.)
+
+/// The routed-type tokens the suites were written against, each read off `.fernlet`'s
+/// `family.vocabulary.routedTypes` (plan step A0.3.3), never respelled here.
+enum MeshRoutedTypeToken {
+    /// `.fernlet`'s routed photo type.
+    static let photo = ProximityNamespace.fernlet.family.vocabulary.routedTypes.photo
+    /// `.fernlet`'s routed temporary-message type.
+    static let tempMessage = ProximityNamespace.fernlet.family.vocabulary.routedTypes.tempMessage
+    /// `.fernlet`'s routed heart type, whose manifest's item id is the gift id.
+    static let heart = ProximityNamespace.fernlet.family.vocabulary.routedTypes.heart
+    /// `.fernlet`'s reserved control type, registered for nothing.
+    static let control = ProximityNamespace.fernlet.family.vocabulary.routedTypes.control
+}
+
+/// The shipping registry in the shape the suites were written against (plan step A0.3.3).
+extension MeshRoutedTypeRegistry {
+
+    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the registry the retired
+    /// `increment1` value held.
+    static var increment1: MeshRoutedTypeRegistry {
+        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
+    }
+}
+
+/// The ack-stage projection in the shape the suites were written against (plan step A0.3.3).
+extension MeshRoutedAckStageTable {
+
+    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the table the retired
+    /// `increment1` value held.
+    static var increment1: MeshRoutedAckStageTable {
+        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
+    }
+}
+
+/// The manifest mint in the shape the suites were written against, with the registry its retired
+/// `types:` default named (plan step A0.3.3). It inherits the mint's main-actor isolation.
+extension MeshRoutedManifest {
+
+    /// `signed(...types:)` with `.fernlet`'s registry, `increment1(_:)` over its routed types.
+    @MainActor
+    static func signed(
+        meshID: UUID, target: MeshDeliveryTarget, typeToken: String, contentHash: Data, size: UInt64,
+        createdAt: Date, hardDeadline: Date, contentKey: Data, recipientKeys: [String: Data],
+        identity: IdentityService
+    ) throws -> MeshRoutedManifest {
+        try signed(
+            meshID: meshID, target: target, typeToken: typeToken, contentHash: contentHash, size: size,
+            createdAt: createdAt, hardDeadline: hardDeadline, contentKey: contentKey,
+            recipientKeys: recipientKeys, identity: identity,
+            types: MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes))
+    }
+}
+
+// MARK: - The envelope's and the coordinator's vocabulary (A0.3.4)
+//
+// The envelope seals and parks by its identity's namespace's payload rules, and the coordinator signs
+// its session messages under that namespace's tokens and titles; neither changed a call shape. The
+// capability gates did: a peer's `supports` takes the host's capabilities, whose legacy assumption it
+// applies to a peer that listed none. Its old shape comes back here with `.fernlet`'s
+// `family.vocabulary.capabilities`, read off the value. A cell whose subject is the legacy
+// assumption names `.fernlet` explicitly instead.
+
+/// The coordinator's capability gate in the shape the suites were written against (plan step A0.3.4).
+/// It is main-actor, as the gate it restores is.
+extension ProximityCoordinator.PeerIdentity {
+
+    /// `supports(_:in:)` with `.fernlet`'s `family.vocabulary.capabilities`.
+    @MainActor
+    func supports(_ capability: ProximityCapability) -> Bool {
+        supports(capability, in: ProximityNamespace.fernlet.family.vocabulary.capabilities)
+    }
+}
+
+// MARK: - The display-name policy (A0.3.12)
+//
+// ProximityKit sanitizes a peer's name with its own sanitizer (`ProximityDisplayName`) and applies the
+// cap and the floor of the namespace each reader holds (`installation.peerNames`): its coercion is
+// `ProximityDisplayName.peerDisplayName(_:in:)` rather than an extension of FernletDomainModel's
+// `ItemNameModeration`, the envelope's two sender reads are functions taking the namespace, and the
+// advertised recipe name and the session message store's ingest take it last. Each old shape comes
+// back here with `.fernlet`'s peer-name policy, never a cap or a floor of its own. A cell whose subject
+// is the cap or the floor names `.fernlet` explicitly instead.
+
+/// ProximityKit's peer-name coercion in the shape the suites were written against (plan step
+/// A0.3.12), on the type that used to carry it.
+extension ItemNameModeration {
+
+    /// `ProximityDisplayName.peerDisplayName(raw, in: .fernlet)`.
+    static func moderatedPeerDisplayName(_ raw: String) -> String {
+        ProximityDisplayName.peerDisplayName(raw, in: .fernlet)
+    }
+}
+
+/// The envelope's two sender reads as the properties the suites were written against (plan step
+/// A0.3.12), each under `.fernlet`'s peer-name policy.
+extension FernletIdentityEnvelope {
+
+    /// `sanitizedSenderDisplayName(in: .fernlet)`.
+    var sanitizedSenderDisplayName: String { sanitizedSenderDisplayName(in: .fernlet) }
+
+    /// `disclosedSenderDisplayName(in: .fernlet)`.
+    var disclosedSenderDisplayName: String? { disclosedSenderDisplayName(in: .fernlet) }
+}
+
+/// The advertised recipe name in the shape the suites were written against (plan step A0.3.12).
+extension RecipeShareAdvertisedName {
+
+    /// `publishable(_:in: .fernlet)`.
+    static func publishable(_ raw: String) -> String {
+        publishable(raw, in: .fernlet)
+    }
+}
+
+/// The session message store's ingest in the shape the suites were written against (plan step
+/// A0.3.12). It inherits the store's main-actor isolation, as the function it restores has.
+extension SessionMessageStore {
+
+    /// `receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:in: .fernlet)`.
+    func receiveIncoming(
+        id: UUID, senderFingerprint: String, senderDisplayName: String, text rawText: String,
+        sentAt: Date, seenAt: Date
+    ) -> Acceptance {
+        receiveIncoming(id: id, senderFingerprint: senderFingerprint, senderDisplayName: senderDisplayName,
+                        text: rawText, sentAt: sentAt, seenAt: seenAt, in: .fernlet)
+    }
+}
+
+// MARK: - The static key agreement (A0.4.2)
+//
+// The identity's static key agreement names no feature: it is `staticKeyAgreement(withEphemeralPublicKey:)`,
+// which the routed content-key unwrap and the heart dead-drop's static fallback both call. The suites
+// were written against its heart-drop spelling, which comes back here as a pure rename: it takes no
+// namespace, so it passes nothing at all.
+
+/// The static key agreement in the spelling the suites were written against (plan step A0.4.2). It
+/// inherits the class's main-actor isolation, as the method it restores has.
+extension IdentityService {
+
+    /// `staticKeyAgreement(withEphemeralPublicKey:)`.
+    func heartDropStaticAgreement(withEphemeralPublicKey key: Data) throws -> SharedSecret {
+        try staticKeyAgreement(withEphemeralPublicKey: key)
+    }
+}
+
+// MARK: - The host's identity door (A0.4)
+//
+// `ProximityHost.makeProximityIdentity()` has no default: an identity's custody is its host's, so
+// ProximityKit never guesses one, and the app's store answers its factory's identity, which carries
+// the sealed-backup escrow key. The test target's host doubles were written against the identity the
+// requirement's default built for them, and that shape comes back here, once, for every double in this
+// target: the participant-less identity under the host's OWN namespace, `.fernlet` for twelve of them
+// and the cell's for the golden suites' five, never a value of this file's choosing. A protocol
+// extension supplies a requirement only to the conformances its module can see, so this one is
+// invisible to the app module: `FernletStore`'s conformance there must answer for itself, and does.
+// A double that answers for itself (`ProximityNamespaceGateTests`' `ForeignIdentityHost`) keeps its
+// own answer.
+
+/// The identity the test target's host doubles hand a manager that was handed none, in the shape they
+/// had: `IdentityService(namespace: proximityNamespace)`, this device's identity under the host's own
+/// namespace, on that namespace's identity service, with no provisioning participant. It inherits the
+/// protocol's main-actor isolation, as the requirement it answers has.
+extension ProximityHost {
+
+    /// `IdentityService(namespace: proximityNamespace)`: no participant, the host's namespace.
+    func makeProximityIdentity() -> IdentityService {
+        IdentityService(namespace: proximityNamespace)
     }
 }

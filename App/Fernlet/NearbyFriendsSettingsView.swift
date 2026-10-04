@@ -3,6 +3,7 @@ import FernletDomainModel
 import FernletFoundation
 import FernletUI
 import ProximityKit
+import FernletSocial
 
 /// The Nearby friends settings page (2026-08-21 redesign, artboard 5b — SETT-29, XCUT-11).
 ///

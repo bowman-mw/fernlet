@@ -5,7 +5,7 @@ import os
 
 // MARK: - PresenceRadioSession
 
-/// The presence radio, as the surface ``PresenceManager`` actually drives.
+/// The presence radio, as the surface FernletSocial's `PresenceManager` actually drives.
 ///
 /// The seam `PresenceManager` did not have. `MeshNetworkManager` has held its radio behind
 /// `MeshTransportSession` since P2 item 8, so the whole manager can be exercised at tier 1 over an
@@ -16,8 +16,12 @@ import os
 ///
 /// The hooks are settable rather than delegate methods because that is the shape both existing
 /// radios already publish, and because the manager wires them once in `start()` and never again.
+///
+/// Package access for FernletSocial until A1, with every requirement: FernletSocial's presence
+/// manager drives the radio through it, and before ProximityKit leaves FernletKit the seam is
+/// published as mechanism or wrapped by a presence engine. Main-actor, like the radio and its owner.
 @MainActor
-protocol PresenceRadioSession: AnyObject {
+package protocol PresenceRadioSession: AnyObject {
 
     /// A peer appeared in the browse results, with its advertisement.
     var onPeerDiscovered: ((PeerHandle) -> Void)? { get set }
@@ -140,8 +144,12 @@ protocol PresenceRadioSession: AnyObject {
 ///
 /// `@MainActor`; framework callbacks arrive `@Sendable` and hop in. Owners wire behaviour through
 /// the closure hooks, the same way they do for the other two radios.
+///
+/// Package access for FernletSocial until A1, with ``init(namespace:)`` and the twelve
+/// ``PresenceRadioSession`` witnesses (the protocol's access forces theirs): Fernlet's presence
+/// manager builds this radio by default. Everything else here stays internal.
 @MainActor
-final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
+package final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
 
     /// The presence radio's QUIC service type, the host namespace's
     /// `family.radios.presence.serviceType`. A frozen wire token: it must also appear in the app's
@@ -158,6 +166,11 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
     /// wire token, distinct from the mesh's `fernlet-mesh-v1` so the two radios cannot negotiate a
     /// connection with each other.
     nonisolated let alpn: String
+
+    /// The host namespace's ``ProximityNamespace/soundness``, the verdict it recorded when it was
+    /// built: ``start(posture:discoveryInfo:)`` refuses to bring the radio up under an unsound
+    /// namespace.
+    nonisolated let namespaceSoundness: ProximityNamespace.Soundness
 
     /// Hard ceiling on one inbound frame, enforced before the bytes reach any channel or decoder.
     /// The same value both other transports enforce, so all three refuse identically.
@@ -221,20 +234,20 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
     // MARK: Hooks
 
     /// A peer appeared in the browse results, with its advertisement.
-    var onPeerDiscovered: ((PeerHandle) -> Void)?
+    package var onPeerDiscovered: ((PeerHandle) -> Void)?
     /// A peer left the browse results.
-    var onPeerLost: ((PeerHandle) -> Void)?
+    package var onPeerLost: ((PeerHandle) -> Void)?
     /// A tunnel came up and its channel is live.
-    var onPeerChannelReady: ((NetworkPeerChannel) -> Void)?
+    package var onPeerChannelReady: ((NetworkPeerChannel) -> Void)?
     /// A tunnel went down, with a diagnostic reason.
-    var onPeerDisconnected: ((PeerHandle, String) -> Void)?
+    package var onPeerDisconnected: ((PeerHandle, String) -> Void)?
     /// Invoked with frozen diagnostic English when the listener or browser fails to start. Without
     /// it a missing `NSBonjourServices` entry or a declined Local Network prompt is silent.
-    var onTransportError: ((String) -> Void)?
+    package var onTransportError: ((String) -> Void)?
 
     /// Resolves an inbound dialer's claimed pairwise tag to the browsed peer it names, or nil to
     /// refuse the connection. **Fails closed**: a radio nobody has wired resolves nobody.
-    var resolveDialer: ((String) -> PeerHandle?)?
+    package var resolveDialer: ((String) -> PeerHandle?)?
 
     // MARK: State
 
@@ -286,12 +299,16 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
 
     /// A radio that speaks the host's wire: it advertises and browses the namespace's presence
     /// service type, negotiates its ALPN and logs under its subsystem (ProximityKit plan step
-    /// A0.2.7). Each value is read once, here; building a radio starts nothing.
+    /// A0.2.7). Each value is read once, here, with the namespace's soundness verdict; building a
+    /// radio starts nothing.
+    ///
+    /// Package access for FernletSocial until A1, with the type.
     ///
     /// - Parameter namespace: The host's protocol identity, as its manager holds it.
-    init(namespace: ProximityNamespace) {
+    package init(namespace: ProximityNamespace) {
         serviceType = namespace.family.radios.presence.serviceType
         alpn = namespace.family.radios.presence.alpn
+        namespaceSoundness = namespace.soundness
         logger = Logger(subsystem: namespace.installation.logSubsystem, category: "proximity.presence.quic")
     }
 
@@ -313,7 +330,13 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
     ///
     /// Throws rather than reporting, because the owner's `start()` is the one caller and it stands
     /// the radio down on a failure — the `didNotStart*` shape P8 item 0's device finding (b) fixed.
-    func start(posture: PresenceEpochPosture, discoveryInfo: [String: String]) throws {
+    ///
+    /// Refuses first, under an unsound namespace (``namespaceSoundness``): it throws
+    /// ``ProximityNamespaceError`` and audits `presence.quic.namespaceUnsound` (at `start`) before it
+    /// wears the posture, listens or advertises anything.
+    package func start(posture: PresenceEpochPosture, discoveryInfo: [String: String]) throws {
+        try ProximityNamespaceGate.refuseUnsound(
+            namespaceSoundness, event: "presence.quic.namespaceUnsound", at: .start)
         guard !isRunning else { return }
         self.posture = posture
         advertisedFields = discoveryInfo
@@ -333,7 +356,7 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
     /// survives a boundary carries no link from the old posture to the new one that its peer did
     /// not already hold — it is a verified friend, which is the only party that ever learns either
     /// name (see the type's discussion of what a boundary does and does not break).
-    func republish(posture: PresenceEpochPosture, discoveryInfo: [String: String]) {
+    package func republish(posture: PresenceEpochPosture, discoveryInfo: [String: String]) {
         let rotated = self.posture?.epoch != posture.epoch
         self.posture = posture
         advertisedFields = discoveryInfo
@@ -351,7 +374,7 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
 
     /// Tears the radio down and drops everything it was holding — including the posture, so a
     /// stood-down radio keeps no name and no identity to come back up under.
-    func stop() {
+    package func stop() {
         let stopped = isRunning
         for tunnel in tunnels.values { tunnel.task?.cancel() }
         for task in pendingInbound.values { task.cancel() }
@@ -384,7 +407,7 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
     /// so ``noteLost(_:)`` drops the endpoint while the owner's 45 s lost-grace still offers that
     /// friend as nearby. A heart tapped in that window used to take presence off the air — nearby
     /// list emptied, posture dropped — until the next scene event re-applied the run policy.
-    func dial(_ peer: PeerHandle, helloTag: String) {
+    package func dial(_ peer: PeerHandle, helloTag: String) {
         guard isRunning, let key = identities.key(for: peer) else { return }
         guard let endpoint = browsedEndpoints[key] else {
             logger.notice(
@@ -405,7 +428,7 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
     }
 
     /// Ends a peer's tunnel at the owner's request, without reporting it back to the owner.
-    func disconnectPeer(_ peer: PeerHandle) {
+    package func disconnectPeer(_ peer: PeerHandle) {
         guard let key = identities.key(for: peer) else { return }
         endTunnel(key, reason: "This peer's presence connection was closed locally.", notifyOwner: false)
     }
@@ -574,7 +597,7 @@ final class NetworkPresenceSession: PresenceRadioSession, NetworkChannelHost {
 
     /// The channel this radio would hand the owner for `peer`, built exactly as the live path
     /// builds one. ``PresenceRadioSession`` requirement.
-    func channel(for peer: PeerHandle) -> NetworkPeerChannel {
+    package func channel(for peer: PeerHandle) -> NetworkPeerChannel {
         NetworkPeerChannel(peer: peer, host: self)
     }
 }

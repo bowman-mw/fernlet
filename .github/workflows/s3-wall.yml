@@ -201,10 +201,35 @@ jobs:
         # compiles clean and moves no other test: a namespace, namespace group or purpose built
         # outside Namespace/; `FernletCryptoPurpose` in code beyond the 20 feature lines in 7 files
         # that leave with their features in A0.4; and a `fernlet` string literal beyond an exact
-        # per-file allowlist (51 in 19 files) whose every row names why it is still there and the
+        # per-file allowlist (36 in 12 files) whose every row names why it is still there and the
         # step that removes it. A new use fails, and so does a removed one until its row goes, so
-        # both lists only shrink. It rides this line because its floor is the shared `1`, so the
-        # name needs no re-measure.
+        # every list only shrinks. It rides this line because its floor is the shared `1`, so the
+        # name needs no re-measure. ProximityKit plan step A0.3's walls (2026-10-03) give it a
+        # fourth rule, the ratchet that keeps A0.3's result: FernletDomainModel's `PayloadType`,
+        # `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
+        # `TrainerAuditEvent` and `ConnectionSessionLog` in ProximityKit code only on an exact
+        # per-file, per-type allowlist (58 lines in 8 files) of the lines that leave with their
+        # features (A0.4), with the mesh manager's feature parts (A0.5) or with the session profile
+        # (A0.7 / C5), its matcher fixtured both ways. The suite holds 7 cells (5 before it), and
+        # the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in
+        # 10 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.4 (2026-10-03) moves Fernlet's social features out of
+        # ProximityKit (the heart dead-drop, presence, moderation's ban store, ledger and content
+        # hash, closeness, friend state and the parked chat payload to FernletSocial; the
+        # sealed-backup escrow to the app) and leaves the ratchet at the step's end state:
+        # `FernletCryptoPurpose` on 10 lines in 3 files, 32 `fernlet` literals in 8 files and 34
+        # domain-type lines in 6 files, every row leaving with the mesh manager's feature parts
+        # (A0.5), the recipe profile (A0.7), the session profile (A0.7 / C5) or, for the DEBUG
+        # test-hook names, with the package (A1), and no row of A0.4's left. It gives the suite two
+        # rules: a fifth (A0.4.0), `package` declared in ProximityKit code only on an exact per-file
+        # list of the doors a Fernlet module uses while a named later step reshapes them (44 lines in
+        # 6 files: the presence radio's until A1, the coordinator's typed send and manual commit until
+        # A0.7, the JSON sidecar until A0.5); and a sixth (A0.4.8), no type that left ProximityKit (24
+        # names) declared, extended or aliased in its code again, which rules 2 to 4 could not see
+        # come back under its old name. Each carries its matcher fixtured both ways, so the suite holds
+        # 11 cells (7 before the step), and the line, MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), ran 103 tests in 10 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -246,8 +271,10 @@ jobs:
         # enforcement (Docs/Verifiability.md §2, §4) and must run here for the "cannot merge
         # green" claim in Docs/Release-Process.md §1 to be true. Simulator-safe by design:
         # KeyCustodyBoundaryTests drives the production key stores against per-test UUID
-        # keychain services (plus the simulator's own data-protection keychain for the two
-        # well-known rows) and pins the one passcode-gated class in source, so no device
+        # keychain services (plus the simulator's own data-protection keychain for the
+        # well-known rows: the media keys, the install binding, and the device identity the
+        # app's real store hands its three proximity managers, which one cell holds to the
+        # sealed-backup escrow key) and pins the one passcode-gated class in source, so no device
         # passcode is needed. The remaining suites are pure crypto format pins, plus
         # IdentityProvisioningReadTests (F-1, 2026-09-06): the fail-closed identity read whose
         # source wall keeps a transient keychain error from minting over a live identity.
@@ -323,6 +350,56 @@ jobs:
         # from literals. Like the three above it has no compiler half: a loosened rule compiles clean
         # and moves no other test.
         #
+        # `ProximityVocabularyGoldenTests` joins them at ProximityKit plan step A0.3 (2026-10-02):
+        # every token and byte string A0.3 routes through the host, pinned by hand-written literal and
+        # by driving its consumer before any of them moves — the 55 PayloadType tokens and the sealing
+        # rule (each token signed unsealed under a real identity is refused exactly when it is one of
+        # the 17), the capability tokens, the coordinator's receive bounds, the legacy photos-only
+        # default and wire2's framing, the session enums, the record kinds and a known-answer
+        # inventory digest over one record per kind, the routed-type tokens and the heart row's cap,
+        # the coordinator's four session messages and the mesh's title rule, the presentation
+        # strings, the trainer export body, the generic types' schema-v1 bytes and JSON, three
+        # persisted records as the repositories write them, and the display-name sanitizer; and
+        # `.fernlet`'s own vocabulary and presentation strings against the same literals, with the
+        # bounds the namespace's soundness rules apply held to the consumers'. Its name
+        # ends `GoldenTests`, so CIGateSelectorBoundaryTests demands it on a line; it rides this one
+        # beside the namespace golden it continues. No compiler half either: a moved token compiles
+        # clean. Since A0.3.6, which moves `ProximityRole` and `ProximityRangingMode` into ProximityKit
+        # while Fernlet's session log keeps copies of its own, it also holds those copies to
+        # ProximityKit's spellings, case for case. Since A0.3.10, which has the coordinator record its
+        # audit in ProximityKit's own `ProximitySessionAudit` and Fernlet convert it into the persisted
+        # `TrainerAuditEvent`, it also holds a converted audit to the frozen audit row's bytes and
+        # each of the eight kinds to the token its row persists under.
+        #
+        # `ProximityNamespaceGateTests` joins them at ProximityKit plan step A0.3's runtime gate
+        # (2026-10-02): ProximityKit's run-time refusal of an unsound namespace, door by door — the
+        # identity refuses to provision and to wrap a group key, and each radio to start, each throwing
+        # the namespace's violations and writing its named audit line (the door, the count and the
+        # first violation's case, never a value) — and each manager's refusal to start its radio, and
+        # the mesh manager's to found a mesh, under an identity of another namespace, over namespaces
+        # built from literals. No compiler half: a door that stopped refusing compiles clean and moves
+        # no other test.
+        #
+        # `FernletFeatureGoldenTests` joins them at ProximityKit plan step A0.4.0 (2026-10-03): every
+        # byte Fernlet's features over the proximity stack put on the wire, in the keychain or on disk
+        # that plan step A0.4 moves or re-derives, pinned by hand-written literal (each vector confirmed
+        # by two independent computations before it was frozen) and by driving its consumer before any
+        # of it moves: the seven feature labels the heart dead-drop, presence and the ban store hand
+        # CryptoKit themselves; the heart-drop and presence pair secrets of two planted identities from
+        # either side, and their refusals in their order; two heart day tags, three presence tags and
+        # their wire tokens, and the day epoch at its boundaries; the ban evidence's reporter tag; a
+        # frozen static-key drop the sealer opens and a frozen sidecar the sidecar seal opens under a
+        # planted key; the prekey bundle's JSON both ways and both directions of the identity
+        # introduction that gossips it; the heart-drop keychain names, the ban store's two accounts and
+        # the mesh stores' services derived beside the heart-drop service; five stores' file names and
+        # the production heart-drop scope; a closeness ledger, a friend-state cache and a moderation
+        # ledger loaded from literal JSON and two literal ban records decoded; presence's advertisement
+        # and matching window over a planted identity; and the sealed-backup escrow's content-addressed
+        # account and provisioning's Cases 1 to 3, every row and its attributes. Its name ends
+        # `GoldenTests`, so CIGateSelectorBoundaryTests demands it on a line; it rides this one beside
+        # the namespace and vocabulary goldens it continues. No compiler half either: a moved byte
+        # compiles clean.
+        #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
         # floor 1 after the strict build-for-testing (Scripts/spm-wall-check.sh, WALL CHECK PASSED),
@@ -354,14 +431,150 @@ jobs:
         # 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 170: passed. Run
         # once more at 170 without ProximityNamespaceGoldenTests: 67 ran and the floor refused it.
         # 165 + 5 (the keychain group's five cells) = 170 is the ARITHMETIC CHECK, never the source.
+        # RAISED 170 -> 199 at A0.3.0, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "199 tests in 6 suites" (6 + 13 + 19 + 103 + 29 +
+        # 29), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 199: passed.
+        # Run once more at 199 without ProximityVocabularyGoldenTests: 170 ran and the floor refused
+        # it. 170 + 29 (the vocabulary suite's cells) = 199 is the ARITHMETIC CHECK, never the source.
+        # RAISED 199 -> 211 at A0.3.1, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "211 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 33), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 211: passed.
+        # Run once more at 211 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 199 + 12 (the soundness suite's seven vocabulary and presentation cells, the vocabulary
+        # suite's four `.fernlet` cells and the namespace golden's foreign-vocabulary cell) = 211 is
+        # the ARITHMETIC CHECK, never the source.
+        # RAISED 211 -> 213 at A0.3.2, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "213 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 35), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 213: passed.
+        # Run once more at 213 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 211 + 2 (the vocabulary suite's two presentation-string consumer cells; its display-
+        # default cell was replaced, not added) = 213 is the ARITHMETIC CHECK, never the source.
+        # RAISED 213 -> 216 at A0.3.3, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "216 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 38), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 216: passed.
+        # Run once more at 216 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 213 + 3 (the vocabulary suite's record-kind and routed-type consumer cells: the digest,
+        # the registry and a mesh manager under a namespace whose record kinds and routed types are
+        # its own) = 216 is the ARITHMETIC CHECK, never the source.
+        # RAISED 216 -> 220 at A0.3.4, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "220 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 42), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 220: passed.
+        # Run once more at 220 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 216 + 4 (the vocabulary suite's envelope, coordinator and mesh consumer cells: the
+        # envelope's sealing gate and park, the coordinator's capability rules and its session
+        # messages, and the mesh's sealed sends, each under a namespace whose payload rules,
+        # capabilities or session messages are its own) = 220 is the ARITHMETIC CHECK, never the
+        # source.
+        # RAISED 220 -> 221 at A0.3.6, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact six-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "221 tests in 6 suites" (6 + 13 + 19 + 104 + 36 +
+        # 43), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 221: passed.
+        # Run once more at 221 without ProximityVocabularyGoldenTests: 178 ran and the floor refused
+        # it. 220 + 1 (the cell holding the session log's own role and ranging mode to ProximityKit's
+        # spellings) = 221 is the ARITHMETIC CHECK, never the source.
+        # RAISED 221 -> 232 at A0.3.7, MEASURED on a Mac, 2026-10-02 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "232 tests in 7 suites" (6 + 13 + 19 + 104 + 36 +
+        # 43 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 232:
+        # passed. Run once more at 232 without ProximityNamespaceGateTests: 221 ran and the floor
+        # refused it. 221 + 11 (the gate suite's cells) = 232 is the ARITHMETIC CHECK, never the
+        # source.
+        # RAISED 232 -> 235 at A0.3.9, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "235 tests in 7 suites" (6 + 13 + 19 + 104 + 37 +
+        # 45 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 235:
+        # passed. Run once more at 235 without ProximityVocabularyGoldenTests: 190 ran and the floor
+        # refused it. 232 + 3 (the soundness suite's mesh field-name cell, and the vocabulary suite's
+        # two mesh cells: `.fernlet`'s thirty mesh messages against their frozen tokens and its known
+        # set, and a mesh manager signing and dispatching by a namespace whose mesh messages are its
+        # own) = 235 is the ARITHMETIC CHECK, never the source.
+        # RAISED 235 -> 237 at A0.3.10, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "237 tests in 7 suites" (6 + 13 + 19 + 104 + 37 +
+        # 47 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 237:
+        # passed. Run once more at 237 without ProximityVocabularyGoldenTests: 190 ran and the floor
+        # refused it. 235 + 2 (the cells holding a coordinator's converted audit to the frozen audit
+        # row and each audit kind to its persisted token) = 237 is the ARITHMETIC CHECK, never the
+        # source.
+        # RAISED 237 -> 241 at A0.3.12, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact seven-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "241 tests in 7 suites" (6 + 13 + 19 + 104 + 38 +
+        # 50 + 11), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 241:
+        # passed. Run once more at 241 without ProximityVocabularyGoldenTests: 191 ran and the floor
+        # refused it. 237 + 4 (the soundness suite's peer-name policy cell, and the vocabulary suite's
+        # three display-name cells: ProximityKit's sanitizer against the domain model's it was copied
+        # from, and the name consumers and the mesh and recipe-share managers under a namespace whose
+        # peer-name policy is its own) = 241 is the ARITHMETIC CHECK, never the source.
+        # RAISED 241 -> 244 at the A0.3 review fixes, MEASURED on a Mac, 2026-10-03 (iPhone 17
+        # simulator, iOS 26.5): this exact seven-name list run at floor 1 after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: "244 tests in 7 suites"
+        # (6 + 13 + 19 + 104 + 40 + 50 + 12), 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. Re-run AT 244: passed. Run once more at 244 without ProximityNamespaceGateTests: 232 ran
+        # and the floor refused it. 241 + 3 (the soundness suite's cells holding a mesh message to a
+        # summary title's bound and the peer-name cap to the identifiers the name display hides, and
+        # the gate suite's cell holding the mesh manager to founding no mesh under an identity of
+        # another namespace) = 244 is the ARITHMETIC CHECK, never the source.
+        # RAISED 244 -> 268 at A0.4.0, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "268 tests in 8 suites" (6 + 13 + 19 + 104 + 40 + 50
+        # + 12 + 24), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 268:
+        # passed. Run once more at 268 without FernletFeatureGoldenTests: 244 ran and the floor refused
+        # it. 244 + 24 (the feature golden's cells) = 268 is the ARITHMETIC CHECK, never the source.
+        # RAISED 268 -> 276 at A0.4.1, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "276 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 15 + 26), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 276:
+        # passed. Run once more at 276 without ProximityNamespaceGateTests: 261 ran and the floor
+        # refused it. 268 + 8 (the host feature salts' cells: three in the soundness suite, a salt that
+        # repeats or prefixes a label and the salts two families share; three in the gate suite, the
+        # pair-secret door's refusals and derivation; two in the feature golden, `.fernlet`'s declared
+        # salts and the door's known answers) = 276 is the ARITHMETIC CHECK, never the source.
+        # RAISED 276 -> 277 at A0.4.2, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "277 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 15 + 27), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 277:
+        # passed. Run once more at 277 without FernletFeatureGoldenTests: 250 ran and the floor refused
+        # it. 276 + 1 (the feature golden's cell holding the core's heart-eligibility predicate to
+        # presence's gate, leg by leg) = 277 is the ARITHMETIC CHECK, never the source.
+        # RAISED 277 -> 278 at A0.4.3, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "278 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 15 + 28), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 278:
+        # passed. Run once more at 278 without FernletFeatureGoldenTests: 250 ran and the floor refused
+        # it. 277 + 1 (the feature golden's cell holding a reported artwork's content hash to its known
+        # answer) = 278 is the ARITHMETIC CHECK, never the source.
+        # RAISED 278 -> 279 at A0.4.7, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "279 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 16 + 28), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 279:
+        # passed. Run once more at 279 without ProximityNamespaceGateTests: 263 ran and the floor refused
+        # it. 278 + 1 (the gate suite's cell holding the mesh, presence and recipe-share managers to the
+        # identity their host's `makeProximityIdentity()` builds, refused when it is of another
+        # namespace) = 279 is the ARITHMETIC CHECK, never the source.
+        # RAISED 279 -> 280 at A0.4.9, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "280 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 17 + 28), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 280:
+        # passed. Run once more at 280 without ProximityNamespaceGateTests: 263 ran and the floor refused
+        # it. 279 + 1 (the gate suite's cell holding the pair-secret door to a declaration by bytes: a
+        # salt only canonically equivalent to a declared one, the Kelvin sign for a `K`, is refused) =
+        # 280 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 170 \
+          Scripts/run-gated-suites.sh crypto-goldens 280 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
             ProximityNamespaceGoldenTests \
-            ProximityNamespaceSoundnessTests
+            ProximityNamespaceSoundnessTests \
+            ProximityVocabularyGoldenTests \
+            ProximityNamespaceGateTests \
+            FernletFeatureGoldenTests
 
       # The five walls below have no compiler half and ran on NO workflow until 2026-09-24 — each
       # was green only when somebody remembered to run it locally, which is the gap the mesh

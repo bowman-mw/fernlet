@@ -4,7 +4,8 @@
 // Value types + pure verdict math for the in-person clothing-shop content-moderation system.
 // Wall-safe (no crypto, no sealed types): the append-only report ledger row, its wire-tolerant
 // enums, the escalation thresholds, and the deterministic tally functions. The SHA-256 content
-// hash itself is computed in ProximityKit (where CryptoKit lives) and handed in as `Data`.
+// hash itself is computed in FernletSocial (`ModerationContentHash`, where CryptoKit is linked) and
+// handed in as `Data`.
 //
 // Design (2026-07-11 ban memo): reports key on the transport-VERIFIED reporter/subject signing
 // keys and a content hash of the artwork — never the attacker-settable `designerID`. Verdicts are
@@ -57,7 +58,7 @@ public nonisolated struct ModerationLedgerEntry: Codable, Equatable, Identifiabl
     /// The reported item's id — display/correlation only, NOT the dedup key (a designer can rotate it).
     public var itemID: UUID
     /// SHA-256 over the sanitized artwork (texture + slot) — the stable moderation key across
-    /// itemID/name/price/identity rotation. Computed in ProximityKit.
+    /// itemID/name/price/identity rotation. Computed in FernletSocial (`ModerationContentHash`).
     public var contentHash: Data
     /// Raw `ReportReason` token, kept forward-tolerant.
     public var reasonToken: String

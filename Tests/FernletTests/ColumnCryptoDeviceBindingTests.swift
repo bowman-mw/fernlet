@@ -69,18 +69,24 @@ struct ColumnCryptoDeviceBindingTests {
     /// legacy READ path too, so what these bytes exercise now is the named refusal — which is the
     /// thing most worth pinning, because real rows written by shipped builds are out there and a
     /// refusal that cannot name them is indistinguishable from a corruption bug.
-    private func sealLegacy(_ plaintext: Data, label: String) throws -> Data {
+    ///
+    /// The nonce is FIXED — `nonceFirstByte`, then eleven zero bytes — because a legacy blob's
+    /// first byte is its nonce's first byte and the reader classifies by that byte alone: a random
+    /// nonce would start `0x02` or `0x03` 2 times in 256 and fail the refusal pins below about once
+    /// in 128 runs. The default `0x00` is neither marker; only a deliberate collision passes one.
+    private func sealLegacy(_ plaintext: Data, label: String, nonceFirstByte: UInt8 = 0x00) throws -> Data {
         let key = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: contentKey,
             info: Data(label.utf8),
             outputByteCount: 32
         )
-        return try ChaChaPoly.seal(plaintext, using: key).combined
+        let nonce = try ChaChaPoly.Nonce(data: Data([nonceFirstByte]) + Data(count: 11))
+        return try ChaChaPoly.seal(plaintext, using: key, nonce: nonce).combined
     }
 
-    /// ``sealLegacy(_:label:)`` over a UTF-8 string, the shape most callers here want.
-    private func sealLegacy(_ value: String, label: String) throws -> Data {
-        try sealLegacy(Data(value.utf8), label: label)
+    /// ``sealLegacy(_:label:nonceFirstByte:)`` over a UTF-8 string, the shape most callers here want.
+    private func sealLegacy(_ value: String, label: String, nonceFirstByte: UInt8 = 0x00) throws -> Data {
+        try sealLegacy(Data(value.utf8), label: label, nonceFirstByte: nonceFirstByte)
     }
 
     // MARK: Proves a device-bound seal round-trips and carries the current version tag.
@@ -128,14 +134,14 @@ struct ColumnCryptoDeviceBindingTests {
     // which is the one refusal in this file that cannot name what it found. That is a real loss and
     // this pin is where it is recorded.
     @Test func aCollidedLegacyBlobCanNoLongerBeResolvedByOpen() throws {
-        let v2Collision = try drawLegacyBlob(startingWith: ColumnCrypto.deviceBoundFormatVersionV2)
+        let v2Collision = try collidingLegacyBlob(startingWith: ColumnCrypto.deviceBoundFormatVersionV2)
         #expect(throws: ColumnCrypto.SealedColumnOpenError.retiredFormat(.v2Marked)) {
             _ = try self.open(v2Collision, label: "menstrual-narrative", override: .identifier(self.installA))
         }
         // The 0x03 collision: the marker says V3, so the reader believes it and the failure is an
         // AUTHENTICATION failure — deliberately asserted as "not a SealedColumnOpenError", because
         // the honest statement is that this one row cannot be named, not that it fails somehow.
-        let v3Collision = try drawLegacyBlob(startingWith: ColumnCrypto.deviceBoundFormatVersionV3)
+        let v3Collision = try collidingLegacyBlob(startingWith: ColumnCrypto.deviceBoundFormatVersionV3)
         do {
             _ = try open(v3Collision, label: "menstrual-narrative", override: .identifier(installA))
             Issue.record("a legacy blob must not open under the V3 rung")
@@ -146,18 +152,12 @@ struct ColumnCryptoDeviceBindingTests {
         }
     }
 
-    // MARK: Draws a legacy blob whose first nonce byte equals `marker`. Bounded (R2) and
-    // astronomically unlikely to miss: P(miss all 8192) ≈ (255/256)^8192 ≈ 1e-14.
-    private func drawLegacyBlob(startingWith marker: UInt8) throws -> Data {
-        var drawn: Data?
-        for _ in 0..<8192 {
-            let candidate = try sealLegacy("nonce collision", label: "menstrual-narrative")
-            if candidate.first == marker {
-                drawn = candidate
-                break
-            }
-        }
-        return try #require(drawn, "could not draw a legacy blob starting with \(marker)")
+    // MARK: Builds a legacy blob whose first nonce byte equals `marker` by sealing it under a nonce
+    // that starts with `marker`: the collision is made on purpose, so it is the same bytes every run.
+    private func collidingLegacyBlob(startingWith marker: UInt8) throws -> Data {
+        let blob = try sealLegacy("nonce collision", label: "menstrual-narrative", nonceFirstByte: marker)
+        try #require(blob.first == marker, "a legacy blob sealed under a nonce starting \(marker) must start with it")
+        return blob
     }
 
     // MARK: RETIRED FORMAT, v2: the pre-purpose generation (binding-only AAD) is refused by name on

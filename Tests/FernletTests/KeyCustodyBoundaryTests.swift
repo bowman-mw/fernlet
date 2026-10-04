@@ -1,4 +1,5 @@
 import CryptoKit
+import FernletSocial
 import Foundation
 import PrivateMediaStore
 import PrivateStoreCore
@@ -6,6 +7,7 @@ import ProximityKit
 import Security
 import Testing
 import FernletFoundation
+@testable import Fernlet
 @testable import FernletCrypto
 @testable import FernletLock
 
@@ -17,10 +19,16 @@ import FernletFoundation
 ///   keychain service and read the row's ACTUAL `kSecAttrAccessible` + `kSecAttrSynchronizable`
 ///   back via `SecItemCopyMatching` — asserting the exact expected class, not the source text.
 /// - **Grep-walls** pin where the two sanctioned exceptions may live in shipping code:
-///   `synchronizable: true` (the escrow promotion) only in `IdentityService.swift`, and a bare
+///   `synchronizable: true` (the escrow promotion) only in `SealedBackupEscrowKey.swift`, and a bare
 ///   non-`ThisDeviceOnly` accessibility class only in `PrivateMediaKeyStore.swift` +
-///   `IdentityService.swift`. Exact-set in both directions, with planted-violation fixtures and
-///   a scan floor, so the wall can neither miss a new file nor rot into a stale allowance.
+///   `SealedBackupEscrowKey.swift`; and where a device identity may be built: only in the app's
+///   factory in `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none:
+///   its host door, `ProximityHost.makeProximityIdentity()`, has no default, so the app's store must
+///   answer it, and a behavioural cell holds what it answers, the store's three managers each holding
+///   an identity that carries the escrow key. Between them no shipping path provisions an identity
+///   that could mint over a previous build's key-agreement row without first promoting it into the
+///   escrow. Exact-set in both directions, with planted-violation fixtures and a scan floor, so the
+///   wall can neither miss a new file nor rot into a stale allowance.
 ///
 /// A future "make sealed data shareable" change would have to flip one of these rows to a
 /// synchronizable or non-device class — and fail here, in the same commit.
@@ -482,7 +490,7 @@ struct KeyCustodyBoundaryTests {
         return hits
     }
 
-    // MARK: Wall: `synchronizable: true` may appear ONLY in IdentityService.swift (the escrow
+    // MARK: Wall: `synchronizable: true` may appear ONLY in SealedBackupEscrowKey.swift (the escrow
     // key's promotion to iCloud Keychain — the one key whose entire purpose is to sync).
     // Exact-set both ways: a new syncing write fails, and a stale allowance fails.
     @Test func synchronizableTrueIsConfinedToTheEscrowService() throws {
@@ -493,12 +501,12 @@ struct KeyCustodyBoundaryTests {
             guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
             if Self.containsSynchronizableTrue(source) { hitFiles.insert(url.lastPathComponent) }
         }
-        #expect(hitFiles == ["IdentityService.swift"],
+        #expect(hitFiles == ["SealedBackupEscrowKey.swift"],
                 "iCloud-Keychain-synchronizable keychain writes must exist only in the escrow promotion; found \(hitFiles.sorted())")
     }
 
     // MARK: Wall: a bare non-ThisDeviceOnly accessibility class may appear ONLY in the two
-    // sanctioned files (media key = backup-restorable by product decision; IdentityService =
+    // sanctioned files (media key = backup-restorable by product decision; SealedBackupEscrowKey =
     // the synced escrow slots). Everything else must be ThisDeviceOnly.
     @Test func bareAccessibilityClassesAreConfinedToTheSanctionedFiles() throws {
         let files = shippingSwiftFiles()
@@ -508,8 +516,188 @@ struct KeyCustodyBoundaryTests {
             guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
             if !Self.bareAccessibilityTokens(in: source).isEmpty { hitFiles.insert(url.lastPathComponent) }
         }
-        #expect(hitFiles == ["PrivateMediaKeyStore.swift", "IdentityService.swift"],
+        #expect(hitFiles == ["PrivateMediaKeyStore.swift", "SealedBackupEscrowKey.swift"],
                 "non-device-bound accessibility classes must stay confined to the two sanctioned files; found \(hitFiles.sorted())")
+    }
+
+    // MARK: Wall: every shipping identity is built by its host's door. An identity that carries no
+    // escrow participant mints over the key-agreement row a pre-migration build left without first
+    // promoting that key into its escrow slot, destroying the user's backup key on the first
+    // provisioning, so an identity may be constructed ONLY in the app's factory
+    // (`IdentityService.fernletApp(keychainService:)`, which carries `SealedBackupEscrowKey`, and which
+    // `FernletStore.makeProximityIdentity()` answers). ProximityKit constructs none: its host door has
+    // no default, so a host answers it, and a new convenience initializer or static factory of the
+    // identity anywhere else is a construction too.
+
+    /// The shipping files that may construct an `IdentityService`, by repo-relative path: the app's
+    /// factory, alone.
+    static let identityConstructionHomes: Set<String> = ["App/Fernlet/SealedBackupEscrowKey.swift"]
+
+    /// ProximityKit's file that declares the identity, the one place its initializers may delegate to
+    /// one another: a delegating initializer there is the identity's own API, and every call of it is
+    /// still read where it is made.
+    static let identityDeclarationFile = "FernletKit/Sources/ProximityKit/Identity/IdentityService.swift"
+
+    /// An argument list whose first label is one of the identity's initializer's three
+    /// (`namespace:`, `keychainService:`, `provisioningParticipant:`).
+    private static let identityFirstLabel = #"\(\s*(?:namespace|keychainService|provisioningParticipant)\s*:"#
+
+    /// Matcher: the 1-based lines of lexed `code` (comments removed, literals emptied) that construct
+    /// an identity: a call of the type (`IdentityService(…)`, `IdentityService.init(…)`), or an implicit
+    /// initializer (`.init(…)`, `Self(…)`, `Self.init(…)`) under one of the identity's three labels
+    /// first, which no other shipping type is built with implicitly today, so a construction cannot
+    /// hide behind type inference.
+    static func identityConstructionLines(in code: String) -> [Int] {
+        let pattern = #"(?<![A-Za-z0-9_])IdentityService\s*(?:\.\s*init\s*)?\("#
+            + #"|(?<![A-Za-z0-9_.])(?:Self\s*(?:\.\s*init\s*)?|\.\s*init\s*)"# + identityFirstLabel
+        return lines(matching: pattern, in: code)
+    }
+
+    /// Matcher: the 1-based lines of lexed `code` on which an initializer delegates under one of the
+    /// identity's three labels first (`self.init(namespace:`, …), read only where the code names
+    /// `IdentityService`, as the extension that holds a convenience initializer of the identity does:
+    /// another type's delegation to its own `init(namespace:)` or `init(keychainService:)`, in a file
+    /// whose code never names the identity, is not one.
+    static func identityDelegationLines(in code: String) -> [Int] {
+        guard !lines(matching: #"(?<![A-Za-z0-9_])IdentityService(?![A-Za-z0-9_])"#, in: code).isEmpty else {
+            return []
+        }
+        return lines(matching: #"(?<![A-Za-z0-9_.])self\s*\.\s*init\s*"# + identityFirstLabel, in: code)
+    }
+
+    /// The 1-based lines of `code` on which `pattern` matches, or `[-1]`, which no sample expects and
+    /// no file passes, when the pattern does not compile.
+    private static func lines(matching pattern: String, in code: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [-1] }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map {
+            text.substring(to: $0.range.location).count(where: { $0 == "\n" }) + 1
+        }
+    }
+
+    /// Every shipping Swift file constructs an identity only in ``identityConstructionHomes``, exact
+    /// both ways, read as lexed code (`SwiftSourceLexer`, from `ProximityNamespaceBoundaryTests`), so
+    /// a doc comment or a string that spells a construction is not one: a construction in any file, and
+    /// a delegating initializer in any file but ``identityDeclarationFile``. Both matchers are held to
+    /// their samples and their neighbours first.
+    @Test func everyShippingIdentityIsBuiltByItsHostsDoor() throws {
+        Self.expectTheIdentityMatchersSeeTheirSamplesAndNoNeighbour()
+        var homes: Set<String> = []
+        var scanned = 0
+        // R2: bounded by the five shipping roots and each root's finite file list.
+        for root in Self.shippingRoots {
+            let rootURL = RepoRoot.url.appendingPathComponent(root)
+            guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("scan root missing: \(root)")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                scanned += 1
+                guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                // A path that does not resolve under its root is kept whole, so it fails the set loudly.
+                let suffix = url.path.range(of: "/" + root + "/", options: .backwards).map { url.path[$0.upperBound...] }
+                let path = suffix.map { root + "/" + $0 } ?? url.path
+                let code = SwiftSourceLexer.lex(source).code
+                let delegations = path == Self.identityDeclarationFile ? [] : Self.identityDelegationLines(in: code)
+                guard !(Self.identityConstructionLines(in: code) + delegations).isEmpty else { continue }
+                homes.insert(path)
+            }
+        }
+        #expect(scanned >= Self.scanFloor, "scan saw \(scanned) files — enumerator broken?")
+        #expect(homes == Self.identityConstructionHomes, """
+            shipping code constructs an IdentityService in \(homes.sorted()); only \
+            \(Self.identityConstructionHomes.sorted()) may. Build Fernlet's identity with \
+            `IdentityService.fernletApp(keychainService:)` (it carries the sealed-backup escrow key), a \
+            manager's with its host's `makeProximityIdentity()`, add no initializer or factory of the \
+            identity outside ProximityKit's `Identity/IdentityService.swift`, and spell any other type's \
+            `init(namespace:)` with its type name.
+            """)
+    }
+
+    /// The construction matcher reads every way a construction is spelled and none of the nearest code
+    /// that builds no identity (another type's initializer under the same label, the lock service's own
+    /// delegation, the factory's call, a static read); the delegation matcher reads a convenience
+    /// initializer of the identity delegating under its first label or under another initializer's,
+    /// and not another type's delegation in code that never names the identity, even when a comment
+    /// does, nor code that names it and delegates nothing. Each sample is lexed first, as the files are.
+    private static func expectTheIdentityMatchersSeeTheirSamplesAndNoNeighbour() {
+        let constructions = [
+            "let id = IdentityService(namespace: .fernlet)", "let id = IdentityService.init(namespace: n)",
+            "let id: IdentityService = .init(namespace: n)", "return Self(namespace: n, keychainService: s)",
+            "return Self.init(namespace: n)", "let id: IdentityService = .init(keychainService: s)",
+            "let id: IdentityService = .init(provisioningParticipant: nil)"
+        ]
+        let notConstructions = [
+            "let tag = IdentityService.fingerprint(of: key)", "let identity: IdentityService",
+            "/// IdentityService(namespace:)", #"let s = "IdentityService(namespace: .fernlet)""#,
+            "let id = IdentityService.fernletApp()", "self.init(namespace: .fernlet, keychainService: service)",
+            "let radio = NetworkMeshSession(namespace: namespace)",
+            "let lock = FernletLockService(keychainService: service)",
+            "self.init(\n    keychainService: keychainService,\n    sealedContentKeyServices: services\n)"
+        ]
+        let delegations = [
+            "extension IdentityService {\n    convenience init(service: String) {\n        self.init(namespace: .fernlet, keychainService: service)\n    }\n}",
+            "extension IdentityService {\n    convenience init(service: String) {\n        self.init(keychainService: service)\n    }\n}"
+        ]
+        let notDelegations = [
+            "final class Radio {\n    convenience init() {\n        self.init(namespace: .fernlet)\n    }\n}",
+            "/// IdentityService\nconvenience init(service: String) {\n    self.init(keychainService: service)\n}",
+            "extension IdentityService {\n    static let shared = fernletApp()\n}"
+        ]
+        // R2: bounded by the four fixture lists.
+        for sample in constructions {
+            #expect(identityConstructionLines(in: SwiftSourceLexer.lex(sample).code) == [1], "missed: \(sample)")
+        }
+        for neighbour in notConstructions {
+            #expect(identityConstructionLines(in: SwiftSourceLexer.lex(neighbour).code).isEmpty,
+                    "read a construction in: \(neighbour)")
+        }
+        for sample in delegations {
+            #expect(identityDelegationLines(in: SwiftSourceLexer.lex(sample).code) == [3], "missed: \(sample)")
+        }
+        for neighbour in notDelegations {
+            #expect(identityDelegationLines(in: SwiftSourceLexer.lex(neighbour).code).isEmpty,
+                    "read a delegation in: \(neighbour)")
+        }
+    }
+
+    // MARK: Behaviour: the app's store hands its three managers Fernlet's custody. The construction
+    // wall above holds every shipping construction to the app's factory, and ProximityKit's host door
+    // has no default, so the store must answer it; this cell holds what the managers hold at run time.
+
+    /// The app's own store (`makeTestStore()`, the real `FernletStore`) hands its mesh, recipe-share and
+    /// presence managers, each built with no identity, an identity whose provisioning participant is a
+    /// `SealedBackupEscrowKey`, one of its own per identity, and its host door, asked through the
+    /// protocol as the managers ask it, answers the same. A participant-less identity on a device a
+    /// pre-migration build left in provisioning Case 3 would mint over the synced key-agreement row
+    /// without promoting it into the escrow, destroying the user's backup key. Each manager keeps its
+    /// identity private, so it is read by reflection: a manager that stops keeping one under that name
+    /// fails here by name.
+    @MainActor
+    @Test func theStoresManagersHoldIdentitiesCarryingTheEscrowKey() throws {
+        let store = makeTestStore()
+        let host: any ProximityHost = store
+        #expect(host.makeProximityIdentity().provisioningParticipant is SealedBackupEscrowKey,
+                "the store's host door answers an identity without the sealed-backup escrow key")
+        let managers: [(name: String, manager: AnyObject)] = [
+            ("mesh", store.meshNetworkManager), ("recipe-share", store.recipeShareManager),
+            ("presence", store.presenceManager)
+        ]
+        var participants: Set<ObjectIdentifier> = []
+        // R2: bounded by the three managers.
+        for (name, manager) in managers {
+            let identity = try #require(Self.heldIdentity(of: manager), "the \(name) manager keeps no `identity`")
+            let participant = try #require(identity.provisioningParticipant as? SealedBackupEscrowKey,
+                                           "the \(name) manager's identity does not carry the sealed-backup escrow key")
+            participants.insert(ObjectIdentifier(participant))
+        }
+        #expect(participants.count == managers.count, "two managers' identities share one escrow key")
+    }
+
+    /// The `IdentityService` a manager keeps in its stored `identity` property, read by reflection, or
+    /// nil when it keeps none under that name.
+    private static func heldIdentity(of manager: AnyObject) -> IdentityService? {
+        Mirror(reflecting: manager).children.first { $0.label == "identity" }?.value as? IdentityService
     }
 
     // MARK: Fixtures: prove both matchers actually fire on planted violations (and stay quiet on

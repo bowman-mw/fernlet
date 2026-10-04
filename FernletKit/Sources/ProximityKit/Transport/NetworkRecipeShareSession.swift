@@ -103,13 +103,21 @@ nonisolated struct RecipeSharePosture {
 
     /// A freshly minted posture: a random instance name, a random session id, and a new key pair.
     ///
+    /// - Parameters:
+    ///   - instanceNamePrefix: The host namespace's `family.radios.meshInstanceNamePrefix`, which the
+    ///     random instance name begins with, as the mesh radio's does.
+    ///   - commonName: The host namespace's `family.radios.tlsCommonName`, the certificate's subject
+    ///     and issuer.
+    ///   - now: The instant the certificate's validity is anchored to.
     /// - Throws: ``MeshTransportError/tlsIdentityUnavailable`` when the platform refuses the mint,
     ///   which the caller reports as a start failure rather than advertising without an identity.
-    static func minted(now: Date = Date()) throws -> RecipeSharePosture {
+    static func minted(
+        instanceNamePrefix: String, commonName: String, now: Date = Date()
+    ) throws -> RecipeSharePosture {
         RecipeSharePosture(
-            instanceName: MeshLinkAdvertisement.randomInstanceName(),
+            instanceName: MeshLinkAdvertisement.randomInstanceName(prefix: instanceNamePrefix),
             sessionID: UUID().uuidString,
-            tlsIdentity: try EphemeralMeshTLSIdentity.mint(now: now)
+            tlsIdentity: try EphemeralMeshTLSIdentity.mint(commonName: commonName, now: now)
         )
     }
 }
@@ -192,6 +200,18 @@ final class NetworkRecipeShareSession: RecipeShareRadioSession, NetworkChannelHo
     /// frozen wire token, distinct from the mesh's `fernlet-mesh-v1` and presence's `fernlet-near-v1`
     /// so no two radios can negotiate.
     nonisolated let alpn: String
+
+    /// The start of every Bonjour instance name this radio's postures advertise, the host
+    /// namespace's `family.radios.meshInstanceNamePrefix`, shared with the mesh radio.
+    nonisolated let instanceNamePrefix: String
+
+    /// The subject and issuer of every TLS certificate this radio's postures mint, the host
+    /// namespace's `family.radios.tlsCommonName`.
+    nonisolated let tlsCommonName: String
+
+    /// The host namespace's ``ProximityNamespace/soundness``, the verdict it recorded when it was
+    /// built: ``start(advertisement:)`` refuses to bring the radio up under an unsound namespace.
+    nonisolated let namespaceSoundness: ProximityNamespace.Soundness
 
     /// Hard ceiling on one inbound frame, enforced before the bytes reach any channel or decoder.
     /// The same value the other two transports enforce, so all three refuse identically.
@@ -396,12 +416,17 @@ final class NetworkRecipeShareSession: RecipeShareRadioSession, NetworkChannelHo
 
     /// A radio that speaks the host's wire: it advertises and browses the namespace's recipe-share
     /// service type, negotiates its ALPN and logs under its subsystem (ProximityKit plan step
-    /// A0.2.7). Each value is read once, here; building a radio starts nothing.
+    /// A0.2.7), and mints every posture with the namespace's mesh instance-name prefix and common
+    /// name. Each value is read once, here, with the namespace's soundness verdict; building a radio
+    /// starts nothing.
     ///
     /// - Parameter namespace: The host's protocol identity, as its manager holds it.
     init(namespace: ProximityNamespace) {
         serviceType = namespace.family.radios.recipeShare.serviceType
         alpn = namespace.family.radios.recipeShare.alpn
+        instanceNamePrefix = namespace.family.radios.meshInstanceNamePrefix
+        tlsCommonName = namespace.family.radios.tlsCommonName
+        namespaceSoundness = namespace.soundness
         logger = Logger(subsystem: namespace.installation.logSubsystem, category: "proximity.recipe.quic")
     }
 
@@ -422,10 +447,17 @@ final class NetworkRecipeShareSession: RecipeShareRadioSession, NetworkChannelHo
     /// Throws rather than reporting, because the owner's `start()` is the one caller and it stands
     /// the radio down on a failure — the `didNotStart*` shape P8 item 0's device finding (b)
     /// fixed.
+    ///
+    /// Refuses first, under an unsound namespace (``namespaceSoundness``): it throws
+    /// ``ProximityNamespaceError`` and audits `recipe.quic.namespaceUnsound` (at `start`) before it
+    /// mints a posture, listens or advertises anything.
     func start(advertisement: [String: String]) throws {
+        try ProximityNamespaceGate.refuseUnsound(
+            namespaceSoundness, event: "recipe.quic.namespaceUnsound", at: .start)
         guard !isRunning else { return }
         ownerFields = advertisement
-        posture = try RecipeSharePosture.minted()
+        posture = try RecipeSharePosture.minted(
+            instanceNamePrefix: instanceNamePrefix, commonName: tlsCommonName)
         isRunning = true
         isDiscoveryPaused = false
         do {
@@ -493,7 +525,8 @@ final class NetworkRecipeShareSession: RecipeShareRadioSession, NetworkChannelHo
             // leave an unpaused radio wearing the PRE-PAUSE posture and answering
             // `advertisedSessionID` with a `sid` it has already withdrawn — which the owner would
             // then write into a dial hello. The flag clears only once there is a posture to wear.
-            let fresh = try RecipeSharePosture.minted()
+            let fresh = try RecipeSharePosture.minted(
+                instanceNamePrefix: instanceNamePrefix, commonName: tlsCommonName)
             previousInstanceName = posture?.instanceName
             posture = fresh
             isDiscoveryPaused = false
@@ -938,7 +971,8 @@ private extension NetworkRecipeShareSession {
         ProximityAudit.log("recipe.quic.registrationWithdrawn", context: [:])
         cancelListener()
         do {
-            let fresh = try RecipeSharePosture.minted()
+            let fresh = try RecipeSharePosture.minted(
+                instanceNamePrefix: instanceNamePrefix, commonName: tlsCommonName)
             previousInstanceName = posture?.instanceName
             posture = fresh
             try startListener()
@@ -1117,7 +1151,8 @@ private extension NetworkRecipeShareSession {
     /// instance name and the endpoint key that CONTAINS that name, and both are exactly what
     /// P9-2-A's salted peer labelling exists to keep out of anything anyone reads. An absent hint
     /// makes ``RecipeShareAdvertisedName/received(_:hint:)`` fall through to the picker's existing
-    /// "A friend" placeholder for a peer that published no `name`, which is the right answer.
+    /// placeholder, the host's peer-name floor, for a peer that published no `name`, which is the
+    /// right answer.
     func handle(for key: MeshLinkKey) -> PeerHandle {
         let identity = identities.identity(for: key)
         let record = browsedRecords[key]

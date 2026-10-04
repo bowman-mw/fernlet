@@ -78,7 +78,7 @@ nonisolated enum MeshRoutedManifestFormat {
 /// lifted out of one manifest cannot be opened under another, and one relabelled to a different
 /// recipient cannot be opened by anyone. Carries no epoch, no group-key reference, no format
 /// marker — the `.v1` in the wrap purposes is the version. Never on the wire alone: it has no
-/// `PayloadType`. Pure value; nothing reads a clock.
+/// mesh message of its own. Pure value; nothing reads a clock.
 nonisolated struct MeshRecipientKeyWrap: Codable, Equatable, Sendable {
     /// The destination this wrap is for. Equals the same-index entry of ``MeshRoutedManifest/destinations``.
     let recipientFingerprint: String
@@ -295,7 +295,7 @@ nonisolated struct MeshRoutedManifest: Codable, Equatable, Sendable {
 
 // MARK: - MeshRoutedManifestPayload
 
-/// The wire frame for a ``MeshRoutedManifest`` — `PayloadType.meshRoutedManifest`, signed and
+/// The wire frame for a ``MeshRoutedManifest`` — `MeshPayloadRole.meshRoutedManifest`, signed and
 /// UNSEALED like every membership record so a custodian can re-broadcast it verbatim; the
 /// per-recipient wraps are the confidentiality, not the envelope. Carries no second claim about
 /// the origin: the record already says, under the origin's own signature. Registered in item 1,
@@ -425,10 +425,10 @@ extension MeshRoutedManifest {
     ///     token's row supplies the per-type size cap, the destination semantics the mint is allowed
     ///     to use, and the expiry rule. An UNREGISTERED token still mints, under the shared wire
     ///     bounds — a documented asymmetry: acceptance is a receiver-side statement (D13), so an
-    ///     unregistered item is refused at every receiver door rather than at its author's. The
-    ///     default is written as `MeshRoutedTypeRegistry.increment1` rather than `.increment1` on
-    ///     purpose: the one-registry wall's member scanner reads the spelled-out form only, so a
-    ///     leading dot here would let a second registry value reach a value position unseen.
+    ///     unregistered item is refused at every receiver door rather than at its author's. No
+    ///     default: the caller passes the registry it holds (the manager's, built from its host
+    ///     namespace's routed types), since this module has no routed types of its own to fall back
+    ///     on.
     /// - Throws: ``MeshRoutedManifestMintError``, ``MeshRoutedKeyWrapError``, or the identity's
     ///   signing error. Never a trap.
     @MainActor
@@ -443,7 +443,7 @@ extension MeshRoutedManifest {
         contentKey: Data,
         recipientKeys: [String: Data],
         identity: IdentityService,
-        types: MeshRoutedTypeRegistry = MeshRoutedTypeRegistry.increment1
+        types: MeshRoutedTypeRegistry
     ) throws -> MeshRoutedManifest {
         let origin = identity.localFingerprint
         try validated(

@@ -985,14 +985,14 @@ struct NoTrackingBoundaryTests {
     /// state, no other test.
     ///
     /// `_fernlet-coach._tcp` / `._udp` are ``heldBonjourServiceTypes``: declared, recorded in §4c,
-    /// backed by no radio. Every shipping `ProximityCoordinator.begin` passes `mode: .friend`
-    /// (`MeshNetworkManager`, `ProximityRecipeShareManager`, `PresenceManager`), and
-    /// `serviceType(for: .trainer)` — the one reader of `MultipeerServiceType.trainer` — is reached
-    /// only from `TrainerProximityService`, which exists only under `Tests/`. So they are NOT live
-    /// (pinning them would assert an advertiser this app does not have) and NOT pinned present
-    /// (deleting an overclaim is legitimate cleanup, and plan §18 decision 4 is the owner's). The
-    /// held set's one job is the partition below: a declared type in none of the three sets is a
-    /// local-network radio nobody reviewed.
+    /// backed by no radio. No code names the `fernlet-coach` type at all: `PeerTransport`'s discovery
+    /// doors take no service type (the shared radio sessions own discovery, on their namespace's
+    /// types), the coordinator's trainer mode is reached only from `TrainerProximityService`, which
+    /// exists only under `Tests/`, and the coach channel's own type arrives with its radio profile.
+    /// So they are NOT live (pinning them would assert an advertiser this app does not have) and NOT
+    /// pinned present (deleting an overclaim is legitimate cleanup, and plan §18 decision 4 is the
+    /// owner's). The held set's one job is the partition below: a declared type in none of the three
+    /// sets is a local-network radio nobody reviewed.
     @Test func theRetiredRadiosBonjourTypesAreGoneFromThePlist() throws {
         let declared = try Self.declaredBonjourServiceTypes()
         guard !declared.isEmpty else {

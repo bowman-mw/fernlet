@@ -6,6 +6,7 @@
 // responder can resolve an inbound QUIC connection to a browsed peer. No radio, no clock, no
 // manager: every input here is a literal.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import Foundation
 import Testing

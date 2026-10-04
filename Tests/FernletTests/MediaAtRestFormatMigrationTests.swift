@@ -25,7 +25,7 @@ import PrivateMediaStore
 /// Fixture discipline: UUID-fresh temp roots per test (never shared container roots — see
 /// `PhotoDirectoryIsolationTests`), `UserDefaults(suiteName: UUID)` per test, in-memory key
 /// providers, and fixtures that RE-SPELL the marker (`"FMA2"`) and build pre-domain boxes as bare
-/// `AES.GCM.seal(_:using:).combined` — never asking production what the format is, the
+/// `AES.GCM.seal(_:using:nonce:).combined` — never asking production what the format is, the
 /// `OwnPhotoKeyMigrationTests.opens` doctrine.
 @MainActor
 struct MediaAtRestFormatMigrationTests {
@@ -58,8 +58,13 @@ struct MediaAtRestFormatMigrationTests {
 
     /// A byte-exact PRE-domain-separation box: combined (nonce + ciphertext + tag), no marker,
     /// no AAD — what the legacy writers put on disk, and what nothing in the app opens any more.
+    ///
+    /// Sealed under a fixed all-zero nonce, because the box's first bytes are its nonce's and the
+    /// migrator classifies by them (the census's rule): a random nonce would read as a plaintext
+    /// JPEG when it began `FF D8 FF` (2⁻²⁴) or as current when it began `FMA2` (2⁻³²), not residue.
     private func legacySealed(_ plaintext: Data, under key: SymmetricKey) throws -> Data {
-        try #require(try AES.GCM.seal(plaintext, using: key).combined)
+        let nonce = try AES.GCM.Nonce(data: Data(count: 12))
+        return try #require(try AES.GCM.seal(plaintext, using: key, nonce: nonce).combined)
     }
 
     /// A current-format box with the marker re-spelled here (never read from the module — a

@@ -17,6 +17,7 @@
 // the mesh's slotTrustPolicies retention is the same pattern).
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import FernletFoundation
@@ -603,7 +604,7 @@ struct MeshClothingShopTests {
     // MARK: - Retained trust policy enforces blocked keys at the envelope layer
     //
     // Ported from ClothingShareCodecTests (the ProximityClothingShareManager it drove is deleted): the
-    // mesh manager creates its FriendSessionTrustPolicy per slot in `handleChannelReady` and the
+    // mesh manager asks its host for a FriendSessionTrustPolicy per slot in `handleChannelReady` and the
     // coordinator holds it only `weak` — the policy survives ONLY because `slotTrustPolicies` retains
     // it. If that retention regresses, the revoked/blocked-key rejection + audit silently no-op
     // (`nil?.isRevokedProximitySigningKey(...) == true` → false). A BLOCKED-key envelope must be

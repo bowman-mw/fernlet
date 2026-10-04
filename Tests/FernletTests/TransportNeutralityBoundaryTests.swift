@@ -18,11 +18,15 @@ struct TransportNeutralityBoundaryTests {
 
     /// Everything that must stay free of the framework. The three radio managers are the ones that
     /// actually dropped their import in P1; the wire and engine roots are scanned so a new file
-    /// cannot introduce one. `FernletProximityUI` holds the review screens that left ProximityKit's
-    /// `UI/` folder (ProximityKit plan step A0.1), so it stays scanned with the rest.
+    /// cannot introduce one. The modules that build on ProximityKit's radios are scanned with it:
+    /// `FernletProximityUI` holds the review screens that left ProximityKit's `UI/` folder
+    /// (ProximityKit plan step A0.1), `FernletConnections` Fernlet's connection rules over the mesh,
+    /// and `FernletSocial` the features that leave ProximityKit for it (ProximityKit plan step A0.4).
     private static let scanRoots = [
         "FernletKit/Sources/ProximityKit",
         "FernletKit/Sources/FernletProximityUI",
+        "FernletKit/Sources/FernletConnections",
+        "FernletKit/Sources/FernletSocial",
         "App/Fernlet"
     ]
 
@@ -64,7 +68,7 @@ struct TransportNeutralityBoundaryTests {
     private static let floorFiles = [
         "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift",
         "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
-        "FernletKit/Sources/ProximityKit/Presence/PresenceManager.swift",
+        "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
         "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
         "FernletKit/Sources/ProximityKit/Transport/PeerTransport.swift",
         "FernletKit/Sources/ProximityKit/Transport/PeerHandle.swift"

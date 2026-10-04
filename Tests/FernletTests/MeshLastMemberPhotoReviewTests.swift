@@ -36,6 +36,7 @@ import SwiftUI
 import Testing
 import UIKit
 @testable import FernletCrypto
+import FernletConnections
 import FernletDomainModel
 import PrivateMediaStore
 @testable import ProximityKit

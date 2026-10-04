@@ -13,7 +13,7 @@
 // also controls. So a ban only ever lifts because a reporter said so.
 //
 // Wall-safe (no crypto, no sealed types): reporter identities arrive as opaque TAGS through a closure,
-// derived in ProximityKit (`ModerationBanStore`) from a per-ban salt, so the ban record that outlives
+// derived in FernletSocial (`ModerationBanStore`) from a per-ban salt, so the ban record that outlives
 // a wipe never holds another person's signing key.
 
 import Foundation

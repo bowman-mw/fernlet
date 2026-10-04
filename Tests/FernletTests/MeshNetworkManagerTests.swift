@@ -504,7 +504,7 @@ struct MeshNetworkManagerTests {
     }
 
     /// `allowAdmission` is `public` and takes an arbitrary payload, so it must not depend on the
-    /// queue's copy having been sanitized. (`moderatedPeerDisplayName` is idempotent.)
+    /// queue's copy having been sanitized. (`ProximityDisplayName.peerDisplayName` is idempotent.)
     @Test func allowAdmissionStoresASanitizedMemberName() {
         let manager = MeshNetworkManager(store: store)
         let mesh = makeTestMesh(mode: .open)

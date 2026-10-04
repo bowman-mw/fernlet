@@ -14,16 +14,16 @@ import Foundation
 ///
 /// ## The payload
 ///
-/// `v` is the frozen version token `"1"`. The tags are the truncated pairwise HMACs
-/// `IdentityService.presenceTag` derives for the current epoch, base64, comma-separated — the only
-/// thing this radio ever broadcasts. There is no display name, no session id and no fingerprint,
-/// and there is deliberately no room in the vocabulary for one.
+/// `v` is the frozen version token `"1"`. The tags are the truncated pairwise HMACs that
+/// FernletSocial's `IdentityService.presenceTag` derives for the current epoch, base64,
+/// comma-separated — the only thing this radio ever broadcasts. There is no display name, no session
+/// id and no fingerprint, and there is deliberately no room in the vocabulary for one.
 ///
 /// ## Why the tags are chunked
 ///
 /// DNS-SD (RFC 6763 §6.1) gives each TXT entry a single length byte, so one `key=value` string may
-/// not exceed 255 bytes. `PresenceManager.maxAdvertisedTags` is 24, and 24 base64 tags with their
-/// separators are 311 bytes — over the limit before the key is even counted. Under
+/// not exceed 255 bytes. FernletSocial's `PresenceManager.maxAdvertisedTags` is 24, and 24 base64
+/// tags with their separators are 311 bytes — over the limit before the key is even counted. Under
 /// MultipeerConnectivity that ceiling was the framework's problem and its behaviour there was never
 /// established; under `NWTXTRecord` it is this type's problem, and an over-long entry would either
 /// be refused or silently truncated, which reads on the air as "presence stopped working once you
@@ -38,7 +38,12 @@ import Foundation
 /// already means.
 ///
 /// Every key and value here is a frozen wire token in English, never localized.
-nonisolated enum PresenceAdvertisement {
+///
+/// Package access for FernletSocial until A1, with ``publishedFields(tags:)``,
+/// ``isPresenceAdvertisement(_:)`` and ``tags(from:)``: Fernlet's presence manager builds the record
+/// it hands the presence radio's seam (``PresenceRadioSession``) and reads its peers' records with
+/// them, so they exit with that seam. The keys, the bounds and the dial hello stay internal.
+package nonisolated enum PresenceAdvertisement {
 
     /// The advertisement version key. A reader that does not see ``version`` under it believes
     /// nothing else in the record.
@@ -77,8 +82,9 @@ nonisolated enum PresenceAdvertisement {
     /// `v` is always present — an advertisement with no tags is still a presence advertisement, and
     /// a device with no eligible friends must look exactly like one that has them but is out of
     /// range. The tags are sorted so the record is a function of the set alone: an unstable
-    /// ordering would re-publish (and therefore re-register) an unchanged advertisement.
-    static func publishedFields(tags: [String]) -> [String: String] {
+    /// ordering would re-publish (and therefore re-register) an unchanged advertisement. Package
+    /// access for FernletSocial until A1, with the type.
+    package static func publishedFields(tags: [String]) -> [String: String] {
         var fields = [versionKey: version]
         var chunk = ""
         var index = 0
@@ -98,8 +104,9 @@ nonisolated enum PresenceAdvertisement {
         return fields
     }
 
-    /// Whether a browsed record is a presence advertisement this build understands.
-    static func isPresenceAdvertisement(_ fields: [String: String]?) -> Bool {
+    /// Whether a browsed record is a presence advertisement this build understands. Package access
+    /// for FernletSocial until A1, with the type.
+    package static func isPresenceAdvertisement(_ fields: [String: String]?) -> Bool {
         fields?[versionKey] == version
     }
 
@@ -107,8 +114,9 @@ nonisolated enum PresenceAdvertisement {
     ///
     /// Empty for anything that is not a version-1 presence advertisement, and bounded at
     /// ``maxInboundTags`` however many a peer crams in. Empty tokens are dropped rather than
-    /// matched: an empty string would be a token every malformed record shares.
-    static func tags(from fields: [String: String]?) -> Set<String> {
+    /// matched: an empty string would be a token every malformed record shares. Package access for
+    /// FernletSocial until A1, with the type.
+    package static func tags(from fields: [String: String]?) -> Set<String> {
         guard let fields, isPresenceAdvertisement(fields) else { return [] }
         var tags: Set<String> = []
         for index in 0..<maxChunks {

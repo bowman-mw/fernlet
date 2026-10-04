@@ -12,6 +12,7 @@
 // rotation dropping a stale advertisement, the `allowNearbyPresence` default-false + tolerant decode,
 // and the one-time first-kept-friend enable prompt (fires on 0→1, never twice).
 
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 import Foundation
@@ -28,8 +29,10 @@ private final class MockPresenceHost: ProximityHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
     func isBlockedFingerprint(_ fingerprint: String) -> Bool {
         proximityTrustVault.isBlockedFingerprint(fingerprint)
     }

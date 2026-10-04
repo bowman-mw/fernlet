@@ -22,6 +22,7 @@
 import Foundation
 import Testing
 import FernletFoundation
+import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 

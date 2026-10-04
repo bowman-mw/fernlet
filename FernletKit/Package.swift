@@ -2,7 +2,7 @@
 import PackageDescription
 
 // FernletKit — the local Swift package for the SPM module carve-up (plan §6).
-// The layered DAG below (21 targets, one umbrella product) IS the S3 privacy
+// The layered DAG below (28 targets, one umbrella product) IS the S3 privacy
 // wall: the walled AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) targets
 // have no dependency edge to the sealed `Private*` stores, and the build runs
 // with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import
@@ -30,7 +30,7 @@ let package = Package(
     products: [
         // The app and its tests link the umbrella product. An extension that needs only a portable
         // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections"]),
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
     ],
     dependencies: [
@@ -354,18 +354,6 @@ let package = Package(
             name: "AppServices",
             dependencies: ["FernletDomainModel", "AIProviders"]
         ),
-        // Layer 6 — the Proximity peer-to-peer subsystem as ONE black-box shim ([S]): mesh
-        // transport (Network.framework/QUIC; MultipeerConnectivity until 2026-09-22), identity/replay (CryptoKit Ed25519/X25519), trust
-        // vault, NI ranging, recipe-share + friend-photo managers, wire payloads, and the
-        // ProximityHost seam protocol. "Outward edges only": the 6 files with backward edges to
-        // the app (ConnectionInspector → FernletStore; the SwiftUI views on app Color/UI
-        // components + FernletStore) STAY in the app, as does ProximityHostAdapter (the
-        // FernletStore→ProximityHost conformance). Deps: PrivateMediaStore (MeshNetworkManager's
-        // photo cache) + FernletDomainModel + FernletFoundation. No FernletUI edge and no SwiftUI
-        // view: the review sheets it used to package moved to FernletProximityUI (below), which
-        // depends on this module, never the reverse.
-        // defaultIsolation(MainActor.self)
-        // (the managers are @Observable @MainActor).
         // Layer 6.5 — the lock SwiftUI surface (setup, unlock, numeric pad, and the
         // fernletLockGate modifier), moved out of the app so the lock feature is
         // module-complete (SPM carve-up §14 remaining item 2). Kept separate from
@@ -378,6 +366,33 @@ let package = Package(
                 .defaultIsolation(MainActor.self),
             ]
         ),
+        // Layer 6 — the Proximity peer-to-peer subsystem ([S]): the radios (Network.framework/QUIC
+        // over Bonjour; MultipeerConnectivity until 2026-09-22), identity, the signed envelope, sealing
+        // and replay (CryptoKit Ed25519/X25519), the session coordinator and the trust protocols its
+        // host answers, NI ranging, the protocol namespace its host supplies, the routed mesh engine,
+        // the presence radio and the ProximityHost seam protocol; and the Fernlet features still built
+        // into it until plan steps A0.5 and A0.7 move them out (the mesh manager's feature parts, the
+        // heart ledger, the recipe-share manager, the clothing shop, activities, chat and the
+        // moderation report relay). The sealed-backup escrow beside its identity is the app's, through
+        // the identity's provisioning participant. Fernlet's rules (its
+        // namespace, trust vault and session policies) are FernletConnections', and the heart dead-drop,
+        // presence's manager and tags, moderation's ban store and ledger, closeness, friend state and the
+        // parked chat payload are FernletSocial's: both below, both depending on this module, never the
+        // reverse. "Outward edges only": the files with backward edges to the app
+        // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
+        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
+        // PrivateMediaStore (MeshNetworkManager's photo cache, which leaves with the mesh manager's
+        // photo feature at A0.5) + FernletCrypto (the activities' and the moderation report's four
+        // feature labels, which leave with the mesh manager's feature parts at A0.5, and the
+        // `CryptographicPurpose` signing overloads the app's duress and probe signatures sign through
+        // until C1) + FernletDomainModel (the features' models, and Fernlet's payload vocabulary,
+        // trusted-peer record and session mode, which it names only on the lines
+        // ProximityNamespaceBoundaryTests allowlists) + FernletFoundation (the mesh manager's one
+        // FernletDate read, until A0.5). ProximityNamespaceBoundaryTests also refuses any type that
+        // left it for FernletSocial or the app, declared, extended or aliased here again. No FernletUI
+        // edge and no SwiftUI view: the review sheets moved to FernletProximityUI (below). MainActor
+        // default: the managers are @Observable @MainActor, and the wire values and pure crypto statics
+        // are nonisolated within.
         .target(
             name: "ProximityKit",
             dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
@@ -418,30 +433,91 @@ let package = Package(
         // FernletUI so the design system stays free of the networking stack and of Photos; the edge
         // runs UI → ProximityKit, never the reverse. Deps: ProximityKit (the roster, answer and
         // name-display types) + FernletUI + FernletDomainModel (FriendPhotoPayload) +
-        // FernletFoundation (the audit log). MainActor: SwiftUI surface, with the saver's
+        // FernletFoundation (the audit log) + FernletConnections (`ProximityNamespace.fernlet`, whose
+        // mesh instance-name prefix the name display hides, and the name placeholders the screens
+        // render through, `PeerNameDisplay.shown`). MainActor: SwiftUI surface, with the saver's
         // Photos-queue work marked nonisolated within.
         .target(
             name: "FernletProximityUI",
-            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletUI", "FernletDomainModel", "FernletFoundation", "FernletConnections"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
         ),
         // Layer 6.5 — Fernlet's connection rules on top of ProximityKit's mechanisms
-        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). Step A0.2.2
-        // gives it one thing: `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39
-        // domain-separation labels, the radios' service types, ALPNs and heartbeat, the QR scheme,
-        // the keychain rows, the storage names and the log subsystem), byte-identical to today's
-        // literals. ProximityKit can never name it: the edge runs FernletConnections → ProximityKit,
-        // never the reverse. A0.2.9 adds FernletDeviceBindingAdapter (the install binding) and
-        // A0.2.10 FernletAuditBridge (the audit sink); the payload vocabulary (A0.3), the feature
-        // purposes (A0.4) and the coach profile and link purposes (C1) join it later. Deps:
-        // ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) + FernletFoundation
-        // (FernletAuditLog, behind the bridge). MainActor default, with every type, extension and
-        // static marked nonisolated within (inert value data and stateless seams).
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, owner decision O3). It holds
+        // `ProximityNamespace.fernlet`, Fernlet's protocol identity (the 39 domain-separation labels and
+        // the feature salts the core's pair secret consumes, the radios' service types, ALPNs,
+        // heartbeat and presentation strings, the QR scheme, the payload vocabulary, the keychain rows,
+        // the storage names, the log subsystem and the peer-name policy), byte-identical to the
+        // literals Fernlet shipped; FernletDeviceBindingAdapter
+        // (the install binding) and FernletAuditBridge (the audit sink); Fernlet's session rules
+        // (FriendSessionTrustPolicy, CoachSessionTrustPolicy and CoachSessionContract,
+        // FriendMintingReview, TrainerExportPayload, and the one conversion of ProximityKit's session
+        // audit into TrainerAuditEvent); ProximityTrustVault, Fernlet's trusted-peer records and
+        // audit rows; and the name placeholders, its extension of ProximityKit's PeerNameDisplay
+        // (`Placeholder`, `shown`, `firstName`, `text(for:)`, over the identifier filter that stays
+        // ProximityKit's), whose two phrases resolve against this module's own Localizable.xcstrings
+        // (FernletConnectionsCopy, `bundle: .module`). ProximityKit can never name it: the edge runs
+        // FernletConnections → ProximityKit, never the reverse. The coach profile and link purposes
+        // join it at C1. Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
+        // FernletFoundation (FernletAuditLog, behind the bridge) + FernletDomainModel (PayloadType and
+        // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling;
+        // ItemNameModeration, whose name cap the peer-name policy reads; and TrainerAuditEvent and
+        // ProximityTrustedPeerRecord with its ProximityMode, the persisted records the vault builds and
+        // keeps and the policies and the review read). MainActor default: the vault and the two trust
+        // policies are main-actor classes, like the main-actor protocols, coordinator, managers and
+        // store they serve, beside nonisolated value data and stateless seams (the namespace and its
+        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion and
+        // the name placeholders).
         .target(
             name: "FernletConnections",
-            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation"],
+            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
+            swiftSettings: [
+                .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // Layer 6.5 — Fernlet's social features over ProximityKit's mechanisms
+        // (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §3.2, step A0.4): the heart dead-drop (its
+        // service, sealer, prekey store, outbox and dedup store, peer-bundle cache, sidecar seal,
+        // storage scope and format census, the identity's heart-drop derivations, and the mesh stores'
+        // keychain services derived beside the heart-drop service), presence (its manager, which drives
+        // ProximityKit's presence radio and delivers in-person hearts, and the identity's presence pair
+        // secret and epoch tag), moderation's ban store, ledger and content hash, the closeness ledger,
+        // the friend-state cache and the parked live-session chat payload, moved out of ProximityKit so
+        // it holds none of them (ProximityNamespaceBoundaryTests refuses any of their types there
+        // again); the mesh manager's feature parts join them at A0.5 and the recipe-share manager at
+        // A0.7. The edge runs FernletSocial → ProximityKit, never the reverse. Deps:
+        // ProximityKit (`IdentityService` with its fingerprint, pair-secret door, static key agreement
+        // and presence epoch clock, the envelope, the protected sidecar, sealed-payload framing, the
+        // heart ledger, the prekey bundle and the mesh storage scopes, the moderation report payload's
+        // row cap; for presence the host seam, the session coordinator, ranging, the namespace gate, the
+        // observation loop and the peer-name coercion; and `package` doors: `JSONSidecarFile`, the three
+        // ledgers' sidecar, until A0.5, the coordinator's typed send and manual commit until A0.7, and
+        // the presence radio's seam, QUIC conformer, peer channel, epoch posture and TXT vocabulary
+        // until A1) + FernletConnections (`FernletFeaturePurposes`' two declared salts, which the
+        // heart-drop and presence pair secrets derive under, `ProximityNamespace.fernlet`, whose
+        // sidecar root is the production heart-drop scope's directory, and the name placeholders,
+        // `PeerNameDisplay.firstName` among them, which presence's hearts copy reads) + FernletCrypto
+        // (`FernletCryptoPurpose`: the ban-evidence reporter-tag domain the ban store hashes under, the
+        // sealed drop's salt, the day-tag prefix and the sidecar's authenticated data the heart
+        // dead-drop hands CryptoKit, and the presence epoch-tag prefix) + FernletDomainModel (the
+        // moderation, closeness, friend-state, companion and heart value types the stores keep, the
+        // friend records the dead-drop and presence read, the dead-drop's transport seam, and the heart
+        // payload type and hearts capability presence sends and checks) + FernletFoundation
+        // (`KeychainItem`, `MonotonicClock` and `FernletAuditLog`, for the ban store and the heart
+        // dead-drop, `FernletAuditLog` for presence too, and `FernletDate`, for a presence heart's day
+        // key). No CloudKit or UI edge (the
+        // dead-drop's CloudKit transport is injected by the app), and no string catalog: it localizes
+        // nothing. MainActor default: the ban store, the three ledgers, the dead-drop's service and its
+        // four stores and the presence manager are main-actor classes (the ban store, the ledgers, the
+        // service and the presence manager @Observable), beside nonisolated values (the ban record, the
+        // cached friend state, the content hash, the chat payload, the ledgers' persisted shapes, the
+        // sealer, the storage scope, the format census, the heart-drop tag statics and the presence tag
+        // length).
+        .target(
+            name: "FernletSocial",
+            dependencies: ["ProximityKit", "FernletConnections", "FernletCrypto", "FernletDomainModel", "FernletFoundation"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]

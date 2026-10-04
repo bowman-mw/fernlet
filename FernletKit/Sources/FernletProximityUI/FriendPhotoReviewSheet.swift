@@ -5,6 +5,7 @@ import UIKit
 import FernletDomainModel
 import FernletFoundation
 import ProximityKit
+import FernletConnections
 import os
 
 /// One selectable photo thumbnail in the session-end review grid.
@@ -228,7 +229,7 @@ public struct FriendPhotoReviewSheet: View {
                     // Who took it (a withheld name reads as the placeholder, never a fingerprint)
                     // and what a double-tap does; the tile carries `.isSelected` itself.
                     .accessibilityLabel(Text(verbatim: FernletProximityUICopy.Review.tileLabel(
-                        PeerNameDisplay.shown(photo.senderName, fingerprint: photo.senderFingerprint, placeholder: .met)
+                        PeerNameDisplay.shown(photo.senderName, fingerprint: photo.senderFingerprint, placeholder: .met, in: .fernlet)
                     )))
                     .accessibilityHint(Text(verbatim: FernletProximityUICopy.Review.tileHint))
                 }

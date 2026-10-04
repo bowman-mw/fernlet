@@ -199,13 +199,38 @@ import Testing
     /// `FernletCryptoPurpose` only on the feature lines that leave in A0.4, and every `fernlet`
     /// literal on an exact allowlist with its exit step. Each thing it refuses compiles clean. The
     /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.3 (2026-10-02): `crypto-goldens` 5 → 6, for
+    /// `ProximityVocabularyGoldenTests` — every token and byte string plan step A0.3 routes through
+    /// the host (the payload tokens and the sealing rule, the capabilities, the session enums, the
+    /// record kinds, the routed types, the coordinator's session messages, the presentation strings,
+    /// the trainer export body, the generic types' bytes, three persisted records and the name
+    /// sanitizer), pinned by literal and by behaviour before any of them moves. Its name ends
+    /// `GoldenTests`, so ``everyWireGoldenSuiteIsGated()`` demands it on SOME line; this entry and its
+    /// ``wallLines`` pin hold it on this one. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.3's runtime gate (2026-10-02): `crypto-goldens` 6 → 7,
+    /// for `ProximityNamespaceGateTests` — ProximityKit's run-time refusal of an unsound namespace (the
+    /// identity's provisioning and group-key wrap, each radio's start) and each manager's refusal of an
+    /// identity of another namespace, each held to its error and its audit line. A door that stopped
+    /// refusing compiles clean and moves no other test, and its name is not a `GoldenTests` name, so
+    /// this entry and its ``wallLines`` pin are all that hold it on a line. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.4.0 (2026-10-03): `crypto-goldens` 7 → 8, for
+    /// `FernletFeatureGoldenTests` — every byte Fernlet's features over the proximity stack put on the
+    /// wire, in the keychain or on disk that plan step A0.4 moves or re-derives (the seven feature
+    /// labels, the pair secrets, the tags, the sealed drop and sidecar, the prekey bundle, the keychain
+    /// and storage names, the persisted shapes, presence's advertisement and the sealed-backup escrow's
+    /// provisioning cases), pinned by literal and by behaviour before any of it moves. Its name ends
+    /// `GoldenTests`, so ``everyWireGoldenSuiteIsGated()`` demands it on SOME line; this entry and its
+    /// ``wallLines`` pin hold it on this one. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 10,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
-        "crypto-goldens": 5,
+        "crypto-goldens": 8,
         "privacy-wipe": 4,
         "accessibility": 1,
         "memory-lifecycle": 1,
@@ -234,7 +259,8 @@ import Testing
                         "SealedBackupFormatPinTests", "IdentityProvisioningReadTests"],
         "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
                            "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests",
-                           "ProximityNamespaceSoundnessTests"],
+                           "ProximityNamespaceSoundnessTests", "ProximityVocabularyGoldenTests",
+                           "ProximityNamespaceGateTests", "FernletFeatureGoldenTests"],
         "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
                          "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
         "accessibility": ["AccessibilityBoundaryTests"],
@@ -400,8 +426,10 @@ import Testing
         let gated = Set(Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath)).flatMap(\.suites))
         let goldens = try Self.declaredTopLevelTypes().filter { $0.hasSuffix("GoldenTests") }
         // MEASURED at 2026-09-24 by reading the tree: nine declarations. RE-MEASURED at ProximityKit
-        // plan step A0.2.0 (2026-10-02): ten, with `ProximityNamespaceGoldenTests`.
-        #expect(goldens.count >= 10, "the golden suites shrank: \(goldens.count) declared")
+        // plan step A0.2.0 (2026-10-02): ten, with `ProximityNamespaceGoldenTests`; at plan step
+        // A0.3 (2026-10-02): eleven, with `ProximityVocabularyGoldenTests`; and at plan step A0.4.0
+        // (2026-10-03): twelve, with `FernletFeatureGoldenTests`.
+        #expect(goldens.count >= 12, "the golden suites shrank: \(goldens.count) declared")
         let ungated = goldens.subtracting(gated).sorted()
         #expect(ungated.isEmpty, """
             Golden suites declared in Tests/FernletTests but named on no line of \

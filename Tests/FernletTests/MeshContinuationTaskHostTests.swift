@@ -541,8 +541,19 @@ struct MeshContinuationTaskHostWallTests {
     /// 2026-09-20; the floor is deliberately below it, since files come and go.
     private static let minimumProximityKitFilesWalked = 120
 
+    /// Cell (g)'s second walk root: `FernletSocial`, the module Fernlet's presence lives in, whose
+    /// heart door and its teardown seam are two of the three shipping constructions that take the
+    /// coordinator's default anchor. It holds no anchor file, so none of the retired or reaper-only
+    /// spellings may appear in it at all: a request raised there would be the same doomed proximity
+    /// Live Activity from a file the ProximityKit walk never reads.
+    private static let fernletSocialRoot = "FernletKit/Sources/FernletSocial"
+
+    /// Floor under the second walk, for the same reason. Measured 18 on 2026-10-03; the floor is
+    /// deliberately below it.
+    private static let minimumFernletSocialFilesWalked = 15
+
     /// Spellings P9 item 5 retired outright: no file in ProximityKit, the anchor file included, may
-    /// hold one.
+    /// hold one, and no file in `FernletSocial`.
     private static let retiredAnchorSpellings = [
         "ActivityKitProximityForegroundAnchor",
         "Activity.request"
@@ -685,24 +696,27 @@ struct MeshContinuationTaskHostWallTests {
     ///
     /// Cell (e) pinned the mesh's door. This pins the half P8 left open — the coordinator's
     /// DEFAULT anchor, which three shipping construction sites take by omitting the argument
-    /// (`ProximityRecipeShareManager.handleChannelOpened`, `PresenceManager`'s heart door, and its
-    /// teardown seam). Until P9 that default was the ActivityKit conformer, whose every request was
-    /// doomed: the attributes type is internal to ProximityKit and
+    /// (`ProximityRecipeShareManager.handleChannelReady`, and `FernletSocial`'s `PresenceManager`'s
+    /// heart door and its teardown seam). Until P9 that default was the ActivityKit conformer, whose
+    /// every request was doomed: the attributes type is internal to ProximityKit and
     /// `App/FernletWidgets/FernletWidgetsBundle.swift` declares no `ActivityConfiguration` for it,
     /// so each call either threw (audited) or spent a per-app Live Activity slot on something
     /// nothing draws.
     ///
     /// Four independently reddenable needles: re-adding a request to the anchor file — or moving the
     /// reaper's enumeration out of the reaper's own brace-matched body — reddens (1); naming the
-    /// retired class, `Activity.request`, or the attributes type from ANY file under ProximityKit
-    /// reddens (2); restoring the `#if canImport` default reddens (3); declaring a proximity
-    /// configuration in the widget bundle reddens (4) — which is the honest signal that "retire"
-    /// has been reversed and this cell must be rewritten rather than deleted.
+    /// retired class, `Activity.request`, or the attributes type from ANY file under ProximityKit, or
+    /// any retired or reaper-only spelling from any file under `FernletSocial`, reddens (2);
+    /// restoring the `#if canImport` default reddens (3); declaring a proximity configuration in the
+    /// widget bundle reddens (4) — which is the honest signal that "retire" has been reversed and
+    /// this cell must be rewritten rather than deleted.
     ///
     /// Needle (2) is a WALK of the module, not the four hand-listed files it replaced (the fix
     /// round's F2): those four made the comment's claim — "anywhere else in shipping source" —
     /// false for the case that actually ships, a NEW ProximityKit file that imports ActivityKit and
-    /// requests one while every needle stays green.
+    /// requests one while every needle stays green. It walks `FernletSocial` too, because presence's
+    /// heart door lives there: a walk of ProximityKit alone would read a request raised beside it as
+    /// a clean module.
     @Test func theOneToOneForegroundAnchorsAreRetired() throws {
         let anchorPath = "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift"
         let anchor = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(anchorPath))
@@ -719,10 +733,11 @@ struct MeshContinuationTaskHostWallTests {
 
         // (2) Neither the retired conformer nor the attributes type is spelled anywhere else in
         // ProximityKit — WALKED (the suite's own `codeSources`/`homes`, comment-stripped), not a
-        // hand-listed four. The walk is scoped to this module with evidence both ways: the
-        // attributes type is declared internal, so no other module — the app target included — can
-        // name it, and `Activity.request` has a legitimate home in the app target's workout/cooking
-        // starter, which a walk of `App/Fernlet` would redden on arrival.
+        // hand-listed four. The walk is scoped to ProximityKit and `FernletSocial`, where presence's
+        // heart door lives, with evidence both ways: the attributes type is declared internal, so no
+        // other module — the app target included — can name it, and `Activity.request` has a
+        // legitimate home in the app target's workout/cooking starter, which a walk of `App/Fernlet`
+        // would redden on arrival.
         let coordinatorPath = "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift"
         let proximity = try Self.codeSources(under: Self.proximityKitRoot)
         #expect(proximity.count >= Self.minimumProximityKitFilesWalked,
@@ -741,6 +756,19 @@ struct MeshContinuationTaskHostWallTests {
             let homes = Set(Self.homes(of: needle, in: proximity))
             #expect(homes == [Self.anchorFile],
                     "`\(needle)` must be spelled in \(Self.anchorFile) and nowhere else in ProximityKit; found \(homes.sorted())")
+        }
+        // ... and in `FernletSocial`, where presence's heart door and teardown seam live and no file
+        // is the anchor, every one of those spellings is refused outright.
+        let social = try Self.codeSources(under: Self.fernletSocialRoot)
+        #expect(social.count >= Self.minimumFernletSocialFilesWalked,
+                """
+                walked only \(social.count) FernletSocial files (floor \
+                \(Self.minimumFernletSocialFilesWalked)) — the walk is broken, not the module clean
+                """)
+        for needle in Self.retiredAnchorSpellings + Self.reaperOnlySpellings {
+            let homes = Set(Self.homes(of: needle, in: social)).sorted()
+            #expect(homes.isEmpty,
+                    "`\(needle)` is in FernletSocial, in \(homes) — only ProximityKit's \(Self.anchorFile) may name a proximity Live Activity")
         }
 
         // (3) The coordinator's default is the no-op unconditionally — no ActivityKit branch left.

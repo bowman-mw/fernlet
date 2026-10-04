@@ -103,7 +103,7 @@ struct MemoryLifecycleBoundaryTests {
             rule: "ML1", path: "App/Fernlet/BrandedCatalogResourceLoader.swift",
             invariant: "Owned by the store for the process lifetime; `inFlight` is a single one-shot ODR fetch that the caller awaits to completion and clears."),
         Exemption(
-            rule: "ML1", path: "FernletKit/Sources/ProximityKit/HeartSharing/HeartDropService.swift",
+            rule: "ML1", path: "FernletKit/Sources/FernletSocial/HeartSharing/HeartDropService.swift",
             invariant: "Owned by the store for the process lifetime; `syncTask` captures [weak self] and runs a bounded number of coalesced sync passes, then finishes."),
         Exemption(
             rule: "ML1", path: "App/Fernlet/FernletStoreAccess.swift",

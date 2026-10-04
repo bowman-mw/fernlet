@@ -2,7 +2,8 @@
 // FernletTests
 //
 // Phase 4a (Docs/Proximity-Mesh-Redesign-2026-07-10.md): the static-static X25519 DH presence-tag
-// primitive in IdentityService. Pins the load-bearing properties the presence layer stands on:
+// primitive, FernletSocial's extension of IdentityService over ProximityKit's pair-secret door.
+// Pins the load-bearing properties the presence layer stands on:
 // MUTUAL derivation (both members of a friend pair derive the SAME tag for a given epoch —
 // recognition is mutual-by-construction, which is what makes one-sided friend minting safe),
 // pair independence (different pairs derive different tags), epoch rotation (tags change every
@@ -12,6 +13,7 @@
 // never touch the production identity.
 
 import ProximityKit
+import FernletSocial
 import Foundation
 import FernletFoundation
 import Testing

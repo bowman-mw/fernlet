@@ -4,6 +4,7 @@
 // Unit tests for Phase 3 group symmetric encryption (§17.13).
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import Testing
 import CryptoKit

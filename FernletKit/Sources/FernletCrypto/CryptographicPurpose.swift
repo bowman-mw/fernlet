@@ -79,21 +79,26 @@ public nonisolated struct CryptographicPurpose: Hashable, Sendable {
 /// existing signature verifies. A new spelling therefore needs an explicit versioned write format
 /// and a legacy read path at its consumer.
 ///
-/// **38 entries are twins now.** ProximityKit's protocol labels — the identity envelope,
+/// **40 entries are twins.** ProximityKit's 38 protocol labels here — the identity envelope,
 /// admission, membership, quorum, key-agreement, channel-introduction, routed and verify-QR
 /// signatures with the verify-only legacy pair, the transport, group-key, routed key-wrap and
 /// TLS-exporter derivations, the two mesh column seals, the five transport and mesh AEAD labels
-/// and the six mesh hashes — are no longer read from here. Since ProximityKit plan step A0.2 every
-/// ProximityKit reader takes its label from the namespace its host hands down, and Fernlet's,
-/// `ProximityNamespace.fernlet` in FernletConnections, spells each of these 38 identically (beside
-/// the epoch-id domain, which this registry never held). They stay as twins until they retire (plan
-/// step C1): `ProximityNamespaceGoldenTests` pins each to its `.fernlet` field (the same spelling
-/// and bytes, and for a signature the same acceptance), and `CryptographicDomainSeparationTests`
-/// keeps them in its all-pairs checks. Where a note below names a ProximityKit consumer, that
-/// consumer reads the twin. ProximityKit names this registry only for its 13 feature labels
-/// (hearts, presence, activities, moderation and the sealed-backup escrow) until they leave with
-/// their features (A0.4); the app's duress and probe signatures still sign through ProximityKit's
-/// identity under entries here.
+/// and the six mesh hashes — and the heart dead-drop's and presence's pair-secret salts
+/// (`KeyDerivation.heartDropPairV1`, `.presencePairV1`) are not read from here. Every ProximityKit
+/// reader takes its label from the namespace its host hands down, and Fernlet's,
+/// `ProximityNamespace.fernlet` in FernletConnections, spells each of the 38 identically (beside the
+/// epoch-id domain, which this registry never held) and declares the two salts as the feature
+/// purposes ProximityKit's pair-secret door derives under (`FernletFeaturePurposes`, which
+/// FernletSocial passes). They stay as twins until they retire (plan step C1):
+/// `ProximityNamespaceGoldenTests` pins each to its `.fernlet` field (the same spelling and bytes,
+/// and for a signature the same acceptance), and `CryptographicDomainSeparationTests` keeps them in
+/// its all-pairs checks. Where a note below names a ProximityKit consumer, that consumer reads the
+/// twin. ProximityKit names this registry only for its 4 feature labels
+/// (activities and the moderation report) until they leave with the mesh manager's feature parts
+/// (A0.5); FernletSocial names it for the heart dead-drop's sealing salt, day-tag prefix and sidecar
+/// authenticated data, for presence's epoch-tag prefix and for the ban evidence's reporter tag; the
+/// app names the sealed-backup escrow's two (its `SealedBackupEscrowKey`), and the app's duress and
+/// probe signatures still sign through ProximityKit's identity under entries here.
 public nonisolated enum FernletCryptoPurpose {
     /// Domains embedded in Ed25519 signature transcripts.
     ///

@@ -1,7 +1,7 @@
 # SPM Module Carve-Up Plan
 
 **Status: BUILT AND ENFORCED.** This stopped being a proposal on 2026-06-27 and is now the shipped
-module architecture: `FernletKit/Package.swift` declares **27 library targets** under one umbrella
+module architecture: `FernletKit/Package.swift` declares **28 library targets** under one umbrella
 product, and the wall it describes is a CI-required check
 (`Scripts/spm-wall-check.sh`, `.github/workflows/s3-wall.yml`). Sections 1–10 are the original plan
 and are preserved as the design record; **sections 11–14 are the execution handoffs and win wherever
@@ -23,7 +23,7 @@ following the plan text instead of the handoffs would undo enforcement:
    wall silently off.
 
 **Where the shipped graph differs from §2.** The plan sized this at "~21 library targets"; the tree
-has 27, and `Package.swift` uses `swift-tools-version: 6.2` (not the 6.0 in §6 step 1). Added since:
+has 28, and `Package.swift` uses `swift-tools-version: 6.2` (not the 6.0 in §6 step 1). Added since:
 `WebScrapingKit` (the no-tracking wall's single outbound-fetch seam), `PrivateStoreCore`, `DiaryStore`
 (§5d's `FernletStore` decomposition landed as its own target), `FernletLockUI`, `FernletExchange` (the
 portable exchange boundary, also the Messages extension's own product), `FernletProximityUI`
@@ -31,7 +31,10 @@ portable exchange boundary, also the Messages extension's own product), `Fernlet
 `FernletUI` edge: step A0.1 of [Plan-FernletCoach-ProximityKit-2026-10-01.md](Plan-FernletCoach-ProximityKit-2026-10-01.md)),
 and `FernletConnections` (Fernlet's connection rules on top of `ProximityKit`'s mechanisms, which
 depends on `ProximityKit` and never the reverse; its first value is `ProximityNamespace.fernlet`,
-Fernlet's protocol identity: step A0.2.2 of the same plan). Not built:
+Fernlet's protocol identity: step A0.2.2 of the same plan), and `FernletSocial` (Fernlet's social
+features on top of `ProximityKit`, which also depends on it and never the reverse: presence, the heart
+dead-drop, moderation's ledger, ban store and content hash, closeness, friend state and the parked
+chat payload, moved out of `ProximityKit` in step A0.4 of the same plan). Not built:
 `Onboarding` — the onboarding state machine and its views stayed in the app target
 (`App/Fernlet/Onboarding*.swift`). Narrower than planned: `FernletUI` is the **design system**
 (theme, primitives, components, `ModelColors`, `CaptureProtection`), not "all SwiftUI screens" —

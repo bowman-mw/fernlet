@@ -17,7 +17,6 @@ final class MockMultipeerTransport: PeerTransport {
     // Recorded calls
     var advertisingStarted = false
     var browsingStarted = false
-    var lastServiceType: String?
     var lastDiscoveryInfo: [String: String]?
     var disconnectCalled = false
     var sendDelayNanoseconds: UInt64 = 0
@@ -26,16 +25,14 @@ final class MockMultipeerTransport: PeerTransport {
 
     // MARK: PeerTransport
 
-    func startAdvertising(serviceType: String, discoveryInfo: [String: String]) async throws {
+    func startAdvertising(discoveryInfo: [String: String]) async throws {
         advertisingStarted = true
-        lastServiceType = serviceType
         lastDiscoveryInfo = discoveryInfo
         stateSubject.send(.advertising)
     }
 
-    func startBrowsing(serviceType: String) async throws {
+    func startBrowsing() async throws {
         browsingStarted = true
-        lastServiceType = serviceType
         stateSubject.send(.browsing)
     }
 

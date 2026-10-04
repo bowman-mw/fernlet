@@ -7,6 +7,7 @@
 
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import CloudKitSync
 import HealthKit
 import SwiftUI
@@ -577,7 +578,7 @@ struct ContentView: View {
         // R7: `true` means an enrollment this device's identity had outlived was actually retired
         // — a rare, security-relevant state change, so it is recorded rather than dropped.
         if DuressRecoveryCoordinator(
-            identity: IdentityService(namespace: .fernlet),
+            identity: .fernletApp(),
             lockService: lockService
         ).reconcileEnrollmentWithLocalIdentity() {
             FernletAuditLog.log("duress.recoveryEnrollment.retired", context: ["site": "launch"])
@@ -1676,7 +1677,7 @@ struct ContentView: View {
         // too (see the `.task` below), which covers a rotation from any other route.
         store.identityRotatedHook = { [lockService] in
             if DuressRecoveryCoordinator(
-                identity: IdentityService(namespace: .fernlet),
+                identity: .fernletApp(),
                 lockService: lockService
             ).reconcileEnrollmentWithLocalIdentity() {
                 FernletAuditLog.log("duress.recoveryEnrollment.retired", context: ["site": "identityRotated"])

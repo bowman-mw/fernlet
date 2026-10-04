@@ -455,7 +455,7 @@ struct MeshTerminationUnderPartitionTests {
         let base = MeshTerminationFixtures.base
         scenario.splitIntoBranches(at: base)
         let nodeA = scenario.nodeA
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         nodeA.manager.onMembershipEventSentForTesting = { emitted.append($0) }
         let clock = MeshTerminationFixtures.SteppedClock(
             [base, base.addingTimeInterval(3)]
@@ -487,7 +487,7 @@ struct MeshTerminationUnderPartitionTests {
         let scenario = try MeshTerminationSplitScenario.build(label: "t6-split-b")
         scenario.splitIntoBranches(at: MeshTerminationFixtures.base)
         let nodeA = scenario.nodeA
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         nodeA.manager.onMembershipEventSentForTesting = { emitted.append($0) }
 
         await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -682,7 +682,7 @@ struct MeshTerminationPairScenario {
                 reachable: [nodeB.fingerprint], now: base) == .linksLost)
         }
         #expect(nodeA.manager.presence(of: nodeB.fingerprint) == .temporarilyDisconnected)
-        var emitted: [PayloadType] = []
+        var emitted: [MeshPayloadRole] = []
         nodeA.manager.onMembershipEventSentForTesting = { emitted.append($0) }
         let clock = MeshTerminationFixtures.SteppedClock([base, base.addingTimeInterval(2)])
 

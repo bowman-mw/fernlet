@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletConnections
 import SwiftUI
 import FernletDomainModel
 import FernletLock
@@ -243,7 +244,7 @@ struct ProximityRecipeShareSheet: View {
                     .accessibilityHidden(true)
                 // The name only (2026-09-29): the hex subtitle was an identifier, and its
                 // pre-handshake "Verifying…" claimed work nobody had started.
-                Text(verbatim: PeerNameDisplay.shown(recipient.displayName, fingerprint: recipient.fingerprint))
+                Text(verbatim: PeerNameDisplay.shown(recipient.displayName, fingerprint: recipient.fingerprint, in: .fernlet))
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
@@ -488,9 +489,9 @@ struct ProximityRecipeShareSheet: View {
         case .idle, .sent:
             nil
         case .connecting(let recipientName):
-            Text("Connecting to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))…")
+            Text("Connecting to \(PeerNameDisplay.shown(recipientName, fingerprint: nil, in: .fernlet))…")
         case .sending(let recipientName):
-            Text("Sending to \(PeerNameDisplay.shown(recipientName, fingerprint: nil))…")
+            Text("Sending to \(PeerNameDisplay.shown(recipientName, fingerprint: nil, in: .fernlet))…")
         case .failed(let message):
             Text(verbatim: message)
         }

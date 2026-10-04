@@ -1,3 +1,4 @@
+import FernletConnections
 import FernletUI
 import ProximityKit
 import SwiftUI
@@ -189,13 +190,13 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
     /// peer this radio never discovered. `PeerNameDisplay` is the one rule that keeps an identifier
     /// off this path (owner decision 2026-09-29), so every sentence below reads the name through it.
     private static func shownName(_ outcome: RecipeShareOutcome) -> String {
-        PeerNameDisplay.shown(outcome.recipientName, fingerprint: nil)
+        PeerNameDisplay.shown(outcome.recipientName, fingerprint: nil, in: .fernlet)
     }
 
     /// The cap refusal's sentence, naming the Fernlet that holds the link when it is known.
     private static func pairedWithAnotherDetail(_ outcome: RecipeShareOutcome) -> LocalizedStringResource {
         let name = shownName(outcome)
-        guard let other = outcome.otherPeerName.flatMap({ PeerNameDisplay.personName($0, fingerprint: nil) }) else {
+        guard let other = outcome.otherPeerName.flatMap({ PeerNameDisplay.personName($0, fingerprint: nil, in: .fernlet) }) else {
             return LocalizedStringResource(
                 "Fernlet is still connected to another Fernlet. Recipe sharing links two Fernlets at a time, so nothing went to \(name).",
                 comment: "Why a recipe share did not go out: this phone is already connected to someone else. %@ is the name of the person the user tried to share with.")

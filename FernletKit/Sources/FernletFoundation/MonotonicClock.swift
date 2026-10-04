@@ -11,7 +11,7 @@ import Foundation
 /// A monotonic time source whose reading keeps advancing while the device is asleep.
 ///
 /// The abstraction behind the multi-week moderation store-ban clock (`ModerationBanStore` in
-/// ProximityKit): a ban must accrue real elapsed time even while the phone sleeps most of every
+/// FernletSocial): a ban must accrue real elapsed time even while the phone sleeps most of every
 /// night, which rules out `ProcessInfo.systemUptime` (paused during sleep). Production code
 /// injects ``SystemMonotonicClock``; tests inject fakes that drive ``seconds`` forward
 /// deterministically. `Sendable` so a clock can be captured by long-lived stores without

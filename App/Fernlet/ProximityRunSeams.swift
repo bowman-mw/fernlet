@@ -60,6 +60,7 @@
 import Foundation
 import FernletFoundation
 import ProximityKit
+import FernletSocial
 
 // MARK: - ProximityRunAction
 

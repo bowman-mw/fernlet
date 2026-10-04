@@ -223,8 +223,13 @@ struct LockWrapFormatCensusTests {
     /// The pre-`FLW2` wrap, byte for byte: a bare ChaChaPoly combined box (nonce ‖ ciphertext ‖ tag)
     /// over the content key, sealed with no additional authenticated data — the exact shape
     /// `FernletLockCrypto.unwrapContentKey` now refuses by name.
+    ///
+    /// Sealed under a fixed all-zero nonce, because the wrap's first bytes are its nonce's and the
+    /// census reads them: a random nonce starting `2` (1 in 256) would turn the `FLW` + wrap near miss
+    /// into `FLW2`, and one spelling `FLW2` outright (2⁻³²) would be counted V2.
     private static func legacyWrapBytes() throws -> Data {
-        try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKeyData)).combined
+        let nonce = try ChaChaPoly.Nonce(data: Data(count: 12))
+        return try ChaChaPoly.seal(contentKey, using: SymmetricKey(data: wrappingKeyData), nonce: nonce).combined
     }
 
     /// Files `bytes` at `account` under `service` with the production accessibility class, and hands

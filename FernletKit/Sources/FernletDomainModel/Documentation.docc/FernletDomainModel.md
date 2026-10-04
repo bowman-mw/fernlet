@@ -11,8 +11,9 @@ cosmetics, and the proximity wire/audit DTOs.
 and no crypto — just `Codable`/`Sendable` value types plus deterministic pure functions
 (economies, scoring inputs, search relevance, recipe math, program rendering). Nearly every other
 module in the package sits above it: `FernletScoring`, `FoodCatalog`, `FernletPersistence`,
-`LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, `ProximityKit`,
-`DiaryStore`, and `FernletUI` all import it.
+`LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, `ProximityKit` and the
+modules over it (`FernletConnections`, `FernletSocial`, `FernletProximityUI`), `DiaryStore`, and
+`FernletUI` all import it.
 
 That position dictates its three hard rules. First, the S3 privacy wall: because the walled
 `AIProviders` and `CloudKitSync` targets import this module, **nothing sensitive may be nameable
@@ -74,7 +75,7 @@ byte-identical to what already shipped and a separate reader-facing property add
   vocabulary the meal-parsing prompt hands the model, the input `WorkoutExerciseCatalog.inferType`
   matches against, and fields of the trainer export.
 
-Two more strings read exactly like UI copy and are not: ``PayloadSummary``'s `title`, `subtitle`,
+Two more strings read exactly like UI copy and are not: ProximityKit's `PayloadSummary` `title`, `subtitle`,
 and every `extraDetails` key and value are folded into the Ed25519 canonical signing bytes by
 `CanonicalSignatureSerializer` *and* render on the RECEIVER's phone (so localizing them would put
 the sender's language in someone else's audit trail); and ``CoachPlanTokens``'s frozen muscle and
@@ -587,14 +588,28 @@ what actually happened.
 
 ### Proximity wire and audit
 
+Fernlet's proximity vocabulary and records. ``PayloadType`` and ``ProximityCapability`` are the
+tokens FernletConnections reads into `ProximityNamespace.fernlet`'s vocabulary, which is where
+ProximityKit's core takes every token from; ``ProximityMode`` is the session mode the coordinator's
+`Mode` aliases; ``ProximityTrustedPeerRecord`` and ``TrainerAuditEvent`` are the trust records and
+audit rows Fernlet's `ProximityTrustVault` (FernletConnections) keeps and the snapshot persists: a
+coordinator's audits arrive converted from ProximityKit's own `ProximitySessionAudit` by
+FernletConnections' one conversion, while the vault builds its block, revoke and report rows itself
+and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
+the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
+names these types and ``ItemNameModeration`` only on the lines `ProximityNamespaceBoundaryTests`
+allowlists, which leave with the mesh manager's feature parts (plan step A0.5) and the recipe
+profile (A0.7) and, for the mode, with the connection profiles (A0.7 and C5); `TrainerAuditEvent` and
+`ConnectionSessionLog` it names nowhere. Fernlet's own modules name them freely: `FernletSocial`'s
+presence and heart dead-drop read ``ProximityTrustedPeerRecord``, the dead-drop titles its envelope
+with a ``PayloadType`` token and presence advertises the hearts ``ProximityCapability``, and
+`FernletConnections` reads the tokens into the vocabulary and keeps the records. The generic types
+an envelope carries (`PayloadEncryption`, `PayloadSummary` and its `DateRange`) and the session's
+role and ranging mode are ProximityKit's own.
+
 - ``PayloadType``
 - ``ProximityCapability``
-- ``PayloadEncryption``
-- ``PayloadSummary``
-- ``DateRange``
-- ``ProximityRole``
 - ``ProximityMode``
-- ``ProximityRangingMode``
 - ``ConnectionSessionLog``
 - ``ProximityTrustedPeerRecord``
 - ``TrainerAuditEvent``

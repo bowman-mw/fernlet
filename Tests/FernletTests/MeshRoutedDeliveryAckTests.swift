@@ -29,6 +29,7 @@
 // service) and its own heart-ledger file. Nothing sleeps or reads a wall clock for a decision.
 
 import CryptoKit
+import FernletConnections
 import Foundation
 @testable import FernletCrypto
 import FernletDomainModel
@@ -157,19 +158,22 @@ struct MeshRoutedAckStageTests {
     /// manifest vocabulary that travels on the wire in `MeshRoutedManifest.typeToken` and keys the
     /// whole ack matrix. A rename would be a silent wire break with a clean build, which is exactly
     /// what the frozen-token rule exists to catch. Same idiom the receipt's `PayloadType` spelling
-    /// gets in `theTokenVocabularyIsShared`.
+    /// gets in `theTokenVocabularyIsShared`. Read off `.fernlet`'s routed types, the spellings the
+    /// registry's rows are built from.
     @Test func theRegisteredTypeTokensAreFrozen() {
-        #expect(MeshRoutedTypeToken.photo == "fernlet.mesh.routed-type.photo.v1")
-        #expect(MeshRoutedTypeToken.tempMessage == "fernlet.mesh.routed-type.temp-message.v1")
-        #expect(MeshRoutedTypeToken.heart == "fernlet.mesh.routed-type.heart.v1")
+        let routed = ProximityNamespace.fernlet.family.vocabulary.routedTypes
+        #expect(routed.photo == "fernlet.mesh.routed-type.photo.v1")
+        #expect(routed.tempMessage == "fernlet.mesh.routed-type.temp-message.v1")
+        #expect(routed.heart == "fernlet.mesh.routed-type.heart.v1")
     }
 
     /// The reserved token is a valid spelling and is deliberately unregistered: a door with no
     /// handler behind it is worse than no door.
     @Test func controlIsFrozenButUnregistered() {
-        #expect(MeshRoutedTypeToken.control == "fernlet.mesh.routed-type.control.v1")
-        #expect(MeshRoutedTypeToken.control.utf8.count <= MeshRoutedManifestFormat.maxTypeTokenLength)
-        #expect(MeshRoutedAckStageTable.increment1.stage(for: MeshRoutedTypeToken.control) == nil)
+        let routed = ProximityNamespace.fernlet.family.vocabulary.routedTypes
+        #expect(routed.control == "fernlet.mesh.routed-type.control.v1")
+        #expect(routed.control.utf8.count <= MeshRoutedManifestFormat.maxTypeTokenLength)
+        #expect(MeshRoutedAckStageTable.increment1(routed).stage(for: routed.control) == nil)
     }
 
     @Test func anUnknownTokenIsNilNotADefault() {

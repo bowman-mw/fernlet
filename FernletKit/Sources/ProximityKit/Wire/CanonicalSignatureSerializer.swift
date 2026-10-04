@@ -181,8 +181,8 @@ nonisolated func canonicalUTF8Ordered(_ lhs: String, _ rhs: String) -> Bool {
 // inventory digest ("what content I am carrying, and for whom") from the membership one ("what
 // records I hold"); and the drain answer ("we are in sync") from the routed inventory digest ("here is
 // everything I hold"), or a stale quiescence bit could close a merge window that should still be
-// open. The four tags left below are the activity and moderation features', which move with their
-// features at A0.4.
+// open. The four tags left below are the activity and moderation features', which leave with those
+// features when the mesh manager's feature parts do (plan step A0.5).
 //
 // Group Activities (Phase 6). Distinct tags so an activity descriptor hash, a join token, and a roster
 // snapshot can never cross-validate one another (or the mesh types above).
@@ -770,9 +770,10 @@ private nonisolated func appendCanonical(_ writer: inout CanonicalByteWriter, _ 
 /// The bytes a ``MeshInventoryDigest`` hashes, under the Hash-family purpose that names them: the
 /// host namespace's `purposes.hash.meshInventoryDigestV1` (plan step A0.2.4).
 ///
-/// Every record contributes its kind token and the four fields that give the record set its total
-/// order, in that set's own deterministic order — so two ledgers holding the same records produce
-/// the same bytes on any device, and one extra or one missing record changes them.
+/// Every record contributes its kind's token (the host's, resolved when its identity was built) and
+/// the four fields that give the record set its total order, in that set's own deterministic order —
+/// so two ledgers holding the same records produce the same bytes on any device, and one extra or one
+/// missing record changes them.
 nonisolated func canonicalInventoryDigestBytes(
     for identities: [MeshRecordIdentity], in purposes: ProximityNamespace.Purposes
 ) -> Data {
@@ -780,7 +781,7 @@ nonisolated func canonicalInventoryDigestBytes(
     writer.appendLengthPrefixed(purposes.hash.meshInventoryDigestV1.data)
     writer.appendUInt64(UInt64(identities.count))
     for identity in identities {
-        writer.appendString(identity.kind.rawValue)
+        writer.appendString(identity.kindToken)
         writer.appendString(identity.memberFingerprint)
         writer.appendDate(identity.occurredAt)
         writer.appendString(identity.authorFingerprint)

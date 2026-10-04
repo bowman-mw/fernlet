@@ -168,19 +168,25 @@ protocol NetworkChannelHost: AnyObject {
 /// moment a conformer emits a discovered state. Two policies pointing opposite ways means neither
 /// side dials. Discovery reaches the owner through ``NetworkMeshSession/onPeerDiscovered`` instead,
 /// which is where the live policy already reads it.
+///
+/// Package access for FernletSocial until A1, with ``peer``, ``notifyConnected()`` and the nine
+/// ``PeerTransport`` witnesses (the type's access forces theirs): the presence radio's seam names
+/// the channel (``PresenceRadioSession``'s `onPeerChannelReady` and `channel(for:)`), and Fernlet's
+/// presence manager builds a heart connection's coordinator over it, so the channel exits with that
+/// seam. Its initializer and everything else stay internal: only a radio makes one.
 @MainActor
-final class NetworkPeerChannel: PeerTransport {
+package final class NetworkPeerChannel: PeerTransport {
 
-    /// The peer this channel carries.
-    let peer: PeerHandle
+    /// The peer this channel carries. Package access for FernletSocial until A1, with the type.
+    package let peer: PeerHandle
 
     private weak var host: (any NetworkChannelHost)?
     private let stateSubject = CurrentValueSubject<PeerTransportState, Never>(.idle)
     private let inboundSubject = PassthroughSubject<InboundPeerFrame, Never>()
 
-    var state: AnyPublisher<PeerTransportState, Never> { stateSubject.eraseToAnyPublisher() }
-    var inbound: AnyPublisher<InboundPeerFrame, Never> { inboundSubject.eraseToAnyPublisher() }
-    var connectedPeers: [PeerHandle] { [] }
+    package var state: AnyPublisher<PeerTransportState, Never> { stateSubject.eraseToAnyPublisher() }
+    package var inbound: AnyPublisher<InboundPeerFrame, Never> { inboundSubject.eraseToAnyPublisher() }
+    package var connectedPeers: [PeerHandle] { [] }
 
     init(peer: PeerHandle, host: any NetworkChannelHost) {
         self.peer = peer
@@ -188,17 +194,17 @@ final class NetworkPeerChannel: PeerTransport {
     }
 
     // Discovery and admission belong to the shared session, exactly as they did under MC.
-    func startAdvertising(serviceType: String, discoveryInfo: [String: String]) async throws {}
-    func startBrowsing(serviceType: String) async throws {}
-    func invite(_ peer: PeerHandle) async throws {}
-    func accept(_ invite: PeerPendingInvite) async throws {}
+    package func startAdvertising(discoveryInfo: [String: String]) async throws {}
+    package func startBrowsing() async throws {}
+    package func invite(_ peer: PeerHandle) async throws {}
+    package func accept(_ invite: PeerPendingInvite) async throws {}
 
     /// Sends one frame. A reliable payload at or above ``MeshTransferStreamTable/bulkFloorBytes``
     /// takes a per-transfer stream of its own (plan §7.1); everything else rides the tunnel's
     /// control stream or a datagram, exactly as it did before those streams existed. **No caller
     /// above this line can tell the difference**, which is the point: `MeshNetworkManager` sends a
     /// friend photo the same way over QUIC as it did over the retired MultipeerConnectivity radio.
-    func send(_ data: Data, to peer: PeerHandle, mode: PeerDeliveryMode) async throws {
+    package func send(_ data: Data, to peer: PeerHandle, mode: PeerDeliveryMode) async throws {
         guard let host else { throw PeerTransportError.unexpectedState }
         try await host.send(data, to: peer, mode: mode)
     }
@@ -211,7 +217,7 @@ final class NetworkPeerChannel: PeerTransport {
         host?.openTransferCount(for: peer) ?? 0
     }
 
-    func disconnect() async {
+    package func disconnect() async {
         // Signals idle locally only — the shared radio and its other tunnels keep running.
         stateSubject.send(.idle)
     }
@@ -220,8 +226,9 @@ final class NetworkPeerChannel: PeerTransport {
 
     /// Publishes `.connected`. Called after the owner's `begin()` has completed, matching the
     /// ordering contract the retired MC radio set — it keeps the coordinator out of the wrong
-    /// handshake branch.
-    func notifyConnected() {
+    /// handshake branch. Package access for FernletSocial until A1: presence's heart door calls it
+    /// once its coordinator has begun.
+    package func notifyConnected() {
         stateSubject.send(.connected(peer))
     }
 
@@ -328,6 +335,20 @@ final class NetworkMeshSession: NetworkChannelHost {
     /// builds the radio from its namespace signs this side's introduction under the same namespace's
     /// label.
     nonisolated let purposes: ProximityNamespace.Purposes
+
+    /// The start of every Bonjour instance name this radio advertises, the host namespace's
+    /// `family.radios.meshInstanceNamePrefix`; 12 random lowercase hex characters follow it
+    /// (``MeshLinkAdvertisement/randomInstanceName(prefix:)``). A presentation string, never a
+    /// device's: every device of the family wears the same prefix.
+    nonisolated let instanceNamePrefix: String
+
+    /// The subject and issuer of every TLS certificate this radio mints, the host namespace's
+    /// `family.radios.tlsCommonName`. Nothing verifies it: it names the protocol, never the device.
+    nonisolated let tlsCommonName: String
+
+    /// The host namespace's ``ProximityNamespace/soundness``, the verdict it recorded when it was
+    /// built: ``start(discoveryInfo:)`` refuses to bring the radio up under an unsound namespace.
+    nonisolated let namespaceSoundness: ProximityNamespace.Soundness
 
     /// Hard ceiling on one inbound frame, enforced before the bytes reach any channel or decoder.
     /// Pinned to the same value the retired `MeshMultipeerSession` used, so both transports refused
@@ -541,7 +562,7 @@ final class NetworkMeshSession: NetworkChannelHost {
     private var listenerTask: Task<Void, Never>?
     private var browserTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
-    private var instanceName = MeshLinkAdvertisement.randomInstanceName()
+    private var instanceName: String
 
     /// The random salt every peer label in this session's diagnostics is taken under.
     ///
@@ -579,8 +600,9 @@ final class NetworkMeshSession: NetworkChannelHost {
     /// A radio that speaks the host's wire: it advertises and browses the namespace's mesh service
     /// type, negotiates its ALPN, beats its heartbeat, binds every tunnel's introduction under its
     /// TLS exporter label, frames and checks that introduction under its labels and logs under its
-    /// subsystem (ProximityKit plan step A0.2.7). Each value is read once, here; building a radio
-    /// starts nothing.
+    /// subsystem (ProximityKit plan step A0.2.7), and names its Bonjour instances and certificates
+    /// with the namespace's mesh instance-name prefix and common name. Each value is read once,
+    /// here, with the namespace's soundness verdict; building a radio starts nothing.
     ///
     /// - Parameter namespace: The host's protocol identity, as its manager holds it.
     init(namespace: ProximityNamespace) {
@@ -589,6 +611,10 @@ final class NetworkMeshSession: NetworkChannelHost {
         heartbeatDatagram = namespace.family.radios.meshHeartbeat
         tlsExporterLabel = namespace.family.purposes.keyDerivation.meshTLSExporterV1
         purposes = namespace.family.purposes
+        instanceNamePrefix = namespace.family.radios.meshInstanceNamePrefix
+        tlsCommonName = namespace.family.radios.tlsCommonName
+        namespaceSoundness = namespace.soundness
+        instanceName = MeshLinkAdvertisement.randomInstanceName(prefix: instanceNamePrefix)
         logger = Logger(subsystem: namespace.installation.logSubsystem, category: "proximity.transport.quic")
     }
 
@@ -615,11 +641,17 @@ final class NetworkMeshSession: NetworkChannelHost {
 
     /// Brings the radio up: mints this session's TLS identity and Bonjour name, starts the QUIC
     /// listener, and starts browsing once the listener is both ready and advertised.
+    ///
+    /// Refuses first, under an unsound namespace (``namespaceSoundness``): it throws
+    /// ``ProximityNamespaceError`` and audits `mesh.quic.namespaceUnsound` (at `start`) before it
+    /// mints, listens or advertises anything.
     func start(discoveryInfo: [String: String]) throws {
+        try ProximityNamespaceGate.refuseUnsound(
+            namespaceSoundness, event: "mesh.quic.namespaceUnsound", at: .start)
         guard !isRunning else { return }
-        instanceName = MeshLinkAdvertisement.randomInstanceName()
+        instanceName = MeshLinkAdvertisement.randomInstanceName(prefix: instanceNamePrefix)
         advertisedFields = MeshLinkAdvertisement.publishedFields(from: discoveryInfo)
-        tlsIdentity = try EphemeralMeshTLSIdentity.mint()
+        tlsIdentity = try EphemeralMeshTLSIdentity.mint(commonName: tlsCommonName)
         isRunning = true
         try startListener()
         startPoll()

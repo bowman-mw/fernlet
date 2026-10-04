@@ -31,6 +31,7 @@
 //   real `commitLocalDelivery`, never an ack value a cell built.
 
 @testable import ProximityKit
+import FernletConnections
 import Foundation
 import SwiftUI
 import Testing
