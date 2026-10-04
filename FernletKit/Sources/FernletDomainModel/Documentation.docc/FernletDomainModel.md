@@ -11,8 +11,9 @@ cosmetics, and the proximity wire/audit DTOs.
 and no crypto — just `Codable`/`Sendable` value types plus deterministic pure functions
 (economies, scoring inputs, search relevance, recipe math, program rendering). Nearly every other
 module in the package sits above it: `FernletScoring`, `FoodCatalog`, `FernletPersistence`,
-`LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, `ProximityKit`,
-`DiaryStore`, and `FernletUI` all import it.
+`LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, `ProximityKit` and the
+modules over it (`FernletConnections`, `FernletSocial`, `FernletProximityUI`), `DiaryStore`, and
+`FernletUI` all import it.
 
 That position dictates its three hard rules. First, the S3 privacy wall: because the walled
 `AIProviders` and `CloudKitSync` targets import this module, **nothing sensitive may be nameable
@@ -597,10 +598,14 @@ FernletConnections' one conversion, while the vault builds its block, revoke and
 and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
 the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
 names these types and ``ItemNameModeration`` only on the lines `ProximityNamespaceBoundaryTests`
-allowlists, which leave with Fernlet's features (plan steps A0.5 and A0.7) and, for the mode, with
-the connection profiles (A0.7 and C5); `TrainerAuditEvent` and `ConnectionSessionLog` it names
-nowhere. The generic types an envelope carries (`PayloadEncryption`, `PayloadSummary` and its
-`DateRange`) and the session's role and ranging mode are ProximityKit's own.
+allowlists, which leave with the mesh manager's feature parts (plan step A0.5) and the recipe
+profile (A0.7) and, for the mode, with the connection profiles (A0.7 and C5); `TrainerAuditEvent` and
+`ConnectionSessionLog` it names nowhere. Fernlet's own modules name them freely: `FernletSocial`'s
+presence and heart dead-drop read ``ProximityTrustedPeerRecord``, the dead-drop titles its envelope
+with a ``PayloadType`` token and presence advertises the hearts ``ProximityCapability``, and
+`FernletConnections` reads the tokens into the vocabulary and keeps the records. The generic types
+an envelope carries (`PayloadEncryption`, `PayloadSummary` and its `DateRange`) and the session's
+role and ranging mode are ProximityKit's own.
 
 - ``PayloadType``
 - ``ProximityCapability``

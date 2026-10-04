@@ -2,7 +2,7 @@
 // FernletTests
 //
 // ProximityKit plan step A0.2.3 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.2): the one
-// place the test target gets back the call shapes A0.2 to A0.4 take out of ProximityKit. ProximityKit
+// place the test target gets back the call shapes A0.2 to A0.4 took out of ProximityKit. ProximityKit
 // offers no namespace default, so every API that used to spell Fernlet's bytes for itself now takes
 // the host's `ProximityNamespace`, or a value read off it. The suites were written against the old
 // shapes; rather than rewrite every construction in every suite, each old shape comes back here

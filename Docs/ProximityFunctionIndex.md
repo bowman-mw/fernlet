@@ -16,6 +16,17 @@ state rather than its commits: what the host supplies, how each kind of reader t
 the column-seal and keychain copies, and the test target's bindings in one table, with no row left
 for a static A0.2 deleted. The quick-lookup rows above name the serializer's `in purposes:` overloads.
 
+**2026-10-03 (ProximityKit plan step A0.4):** the features that left ProximityKit for `FernletSocial`
+(presence, the heart dead-drop, moderation's ban store, ledger and content hash, the closeness
+ledger, the friend-state cache and the parked chat payload) are indexed under "FernletSocial", each
+section headed by its path there, and the sealed-backup escrow under "Identity, Wire, Trust, And
+Audit", by its app path. What ProximityKit still holds for its later steps keeps its own sections:
+"Hearts" the heart ledger, the prekey bundle and the protected sidecar; "Presence And Nearby
+Friends" the presence radio presence drives; "Group Activities", "Clothing Shop", "Session Messages"
+and "Moderation" what the mesh manager builds, decodes or calls (A0.5); "Photos And Recipe Sharing"
+the recipe-share manager (A0.7). The test target's three bindings files are indexed beside the
+namespace's readers.
+
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
 > minting", "Phase 5", …). **That document does not exist in this tree.** The phase numbers are still
@@ -479,7 +490,7 @@ where all three read off `PayloadType` or its label twins, so a grep for the tok
 The mesh engine's own frames by role (ProximityKit plan step A0.3): what each frame is, never how it
 is spelled. The spelling is the host's namespace's `family.vocabulary.mesh`, and this file is the one
 place a role meets its token, both ways. Feature payloads are not here: they keep Fernlet's
-`PayloadType` tokens until their features leave (A0.4, A0.5, A0.7).
+`PayloadType` tokens until their features leave (A0.5, A0.7).
 
 | Type / Function | What It Does |
 | --- | --- |
@@ -1462,7 +1473,7 @@ vocabulary its family carries, the radios' presentation strings and the installa
 policy, all judged by its soundness rules, and so are the feature salts the host declares in its
 family (`FeaturePurposes`), the only salts `IdentityService.pairSecret(with:purpose:)` derives
 under. The features' payload and capability tokens are still Fernlet's
-`PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the activities' and the
+`PayloadType` and `ProximityCapability` cases until A0.5 and A0.7; the activities' and the
 moderation report's four feature labels stay outside it until A0.5 (the sealed-backup escrow's two are
 the app's, with its escrow); the heart dead-drop's keychain service and the moderation ban store's are
 FernletSocial's.
@@ -1471,17 +1482,18 @@ below). The host hands it in (`ProximityHost.proximityNamespace`) beside its
 install binding and audit sink; the column seal and the keychain mechanism are ProximityKit's own
 copies. ProximityKit holds no instance and offers no default. `ProximityNamespaceSoundnessTests`
 covers every rule below; `ProximityNamespaceGoldenTests` and `ProximityVocabularyGoldenTests` pin
-Fernlet's value and every reader, and `FernletFeatureGoldenTests` the bytes of the features
-ProximityKit still holds; `ProximityNamespaceBoundaryTests` keeps any namespace, group or purpose from
-being built outside `Namespace/`, `FernletCryptoPurpose` to the feature lines that leave with their
-features (A0.4) or the mesh manager's feature parts (A0.5), every remaining `fernlet` literal to an
-allowlist naming its exit step, Fernlet's domain vocabulary and records (`PayloadType`,
+Fernlet's value and every reader, and `FernletFeatureGoldenTests` the bytes of Fernlet's features
+over ProximityKit, in `FernletSocial`, in the app and in ProximityKit; `ProximityNamespaceBoundaryTests`
+keeps any namespace, group or purpose from being built outside `Namespace/`, `FernletCryptoPurpose` to
+the feature lines that leave with the mesh manager's feature parts (A0.5), every remaining `fernlet`
+literal to an allowlist naming its exit step, Fernlet's domain vocabulary and records (`PayloadType`,
 `ProximityCapability`, `ProximityMode`, `ItemNameModeration` and the persisted proximity records) to
-the lines that leave with their features (A0.4), the mesh manager's feature parts (A0.5), the recipe
-profile (A0.7) or the session profile (A0.7 / C5), and `package` to the doors its list names (the
-presence radio's seam, its QUIC conformer, the peer channel, the epoch posture and the TXT
-vocabulary until A1; the coordinator's typed send and manual commit until A0.7; the JSON sidecar
-`FernletSocial`'s ledgers persist through until A0.5). The exact per-file lists in
+the lines that leave with the mesh manager's feature parts (A0.5), the recipe profile (A0.7) or the
+session profile (A0.7 / C5), `package` to the doors its list names (the presence radio's seam, its
+QUIC conformer, the peer channel, the epoch posture and the TXT vocabulary until A1; the
+coordinator's typed send and manual commit until A0.7; the JSON sidecar `FernletSocial`'s ledgers
+persist through until A0.5), and every type that left ProximityKit for `FernletSocial` or the app out
+of it: none is declared, extended or aliased there again. The exact per-file lists in
 `ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
@@ -1522,7 +1534,7 @@ and park), the session messages and the capabilities (the coordinator; the wire2
 managers' advertisements and the mesh's sealed sends), the record kinds (the inventory digest), the
 routed types (the routed type registry's rows) and the mesh messages (the mesh manager's own sends and
 its payload door, through `MeshPayloadRole`). The mesh features' tokens are still `PayloadType` and
-`ProximityCapability` cases until A0.4, A0.5 and A0.7, and `ProximityVocabularyGoldenTests` holds Fernlet's
+`ProximityCapability` cases until A0.5 and A0.7, and `ProximityVocabularyGoldenTests` holds Fernlet's
 two spellings equal.
 
 | Function | What It Does |
@@ -1757,7 +1769,7 @@ read, list and delete each other's rows and fail and audit alike.
 
 ### The test target's bindings (`Tests/FernletTests/ProximityNamespaceTestBindings.swift`)
 
-The call shapes A0.2 and A0.3 took out of ProximityKit, restored for the suites by passing `.fernlet`
+The call shapes A0.2 to A0.4 took out of ProximityKit, restored for the suites by passing `.fernlet`
 (`ProximityNamespace.Purposes.fernlet` where a reader takes the labels and `ProximityNamespace.Family.fernlet`
 where it takes the family, which the golden pins equal to `ProximityNamespace.fernlet`'s, `.fernlet`'s
 `family.radios` values where a door takes a presentation string, its `family.vocabulary.routedTypes`
@@ -1777,6 +1789,8 @@ value names `.fernlet` explicitly.
 | `PeerNameDisplay.personName(_:fingerprint:)` / `shown(_:fingerprint:placeholder:)` / `firstName(_:fingerprint:placeholder:)` | The name display, hiding `.fernlet`'s mesh instance-name prefix (`personName` over ProximityKit's filter, `shown` and `firstName` over FernletConnections' placeholders, which the bindings file imports). |
 | `MeshRoutedTypeToken.photo` / `tempMessage` / `heart` / `control`, `MeshRoutedTypeRegistry.increment1`, `MeshRoutedAckStageTable.increment1`, `MeshRoutedManifest.signed(...)` without `types:` | The routed constants, the shipping registry and its projection as values, and the mint with that registry, each over `.fernlet`'s routed types. |
 | `ProximityCoordinator.PeerIdentity.supports(_:)` | The coordinator's capability gate under `.fernlet`'s capabilities. |
+| `ItemNameModeration.moderatedPeerDisplayName(_:)`, `FernletIdentityEnvelope.sanitizedSenderDisplayName` / `disclosedSenderDisplayName` as properties, `RecipeShareAdvertisedName.publishable(_:)`, `SessionMessageStore.receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:)` | The peer-name coercion, the envelope's two sender reads, the advertised recipe name and the session message store's ingest under `.fernlet`'s peer-name policy. |
+| `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` | The static key agreement under the spelling the suites were written against: a pure rename of `staticKeyAgreement(withEphemeralPublicKey:)`, which takes no namespace. |
 
 ### The test target's FernletSocial bindings (`Tests/FernletTests/FernletSocialTestBindings.swift`)
 
@@ -1828,7 +1842,7 @@ same rule, so the core bindings file never imports the app.
 | `identityAdoptedDeviceKeys(_:)` | Provisioning adopted the device keys already on this device; called before the key-agreement row is rewritten device-only. |
 | `identityWillMintDeviceKeys(_:previousKeyAgreementKey:)` | Provisioning is about to mint fresh device keys over its rows; the reader returns the key-agreement row a previous build left (nil when absent or unparseable, `keychainReadFailed` when unreadable). Anything it throws stops provisioning before the identity writes a row. |
 | `identityMintedDeviceKeys(_:)` | The fresh rows are on disk and adopted; never called after a failed mint. |
-| `identityWiped(_:)` | The identity swept its rows and cleared its keys, whether or not the sweep succeeded. |
+| `identityWiped(_:)` | The identity swept its rows and cleared its keys, whether or not the sweep succeeded, and under any namespace: a wipe reads no soundness verdict. |
 
 ### `App/Fernlet/SealedBackupEscrowKey.swift` (the app)
 
@@ -2671,8 +2685,8 @@ drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch 
 | --- | --- |
 | `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. `start()` refuses first, with `presence.identity.namespaceMismatch` (at `start`), when `init(store:ledger:identity:)` was handed an identity of another namespace (audited at `construction`): it mints no posture and starts no radio. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
-| `presencePosture` / `rotateEpochIfNeeded()` | **P9 item 2 pass 1**: the one source of this radio's epoch index, advertised instance name and TLS identity (``PresenceEpochPosture``), minted through `postureMint`, whose default `init` builds over the namespace's presence instance-name prefix and TLS common name. Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. **Pass 1 HOLDS the posture; nothing advertises it yet** — pass 2 binds the QUIC presence listener to it. |
-| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. Pass 1 qualifier, now spent: that rotation was held rather than advertised until pass 2 bound the QUIC presence listener; until then the MC advertiser kept one peer ID per `start()`. |
+| `presencePosture` / `rotateEpochIfNeeded()` | The one source of this radio's epoch index, advertised instance name and TLS identity (`PresenceEpochPosture`), minted through `postureMint`, whose default `init` builds over the namespace's presence instance-name prefix and TLS common name. Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. The radio starts and re-publishes under it (`start(posture:discoveryInfo:)`, `republish(posture:discoveryInfo:)`): its QUIC listener's instance name and `sec_identity_t` ARE the posture, so no posture means nothing advertised. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. |
+| `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. |
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
 | `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the radio's eight-peer link cap. |
 | `heartAffordance(...)` (`nonisolated static`) | The friend row's decision about which heart affordance to show. Takes the away-delivery setting as an explicit parameter rather than reading it off the host, so the affordance and the enforcement cannot drift apart. |
@@ -2832,7 +2846,7 @@ whose phrases are Fernlet's display policy, beside `PeerNames.fernlet`.
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
-| `makeProximityIdentity()` | The identity a manager builds when handed none: the mesh, presence and recipe-share managers call it once each, at construction, and check it against their namespace (`ProximityNamespaceGate.checkIdentity`), so an identity of another namespace starts no radio. The extension's default is `IdentityService(namespace: proximityNamespace)`, with no provisioning participant, which every test double takes; Fernlet's adapter answers its factory's identity, `IdentityService.fernletApp()`, which carries the sealed-backup escrow key. |
+| `makeProximityIdentity()` | The identity a manager builds when handed none: the mesh, presence and recipe-share managers call it once each, at construction, and check it against their namespace (`ProximityNamespaceGate.checkIdentity`), so an identity of another namespace starts no radio. The extension's default is `IdentityService(namespace: proximityNamespace)`, with no provisioning participant, which sixteen of the test target's seventeen doubles take (`ProximityNamespaceGateTests`' `ForeignIdentityHost` answers an identity of another namespace, so each manager's check can be seen refusing); Fernlet's adapter answers its factory's identity, `IdentityService.fernletApp()`, which carries the sealed-backup escrow key. |
 | `proximityTrustStore` | The host's `ProximityTrustStore`, with **no default**: the mesh's four kept-friend gates (friend state and moderation reports, in and out) and the heart-eligibility predicate `isTrustedUnblockedPeer(signingPublicKey:fingerprint:)` (a public extension in `Trust/ProximityTrustStore.swift`), which presence's gate and the routed heart path both ask, ask it whether a signing key is a remembered, unrevoked peer and whether it is blocked, at each question. Fernlet's adapter answers the store's `ProximityTrustVault` (`FernletConnections`), as every test double answers its own vault. |
 | `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. Its element type, Fernlet's persisted `ProximityTrustedPeerRecord`, is on `ProximityNamespaceBoundaryTests`' rule-4 list until the last feature that reads it leaves (A0.5). |
 | `allowNearbyHearts` | The in-person hearts opt-in, the one hearts setting a host answers. FernletSocial's `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one), and `MeshNetworkManager`'s session hearts do too (the send, the routed heart's ledger judgement and the hearts capability). Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. The away-delivery consent is no host requirement: the mesh and presence managers each take a `heartsAwayEnabledProvider`. |

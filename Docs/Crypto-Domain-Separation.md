@@ -763,16 +763,18 @@ labels.
   soundness rules bound each token's bytes. Fifteen mesh messages and three record kinds are spelled
   exactly like signature labels, which `ProximityNamespaceGoldenTests` holds equal so that one grep
   finds both.
-- **What still reads this registry from ProximityKit.** The 4 feature labels — activities (3) and
-  the moderation report's signature (1) — on the code lines `ProximityNamespaceBoundaryTests`
-  allowlists file by file. They leave with the mesh manager's feature parts at plan step A0.5, when
-  that list reaches nothing. `FernletSocial` names its own entries here: the heart dead-drop's
+- **Where Fernlet's thirteen feature labels are read.** The two pair-secret salts,
+  `heartDropPairV1` and `presencePairV1`, are read from here by nobody: ProximityKit's pair-secret
+  door derives under their `.fernlet` twins, the feature salts above, which `FernletSocial` passes.
+  `FernletSocial` names five entries here itself and hands them to CryptoKit: the heart dead-drop's
   sealed-drop salt, day-tag prefix and sidecar authenticated data, presence's epoch-tag prefix, and
   the ban store's evidence reporter tag. The app names the sealed-backup escrow's two
-  (`SealedBackupEscrowKey`, the provisioning participant of every identity the app builds).
-  The app's duress and probe signatures still sign
-  through ProximityKit's `IdentityService` under their entries here, through its
-  `CryptographicPurpose` overloads.
+  (`SealedBackupEscrowKey`, the provisioning participant of every identity the app builds), a prefix
+  pair no namespace can declare (§7's one exception). ProximityKit still reads four, the activities'
+  three and the moderation report's signature, on the code lines `ProximityNamespaceBoundaryTests`
+  allowlists file by file; they leave with the mesh manager's feature parts at plan step A0.5, when
+  that list reaches nothing. The app's duress and probe signatures still sign through ProximityKit's
+  `IdentityService` under their entries here, through its `CryptographicPurpose` overloads.
 
 Adding a ProximityKit protocol label is therefore a namespace change, not a registry change: a field
 in a `Namespace/` group (which fixes its role), the host's literal in `.fernlet`, and a golden row in

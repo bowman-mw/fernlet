@@ -2152,7 +2152,7 @@ struct MeshPairwiseFoundingTests {
     /// The pre-commit **timeout** is the one end that refused nothing, and provisional admission
     /// makes it common: a stranger is seated and then evicted by the **five-minute** proximity gate
     /// `ProximityCoordinator.transitionToProximityGate` arms once the identity introduction
-    /// verifies (`ProximityCoordinator.swift:1320`) — not the 25 s / 60 s connection-phase timer
+    /// verifies (in `Engine/ProximityCoordinator.swift`) — not the 25 s / 60 s connection-phase timer
     /// `handleChannelReady` sets, which that gate cancels and replaces. Six of those used to strand
     /// a real friend for the session, because `MeshLinkTable.maxReproposalsPerEndpoint` is never
     /// refilled. Every other end keeps charging — re-offering an endpoint whose link keeps failing

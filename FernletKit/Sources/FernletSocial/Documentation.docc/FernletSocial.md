@@ -9,7 +9,8 @@ API (`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` §3.2). Fernlet's rules
 namespace, trust vault and session policies, live in `FernletConnections`; Fernlet's features live
 here, moved out of ProximityKit in plan step A0.4 with their bytes unchanged. The edge runs
 `FernletSocial` → ProximityKit, never the reverse, so ProximityKit can never name a type of this
-module.
+module, and `ProximityNamespaceBoundaryTests` refuses one declared, extended or aliased there again
+under its old name, which nothing else would notice.
 
 **What it holds.**
 
@@ -238,10 +239,10 @@ which ProximityKit's activity manager and the mesh's photo-wall preferences stil
 when it moves here with them.
 
 **What is still in ProximityKit.** The presence radio itself (its seam and QUIC conformer, its epoch
-posture and TXT vocabulary), the mechanism presence drives; the mesh manager's
+posture and TXT vocabulary), the mechanism presence drives, for good; the mesh manager's
 feature parts and the types it builds, decodes or calls (the clothing shop, activities, chat's
 session message store, the moderation report relay and its payload, the heart ledger), until A0.5;
-and the recipe-share manager, until A0.7.
+and the recipe-share manager, until A0.7. Those Fernlet features join this module when they leave.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the

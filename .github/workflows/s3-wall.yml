@@ -213,6 +213,23 @@ jobs:
         # (A0.7 / C5), its matcher fixtured both ways. The suite holds 7 cells (5 before it), and
         # the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in
         # 10 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.4 (2026-10-03) moves Fernlet's social features out of
+        # ProximityKit (the heart dead-drop, presence, moderation's ban store, ledger and content
+        # hash, closeness, friend state and the parked chat payload to FernletSocial; the
+        # sealed-backup escrow to the app) and leaves the ratchet at the step's end state:
+        # `FernletCryptoPurpose` on 10 lines in 3 files, 32 `fernlet` literals in 8 files and 34
+        # domain-type lines in 6 files, every row leaving with the mesh manager's feature parts
+        # (A0.5), the recipe profile (A0.7), the session profile (A0.7 / C5) or, for the DEBUG
+        # test-hook names, with the package (A1), and no row of A0.4's left. It gives the suite two
+        # rules: a fifth (A0.4.0), `package` declared in ProximityKit code only on an exact per-file
+        # list of the doors a Fernlet module uses while a named later step reshapes them (44 lines in
+        # 6 files: the presence radio's until A1, the coordinator's typed send and manual commit until
+        # A0.7, the JSON sidecar until A0.5); and a sixth (A0.4.8), no type that left ProximityKit (24
+        # names) declared, extended or aliased in its code again, which rules 2 to 4 could not see
+        # come back under its old name. Each carries its matcher fixtured both ways, so the suite holds
+        # 11 cells (7 before the step), and the line, MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), ran 103 tests in 10 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

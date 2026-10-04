@@ -381,13 +381,18 @@ let package = Package(
         // reverse. "Outward edges only": the files with backward edges to the app
         // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
         // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
-        // PrivateMediaStore (MeshNetworkManager's photo cache) + FernletCrypto (the feature labels that
-        // leave with their features, and the `CryptographicPurpose` signing overloads) +
-        // FernletDomainModel (the features' models, and Fernlet's payload vocabulary, trusted-peer record
-        // and session mode, which it names only on the lines ProximityNamespaceBoundaryTests allowlists)
-        // + FernletFoundation (one FernletDate read). No FernletUI edge and no SwiftUI view: the review
-        // sheets moved to FernletProximityUI (below). MainActor default: the managers are
-        // @Observable @MainActor, and the wire values and pure crypto statics are nonisolated within.
+        // PrivateMediaStore (MeshNetworkManager's photo cache, which leaves with the mesh manager's
+        // photo feature at A0.5) + FernletCrypto (the activities' and the moderation report's four
+        // feature labels, which leave with the mesh manager's feature parts at A0.5, and the
+        // `CryptographicPurpose` signing overloads the app's duress and probe signatures sign through
+        // until C1) + FernletDomainModel (the features' models, and Fernlet's payload vocabulary,
+        // trusted-peer record and session mode, which it names only on the lines
+        // ProximityNamespaceBoundaryTests allowlists) + FernletFoundation (the mesh manager's one
+        // FernletDate read, until A0.5). ProximityNamespaceBoundaryTests also refuses any type that
+        // left it for FernletSocial or the app, declared, extended or aliased here again. No FernletUI
+        // edge and no SwiftUI view: the review sheets moved to FernletProximityUI (below). MainActor
+        // default: the managers are @Observable @MainActor, and the wire values and pure crypto statics
+        // are nonisolated within.
         .target(
             name: "ProximityKit",
             dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
@@ -480,7 +485,9 @@ let package = Package(
         // ProximityKit's presence radio and delivers in-person hearts, and the identity's presence pair
         // secret and epoch tag), moderation's ban store, ledger and content hash, the closeness ledger,
         // the friend-state cache and the parked live-session chat payload, moved out of ProximityKit so
-        // it holds none of them. The edge runs FernletSocial → ProximityKit, never the reverse. Deps:
+        // it holds none of them (ProximityNamespaceBoundaryTests refuses any of their types there
+        // again); the mesh manager's feature parts join them at A0.5 and the recipe-share manager at
+        // A0.7. The edge runs FernletSocial → ProximityKit, never the reverse. Deps:
         // ProximityKit (`IdentityService` with its fingerprint, pair-secret door, static key agreement
         // and presence epoch clock, the envelope, the protected sidecar, sealed-payload framing, the
         // heart ledger, the prekey bundle and the mesh storage scopes, the moderation report payload's

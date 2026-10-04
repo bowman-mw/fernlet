@@ -7,11 +7,13 @@
 // radios' presentation strings and the payload vocabulary off the namespace its host hands down
 // (`ProximityNamespace`; Fernlet's is `.fernlet`, in FernletConnections), and shows a peer's name
 // under the namespace's peer-name policy; it asks its host's trust store and per-connection session
-// policy its trust questions, records its own audit type and reports its own inspector values. The
-// compiler does not keep it that way: a ProximityKit file that builds a namespace of its own,
-// reaches for one of FernletCrypto's purposes again, spells a new Fernlet string, names one of
-// Fernlet's domain types again or opens a `package` door compiles clean and passes every other test.
-// So this suite reads ProximityKit's source and holds five lines:
+// policy its trust questions, records its own audit type and reports its own inspector values; and
+// Fernlet's social features and its sealed-backup escrow live in Fernlet's own modules, FernletSocial
+// and the app. The compiler does not keep it that way: a ProximityKit file that builds a namespace of
+// its own, reaches for one of FernletCrypto's purposes again, spells a new Fernlet string, names one
+// of Fernlet's domain types again, opens a `package` door or declares a feature type that left it
+// compiles clean and passes every other test. So this suite reads ProximityKit's source and holds six
+// lines:
 //
 //   1. no namespace, namespace group or purpose is built in ProximityKit outside `Namespace/`;
 //   2. `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
@@ -26,11 +28,17 @@
 //      (A0.5), with the recipe profile (A0.7) or with the session profile (A0.7 / C5): 34 lines in 6
 //      files;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
-//      later step reshapes or closes, each row with that step (44 lines in 6 files).
+//      later step reshapes or closes, each row with that step (44 lines in 6 files);
+//   6. no type that left ProximityKit for FernletSocial or the app (24 names: the heart dead-drop's,
+//      presence's, moderation's, closeness's and friend state's types, the parked chat payload, the
+//      deleted support layout and the sealed-backup escrow's) is declared, extended or aliased in
+//      ProximityKit code again.
 //
 // Rules 2 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
 // lowered or deleted. So rules 2 to 4 only shrink, to nothing, as A0.5, A0.7, A0.7 / C5 and A1
-// land, and a `package` door's row lives exactly as long as the door.
+// land, and a `package` door's row lives exactly as long as the door. Rule 6 only grows: a feature
+// that came back under its old name with no Fernlet string, no registry label and no domain type of
+// its own would pass rules 2 to 4, so each step that moves features out adds the types it took.
 // Between them they hold what ProximityKit still takes from Fernlet rather than from its host: what
 // the mesh manager builds, decodes or calls (the clothing shop, the activity manager and the
 // moderation report relay, with their payload formats, their labels and the canonical serializer's
@@ -38,18 +46,17 @@
 // typed capability gates and the host's trusted-peer list (until A0.5); the recipe-share manager,
 // its wire types and status copy, and the typed doors only it and Fernlet's features go through,
 // the envelope's typed view of its token and the coordinator's typed send (until A0.7); the session
-// mode (until A0.7 / C5); and the DEBUG test-hook names (until A1). A0.3's and A0.4's rows are
-// gone, and their exit steps with them: no presentation string, membership record kind, routed-type
-// token or coach-channel format is on rule 3's list, and none of rules 2 to 4 lists a line of a
-// feature A0.4 took out (the heart dead-drop, presence, moderation's ban store, closeness, friend
-// state, the parked chat payload and the sealed-backup escrow). Rule 5 holds the other direction,
-// the doors ProximityKit opens to Fernlet's own modules while a later step reshapes what is behind
-// them: the presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch
-// posture and the TXT vocabulary, which FernletSocial's presence manager drives (until A1); the
-// coordinator's typed send and manual commit, which presence's heart delivery and the recipe-share
-// manager call (until A0.7); and the naive JSON sidecar FernletSocial's moderation, closeness and
-// friend-state ledgers persist through, which the activity manager and the mesh's photo-wall
-// preferences still use here (until A0.5).
+// mode (until A0.7 / C5); and the DEBUG test-hook names (until A1). No row names a presentation
+// string, a membership record kind, a routed-type token or a coach-channel format, and none of rules
+// 2 to 4 lists a line of a feature that left (the heart dead-drop, presence, moderation's ban store,
+// closeness, friend state, the parked chat payload and the sealed-backup escrow), which rule 6 keeps
+// out. Rule 5 holds the other direction, the doors ProximityKit opens to Fernlet's own modules while
+// a later step reshapes what is behind them: the presence radio's seam, its QUIC conformer, the peer
+// channel the seam names, the epoch posture and the TXT vocabulary, which FernletSocial's presence
+// manager drives (until A1); the coordinator's typed send and manual commit, which presence's heart
+// delivery and the recipe-share manager call (until A0.7); and the naive JSON sidecar FernletSocial's
+// moderation, closeness and friend-state ledgers persist through, which the activity manager and the
+// mesh's photo-wall preferences still use here (until A0.5).
 
 import Foundation
 import Testing
@@ -272,10 +279,10 @@ private extension UInt8 {
 // MARK: - The wall
 
 /// ProximityKit builds no namespace of its own, names FernletCrypto's purposes only on the feature
-/// lines that leave with their features or the mesh manager's feature parts, spells `fernlet` only in
-/// the literals its allowlist names, names Fernlet's domain vocabulary and records only on the lines
-/// that leave with the mesh manager's feature parts or the recipe and session profiles, and declares
-/// `package` only on the doors its list names.
+/// lines that leave with the mesh manager's feature parts, spells `fernlet` only in the literals its
+/// allowlist names, names Fernlet's domain vocabulary and records only on the lines that leave with
+/// the mesh manager's feature parts or the recipe and session profiles, declares `package` only on
+/// the doors its list names, and declares, extends or aliases none of the types that left it.
 @Suite struct ProximityNamespaceBoundaryTests {
 
     /// The module, from the repository root.
@@ -458,7 +465,8 @@ private extension UInt8 {
     // MARK: Rule 2: FernletCryptoPurpose only on the feature lines
 
     /// `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
-    /// their features: exactly ``featurePurposeLines``, file by file, line count and purposes read.
+    /// the mesh manager's feature parts: exactly ``featurePurposeLines``, file by file, line count and
+    /// purposes read.
     ///
     /// Every protocol label ProximityKit reads is the namespace's. What is left are the 4 feature
     /// labels, on 10 code lines in 3 files: the activities' and the moderation report's, with the
@@ -952,6 +960,157 @@ private extension UInt8 {
         "Transport/NetworkPresenceSession.swift": PackageLines(lines: 15, reason: .presenceRadioSeam)
     ]
 
+    // MARK: Rule 6: the moved types stay gone
+
+    /// No type that left ProximityKit for Fernlet's own modules is declared, extended or aliased in
+    /// ProximityKit code again: none of ``movedTypeNames``, read by ``movedTypeMatcherPattern(for:)``.
+    ///
+    /// Fernlet's social features left ProximityKit with their bytes unchanged: the heart dead-drop,
+    /// presence, moderation's ban store, ledger and content hash, closeness, friend state and the
+    /// parked chat payload for FernletSocial and the sealed-backup escrow for the app, and the support
+    /// layout that named their folder was deleted. Rules 2 to 4 cannot see one come back: a feature
+    /// re-declared here under its old name, with no Fernlet string, no registry label and no domain
+    /// type of its own, compiles clean and passes them and every other test, and two declarations of
+    /// one name in two modules the app imports compile until a caller names it. So each name is
+    /// refused as a type declared here (a class, struct, enum, actor or protocol, nested or not), an
+    /// extension, or an alias's name or target, module-qualified or not. The list has no exit step: it
+    /// only grows, as A0.5 and A0.7 add the types they move out. Only code counts: comments and
+    /// literals may name a moved type freely, as the docs that say where it went do. The same matcher
+    /// over types that stay (``declarationFloorNames``) must find each of them, so a matcher gone
+    /// blind cannot pass the module vacuously.
+    @Test func noMovedTypeIsDeclaredExtendedOrAliasedInProximityKit() throws {
+        let moved = try NSRegularExpression(pattern: Self.movedTypeMatcherPattern(for: Self.movedTypeNames))
+        let floor = try NSRegularExpression(pattern: Self.movedTypeMatcherPattern(for: Self.declarationFloorNames))
+        let sources = try Self.proximitySources()
+        var violations: [String] = []
+        var floorSeen: Set<String> = []
+        // R2: bounded by the module's file list.
+        for source in sources {
+            violations += Self.lineCaptures(of: moved, in: source.lexed.code).map {
+                "\(source.path):\($0.line): \($0.name)"
+            }
+            floorSeen.formUnion(Self.lineCaptures(of: floor, in: source.lexed.code).map { $0.name })
+        }
+        #expect(sources.count >= 50, "the ProximityKit sweep read only \(sources.count) Swift files")
+        #expect(Set(Self.movedTypeNames).count == Self.movedTypeNames.count, "a moved type is listed twice")
+        #expect(floorSeen == Set(Self.declarationFloorNames), """
+            the matcher read only \(floorSeen.sorted()) of the types that stay in ProximityKit \
+            (\(Self.declarationFloorNames.sorted())): a matcher that no longer sees a declaration would \
+            pass every file vacuously
+            """)
+        #expect(violations.isEmpty, """
+            ProximityKit declares, extends or aliases a type that left it: \(violations). Fernlet's \
+            features live in FernletSocial and its sealed-backup escrow in the app, which depend on \
+            ProximityKit, never the reverse. Mechanism a feature needs belongs here under a name of its \
+            own, as public API with its contract or, while a named later step reshapes it, as a \
+            `package` door on rule 5's list; the feature itself goes back to its module.
+            """)
+    }
+
+    /// Rule 6's matcher, fixtured both ways, because the matcher is the wall: it sees a moved name
+    /// declared as every kind of type (a class behind its attribute and modifiers, a struct, an enum,
+    /// an actor, a protocol, a generic type, a nested type, a type whose name is on the line after its
+    /// keyword), extended (plainly, `nonisolated`, module-qualified) and aliased (as the alias's name,
+    /// or as its target, plain, behind a generic alias or module-qualified), each match on its
+    /// keyword's line and under its own name; it sees every listed name declared, extended and aliased,
+    /// and never inside a longer name or a use; and it sees none of the nearest code that declares no
+    /// moved type: the types that stay beside them (the prekey bundle, the heart ledger, the presence
+    /// radio's TXT vocabulary, the prekey store's alias for the bundle), a name that begins or ends
+    /// with a moved name, a use of one as a type or a value, a class method that returns one, a host
+    /// extension, and a comment and a literal that name one. Every sample is lexed first, as the
+    /// module's files are.
+    @Test func theMovedTypeMatcherSeesEveryFormAndNoNeighbour() throws {
+        let matcher = try NSRegularExpression(pattern: Self.movedTypeMatcherPattern(for: Self.movedTypeNames))
+        let read = { (source: String) in Self.lineCaptures(of: matcher, in: SwiftSourceLexer.lex(source).code) }
+        let samples: [(source: String, name: String)] = [
+            ("public final class PresenceManager: ProximityPayloadHandling {", "PresenceManager"),
+            ("extension HeartPrekeyStore {", "HeartPrekeyStore"),
+            ("typealias ClosenessLedger = Foo", "ClosenessLedger"),
+            ("@MainActor final class ModerationBanStore {", "ModerationBanStore"),
+            ("public nonisolated struct CachedFriendState: Codable, Equatable, Identifiable {", "CachedFriendState"),
+            ("public nonisolated enum ModerationContentHash {", "ModerationContentHash"),
+            ("actor HeartDropOutbox {", "HeartDropOutbox"),
+            ("protocol HeartDropSidecarFormatCensus: Sendable {", "HeartDropSidecarFormatCensus"),
+            ("final class HeartDropService<Transport> {", "HeartDropService"),
+            ("struct Escrow { enum BackupEscrowReconcileOutcome: Equatable { case noEscrow } }",
+             "BackupEscrowReconcileOutcome"),
+            ("public final class\n    ProximitySupportLayout {", "ProximitySupportLayout"),
+            ("nonisolated extension HeartDropSealer {", "HeartDropSealer"),
+            ("extension FernletSocial.TempMessagePayload: CustomStringConvertible {}", "TempMessagePayload"),
+            ("public typealias Escrow = SealedBackupEscrowKey", "SealedBackupEscrowKey"),
+            ("typealias Cache<Key> = HeartDropPeerBundleCache", "HeartDropPeerBundleCache"),
+            ("typealias Scope = FernletSocial.HeartDropStorageScope", "HeartDropStorageScope")
+        ]
+        // R2: bounded by the sample list.
+        for sample in samples {
+            let found = read(sample.source)
+            #expect(found.map { $0.line } == [1] && found.map { $0.name } == [sample.name],
+                    "the moved-type matcher read \(found) in: \(sample.source)")
+        }
+        // R2: bounded by the name list and three forms each way.
+        for name in Self.movedTypeNames {
+            for form in ["struct \(name) {", "extension \(name) {", "typealias Alias = \(name)"] {
+                #expect(read(form).map { $0.name } == [name], "the moved-type matcher misses \(name) in: \(form)")
+            }
+            for form in ["struct \(name)Row {", "struct Legacy\(name) {", "let value: \(name)? = nil"] {
+                #expect(read(form).isEmpty, "the moved-type matcher read \(read(form)) in: \(form)")
+            }
+        }
+        let neighbours = [
+            "public nonisolated struct ProximityPrekeyBundle: Codable, Equatable, Sendable {",
+            "public final class ProximityHeartLedger {",
+            "package nonisolated enum PresenceAdvertisement {",
+            "public typealias Bundle = ProximityPrekeyBundle",
+            "final class PresenceManagerTests {",
+            "let scope = HeartDropStorageScope.production",
+            "class func makeHeartDropService() -> HeartDropService {",
+            "extension ProximityHost {",
+            "/// PresenceManager in FernletSocial",
+            #"let token = "HeartDropService""#
+        ]
+        // R2: bounded by the neighbour list.
+        for source in neighbours {
+            #expect(read(source).isEmpty, "the moved-type matcher read \(read(source)) in: \(source)")
+        }
+    }
+
+    /// Every type that left ProximityKit for Fernlet's own modules, by its name: the heart dead-drop's
+    /// (the service, its outbox and dedup store, its peer-bundle cache, the sealer, the sidecar seal,
+    /// the storage scope, the format census and the prekey store), presence's (the manager and its heart
+    /// connection), the closeness ledger, the friend-state cache and its rows, moderation's (the ban
+    /// store and its record, the ledger and the content hash) and the parked chat payload, all
+    /// FernletSocial's now; the support layout that named their folder, deleted; and the sealed-backup
+    /// escrow's (the escrow key, its reconcile outcome, its candidate and its legacy-account name), the
+    /// app's.
+    static let movedTypeNames = [
+        "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
+        "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
+        "HeartPrekeyStore", "PresenceManager", "PresenceHeartConnection", "ClosenessLedger",
+        "FriendStateCache", "CachedFriendState", "ModerationBanStore", "BanRecord", "ModerationLedger",
+        "ModerationContentHash", "TempMessagePayload", "ProximitySupportLayout", "SealedBackupEscrowKey",
+        "BackupEscrowReconcileOutcome", "EscrowCandidate", "IdentityKeychainKey"
+    ]
+
+    /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must
+    /// find: its floor against a blind matcher.
+    static let declarationFloorNames = [
+        "IdentityService", "ProximityHost", "ProximityPrekeyBundle", "PresenceAdvertisement", "ProtectedSidecar"
+    ]
+
+    /// Rule 6's matcher over lexed code, for `names`: a type keyword (`class`, `struct`, `enum`, `actor`,
+    /// `protocol`), `extension` or `typealias`, then one of the names, module-qualified or not, or a
+    /// `typealias` of any name, generic or not, whose target is one of them, module-qualified or not.
+    /// The keyword is a whole word (no identifier character and no `.` before it) and the name a whole
+    /// identifier (none after it), so a longer name that begins or ends with one is not it; the name is
+    /// capture group 1.
+    static func movedTypeMatcherPattern(for names: [String]) -> String {
+        let qualifier = #"(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*"#
+        let declared = #"(?:class|struct|enum|actor|protocol|extension|typealias)\s+"# + qualifier
+        let aliased = #"typealias\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:<[^>\n]*>\s*)?=\s*"# + qualifier
+        let alternatives = names.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        return #"(?<![A-Za-z0-9_.])(?:"# + declared + "|" + aliased + ")(" + alternatives + #")(?![A-Za-z0-9_])"#
+    }
+
     // MARK: The lexer, fixtured
 
     /// The lexer reads code, comments and literals as Swift does: the walls above and the isolation
@@ -1019,6 +1178,16 @@ private extension UInt8 {
         let text = code as NSString
         let matches = regex.matches(in: code, range: NSRange(location: 0, length: text.length))
         return Set(matches.map { text.substring(with: $0.range(at: 1)) + "." + text.substring(with: $0.range(at: 2)) })
+    }
+
+    /// Every match of `regex` in `code`, in order, as the 1-based line it starts on and its first
+    /// capture group.
+    private static func lineCaptures(of regex: NSRegularExpression, in code: String) -> [(line: Int, name: String)] {
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map {
+            (line: text.substring(to: $0.range.location).count(where: { $0 == "\n" }) + 1,
+             name: text.substring(with: $0.range(at: 1)))
+        }
     }
 
     // MARK: Reasons

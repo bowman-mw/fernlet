@@ -476,7 +476,7 @@ struct MeshLinkTableTests {
     ///
     /// The budget exists for *connect → the owner refuses the seat → disconnect → idle → re-offer*,
     /// and provisional admission makes the other shape common: a stranger is seated and then evicted
-    /// by the five-minute proximity gate (`ProximityCoordinator.swift:1320`) with nobody having
+    /// by the five-minute proximity gate (`ProximityCoordinator.transitionToProximityGate`) with nobody having
     /// refused anything. Six of those used to strand a genuine friend for the rest of the session.
     ///
     /// It is NOT the refill the cap's own doc rules out, and what makes that true is that the refund

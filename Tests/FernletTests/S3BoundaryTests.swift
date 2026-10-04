@@ -216,11 +216,15 @@ struct S3BoundaryTests {
     ///   folder (ProximityKit plan step A0.1) and still render held peer photos and peer names.
     ///   `FernletConnections` is too: it holds Fernlet's protocol identity and payload vocabulary, and
     ///   Fernlet's connection rules on top of the mesh: its session trust policies and its trust vault.
-    ///   `FernletSocial` is too: it holds Fernlet's social records over the mesh (moderation's ban store
-    ///   and ledger, the closeness ledger, the friend-state cache), device-local by design, so a
-    ///   CloudKit call from inside it is how who reported whom, who feels close and a friend's shared
-    ///   state would follow the user into iCloud; and it holds the heart dead-drop service itself,
-    ///   whose one CloudKit leg is the injected transport above.
+    ///   `FernletSocial` is too: it holds Fernlet's social features over the mesh, presence (the
+    ///   manager that recognizes kept friends nearby by rotating pairwise tags and delivers in-person
+    ///   hearts, and the pair secret and the tags themselves), the heart dead-drop (its service, sealer,
+    ///   prekey store, outbox, dedup store, peer-bundle cache and sealed sidecars, whose one CloudKit
+    ///   leg is the injected transport above), Fernlet's social records (moderation's ban store,
+    ///   ledger and content hash, the closeness ledger, the friend-state cache) and the parked chat
+    ///   payload, device-local by design, so a CloudKit call from inside it is how who is nearby, who
+    ///   reported whom, who feels close and a friend's shared state would follow the user into
+    ///   iCloud.
     /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
     ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
     ///   allowed to carry, and would invert that injection seam. The same holds for

@@ -3,8 +3,8 @@
 //
 // Fernlet's features over the proximity stack (the heart dead-drop, presence, moderation, closeness,
 // friend state, and the sealed-backup escrow beside the identity) put bytes on the wire,
-// in the keychain and on disk that no other suite pins, and plan step A0.4 moves every one of those
-// features or re-derives its bytes (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.4). This
+// in the keychain and on disk that no other suite pins, and plan step A0.4 moved every one of those
+// features or re-derived its bytes (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.4). This
 // suite holds each such byte to the value Fernlet ships: by a hand-written literal, and wherever a
 // production consumer can be reached without a new seam, by driving that consumer and reading what it
 // emits or opens. Moving a feature moves no byte; this file is how that claim is checked rather than
@@ -149,8 +149,9 @@ struct FeatureGoldenNameRow: Sendable {
 
 // MARK: - The suite
 
-/// Every byte the features plan step A0.4 moves or re-derives put on the wire, in the keychain or on
-/// disk, pinned by literal and by behaviour: the gate each A0.4 move has to pass unchanged.
+/// Every byte the features plan step A0.4 moved or re-derived put on the wire, in the keychain or on
+/// disk, pinned by literal and by behaviour: the gate each of those moves passed unchanged, and every
+/// later one must.
 ///
 /// **The rule for every commit: re-point an accessor, never a literal.** A frozen literal was written
 /// by hand and confirmed by two independent computations; a failing one is a WIRE, KEYCHAIN or AT-REST

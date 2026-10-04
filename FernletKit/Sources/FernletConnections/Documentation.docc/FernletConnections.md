@@ -47,11 +47,13 @@ identities from the store's `makeProximityIdentity()`, which answers the app's f
 `proximityNamespace` and gives it no default, so the app is what hands `.fernlet` over: the
 `FernletStore` adapter (`App/Fernlet/ProximityHostAdapter.swift`) answers `.fernlet`, `nonisolated`
 because it is inert value data. The mesh, presence and recipe-share managers read it once at
-construction, keep their own copy and build their default identity and their radio from it; every
-other `IdentityService` the app builds says `IdentityService(namespace: .fernlet)` (the sealed-backup,
-own-photo, duress-recovery and launch paths, the readout and the DEBUG probe), the heart-drop
-service's identity is built from the store's `proximityNamespace`, and the app hands `.fernlet` to
-both storage scopes and resolves its proximity root from it.
+construction, keep their own copy and build their radio from it, and take their default identity from
+the store's `makeProximityIdentity()`; that identity and every other `IdentityService` the app builds
+(the sealed-backup, own-photo, duress-recovery and launch paths, the readout, the DEBUG probe and the
+heart-drop service's) come from the app's one factory, `IdentityService.fernletApp(keychainService:)`,
+which builds under `.fernlet` with the app's sealed-backup escrow key as the identity's provisioning
+participant; and the app hands `.fernlet` to both storage scopes and resolves its proximity root from
+it.
 
 ProximityKit reads every protocol label of `Purposes.fernlet` and every value of `Radios.fernlet`, the
 QR scheme and `Installation.fernletApp` off the namespace its reader holds, so every signature, seal,
@@ -77,13 +79,15 @@ Fernlet always shipped:
   accounts, the mesh stores' file names, chunk directory and seal-key accounts, the production
   seal-key services and the default sidecar root.
 
-Eleven of the test target's sixteen `ProximityHost` doubles supply the same value (the other five,
+Twelve of the test target's seventeen `ProximityHost` doubles supply the same value (the other five,
 `ProximityNamespaceGoldenTests`' three hosts and `ProximityVocabularyGoldenTests`' two, take theirs
 from the cell that builds them: another app's, or Fernlet's with some of its groups replaced, in the
 cells that test one). The test target's `ProximityNamespaceTestBindings.swift` restores, by passing
-`.fernlet`, the call shapes the namespace took out of ProximityKit: the identity's argument-less and
-keychain-service initializers, the serializers' and verifiers' shapes, the routed and QR shapes, the
-radios' argument-less initializers, the seal-key reads and the identity-row classifier.
+`.fernlet`, the call shapes the namespace took out of ProximityKit: the serializers' and verifiers'
+shapes, the routed and QR shapes, the radios' argument-less initializers, the seal-key reads and the
+identity-row classifier. The identity's argument-less and keychain-service initializers are
+`FernletAppTestBindings.swift`'s, which builds them under `.fernlet` with the app's sealed-backup
+escrow key, what every identity the app builds carries.
 
 **The feature salts.** `FernletFeaturePurposes.swift` holds ``FernletFeaturePurposes``, Fernlet's
 feature labels that a ProximityKit door consumes: `heartDropPairV1` (`fernlet.heartdrop.v1`) and
@@ -136,7 +140,7 @@ three rows from the routed types (the mesh manager hands it its namespace's); an
 names each of its own frames by role (`MeshPayloadRole`), signs it under the mesh messages' token
 for that role and resolves every token its payload door receives back to a role by them. Its mesh
 features' payload and capability tokens are still `PayloadType` and `ProximityCapability` cases until
-plan steps A0.4 and A0.5 move them: the manager sends a feature's payload under the case's token and
+plan steps A0.5 and A0.7 move them: the manager sends a feature's payload under the case's token and
 keeps its feature handlers by token.
 
 `Radios.fernlet` carries the three presentation strings beside the radio values, and ProximityKit

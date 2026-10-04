@@ -138,9 +138,10 @@ public final class HeartDropService {
 
     /// The dead-drop service over one host's ledger, consent, roster and identity.
     ///
-    /// `identity` has no default: the host passes the identity built from its own namespace (the
-    /// app's `FernletStore.heartDropService` passes `IdentityService(namespace: proximityNamespace)`,
-    /// and every test passes one on a throwaway keychain service).
+    /// `identity` has no default: the host passes this device's identity as it builds every other
+    /// (the app's `FernletStore.heartDropService` passes its one factory's,
+    /// `IdentityService.fernletApp()`, under `.fernlet` and carrying the sealed-backup escrow key as
+    /// its provisioning participant, and every test passes one on a throwaway keychain service).
     public init(
         ledger: ProximityHeartLedger,
         isEnabled: @escaping () -> Bool,
