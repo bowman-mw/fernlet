@@ -10,15 +10,17 @@
 // follow them to `FernletSocialTestBindings.swift`, under the same rule, so this file never imports
 // FernletSocial; and the identity's two initializers, which carry Fernlet's custody (the app's
 // sealed-backup escrow key, the identity's provisioning participant), are in
-// `FernletAppTestBindings.swift`, so it never imports the app either.
+// `FernletAppTestBindings.swift`, so it never imports the app either. The host doubles' identity door,
+// which carries no custody at all, is here, at the foot of the file.
 //
 // THE RULE. A binding restores a call SHAPE, never a value: it passes `ProximityNamespace.fernlet`,
 // exactly the value FernletConnections ships and the app hands ProximityKit, so a suite that goes
-// through one sees the bytes it always saw, and nothing here may pass anything else or compute a
-// label, a row or a name of its own. A test that PINS a value does not lean on a binding: it names
-// `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is visibly
-// Fernlet's and still reads correctly once a binding is retired. Each plan-step commit adds its
-// bindings to this file, beside the API it restores.
+// through one sees the bytes it always saw, and nothing here may pass anything else (but the host
+// doubles' identity door, which passes the double's own namespace, as the shape it restores did) or
+// compute a label, a row or a name of its own. A test that PINS a value does not lean on a binding:
+// it names `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is
+// visibly Fernlet's and still reads correctly once a binding is retired. Each plan-step commit adds
+// its bindings to this file, beside the API it restores.
 //
 // Where an API takes the namespace's labels rather than the whole namespace (step A0.2.4 on), the
 // binding passes `.fernlet` for a `ProximityNamespace.Purposes`: FernletConnections'
@@ -825,5 +827,30 @@ extension IdentityService {
     /// `staticKeyAgreement(withEphemeralPublicKey:)`.
     func heartDropStaticAgreement(withEphemeralPublicKey key: Data) throws -> SharedSecret {
         try staticKeyAgreement(withEphemeralPublicKey: key)
+    }
+}
+
+// MARK: - The host's identity door (A0.4)
+//
+// `ProximityHost.makeProximityIdentity()` has no default: an identity's custody is its host's, so
+// ProximityKit never guesses one, and the app's store answers its factory's identity, which carries
+// the sealed-backup escrow key. The test target's host doubles were written against the identity the
+// requirement's default built for them, and that shape comes back here, once, for every double in this
+// target: the participant-less identity under the host's OWN namespace, `.fernlet` for twelve of them
+// and the cell's for the golden suites' five, never a value of this file's choosing. A protocol
+// extension supplies a requirement only to the conformances its module can see, so this one is
+// invisible to the app module: `FernletStore`'s conformance there must answer for itself, and does.
+// A double that answers for itself (`ProximityNamespaceGateTests`' `ForeignIdentityHost`) keeps its
+// own answer.
+
+/// The identity the test target's host doubles hand a manager that was handed none, in the shape they
+/// had: `IdentityService(namespace: proximityNamespace)`, this device's identity under the host's own
+/// namespace, on that namespace's identity service, with no provisioning participant. It inherits the
+/// protocol's main-actor isolation, as the requirement it answers has.
+extension ProximityHost {
+
+    /// `IdentityService(namespace: proximityNamespace)`: no participant, the host's namespace.
+    func makeProximityIdentity() -> IdentityService {
+        IdentityService(namespace: proximityNamespace)
     }
 }

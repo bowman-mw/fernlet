@@ -31,9 +31,10 @@
 //    namespace unsound, so its identity refuses to provision and the salt derives nothing.
 //    `pairSecret(with:purpose:)` refuses, with `undeclaredPurpose` and before it reads a key, every
 //    purpose its namespace does not declare as a feature salt (one never declared, the protocol's own
-//    salt, a signature label, the declared salt's bytes in another role), throws `notProvisioned`
-//    for a declared salt before provisioning, and derives under a declared salt the key both members
-//    of a pair derive, writing no audit line and no keychain row.
+//    salt, a signature label, the declared salt's bytes in another role, and a spelling Swift's
+//    `String` calls equal to a declared salt but in other bytes, the Kelvin sign for a `K`), throws
+//    `notProvisioned` for a declared salt before provisioning, and derives under a declared salt the
+//    key both members of a pair derive, writing no audit line and no keychain row.
 //
 // Every namespace here is built from literals that belong to no shipping app ("gate"), the way
 // `ProximityNamespaceSoundnessTests` builds its fixtures: sound as written, and unsound with two
@@ -521,6 +522,37 @@ struct ProximityNamespaceGateTests {
         }
         #expect(lines.isEmpty, "the pair-secret door wrote \(lines)")
         #expect(KeychainItem.loadAll(service: services[1]).isEmpty, "the door wrote a keychain row")
+    }
+
+    /// A declaration matches by bytes, never by Unicode text. A namespace that declares the salt
+    /// `gate.Key.v1` derives under it, and refuses with `undeclaredPurpose`, before it reads a key,
+    /// the same label with its `K` spelled as the Kelvin sign (U+212A): Swift's `String` equality, and
+    /// so the purpose's synthesized `==`, calls the two equal (canonical equivalence), but the Kelvin
+    /// spelling is 13 bytes, not 11, which the namespace's soundness verdict never judged (it would be
+    /// a `malformedLabel`), so the feature group does not declare it. Nothing is audited.
+    @Test func thePairSecretDoorRefusesASaltOnlyCanonicallyEquivalentToADeclaredOne() throws {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let declared = ProximityCryptographicPurpose.featureKeyDerivationSalt("gate.Key.v1")
+        let kelvin = ProximityCryptographicPurpose.featureKeyDerivationSalt("gate.\u{212A}ey.v1")
+        #expect(kelvin == declared && kelvin.data.count == 13 && declared.data.count == 11, """
+            the Kelvin spelling is not the declared salt's canonical equivalent in other bytes: \
+            \(Array(kelvin.data)) against \(Array(declared.data))
+            """)
+        let namespace = GateFixtureApp.declaring(ProximityNamespace.FeaturePurposes(["keyV1": declared]))
+        #expect(namespace.soundness == .sound, "the declaring fixture is unsound: \(namespace.soundness)")
+        #expect(namespace.family.purposes.feature.declares(declared), "the feature group does not declare its salt")
+        #expect(!namespace.family.purposes.feature.declares(kelvin), "the feature group declares the Kelvin spelling")
+        let identity = IdentityService(namespace: namespace, keychainService: service)
+        try identity.ensureProvisioned()
+        let peer = Curve25519.KeyAgreement.PrivateKey().publicKey
+        let lines = try GateAuditLines.delivered {
+            #expect(throws: IdentityError.undeclaredPurpose, "the Kelvin spelling reached the key agreement") {
+                _ = try identity.pairSecret(with: peer, purpose: kelvin)
+            }
+            _ = try identity.pairSecret(with: peer, purpose: declared)
+        }
+        #expect(lines.isEmpty, "the pair-secret door wrote \(lines)")
     }
 
     /// The door derives under a declared salt: X25519 between the two keys, then HKDF-SHA256 with the

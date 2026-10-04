@@ -5,8 +5,8 @@ import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
-/// `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore` and
-/// `makeProximityTrustPolicy()` is already satisfied by existing store
+/// `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore`,
+/// `makeProximityTrustPolicy()` and `makeProximityIdentity()` is already satisfied by existing store
 /// members (`trustedProximityPeers`, `isBlockedFingerprint`,
 /// `blockProximityPeer`). Kept in the app target: this conformance is the one piece that cannot
 /// move into `ProximityKit`, since it bridges the module's abstraction to the app's concrete store.
@@ -58,7 +58,9 @@ extension FernletStore: ProximityHost {
     /// The identity the mesh, presence and recipe-share managers build when they are handed none:
     /// Fernlet's, from the app's one factory, `IdentityService.fernletApp()` (`SealedBackupEscrowKey.swift`),
     /// so it carries the sealed-backup escrow key as its provisioning participant and runs the escrow's
-    /// provisioning cases like every other identity the app builds. Overrides the protocol's default,
-    /// an identity with no participant.
+    /// provisioning cases like every other identity the app builds. The requirement has no default (an
+    /// identity's custody is the host's), so a host that left this out would not compile;
+    /// `KeyCustodyBoundaryTests` holds each of the store's three managers to an identity carrying the
+    /// escrow key.
     func makeProximityIdentity() -> IdentityService { .fernletApp() }
 }

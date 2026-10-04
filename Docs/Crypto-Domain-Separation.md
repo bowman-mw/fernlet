@@ -724,8 +724,11 @@ labels.
   (X25519 between the two identities' keys, then HKDF-SHA256 under the salt, empty info, 32 bytes),
   refuses any purpose its namespace does not declare as a feature salt with
   `IdentityError.undeclaredPurpose` before it reads a key, the protocol's own salts included, so no
-  pair secret is derived under a label no verdict judged or under a protocol label. `.fernlet`
-  declares two, `fernlet.heartdrop.v1` and `fernlet.presence.tag.v1`
+  pair secret is derived under a label no verdict judged or under a protocol label. A declaration
+  matches by bytes and role, never by Unicode text (a spelling Swift's `String` calls equal to a
+  declared salt, the Kelvin sign for a `K`, is other bytes, and refused), and the door derives under
+  the declared label's bytes. `.fernlet` declares two, `fernlet.heartdrop.v1` and
+  `fernlet.presence.tag.v1`
   (`FernletKit/Sources/FernletConnections/FernletFeaturePurposes.swift`), twins of this registry's
   `KeyDerivation.heartDropPairV1` and `KeyDerivation.presencePairV1`. FernletSocial's heart-drop and
   presence pair secrets pass the declared salts to the door.

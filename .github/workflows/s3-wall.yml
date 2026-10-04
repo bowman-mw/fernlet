@@ -271,8 +271,10 @@ jobs:
         # enforcement (Docs/Verifiability.md §2, §4) and must run here for the "cannot merge
         # green" claim in Docs/Release-Process.md §1 to be true. Simulator-safe by design:
         # KeyCustodyBoundaryTests drives the production key stores against per-test UUID
-        # keychain services (plus the simulator's own data-protection keychain for the two
-        # well-known rows) and pins the one passcode-gated class in source, so no device
+        # keychain services (plus the simulator's own data-protection keychain for the
+        # well-known rows: the media keys, the install binding, and the device identity the
+        # app's real store hands its three proximity managers, which one cell holds to the
+        # sealed-backup escrow key) and pins the one passcode-gated class in source, so no device
         # passcode is needed. The remaining suites are pure crypto format pins, plus
         # IdentityProvisioningReadTests (F-1, 2026-09-06): the fail-closed identity read whose
         # source wall keeps a transient keychain error from minting over a live identity.
@@ -554,9 +556,17 @@ jobs:
         # it. 278 + 1 (the gate suite's cell holding the mesh, presence and recipe-share managers to the
         # identity their host's `makeProximityIdentity()` builds, refused when it is of another
         # namespace) = 279 is the ARITHMETIC CHECK, never the source.
+        # RAISED 279 -> 280 at A0.4.9, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "280 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 17 + 28), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 280:
+        # passed. Run once more at 280 without ProximityNamespaceGateTests: 263 ran and the floor refused
+        # it. 279 + 1 (the gate suite's cell holding the pair-secret door to a declaration by bytes: a
+        # salt only canonically equivalent to a declared one, the Kelvin sign for a `K`, is refused) =
+        # 280 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 279 \
+          Scripts/run-gated-suites.sh crypto-goldens 280 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

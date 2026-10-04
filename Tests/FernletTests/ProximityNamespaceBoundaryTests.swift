@@ -452,7 +452,7 @@ private extension UInt8 {
             "role: .keyDerivationSalt",
             "/// Mint a salt with featureKeyDerivationSalt(_:) and declare it in the feature group.",
             "let secret = try identity.pairSecret(with: peerKey, purpose: purpose)",
-            "guard purpose.role == .keyDerivationSalt, purposes.feature.declares(purpose) else {"
+            "guard purpose.role == .keyDerivationSalt, let purpose = purposes.feature.declaredLabel(matching: purpose) else {"
         ]
         // R2: bounded by the neighbour and pattern lists.
         for source in neighbours {
@@ -863,9 +863,10 @@ private extension UInt8 {
     /// fails until a row names why it is there and its exit, and a line that goes away fails until
     /// its row is lowered or deleted, so no door outlives its step unnoticed. ProximityKit declares
     /// `package` on 44 code lines in 6 files: the presence radio's doors (36 lines in 4 files, until
-    /// A1), the coordinator's two (until A0.7) and the JSON sidecar's six (until A0.5). Only code
-    /// lines count, each once (``packageDeclarationPattern``): comments and literals may say
-    /// `package` freely.
+    /// A1), the coordinator's two (until A0.7) and the JSON sidecar's six (until A0.5). Every code
+    /// line on which `package` is an access modifier counts, once, however its declaration goes on
+    /// (``packageDeclarationPattern``), a setter's `package(set)` included; comments and literals may
+    /// say `package` freely, and code may use it as a name.
     @Test func packageIsDeclaredOnlyOnTheListedLines() throws {
         let matcher = try NSRegularExpression(pattern: Self.packageDeclarationPattern)
         let sources = try Self.proximitySources()
@@ -894,14 +895,20 @@ private extension UInt8 {
         }
     }
 
-    /// Rule 5's matcher, fixtured both ways, because the matcher is the wall: it sees a `package`
-    /// declaration of every kind a door can be (a type, a protocol, a function, a property, an
-    /// initializer), behind an attribute and before the modifiers a widened declaration keeps
-    /// (`nonisolated`, `static`, the setter access of `private(set)`), and sees none of the nearest
-    /// code that declares nothing `package`: a manifest's `let package = Package(`, a comment and a
-    /// literal that spell the word, an identifier that begins with it, an enum case named for it, and
-    /// a setter-access declaration with no `package` before it. Every sample is lexed first, as the
-    /// module's files are.
+    /// Rule 5's matcher, fixtured both ways, because the matcher is the wall: it sees `package`
+    /// wherever it is an access modifier, before a type, a protocol, a function, a property and an
+    /// initializer, behind an attribute, as a setter's access (`public package(set) var`), before
+    /// whatever modifier its declaration goes on with (`nonisolated`, `nonisolated(nonsending)`,
+    /// `static`, an operator's `prefix` and `postfix` and an infix operator, which takes none,
+    /// `consuming`, `borrowing`, `distributed`, `unowned(unsafe)`, `nonmutating`, a setter's
+    /// `private(set)`), and ending its line before its declaration, alone or behind an attribute or a
+    /// modifier; and it sees none of the nearest code where `package` is a name or no code at all: a
+    /// manifest's `let package = Package(`, a comment and a literal that spell the word, an identifier
+    /// that begins with it, an enum case named for it (alone, and before the next member), a
+    /// setter-access declaration with no `package` before it, a loop variable, a parameter's argument
+    /// label, a `guard` binding, a type test, a member read and write, a value ending a line before a
+    /// declaration, a closure parameter, a call with a `set:` label, a return, a type named for it, a
+    /// ternary's operand and an awaited value. Every sample is lexed first, as the module's files are.
     @Test func thePackageMatcherSeesEveryDeclarationAndNoNeighbour() throws {
         let matcher = try NSRegularExpression(pattern: Self.packageDeclarationPattern)
         let samples = [
@@ -910,7 +917,20 @@ private extension UInt8 {
             "package init(fileURL: URL) {",
             "@MainActor package protocol PresenceRadioSession: AnyObject {",
             "package var onPeerDiscovered: ((PeerHandle) -> Void)?",
-            "package private(set) var isRunning = false"
+            "package private(set) var isRunning = false",
+            "public package(set) var sessionHeartState = SessionHeartState()",
+            "package nonisolated(nonsending) func settle() async {",
+            "package consuming func take() {",
+            "package borrowing func peek() {",
+            "package static prefix func - (value: Level) -> Level { value }",
+            "package static postfix func ++ (value: Level) -> Level { value }",
+            "package static func + (lhs: Level, rhs: Level) -> Level { lhs }",
+            "package distributed func ping() {",
+            "package unowned(unsafe) var owner: Radio?",
+            "package nonmutating func touch() {",
+            "package\nfunc settle() {",
+            "@MainActor package\nfinal class Radio {",
+            "nonisolated(unsafe) package\nvar count = 0"
         ]
         // R2: bounded by the sample list.
         for sample in samples {
@@ -923,7 +943,21 @@ private extension UInt8 {
             #""package""#,
             "packageName",
             "case package",
-            "private(set) var isRunning = false"
+            "private(set) var isRunning = false",
+            "case package\n    var label: String { \"\" }",
+            "for package in packages {",
+            "func make(package level: Int) -> Int { level }",
+            "guard let package else { return }",
+            "if package is Bundle {",
+            "let size = package.count",
+            "manifest.package = nil",
+            "let kind = package\nvar other = 1",
+            "_ = packages.map { package in package }",
+            "let level = package(set: x)",
+            "    return package\n}",
+            "class package\n{",
+            "let pair = isOn ? package : other",
+            "try await package\nlet next = 1"
         ]
         // R2: bounded by the neighbour list.
         for source in neighbours {
@@ -932,12 +966,30 @@ private extension UInt8 {
         }
     }
 
-    /// Rule 5's matcher over lexed code: `package` as a whole word (no identifier character and no
-    /// `.` before it), then whitespace, any of the declaration and storage modifiers a widened
-    /// declaration may keep before its keyword (the setter-access ones included, so a widened
-    /// `package private(set) var` is counted, never missed), then a declaration keyword.
-    static let packageDeclarationPattern =
-        #"(?<![A-Za-z0-9_.])package(?=\s+(?:(?:nonisolated|nonisolated\(unsafe\)|static|final|override|mutating|convenience|required|lazy|weak|unowned|dynamic|indirect|private\(set\)|fileprivate\(set\)|internal\(set\))\s+)*(?:func|var|let|init|struct|class|enum|actor|protocol|typealias|subscript|extension)\b)"#
+    /// Rule 5's matcher over lexed code: every line on which `package` is an access modifier, in
+    /// either of the two places a declaration can put it (multiline, so `^` and `$` are a line's).
+    ///
+    /// - **Before its declaration, on its line** (``packageBeforeItsDeclaration``): `package` as a
+    ///   whole word (no identifier character and no `.` before it), then its setter's `(set)`, or then
+    ///   the next word of its declaration, whatever that word is, so a modifier is counted however the
+    ///   declaration goes on, one Swift adds later included. A name is never followed by a word but
+    ///   for the five a value or a pattern can take after it (`in`, `as`, `is`, `where`, `else`), and
+    ///   a parameter's name after its argument label, which a colon follows; those are not read.
+    /// - **Ending its line, its declaration on a later one** (``packageEndingItsLine``): `package` last
+    ///   on a line that holds nothing before it but attributes and modifiers. A word that introduces a
+    ///   name or a value there (`case`, `let`, `return`, `try` and the like) makes it a name, as in an
+    ///   enum case or a value named `package` at the end of a line, which is not read.
+    static let packageDeclarationPattern = "(?m)" + packageBeforeItsDeclaration + "|" + packageEndingItsLine
+
+    /// `package` followed on its line by `(set)` or by a word other than `in`, `as`, `is`, `where` and
+    /// `else` that no colon follows.
+    static let packageBeforeItsDeclaration =
+        #"(?<![A-Za-z0-9_.])package(?:\(\s*set\s*\)|(?=[ \t]+(?!(?:in|as|is|where|else)\b)[A-Za-z_]\w*\b(?![ \t]*:)))"#
+
+    /// `package` ending a line whose code before it is only attributes and modifiers: words (each with
+    /// an optional parenthesized argument) none of which introduces a name or a value.
+    static let packageEndingItsLine =
+        #"^[ \t]*(?:(?:@\w+(?:\([^()\n]*\))?|(?!(?:case|let|var|func|class|struct|enum|actor|protocol|extension|typealias|associatedtype|import|return|throw|try|await|in|is|as|if|guard|while|switch|for|repeat|some|any|inout|else|where)\b)[A-Za-z_]\w*(?:\([^()\n]*\))?)[ \t]+)*package[ \t]*$"#
 
     /// One file's `package` declaration lines.
     struct PackageLines: Sendable {
