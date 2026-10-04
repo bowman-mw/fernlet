@@ -93,3 +93,10 @@
 # FernletSocial's presence tags: the presence pair secret and the rotating epoch tag every friend pair
 # advertises and matches by — changing a byte here makes every pair of friends invisible to each other
 /FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
+
+# The sealed-backup escrow: the app's escrow key (its content-addressed iCloud Keychain rows, the one
+# synchronizable key, its HKDF derivations, and the order it promotes a previous build's key before a
+# mint overwrites the row) and the identity's provisioning participant seam it rides — a mistake here
+# can destroy a user's backup key on a device that never ran the build
+/App/Fernlet/SealedBackupEscrowKey.swift                                        @bowman-mw
+/FernletKit/Sources/ProximityKit/Identity/IdentityProvisioningParticipant.swift @bowman-mw

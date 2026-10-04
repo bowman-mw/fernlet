@@ -8,7 +8,9 @@
 // shapes; rather than rewrite every construction in every suite, each old shape comes back here
 // once, passing Fernlet's value. The shapes of the types that left ProximityKit for FernletSocial
 // follow them to `FernletSocialTestBindings.swift`, under the same rule, so this file never imports
-// FernletSocial.
+// FernletSocial; and the identity's two initializers, which carry Fernlet's custody (the app's
+// sealed-backup escrow key, the identity's provisioning participant), are in
+// `FernletAppTestBindings.swift`, so it never imports the app either.
 //
 // THE RULE. A binding restores a call SHAPE, never a value: it passes `ProximityNamespace.fernlet`,
 // exactly the value FernletConnections ships and the app hands ProximityKit, so a suite that goes
@@ -34,31 +36,6 @@ import FernletConnections
 import FernletDomainModel
 import Foundation
 @testable import ProximityKit
-
-// MARK: - IdentityService (A0.2.3)
-
-/// The two `IdentityService` initializers the suites were written against, restored over
-/// `init(namespace:keychainService:)` with Fernlet's namespace (plan step A0.2.3).
-///
-/// A binding restores a call shape, never a value; a test that pins a value names `.fernlet`
-/// explicitly instead of calling one of these. Both inherit the class's main-actor isolation, as the
-/// initializers they replace had.
-extension IdentityService {
-
-    /// `IdentityService(namespace: .fernlet)`: this device's identity on Fernlet's identity service,
-    /// the identity the retired argument-less initializer built.
-    convenience init() {
-        self.init(namespace: .fernlet)
-    }
-
-    /// `IdentityService(namespace: .fernlet, keychainService:)`: an identity on a keychain service of
-    /// the test's own, the identity the retired `init(keychainService:)` built.
-    ///
-    /// - Parameter keychainService: The test's own service, usually a throwaway one.
-    convenience init(keychainService: String) {
-        self.init(namespace: .fernlet, keychainService: keychainService)
-    }
-}
 
 // MARK: - Signed transcripts I: the canonical bytes (A0.2.4)
 //

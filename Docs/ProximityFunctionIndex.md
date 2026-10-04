@@ -1462,9 +1462,9 @@ vocabulary its family carries, the radios' presentation strings and the installa
 policy, all judged by its soundness rules, and so are the feature salts the host declares in its
 family (`FeaturePurposes`), the only salts `IdentityService.pairSecret(with:purpose:)` derives
 under. The features' payload and capability tokens are still Fernlet's
-`PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the feature labels stay
-outside it until A0.4 (presence's and the sealed-backup escrow's; the activities' and the moderation
-report's four until A0.5); the heart dead-drop's keychain service and the moderation ban store's are
+`PayloadType` and `ProximityCapability` cases until A0.4, A0.5 and A0.7; the activities' and the
+moderation report's four feature labels stay outside it until A0.5 (the sealed-backup escrow's two are
+the app's, with its escrow); the heart dead-drop's keychain service and the moderation ban store's are
 FernletSocial's.
 ProximityKit refuses an unsound namespace at run time (`Support/ProximityNamespaceGate.swift`,
 below). The host hands it in (`ProximityHost.proximityNamespace`) beside its
@@ -1556,10 +1556,11 @@ ProximityKit acts on the verdict `judge` records at three doors and nowhere else
 provisioning (so a refused identity holds no signing or key-agreement key) and group-key wrap (which
 needs no provisioned key), and each radio's start. Each door reads the stored `soundness` (no rule
 runs again), throws `ProximityNamespaceError` and writes one audit line whose context is `at`,
-`violations` and `first`, never a field or a value. The identity's backup-escrow API reads no verdict:
-it needs no provisioned key and is Fernlet's sealed-backup feature, a feature path that leaves at
-A0.4, whose callers provision first. `ProximityNamespaceGateTests` holds every door to its error and
-its line, over namespaces built from literals, and the managers' identity check to its refusals.
+`violations` and `first`, never a field or a value. An identity's provisioning participant is called
+only from inside the identity's provisioning, after its refusal, and from its wipe, so under an
+unsound namespace no participant is told of a mint. `ProximityNamespaceGateTests` holds every door to
+its error and its line, over namespaces built from literals, and the managers' identity check to its
+refusals, the identity their host's `makeProximityIdentity()` builds included.
 The pair-secret door reads no verdict either: it needs the provisioned key-agreement key, so it
 derives nothing under an unsound namespace.
 The type and its two manager doors, `checkIdentity(_:isOf:event:)` and
@@ -1627,8 +1628,8 @@ overloads of `sign` and `verify`.
 | --- | --- |
 | `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, `proximityTrustStore` and `makeProximityTrustPolicy()`, one of the four requirements the protocol extension **never defaults**, so a host that supplies none fails to compile instead of running under another app's identity. |
 | `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
-| `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; the identity each builds by default is `IdentityService(namespace: namespace)`, and each builds its radio from it. |
-| `IdentityService.init(namespace:keychainService:)` | The identity's namespace and keychain service — see `IdentityService.swift` below. The app's other constructions say `IdentityService(namespace: .fernlet)`; `HeartDropService`'s identity has no default, and `FernletStore` passes `IdentityService(namespace: proximityNamespace)`. |
+| `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; each builds its radio from it, and the identity each holds by default is its host's `makeProximityIdentity()`, checked against it. |
+| `IdentityService.init(namespace:keychainService:provisioningParticipant:)` | The identity's namespace, keychain service and provisioning participant — see `IdentityService.swift` below. Every shipping construction is one of two: ProximityKit's `ProximityHost.makeProximityIdentity()` default, and the app's factory `IdentityService.fernletApp(keychainService:)` (`App/Fernlet/SealedBackupEscrowKey.swift`), which every app construction uses (`HeartDropService`'s identity has no default, and `FernletStore` passes the factory's) and the store's `makeProximityIdentity()` answers; `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` holds that. |
 
 ### Signed transcripts
 
@@ -1729,10 +1730,13 @@ store to its scope's label and binding.
 ### The keychain mechanism
 
 FernletFoundation's `KeychainItem` mechanism is copied into ProximityKit member for member as
-`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 30
-references in the three key-store files (the identity's rows and escrow, and the two mesh seal keys)
-call it; FernletSocial's stores (the moderation ban store, the heart-drop prekey blob and sidecar seal
-key) call FernletFoundation's `KeychainItem` themselves. Only the mechanism came
+`ProximityKeychainItem` (`Support/ProximityKeychainItem.swift`, internal, `nonisolated`), and the 18
+references in the three key-store files (the identity's rows and the two mesh seal keys) call it;
+FernletSocial's stores (the moderation ban store, the heart-drop prekey blob and sidecar seal key) and
+the app's sealed-backup escrow (`SealedBackupEscrowKey`) call FernletFoundation's `KeychainItem`
+themselves. The stores here call the absence-distinguishing reads, `store` under its default scopes
+and the whole-service deletes; the nil-collapsing `load`, the enumerations, the `.synced` / `.local`
+scopes and a narrow `replacing:` have no caller here and stay member for member. Only the mechanism came
 across; Fernlet's `Account` names, typed overloads, service constants, `loadOrCreateSymmetricKey`
 and `updateReportingStatus` stayed behind. Every query is FernletFoundation's for the same call, so
 rows written before the copy read back unchanged and a host's own `KeychainItem` still reads and
@@ -1763,7 +1767,6 @@ value names `.fernlet` explicitly.
 
 | Function | What It Does |
 | --- | --- |
-| `IdentityService.init()` / `init(keychainService:)` | An identity under `.fernlet`. |
 | `canonicalBytes(for:)` (17 types), `canonicalInventoryDigestBytes(for:)` | The serializer's overloads with `.fernlet`'s labels. |
 | `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)`, the six routed verifiers' and `MeshChannelIntroductionExchange`'s initializers without `purposes:` | The verifiers and helpers with `.fernlet`'s labels (the first four with `Family.fernlet`, record kinds included). |
 | `ProximityVerifyQR.urlScheme` / `parse(_:)` / `isValid(_:at:)`, `ProximityVerifySignature.message(scannerKeyAgreementPublicKey:challengeNonce:qrNonce:)` | The verify QR in `.fernlet`. |
@@ -1784,29 +1787,57 @@ bindings file never imports FernletSocial.
 | --- | --- |
 | `PresenceManager.firstName(of:)` | The hearts copy's first name, hiding `.fernlet`'s mesh instance-name prefix. |
 
+### The test target's App bindings (`Tests/FernletTests/FernletAppTestBindings.swift`)
+
+The identity's two old initializers, which need the app's own type to carry Fernlet's custody, under the
+same rule, so the core bindings file never imports the app.
+
+| Function | What It Does |
+| --- | --- |
+| `IdentityService.init()` / `init(keychainService:)` | An identity under `.fernlet` carrying a fresh `SealedBackupEscrowKey`, what every identity the app builds carries, so the suites keep the escrow behaviour they were written against. |
+
 ## Identity, Wire, Trust, And Audit
 
 ### `IdentityService.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `init(namespace:keychainService:)` | Builds an identity under the host's `ProximityNamespace` (plan step A0.2.3). A `nil` service — every shipping path — is `namespace.installation.keychain.identity.service`, `com.fernlet.identity` under `.fernlet`; a test passes a throwaway service of its own. Replaced `init(keychainService:)` and its `"com.fernlet.identity"` default, so ProximityKit spells no app's service. Touches no keychain row. |
+| `init(namespace:keychainService:provisioningParticipant:)` | Builds an identity under the host's `ProximityNamespace` (plan step A0.2.3), with the host's `IdentityProvisioningParticipant` or none (the default). A `nil` service — every shipping path — is `namespace.installation.keychain.identity.service`, `com.fernlet.identity` under `.fernlet`; a test passes a throwaway service of its own. Replaced `init(keychainService:)` and its `"com.fernlet.identity"` default, so ProximityKit spells no app's service. Touches no keychain row. |
 | `namespace` / `purposes` | The namespace the identity was built with (`nonisolated let`) and its labels, `namespace.family.purposes` (`nonisolated`). |
+| `provisioningParticipant` | The host's keys beside the identity's rows, told of each adoption, mint and wipe in the protocol's order, or nil; fixed at construction. |
 | `localFingerprint` | Returns fingerprint of current signing public key, or empty string before provisioning. |
 | `localSigningPublicKey` | Returns raw Ed25519 public key, or empty data before provisioning. |
 | `localKeyAgreementPublicKey` | Returns raw X25519 public key, or empty data before provisioning. |
 | `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it serves FernletCrypto's feature signature labels (the activity join token, roster snapshot and moderation report) until A0.5, the app's duress and probe purposes until C1, and the tests that name them; every core label's builder signs through the namespace overload since A0.2.5. No deprecation attribute (warnings are errors). |
 | `sign(_:purpose:)` with a `ProximityCryptographicPurpose` | The same Ed25519 boundary under a namespace label (A0.2.3). Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
-| `sealedBackupKey()` | Derives the sealed-backup symmetric key from the X25519 private key. |
 | `verify(_:of:by:purpose:)` with a `CryptographicPurpose` or a `ProximityCryptographicPurpose` | Verifies an Ed25519 signature over a transcript framed for the purpose (`signingBytes`). Under a namespace label a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. The registry overload is transitional, like its `sign`. |
 | `seal(_:to:)` | Pairwise-seals payload using ephemeral X25519 ECDH, HKDF-SHA256, and ChaChaPoly; since A0.2.6 the salt is the identity's `purposes.keyDerivation.proximityTransportV1` and the AAD `purposes.aead.proximityTransportV2` ‖ sender. |
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM; since A0.2.6 the salt and AAD are the identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and `purposes.aead.meshGroupKeyWrapV2`. It needs no provisioned key, so it refuses an unsound namespace itself, first: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `groupKeyWrap`). |
 | `decryptGroupKey(_:)` | Unwraps a group key bundle produced by `encryptGroupKey`, under the same purposes. |
 | `pairSecret(with:purpose:)` | A pair secret for one of the host's features (FernletSocial's `heartDropPairSecret(with:)` and `presencePairSecret(with:)` derive through it): X25519 between this device's key-agreement key and a parsed peer key, then HKDF-SHA256 with the purpose's bytes as the salt, empty info, 32 bytes, so both members of a pair derive one key. Throws `IdentityError.undeclaredPurpose` first, before any key is read, for a purpose that is not a key-derivation salt its namespace declares as a feature purpose (a protocol salt included), then `notProvisioned`; no audit line, no keychain row. |
-| `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Refuses an unsound namespace first**: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `provision`) before any row is read or written, on every call. The backup-escrow API beside it needs neither key and checks no verdict: Fernlet's sealed-backup feature, leaving at A0.4, whose callers run this first. **Fails closed on an unreadable row** (F-1, 2026-09-06): Case 1 and Case 3 read with `ProximityKeychainItem.loadDistinguishingAbsence` (FernletFoundation's `KeychainItem` before A0.2.11), and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
+| `ensureProvisioned()` | Idempotently loads or creates signing/key-agreement keys and stores public-key caches. **Refuses an unsound namespace first**: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `provision`) before any row is read or written, on every call, calling no participant. **The participant at fixed points**: told of an adoption after the device keys are adopted and before the key-agreement row is rewritten device-only; asked before every mint, with a fail-closed reader of the key-agreement row a previous build left (`loadLegacyKeyAgreementKey()`, which the mint is about to overwrite), anything it throws stopping provisioning before the identity writes a row; told once the fresh rows are on disk and adopted, never after a failed mint. **Fails closed on an unreadable row** (F-1, 2026-09-06): the device-row reads and the previous build's row read with `ProximityKeychainItem.loadDistinguishingAbsence` (FernletFoundation's `KeychainItem` before A0.2.11), and any status other than `errSecItemNotFound` throws `IdentityError.keychainReadFailed(OSStatus)` with nothing written — a mint `store`s every row delete-then-add, so falling through would destroy the live identity. |
 | `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` / `DeviceIdentityRead` / `loadExistingDeviceIdentity()` / `loadLegacyKeyAgreementKey()` | The pure half and the two reads of the fail-closed rule: an unreadable row wins over everything (`.unreadable`), absence on either row falls through to the mint (`.absent`), a present-but-unparseable row is `.unparseable(row:)` — minted over, but named by `identity.keychain.unparseableRow` first — and both rows found and parsed is `.found`. Since A0.2.8 the rows are the identity's `accounts` (the namespace's `installation.keychain.identity`), and the classifier names a refusing row by the `accounts:` it is handed. Tabled in `IdentityProvisioningReadTests`. |
-| `wipe()` | Deletes identity Keychain entries and clears loaded keys. |
+| `wipe()` | Deletes every row under the identity's keychain service (the device rows and any its host keeps beside them), clears the loaded keys, then tells the participant (`identityWiped(_:)`), and only then throws `keychainDeleteFailed` for a sweep the keychain refused. |
+
+### `IdentityProvisioningParticipant.swift`
+
+| Function | What It Does |
+| --- | --- |
+| `IdentityProvisioningParticipant` | Public, `@MainActor`, class-bound: the keys a host keeps beside its device identity under the identity's keychain service, which provisioning must account for. Without one an identity adopts or mints and nothing else; Fernlet's is the app's `SealedBackupEscrowKey`. |
+| `identityAdoptedDeviceKeys(_:)` | Provisioning adopted the device keys already on this device; called before the key-agreement row is rewritten device-only. |
+| `identityWillMintDeviceKeys(_:previousKeyAgreementKey:)` | Provisioning is about to mint fresh device keys over its rows; the reader returns the key-agreement row a previous build left (nil when absent or unparseable, `keychainReadFailed` when unreadable). Anything it throws stops provisioning before the identity writes a row. |
+| `identityMintedDeviceKeys(_:)` | The fresh rows are on disk and adopted; never called after a failed mint. |
+| `identityWiped(_:)` | The identity swept its rows and cleared its keys, whether or not the sweep succeeded. |
+
+### `App/Fernlet/SealedBackupEscrowKey.swift` (the app)
+
+| Function | What It Does |
+| --- | --- |
+| `SealedBackupEscrowKey` | Fernlet's sealed-backup escrow key and the identity's provisioning participant, one per identity: Case 1 adopts the canonical escrow present; Cases 2 to 4 decide before the mint (an escrow present is adopted once the mint lands; else a previous build's synced key-agreement key is promoted into its content-addressed synchronized slot BEFORE the mint overwrites the row, audited `identity.escrow.legacyPromoteFailed` and thrown as `keychainWriteFailed` when the write fails, so nothing is minted; else nothing); a wipe drops it. Its WS-1 to WS-4 lifecycle (the sealing mint, the open path's load, the restore candidates, the launch reconcile, the conflict adoption, the v1 and v2 HKDF derivations) moved verbatim from `IdentityService`, over `KeychainItem` and `FernletAuditLog`, each taking the identity's keychain service. |
+| `IdentityService.fernletApp(keychainService:)` | The app's one identity factory: `.fernlet`'s identity with a fresh `SealedBackupEscrowKey`. `FernletStore.makeProximityIdentity()` answers it for the three managers, and every other app construction calls it. |
+| `IdentityService.localBackupEscrowPublicKey`, `sealedBackupKey()`, `sealedBackupKey(formatVersion:salt:)`, `sealedBackupKeyCandidates()`, `sealedBackupKeyCandidates(formatVersion:salt:)`, `provisionBackupEscrowKeyForSealing()`, `loadBackupEscrowKeyForOpen()`, `reconcileBackupEscrowKey()`, `adoptSyncedBackupEscrowKey()`, `BackupEscrowReconcileOutcome` | The escrow API the app calls through an identity, each forwarding to its participant when that is a `SealedBackupEscrowKey` (a conditional cast) on the identity's keychain service, and answering "no escrow" without one (`Data()`, `notProvisioned`, `[]`, `false`, `.noEscrow`, `nil`). |
+| `IdentityService.escrowKeychainAccount(forPublicKey:)` | `nonisolated` and pure: `backupEscrowPrivateKey.k.` + the lowercase hex SHA-256 of the public key, the participant type's own static. |
 | `fingerprint(of:)` | Returns a 16-character lowercase SHA-256 prefix for a public key. |
 | `fingerprintsMatch(_:_:)` | Matches 16-character fingerprints and legacy 8-character prefixes. |
 | `staticKeyAgreement(withEphemeralPublicKey:)` | X25519 of the identity's static key-agreement private key with a sender's ephemeral key, answered as the raw shared secret: the closure two ephemeral-static opens take, so the private key never leaves the identity. Its callers are the routed content-key unwrap (`MeshRoutedContentKeyWrapper.unwrap`, from `MeshRoutedItemDelivery`) and FernletSocial's heart dead-drop static-key fallback (`HeartDropSealer.open`, from `HeartDropService`). Throws `notProvisioned` without a key-agreement key and `openFailed` for a malformed ephemeral key. The test target keeps its old `heartDropStaticAgreement(withEphemeralPublicKey:)` spelling as a binding. |
@@ -2801,6 +2832,7 @@ whose phrases are Fernlet's display policy, beside `PeerNames.fernlet`.
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
+| `makeProximityIdentity()` | The identity a manager builds when handed none: the mesh, presence and recipe-share managers call it once each, at construction, and check it against their namespace (`ProximityNamespaceGate.checkIdentity`), so an identity of another namespace starts no radio. The extension's default is `IdentityService(namespace: proximityNamespace)`, with no provisioning participant, which every test double takes; Fernlet's adapter answers its factory's identity, `IdentityService.fernletApp()`, which carries the sealed-backup escrow key. |
 | `proximityTrustStore` | The host's `ProximityTrustStore`, with **no default**: the mesh's four kept-friend gates (friend state and moderation reports, in and out) and the heart-eligibility predicate `isTrustedUnblockedPeer(signingPublicKey:fingerprint:)` (a public extension in `Trust/ProximityTrustStore.swift`), which presence's gate and the routed heart path both ask, ask it whether a signing key is a remembered, unrevoked peer and whether it is blocked, at each question. Fernlet's adapter answers the store's `ProximityTrustVault` (`FernletConnections`), as every test double answers its own vault. |
 | `proximityDisplayName`, `trustedProximityPeers`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The identity/trust surface the managers consume. `trustedProximityPeers` is where they read a friend's record (presence tags, a heart connection's sealing key, a heart sender's filed name, the mesh's vouch list): the same records `proximityTrustStore` answers from. Its element type, Fernlet's persisted `ProximityTrustedPeerRecord`, is on `ProximityNamespaceBoundaryTests`' rule-4 list until the last feature that reads it leaves (A0.5). |
 | `allowNearbyHearts` | The in-person hearts opt-in, the one hearts setting a host answers. FernletSocial's `PresenceManager` consults it on BOTH sides (block an outbound heart, drop an inbound one), and `MeshNetworkManager`'s session hearts do too (the send, the routed heart's ledger judgement and the hearts capability). Presence VISIBILITY is a separate setting, so hearts-off + presence-on means a friend still sees you nearby but a heart to you is silently dropped. The away-delivery consent is no host requirement: the mesh and presence managers each take a `heartsAwayEnabledProvider`. |

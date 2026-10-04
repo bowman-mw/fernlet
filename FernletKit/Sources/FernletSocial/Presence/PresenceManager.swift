@@ -172,15 +172,17 @@ public final class PresenceManager: ProximityPayloadHandling {
     @ObservationIgnored private unowned let store: any ProximityHost
     /// The host's protocol identity, read once from ``store`` at construction and kept as this
     /// manager's own copy (ProximityKit plan step A0.2.3), so no later read reaches back to the
-    /// host. The default identity is built from it, and since A0.2.7 so is the radio, which reads
-    /// its service type, ALPN and log subsystem off it; the default posture mint takes its presence
+    /// host. The default identity, the host's `makeProximityIdentity()`, is checked against it, and
+    /// since A0.2.7 the radio is built from it, which reads its service type, ALPN and log subsystem
+    /// off it; the default posture mint takes its presence
     /// instance-name prefix and TLS common name, and the hearts copy its mesh prefix, which a name
     /// never begins with. `nonisolated`: inert `Sendable` value data.
     @ObservationIgnored nonisolated let namespace: ProximityNamespace
     @ObservationIgnored private let identity: IdentityService
-    /// Whether ``identity`` is of ``namespace``, decided once at `init`. False only when the
-    /// `identity:` parameter handed this manager an identity of another namespace: the manager still
-    /// constructs, and ``start()`` refuses every start of the radio
+    /// Whether ``identity`` is of ``namespace``, decided once at `init`. False only when the identity
+    /// this manager holds, handed in through the `identity:` parameter or answered by the host's
+    /// `makeProximityIdentity()`, is of another namespace: the manager still constructs, and
+    /// ``start()`` refuses every start of the radio
     /// (`presence.identity.namespaceMismatch`), so nothing is advertised under two namespaces.
     @ObservationIgnored private let identityIsOfNamespace: Bool
     @ObservationIgnored private let ledger: ProximityHeartLedger
@@ -314,8 +316,9 @@ public final class PresenceManager: ProximityPayloadHandling {
                 identity, isOf: namespace, event: "presence.identity.namespaceMismatch")
             self.identity = identity
         } else {
-            self.identityIsOfNamespace = true
-            let id = IdentityService(namespace: namespace)
+            let id = store.makeProximityIdentity()
+            self.identityIsOfNamespace = ProximityNamespaceGate.checkIdentity(
+                id, isOf: namespace, event: "presence.identity.namespaceMismatch")
             // Fail-soft: the manager still constructs, but a failed provisioning is NAMED (R7) —
             // otherwise every later presence tag and heart send fails with no visible cause.
             do {

@@ -2,7 +2,7 @@
 // FernletTests
 //
 // Fernlet's features over the proximity stack (the heart dead-drop, presence, moderation, closeness,
-// friend state, and the identity's sealed-backup escrow) put bytes on the wire,
+// friend state, and the sealed-backup escrow beside the identity) put bytes on the wire,
 // in the keychain and on disk that no other suite pins, and plan step A0.4 moves every one of those
 // features or re-derives its bytes (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.4). This
 // suite holds each such byte to the value Fernlet ships: by a hand-written literal, and wherever a
@@ -78,9 +78,10 @@
 // identity is its signing and key-agreement private rows stored device-only at `.fernlet`'s identity
 // accounts under a throwaway service (`com.fernlet.test.ffgt.<UUID>`, swept in a `defer`), then built with
 // `IdentityService(namespace: .fernlet, keychainService:)` and provisioned, which adopts them
-// (provisioning's Case 1). Every identity here names its namespace, never a test binding
-// (ProximityNamespaceTestBindings.swift); the escrow group builds its identities through one accessor,
-// ``FernletFeatureGoldenTests/escrowIdentity(keychainService:)``.
+// (provisioning's Case 1). Every identity here names its namespace or the app's factory, never a test
+// binding (ProximityNamespaceTestBindings.swift, FernletAppTestBindings.swift); the escrow group builds
+// its identities through one accessor, ``FernletFeatureGoldenTests/escrowIdentity(keychainService:)``,
+// today the app's factory, whose identity carries the sealed-backup escrow key.
 //
 // Every vector below was confirmed by two independent computations before it was frozen: a Python
 // re-implementation over OpenSSL (`cryptography`), proved honest first by reproducing
@@ -98,6 +99,7 @@ import FernletFoundation
 import Foundation
 import Security
 import Testing
+@testable import Fernlet
 @testable import FernletSocial
 @testable import ProximityKit
 
@@ -1053,12 +1055,13 @@ extension FernletFeatureGoldenTests {
         PresenceManager.isHeartEligible(signingPublicKey: signingKey, fingerprint: fingerprint, in: host)
     }
 
-    /// The ONE construction of every identity the escrow group provisions: today
-    /// `IdentityService(namespace: .fernlet, keychainService:)`. The only line of that group that says
-    /// how Fernlet builds an identity, so a change to how it builds one re-points this line and never a
-    /// literal or a case.
+    /// The ONE construction of every identity the escrow group provisions: today the app's factory,
+    /// `IdentityService.fernletApp(keychainService:)`, whose identity carries Fernlet's sealed-backup
+    /// escrow key as its provisioning participant. The only line of that group that says how Fernlet
+    /// builds an identity, so a change to how it builds one re-points this line and never a literal or
+    /// a case.
     static func escrowIdentity(keychainService: String) -> IdentityService {
-        IdentityService(namespace: .fernlet, keychainService: keychainService)
+        IdentityService.fernletApp(keychainService: keychainService)
     }
 }
 

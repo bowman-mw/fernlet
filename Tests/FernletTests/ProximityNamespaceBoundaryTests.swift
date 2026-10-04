@@ -15,8 +15,7 @@
 //
 //   1. no namespace, namespace group or purpose is built in ProximityKit outside `Namespace/`;
 //   2. `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
-//      their features (A0.4) or with the mesh manager's feature parts (A0.5), an exact per-file
-//      allowlist (12 lines in 4 files);
+//      the mesh manager's feature parts (A0.5), an exact per-file allowlist (10 lines in 3 files);
 //   3. every remaining string literal in ProximityKit code that contains `fernlet` (any case) is on an
 //      exact per-file allowlist that names why it is still there and the plan step that removes it
 //      (32 literals on 31 lines in 8 files);
@@ -30,25 +29,27 @@
 //      later step reshapes or closes, each row with that step (44 lines in 6 files).
 //
 // Rules 2 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// lowered or deleted. So rules 2 to 4 only shrink, to nothing, as A0.4, A0.5, A0.7, A0.7 / C5 and A1
+// lowered or deleted. So rules 2 to 4 only shrink, to nothing, as A0.5, A0.7, A0.7 / C5 and A1
 // land, and a `package` door's row lives exactly as long as the door.
-// Between them they hold what ProximityKit still takes from Fernlet rather than from its host:
-// the sealed-backup escrow's labels (until A0.4); what the mesh manager builds,
-// decodes or calls (the clothing shop, the activity manager and the moderation report relay, with
-// their payload formats, their labels and the canonical serializer's domains for them) and its own
-// feature sends, capability list and session hearts, with the two typed capability gates and the
-// host's trusted-peer list (until A0.5); the recipe-share manager, its wire types and status copy,
-// and the typed doors only it and Fernlet's features go through, the envelope's typed view of its
-// token and the coordinator's typed send (until A0.7); the session mode (until A0.7 / C5); and the
-// DEBUG test-hook names (until A1). A0.3's rows are gone, and their exit step with them: no
-// presentation string, membership record kind, routed-type token or coach-channel format is on rule
-// 3's list. Rule 5 holds the other direction, the doors ProximityKit opens to Fernlet's own modules
-// while a later step reshapes what is behind them: the presence radio's seam, its QUIC conformer,
-// the peer channel the seam names, the epoch posture and the TXT vocabulary, which FernletSocial's
-// presence manager drives (until A1); the coordinator's typed send and manual commit, which
-// presence's heart delivery and the recipe-share manager call (until A0.7); and the naive JSON
-// sidecar FernletSocial's moderation, closeness and friend-state ledgers persist through, which the
-// activity manager and the mesh's photo-wall preferences still use here (until A0.5).
+// Between them they hold what ProximityKit still takes from Fernlet rather than from its host: what
+// the mesh manager builds, decodes or calls (the clothing shop, the activity manager and the
+// moderation report relay, with their payload formats, their labels and the canonical serializer's
+// domains for them) and its own feature sends, capability list and session hearts, with the two
+// typed capability gates and the host's trusted-peer list (until A0.5); the recipe-share manager,
+// its wire types and status copy, and the typed doors only it and Fernlet's features go through,
+// the envelope's typed view of its token and the coordinator's typed send (until A0.7); the session
+// mode (until A0.7 / C5); and the DEBUG test-hook names (until A1). A0.3's and A0.4's rows are
+// gone, and their exit steps with them: no presentation string, membership record kind, routed-type
+// token or coach-channel format is on rule 3's list, and none of rules 2 to 4 lists a line of a
+// feature A0.4 took out (the heart dead-drop, presence, moderation's ban store, closeness, friend
+// state, the parked chat payload and the sealed-backup escrow). Rule 5 holds the other direction,
+// the doors ProximityKit opens to Fernlet's own modules while a later step reshapes what is behind
+// them: the presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch
+// posture and the TXT vocabulary, which FernletSocial's presence manager drives (until A1); the
+// coordinator's typed send and manual commit, which presence's heart delivery and the recipe-share
+// manager call (until A0.7); and the naive JSON sidecar FernletSocial's moderation, closeness and
+// friend-state ledgers persist through, which the activity manager and the mesh's photo-wall
+// preferences still use here (until A0.5).
 
 import Foundation
 import Testing
@@ -459,13 +460,13 @@ private extension UInt8 {
     /// `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
     /// their features: exactly ``featurePurposeLines``, file by file, line count and purposes read.
     ///
-    /// Every protocol label ProximityKit reads is the namespace's. What is left are the 6 feature
-    /// labels, on 12 code lines in 4 files, each row with the step its lines leave at: the
-    /// sealed-backup escrow's with its feature in plan step A0.4, and the activities' and the
-    /// moderation report's, with the canonical serializer's domains for them, with the mesh manager's
-    /// feature parts in A0.5, because the mesh manager decodes those payloads and calls their signers. A new line fails, and so does a
-    /// protocol purpose read again on a line that was a feature's; a line that goes away fails until
-    /// its count is lowered or its row deleted, so the list only shrinks and reaches nothing at A0.5.
+    /// Every protocol label ProximityKit reads is the namespace's. What is left are the 4 feature
+    /// labels, on 10 code lines in 3 files: the activities' and the moderation report's, with the
+    /// canonical serializer's domains for them, which leave with the mesh manager's feature parts in
+    /// plan step A0.5, because the mesh manager decodes those payloads and calls their signers. A new
+    /// line fails, and so does a protocol purpose read again on a line that was a feature's; a line
+    /// that goes away fails until its count is lowered or its row deleted, so the list only shrinks and
+    /// reaches nothing at A0.5.
     /// Comments may name the registry; only code lines count.
     @Test func fernletCryptoPurposeIsNamedOnlyOnTheFeatureLinesThatLeave() throws {
         let mention = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])FernletCryptoPurpose(?![A-Za-z0-9_])"#)
@@ -512,10 +513,6 @@ private extension UInt8 {
 
     /// Every file whose code still names `FernletCryptoPurpose`, by path under the module root.
     static let featurePurposeLines: [String: FeaturePurposeLines] = [
-        "Identity/IdentityService.swift": FeaturePurposeLines(
-            lines: 2,
-            purposes: ["KeyDerivation.sealedBackupV2", "KeyDerivation.sealedBackupLegacyV1"],
-            reason: .identityFeatureDerivations),
         "Moderation/ModerationReportRelay.swift": FeaturePurposeLines(
             lines: 2, purposes: ["Signature.moderationReportV2"], reason: .moderationReportLabels),
         "Wire/ActivityPayloads.swift": FeaturePurposeLines(
@@ -1028,8 +1025,6 @@ private extension UInt8 {
 
     /// The plan step that takes a value out of ProximityKit.
     enum ExitStep: String, Sendable {
-        /// Fernlet's features still here leave (A0.4): the sealed-backup escrow, for the App.
-        case a04 = "A0.4"
         /// The routed mesh manager is split and its feature parts leave (A0.5), and with them what it
         /// builds, decodes or calls: the clothing shop, the activity manager and the moderation report
         /// relay, with their wire payloads' formats, their labels and the canonical serializer's
@@ -1067,14 +1062,6 @@ private extension UInt8 {
 // MARK: - The reasons
 
 extension ProximityNamespaceBoundaryTests.Reason {
-
-    // Rule 2: the feature labels that leave with their features (A0.4).
-
-    /// IdentityService's feature derivations.
-    static let identityFeatureDerivations = Self(exit: .a04, why: """
-        IdentityService's feature derivations: the sealed-backup escrow's two HKDF info labels, which \
-        leave with the escrow for the App's backup side
-        """)
 
     // Rule 2: the labels of what the mesh manager decodes and calls (A0.5).
 

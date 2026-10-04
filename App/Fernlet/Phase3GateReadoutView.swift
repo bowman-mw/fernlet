@@ -521,9 +521,10 @@ struct Phase3GateReadoutView: View {
     ///
     /// It never calls `ensureProvisioned()` — which can mint device keys, promote a legacy key to a
     /// synchronizable escrow row, and migrate key accessibility — and never
-    /// `provisionBackupEscrowKeyForSealing()`, which MINTS. A bare
-    /// `IdentityService(namespace: .fernlet)` reaches every escrow key through pure keychain reads,
-    /// and an empty candidate set surfaces as a distinguishable, honest failure rather than a mint.
+    /// `provisionBackupEscrowKeyForSealing()`, which MINTS. A bare, never-provisioned
+    /// `IdentityService.fernletApp()` reaches every escrow key through pure keychain reads (its
+    /// `SealedBackupEscrowKey` enumerates them), and an empty candidate set surfaces as a
+    /// distinguishable, honest failure rather than a mint.
     private func probeManifests() async {
         guard !session.manifestProbeInFlight else { return }
         guard !store.ownPhotoBackupPassInFlight else {
@@ -534,7 +535,7 @@ struct Phase3GateReadoutView: View {
         let capturedEpoch = session.epoch
         let service = SealedPhotoBackupService(
             cloudDataService: CloudKitDataService(),
-            identityService: IdentityService(namespace: .fernlet)
+            identityService: .fernletApp()
         )
         var readings: [SealedPhotoCorpus: SealedPhotoManifestReading] = [:]
         // R2: bounded by `SealedPhotoCorpus.allCases` (three).

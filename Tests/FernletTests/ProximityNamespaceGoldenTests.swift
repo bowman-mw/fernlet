@@ -2995,7 +2995,7 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// A device-only row and its synchronized twin under one account and service, the two the
-    /// identity's escrow reconciliation tells apart, are matched alike by ProximityKit's copy and
+    /// sealed-backup escrow's reconciliation tells apart, are matched alike by ProximityKit's copy and
     /// FernletFoundation's `KeychainItem` under every scope: the copy writes the twin with
     /// `replacing: .synced`, which leaves the device-only row in place; `.synced` and `.local` each
     /// find exactly their own row through either, and `.any` both; a `.local` delete through the copy

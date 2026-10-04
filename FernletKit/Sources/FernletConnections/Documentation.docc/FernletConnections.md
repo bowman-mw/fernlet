@@ -35,11 +35,13 @@ transcript consumer writes today begin with the field's prefix.
 That `.sound` verdict is load-bearing at run time: ProximityKit refuses an unsound namespace on its
 own, failing closed with a named audit event before an identity provisions or wraps a group key and
 before a radio starts, so it is what lets the app's identities provision and its three radios come
-up. (The identity's backup-escrow API checks no verdict: it is the app's sealed-backup feature, whose
-paths provision the identity first.) Each ProximityKit manager also refuses to start its radio, and
-the mesh manager to found a mesh, under an identity of another namespace than its host's, which no
-app path hands it: the managers build their own identities from the store's `.fernlet`, and so does
-every other `IdentityService` the app builds.
+up. (The app's sealed-backup escrow checks no verdict: it rides each identity as its provisioning
+participant, which a refused provisioning never calls, and its paths provision the identity first.)
+Each ProximityKit manager also refuses to start its radio, and the mesh manager to found a mesh, under
+an identity of another namespace than its host's, which no app path hands it: the managers take their
+identities from the store's `makeProximityIdentity()`, which answers the app's factory
+(`IdentityService.fernletApp(keychainService:)`, under `.fernlet`), and so does every other
+`IdentityService` the app builds.
 
 **How the app supplies it.** ProximityKit's `ProximityHost` requires a
 `proximityNamespace` and gives it no default, so the app is what hands `.fernlet` over: the

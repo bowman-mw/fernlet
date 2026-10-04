@@ -21,7 +21,8 @@
 //    identity of another namespace, audit `<area>.identity.namespaceMismatch` once at construction and
 //    refuse every start of their radio with it, and the mesh manager every founding of a mesh, before it
 //    signs or seals anything; over an identity of their own namespace they audit nothing and start, and
-//    the mesh manager founds.
+//    the mesh manager founds. Handed no identity, each checks the one its host's
+//    `makeProximityIdentity()` builds the same way, and refuses when that is of another namespace.
 // 5. **A sound namespace passes.** The identity provisions and wraps a group key another identity of
 //    the namespace opens, the recipe-share radio comes up, and the mesh and presence radios hold the
 //    sound verdict their starts read. Tier 1 cannot bring those two up for real (a live listener, and
@@ -38,11 +39,17 @@
 // `ProximityNamespaceSoundnessTests` builds its fixtures: sound as written, and unsound with two
 // literals broken. The managers' host is the app's own store, built through `makeTestStore()`, whose
 // namespace is Fernlet's: a manager is only ever built over a host, and that is the host whose
-// identity seam the mismatch guards. Audit lines are captured the way `ProximityAuditBridgeTests`
-// captures them, through `FernletAuditLog`'s capture registry, scoped to the cell's own calls by a
-// task-local mark, so no line from a suite running beside this one is counted.
+// identity seam the mismatch guards. The one exception is the cell for the host's own identity door,
+// whose host is a double private to this suite (`ForeignIdentityHost`): Fernlet's namespace, binding
+// and trust rules on a scratch sidecar root, whose `makeProximityIdentity()` answers an identity of the
+// gate app's namespace, which no Fernlet host builds. Audit lines are captured the way
+// `ProximityAuditBridgeTests` captures them, through `FernletAuditLog`'s capture registry, scoped to
+// the cell's own calls by a task-local mark, so no line from a suite running beside this one is
+// counted.
 
 import CryptoKit
+import FernletConnections
+import FernletDomainModel
 import FernletFoundation
 import Foundation
 import os
@@ -379,6 +386,62 @@ struct ProximityNamespaceGateTests {
         withExtendedLifetime(ownStore) {}
     }
 
+    /// Each manager handed no identity asks its host's `makeProximityIdentity()` for one and checks it
+    /// as it checks one it is handed. Over a host whose door answers an identity of another namespace
+    /// (``ForeignIdentityHost``, the gate app's identity), the mesh, presence and recipe-share managers
+    /// each construct, write `<area>.identity.namespaceMismatch` once at `construction` and refuse
+    /// every start of their radio with it at `start`, so no radio is started and none reads as
+    /// searching or listening; and each asked the host once.
+    @Test func eachManagerChecksTheIdentityItsHostBuildsForIt() throws {
+        let service = Self.isolatedIdentityService()
+        defer { KeychainItem.deleteAll(service: service) }
+        let host = ForeignIdentityHost(identityService: service)
+
+        let meshRadio = FakeMeshTransportSession()
+        var mesh: MeshNetworkManager?
+        let meshBuilt = GateAuditLines.delivered { mesh = MeshNetworkManager(store: host, transport: meshRadio) }
+        let meshManager = try #require(mesh, "the mesh manager did not construct")
+        let meshStarts = GateAuditLines.delivered {
+            meshManager.startJoin()
+            meshManager.startJoin()
+        }
+        Self.expectRefusedTwice("mesh.identity.namespaceMismatch", construction: meshBuilt, starts: meshStarts)
+        #expect(meshRadio.startedDiscoveryInfo.isEmpty && !meshManager.isSearching,
+                "the mesh manager started its radio under its host's identity of another namespace")
+        meshManager.stopJoin()
+
+        let presenceRadio = FakePresenceRadioSession()
+        var presence: PresenceManager?
+        let presenceBuilt = GateAuditLines.delivered {
+            presence = PresenceManager(store: host, ledger: ProximityHeartLedger(fileURL: Self.scratchLedgerURL()))
+        }
+        let presenceManager = try #require(presence, "the presence manager did not construct")
+        presenceManager.makeSession = { presenceRadio }
+        let presenceStarts = GateAuditLines.delivered {
+            presenceManager.start()
+            presenceManager.start()
+        }
+        Self.expectRefusedTwice("presence.identity.namespaceMismatch", construction: presenceBuilt, starts: presenceStarts)
+        #expect(presenceRadio.advertised.isEmpty && presenceManager.presencePosture == nil && !presenceManager.isListening,
+                "the presence manager started its radio under its host's identity of another namespace")
+
+        let recipeRadio = FakeRecipeShareRadioSession()
+        var recipe: ProximityRecipeShareManager?
+        let recipeBuilt = GateAuditLines.delivered {
+            recipe = ProximityRecipeShareManager(store: host, makeSession: { recipeRadio })
+        }
+        let recipeManager = try #require(recipe, "the recipe-share manager did not construct")
+        let recipeStarts = GateAuditLines.delivered {
+            recipeManager.start()
+            recipeManager.start()
+        }
+        Self.expectRefusedTwice("recipeShare.identity.namespaceMismatch", construction: recipeBuilt, starts: recipeStarts)
+        #expect(!recipeRadio.isStarted && recipeRadio.advertised.isEmpty && !recipeManager.isListening,
+                "the recipe-share manager started its radio under its host's identity of another namespace")
+        #expect(host.identitiesBuilt == 3, "the three managers asked their host for \(host.identitiesBuilt) identities")
+        withExtendedLifetime(host) {}   // the managers hold their host `unowned`
+    }
+
     // MARK: The pair-secret door
 
     /// An identity of a namespace whose declared feature salt repeats a protocol label refuses to
@@ -580,6 +643,18 @@ struct ProximityNamespaceGateTests {
         lines.filter { $0.event == event }.map(\.context)
     }
 
+    /// Expects a manager's mismatch `event` once at `construction` among `construction`'s lines, and at
+    /// `start` once for each of the two starts `starts` holds.
+    private static func expectRefusedTwice(
+        _ event: String, construction: [GateAuditLines.Line], starts: [GateAuditLines.Line],
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(contexts(of: event, in: construction) == [["at": "construction"]],
+                "\(event): construction wrote \(construction)", sourceLocation: sourceLocation)
+        #expect(contexts(of: event, in: starts) == [["at": "start"], ["at": "start"]],
+                "\(event): two starts wrote \(starts)", sourceLocation: sourceLocation)
+    }
+
     /// A symmetric key's bytes, to compare two keys.
     private static func bytes(of key: SymmetricKey) -> Data {
         key.withUnsafeBytes { Data($0) }
@@ -671,6 +746,48 @@ private enum GateAuditLines {
         defer { FernletAuditLog.removeCaptureHandler(token) }
         try Self.$emitter.withValue(mark) { try emit() }
         return seen.withLock { $0 }
+    }
+}
+
+// MARK: - A host whose door builds an identity of another namespace
+
+/// The one host in this suite that is not the app's store: Fernlet's namespace, install binding and
+/// friend-session rule over a trust vault of its own, on a scratch sidecar root (the mesh manager loads
+/// its photo wall and its session context from its host's root at construction), whose
+/// `makeProximityIdentity()` answers an identity of the gate app's namespace on the cell's throwaway
+/// service: the identity no Fernlet host builds, so each manager's check of its host's door can be
+/// seen refusing.
+@MainActor
+private final class ForeignIdentityHost: ProximityHost {
+    /// The throwaway keychain service the identities ``makeProximityIdentity()`` builds keep their rows under.
+    let identityService: String
+    /// How many identities ``makeProximityIdentity()`` has built.
+    private(set) var identitiesBuilt = 0
+    let proximityTrustVault = ProximityTrustVault()
+    let proximityNamespace = ProximityNamespace.fernlet
+    let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
+    let proximitySupportDirectory = uniqueProximityDirectory()
+
+    /// A host whose identities live under `identityService`.
+    init(identityService: String) {
+        self.identityService = identityService
+    }
+
+    var proximityDisplayName: String { "Gate" }
+    var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
+    var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
+    func makeProximityTrustPolicy() -> any ProximityTrustPolicy { FriendSessionTrustPolicy(vault: proximityTrustVault) }
+    func isBlockedFingerprint(_ fingerprint: String) -> Bool {
+        proximityTrustVault.isBlockedFingerprint(fingerprint)
+    }
+    func blockProximityPeer(signingPublicKey: Data) {
+        proximityTrustVault.block(signingPublicKey: signingPublicKey)
+    }
+
+    /// An identity of the gate app's sound namespace, never this host's own.
+    func makeProximityIdentity() -> IdentityService {
+        identitiesBuilt += 1
+        return IdentityService(namespace: GateFixtureApp.sound(), keychainService: identityService)
     }
 }
 

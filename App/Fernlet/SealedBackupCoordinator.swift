@@ -262,7 +262,8 @@ final class SealedBackupCoordinator {
 
     /// Builds the identity the sealed records are sealed/opened under. Injectable ONLY so tests can
     /// point it at a throwaway keychain service instead of the device's real one; production leaves it
-    /// nil and gets `IdentityService(namespace: .fernlet)`, the device's identity on its real rows.
+    /// nil and gets `IdentityService.fernletApp()`, the device's identity on its real rows, carrying the
+    /// sealed-backup escrow key.
     private let identityFactory: (() -> IdentityService)?
 
     /// Builds the CloudKit-backed sealing service. Injectable ONLY so tests can drive the real
@@ -386,7 +387,7 @@ final class SealedBackupCoordinator {
         return SealedBackupV2Engine(
             host: host,
             adapters: adapters,
-            identityFactory: { [identityFactory] in identityFactory?() ?? IdentityService(namespace: .fernlet) },
+            identityFactory: { [identityFactory] in identityFactory?() ?? .fernletApp() },
             serviceFactory: { [serviceFactory] identity in
                 serviceFactory?(identity)
                     ?? SealedBackupService(cloudDataService: CloudKitDataService(), identityService: identity)
@@ -486,7 +487,7 @@ final class SealedBackupCoordinator {
         if keepsForeignSlot {
             FernletAuditLog.log("sealedBackup.v2.turnedOffKeepingAnotherIPhonesSlot", context: ["payload": payload.rawValue])
         } else {
-            let service = makeSealedBackupService(identity: identityFactory?() ?? IdentityService(namespace: .fernlet))
+            let service = makeSealedBackupService(identity: identityFactory?() ?? .fernletApp())
             do {
                 try await service.reconcile(Data(), payloadType: payload, enabled: false)
             } catch {
@@ -507,7 +508,7 @@ final class SealedBackupCoordinator {
     /// The retired payload's delete — its whole chunk set by record name. It needs no content key,
     /// no escrow key and no visibility, which is what keeps it available while locked and hidden.
     private func deleteRetiredBackup(_ payload: SealedBackupPayloadType) async -> Bool {
-        let service = makeSealedBackupService(identity: identityFactory?() ?? IdentityService(namespace: .fernlet))
+        let service = makeSealedBackupService(identity: identityFactory?() ?? .fernletApp())
         do {
             try await service.reconcile(Data(), payloadType: payload, enabled: false)
         } catch {
@@ -561,7 +562,7 @@ final class SealedBackupCoordinator {
         guard backupMayExist else { return }
         // No identity provisioning: `ensureProvisioned()` can mint a device identity, and a delete by
         // record name needs no key at all.
-        let service = makeSealedBackupService(identity: identityFactory?() ?? IdentityService(namespace: .fernlet))
+        let service = makeSealedBackupService(identity: identityFactory?() ?? .fernletApp())
         let payload = SealedBackupPayloadType.sensitiveNotes
         do {
             try await service.reconcile(Data(), payloadType: payload, enabled: false)
@@ -622,7 +623,7 @@ final class SealedBackupCoordinator {
     /// can surface a non-silent choice. Adoption of a synced key and promotion of a local key are
     /// non-destructive and proceed; only a divergent synced-vs-local key is held back for user resolution.
     private func reconcileEscrowKey() {
-        let identity = identityFactory?() ?? IdentityService(namespace: .fernlet)
+        let identity = identityFactory?() ?? .fernletApp()
         do { try identity.ensureProvisioned() } catch {
             FernletAuditLog.log("sealedBackup.escrowReconcileNotProvisioned")
             return
@@ -649,7 +650,7 @@ final class SealedBackupCoordinator {
     /// - Note: deliberately NOT `@discardableResult` (Power-of-10 R7). A `false` means the conflict
     ///   banner the user just acted on is still there, and only the caller can say so.
     func adoptSyncedEscrowAndReupload() async -> Bool {
-        let identity = identityFactory?() ?? IdentityService(namespace: .fernlet)
+        let identity = identityFactory?() ?? .fernletApp()
         do { try identity.ensureProvisioned() } catch {
             FernletAuditLog.log("sealedBackup.escrowAdoptNotProvisioned")
             return false

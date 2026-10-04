@@ -371,9 +371,10 @@ let package = Package(
         // and replay (CryptoKit Ed25519/X25519), the session coordinator and the trust protocols its
         // host answers, NI ranging, the protocol namespace its host supplies, the routed mesh engine,
         // the presence radio and the ProximityHost seam protocol; and the Fernlet features still built
-        // into it until plan steps A0.4, A0.5 and A0.7 move them out (the identity's sealed-backup
-        // escrow, the mesh manager's feature parts, the heart ledger, the recipe-share manager, the
-        // clothing shop, activities, chat and the moderation report relay). Fernlet's rules (its
+        // into it until plan steps A0.5 and A0.7 move them out (the mesh manager's feature parts, the
+        // heart ledger, the recipe-share manager, the clothing shop, activities, chat and the
+        // moderation report relay). The sealed-backup escrow beside its identity is the app's, through
+        // the identity's provisioning participant. Fernlet's rules (its
         // namespace, trust vault and session policies) are FernletConnections', and the heart dead-drop,
         // presence's manager and tags, moderation's ban store and ledger, closeness, friend state and the
         // parked chat payload are FernletSocial's: both below, both depending on this module, never the

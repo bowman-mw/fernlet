@@ -13,13 +13,15 @@ import Security
 ///
 /// The common substrate for Fernlet's keychain-backed secrets: `FernletLockService`'s lock
 /// credentials, the device-bound journal and Worry Box content keys, the private-media keys, the
-/// pending-narrative buffer's key, the persisted ``StoragePreferences`` blob, and FernletSocial's
+/// pending-narrative buffer's key, the persisted ``StoragePreferences`` blob, FernletSocial's
 /// moderation bans (`ModerationBanStore`) and heart-drop keys (`HeartPrekeyStore`'s prekey blob and
-/// `HeartDropSidecarSeal`'s sidecar seal key). All operations target generic-password items in the
-/// data-protection keychain (`kSecUseDataProtectionKeychain`), keyed by service + account.
+/// `HeartDropSidecarSeal`'s sidecar seal key), and the app's sealed-backup escrow rows
+/// (`SealedBackupEscrowKey`, beside the device identity's under its keychain service). All operations
+/// target generic-password items in the data-protection keychain (`kSecUseDataProtectionKeychain`),
+/// keyed by service + account.
 ///
-/// ProximityKit's key stores (the device identity and its backup-escrow rows, and the mesh seal
-/// keys) do not call this type: since ProximityKit plan step A0.2.11 they reach the keychain through
+/// ProximityKit's key stores (the device identity's rows and the mesh seal keys) do not call this
+/// type: since ProximityKit plan step A0.2.11 they reach the keychain through
 /// ProximityKit's own copy of this mechanism, `ProximityKeychainItem`, which issues these same query
 /// dictionaries (`ProximityNamespaceGoldenTests` holds the two equal), so rows written through
 /// either read back through the other.
@@ -27,9 +29,9 @@ import Security
 /// Two subtleties are load-bearing:
 /// - The keychain treats `kSecAttrSynchronizable` as part of an item's primary key, so an
 ///   iCloud-synced item and a `ThisDeviceOnly` item can coexist under the same service + account
-///   as two distinct rows. ``SynchronizableScope`` lets callers target one variant; ProximityKit's
-///   backup-escrow reconciliation, which it was written for, depends on telling them apart, and
-///   now does so through ProximityKit's copy (no shipping caller of this type passes a scope).
+///   as two distinct rows. ``SynchronizableScope`` lets callers target one variant; the sealed-backup
+///   escrow's reconciliation, which it was written for, depends on telling them apart, and the app's
+///   `SealedBackupEscrowKey` is the shipping caller that passes a scope.
 /// - ``store(_:account:service:accessibility:synchronizable:replacing:)`` is delete-then-add, and
 ///   its `replacing` scope controls which variant the delete removes — pass a narrow scope when
 ///   promoting an escrow item so a genuine key that just synced in is not clobbered.
@@ -63,9 +65,8 @@ public nonisolated enum KeychainItem {
     /// an iCloud-Keychain-replicated item from a `ThisDeviceOnly` one when BOTH can exist under the same
     /// service+account — the keychain treats `kSecAttrSynchronizable` as part of an item's primary key,
     /// so a synced item and a device-only item with the same account coexist as two distinct rows.
-    /// ProximityKit's backup-escrow reconciliation relies on telling them apart (see its
-    /// IdentityService, which does so through ProximityKit's copy of this type since its plan step
-    /// A0.2.11).
+    /// The app's sealed-backup escrow reconciliation (`SealedBackupEscrowKey`) relies on telling them
+    /// apart.
     public enum SynchronizableScope {
         /// Match either variant (`kSecAttrSynchronizableAny`) — the historical default behavior.
         case any
@@ -126,8 +127,8 @@ public nonisolated enum KeychainItem {
     /// variant is removed before the add: the default `.any` matches the historical "overwrite whatever
     /// is there" behavior. Pass `.local` (or `.synced`) to remove only that variant — written for
     /// promoting a `ThisDeviceOnly` escrow item to `synchronizable` without risking the removal of a
-    /// genuine key that just synced in under the same account (ProximityKit's escrow promotion, which
-    /// goes through ProximityKit's copy of this type since its plan step A0.2.11).
+    /// genuine key that just synced in under the same account (the app's `SealedBackupEscrowKey`: its
+    /// reconcile promotes a device-only key, and migrates a legacy one, under a narrow scope).
     ///
     /// - Returns: the `SecItemAdd` status (`errSecSuccess` on success). Not discardable (R7): a
     ///   failed add means the secret was never persisted, and every caller here is minting key
@@ -220,8 +221,7 @@ public nonisolated enum KeychainItem {
     /// land on DIFFERENT accounts and coexist rather than overwrite one another — so the reconcile path
     /// must enumerate to discover the full set (a fresh device does not know the account name a priori).
     /// Query `.synced` and `.local` separately to learn each row's sync status. Returns `[]` on no
-    /// match/error. That store is ProximityKit's, and it enumerates through ProximityKit's copy of this
-    /// type since its plan step A0.2.11, so no shipping code calls this member today; only tests do.
+    /// match/error. That store is the app's `SealedBackupEscrowKey`, this member's shipping caller.
     ///
     /// - Important: the error collapse is the whole difference from
     ///   ``loadAllDistinguishingFailure(service:synchronizable:)``, and it is only safe where an

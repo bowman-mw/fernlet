@@ -56,4 +56,10 @@ extension FernletStore: ProximityHost {
     func makeProximityTrustPolicy() -> any ProximityTrustPolicy {
         FriendSessionTrustPolicy(vault: proximityTrustVault)
     }
+    /// The identity the mesh, presence and recipe-share managers build when they are handed none:
+    /// Fernlet's, from the app's one factory, `IdentityService.fernletApp()` (`SealedBackupEscrowKey.swift`),
+    /// so it carries the sealed-backup escrow key as its provisioning participant and runs the escrow's
+    /// provisioning cases like every other identity the app builds. Overrides the protocol's default,
+    /// an identity with no participant.
+    func makeProximityIdentity() -> IdentityService { .fernletApp() }
 }

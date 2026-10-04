@@ -6,6 +6,7 @@ import ProximityKit
 import Security
 import Testing
 import FernletFoundation
+@testable import Fernlet
 @testable import FernletCrypto
 @testable import FernletLock
 
@@ -17,10 +18,15 @@ import FernletFoundation
 ///   keychain service and read the row's ACTUAL `kSecAttrAccessible` + `kSecAttrSynchronizable`
 ///   back via `SecItemCopyMatching` — asserting the exact expected class, not the source text.
 /// - **Grep-walls** pin where the two sanctioned exceptions may live in shipping code:
-///   `synchronizable: true` (the escrow promotion) only in `IdentityService.swift`, and a bare
+///   `synchronizable: true` (the escrow promotion) only in `SealedBackupEscrowKey.swift`, and a bare
 ///   non-`ThisDeviceOnly` accessibility class only in `PrivateMediaKeyStore.swift` +
-///   `IdentityService.swift`. Exact-set in both directions, with planted-violation fixtures and
-///   a scan floor, so the wall can neither miss a new file nor rot into a stale allowance.
+///   `SealedBackupEscrowKey.swift`; and where a device identity may be built: only by its host's
+///   door, ProximityKit's `ProximityHost.swift` (the default, which carries no participant) and the
+///   app's factory in `SealedBackupEscrowKey.swift` (which carries the escrow key), so no shipping
+///   path can provision an identity that mints over a previous build's key-agreement row without
+///   first promoting it into the escrow. Exact-set in both directions, with planted-violation
+///   fixtures and a scan floor, so the wall can neither miss a new file nor rot into a stale
+///   allowance.
 ///
 /// A future "make sealed data shareable" change would have to flip one of these rows to a
 /// synchronizable or non-device class — and fail here, in the same commit.
@@ -482,7 +488,7 @@ struct KeyCustodyBoundaryTests {
         return hits
     }
 
-    // MARK: Wall: `synchronizable: true` may appear ONLY in IdentityService.swift (the escrow
+    // MARK: Wall: `synchronizable: true` may appear ONLY in SealedBackupEscrowKey.swift (the escrow
     // key's promotion to iCloud Keychain — the one key whose entire purpose is to sync).
     // Exact-set both ways: a new syncing write fails, and a stale allowance fails.
     @Test func synchronizableTrueIsConfinedToTheEscrowService() throws {
@@ -493,12 +499,12 @@ struct KeyCustodyBoundaryTests {
             guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
             if Self.containsSynchronizableTrue(source) { hitFiles.insert(url.lastPathComponent) }
         }
-        #expect(hitFiles == ["IdentityService.swift"],
+        #expect(hitFiles == ["SealedBackupEscrowKey.swift"],
                 "iCloud-Keychain-synchronizable keychain writes must exist only in the escrow promotion; found \(hitFiles.sorted())")
     }
 
     // MARK: Wall: a bare non-ThisDeviceOnly accessibility class may appear ONLY in the two
-    // sanctioned files (media key = backup-restorable by product decision; IdentityService =
+    // sanctioned files (media key = backup-restorable by product decision; SealedBackupEscrowKey =
     // the synced escrow slots). Everything else must be ThisDeviceOnly.
     @Test func bareAccessibilityClassesAreConfinedToTheSanctionedFiles() throws {
         let files = shippingSwiftFiles()
@@ -508,8 +514,87 @@ struct KeyCustodyBoundaryTests {
             guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
             if !Self.bareAccessibilityTokens(in: source).isEmpty { hitFiles.insert(url.lastPathComponent) }
         }
-        #expect(hitFiles == ["PrivateMediaKeyStore.swift", "IdentityService.swift"],
+        #expect(hitFiles == ["PrivateMediaKeyStore.swift", "SealedBackupEscrowKey.swift"],
                 "non-device-bound accessibility classes must stay confined to the two sanctioned files; found \(hitFiles.sorted())")
+    }
+
+    // MARK: Wall: every shipping identity is built by its host's door. An identity that carries no
+    // escrow participant mints over the key-agreement row a pre-migration build left without first
+    // promoting that key into its escrow slot, destroying the user's backup key on the first
+    // provisioning, so an identity may be constructed ONLY in the two homes: ProximityKit's host
+    // default (`ProximityHost.makeProximityIdentity()`, reached only by hosts that keep no keys beside
+    // the identity) and the app's factory (`IdentityService.fernletApp(keychainService:)`, which
+    // carries `SealedBackupEscrowKey`, and which `FernletStore.makeProximityIdentity()` answers).
+
+    /// The shipping files that may construct an `IdentityService`, by repo-relative path.
+    static let identityConstructionHomes: Set<String> = [
+        "FernletKit/Sources/ProximityKit/ProximityHost.swift",
+        "App/Fernlet/SealedBackupEscrowKey.swift"
+    ]
+
+    /// Matcher: the 1-based lines of lexed `code` (comments removed, literals emptied) that construct
+    /// an identity: a call of the type (`IdentityService(…)`, `IdentityService.init(…)`) or an implicit
+    /// initializer under the identity's one first label (`.init(namespace:`, `Self(namespace:`), which
+    /// no other shipping type is built with today, so a construction cannot hide behind type inference.
+    static func identityConstructionLines(in code: String) -> [Int] {
+        let pattern = #"(?<![A-Za-z0-9_])IdentityService\s*(?:\.\s*init\s*)?\("#
+            + #"|(?<![A-Za-z0-9_.])(?:Self\s*(?:\.\s*init\s*)?|\.\s*init\s*)\(\s*namespace\s*:"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [-1] }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map {
+            text.substring(to: $0.range.location).count(where: { $0 == "\n" }) + 1
+        }
+    }
+
+    /// Every shipping Swift file constructs an identity only in ``identityConstructionHomes``, exact
+    /// both ways, read as lexed code (`SwiftSourceLexer`, from `ProximityNamespaceBoundaryTests`), so
+    /// a doc comment or a string that spells a construction is not one; the matcher is held to its
+    /// samples and its neighbours first.
+    @Test func everyShippingIdentityIsBuiltByItsHostsDoor() throws {
+        let samples = [
+            "let id = IdentityService(namespace: .fernlet)", "let id = IdentityService.init(namespace: n)",
+            "let id: IdentityService = .init(namespace: n)", "return Self(namespace: n, keychainService: s)"
+        ]
+        let neighbours = [
+            "let tag = IdentityService.fingerprint(of: key)", "let identity: IdentityService",
+            "/// IdentityService(namespace:)", #"let s = "IdentityService(namespace: .fernlet)""#,
+            "let id = IdentityService.fernletApp()", "self.init(namespace: .fernlet, keychainService: service)",
+            "let radio = NetworkMeshSession(namespace: namespace)"
+        ]
+        // R2: bounded by the two fixture lists.
+        for sample in samples {
+            #expect(Self.identityConstructionLines(in: SwiftSourceLexer.lex(sample).code) == [1], "missed: \(sample)")
+        }
+        for neighbour in neighbours {
+            #expect(Self.identityConstructionLines(in: SwiftSourceLexer.lex(neighbour).code).isEmpty,
+                    "read a construction in: \(neighbour)")
+        }
+        var homes: Set<String> = []
+        var scanned = 0
+        // R2: bounded by the five shipping roots and each root's finite file list.
+        for root in Self.shippingRoots {
+            let rootURL = RepoRoot.url.appendingPathComponent(root)
+            guard let enumerator = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil) else {
+                Issue.record("scan root missing: \(root)")
+                continue
+            }
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                scanned += 1
+                guard let source = try? String(contentsOf: url, encoding: .utf8),
+                      !Self.identityConstructionLines(in: SwiftSourceLexer.lex(source).code).isEmpty else { continue }
+                // A path that does not resolve under its root is kept whole, so it fails the set loudly.
+                let suffix = url.path.range(of: "/" + root + "/", options: .backwards).map { url.path[$0.upperBound...] }
+                homes.insert(suffix.map { root + "/" + $0 } ?? url.path)
+            }
+        }
+        #expect(scanned >= Self.scanFloor, "scan saw \(scanned) files — enumerator broken?")
+        #expect(homes == Self.identityConstructionHomes, """
+            shipping code constructs an IdentityService in \(homes.sorted()); only \
+            \(Self.identityConstructionHomes.sorted()) may. Build Fernlet's identity with \
+            `IdentityService.fernletApp(keychainService:)` (it carries the sealed-backup escrow key), a \
+            manager's with its host's `makeProximityIdentity()`, and spell any other type's \
+            `init(namespace:)` with its type name.
+            """)
     }
 
     // MARK: Fixtures: prove both matchers actually fire on planted violations (and stay quiet on

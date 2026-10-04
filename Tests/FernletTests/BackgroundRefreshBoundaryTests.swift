@@ -92,7 +92,8 @@ import Testing
 /// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
 /// protocol identity, a constant value), `proximityInstallBinding` (a stateless adapter over the
 /// install's binding row), `makeProximityTrustPolicy` (a fresh session trust policy over the vault,
-/// which runs nothing until a coordinator consults it), `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// which runs nothing until a coordinator consults it), `makeProximityIdentity` (a fresh identity over
+/// the store's rows, which provisions nothing until asked), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,

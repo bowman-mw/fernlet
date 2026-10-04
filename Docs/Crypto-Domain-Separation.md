@@ -132,8 +132,8 @@ on the reasoning.
 
 | Constant | Spelling | Consumer |
 |---|---|---|
-| `sealedBackupLegacyV1` | `com.fernlet.sealed-backup` | `IdentityService` |
-| `sealedBackupV2` | `com.fernlet.sealed-backup.v2` | `IdentityService` |
+| `sealedBackupLegacyV1` | `com.fernlet.sealed-backup` | `SealedBackupEscrowKey` (the app) |
+| `sealedBackupV2` | `com.fernlet.sealed-backup.v2` | `SealedBackupEscrowKey` (the app) |
 | `proximityTransportV1` | `fernlet.proximity.v1` | `IdentityService` |
 | `heartDropPairV1` | `fernlet.heartdrop.v1` | — (FernletSocial's `IdentityService+HeartDrop` derives under its twin, `FernletFeaturePurposes.heartDropPairV1`; §8) |
 | `presencePairV1` | `fernlet.presence.tag.v1` | — (FernletSocial's `IdentityService+PresenceTags` derives under its twin, `FernletFeaturePurposes.presencePairV1`; §8) |
@@ -416,7 +416,7 @@ than from this device's disk.
 | Sealed column blob | **v3**: `0x03 ‖ ChaChaPoly(nonce‖ct‖tag)` with `purpose ‖ deviceBindingID` as AAD | **None.** v2 (`0x02`, binding-only AAD) and legacy (bare `combined`, no version byte) are CLASSIFIED and refused, never opened | `ColumnCrypto.openBlob` requires `0x03`; anything else throws `SealedColumnOpenError.retiredFormat(_:)` |
 | Identity envelope signature | `identityEnvelopeV2` over the binary canonical serializer | `identityEnvelopeLegacyV1` over the old `.sortedKeys`/`.iso8601` JSON, selected by `schemaVersion` | `FernletIdentityEnvelope.verify` |
 | Mesh admission token | `meshAdmissionTokenV2` | `meshAdmissionTokenLegacyV1`, tried as a **fallback** after v2 fails | `MeshPayloads` |
-| Sealed backup key | `sealedBackupV2` info + a real salt | `sealedBackupLegacyV1` info + an empty salt, selected by `formatVersion` | `IdentityService.deriveSealedBackupKey` |
+| Sealed backup key | `sealedBackupV2` info + a real salt | `sealedBackupLegacyV1` info + an empty salt, selected by `formatVersion` | `SealedBackupEscrowKey.deriveSealedBackupKey` (the app) |
 
 Three things about the sealed-column table row are easy to miss, and the first two were true in the
 opposite direction until the crypto standardization round:
@@ -763,14 +763,13 @@ labels.
   soundness rules bound each token's bytes. Fifteen mesh messages and three record kinds are spelled
   exactly like signature labels, which `ProximityNamespaceGoldenTests` holds equal so that one grep
   finds both.
-- **What still reads this registry from ProximityKit.** The 6 feature labels — activities (3), the
-  moderation report's signature (1) and the sealed-backup escrow (2) — on the code lines
-  `ProximityNamespaceBoundaryTests` allowlists file by file. They leave with their features: the
-  escrow's at plan step A0.4, and the activities' three and the
-  moderation report's signature with the mesh manager's feature parts at A0.5, when that list
-  reaches nothing. `FernletSocial` names its own entries here: the heart dead-drop's sealed-drop
-  salt, day-tag prefix and sidecar authenticated data, presence's epoch-tag prefix, and the ban
-  store's evidence reporter tag.
+- **What still reads this registry from ProximityKit.** The 4 feature labels — activities (3) and
+  the moderation report's signature (1) — on the code lines `ProximityNamespaceBoundaryTests`
+  allowlists file by file. They leave with the mesh manager's feature parts at plan step A0.5, when
+  that list reaches nothing. `FernletSocial` names its own entries here: the heart dead-drop's
+  sealed-drop salt, day-tag prefix and sidecar authenticated data, presence's epoch-tag prefix, and
+  the ban store's evidence reporter tag. The app names the sealed-backup escrow's two
+  (`SealedBackupEscrowKey`, the provisioning participant of every identity the app builds).
   The app's duress and probe signatures still sign
   through ProximityKit's `IdentityService` under their entries here, through its
   `CryptographicPurpose` overloads.

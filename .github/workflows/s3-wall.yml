@@ -529,9 +529,17 @@ jobs:
         # passed. Run once more at 278 without FernletFeatureGoldenTests: 250 ran and the floor refused
         # it. 277 + 1 (the feature golden's cell holding a reported artwork's content hash to its known
         # answer) = 278 is the ARITHMETIC CHECK, never the source.
+        # RAISED 278 -> 279 at A0.4.7, MEASURED on a Mac, 2026-10-03 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at floor 1 after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "279 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 16 + 28), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 279:
+        # passed. Run once more at 279 without ProximityNamespaceGateTests: 263 ran and the floor refused
+        # it. 278 + 1 (the gate suite's cell holding the mesh, presence and recipe-share managers to the
+        # identity their host's `makeProximityIdentity()` builds, refused when it is of another
+        # namespace) = 279 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 278 \
+          Scripts/run-gated-suites.sh crypto-goldens 279 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

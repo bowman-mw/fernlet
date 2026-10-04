@@ -218,8 +218,10 @@ key, provisioning and wipe; the signed `FernletIdentityEnvelope` with its `Paylo
 `ProximityPrekeyBundle` wire type; the two mesh storage scopes the derivation extends;
 `ModerationReportPayload.maxReports`, the most rows one relay delivery may add; and for presence the
 host seam (`ProximityHost`: its namespace, trusted peers and trust store, the hearts setting, the
-per-connection trust policy, the resolved display name and the heart-eligibility predicate
-`isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`), the session coordinator it builds a heart
+per-connection trust policy, the resolved display name, the identity presence builds when it is
+handed none, `makeProximityIdentity()`, which it checks against its namespace as an injected one, and
+the heart-eligibility predicate `isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`), the session
+coordinator it builds a heart
 connection over (`ProximityCoordinator`, with `ProximityPayloadHandling`, `NIRangingSession`,
 `ReplayCache`, `PeerHandle` and the coordinator's prekey-bundle hooks), the `ObservationLoop` it
 watches its coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name
