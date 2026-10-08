@@ -47,6 +47,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -59,9 +60,11 @@ struct MeshReturningMemberReseatTests {
 
     let store = makeTestStore()
 
-    /// What a scenario needs: the manager, its recording radio, the member that will re-dial, and
-    /// the mesh id.
+    /// What a scenario needs: the manager with the mesh composition that owns it, its recording
+    /// radio, the member that will re-dial, and the mesh id.
     private struct Rig {
+        /// Fernlet's mesh composition, which built ``manager`` and owns it; kept for the rig's lifetime.
+        let features: FernletMeshFeatures
         let manager: MeshNetworkManager
         let radio: FakeMeshTransportSession
         let member: IdentityService
@@ -91,7 +94,8 @@ struct MeshReturningMemberReseatTests {
         ledgerExtras: (inout MeshMembershipLedger, IdentityService, UUID) throws -> Void = { _, _, _ in }
     ) throws -> Rig {
         let radio = FakeMeshTransportSession()
-        let manager = MeshNetworkManager(store: store, transport: radio)
+        let features = FernletMeshRig.features(store: store, transport: radio)
+        let manager = features.mesh
         let meshID = UUID()
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID)
         let member = try MeshPartitionFixtures.identity("reseat-member")
@@ -110,7 +114,9 @@ struct MeshReturningMemberReseatTests {
             manager.applySessionEvent(.linksLost)
         }
         #expect(manager.sessionState == .partitioned, "the rig must start partitioned")
-        return Rig(manager: manager, radio: radio, member: member, extras: extras, meshID: meshID)
+        return Rig(
+            features: features, manager: manager, radio: radio, member: member, extras: extras, meshID: meshID
+        )
     }
 
     /// Seats a fresh slot the way a re-dial does and drives its coordinator through `remote`'s
@@ -570,12 +576,17 @@ struct MeshReturningMemberReseatTests {
     // MARK: Claim 7 — a final pair's leaver lets the partner read the termination first
 
     /// A manager in a live, founded mesh whose signed roster is this device plus `others`, with a
-    /// committed slot for each of them, over a recording fake radio.
+    /// committed slot for each of them, over a recording fake radio, with the mesh composition that
+    /// owns it (kept by the caller for as long as it uses the manager).
     private func makeLeaver(
         others count: Int, seatsOthers: Bool = true
-    ) throws -> (manager: MeshNetworkManager, radio: FakeMeshTransportSession, handles: [PeerHandle], meshID: UUID) {
+    ) throws -> (
+        features: FernletMeshFeatures, manager: MeshNetworkManager, radio: FakeMeshTransportSession,
+        handles: [PeerHandle], meshID: UUID
+    ) {
         let radio = FakeMeshTransportSession()
-        let manager = MeshNetworkManager(store: store, transport: radio)
+        let features = FernletMeshRig.features(store: store, transport: radio)
+        let manager = features.mesh
         let meshID = UUID()
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID)
         let others = try (0..<count).map { try MeshPartitionFixtures.identity("grace-\($0)") }
@@ -591,7 +602,7 @@ struct MeshReturningMemberReseatTests {
         let handles = seatsOthers ? others.map {
             MeshP3Acceptance.attachSlot(to: manager, fingerprint: $0.localFingerprint).peer
         } : []
-        return (manager, radio, handles, meshID)
+        return (features, manager, radio, handles, meshID)
     }
 
     @Test func aFinalPairLeaverWaitsForThePartnersCloseBeforeItsRadioGoesDown() async throws {

@@ -28,6 +28,7 @@ import Testing
 @testable import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -2122,14 +2123,14 @@ struct MeshPairwiseFoundingTests {
 
         // Node 2 is linked to node 0 and has NOT committed: exactly a provisional peer.
         rig.link(0, 2)
-        rig.nodes[0].manager.isVouchListBroadcastEnabled = true
+        rig.nodes[0].features.vouchList.isVouchListBroadcastEnabled = true
         try rig.deliverGroupKeyFamily(from: 2, to: 0)
         try rig.deliver(rig.vouchList(from: 2, trusting: 1), type: .meshFriendVouchList, from: 2, to: 0)
 
         #expect(capture.count(of: "mesh.groupKey.droppedUncommittedSlot", where: mine) == 5,
                 "all five group-crypto types are dropped at the door, and each is named")
         #expect(capture.count(of: "mesh.vouchList.droppedUncommittedSlot", where: mine) == 1)
-        #expect(rig.nodes[0].manager.vouchLabel(for: rig.nodes[1].fingerprint) == nil,
+        #expect(rig.nodes[0].features.vouchList.vouchLabel(for: rig.nodes[1].fingerprint) == nil,
                 "and nothing from an uncommitted slot composed a friend-of label")
 
         // The same frames on the SAME slot, once it commits, are not dropped — the gate is the
@@ -2141,7 +2142,7 @@ struct MeshPairwiseFoundingTests {
         #expect(capture.count(of: "mesh.groupKey.droppedUncommittedSlot", where: mine) == 5,
                 "no sixth drop: the committed slot's frames reached their handlers")
         #expect(capture.count(of: "mesh.vouchList.droppedUncommittedSlot", where: mine) == 1)
-        #expect(rig.nodes[0].manager.vouchLabel(for: rig.nodes[1].fingerprint) != nil, """
+        #expect(rig.nodes[0].features.vouchList.vouchLabel(for: rig.nodes[1].fingerprint) != nil, """
             and the committed vouch list DID land — the positive control that separates \
             "the gate let it through" from "the frame never worked"
             """)

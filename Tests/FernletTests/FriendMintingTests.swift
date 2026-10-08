@@ -15,6 +15,7 @@ import FernletConnections
 import Foundation
 import Testing
 import FernletDomainModel
+@testable import FernletSocial
 @testable import Fernlet
 
 // MARK: - Shared fixtures
@@ -553,26 +554,30 @@ struct FriendMintingStoreTests {
 
 // MARK: - Vouch-list broadcast gate
 
+/// The vouch list's content, on the mesh composition the app builds (`FernletMeshFeatures.vouchList`,
+/// plan step A0.5.5): the engine keeps the frame and asks this content through its exchange.
 @Suite(.serialized) @MainActor
 struct VouchListBroadcastGateTests {
     let store = makeTestStore()
 
     @Test func vouchBroadcastIsDisabledByDefault() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let vouchList = features.vouchList
         // Seed a friend so the payload WOULD be non-empty if the gate were open.
         store.trustProximityPeer(makePeerIdentity(), mode: .friend)
 
         // Phase 2 disables the vouch-list broadcast (Docs/Proximity-Mesh-Redesign-2026-07-10.md):
         // friend minting is what would have switched this friend-graph disclosure on.
-        #expect(manager.isVouchListBroadcastEnabled == false)
-        #expect(manager.vouchListPayloadForBroadcast() == nil,
+        #expect(vouchList.isVouchListBroadcastEnabled == false)
+        #expect(vouchList.vouchListPayloadForBroadcast() == nil,
                 "Gate off ⇒ sendVouchList must be a no-op even with trusted peers in the vault")
     }
 
     /// The machinery stays tested: forcing the flag on yields a payload with exactly the
     /// unblocked, unrevoked fingerprints.
     @Test func vouchMachineryStillFiltersWhenForcedOn() throws {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let vouchList = features.vouchList
         let activeKey = Data([1, 1, 1])
         let revokedKey = Data([2, 2, 2])
         let blockedKey = Data([3, 3, 3])
@@ -582,18 +587,19 @@ struct VouchListBroadcastGateTests {
         store.revokeTrustedProximityPeer(signingPublicKey: revokedKey)
         store.blockProximityPeer(signingPublicKey: blockedKey)
 
-        manager.isVouchListBroadcastEnabled = true
-        let payload = try #require(manager.vouchListPayloadForBroadcast())
+        vouchList.isVouchListBroadcastEnabled = true
+        let payload = try #require(vouchList.vouchListPayloadForBroadcast())
 
         #expect(payload.trustedFingerprints == [IdentityService.fingerprint(of: activeKey)])
-        #expect(payload.voucherFingerprint == manager.localFingerprint)
+        #expect(payload.voucherFingerprint == features.mesh.localFingerprint)
         #expect(payload.expiresAt > Date().addingTimeInterval(3600), "2 h TTL")
     }
 
     /// Finding 1: the Phase-2 gate must hold on the RECEIVE side too — while disabled, inbound
     /// vouch lists are dropped wholesale (no cache write, no "Friend of …" label).
     @Test func inboundVouchListIsDroppedWhileGateIsOff() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let vouchList = features.vouchList
         let payload = MeshFriendVouchListPayload(
             voucherFingerprint: "voucher-fp-001122",
             voucherDisplayName: "Mallory",
@@ -601,18 +607,19 @@ struct VouchListBroadcastGateTests {
             expiresAt: Date().addingTimeInterval(3600)
         )
 
-        manager.receiveVouchList(payload, senderFingerprint: "voucher-fp-001122")
+        vouchList.receiveVouchList(payload, senderFingerprint: "voucher-fp-001122")
 
-        #expect(manager.isVouchListBroadcastEnabled == false, "Precondition: gate defaults off")
-        #expect(manager.cachedVouchList(from: "voucher-fp-001122") == nil)
-        #expect(manager.vouchLabel(for: "vouched-fp-334455") == nil)
+        #expect(vouchList.isVouchListBroadcastEnabled == false, "Precondition: gate defaults off")
+        #expect(vouchList.cachedVouchList(from: "voucher-fp-001122") == nil)
+        #expect(vouchList.vouchLabel(for: "vouched-fp-334455") == nil)
     }
 
     /// Forced on, the receive path hygienes what it caches: expiry capped at the protocol's 2 h
     /// TTL (the wire value is sender-controlled) and the peer-supplied display name sanitized.
     @Test func inboundVouchListIsCappedAndSanitizedWhenForcedOn() throws {
-        let manager = MeshNetworkManager(store: store)
-        manager.isVouchListBroadcastEnabled = true
+        let features = FernletMeshRig.features(store: store)
+        let vouchList = features.vouchList
+        vouchList.isVouchListBroadcastEnabled = true
         let payload = MeshFriendVouchListPayload(
             voucherFingerprint: "voucher-fp-001122",
             voucherDisplayName: "Ali\u{200B}ce",   // zero-width space must not survive
@@ -620,19 +627,20 @@ struct VouchListBroadcastGateTests {
             expiresAt: Date().addingTimeInterval(10 * 3600)   // sender claims 10 h
         )
 
-        manager.receiveVouchList(payload, senderFingerprint: "voucher-fp-001122")
+        vouchList.receiveVouchList(payload, senderFingerprint: "voucher-fp-001122")
 
-        let cached = try #require(manager.cachedVouchList(from: "voucher-fp-001122"))
+        let cached = try #require(vouchList.cachedVouchList(from: "voucher-fp-001122"))
         #expect(cached.expiresAt <= Date().addingTimeInterval(2 * 3600 + 5), "Wire TTL capped at 2 h")
         #expect(cached.voucherDisplayName == "Alice")
-        #expect(manager.vouchLabel(for: "vouched-fp-334455") == "Friend of Alice")
+        #expect(vouchList.vouchLabel(for: "vouched-fp-334455") == "Friend of Alice")
     }
 
     /// Sender binding is unchanged: a vouch list whose claimed voucher fingerprint doesn't match
     /// the authenticated envelope sender is dropped even with the gate on.
     @Test func inboundVouchListRequiresAuthenticatedSenderMatch() {
-        let manager = MeshNetworkManager(store: store)
-        manager.isVouchListBroadcastEnabled = true
+        let features = FernletMeshRig.features(store: store)
+        let vouchList = features.vouchList
+        vouchList.isVouchListBroadcastEnabled = true
         let payload = MeshFriendVouchListPayload(
             voucherFingerprint: "voucher-fp-001122",
             voucherDisplayName: "Mallory",
@@ -640,8 +648,8 @@ struct VouchListBroadcastGateTests {
             expiresAt: Date().addingTimeInterval(3600)
         )
 
-        manager.receiveVouchList(payload, senderFingerprint: "someone-else-778899")
+        vouchList.receiveVouchList(payload, senderFingerprint: "someone-else-778899")
 
-        #expect(manager.cachedVouchList(from: "voucher-fp-001122") == nil)
+        #expect(vouchList.cachedVouchList(from: "voucher-fp-001122") == nil)
     }
 }

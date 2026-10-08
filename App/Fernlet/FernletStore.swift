@@ -243,8 +243,13 @@ final class FernletStore {
     @ObservationIgnored let milestoneLedgerService: MilestoneLedgerService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
-    @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = {
-        let manager = MeshNetworkManager(store: self)
+    /// Fernlet's mesh features and the mesh engine they ride (FernletSocial's composition, ProximityKit
+    /// plan step A0.5.5), built on the first touch of this property or of ``meshNetworkManager``: it
+    /// asks this store for the device identity once, builds the mesh with it, and owns the mesh and
+    /// every feature. The providers below are wired onto the objects that own each one.
+    @ObservationIgnored private(set) lazy var meshFeatures: FernletMeshFeatures = {
+        let features = FernletMeshFeatures(host: self)
+        let manager = features.mesh
         // Clothing shop (Phase 3a): catalogs ride the friend mesh; the opt-out is payload-layer, wired
         // here as app-side closures so `ProximityHost` stays settings-free. While the setting is off the
         // provider returns nil (nothing sent), inbound catalogs drop, and the `shop` capability is not
@@ -293,9 +298,11 @@ final class FernletStore {
         manager.onPeerPrekeyBundle = { [weak self] key, bundle in
             self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
         }
-        manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
-        return manager
+        features.capabilities.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
+        return features
     }()
+    /// The mesh engine, which ``meshFeatures`` built and owns; reading it builds the features first.
+    var meshNetworkManager: MeshNetworkManager { meshFeatures.mesh }
     /// The one presenter of the session-end photo review (session photos U3, 2026-09-30): first
     /// thing shown, in its own overlay window above every tab and sheet, and the source of the run
     /// policy's `sessionPhotoReviewBlocksDiscovery` fact. It holds this store weakly (as its

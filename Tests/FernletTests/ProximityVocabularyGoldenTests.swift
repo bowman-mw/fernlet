@@ -1986,19 +1986,21 @@ struct ProximityVocabularyGoldenTests {
         return Dictionary(store.messages.map { ($0.senderFingerprint, $0.senderDisplayName) }, uniquingKeysWith: { first, _ in first })
     }
 
-    /// What a mesh manager over a scratch host of `namespace` records: its session roster's names by
-    /// fingerprint after it records a committed peer with a long name, one with an invisible name,
-    /// and one with an invisible name that discloses the long one, and the voucher name it files for a
-    /// vouch that names nothing displayable. It runs on a fake radio, with an identity on a throwaway
-    /// service; the host's root and seal-key rows and the identity's rows are removed before this
-    /// returns.
+    /// What Fernlet's mesh over a scratch host of `namespace` records: its manager's session roster's
+    /// names by fingerprint after it records a committed peer with a long name, one with an invisible
+    /// name, and one with an invisible name that discloses the long one, and the voucher name its vouch
+    /// list files for a vouch that names nothing displayable (the vouch list is the composition's since
+    /// plan step A0.5.5, and reads the namespace its host was read for once). It runs on a fake radio,
+    /// with an identity on a throwaway service; the host's root and seal-key rows and the identity's
+    /// rows are removed before this returns.
     static func meshRecordedNames(underHostOf namespace: ProximityNamespace) -> (roster: [String: String], voucher: String?) {
         let host = ScratchNamespaceHost(namespace: namespace)
         defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
         let service = isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
-                                         identity: IdentityService(namespace: namespace, keychainService: service))
+        let features = FernletMeshRig.features(store: host, transport: FakeMeshTransportSession(),
+                                               identity: IdentityService(namespace: namespace, keychainService: service))
+        let manager = features.mesh
         let (signing, agreement) = (Data(repeating: 0x5A, count: 32), Data(repeating: 0xA5, count: 32))
         manager.recordSessionParticipant(displayName: longPeerName, fingerprint: "fp-long",
                                          signingPublicKey: signing, keyAgreementPublicKey: agreement)
@@ -2007,13 +2009,13 @@ struct ProximityVocabularyGoldenTests {
         manager.recordSessionParticipant(displayName: "\u{2066}", fingerprint: "fp-renamed",
                                          signingPublicKey: signing, keyAgreementPublicKey: agreement)
         manager.renameSessionParticipant(fingerprint: "fp-renamed", to: longPeerName)
-        manager.isVouchListBroadcastEnabled = true
-        manager.receiveVouchList(MeshFriendVouchListPayload(
+        features.vouchList.isVouchListBroadcastEnabled = true
+        features.vouchList.receiveVouchList(MeshFriendVouchListPayload(
             voucherFingerprint: "fp-voucher", voucherDisplayName: "\u{200B}\u{FEFF}", trustedFingerprints: [],
             expiresAt: Date().addingTimeInterval(600)), senderFingerprint: "fp-voucher")
         let roster = Dictionary(manager.sessionRoster.map { ($0.fingerprint, $0.displayName) },
                                 uniquingKeysWith: { first, _ in first })
-        return (roster, manager.cachedVouchList(from: "fp-voucher")?.voucherDisplayName)
+        return (roster, features.vouchList.cachedVouchList(from: "fp-voucher")?.voucherDisplayName)
     }
 
     /// `.fernlet` with its peer-name policy replaced by one of its own (a 20-character cap and the

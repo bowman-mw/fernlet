@@ -125,7 +125,7 @@ enum MeshMergeWire {
 
     /// Puts a manager into a live session on a seeded ledger — the shape both ends start from.
     ///
-    /// Deliberately *not* `MeshMergeFixtures.liveManager`: this rig needs one end that is a MEMBER
+    /// Deliberately *not* `MeshMergeFixtures.liveFeatures`: this rig needs one end that is a MEMBER
     /// of somebody else's mesh (its ledger rooted at the other device's founder key), which that
     /// fixture cannot express.
     ///

@@ -645,6 +645,8 @@ struct DisposableCameraView: View {
     private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
+    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels live there.
+    private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level session-end review (session photos U3): told when the Develop review is up, and
     /// around this view's answer.
     private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
@@ -1698,7 +1700,7 @@ struct DisposableCameraView: View {
             Text(verbatim: shownName(participant))
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
-            if !participant.isLocal, let vouchLabel = manager.vouchLabel(for: participant.fingerprint) {
+            if !participant.isLocal, let vouchLabel = features.vouchList.vouchLabel(for: participant.fingerprint) {
                 Text(vouchLabel)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)

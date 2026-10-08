@@ -25,7 +25,7 @@
 //      `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
 //      `TrainerAuditEvent` and `ConnectionSessionLog`, are named in ProximityKit code only on an exact
 //      per-file, per-type allowlist of the lines that leave with the mesh manager's feature parts
-//      (A0.5), with the recipe profile (A0.7) or with the session profile (A0.7 / C5): 34 lines in 6
+//      (A0.5), with the recipe profile (A0.7) or with the session profile (A0.7 / C5): 26 lines in 6
 //      files;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step (44 lines in 6 files);
@@ -42,8 +42,8 @@
 // Between them they hold what ProximityKit still takes from Fernlet rather than from its host: what
 // the mesh manager builds, decodes or calls (the clothing shop, the activity manager and the
 // moderation report relay, with their payload formats, their labels and the canonical serializer's
-// domains for them) and its own feature sends, capability list and session hearts, with the two
-// typed capability gates and the host's trusted-peer list (until A0.5); the recipe-share manager,
+// domains for them) and its own feature sends and session hearts, with the two typed capability
+// gates and the host's trusted-peer list (until A0.5); the recipe-share manager,
 // its wire types and status copy, and the typed doors only it and Fernlet's features go through,
 // the envelope's typed view of its token and the coordinator's typed send (until A0.7); the session
 // mode (until A0.7 / C5); and the DEBUG test-hook names (until A1). No row names a presentation
@@ -676,7 +676,7 @@ private extension UInt8 {
     /// capability gates and the host's trusted-peer list); on the typed doors only Fernlet's features
     /// and the recipe-share manager go through (the envelope's typed view of its token and the
     /// coordinator's typed send), which leave with the recipe profile (A0.7); and on the session
-    /// mode's alias, which generalizes with the connection profiles (A0.7 / C5): 34 code lines in 6
+    /// mode's alias, which generalizes with the connection profiles (A0.7 / C5): 26 code lines in 6
     /// files. A new line fails, and so does a type named in a file whose rows name only others; a
     /// line that goes away fails until its row is lowered or deleted, so the list only shrinks. A type
     /// no row names (`TrainerAuditEvent`, `ConnectionSessionLog`) fails on its first line. Only code
@@ -835,7 +835,6 @@ private extension UInt8 {
         DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityCapability", 1, .peerCapabilityGate),
         DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityMode", 1, .sessionMode),
         DomainTypeLines("Mesh/MeshNetworkManager.swift", "PayloadType", 6, .meshFeatureSends),
-        DomainTypeLines("Mesh/MeshNetworkManager.swift", "ProximityCapability", 8, .meshCapabilityList),
         DomainTypeLines("Mesh/MeshNetworkManager.swift", "ProximityTrustedPeerRecord", 3, .meshSessionHearts),
         DomainTypeLines("Mesh/MeshSessionTypes.swift", "ProximityCapability", 1, .seatCapabilityGate),
         DomainTypeLines("ProximityHost.swift", "ProximityTrustedPeerRecord", 1, .hostTrustedPeers),

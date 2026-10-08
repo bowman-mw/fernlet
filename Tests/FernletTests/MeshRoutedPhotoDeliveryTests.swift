@@ -28,6 +28,7 @@ import PrivateMediaStore
 #if canImport(UIKit)
 import UIKit
 #endif
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -620,10 +621,11 @@ struct MeshRoutedPhotoSenderTests {
                 "the real frame crossed: node 0 folded node 1's own signed row")
 
         // The process dies and comes back over the same sealed bytes, with the same identity.
-        let reborn = MeshNetworkManager(
+        let rebornFeatures = FernletMeshRig.features(
             store: rig.nodes[0].store, transport: FakeMeshTransportSession(),
             identity: rig.identities[0]
         )
+        let reborn = rebornFeatures.mesh
         let outcome = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             reborn.restoreSessionContextAtLaunch(now: MeshRoutedDrainRig.now)
         }
@@ -639,7 +641,7 @@ struct MeshRoutedPhotoSenderTests {
         )
         let rebornNode = MeshDepartureRig.node(
             "photo-resumed-reborn", identity: rig.identities[0], on: rig.fabric,
-            manager: reborn, store: rig.nodes[0].store
+            features: rebornFeatures, store: rig.nodes[0].store
         )
         MeshDepartureRig.link(rebornNode, rig.nodes[1], on: rig.fabric)
         let slotKeys = reborn.slots.compactMap(\.verifiedKeyAgreementPublicKey)

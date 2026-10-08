@@ -39,6 +39,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -566,7 +567,8 @@ struct MeshDivergentTunnelGateTests {
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(1, "gate-seed")
         let store = makeTestStore()
-        let manager = try MeshMergeFixtures.liveManager(store: store, others: seeded, meshID: meshID)
+        let features = try MeshMergeFixtures.liveFeatures(store: store, others: seeded, meshID: meshID)
+        let manager = features.mesh
         #expect(manager.mayReconcileDivergentEpochs, "a mesh with a ledger can run the merge")
         manager.leaveMesh()
         bare.leaveMesh()

@@ -38,6 +38,7 @@ import Testing
 import FernletDomainModel
 import FernletLock
 import LocalPersistence
+import FernletSocial
 import ProximityKit
 @testable import Fernlet
 
@@ -766,7 +767,8 @@ struct ProximityRunPolicyFunnelTests {
     @Test func aReviewTheGatesPassCreatesHoldsThatEdgesSearchBack() throws {
         let proximity = uniqueProximityDirectory()
         let before = makeStore("run-policy-funnel-review-seed", proximity: proximity)
-        let seeding = LastMemberReviewFixtures.foundedManager(store: before)
+        let seedingFeatures = LastMemberReviewFixtures.foundedFeatures(store: before)
+        let seeding = seedingFeatures.mesh
         LastMemberReviewFixtures.capture(2, on: seeding)
         seeding.leaveSession()
         let aside = try HeldPhotoFixtures.makeWallUnreadable(before)   // the next launch is a locked one

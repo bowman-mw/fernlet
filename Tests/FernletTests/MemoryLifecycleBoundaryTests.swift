@@ -26,10 +26,15 @@
 //       `helper` (the one inside `spawnHostPinned`), `timer — <reason>` (a spawn whose handle the
 //       manager STORES, which must never be pinned: that pin is a permanent cycle, HP2) or
 //       `exempt — <reason>` (a spawn touching neither `self` nor the host). The scoped pin taken
-//       inside an async callee is marked `scoped — <reason>` and sits on no `Task` line.
+//       inside an async callee is marked `scoped — <reason>` and sits on no `Task` line. Since
+//       ProximityKit plan step A0.5.5 a file that holds FernletSocial's `FernletMeshHost` (the mesh
+//       features' one `unowned` host holder) is audited the same way, with no helper of its own: the
+//       one helper is the holder's, so a spawn that moves out of the mesh manager never leaves the scan.
 //  ML5  In the test tree, a proximity manager may not be constructed over a host expression that is
 //       itself a call: `MeshNetworkManager(store: makeTestStore(), …)` gives the manager a host that
 //       dies at the end of the expression (invariant HP0), which is a dangling `unowned` from birth.
+//       The mesh composition's two constructions, `FernletMeshFeatures(host:` and the test rig's
+//       `FernletMeshRig.features(store:`, are held to the same rule.
 //
 // Every scan discovers its inputs from the file system and carries a hard FLOOR (a moved root or a
 // broken enumerator must fail loudly, never pass vacuously — the S3BoundaryTests house rule), every
@@ -61,10 +66,16 @@ struct MemoryLifecycleBoundaryTests {
     /// Files with a block-based observer today; a wall that finds fewer has stopped looking.
     static let minimumObserverFiles = 2
 
-    /// Files holding an `unowned` `ProximityHost` today — the four proximity managers. A matcher
-    /// that finds fewer has stopped looking; a FIFTH manager must be found and held to ML4, not
-    /// silently skipped.
+    /// Files holding an `unowned` `ProximityHost` — the four proximity managers, and since
+    /// ProximityKit plan step A0.5.5 the mesh features' `FernletMeshHost` beside them. A matcher that
+    /// finds fewer than the four managers has stopped looking; a new holder must be found and held to
+    /// ML4, not silently skipped.
     static let minimumHostHoldingFiles = 4
+
+    /// Files holding a `FernletMeshHost` today — the mesh composition and its capability and vouch-list
+    /// objects (ProximityKit plan step A0.5.5). ML4's second audit; a matcher that finds fewer has
+    /// stopped looking.
+    static let minimumMeshHostHoldingFiles = 3
 
     /// The test root ML5 scans (308 files at the time of writing).
     static let testRoot = "Tests/FernletTests"
@@ -192,6 +203,28 @@ struct MemoryLifecycleBoundaryTests {
 
     static let sharedTestTreeScan: TestTreeScan = scanTestTree(repoRoot: RepoRoot.url)
 
+    /// One shipping file that holds a `FernletMeshHost`, with its ML4 audit.
+    struct MeshHostHolder: Hashable, Sendable {
+        let path: String
+        let hostPin: HostPinAudit
+    }
+
+    /// ML4's second audit's inputs: every shipping file that holds a `FernletMeshHost`
+    /// (``meshHostHolderPattern``), read once from the files the shipping scan found.
+    static let sharedMeshHostScan: [MeshHostHolder] = meshHostHolders(in: sharedScan, repoRoot: RepoRoot.url)
+
+    /// Every file of `scan` that holds a `FernletMeshHost`, with its host-pin audit. An unreadable file
+    /// is the shipping scan's to report.
+    static func meshHostHolders(in scan: TreeScan, repoRoot: URL) -> [MeshHostHolder] {
+        var holders: [MeshHostHolder] = []
+        for file in scan.files {
+            guard let source = try? String(contentsOf: repoRoot.appendingPathComponent(file.path), encoding: .utf8),
+                  holdsMeshHost(source) else { continue }
+            holders.append(MeshHostHolder(path: file.path, hostPin: hostPinAudit(of: source)))
+        }
+        return holders
+    }
+
     /// Scans the test tree for ML5. Never throws or traps: unreadable files are listed for the
     /// enforcement test to fail on. ``wallFile`` is skipped — its fixtures spell out the violation.
     static func scanTestTree(repoRoot: URL) -> TestTreeScan {
@@ -242,6 +275,12 @@ struct MemoryLifecycleBoundaryTests {
     /// or holding a differently-named host, is SCANNED AND FAILED rather than silently skipped.
     static let unownedHostPattern = #"unowned\s+(let|var)\s+\w+\s*:\s*any ProximityHost"#
 
+    /// A file that holds the mesh features' host holder, FernletSocial's `FernletMeshHost`, which
+    /// holds the host `unowned` for every feature object and declares their one `spawnHostPinned(_:)`
+    /// (ProximityKit plan step A0.5.5). Its own file holds the host, not a holder, and is matched by
+    /// ``unownedHostPattern`` instead.
+    static let meshHostHolderPattern = #"(let|var)\s+\w+\s*:\s*FernletMeshHost\b"#
+
     /// A `Task` CONSTRUCTION in any of its spellings — `Task {`, `Task.detached {`,
     /// `Task(priority: .background) {`, `Task<Void, Never> {`. All four spawn the same detached,
     /// un-cancellable task, and `Task.detached` additionally drops `@_inheritActorContext` so it
@@ -251,11 +290,13 @@ struct MemoryLifecycleBoundaryTests {
 
     /// ML5: a proximity manager constructed over a host expression that is itself a call.
     /// `MeshNetworkManager(store: makeTestStore(), …)` trips; `MeshNetworkManager(store: store)` and
-    /// `PresenceManager(store: host, ledger: ledger)` pass. Known narrowness, stated on purpose: a
+    /// `PresenceManager(store: host, ledger: ledger)` pass. The mesh composition is held the same way
+    /// (ProximityKit plan step A0.5.5): `FernletMeshFeatures(host: makeTestStore())` and
+    /// `FernletMeshRig.features(store: makeTestStore())` trip. Known narrowness, stated on purpose: a
     /// multi-line call with `store:` on its own line is not matched — this covers the one shape that
     /// has ever occurred in the tree, and ML5 is a ratchet on a repaired site, not a proof.
     static let inlineHostPattern =
-        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\("#
+        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\(|FernletMeshFeatures\(\s*host:\s*\w+\(|FernletMeshRig\.features\(\s*store:\s*\w+\("#
 
     /// Whether `line` constructs a `Task`. `///` documentation lines are excluded (the helper's own
     /// doc comment quotes the literal it replaces), as is a match that sits after a `//` on the line.
@@ -338,6 +379,12 @@ struct MemoryLifecycleBoundaryTests {
             holdsUnownedHost: holdsHost,
             hostPin: holdsHost ? hostPinAudit(of: source) : .none
         )
+    }
+
+    /// Whether `source` holds a `FernletMeshHost` (``meshHostHolderPattern``): ML4's second audit's
+    /// matcher, shared by the scan and its fixture.
+    static func holdsMeshHost(_ source: String) -> Bool {
+        matches(meshHostHolderPattern, in: source)
     }
 
     private static func matches(_ pattern: String, in source: String) -> Bool {
@@ -443,6 +490,27 @@ struct MemoryLifecycleBoundaryTests {
         #expect(helperCounts.isEmpty, "ML4: each host-holding file declares exactly one spawnHostPinned helper: \(helperCounts)")
         let silent = holders.filter { $0.hostPin.spawns == 0 }.map(\.path)
         #expect(silent.isEmpty, "ML4: a host-holding file with no Task construction at all has lost its helper: \(silent)")
+        // The second audit (ProximityKit plan step A0.5.5): a file that holds a `FernletMeshHost`
+        // reads the host through it, so every Task it constructs carries a marker as above, and it
+        // declares no helper of its own — the one helper is `FernletMeshHost`'s.
+        let meshHolders = Self.sharedMeshHostScan
+        #expect(meshHolders.count >= Self.minimumMeshHostHoldingFiles,
+                "Found only \(meshHolders.count) files holding a FernletMeshHost (floor \(Self.minimumMeshHostHoldingFiles)) — the matcher has stopped matching")
+        let unmarkedThere = meshHolders.flatMap { file in file.hostPin.unmarkedSpawns.map { "\(file.path):\($0)" } }
+        #expect(unmarkedThere.isEmpty, """
+            ML4: these Task constructions live in a file that holds a FernletMeshHost, which reads an \
+            unowned ProximityHost. Route them through the holder's spawnHostPinned(_:), or mark them \
+            `// host-pin: timer — <reason>` / `// host-pin: exempt — <reason>`:
+            \(unmarkedThere.joined(separator: "\n"))
+            """)
+        let badKindsThere = meshHolders.flatMap { file in file.hostPin.badKinds.map { "\(file.path):\($0)" } }
+        #expect(badKindsThere.isEmpty, "ML4: a FernletMeshHost holder's marker kind must be timer / exempt: \(badKindsThere)")
+        let reasonlessThere = meshHolders.flatMap { file in file.hostPin.reasonlessMarkers.map { "\(file.path):\($0)" } }
+        #expect(reasonlessThere.isEmpty, "ML4: every marker in a FernletMeshHost holder states its invariant: \(reasonlessThere)")
+        let straysThere = meshHolders.flatMap { file in file.hostPin.strayMarkers.map { "\(file.path):\($0)" } }
+        #expect(straysThere.isEmpty, "ML4: only the `scoped` pin may carry a host-pin marker off a Task line: \(straysThere)")
+        let helpersThere = meshHolders.filter { $0.hostPin.helperMarkers != 0 }.map(\.path)
+        #expect(helpersThere.isEmpty, "ML4: a FernletMeshHost holder declares no helper of its own: \(helpersThere)")
     }
 
     // MARK: - ML5: a test never hands a manager a host nobody holds
@@ -519,5 +587,18 @@ struct MemoryLifecycleBoundaryTests {
         #expect(Self.inlineHostViolations(in: "let bare = MeshNetworkManager(store: makeTestStore(), transport: t)\n") == [1])
         #expect(Self.inlineHostViolations(in: "let bare = MeshNetworkManager(store: bareHost, transport: t)\n").isEmpty)
         #expect(Self.inlineHostViolations(in: "let p = PresenceManager(store: host, ledger: ledger)\n").isEmpty)
+        #expect(Self.inlineHostViolations(in: "let f = FernletMeshFeatures(host: makeTestStore())\n") == [1])
+        #expect(Self.inlineHostViolations(in: "let f = FernletMeshRig.features(store: makeTestStore(), transport: t)\n") == [1])
+        #expect(Self.inlineHostViolations(in: "let f = FernletMeshFeatures(host: store)\n").isEmpty)
+        #expect(Self.inlineHostViolations(in: "let f = FernletMeshRig.features(store: store, transport: t)\n").isEmpty)
+
+        let meshHostHolder = "    private let meshHost: FernletMeshHost\n"
+        #expect(Self.holdsMeshHost(meshHostHolder), "a feature holding the composition's host holder is ML4's subject")
+        #expect(!Self.holdsMeshHost("final class FernletMeshHost {\n    unowned let host: any ProximityHost\n"),
+                "the holder's own file holds the host, not a holder")
+        #expect(!Self.holdsMeshHost("    let meshHost: FernletMeshHostSpy\n"), "a longer type name is not the holder")
+        let plantedThere = Self.hostPinAudit(of: meshHostHolder + "        Task { await f() }\n")
+        #expect(plantedThere.unmarkedSpawns == [2] && plantedThere.helperMarkers == 0,
+                "an unmarked spawn in a holder's file must trip the second audit")
     }
 }
