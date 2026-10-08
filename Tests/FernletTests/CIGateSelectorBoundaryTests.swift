@@ -224,6 +224,17 @@ import Testing
     /// provisioning cases), pinned by literal and by behaviour before any of it moves. Its name ends
     /// `GoldenTests`, so ``everyWireGoldenSuiteIsGated()`` demands it on SOME line; this entry and its
     /// ``wallLines`` pin hold it on this one. Counted off the line.
+    ///
+    /// NEW at ProximityKit plan step A0.5.0 (2026-10-04): `mesh-features` (48), the suites that are the
+    /// only cover of the behaviour plan step A0.5 moves out of the routed mesh manager (the activity,
+    /// clothing-shop, moderation and friend-state suites, friend minting and the vouch gate, the heart
+    /// drop, the content merge, the held photos and their review, the routed acks and the session's
+    /// messages), gated before anything moves; each ran on no line. A line of its own rather than more
+    /// names on `mesh-batteries`, whose floor carries a dated history these suites would churn at every
+    /// A0.5 commit. None is a `MeshP<n>…AcceptanceTests` or a `…GoldenTests`, so nothing else here
+    /// demands them: this entry, and that step's floor once a Mac has measured it, are what notice one
+    /// leaving. Its two walls with no compiler half are pinned by name in ``wallLines`` too. Counted off
+    /// the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 10,
         "no-tracking": 1,
@@ -239,7 +250,8 @@ import Testing
         "messages-envelope": 5,
         "recipe-wire": 1,
         "food-search": 13,
-        "mesh-batteries": 154
+        "mesh-batteries": 154,
+        "mesh-features": 48
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -274,7 +286,8 @@ import Testing
         "food-search": ["IngredientSearchCorpusTests", "CatalogDefaultUnitSweepTests", "FoodIngredientIdentityTests",
                         "TypicalPortionTableTests", "RecipePortionPickerTests", "FoodSearchCorrectionMemoryTests",
                         "FoodSearchCorrectionCatalogTests", "FoodSearchCorrectionWipeTests",
-                        "FoodSearchCorrectionResolverFirewallTests"]
+                        "FoodSearchCorrectionResolverFirewallTests"],
+        "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -361,7 +374,7 @@ import Testing
     @Test func everyGatedSelectorNamesADeclaredSuite() throws {
         let steps = Self.gatedSteps(in: try RepoRoot.source(Self.workflowPath))
         let declared = try Self.declaredTopLevelTypes()
-        #expect(steps.count >= 15, "the workflow lost test steps — \(steps.count) floor-script invocations found")
+        #expect(steps.count >= 16, "the workflow lost test steps — \(steps.count) floor-script invocations found")
         var undeclared: [String] = []
         // R2: bounded by the step count × the suite count.
         for step in steps {
