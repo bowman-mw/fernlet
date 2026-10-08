@@ -30,6 +30,9 @@ struct PhotoDirectoryIsolationTests {
     private static let proximityRootedTriggers = [
         // Managers — build the photo wall, the activity ledger, and (via their builders) the ledger.
         "meshNetworkManager", "MeshNetworkManager(", "presenceManager",
+        // The mesh composition (ProximityKit plan step A0.5.5), which builds the mesh manager: the
+        // store's property, the app's construction and the test rig's.
+        "meshFeatures", "FernletMeshFeatures(", "FernletMeshRig",
         // Heart state on the same root.
         "heartLedger", "heartDropService", "heartGlow", "pendingHeartBubble", "queueHeart", "heartsAway",
         // The three JSONSidecarFile stores.

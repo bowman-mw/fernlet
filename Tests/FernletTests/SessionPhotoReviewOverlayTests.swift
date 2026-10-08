@@ -25,6 +25,7 @@ import Testing
 import UIKit
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletProximityUI
 @testable import Fernlet
@@ -170,14 +171,16 @@ enum OverlayTestSupport {
 struct SessionPhotoReviewOverlayTests {
     let store = makeTestStore()
 
-    /// An ended session with `photos` held on a founded manager over this cell's store.
-    private func endedManager(photos: Int) throws -> MeshNetworkManager {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+    /// An ended session with `photos` held on a founded manager over this cell's store, with the mesh
+    /// composition that owns it; the caller keeps the composition for as long as it uses the manager.
+    private func endedFeatures(photos: Int) throws -> FernletMeshFeatures {
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         LastMemberReviewFixtures.capture(photos, on: manager)
         manager.leaveSession()
         HeldPhotos.openGate(on: manager)
         try #require(manager.pendingReviewPhotos.count == photos)
-        return manager
+        return features
     }
 
     /// **I9, hosted.** A SwiftUI sheet presented in the main window survives the overlay: the
@@ -190,7 +193,8 @@ struct SessionPhotoReviewOverlayTests {
         defer { OverlayTestSupport.close(main, hosting) }
         try await OverlayTestSupport.waitUntil { holdsForeignCover(hosting.presentedViewController) }
         try #require(holdsForeignCover(hosting.presentedViewController), "precondition: the sheet is up")
-        let manager = try endedManager(photos: 1)
+        let features = try endedFeatures(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = SessionPhotoReviewOverlayPresenter(appearance: { _ in .dark })
         let coordinator = SessionPhotoReviewCoordinator(
@@ -256,7 +260,8 @@ struct SessionPhotoReviewOverlayTests {
     /// coordinator (ContentView feeds it), not from an environment its window does not have.
     @Test func theOverlayScreenTakesItsScenePhaseFromTheCoordinator() async throws {
         let scene = try OverlayTestSupport.scene()
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             for _ in 0..<2 { manager.addPhoto(OverlayTestSupport.magentaJPEG()) }

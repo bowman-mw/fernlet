@@ -30,6 +30,7 @@ import UIKit
 @testable import FernletCrypto
 import FernletDomainModel
 import PrivateMediaStore
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletProximityUI
 @testable import Fernlet
@@ -154,9 +155,11 @@ struct SessionPhotoReviewCoordinatorTests {
     private typealias Fixtures = ReviewCoordinatorFixtures
 
     /// An ended session on a founded manager: `photos` captured, one keep-as-friend candidate, the
-    /// teardown run, the decrypt seam open.
-    private func endedSession(photos: Int) throws -> (MeshNetworkManager, [UUID]) {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+    /// teardown run, the decrypt seam open. Hands back the mesh composition that owns the manager
+    /// (its `mesh`), which the caller keeps for as long as it uses the manager.
+    private func endedSession(photos: Int) throws -> (FernletMeshFeatures, [UUID]) {
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
@@ -167,12 +170,13 @@ struct SessionPhotoReviewCoordinatorTests {
         manager.leaveSession()
         HeldPhotos.openGate(on: manager)
         try #require(manager.heldPhotosCanBeShown && manager.pendingReviewPhotos.count == photos)
-        return (manager, captured)
+        return (features, captured)
     }
 
     /// Present snapshots the batch: every photo, all ticked, the candidates, the toggle off.
     @Test func presentSnapshotsTheEndedSessionTickedWithTheToggleOff() throws {
-        let (manager, captured) = try endedSession(photos: 2)
+        let (features, captured) = try endedSession(photos: 2)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: presenter)
@@ -192,7 +196,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// unchanged — and the review comes back at the next background-to-active edge, or at once from
     /// the Friends card.
     @Test func notNowAnswersNothingAndComesBackAtTheNextActivationOrTheCard() async throws {
-        let (manager, captured) = try endedSession(photos: 2)
+        let (features, captured) = try endedSession(photos: 2)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: presenter)
@@ -226,7 +231,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// **I10**, the step-aside half, and Q8: First Aid opened under the review takes it down
     /// answering nothing; it waits while First Aid is up and returns when it closes.
     @Test func firstAidTakesTheReviewDownUnansweredAndItReturnsOnClose() throws {
-        let (manager, captured) = try endedSession(photos: 1)
+        let (features, captured) = try endedSession(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: presenter)
@@ -248,7 +254,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// **I13.** Under a duress decoy the review never presents, and one that is up is taken down
     /// without an answer; nothing is deleted.
     @Test func aDuressDecoyNeverPresentsAndWithdrawsAShowingReview() throws {
-        let (manager, captured) = try endedSession(photos: 1)
+        let (features, captured) = try endedSession(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: presenter)
@@ -271,7 +278,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// photos the answer reports landed on the wall, hydrated from the wall; with it off, and on
     /// Delete all, never.
     @Test func theCameraRollSeesOnlyWhatTheAnswerKept() async throws {
-        let (manager, captured) = try endedSession(photos: 3)
+        let (features, captured) = try endedSession(photos: 3)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let saver = RecordingPhotoSaver()
@@ -293,7 +301,8 @@ struct SessionPhotoReviewCoordinatorTests {
 
     /// **I2**, the other two roads: the toggle off, and Delete all, never reach the saver.
     @Test func noToggleAndDeleteAllNeverReachTheCameraRoll() async throws {
-        let (manager, captured) = try endedSession(photos: 2)
+        let (features, captured) = try endedSession(photos: 2)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let saver = RecordingPhotoSaver()
@@ -316,7 +325,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// A photo promoted while the review is up was not in the snapshot: the answer neither keeps
     /// nor deletes it, and the review presents again for it afterwards.
     @Test func aPhotoPromotedWhileTheReviewIsUpIsPresentedAfterTheAnswer() async throws {
-        let (manager, captured) = try endedSession(photos: 1)
+        let (features, captured) = try endedSession(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: presenter)
@@ -335,7 +345,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// that tears the camera down (its flag never cleared) presents at once; and on the own-Keep
     /// road a late arrival is presented once the camera's review closes.
     @Test func theDevelopFlagCannotOutliveTheCamera() async throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         LastMemberReviewFixtures.capture(2, on: manager)
         HeldPhotos.openGate(on: manager)
@@ -349,7 +360,8 @@ struct SessionPhotoReviewCoordinatorTests {
         #expect(presenter.shows == 1, "the flag, never cleared, cannot hold the review back once the camera is gone")
 
         await coordinator.discardAll()
-        let second = LastMemberReviewFixtures.foundedManager(store: store)
+        let secondFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let second = secondFeatures.mesh
         defer { second.leaveMesh() }
         LastMemberReviewFixtures.capture(1, on: second)
         HeldPhotos.openGate(on: second)
@@ -372,7 +384,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// **I11.** The block is false whenever a session is live — even with an earlier session's
     /// photos outstanding and an answer in flight — so a live session's discovery is never changed.
     @Test func theBlockIsFalseOverALiveSession() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         LastMemberReviewFixtures.capture(1, on: manager)
         manager.leaveSession()
@@ -381,7 +394,8 @@ struct SessionPhotoReviewCoordinatorTests {
         #expect(coordinator.blocksDiscovery, "an ended session's photos block discovery")
 
         // A relaunch that rebuilds the ended session's review, then founds a new, live session.
-        let live = LastMemberReviewFixtures.foundedManager(store: store)
+        let liveFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let live = liveFeatures.mesh
         defer { live.leaveMesh() }
         HeldPhotos.openGate(on: live)
         try #require(live.isSessionLive && live.hasOutstandingPhotoReview,
@@ -398,7 +412,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// it. Before the fix it waited forever: the answer leg never fell, discovery stayed blocked for
     /// the rest of the process, and every later review refused Keep, Delete all and Not now.
     @Test func aStepAsideUnderAFailingExportStillEndsTheAnswer() async throws {
-        let (manager, captured) = try endedSession(photos: 1)
+        let (features, captured) = try endedSession(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let saver = RecordingPhotoSaver()
         saver.holdsUntilReleased = true
@@ -431,7 +446,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// export), the answer's own hide would take the new review down and its actions would refuse.
     /// It presents once the answer ends.
     @Test func nothingPresentsUnderAnAnswerStillInFlight() async throws {
-        let (manager, captured) = try endedSession(photos: 1)
+        let (features, captured) = try endedSession(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = RecordingReviewPresenter()
         let saver = RecordingPhotoSaver()
@@ -461,7 +477,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// surface can never leave a full-screen review nobody can dismiss. The review does wait for
     /// that leg before presenting again.
     @Test func aForeignAnswerLegNeverDisablesTheOverlay() async throws {
-        let (manager, _) = try endedSession(photos: 2)
+        let (features, _) = try endedSession(photos: 2)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: RecordingReviewPresenter())
         coordinator.evaluateNow()
@@ -488,7 +505,8 @@ struct SessionPhotoReviewCoordinatorTests {
     /// after that does not wait at all — so the answer's `defer` always lowers its leg. Before the
     /// fix the wait sat on a `@State` object the torn-down camera could no longer release.
     @Test func theDevelopAnswersWaitEndsWithTheDevelopReview() async throws {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: RecordingReviewPresenter())
         let acknowledgement = coordinator.developSaveFailureAcknowledgement
         coordinator.cameraDevelopReviewUp = true   // the Develop sheet presents
@@ -519,7 +537,8 @@ struct SessionPhotoReviewCoordinatorTests {
 
     /// The resume offer is withheld while the review blocks discovery; endings are not.
     @Test func theResumeOfferIsSuppressedWhileBlocked() throws {
-        let (manager, _) = try endedSession(photos: 1)
+        let (features, _) = try endedSession(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let coordinator = Fixtures.coordinator(manager, host: store, presenter: RecordingReviewPresenter())
         try #require(coordinator.blocksDiscovery)
@@ -529,7 +548,8 @@ struct SessionPhotoReviewCoordinatorTests {
         #expect(coordinator.resumePresentation(.nothing) == .nothing)
 
         let quietStore = makeTestStore()   // nothing held on this one
-        let quietManager = MeshNetworkManager(store: quietStore, transport: FakeMeshTransportSession())
+        let quietManagerFeatures = FernletMeshRig.features(store: quietStore, transport: FakeMeshTransportSession())
+        let quietManager = quietManagerFeatures.mesh
         let quiet = Fixtures.coordinator(quietManager, host: quietStore, presenter: RecordingReviewPresenter())
         #expect(!quiet.blocksDiscovery && quiet.resumePresentation(.offerResume) == .offerResume,
                 "and nothing blocked, the offer shows")
@@ -685,14 +705,16 @@ struct SessionPhotoReviewDoor3Tests {
     /// presents with Keep off, a forced Keep is not applied and the review STAYS UP with the inline
     /// failure (never hide-and-re-present), and Delete all applies and closes it.
     @Test func anUnreadableWallDisablesKeepAndDeleteAllStillApplies() async throws {
-        let first = LastMemberReviewFixtures.foundedManager(store: store)
+        let firstFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let first = firstFeatures.mesh
         defer { first.leaveMesh() }
         LastMemberReviewFixtures.capture(2, on: first)
         let ids = first.sessionPhotos.map(\.id)
         try #require(ids.count == 2)
         let aside = try HeldPhotoFixtures.makeWallUnreadable(store)
         defer { try? HeldPhotoFixtures.restoreWall(store, aside: aside) }
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
         HeldPhotos.openGate(on: relaunched)
         let presenter = RecordingReviewPresenter()
         let coordinator = Fixtures.coordinator(relaunched, host: store, presenter: presenter)

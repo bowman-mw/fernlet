@@ -53,13 +53,14 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
 // MARK: - MeshDepartureNode
 
-/// One node of an N-manager fabric: a manager, the endpoint its slots send over, and **one
-/// coordinator per link**.
+/// One node of an N-manager fabric: a manager with the composition that owns it, the endpoint its
+/// slots send over, and **one coordinator per link**.
 ///
 /// A class rather than a struct because ``delivered`` is a cursor the pump advances and
 /// ``coordinators`` grows as links are seated — a value type would hand every pump its own copy and
@@ -78,7 +79,11 @@ final class MeshDepartureNode {
     /// host `unowned`: a store that only lives as long as the expression that made it traps.
     let store: FernletStore
 
-    /// The manager at this end.
+    /// Fernlet's mesh composition at this end, which built ``manager`` and owns it and the feature
+    /// objects; held for the node's whole lifetime (`FernletMeshTestSupport.swift`'s rule).
+    let features: FernletMeshFeatures
+
+    /// The manager at this end: ``features``' mesh.
     let manager: MeshNetworkManager
 
     /// This end's fabric endpoint — what its slots send over and what its peers' frames land in.
@@ -104,19 +109,20 @@ final class MeshDepartureNode {
     /// - Parameters:
     ///   - label: The diagnostic label.
     ///   - store: The sealed root.
-    ///   - manager: The manager at this end.
+    ///   - features: The composition at this end, whose mesh is the node's manager.
     ///   - channel: This end's fabric endpoint.
     ///   - handle: The handle other ends address this one by.
     init(
         label: String,
         store: FernletStore,
-        manager: MeshNetworkManager,
+        features: FernletMeshFeatures,
         channel: FakePeerTransport,
         handle: PeerHandle
     ) {
         self.label = label
         self.store = store
-        self.manager = manager
+        self.features = features
+        self.manager = features.mesh
         self.channel = channel
         self.handle = handle
     }
@@ -181,7 +187,8 @@ enum MeshDepartureRig {
     static let settleRounds = 8
     static let yieldsPerRound = 4
 
-    /// Builds one node on `fabric` with an **injected** identity.
+    /// Builds one node on `fabric` with an **injected** identity, through Fernlet's mesh
+    /// composition (`FernletMeshRig`), which the node keeps.
     ///
     /// The injection is not hygiene: `IdentityService()` is keyed on one process-wide keychain
     /// service, so four default managers in one process would be the same device four times over
@@ -190,22 +197,23 @@ enum MeshDepartureRig {
     ///   - label: The diagnostic label, and the endpoint's name.
     ///   - identity: The injected identity.
     ///   - fabric: The medium.
-    ///   - manager: An EXISTING manager to seat on a fresh endpoint, for the one scenario that
-    ///     needs it: a **relaunch**, where a new manager comes up over a dead node's store and the
-    ///     link has to re-form. Its store is the one it was built with, so the caller keeps that
-    ///     alive (`MeshNetworkManager` holds its host `unowned`). Defaults to nil — every other
-    ///     caller gets a fresh store and a fresh manager.
+    ///   - features: An EXISTING composition to seat on a fresh endpoint, for the one scenario that
+    ///     needs it: a **relaunch**, where a new composition comes up over a dead node's store and
+    ///     the link has to re-form. Its store is the one it was built with, so the caller keeps that
+    ///     alive (the mesh and its features hold their host `unowned`). Defaults to nil — every
+    ///     other caller gets a fresh store and a fresh composition.
+    ///   - store: The store an existing composition was built over, or nil for a fresh one.
     static func node(
         _ label: String, identity: IdentityService, on fabric: FakePeerNetwork,
-        manager: MeshNetworkManager? = nil, store: FernletStore? = nil
+        features: FernletMeshFeatures? = nil, store: FernletStore? = nil
     ) -> MeshDepartureNode {
         let nodeStore = store ?? makeTestStore()
-        let nodeManager = manager ?? MeshNetworkManager(
+        let nodeFeatures = features ?? FernletMeshRig.features(
             store: nodeStore, transport: FakeMeshTransportSession(), identity: identity
         )
         let endpoint = fabric.addEndpoint(named: label)
         return MeshDepartureNode(
-            label: label, store: nodeStore, manager: nodeManager,
+            label: label, store: nodeStore, features: nodeFeatures,
             channel: endpoint.transport, handle: endpoint.handle
         )
     }
@@ -769,12 +777,13 @@ struct MeshMissedDepartureRecoveryTests {
 @Suite(.serialized)
 struct MeshDepartureMergeLawTests {
 
-    /// A live manager on `ledger`, with its own sealed root.
+    /// A live manager on `ledger`, with its own sealed root and the mesh composition that owns it.
     private func manager(
         founder: IdentityService, ledger: MeshMembershipLedger, meshID: UUID
-    ) -> (manager: MeshNetworkManager, store: FernletStore) {
+    ) -> (manager: MeshNetworkManager, store: FernletStore, features: FernletMeshFeatures) {
         let scoped = makeTestStore()
-        let manager = MeshNetworkManager(store: scoped, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: scoped, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID)
         manager.seedMembershipLedgerForTesting(
             meshID: meshID, founderSigningPublicKey: founder.localSigningPublicKey, ledger: ledger
@@ -783,7 +792,7 @@ struct MeshDepartureMergeLawTests {
             manager.applySessionEvent(.founded)
             manager.applySessionEvent(.peerCommitted)
         }
-        return (manager, scoped)
+        return (manager, scoped, features)
     }
 
     /// **Commutative, with a departure in the union.** A merges the branch holding the departure,

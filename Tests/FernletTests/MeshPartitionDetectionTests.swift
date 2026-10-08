@@ -32,6 +32,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -267,9 +268,12 @@ struct MeshPartitionDetectionTests {
 
     let store = makeTestStore()
 
-    /// What a scenario needs to talk about a partitioned mesh: the manager, the roster's
-    /// fingerprints in ascending order, and the mesh id everything is keyed on.
+    /// What a scenario needs to talk about a partitioned mesh: the manager with the mesh composition
+    /// that owns it, the roster's fingerprints in ascending order, and the mesh id everything is keyed
+    /// on.
     private struct Rig {
+        /// Fernlet's mesh composition, which built ``manager`` and owns it; kept for the rig's lifetime.
+        let features: FernletMeshFeatures
         let manager: MeshNetworkManager
         let names: [String]
         let meshID: UUID
@@ -281,7 +285,8 @@ struct MeshPartitionDetectionTests {
     /// The ledger is seeded through `seedMembershipLedgerForTesting`, deliberately: seeding it via
     /// the merge trigger would spend the `.merge` rotation these scenarios must not see fire.
     private func makeRig(memberCount: Int) throws -> Rig {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         let meshID = UUID()
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID)
         let local = manager.identityForTesting
@@ -300,7 +305,7 @@ struct MeshPartitionDetectionTests {
         // A short roster would make every assertion below vacuous rather than wrong, so it is a
         // hard requirement of the rig rather than one more expectation among many.
         #expect(names.count == memberCount, "the seeded roster must hold \(memberCount) distinct members")
-        return Rig(manager: manager, names: names, meshID: meshID)
+        return Rig(features: features, manager: manager, names: names, meshID: meshID)
     }
 
     /// **Claims 1 and 2.** A roster member going out of reach raises `linksLost` and partitions the
@@ -443,7 +448,8 @@ struct MeshPartitionDetectionTests {
         }
         rig.manager.leaveMesh()
         // A second manager over the same sealed root restores membership and no presence at all.
-        let restored = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let restoredFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let restored = restoredFeatures.mesh
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             _ = restored.restoreSessionContextAtLaunch(now: Date())
         }

@@ -39,6 +39,7 @@ import UIKit
 import FernletConnections
 import FernletDomainModel
 import PrivateMediaStore
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -67,15 +68,18 @@ enum LastMemberReviewFixtures {
         }
     }
 
-    /// A manager over a recording fake radio with a founded, single-member mesh — enough for
-    /// `addPhoto` to route captures into the session list and for the machine to take an ending.
-    static func foundedManager(store: FernletStore, createdAt: Date = Date()) -> MeshNetworkManager {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+    /// Fernlet's mesh composition over a manager on a recording fake radio with a founded,
+    /// single-member mesh — enough for `addPhoto` to route captures into the session list and for the
+    /// machine to take an ending. The caller keeps the composition for as long as it uses the
+    /// manager, its `mesh`.
+    static func foundedFeatures(store: FernletStore, createdAt: Date = Date()) -> FernletMeshFeatures {
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, createdAt: createdAt)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             manager.applySessionEvent(.founded)
         }
-        return manager
+        return features
     }
 }
 
@@ -235,7 +239,8 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
     /// `leaveSession()` is the funnel every other ending reaches (a removal naming this device, the
     /// pairwise "Ask to remove", epoch exhaustion, a hard stop). It promotes; it never drops.
     @Test func leaveSessionPromotesTheSessionPhotosAndDropsNone() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         LastMemberReviewFixtures.capture(3, on: manager)
         let captured = Set(manager.sessionPhotos.map(\.id))
@@ -257,7 +262,8 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
     /// through `enforceSessionCeiling` → `leaveSession()`, and the photos reach the review.
     @Test func theCeilingExpiryLeavesThePhotosInTheReview() async throws {
         let created = Date()
-        let manager = LastMemberReviewFixtures.foundedManager(store: store, createdAt: created)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store, createdAt: created)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         manager.startSessionCeiling(
             hardDeadline: created.addingTimeInterval(MeshSessionCeiling.ceilingSeconds), startedAt: created
@@ -278,7 +284,8 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
     /// A new search is a new session, and it must not silently keep what the last one left in the
     /// live list (a late arrival after a pairwise ending, a DEBUG driver's direct start).
     @Test func aNewSearchMovesLeftoverPhotosIntoTheReviewRatherThanDroppingThem() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         LastMemberReviewFixtures.capture(1, on: manager)
         let leftover = Set(manager.sessionPhotos.map(\.id))
@@ -402,7 +409,8 @@ struct PendingPhotoReviewScopingTests {
 
     /// A batch whose photos are pending, promoted with one candidate.
     private func endedSessionWithPhotos(_ count: Int) throws -> (MeshNetworkManager, [UUID]) {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
@@ -471,7 +479,8 @@ struct PendingPhotoReviewScopingTests {
     /// A photo that arrived after the Develop snapshot was never shown, so the camera's answer
     /// leaves it listed — it reaches the post-session review at the teardown, ticked.
     @Test func aDevelopAnswerLeavesAPhotoItNeverShowedForThePostSessionReview() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         LastMemberReviewFixtures.capture(2, on: manager)
         let snapshot = Set(manager.sessionPhotos.map(\.id))

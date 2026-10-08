@@ -27,6 +27,7 @@ import UIKit
 import FernletDomainModel
 import FernletFoundation
 import PrivateMediaStore
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -127,7 +128,8 @@ struct MeshHeldSessionPhotoTests {
     /// readable through the wall's byte doors — while every photo is held and readable through the
     /// review's gated seam.
     @Test func nothingReachesTheWallBeforeTheAnswer() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(3, on: manager)
@@ -153,7 +155,8 @@ struct MeshHeldSessionPhotoTests {
     /// wall key; discarded = shown ∩ held − ticked, files gone; both tombstoned by (origin, id); an
     /// id not shown stays held; and an id answered once is ignored by every later answer.
     @Test func anAnswerIsExactAndFirstAnswerWins() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(4, on: manager)
@@ -188,7 +191,8 @@ struct MeshHeldSessionPhotoTests {
     /// the pending index is byte-identical across the ending, and a manager rebuilt over it offers
     /// every photo as awaiting.
     @Test func theEndingWritesNothing() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         LastMemberReviewFixtures.capture(2, on: manager)
         let captured = Set(manager.sessionPhotos.map(\.id))
@@ -202,7 +206,8 @@ struct MeshHeldSessionPhotoTests {
         #expect(try Data(contentsOf: indexURL) == before, "the pending index is byte-identical")
         let modifiedAfter = try FileManager.default.attributesOfItem(atPath: indexURL.path)[.modificationDate] as? Date
         #expect(modifiedAfter == modifiedBefore, "and was not even rewritten")
-        let rebuilt = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let rebuiltFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let rebuilt = rebuiltFeatures.mesh
         #expect(Set(rebuilt.pendingReviewPhotos.map(\.id)) == captured, "a rebuilt manager sees every photo awaiting")
     }
 
@@ -210,7 +215,8 @@ struct MeshHeldSessionPhotoTests {
     /// photos-only batch with every held photo and NO candidates (they are memory-only key
     /// material — owner question Q5's default), and the review is outstanding.
     @Test func theReviewSurvivesAKillWithoutItsCandidates() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
@@ -220,7 +226,8 @@ struct MeshHeldSessionPhotoTests {
         let captured = Set(manager.sessionPhotos.map(\.id))
         try #require(captured.count == 3 && manager.isSessionLive, "a kill mid-session")
 
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
 
         let batch = try #require(relaunched.pendingFriendReview, "the review came back")
         #expect(Set(batch.photos.map(\.id)) == captured, "with every held photo")
@@ -237,7 +244,8 @@ struct MeshHeldSessionPhotoTests {
     /// at a locked launch nothing is offered and the review cannot be shown; the unlock edge re-reads
     /// the wall and then drops the kept photo from the pending corpus, offering only the rest.
     @Test func theReconcileWaitsForAReadableWallThenDropsWhatTheWallHolds() throws {
-        let first = LastMemberReviewFixtures.foundedManager(store: store)
+        let firstFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let first = firstFeatures.mesh
         defer { first.leaveMesh() }
         LastMemberReviewFixtures.capture(2, on: first)
         let ids = first.sessionPhotos.map(\.id)
@@ -251,7 +259,8 @@ struct MeshHeldSessionPhotoTests {
         #expect(wall.commitKept([hydrated], onto: wall.load()).keptOnWall == [ids[0]], "precondition: on the wall")
         let aside = try HeldPhotoFixtures.makeWallUnreadable(store)
 
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
 
         #expect(relaunched.pendingFriendReview == nil, "over an unreadable wall nothing is offered")
         #expect(!relaunched.heldPhotosCanBeShown && !relaunched.wallCanTakeKeeps)
@@ -271,7 +280,8 @@ struct MeshHeldSessionPhotoTests {
     /// never end), a Keep is not applied (`keepUnavailable`) and leaves the photo held, and a
     /// Delete all applies — it needs only the pending index.
     @Test func aWallThatStaysUnreadableRefusesKeepsButAppliesDiscards() throws {
-        let first = LastMemberReviewFixtures.foundedManager(store: store)
+        let firstFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let first = firstFeatures.mesh
         defer { first.leaveMesh() }
         LastMemberReviewFixtures.capture(2, on: first)
         let ids = first.sessionPhotos.map(\.id)
@@ -279,7 +289,8 @@ struct MeshHeldSessionPhotoTests {
         let aside = try HeldPhotoFixtures.makeWallUnreadable(store)
         defer { try? HeldPhotoFixtures.restoreWall(store, aside: aside) }
 
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
         #expect(relaunched.pendingFriendReview == nil, "a locked launch waits")
         HeldPhotos.openGate(on: relaunched)
         let batch = try #require(relaunched.pendingFriendReview, "unlocked and still unreadable: offered")
@@ -297,7 +308,8 @@ struct MeshHeldSessionPhotoTests {
     /// spent, nothing shared), an answer applies nothing, and the review cannot be shown. Nothing held
     /// is deleted — hide, never delete.
     @Test func duressRevealsNothingAndAcceptsNothing() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(1, on: manager)
@@ -321,7 +333,8 @@ struct MeshHeldSessionPhotoTests {
     /// **I14.** The corpus is bounded without ever evicting: the 201st hold is `.full`, and every
     /// photo held before it is still held.
     @Test func theTwoHundredAndFirstHoldIsRefusedAndNothingIsEvicted() throws {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         let cap = PendingSessionPhotoStore.maxHeldPhotos
         var first: UUID?
         // R2: a hard constant ceiling — the corpus bound.
@@ -358,7 +371,8 @@ struct MeshHeldSessionPhotoTests {
         )
         try #require(outcome == .held)
 
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
 
         #expect(manager.pendingReviewPhotos.map(\.id) == [id], "a year later it is still waiting for the person")
     }
@@ -366,7 +380,8 @@ struct MeshHeldSessionPhotoTests {
     /// **I22.** A kept photo whose sealed bytes do not land on the wall is NOT reported kept: it
     /// stays held and offered, the answer names the failure, and the export set cannot include it.
     @Test func aKeepThatDoesNotLandLeavesThePhotoHeldAndOffered() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(2, on: manager)
@@ -395,7 +410,8 @@ struct MeshHeldSessionPhotoTests {
     /// keep lands. Before the fix every nil read was `unreadable`: the photo was tombstoned and its
     /// files swept — a photo the person chose to keep, deleted for good by a transient failure.
     @Test func aKeptPhotoThatCannotBeReadRightNowStaysHeld() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(2, on: manager)
@@ -423,7 +439,8 @@ struct MeshHeldSessionPhotoTests {
     /// unlock): the keep applies nothing and every ticked photo stays held for the retry.
     @Test func aKeepWithNoKeyAtTheAnswerLeavesEveryPhotoHeld() throws {
         let keys = SwitchableMediaKeyProvider()
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), heldPhotoKeys: keys)
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession(), heldPhotoKeys: keys)
+        let manager = features.mesh
         HeldPhotos.openGate(on: manager)
         let ids = [UUID(), UUID()]
         for id in ids {
@@ -447,7 +464,8 @@ struct MeshHeldSessionPhotoTests {
     /// **I22's boundary, fix round 1.** A ticked photo whose bytes are GONE — they do not open under
     /// the present key — is the one case a keep removes: reported `unreadable`, never offered again.
     @Test func aKeptPhotoWhoseBytesAreGoneIsRemovedAndReported() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(2, on: manager)
@@ -466,7 +484,8 @@ struct MeshHeldSessionPhotoTests {
     /// separately (under a fresh local id), neither suppresses the other, and discarding the
     /// impostor tombstones only the impostor's key.
     @Test func anImpostorWithACopiedItemIDNeitherSuppressesNorTombstonesTheGenuinePhoto() throws {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         HeldPhotos.openGate(on: manager)
         let itemID = UUID()
         let impostorKey = MeshContentKey(senderFingerprint: "fp-impostor", contentID: itemID)
@@ -497,7 +516,8 @@ struct MeshHeldSessionPhotoTests {
     /// A kept photo deleted from the wall is tombstoned by its identity for 24 hours, so a routed
     /// copy still in custody cannot come back as a new held photo; a HELD photo is not deletable.
     @Test func deletingAKeptPhotoTombstonesItAndAHeldPhotoIsNotDeletable() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(2, on: manager)
@@ -519,7 +539,8 @@ struct MeshHeldSessionPhotoTests {
     /// too) and the live roster are empty, the wall is untouched — and nothing comes back on a
     /// rebuild.
     @Test func theDeleteAllPurgeTakesEveryUnchosenPhotoAndTheirSessionsOffer() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
         LastMemberReviewFixtures.capture(3, on: manager)
@@ -538,7 +559,8 @@ struct MeshHeldSessionPhotoTests {
         #expect(manager.pendingFriendReview == nil && manager.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
         #expect(!manager.hasOutstandingPhotoReview)
         #expect(manager.meshPhotos.map(\.id) == [ids[0]], "the kept wall survives")
-        let rebuilt = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let rebuiltFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let rebuilt = rebuiltFeatures.mesh
         #expect(rebuilt.pendingFriendReview == nil, "and nothing unchosen comes back")
     }
 
@@ -647,12 +669,13 @@ struct MeshHeldRoutedPhotoTests {
         capture.install()
         defer { capture.uninstall() }
 
-        let reborn = MeshNetworkManager(
+        let rebornFeatures = FernletMeshRig.features(
             store: rig.nodes[1].store, transport: FakeMeshTransportSession(), identity: rig.identities[1]
         )
+        let reborn = rebornFeatures.mesh
         let rebornNode = MeshDepartureRig.node(
             "held-tombstone-reborn", identity: rig.identities[1], on: rig.fabric,
-            manager: reborn, store: rig.nodes[1].store
+            features: rebornFeatures, store: rig.nodes[1].store
         )
         MeshDepartureRig.start(
             rebornNode, ledger: rig.ledger, founderKey: rig.identities[0].localSigningPublicKey,

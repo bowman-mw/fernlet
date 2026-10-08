@@ -37,6 +37,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -50,9 +51,11 @@ struct MeshSeatTransportProofTests {
 
     let store = makeTestStore()
 
-    /// What a scenario needs: the manager, its recording radio, one member of its mesh, and the
-    /// mesh id.
+    /// What a scenario needs: the manager with the mesh composition that owns it, its recording
+    /// radio, one member of its mesh, and the mesh id.
     private struct Rig {
+        /// Fernlet's mesh composition, which built ``manager`` and owns it; kept for the rig's lifetime.
+        let features: FernletMeshFeatures
         let manager: MeshNetworkManager
         let radio: FakeMeshTransportSession
         let member: IdentityService
@@ -71,7 +74,8 @@ struct MeshSeatTransportProofTests {
     /// member's identity is one the re-seat would act on.
     private func makeRig() throws -> Rig {
         let radio = FakeMeshTransportSession()
-        let manager = MeshNetworkManager(store: store, transport: radio)
+        let features = FernletMeshRig.features(store: store, transport: radio)
+        let manager = features.mesh
         let meshID = UUID()
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID)
         let member = try MeshPartitionFixtures.identity("seatproof-member")
@@ -86,7 +90,7 @@ struct MeshSeatTransportProofTests {
             manager.applySessionEvent(.linksLost)
         }
         #expect(manager.sessionState == .partitioned, "the rig must start partitioned")
-        return Rig(manager: manager, radio: radio, member: member, meshID: meshID)
+        return Rig(features: features, manager: manager, radio: radio, member: member, meshID: meshID)
     }
 
     /// Ends a rig's session and drops whatever rotation it asked for.

@@ -2241,18 +2241,18 @@ struct FernletFeatureGoldenTests {
         }
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
+        let features = Self.meshFeatures(over: store, identity: alice)
         let before = Date()
-        let cached = Self.receiveVouchList(list, from: Self.aliceFingerprint, on: manager)
+        let cached = Self.receiveVouchList(list, from: Self.aliceFingerprint, on: features)
         let after = Date()
         #expect(cached?.voucherDisplayName == "Alice" && cached?.trustedFingerprints == [Self.bobFingerprint, Self.carolFingerprint])
         let expiry = try #require(cached?.expiresAt, "nothing was cached")
         let lifetime = Self.vouchListLifetimeSeconds
         #expect(expiry >= before.addingTimeInterval(lifetime) && expiry <= after.addingTimeInterval(lifetime),
                 "cached until \(expiry)")
-        let label = Self.vouchLabel(for: Self.bobFingerprint, on: manager)
+        let label = Self.vouchLabel(for: Self.bobFingerprint, on: features)
         #expect(label == Self.vouchLabelPrefix + "Alice", "bob is labelled \(String(describing: label))")
-        withExtendedLifetime(store) {}
+        withExtendedLifetime((store, features)) {}
     }
 
     // MARK: Group 21 — the heart ledger's file
@@ -2800,18 +2800,18 @@ struct FernletFeatureGoldenTests {
         }
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
+        let features = Self.meshFeatures(over: store, identity: alice)
         Self.keep(Self.bobPeerIdentity(id: UUID(), capabilities: nil), in: store)
         let lifetime = Self.vouchListLifetimeSeconds
         let before = Date()
-        let sent = try #require(Self.vouchListToSend(on: manager), "the forced-on gate built no list")
+        let sent = try #require(Self.vouchListToSend(on: features), "the forced-on gate built no list")
         let after = Date()
         #expect(sent.expiresAt >= before.addingTimeInterval(lifetime)
                     && sent.expiresAt <= after.addingTimeInterval(lifetime),
                 "the list built between \(before) and \(after) expires at \(sent.expiresAt)")
         #expect(sent.voucherFingerprint == Self.aliceFingerprint && sent.trustedFingerprints == [Self.bobFingerprint],
                 "the list vouches as \(sent.voucherFingerprint) for \(sent.trustedFingerprints)")
-        withExtendedLifetime((store, manager)) {}
+        withExtendedLifetime((store, features)) {}
     }
 
     /// Received from bob with the gate forced on, a list claiming ten hours is cached until two hours
@@ -2827,11 +2827,11 @@ struct FernletFeatureGoldenTests {
         }
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
+        let features = Self.meshFeatures(over: store, identity: alice)
         let lifetime = Self.vouchListLifetimeSeconds
         let before = Date()
         let tenHours = Self.bobVouchList(expiresAt: before.addingTimeInterval(10 * 3600))
-        let capped = try #require(Self.receiveVouchList(tenHours, from: Self.bobFingerprint, on: manager),
+        let capped = try #require(Self.receiveVouchList(tenHours, from: Self.bobFingerprint, on: features),
                                   "bob's ten-hour list was not cached")
         let after = Date()
         #expect(capped.expiresAt >= before.addingTimeInterval(lifetime)
@@ -2839,13 +2839,13 @@ struct FernletFeatureGoldenTests {
                 "a ten-hour claim received between \(before) and \(after) is cached until \(capped.expiresAt)")
         let oneHour = Date().addingTimeInterval(3_600)
         let kept = try #require(Self.receiveVouchList(Self.bobVouchList(expiresAt: oneHour), from: Self.bobFingerprint,
-                                                      on: manager), "bob's one-hour list was not cached")
+                                                      on: features), "bob's one-hour list was not cached")
         #expect(kept.expiresAt == oneHour, "a one-hour claim is cached until \(kept.expiresAt), not \(oneHour)")
-        let label = Self.vouchLabel(for: Self.carolFingerprint, on: manager)
+        let label = Self.vouchLabel(for: Self.carolFingerprint, on: features)
         #expect(label == Self.vouchLabelPrefix + "Bob", "carol is labelled \(String(describing: label))")
-        let stranger = Self.vouchLabel(for: Self.strangerFingerprint, on: manager)
+        let stranger = Self.vouchLabel(for: Self.strangerFingerprint, on: features)
         #expect(stranger == nil, "a friend no list names is labelled \(String(describing: stranger))")
-        withExtendedLifetime((store, manager)) {}
+        withExtendedLifetime((store, features)) {}
     }
 
     // MARK: Group 26 — the item report and the friend state sent at a commit
@@ -3538,9 +3538,11 @@ extension FernletFeatureGoldenTests {
 
     /// The capability array `store`'s mesh advertises: today `MeshNetworkManager.localCapabilities()`,
     /// which the manager reads once per coordinator and the coordinator carries verbatim into the signed
-    /// introduction, on the store's own manager (`FernletStore.meshNetworkManager`).
+    /// introduction, on the store's own composition (`FernletStore.meshFeatures`, plan step A0.5.5),
+    /// whose capability list (`FernletMeshCapabilities`) is the mesh's provider: the list composed in
+    /// FernletSocial, read through the engine as the coordinator reads it.
     static func advertisedCapabilities(of store: FernletStore) -> [String] {
-        store.meshNetworkManager.localCapabilities()
+        store.meshFeatures.mesh.localCapabilities()
     }
 
     /// Puts `store` in capability state `state`: five characters, `1` on, in the order
@@ -3885,12 +3887,22 @@ extension FernletFeatureGoldenTests {
     /// A mesh manager over `store` (held unowned: the caller keeps it alive) on an in-memory radio, with
     /// `identity` as its device identity and `heldPhotoKeys` as the pending corpus's key, or nil, the
     /// default, for the keychain row production reads: today the internal
-    /// `MeshNetworkManager(store:transport:identity:heldPhotoKeys:)`. Re-pointed at A0.5.5, when the
-    /// composition is born.
+    /// `MeshNetworkManager(store:transport:identity:heldPhotoKeys:)`, a bare engine: the cells that read
+    /// it read the activity manager and the photo wall, still the engine's. Re-pointed at
+    /// ``meshFeatures(over:identity:)`` as those features leave the engine (A0.5.8, A0.5.11).
     static func meshManager(over store: FernletStore, identity: IdentityService,
                             heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil) -> MeshNetworkManager {
         MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), identity: identity,
                            heldPhotoKeys: heldPhotoKeys)
+    }
+
+    /// Fernlet's mesh composition over `store` (held unowned: the caller keeps it alive) on an in-memory
+    /// radio, with `identity` as the device identity it hands its mesh and its features: today
+    /// `FernletMeshRig.features(store:transport:identity:)`, the app's composition over the manager's
+    /// internal designated initializer (plan step A0.5.5). The caller keeps the composition for as long
+    /// as it uses it.
+    static func meshFeatures(over store: FernletStore, identity: IdentityService) -> FernletMeshFeatures {
+        FernletMeshRig.features(store: store, transport: FakeMeshTransportSession(), identity: identity)
     }
 
     /// The wall preferences' entry count: today `photoWallPreferenceEntryCountForTesting`.
@@ -3911,13 +3923,14 @@ extension FernletFeatureGoldenTests {
         PrivateMediaStore(indexURL: indexURL, keyProvider: SwitchableMediaKeyProvider())
     }
 
-    /// The vouch list a manager caches after receiving `list` from `sender` with the broadcast gate
-    /// forced on: today `isVouchListBroadcastEnabled`, `receiveVouchList(_:senderFingerprint:)` and
-    /// `cachedVouchList(from:)`.
-    static func receiveVouchList(_ list: FriendVouchList, from sender: String, on manager: MeshNetworkManager) -> FriendVouchList? {
-        manager.isVouchListBroadcastEnabled = true
-        manager.receiveVouchList(list, senderFingerprint: sender)
-        return manager.cachedVouchList(from: sender)
+    /// The vouch list a composition caches after its mesh hands it `list` from `sender` with the
+    /// broadcast gate forced on: today `FernletVouchList.isVouchListBroadcastEnabled`, the mesh's
+    /// `vouchListExchange` (the adapter the composition installs, which the vouch arm hands every list it
+    /// decodes) and `FernletVouchList.cachedVouchList(from:)` (plan step A0.5.5; the manager's until then).
+    static func receiveVouchList(_ list: FriendVouchList, from sender: String, on features: FernletMeshFeatures) -> FriendVouchList? {
+        features.vouchList.isVouchListBroadcastEnabled = true
+        features.mesh.vouchListExchange?.receiveVouchList(list, senderFingerprint: sender)
+        return features.vouchList.cachedVouchList(from: sender)
     }
 
     /// The pending corpus's names: today `PendingSessionPhotoStore`'s four frozen tokens, which the mesh
@@ -3992,18 +4005,20 @@ extension FernletFeatureGoldenTests {
         return decoder
     }
 
-    /// The vouch list `manager` would send with the broadcast gate forced on: today
-    /// `isVouchListBroadcastEnabled` and `vouchListPayloadForBroadcast()`. Re-pointed at A0.5.5, when the
-    /// vouch content leaves the engine.
-    static func vouchListToSend(on manager: MeshNetworkManager) -> FriendVouchList? {
-        manager.isVouchListBroadcastEnabled = true
-        return manager.vouchListPayloadForBroadcast()
+    /// The vouch list a composition's mesh would send with the broadcast gate forced on: today
+    /// `FernletVouchList.isVouchListBroadcastEnabled` and the list the mesh's vouch-list send asks its
+    /// `vouchListExchange` for (plan step A0.5.5, when the vouch content left the engine; until then
+    /// the manager's `vouchListPayloadForBroadcast()`).
+    static func vouchListToSend(on features: FernletMeshFeatures) -> FriendVouchList? {
+        features.vouchList.isVouchListBroadcastEnabled = true
+        return features.mesh.vouchListExchange?.vouchListForBroadcast()
     }
 
-    /// The friend-of-friend label `manager` shows for `fingerprint`: today `vouchLabel(for:)`. Re-pointed
-    /// at A0.5.5.
-    static func vouchLabel(for fingerprint: String, on manager: MeshNetworkManager) -> String? {
-        manager.vouchLabel(for: fingerprint)
+    /// The friend-of-friend label a composition shows for `fingerprint`: today
+    /// `FernletVouchList.vouchLabel(for:)`, which the camera reads (plan step A0.5.5; the manager's
+    /// `vouchLabel(for:)` until then).
+    static func vouchLabel(for fingerprint: String, on features: FernletMeshFeatures) -> String? {
+        features.vouchList.vouchLabel(for: fingerprint)
     }
 
     /// Makes `peer` a kept friend in `store`'s vault: today `ProximityTrustVault.trust(_:mode:)` on

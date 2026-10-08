@@ -28,6 +28,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -391,12 +392,13 @@ struct MeshP3SessionAcceptanceTests {
 
     let store = makeTestStore()
 
-    /// A manager on the fake radio, already holding a descriptor so every `persistContext` effect
-    /// has a mesh to write.
-    private func makeManager() -> MeshNetworkManager {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
-        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
-        return manager
+    /// Fernlet's mesh composition over a manager on the fake radio, already holding a descriptor so
+    /// every `persistContext` effect has a mesh to write; the caller keeps the composition for as long
+    /// as it uses the manager.
+    private func makeFeatures() -> FernletMeshFeatures {
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        features.mesh.currentMesh = MeshP3Acceptance.mesh(for: features.mesh)
+        return features
     }
 
     /// **"unit tests for every state edge"** — walked end to end through
@@ -413,7 +415,8 @@ struct MeshP3SessionAcceptanceTests {
     /// as behaviour a user can currently reach.
     @Test func everyStateEdgeIsTakenThroughTheIntegratedManager() {
         for edge in MeshP3Acceptance.stateEdges {
-            let manager = makeManager()
+            let features = makeFeatures()
+            let manager = features.mesh
             DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
                 for event in edge.prefix.prefix(MeshP3Acceptance.maxEdgePrefix) {
                     manager.applySessionEvent(event)
@@ -434,10 +437,11 @@ struct MeshP3SessionAcceptanceTests {
     @Test func aDisconnectIsNotARemovalOnEitherSideOfTheDrop() throws {
         let peerStore = makeTestStore()
         let transports = [FakeMeshTransportSession(), FakeMeshTransportSession()]
-        let managers = [
-            MeshNetworkManager(store: store, transport: transports[0]),
-            MeshNetworkManager(store: peerStore, transport: transports[1])
+        let compositions = [
+            FernletMeshRig.features(store: store, transport: transports[0]),
+            FernletMeshRig.features(store: peerStore, transport: transports[1])
         ]
+        let managers = compositions.map { $0.mesh }
         for (index, manager) in managers.enumerated() {
             let mesh = MeshP3Acceptance.mesh(for: manager)
             manager.currentMesh = mesh
@@ -478,7 +482,8 @@ struct MeshP3SessionAcceptanceTests {
     /// to the SAME counter while partitioned; on resume neither epoch accepts the other, both
     /// survive in the sealed `epochHeads`, and exactly one `.merge` rotation is armed.
     @Test func anIdleLapseResumesAsAMergeWithBothDivergentHeadsSurviving() async throws {
-        let manager = makeManager()
+        let features = makeFeatures()
+        let manager = features.mesh
         guard let meshID = manager.currentMesh?.meshID else {
             Issue.record("the rig must hand back a manager holding a descriptor")
             return
@@ -535,7 +540,8 @@ struct MeshP3SessionAcceptanceTests {
              MeshP3Acceptance.base.addingTimeInterval(MeshSessionCeiling.ceilingSeconds + 3_600), 5)
         ]
         for jump in jumps {
-            let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+            let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+            let manager = features.mesh
             let created = MeshP3Acceptance.base
             manager.currentMesh = MeshP3Acceptance.mesh(for: manager, createdAt: created)
             var emitted: [MeshPayloadRole] = []
@@ -570,17 +576,20 @@ struct MeshP3RotationAcceptanceTests {
 
     let store = makeTestStore()
 
-    private func makeManager() -> MeshNetworkManager {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
-        manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
-        return manager
+    /// Fernlet's mesh composition over a manager on the fake radio, already holding a descriptor;
+    /// the caller keeps the composition for as long as it uses the manager.
+    private func makeFeatures() -> FernletMeshFeatures {
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        features.mesh.currentMesh = MeshP3Acceptance.mesh(for: features.mesh)
+        return features
     }
 
     /// **Rotation on removal.** A completed vote rotates at once rather than at the next timer
     /// tick, the voted-out member is excluded from the new epoch's key, and their old key stops
     /// opening anything past the grace — which is the whole of the voted-out-member-keeps-key gap.
     @Test func aRemovalRotatesAndTheExcludedMembersOldKeyDiesAfterTheGrace() async {
-        let manager = makeManager()
+        let features = makeFeatures()
+        let manager = features.mesh
         guard let old = MeshP3Acceptance.seedEpoch(manager, counter: 3) else { return }
         let proposal = MeshRemovalProposalPayload(
             id: UUID(), targetFingerprint: "fp-target", targetDisplayName: "Target",
@@ -620,7 +629,8 @@ struct MeshP3RotationAcceptanceTests {
     @Test func aDepartureRotatesAndTheDepartedMembersOldKeyDiesAfterTheGrace() async throws {
         let fixture = try MeshLedgerChainFixture()
         defer { fixture.tearDown() }
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         let identity = manager.identityForTesting
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: fixture.meshID)
         // This device founds a PAIR and admits the leaver, so that once the leaver goes the roster
@@ -671,7 +681,8 @@ struct MeshP3RotationAcceptanceTests {
     /// **Rotation on merge.** A merge that MOVES the roster rotates as `.merge`; the superseded
     /// epoch keeps opening in-flight frames for the grace and not one second longer.
     @Test func aMergeRotatesAndTheSupersededEpochDiesAfterTheGrace() async throws {
-        let manager = makeManager()
+        let features = makeFeatures()
+        let manager = features.mesh
         guard let meshID = manager.currentMesh?.meshID else {
             Issue.record("the rig must hand back a manager holding a descriptor")
             return
@@ -769,7 +780,8 @@ struct MeshP3RestoreMatrixAcceptanceTests {
             try MeshSessionStoreFixtures.writeRaw(sealed.prefix(sealed.count - 8), into: sessionStore)
         }
         let before = MeshP3Acceptance.diskState(of: store)
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         let outcome = DeviceBindingID.$testOverride.withValue(binding) {
             manager.restoreSessionContextAtLaunch(now: now)
         }
@@ -864,7 +876,8 @@ struct MeshP3InteropAcceptanceTests {
     @Test func aLegacyGoodbyeClosesTheLinkAndNeverTheMembership() throws {
         let fixture = try MeshLedgerChainFixture()
         defer { fixture.tearDown() }
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: fixture.meshID)
         manager.seedMembershipLedgerForTesting(
             meshID: fixture.meshID,
@@ -919,7 +932,8 @@ struct MeshP3InteropAcceptanceTests {
     @Test func aThreeNodeRosterConvergesAndADepartureReachesTheMemberThatMissedIt() async throws {
         let fixture = try MeshLedgerChainFixture()
         defer { fixture.tearDown() }
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: fixture.meshID)
         manager.seedMembershipLedgerForTesting(
             meshID: fixture.meshID,
@@ -987,7 +1001,8 @@ struct MeshP3InteropAcceptanceTests {
     /// alike — and the file-system spy shows that nothing at all reached the disk while all three
     /// were refused.
     @Test func nothingIsAcknowledgedWhileTheStoreRefusesToSeal() async throws {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         let mesh = MeshP3Acceptance.mesh(for: manager)
         manager.currentMesh = mesh
         manager.prepareMembershipLedger(

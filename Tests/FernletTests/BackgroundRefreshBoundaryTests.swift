@@ -362,6 +362,7 @@ struct BackgroundRefreshBoundaryTests {
         // The live machinery a `private(set)` hands out whole. The property is internal to READ, so
         // `store.meshNetworkManager.…` needs no import and no funnel.
         Spelling(token: "meshNetworkManager", why: "hands out the radio manager itself", isAppDeclaration: true),
+        Spelling(token: "meshFeatures", why: "hands out the mesh features, and through them the radio manager itself", isAppDeclaration: true),
         Spelling(token: "presenceManager", why: "hands out the presence listener", isAppDeclaration: true),
         Spelling(token: "recipeShareManager", why: "hands out the recipe-share listener", isAppDeclaration: true),
         Spelling(token: "meshContinuationHost", why: "hands out the `BGContinuedProcessingTask` host — a refresh task is not a continuation task", isAppDeclaration: true),
@@ -488,15 +489,20 @@ struct BackgroundRefreshBoundaryTests {
     /// `Health`, `HK`, `CloudKit`, `sync`, `FoundationModels`, `LanguageModel`, `Presence`,
     /// `RecipeShare` or `Continuation`, and none of them RUNS, HANDS OUT or FEEDS prohibited
     /// machinery. They are on the PERMITTED list above with the step each serves.
-    static let measuredSpellingCount = 84
+    ///
+    /// **85 at ProximityKit plan step A0.5.5**, which added `meshFeatures`: the store's mesh
+    /// composition (FernletSocial's `FernletMeshFeatures`), which builds and owns the mesh manager, so
+    /// it hands out the radio manager exactly as `meshNetworkManager`, now a read of it, does.
+    static let measuredSpellingCount = 85
 
     /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
     /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set
     /// from a flag, and a flag dropped in an edit would shrink it without failing anything.
     ///
     /// 38 at item 4; 37 at its verify fixes, which retired `attachedHealthKitService` along with
-    /// the declaration itself — see ``measuredSpellingCount``.
-    static let measuredAppDeclarationCount = 37
+    /// the declaration itself — see ``measuredSpellingCount``; 38 again at ProximityKit plan step
+    /// A0.5.5, with `meshFeatures`.
+    static let measuredAppDeclarationCount = 38
 
     /// The app-target root the declaration-drift cell walks.
     static let appTargetRoot = "App/Fernlet"
