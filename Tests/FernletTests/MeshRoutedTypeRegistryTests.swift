@@ -49,6 +49,11 @@ enum MeshRoutedTypeRegistryFixtures {
     static let probeToken = "fernlet.mesh.routed-type.p6-probe.v1"
 
     /// The probe's row: photo-shaped, so nothing about the flow it drives is heart-specific.
+    ///
+    /// Photo-shaped is columns only. Since plan step A0.5.2 a row names no store and the projection
+    /// looks a handler up by token, so the probe has no handler (an item of it reaching the
+    /// projection logs `noDispatchArm` and stays for now) and no longer shadows the photo row's
+    /// token for the sender or the enumeration, as a lowest-token-per-store lookup let it.
     static func probeEntry(
         maxItemByteCount: UInt64? = nil,
         destinations: MeshRoutedDestinationSemantics = .fullRosterAtCreation,
@@ -62,7 +67,7 @@ enum MeshRoutedTypeRegistryFixtures {
             relayRetention: .originRetainsUntilDeparture,
             finalAck: finalAck,
             expiry: .meshHardDeadlinePlusGrace,
-            canonicalStore: .friendPhotoWall
+            contentScope: .persistent
         )
     }
 
@@ -102,7 +107,7 @@ enum MeshRoutedTypeRegistryFixtures {
                 relayRetention: row.relayRetention,
                 finalAck: row.finalAck,
                 expiry: row.expiry,
-                canonicalStore: row.canonicalStore
+                contentScope: row.contentScope
             )
         })
     }
@@ -214,10 +219,12 @@ struct MeshRoutedTypeRegistryTests {
     /// the registry safe to become the single source without moving any behaviour.
     @Test func everyFieldOfEveryEntryIsSet() throws {
         let registry = MeshRoutedTypeRegistry.increment1
-        let stores: [String: MeshRoutedCanonicalStore] = [
-            MeshRoutedTypeToken.photo: .friendPhotoWall,
-            MeshRoutedTypeToken.tempMessage: .sessionTranscript,
-            MeshRoutedTypeToken.heart: .heartLedger
+        // The content scope replaced the canonical-store column at plan step A0.5.2: a message
+        // belongs to its session's transcript, a photo and a heart outlive the session.
+        let scopes: [String: MeshRoutedContentScope] = [
+            MeshRoutedTypeToken.photo: .persistent,
+            MeshRoutedTypeToken.tempMessage: .session,
+            MeshRoutedTypeToken.heart: .persistent
         ]
         let stages: [String: MeshRoutedAckStage] = [
             MeshRoutedTypeToken.photo: .durableRecipientStorage,
@@ -248,7 +255,7 @@ struct MeshRoutedTypeRegistryTests {
             #expect(entry.destinations == semantics[token], "\(token)")
             #expect(entry.relayRetention == .originRetainsUntilDeparture, "\(token)")
             #expect(entry.expiry == .meshHardDeadlinePlusGrace, "\(token)")
-            #expect(entry.canonicalStore == stores[token], "\(token)")
+            #expect(entry.contentScope == scopes[token], "\(token)")
             #expect(entry.finalAck == stages[token], "\(token)")
         }
     }
@@ -306,7 +313,7 @@ struct MeshRoutedTypeRegistryTests {
             relayRetention: .relayInFlight,
             finalAck: .durableRecipientStorage,
             expiry: .meshHardDeadlinePlusGrace,
-            canonicalStore: .friendPhotoWall
+            contentScope: .persistent
         )
         let registry = MeshRoutedTypeRegistry(entries: [row])
         #expect(registry.tokens.isEmpty)
@@ -325,11 +332,11 @@ struct MeshRoutedTypeRegistryTests {
         #expect(MeshRoutedTypeRegistry(entries: [zero]).tokens.isEmpty)
     }
 
-    /// The declared slot, pinned. Read by P6's dispatch, by nothing today.
-    @Test func theCanonicalStoreSlotNamesTheThreeP6Stores() {
-        #expect(MeshRoutedCanonicalStore.allCases.map(\.rawValue)
-                == ["friendPhotoWall", "sessionTranscript", "heartLedger"])
-    }
+    // `theCanonicalStoreSlotNamesTheThreeP6Stores`, the raw-value pin of the canonical-store
+    // column, was deleted at plan step A0.5.2 with the column: a row names no store since then (the
+    // projection looks a registered handler up by token), and the content scope that replaced it is
+    // pinned per row by `everyFieldOfEveryEntryIsSet`. Its raw values were never on the wire or at
+    // rest, so no byte pin went with it.
 
     // MARK: - P6 item 3: the first narrowed cap, and it is a formula
 

@@ -152,7 +152,7 @@ struct MeshRoutedTextBodyTests {
             "the narrowed row must still be REGISTERED: the registry init DROPS a row whose cap is outside the wire bound, and a dropped row fails closed at every door with no compile error"
         )
         #expect(entry.maxItemByteCount == UInt64(MeshRoutedTextBody.maxSealedBlobByteCount))
-        #expect(entry.canonicalStore == .sessionTranscript)
+        #expect(entry.contentScope == .session)
         #expect(entry.maxItemByteCount < MeshRoutedItemSealFormat.maxResidentBlobByteCount,
                 "and it really is NARROWER than the shared resident bound — otherwise it is not a cap")
     }

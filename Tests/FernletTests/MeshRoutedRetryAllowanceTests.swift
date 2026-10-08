@@ -249,7 +249,7 @@ struct MeshRoutedRetryPlanTests {
         let code = MeshRoutedSourceScan.codeOnly(source)
         #expect(code.contains("MeshRoutedRetryPlan"), "the scan must be reading the right file")
         // R2: bounded by the needle list.
-        for needle in ["MeshRoutedTypeToken", "typeToken", "routedTypes", "canonicalStore",
+        for needle in ["MeshRoutedTypeToken", "typeToken", "routedTypes", "contentScope",
                        "entry(for:", "requiresForeground", "MeshRoutedManifest",
                        "MeshRoutedStore(", "MeshRoutedIndex(", "ProximityAudit"] {
             #expect(code.contains(needle) == false, "the planner acquired something it must not see")

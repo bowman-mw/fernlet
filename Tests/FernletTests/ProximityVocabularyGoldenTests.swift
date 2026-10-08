@@ -973,30 +973,33 @@ struct ProximityVocabularyGoldenTests {
 
     /// The registry and its ack-stage projection take every row's token from the routed types they
     /// are handed and nothing else. Built from `.fernlet`'s, the registry holds exactly the three
-    /// frozen tokens, each for its canonical store; built from a namespace whose record kinds and
-    /// routed types alone are its own, it holds that namespace's three and none of Fernlet's, every
-    /// row otherwise the very row Fernlet's registry holds for the same store, and the projection keys
-    /// the same stages by them. The control type has no row under either.
+    /// frozen tokens, each as its named resident row (the photo, temporary-message and heart rows the
+    /// manager registers its built-in handlers under and mints under, plan step A0.5.2); built from a
+    /// namespace whose record kinds and routed types alone are its own, it holds that namespace's
+    /// three and none of Fernlet's, every row otherwise the very row Fernlet's registry holds under
+    /// the same name, and the projection keys the same stages by them. The control type has no row
+    /// under either.
     @Test func theRegistryIsBuiltFromTheRoutedTypesItIsHanded() throws {
         let fernlet = ProximityNamespace.fernlet.family.vocabulary.routedTypes
         let shipped = MeshRoutedTypeRegistry.increment1(fernlet)
         let frozen = ["routedType.photo", "routedType.tempMessage", "routedType.heart"].map { Self.frozen($0) }
-        let stores: [MeshRoutedCanonicalStore] = [.friendPhotoWall, .sessionTranscript, .heartLedger]
+        let resident = MeshRoutedTypeRegistry.increment1Rows(fernlet).rows
         #expect(shipped.tokens == Set(frozen), "Fernlet's registry holds \(shipped.tokens.sorted())")
-        #expect(stores.map { shipped.token(forCanonicalStore: $0) } == frozen, "Fernlet's rows are filed under other stores")
+        #expect(resident.map(\.token) == frozen, "Fernlet's rows are named under other tokens")
+        #expect(resident.allSatisfy { shipped.entry(for: $0.token) == $0 }, "Fernlet's registry is not its resident rows")
         let renamed = Self.renamedMeshTokensNamespace().family.vocabulary.routedTypes
         let other = MeshRoutedTypeRegistry.increment1(renamed)
         let stages = MeshRoutedAckStageTable.increment1(renamed)
         let theirs = [renamed.photo, renamed.tempMessage, renamed.heart]
         #expect(other.tokens == Set(theirs), "another namespace's registry holds \(other.tokens.sorted())")
-        #expect(stores.map { other.token(forCanonicalStore: $0) } == theirs, "its rows are filed under other stores")
+        #expect(MeshRoutedTypeRegistry.increment1Rows(renamed).rows.map(\.token) == theirs, "its rows are named under other tokens")
         // R2: bounded by the three rows.
         for (token, twinToken) in zip(theirs, frozen) {
             let twin = try #require(shipped.entry(for: twinToken), "Fernlet's registry has no \(twinToken) row")
             let expected = MeshRoutedTypeEntry(
                 token: token, maxItemByteCount: twin.maxItemByteCount, destinations: twin.destinations,
                 relayRetention: twin.relayRetention, finalAck: twin.finalAck, expiry: twin.expiry,
-                canonicalStore: twin.canonicalStore)
+                contentScope: twin.contentScope)
             #expect(other.entry(for: token) == expected, "the \(token) row is not Fernlet's \(twinToken) row")
             #expect(other.entry(for: twinToken) == nil && stages.stage(for: twinToken) == nil, "\(twinToken) is registered")
             #expect(stages.stage(for: token) == twin.finalAck, "the projection stages \(token) otherwise")
