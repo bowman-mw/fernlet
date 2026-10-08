@@ -3730,7 +3730,8 @@ extension FernletFeatureGoldenTests {
     typealias JoinTokenRefusal = ActivityJoinToken.VerifyError
     /// A roster snapshot's refusal: today `ActivityRosterSnapshot.VerifyError`.
     typealias RosterRefusal = ActivityRosterSnapshot.VerifyError
-    /// One signed row the moderation relay carries: today ProximityKit's `SignedModerationReport`.
+    /// One signed row the moderation relay carries: today FernletSocial's `SignedModerationReport`
+    /// (ProximityKit's until plan step A0.5.7 moved the relay).
     typealias SignedReport = SignedModerationReport
 
     /// The bytes an activity descriptor is hashed over: today ProximityKit's
@@ -3756,10 +3757,11 @@ extension FernletFeatureGoldenTests {
         ProximityKit.canonicalBytes(for: snapshot)
     }
 
-    /// The bytes a moderation row is signed over: today ProximityKit's
-    /// `canonicalBytes(for: ModerationLedgerEntry)`.
+    /// The bytes a moderation row is signed over: today FernletSocial's
+    /// `canonicalBytes(for: ModerationLedgerEntry)` (ProximityKit's until plan step A0.5.7 moved it,
+    /// unchanged, to `FeatureCanonicalBytes.swift`).
     static func moderationTranscript(_ entry: ModerationLedgerEntry) -> Data {
-        ProximityKit.canonicalBytes(for: entry)
+        FernletSocial.canonicalBytes(for: entry)
     }
 
     /// Whether `signature` verifies over `transcript` by `key` under a registry label: the one raw
@@ -3809,7 +3811,8 @@ extension FernletFeatureGoldenTests {
 
     /// The report bundle `identity` signs over its own rows: today
     /// `ModerationReportRelay.buildPayload(ownReports:identity:)`, which keeps only the identity's own
-    /// reports and retractions and signs each. Re-pointed at A0.5.7.
+    /// reports and retractions and signs each; FernletSocial's since plan step A0.5.7 moved the relay
+    /// whole, so only its module changed.
     static func signedReportBundle(of rows: [ModerationLedgerEntry], by identity: IdentityService) -> ReportBundle {
         ModerationReportRelay.buildPayload(ownReports: rows, identity: identity)
     }
@@ -3826,7 +3829,8 @@ extension FernletFeatureGoldenTests {
     typealias ActivitySync = ActivitySyncPayload
     /// A shop's catalog, today ProximityKit's `ClothingCatalogPayload`.
     typealias ClothingCatalog = ClothingCatalogPayload
-    /// A moderation report bundle, today ProximityKit's `ModerationReportPayload`.
+    /// A moderation report bundle, today FernletSocial's `ModerationReportPayload` (ProximityKit's until
+    /// plan step A0.5.7 moved the relay).
     typealias ReportBundle = ModerationReportPayload
     /// A vouch list, today ProximityKit's `MeshFriendVouchListPayload`.
     typealias FriendVouchList = MeshFriendVouchListPayload
@@ -3855,7 +3859,8 @@ extension FernletFeatureGoldenTests {
     }
 
     /// The rows the relay keeps from a decoded payload `sender` sent: today
-    /// `ModerationReportRelay.verifiedRows(from:senderSigningKey:now:)`.
+    /// `ModerationReportRelay.verifiedRows(from:senderSigningKey:now:)`, FernletSocial's since plan step
+    /// A0.5.7.
     static func moderationRows(from payload: ReportBundle, sender: Data, now: Date) -> [ModerationLedgerEntry] {
         ModerationReportRelay.verifiedRows(from: payload, senderSigningKey: sender, now: now)
     }
@@ -4124,16 +4129,18 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Arms alice's two commit-time sends to a kept friend: her own rows M1 and M2 as the reports to
-    /// sign, the friend-state opt-in on and ``friendStateFixture`` as the state to send. Today
-    /// `ownModerationReportsProvider`, `friendStateEnabledProvider` and `friendStatePayloadProvider`,
-    /// which the app wires; the opt-in gates only what alice advertises and is set as the app sets it for
-    /// a user who shares. Re-pointed at A0.5.7 (setup only).
+    /// sign, the friend-state opt-in on and ``friendStateFixture`` as the state to send. Today the
+    /// composition's `moderation.ownModerationReportsProvider` and `friendState.isEnabledProvider` and
+    /// `friendState.payloadProvider` (the manager's `ownModerationReportsProvider`,
+    /// `friendStateEnabledProvider` and `friendStatePayloadProvider` until plan step A0.5.7 moved them,
+    /// setup only), which the app wires; the opt-in gates only what alice advertises and is set as the
+    /// app sets it for a user who shares.
     static func armReportAndState(in rig: SessionRig) {
         let rows = [moderationReport, moderationRetract]
         let state = friendStateFixture
-        rig.manager.ownModerationReportsProvider = { rows }
-        rig.manager.friendStateEnabledProvider = { true }
-        rig.manager.friendStatePayloadProvider = { state }
+        rig.features.moderation.ownModerationReportsProvider = { rows }
+        rig.features.friendState.isEnabledProvider = { true }
+        rig.features.friendState.payloadProvider = { state }
     }
 
     /// The item report and the friend state the mesh sends bob at his commit, each with bob's open of its
@@ -4196,7 +4203,8 @@ extension FernletFeatureGoldenTests {
     /// with a verified identity. The slot proves no key, so the frame is attributable and reaches the
     /// feature's handler: the catalog's and the request's are the composition's shop exchange's, on its
     /// mesh's payload registry, since plan step A0.5.6 (so `manager` is a composition's mesh,
-    /// ``AuditMeshRig``); the item report's moves at A0.5.7.
+    /// ``AuditMeshRig``), and the item report's and the friend state's its moderation and friend-state
+    /// exchanges' since plan step A0.5.7.
     static func deliverUnverified(_ type: PayloadType, to manager: MeshNetworkManager,
                                   coordinatorIdentity: IdentityService) {
         let coordinator = ProximityCoordinator(
@@ -5386,9 +5394,10 @@ extension FernletFeatureGoldenTests {
     /// One audit cell's mesh: Fernlet's composition over a scratch store whose proximity root is the
     /// cell's own, with planted alice as its device identity and its pending corpus sealed under an
     /// in-memory key the cell can take away (the held-photo suites' `SwitchableMediaKeyProvider`); its
-    /// mesh is the rig's manager, carrying the features' handlers (the shop's since plan step A0.5.6). The
-    /// rig holds the store, which every manager holds unowned, and the composition, which the manager's
-    /// session observer and handlers need alive; ``tearDown()`` sweeps alice's rows and the root.
+    /// mesh is the rig's manager, carrying the features' handlers (the shop's since plan step A0.5.6, the
+    /// item report's and the friend state's since A0.5.7). The rig holds the store, which every manager
+    /// holds unowned, and the composition, which the manager's session observer and handlers need alive;
+    /// ``tearDown()`` sweeps alice's rows and the root.
     @MainActor
     final class AuditMeshRig {
         /// The proximity root every manager of the rig files under.
