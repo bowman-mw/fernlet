@@ -2568,15 +2568,31 @@ struct MeshRoutedDrainWallTests {
     /// stays decodable, so an older peer's frame parks by name rather than being mis-dispatched or
     /// failing a session. Six unrelated suites also use the token as their sealing-required
     /// CONTROL, so deleting it would drag them into this item.
+    ///
+    /// Nothing registers a handler for it, in either module a registration can come from: the mesh
+    /// registers a feature's handler only through its token door since the typed registration left
+    /// ProximityKit with its last caller (plan step A0.5.8), and every feature in FernletSocial spells
+    /// `forToken: PayloadType.<case>.rawValue`, so that spelling and the typed one are both refused across
+    /// ProximityKit and FernletSocial.
     @Test func theLegacyTextPayloadTypeIsParkedNotDeleted() throws {
         #expect(PayloadType(rawValue: "fernlet.message.temp.v1") == .tempMessage,
                 "the wire token still decodes — a parked type is not an unknown one")
         let sealing = ProximityNamespace.fernlet.family.vocabulary.payloads.sealingRequired
         #expect(sealing.contains(PayloadType.tempMessage.rawValue),
                 "and it keeps its sealing requirement, so an unsealed legacy frame is still refused")
-        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
-        #expect(!source.contains("registerPayloadHandler(for: .tempMessage)"),
-                "while NOTHING registers a handler for it")
+        let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
+        let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
+        #expect(kit.count >= 120 && social.count >= 15,
+                "the registration scan read only \(kit.count) ProximityKit and \(social.count) FernletSocial files")
+        let registrations = [
+            "registerPayloadHandler(forToken: PayloadType.tempMessage.rawValue",
+            "registerPayloadHandler(for: .tempMessage)"
+        ]
+        // R2: bounded by the two spellings.
+        for needle in registrations {
+            let homes = Set(MeshP7Acceptance.homes(of: needle, in: kit + social)).sorted()
+            #expect(homes.isEmpty, "while NOTHING registers a handler for it: `\(needle)` is in \(homes)")
+        }
     }
 
     /// **Item 13's precondition, still green after item 13.** The routed section names no epoch,

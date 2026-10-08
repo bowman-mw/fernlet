@@ -1,6 +1,7 @@
 import XCTest
 import FernletFoundation
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 

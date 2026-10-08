@@ -7,7 +7,7 @@ import FernletUI
 
 /// The Group Activities screen (Phase 6 / B5). A NavigationLink sub-screen off the Friends tab — NOT a
 /// top-level tab (the app's tab bar is a hand-rolled 6-item pager; a 7th would compress it, and nested
-/// paged TabViews conflict). Reaches the activity brain via `store.meshNetworkManager.activities`.
+/// paged TabViews conflict). Reaches the activity brain via `store.meshFeatures.activities`.
 ///
 /// States (all driven by the manager's observable state, no scattered booleans):
 ///  * host form — always available (until the host cap) to start an activity nearby;
@@ -17,7 +17,7 @@ import FernletUI
 ///  * empty hint — when nothing is live.
 struct ActivitiesView: View {
     var store: FernletStore
-    private var manager: ProximityActivityManager { store.meshNetworkManager.activities }
+    private var manager: ProximityActivityManager { store.meshFeatures.activities }
 
     @State private var draftTitle = ""
     @State private var draftLocation = ""

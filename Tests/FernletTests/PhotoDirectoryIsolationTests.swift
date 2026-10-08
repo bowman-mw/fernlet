@@ -30,8 +30,8 @@ struct PhotoDirectoryIsolationTests {
     private static let proximityRootedTriggers = [
         // Managers — build the photo wall, the activity ledger, and (via their builders) the ledger.
         "meshNetworkManager", "MeshNetworkManager(", "presenceManager",
-        // The mesh composition (ProximityKit plan step A0.5.5), which builds the mesh manager: the
-        // store's property, the app's construction and the test rig's.
+        // The mesh composition (ProximityKit plan step A0.5.5), which builds the mesh manager and, since
+        // A0.5.8, the activity ledger: the store's property, the app's construction and the test rig's.
         "meshFeatures", "FernletMeshFeatures(", "FernletMeshRig",
         // Heart state on the same root.
         "heartLedger", "heartDropService", "heartGlow", "pendingHeartBubble", "queueHeart", "heartsAway",
@@ -162,7 +162,7 @@ struct PhotoDirectoryIsolationTests {
     /// | `ModerationLedger.json` | `resetAll` |
     /// | `FriendStateCache.json` | `resetAll`, **and** turning fuzzy-state sharing off |
     /// | `ClosenessLedger.json` | `resetAll` |
-    /// | `ActivityLedger.json` | `resetAll`, via `meshNetworkManager.activities` |
+    /// | `ActivityLedger.json` | `resetAll`, via `meshFeatures.activities` |
     @Test func everyProximityTouchingStoreConstructionPinsItsOwnProximityDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)

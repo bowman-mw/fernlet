@@ -89,7 +89,8 @@
 //     joined ledger.
 // 23. **The photo wall's files and the proximity root's layout**: the legacy wall index and the wall
 //     preferences load into the wall's posts, stale preferences are pruned and rewritten, and the mesh
-//     files every store it builds under its frozen name inside the host's proximity root.
+//     and its composition file every store they build under its frozen name inside the host's proximity
+//     root.
 // 24. **The keychain role that seals each photo corpus**: the wall's resealed index opens under the
 //     friend-wall key alone, and a held photo under the pending-session-photos key alone, each refused
 //     by the other role's key.
@@ -2641,14 +2642,15 @@ struct FernletFeatureGoldenTests {
         withExtendedLifetime(store) {}
     }
 
-    /// The mesh files every store it builds under its frozen name directly inside the host's proximity
-    /// root: over a root holding bob's ledger (every row long expired at the real clock), the wall index
-    /// and the preferences, it rewrites `ActivityLedger.json` as the empty ledger, reads
-    /// `MeshPhotoCache.json` and reseals it as `MeshPhotoCache.sealed` beside `MeshPhotos/` and
-    /// `MeshPhotoThumbnails/`, reads `MeshPhotoWallPreferences.json`, and holds a photo inside
-    /// `PendingSessionPhotos/`; a wall store at the index path the mesh builds files a photo's bytes
-    /// under `MeshPhotos/` and `MeshPhotoThumbnails/` by its id; and the pending corpus's names are
-    /// frozen.
+    /// The mesh and its composition file every store they build under its frozen name directly inside
+    /// the host's proximity root (the activity manager is the composition's since plan step A0.5.8, the
+    /// photo stores the mesh's): over a root holding bob's ledger (every row long expired at the real
+    /// clock), the wall index and the preferences, the composition rewrites `ActivityLedger.json` as the
+    /// empty ledger, and the mesh reads `MeshPhotoCache.json` and reseals it as `MeshPhotoCache.sealed`
+    /// beside `MeshPhotos/` and `MeshPhotoThumbnails/`, reads `MeshPhotoWallPreferences.json`, and holds
+    /// a photo inside `PendingSessionPhotos/`; a wall store at the index path the mesh builds files a
+    /// photo's bytes under `MeshPhotos/` and `MeshPhotoThumbnails/` by its id; and the pending corpus's
+    /// names are frozen.
     @Test func theMeshFilesItsStoresUnderTheirFrozenNames() throws {
         #expect(Self.expectFrozen(Self.pendingCorpusNameRows) == 4)
         let root = Self.scratchDirectory()
@@ -2662,8 +2664,9 @@ struct FernletFeatureGoldenTests {
         try Self.write(Self.frozenWallPreferencesJSON, to: root.appendingPathComponent("MeshPhotoWallPreferences.json"))
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
-        #expect(manager.activities.hostedActivities.isEmpty && manager.activities.joinedActivities.isEmpty)
+        let features = Self.meshFeatures(over: store, identity: alice)
+        let manager = features.mesh
+        #expect(features.activities.hostedActivities.isEmpty && features.activities.joinedActivities.isEmpty)
         let ledger = try Data(contentsOf: root.appendingPathComponent("ActivityLedger.json"))
         #expect(try Self.jsonObjectsEqual(ledger, Data(Self.frozenActivityLedgerEmptyJSON.utf8)),
                 "the mesh's activity ledger wrote \(String(decoding: ledger, as: UTF8.self))")
@@ -2695,7 +2698,7 @@ struct FernletFeatureGoldenTests {
         }
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("MeshPhotoCache.json").path),
                 "the legacy wall index outlived its reseal")
-        withExtendedLifetime(store) {}
+        withExtendedLifetime((features, store)) {}
     }
 
     // MARK: Group 24 — the keychain role that seals each photo corpus
@@ -3734,10 +3737,11 @@ extension FernletFeatureGoldenTests {
     /// (ProximityKit's until plan step A0.5.7 moved the relay).
     typealias SignedReport = SignedModerationReport
 
-    /// The bytes an activity descriptor is hashed over: today ProximityKit's
-    /// `canonicalBytes(for: ActivityDescriptor)`.
+    /// The bytes an activity descriptor is hashed over: today FernletSocial's
+    /// `canonicalBytes(for: ActivityDescriptor)` (ProximityKit's until plan step A0.5.8 moved it,
+    /// unchanged, to `FeatureCanonicalBytes.swift`).
     static func descriptorTranscript(_ descriptor: ActivityDescriptor) -> Data {
-        ProximityKit.canonicalBytes(for: descriptor)
+        FernletSocial.canonicalBytes(for: descriptor)
     }
 
     /// An activity's params hash: today `ActivityParamsHash.of(_:)`.
@@ -3745,16 +3749,16 @@ extension FernletFeatureGoldenTests {
         ActivityParamsHash.of(descriptor)
     }
 
-    /// The bytes a join token is signed over: today ProximityKit's
-    /// `canonicalBytes(for: ActivityJoinToken)`.
+    /// The bytes a join token is signed over: today FernletSocial's
+    /// `canonicalBytes(for: ActivityJoinToken)` (ProximityKit's until plan step A0.5.8).
     static func joinTokenTranscript(_ token: ActivityJoinToken) -> Data {
-        ProximityKit.canonicalBytes(for: token)
+        FernletSocial.canonicalBytes(for: token)
     }
 
-    /// The bytes a roster snapshot is signed over: today ProximityKit's
-    /// `canonicalBytes(for: ActivityRosterSnapshot)`.
+    /// The bytes a roster snapshot is signed over: today FernletSocial's
+    /// `canonicalBytes(for: ActivityRosterSnapshot)` (ProximityKit's until plan step A0.5.8).
     static func rosterTranscript(_ snapshot: ActivityRosterSnapshot) -> Data {
-        ProximityKit.canonicalBytes(for: snapshot)
+        FernletSocial.canonicalBytes(for: snapshot)
     }
 
     /// The bytes a moderation row is signed over: today FernletSocial's
@@ -3817,15 +3821,16 @@ extension FernletFeatureGoldenTests {
         ModerationReportRelay.buildPayload(ownReports: rows, identity: identity)
     }
 
-    /// alice's offer, today ProximityKit's `ActivityOfferPayload`.
+    /// alice's offer, today FernletSocial's `ActivityOfferPayload` (ProximityKit's until plan step
+    /// A0.5.8 moved the activity payloads whole).
     typealias ActivityOffer = ActivityOfferPayload
-    /// bob's join request, today ProximityKit's `ActivityJoinRequestPayload`.
+    /// bob's join request, today FernletSocial's `ActivityJoinRequestPayload`.
     typealias ActivityJoinRequest = ActivityJoinRequestPayload
-    /// alice's grant, today ProximityKit's `ActivityJoinGrantPayload`.
+    /// alice's grant, today FernletSocial's `ActivityJoinGrantPayload`.
     typealias ActivityJoinGrant = ActivityJoinGrantPayload
-    /// A gossiped roster, today ProximityKit's `ActivityRosterSnapshotPayload`.
+    /// A gossiped roster, today FernletSocial's `ActivityRosterSnapshotPayload`.
     typealias ActivityRosterGossip = ActivityRosterSnapshotPayload
-    /// A version digest, today ProximityKit's `ActivitySyncPayload`.
+    /// A version digest, today FernletSocial's `ActivitySyncPayload`.
     typealias ActivitySync = ActivitySyncPayload
     /// A shop's catalog, today ProximityKit's `ClothingCatalogPayload`.
     typealias ClothingCatalog = ClothingCatalogPayload
@@ -3834,7 +3839,8 @@ extension FernletFeatureGoldenTests {
     typealias ReportBundle = ModerationReportPayload
     /// A vouch list, today ProximityKit's `MeshFriendVouchListPayload`.
     typealias FriendVouchList = MeshFriendVouchListPayload
-    /// A hosted activity, today `ProximityActivityManager.HostedActivity`.
+    /// A hosted activity, today `ProximityActivityManager.HostedActivity`, FernletSocial's since plan
+    /// step A0.5.8 moved the manager whole.
     typealias HostedActivity = ProximityActivityManager.HostedActivity
     /// A joined activity, today `ProximityActivityManager.JoinedActivity`.
     typealias JoinedActivity = ProximityActivityManager.JoinedActivity
@@ -3878,13 +3884,15 @@ extension FernletFeatureGoldenTests {
         ProximityHeartLedger(fileURL: fileURL, now: { clock }, readData: reading, writeData: writing)
     }
 
-    /// The activity ledger's file in `root`: today `ProximityActivityManager.fileURL(in:)`.
+    /// The activity ledger's file in `root`: today `ProximityActivityManager.fileURL(in:)`, FernletSocial's
+    /// since plan step A0.5.8.
     static func activityLedgerFile(in root: URL) -> URL {
         ProximityActivityManager.fileURL(in: root)
     }
 
     /// An activity manager over `fileURL` whose clock stands at `clock`, holding `host` unowned (the
-    /// caller keeps it alive): today `ProximityActivityManager(store:identity:fileURL:now:)`.
+    /// caller keeps it alive): today `ProximityActivityManager(store:identity:fileURL:now:)`,
+    /// FernletSocial's since plan step A0.5.8.
     static func activityManager(host: any ProximityHost, identity: IdentityService?, fileURL: URL,
                                 clock: Date) -> ProximityActivityManager {
         ProximityActivityManager(store: host, identity: identity, fileURL: fileURL, now: { clock })
@@ -3894,8 +3902,9 @@ extension FernletFeatureGoldenTests {
     /// `identity` as its device identity and `heldPhotoKeys` as the pending corpus's key, or nil, the
     /// default, for the keychain row production reads: today the internal
     /// `MeshNetworkManager(store:transport:identity:heldPhotoKeys:)`, a bare engine: the cells that read
-    /// it read the activity manager and the photo wall, still the engine's. Re-pointed at
-    /// ``meshFeatures(over:identity:)`` as those features leave the engine (A0.5.8, A0.5.11).
+    /// it read the photo wall, still the engine's (the activity manager's cells read the composition's
+    /// since plan step A0.5.8, when it left the engine). Re-pointed at ``meshFeatures(over:identity:)``
+    /// when the photo wall leaves the engine (A0.5.11).
     static func meshManager(over store: FernletStore, identity: IdentityService,
                             heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil) -> MeshNetworkManager {
         MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), identity: identity,
@@ -4389,11 +4398,11 @@ extension FernletFeatureGoldenTests {
 
     /// Has alice host one hour-long activity, so a commit with an `activities` peer offers it: today
     /// `ProximityActivityManager.host(title:activityTypeToken:coarseLocation:expiresAt:)` on the
-    /// manager's `activities`. Called before bob is seated, since a host offers at once to every
-    /// committed peer. Re-pointed at A0.5.8.
+    /// composition's `activities` (the manager's until plan step A0.5.8; setup only). Called before bob
+    /// is seated, since a host offers at once to every committed peer.
     static func hostActivity(in rig: SessionRig) -> ActivityDescriptor? {
-        rig.manager.activities.host(title: "Sunset walk", activityTypeToken: "walk", coarseLocation: nil,
-                                    expiresAt: Date().addingTimeInterval(3_600))
+        rig.features.activities.host(title: "Sunset walk", activityTypeToken: "walk", coarseLocation: nil,
+                                     expiresAt: Date().addingTimeInterval(3_600))
     }
 
     /// Notes the commit's three observable moments into `recorder`, each with how many frames bob's link
