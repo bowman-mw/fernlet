@@ -250,7 +250,7 @@ struct MeshP6PerTypeCapAcceptanceTests {
         let text = try #require(registry.entry(for: MeshRoutedTypeToken.tempMessage))
         let heart = try #require(registry.entry(for: MeshRoutedTypeToken.heart))
 
-        #expect(photo.maxItemByteCount == UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+        #expect(photo.maxItemByteCount == registry.maxItemByteCount,
                 "the photo row is the widest CIPHERTEXT a routed photo can measure")
         #expect(text.maxItemByteCount == UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
                 "the text row is the sanitized maximum plus its framed header plus the seal")

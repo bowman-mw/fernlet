@@ -58,7 +58,8 @@ public struct PrivateMediaStore {
     /// photowall cache and already depends on the module, and the S3 wall it sits behind is about
     /// which targets may import `PrivateMediaStore` at all (the AI providers may not) — never about
     /// the visibility of a byte bound inside it. Two restatements of "10 MB" that could drift is the
-    /// larger risk; see `MeshRoutedItemSealFormat.maxResidentBlobByteCount`.
+    /// larger risk; see the routed photo row in `MeshRoutedTypeRegistry.increment1Rows(_:)`, which
+    /// holds the formula since ProximityKit plan step A0.5.4.
     public static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
     // A small, highly-compressed JPEG can decode to a multi-gigabyte bitmap, so the byte cap
     // above is not sufficient. Reject by pixel dimensions/area before the full-resolution bytes

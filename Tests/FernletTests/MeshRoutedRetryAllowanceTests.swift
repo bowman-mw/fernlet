@@ -287,11 +287,13 @@ struct MeshRoutedRetryAllowanceTests {
 
     /// One item on job 5's list that refuses `refusedForNow` at **every** pass and cannot heal.
     ///
-    /// Everything about it is real except `manifest.size`, which claims one byte more than
-    /// `MeshRoutedItemSealFormat.maxResidentBlobByteCount`. That makes the projection's resident-blob
-    /// guard refuse it **before** the store is read, which matters twice: the refusal repeats at
-    /// every pass (a missing chunk file would instead be repaired out of completeness on the first
-    /// read, taking the item off the list), and no store read means no repair and no seal work.
+    /// Everything about it is real except `manifest.size`, which claims one byte more than the
+    /// resident bound: `.fernlet`'s widest routed row, `MeshRoutedTypeRegistry.increment1.maxItemByteCount`,
+    /// the number the manager holds from its host registry since plan step A0.5.4. That makes the
+    /// projection's resident-blob guard refuse it **before** the store is read, which matters twice:
+    /// the refusal repeats at every pass (a missing chunk file would instead be repaired out of
+    /// completeness on the first read, taking the item off the list), and no store read means no
+    /// repair and no seal work.
     ///
     /// A registered mint cannot produce this item — the photo row's cap *is* the resident bound
     /// (D-13.19) — so it is planted, which is `MeshRoutedStoreFixtures.record`'s own stated purpose:
@@ -306,7 +308,7 @@ struct MeshRoutedRetryAllowanceTests {
             originFingerprint: manifest.originFingerprint,
             typeToken: manifest.typeToken,
             contentHash: manifest.contentHash,
-            size: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount + 1),
+            size: MeshRoutedTypeRegistry.increment1.maxItemByteCount + 1,
             createdAt: manifest.createdAt,
             expiresAt: manifest.expiresAt,
             destinations: manifest.destinations,

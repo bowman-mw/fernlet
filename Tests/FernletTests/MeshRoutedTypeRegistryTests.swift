@@ -235,9 +235,10 @@ struct MeshRoutedTypeRegistryTests {
         // body's, and item 6 the HEART row to its own — a header-only body, so the formula's payload
         // term is zero. Every row is now narrowed; none sits at the shared wire bound. Each is read
         // from the type that owns it — a literal here would be the second copy the formula exists to
-        // prevent.
+        // prevent. The photo row's formula lives in its row since plan step A0.5.4, and the row is
+        // the registry's widest: the bound the manager holds.
         let caps: [String: UInt64] = [
-            MeshRoutedTypeToken.photo: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+            MeshRoutedTypeToken.photo: registry.maxItemByteCount,
             MeshRoutedTypeToken.tempMessage: UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
             MeshRoutedTypeToken.heart: UInt64(MeshRoutedHeartBody.maxSealedBlobByteCount)
         ]
@@ -352,7 +353,7 @@ struct MeshRoutedTypeRegistryTests {
             + MeshRoutedItemSealFormat.overheadByteCount
         #expect(photo.maxItemByteCount == UInt64(formula),
                 "the row is not the payload bound plus the framing it rides under")
-        #expect(photo.maxItemByteCount == UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+        #expect(photo.maxItemByteCount == MeshRoutedTypeRegistry.increment1.maxItemByteCount,
                 "the manifest door's cap and the projection's resident-blob guard must be one number")
         #expect(photo.maxItemByteCount < MeshRoutedManifestFormat.maxContentByteCount,
                 "a row still at the wire bound is not a narrowed cap")
@@ -449,7 +450,8 @@ struct MeshRoutedTypeRegistryTests {
                 == UInt64(MeshRoutedItemBodyFormat.maxHeaderJSONByteCount - json.count),
                 "the gap to the cap is not the header allowance this header did not spend")
 
-        let padding = MeshRoutedItemSealFormat.maxPlaintextByteCount
+        let padding = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount)
+            - MeshRoutedItemSealFormat.overheadByteCount
             - (MeshRoutedItemBodyFormat.headerLengthPrefixByteCount + json.count)
         let atTheCap = try Self.seal(
             try MeshRoutedPhotoBody(
@@ -459,7 +461,8 @@ struct MeshRoutedTypeRegistryTests {
         #expect(UInt64(atTheCap.count) == photo.maxItemByteCount,
                 "the largest plaintext the sealer takes must seal to exactly the row's cap")
 
-        let overBound = MeshRoutedItemSealFormat.maxPlaintextByteCount + 1
+        let overBound = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount)
+            - MeshRoutedItemSealFormat.overheadByteCount + 1
         #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: overBound)) {
             _ = try Self.seal(Data(repeating: 0x5A, count: overBound))
         }

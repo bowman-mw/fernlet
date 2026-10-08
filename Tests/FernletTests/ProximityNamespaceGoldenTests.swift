@@ -2260,11 +2260,12 @@ struct ProximityNamespaceGoldenTests {
         }
         let (binding, token) = (MeshRoutedManifestFixtures.binding, MeshRoutedManifestFixtures.typeToken)
         let (contentKey, plaintext) = (Self.sequence(from: 0x10), Data("golden routed item".utf8))
+        let bound = Int(clamping: MeshRoutedTypeRegistry.increment1.maxItemByteCount)
         let variants = Self.saltAndAEADVariants()
         // R2: bounded by the three × three variant pairs.
         for (sealedName, sealedIn) in variants {
             let blob = try MeshRoutedItemSealer.seal(plaintext, contentKey: contentKey, binding: binding, typeToken: token,
-                                                     in: sealedIn)
+                                                     maxBlobByteCount: bound, in: sealedIn)
             let wrap = try MeshRoutedContentKeyWrapper.wrap(
                 contentKey: contentKey, recipientFingerprint: "fp002",
                 recipientKeyAgreementPublicKey: recipient.publicKey.rawRepresentation, binding: binding, in: sealedIn)
@@ -2275,7 +2276,7 @@ struct ProximityNamespaceGoldenTests {
                               by: sealedIn.aead.meshRoutedContentKeyWrapV1, consumer: "the key wrap's AAD under \(sealedName)")
             for (openedName, openedIn) in variants {
                 let item = Result { try MeshRoutedItemSealer.open(blob, contentKey: contentKey, binding: binding,
-                                                                  typeToken: token, in: openedIn) }
+                                                                  typeToken: token, maxBlobByteCount: bound, in: openedIn) }
                 let key = Result { try MeshRoutedContentKeyWrapper.unwrap(
                     wrap, binding: binding, localFingerprint: "fp002",
                     localKeyAgreementPublicKey: recipient.publicKey.rawRepresentation, staticAgreement: agreement,

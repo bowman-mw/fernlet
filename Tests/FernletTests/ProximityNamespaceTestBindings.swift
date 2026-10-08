@@ -383,21 +383,47 @@ extension MeshChunkAssembly {
 // HKDF salt — off the namespace since step A0.2.6; each door comes back here with Fernlet's labels.
 
 /// The routed item seal's three doors in the shapes the suites were written against (plan step
-/// A0.2.6).
+/// A0.2.6), the seal and the open in two shapes each since plan step A0.5.4, when both began taking
+/// the caller's bound: the shapes without one pass Fernlet's, the widest row of `.fernlet`'s registry
+/// clamped as `MeshNetworkManager` clamps it, and a cell about the bound itself names its own.
 extension MeshRoutedItemSealer {
 
-    /// `seal(_:contentKey:binding:typeToken:in: .fernlet)`.
+    /// `seal(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under Fernlet's bound,
+    /// `MeshRoutedTypeRegistry.increment1.maxItemByteCount`.
     static func seal(
         _ plaintext: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String
     ) throws -> Data {
-        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken, in: .fernlet)
+        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: Int(clamping: MeshRoutedTypeRegistry.increment1.maxItemByteCount), in: .fernlet)
     }
 
-    /// `open(_:contentKey:binding:typeToken:in: .fernlet)`.
+    /// `open(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under Fernlet's bound,
+    /// `MeshRoutedTypeRegistry.increment1.maxItemByteCount`.
     static func open(
         _ blob: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String
     ) throws -> Data {
-        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken, in: .fernlet)
+        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: Int(clamping: MeshRoutedTypeRegistry.increment1.maxItemByteCount), in: .fernlet)
+    }
+
+    /// `seal(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under a bound the cell
+    /// names, so the sealer's own edges can be driven far below Fernlet's 10 MB (plan step A0.5.4).
+    static func seal(
+        _ plaintext: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String,
+        maxBlobByteCount: Int
+    ) throws -> Data {
+        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: maxBlobByteCount, in: .fernlet)
+    }
+
+    /// `open(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under a bound the cell
+    /// names (plan step A0.5.4).
+    static func open(
+        _ blob: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String,
+        maxBlobByteCount: Int
+    ) throws -> Data {
+        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: maxBlobByteCount, in: .fernlet)
     }
 
     /// `additionalData(binding:typeToken:in: .fernlet)`.
