@@ -6658,7 +6658,7 @@ final class FernletStore {
         workoutTombstones.clearAll()
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
-        meshNetworkManager.activities.clearAll()
+        meshFeatures.activities.clearAll()
         // The guided-workout runner mirrors an in-flight run to an app-group file that a
         // foreground/launch `reconcileGuidedRunFromAppGroup` re-reads — and a naturally-finished run
         // re-LOGS a workout back into the store (`finishGuidedRunLogging` → `addWorkout`; the dedup

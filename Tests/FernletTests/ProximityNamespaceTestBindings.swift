@@ -774,14 +774,40 @@ extension MeshRoutedManifest {
 // `family.vocabulary.capabilities`, read off the value. A cell whose subject is the legacy
 // assumption names `.fernlet` explicitly instead.
 
-/// The coordinator's capability gate in the shape the suites were written against (plan step A0.3.4).
-/// It is main-actor, as the gate it restores is.
+/// The coordinator's capability gate in the shapes the suites were written against (plan steps A0.3.4
+/// and A0.5.8). They are main-actor, as the gate they restore is.
 extension ProximityCoordinator.PeerIdentity {
+
+    /// `supports(capability.rawValue, in: host)`: the typed gate that left ProximityKit with its last
+    /// caller, the mesh manager's activities leg (plan step A0.5.8), restored with its own body, so a
+    /// Fernlet capability is asked by its token as the features ask it.
+    @MainActor
+    func supports(_ capability: ProximityCapability, in host: ProximityNamespace.Capabilities) -> Bool {
+        supports(capability.rawValue, in: host)
+    }
 
     /// `supports(_:in:)` with `.fernlet`'s `family.vocabulary.capabilities`.
     @MainActor
     func supports(_ capability: ProximityCapability) -> Bool {
         supports(capability, in: ProximityNamespace.fernlet.family.vocabulary.capabilities)
+    }
+}
+
+// MARK: - The typed feature registration (A0.5.8)
+//
+// ProximityKit registers a feature's payload handler by its token alone
+// (`registerPayloadHandler(forToken:handler:)`): the typed convenience over Fernlet's `PayloadType` left
+// with its last caller, the mesh manager's activity handlers (plan step A0.5.8), and every feature
+// spells `forToken: PayloadType.<case>.rawValue`. The suites were written against the typed spelling,
+// which comes back here once with the convenience's own body: it passes no value of its own.
+
+/// The payload registry's typed registration in the shape the suites were written against (plan step
+/// A0.5.8). It inherits the manager's main-actor isolation, as the registration it restores had.
+extension MeshNetworkManager {
+
+    /// `registerPayloadHandler(forToken: type.rawValue, handler: handler)`.
+    func registerPayloadHandler(for type: PayloadType, handler: @escaping MeshPayloadHandler) {
+        registerPayloadHandler(forToken: type.rawValue, handler: handler)
     }
 }
 

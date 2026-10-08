@@ -17,21 +17,23 @@
 //
 //   1. no namespace, namespace group or purpose is built in ProximityKit outside `Namespace/`;
 //   2. `FernletCryptoPurpose` is named in ProximityKit code only on the feature lines that leave with
-//      the mesh manager's feature parts (A0.5), an exact per-file allowlist (7 lines in 2 files);
+//      the mesh manager's feature parts (A0.5), an exact per-file allowlist (empty since the activity
+//      labels left with the activity manager, plan step A0.5.8);
 //   3. every remaining string literal in ProximityKit code that contains `fernlet` (any case) is on an
 //      exact per-file allowlist that names why it is still there and the plan step that removes it
-//      (27 literals on 26 lines in 5 files);
+//      (17 literals on 16 lines in 4 files);
 //   4. Fernlet's domain vocabulary and records, FernletDomainModel's `PayloadType`,
 //      `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
 //      `TrainerAuditEvent` and `ConnectionSessionLog`, are named in ProximityKit code only on an exact
 //      per-file, per-type allowlist of the lines that leave with the mesh manager's feature parts
-//      (A0.5), with the recipe profile (A0.7) or with the session profile (A0.7 / C5): 22 lines in 6
+//      (A0.5), with the recipe profile (A0.7) or with the session profile (A0.7 / C5): 10 lines in 5
 //      files;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step (44 lines in 6 files);
-//   6. no type that left ProximityKit for FernletSocial or the app (30 names: the heart dead-drop's,
+//   6. no type that left ProximityKit for FernletSocial or the app (43 names: the heart dead-drop's,
 //      presence's, moderation's (the report relay's among them), closeness's and friend state's types,
-//      the parked chat payload, the clothing shop's, the deleted support layout and the sealed-backup
+//      the parked chat payload, the clothing shop's, the activity manager's with its payloads and the
+//      two domain types its signing extends, the deleted support layout and the sealed-backup
 //      escrow's) is declared, extended or aliased in ProximityKit code again.
 //
 // Rules 2 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
@@ -55,7 +57,7 @@
 // channel the seam names, the epoch posture and the TXT vocabulary, which FernletSocial's presence
 // manager drives (until A1); the coordinator's typed send and manual commit, which presence's heart
 // delivery and the recipe-share manager call (until A0.7); and the naive JSON sidecar FernletSocial's
-// moderation, closeness and friend-state ledgers persist through, which the activity manager and the
+// moderation, closeness and friend-state ledgers and its activity manager persist through, which the
 // mesh's photo-wall preferences still use here (until A0.5).
 
 import Foundation
@@ -468,14 +470,12 @@ private extension UInt8 {
     /// the mesh manager's feature parts: exactly ``featurePurposeLines``, file by file, line count and
     /// purposes read.
     ///
-    /// Every protocol label ProximityKit reads is the namespace's. What is left are the 3 feature
-    /// labels, on 7 code lines in 2 files: the activities', with the canonical serializer's domains for
-    /// them, which leave with the mesh manager's feature parts in plan step A0.5, because the mesh
-    /// manager decodes those payloads and calls their signers (the moderation report's left with its
-    /// relay and its canonical bytes for FernletSocial at A0.5.7). A new
-    /// line fails, and so does a protocol purpose read again on a line that was a feature's; a line
-    /// that goes away fails until its count is lowered or its row deleted, so the list only shrinks and
-    /// reaches nothing at A0.5.
+    /// Every protocol label ProximityKit reads is the namespace's, and no feature label is left: the
+    /// moderation report's left with its relay and its canonical bytes for FernletSocial at plan step
+    /// A0.5.7, and the activities' three with the activity manager, its payloads and the canonical
+    /// serializer's domains for them at A0.5.8, so the list is empty (plan step A0.5.12 deletes it). A
+    /// new line fails, and so does a protocol purpose read again on a line that was a feature's, so the
+    /// list stays at nothing.
     /// Comments may name the registry; only code lines count.
     @Test func fernletCryptoPurposeIsNamedOnlyOnTheFeatureLinesThatLeave() throws {
         let mention = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])FernletCryptoPurpose(?![A-Za-z0-9_])"#)
@@ -520,20 +520,9 @@ private extension UInt8 {
         let reason: Reason
     }
 
-    /// Every file whose code still names `FernletCryptoPurpose`, by path under the module root.
-    static let featurePurposeLines: [String: FeaturePurposeLines] = [
-        "Wire/ActivityPayloads.swift": FeaturePurposeLines(
-            lines: 4,
-            purposes: ["Signature.activityJoinTokenV2", "Signature.activityRosterSnapshotV2"],
-            reason: .activityLabels),
-        "Wire/CanonicalSignatureSerializer.swift": FeaturePurposeLines(
-            lines: 3,
-            purposes: [
-                "Signature.activityDescriptorV2", "Signature.activityJoinTokenV2",
-                "Signature.activityRosterSnapshotV2"
-            ],
-            reason: .serializerFeatureDomains)
-    ]
+    /// Every file whose code still names `FernletCryptoPurpose`, by path under the module root: none
+    /// since plan step A0.5.8.
+    static let featurePurposeLines: [String: FeaturePurposeLines] = [:]
 
     // MARK: Rule 3: every fernlet literal is allowlisted
 
@@ -544,12 +533,12 @@ private extension UInt8 {
     /// presentation strings the radios and the name display read, the membership record kinds the
     /// inventory digest hashes and the routed types the routed type registry builds its rows from,
     /// while the coach channel's trainer-export body is FernletConnections'. What is left is spelled
-    /// in place for a reason each row names, with the plan step that takes it out: the values of what
-    /// the mesh manager builds or decodes (A0.5) and of the recipe-share manager (A0.7), and DEBUG
-    /// test-hook names (A1). A new Fernlet string fails here: it belongs in the host's namespace, or
-    /// in the feature's own module. A row whose literal is gone fails until it is deleted, so the list
-    /// stays the exact set (27 literals on 26 lines in 5 files). The scan reads literals only:
-    /// comments may say Fernlet freely.
+    /// in place for a reason each row names, with the plan step that takes it out: the values of the
+    /// recipe-share manager (A0.7) and DEBUG test-hook names (A1); the last values of what the mesh
+    /// manager builds or decodes, the activity payloads' formats, left with them (A0.5.8). A new
+    /// Fernlet string fails here: it belongs in the host's namespace, or in the feature's own module. A
+    /// row whose literal is gone fails until it is deleted, so the list stays the exact set (17
+    /// literals on 16 lines in 4 files). The scan reads literals only: comments may say Fernlet freely.
     @Test func everyFernletLiteralIsAllowlistedWithItsReasonAndExitStep() throws {
         let sources = try Self.proximitySources()
         var found: [String: [String: [Int]]] = [:]
@@ -632,12 +621,6 @@ private extension UInt8 {
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CONSOLE_LOG", 1, .meshDebugHook),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS", 1, .meshDebugHook),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS_BARRED", 1, .meshDebugHook),
-        FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.offer", 2, .activityFormat),
-        FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.join.request", 2,
-                       .activityFormat),
-        FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.join.grant", 2, .activityFormat),
-        FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.roster", 2, .activityFormat),
-        FernletLiteral("Wire/ActivityPayloads.swift", "fernlet.proximity.activity.sync", 2, .activityFormat),
         FernletLiteral("Wire/RecipeSharePayloads.swift", "fernlet.proximity.recipe", 2, .recipeFormat)
     ]
 
@@ -664,13 +647,14 @@ private extension UInt8 {
     /// token off the namespace its host hands down, asks the host's trust store and per-connection
     /// session policy its trust questions, records its own session audit, reports its own inspector
     /// values and sanitizes a peer's name with its own copy of the sanitizer, under the namespace's
-    /// peer-name policy. What is left names a type on the activity manager and the mesh manager's
-    /// feature parts, which leave in A0.5 with the typed doors only they go through (the two
-    /// capability gates and the host's trusted-peer list); on the typed doors only Fernlet's features
-    /// and the recipe-share manager go through (the envelope's typed view of its token and the
-    /// coordinator's typed send), which leave with the recipe profile (A0.7); and on the session
-    /// mode's alias, which generalizes with the connection profiles (A0.7 / C5): 22 code lines in 6
-    /// files. A new line fails, and so does a type named in a file whose rows name only others; a
+    /// peer-name policy (the activity manager, the mesh manager's feature sends and typed registration
+    /// and the peer identity's typed capability gate left at A0.5.8). What is left names a type on the
+    /// mesh manager's session hearts, which leave in A0.5 with the typed door only they go through (the
+    /// seat's capability gate) and with the host's trusted-peer list; on the typed doors only Fernlet's
+    /// features and the recipe-share manager go through (the envelope's typed view of its token and the
+    /// coordinator's typed send), which leave with the recipe profile (A0.7); and on the session mode's
+    /// alias, which generalizes with the connection profiles (A0.7 / C5): 10 code lines in 5 files. A
+    /// new line fails, and so does a type named in a file whose rows name only others; a
     /// line that goes away fails until its row is lowered or deleted, so the list only shrinks. A type
     /// no row names (`TrainerAuditEvent`, `ConnectionSessionLog`) fails on its first line. Only code
     /// lines count: comments and literals may name the types, and an implicit member (`.friendHeart`)
@@ -822,12 +806,8 @@ private extension UInt8 {
 
     /// Every file and type whose code lines still name one of Fernlet's domain types.
     static let domainTypeLines: [DomainTypeLines] = [
-        DomainTypeLines("Activities/ProximityActivityManager.swift", "PayloadType", 1, .activitySend),
-        DomainTypeLines("Activities/ProximityActivityManager.swift", "ItemNameModeration", 8, .activityNames),
         DomainTypeLines("Engine/ProximityCoordinator.swift", "PayloadType", 1, .coordinatorTypedSend),
-        DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityCapability", 1, .peerCapabilityGate),
         DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityMode", 1, .sessionMode),
-        DomainTypeLines("Mesh/MeshNetworkManager.swift", "PayloadType", 2, .meshFeatureSends),
         DomainTypeLines("Mesh/MeshNetworkManager.swift", "ProximityTrustedPeerRecord", 3, .meshSessionHearts),
         DomainTypeLines("Mesh/MeshSessionTypes.swift", "ProximityCapability", 1, .seatCapabilityGate),
         DomainTypeLines("ProximityHost.swift", "ProximityTrustedPeerRecord", 1, .hostTrustedPeers),
@@ -1011,9 +991,10 @@ private extension UInt8 {
     ///
     /// Fernlet's social features left ProximityKit with their bytes unchanged: the heart dead-drop,
     /// presence, moderation's ban store, ledger and content hash, closeness, friend state, the parked
-    /// chat payload, the clothing shop with its catalog payloads and the moderation report relay with
-    /// its payload for FernletSocial and the sealed-backup escrow for the app, and the support layout
-    /// that named their folder was deleted.
+    /// chat payload, the clothing shop with its catalog payloads, the moderation report relay with its
+    /// payload and the activity manager with its payloads and the signing its two domain types carry,
+    /// for FernletSocial, and the sealed-backup escrow for the app, and the support layout that named
+    /// their folder was deleted.
     /// Rules 2 to 4 cannot see one come back: a feature re-declared here under its old name, with no
     /// Fernlet string, no registry label and no domain type of its own, compiles clean and passes them
     /// and every other test, and two declarations of one name in two modules the app imports compile
@@ -1124,10 +1105,13 @@ private extension UInt8 {
     /// the storage scope, the format census and the prekey store), presence's (the manager and its heart
     /// connection), the closeness ledger, the friend-state cache and its rows, moderation's (the ban
     /// store and its record, the ledger and the content hash), the parked chat payload, the clothing
-    /// shop's (the shop, a held catalog and the catalog payload, plan step A0.5.6) and the moderation
-    /// report relay's (the relay, its payload and a signed row, plan step A0.5.7), all FernletSocial's
-    /// now; the support layout that named their folder, deleted; and the sealed-backup escrow's (the
-    /// escrow key, its reconcile outcome, its candidate and its legacy-account name), the app's.
+    /// shop's (the shop, a held catalog and the catalog payload, plan step A0.5.6), the moderation
+    /// report relay's (the relay, its payload and a signed row, plan step A0.5.7) and the activity
+    /// manager's (the manager and its four nested shapes, the params hash, the five wire payloads, and
+    /// FernletDomainModel's join token and roster snapshot, which its signing and verification extend,
+    /// plan step A0.5.8), all FernletSocial's now; the support layout that named their folder, deleted;
+    /// and the sealed-backup escrow's (the escrow key, its reconcile outcome, its candidate and its
+    /// legacy-account name), the app's.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -1136,7 +1120,10 @@ private extension UInt8 {
         "ModerationContentHash", "TempMessagePayload", "ProximitySupportLayout", "SealedBackupEscrowKey",
         "BackupEscrowReconcileOutcome", "EscrowCandidate", "IdentityKeychainKey",
         "MeshClothingShop", "ProximityClothingCatalog", "ClothingCatalogPayload",
-        "ModerationReportRelay", "ModerationReportPayload", "SignedModerationReport"
+        "ModerationReportRelay", "ModerationReportPayload", "SignedModerationReport",
+        "ProximityActivityManager", "HostedActivity", "JoinedActivity", "OfferedActivity", "PendingActivityJoin",
+        "ActivityParamsHash", "ActivityOfferPayload", "ActivityJoinRequestPayload", "ActivityJoinGrantPayload",
+        "ActivityRosterSnapshotPayload", "ActivitySyncPayload", "ActivityJoinToken", "ActivityRosterSnapshot"
     ]
 
     /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must
@@ -1411,8 +1398,8 @@ extension ProximityNamespaceBoundaryTests.Reason {
     /// The seat's typed capability gate.
     static let seatCapabilityGate = Self(exit: .a05, why: """
         the features' typed capability gate on a seat (`PeerSlot.supports(_:in:)`'s capability \
-        overload, which delegates to the token form); its callers are the mesh manager's activity and \
-        heart parts
+        overload, which delegates to the token form); its caller is the mesh manager's heart part (the \
+        activity part's left with the activity manager's mesh wiring, which asks the token form)
         """)
     /// The host's trusted-peer list.
     static let hostTrustedPeers = Self(exit: .a05, why: """
@@ -1448,7 +1435,7 @@ extension ProximityNamespaceBoundaryTests.Reason {
         """)
     /// The JSON sidecar's door.
     static let sidecarFileShare = Self(exit: .a05, why: """
-        the naive JSON sidecar, shared with FernletSocial's ledgers while the mesh's photo-wall \
-        preferences and the activity manager still use it; it moves to FernletSocial with them
+        the naive JSON sidecar, shared with FernletSocial's ledgers and its activity manager while the \
+        mesh's photo-wall preferences still use it; it moves to FernletSocial with them
         """)
 }

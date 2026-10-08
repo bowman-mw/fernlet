@@ -1,10 +1,11 @@
 // ProximityActivityManager.swift
-// ProximityKit/Activities
+// FernletSocial/Activities
 //
-// The state + logic brain for Group Activities (Phase 6). Owned by `MeshNetworkManager` (a sub-manager
-// like `MeshClothingShop`); activities RIDE THE FRIEND MESH — no new radio, no new Bonjour service. The
-// UWB dwell-commit that forms a friend session IS the join ritual; every activity payload is exchanged
-// only between committed, transport-verified peers.
+// The state + logic brain for Group Activities (Phase 6). Owned by FernletSocial's mesh composition
+// (`FernletMeshFeatures`, since ProximityKit plan step A0.5.8 moved it out of the mesh manager);
+// activities RIDE THE FRIEND MESH — no new radio, no new Bonjour service. The UWB dwell-commit that
+// forms a friend session IS the join ritual; every activity payload is exchanged only between
+// committed, transport-verified peers.
 //
 // This type owns:
 //  * the roster state (activities I host / joined / have been offered / pending join requests),
@@ -13,25 +14,30 @@
 //  * a device-local sidecar (App Support JSON, `.completeFileProtection`, NEVER synced — the
 //    HeartLedger/ClosenessLedger stance) so a hosted/joined activity survives launches until `expiresAt`.
 //
-// It does NOT touch a radio or its session directly. `MeshNetworkManager` wires two closures in:
+// It does NOT touch a radio or its session directly. Its mesh wiring (`ProximityActivityManager+Mesh.swift`)
+// sets two closures:
 //  * `send` — seal + sign + transmit a payload to one verified fingerprint's committed slot;
 //  * `committedActivityPeerFingerprints` — the fingerprints of currently-committed peers that advertise
 //    the `.activities` capability.
-// and forwards every received activity payload here. Authorization is INDEPENDENT of the shared
-// handshake: the friend-session trust policy hard-codes `isTrustedProximityPeer == true`, so the grant
-// carries its own host-signed, invitee-key-bound token (exactly as hearts carry their own eligibility).
+// and registers the mesh handlers that forward every received activity payload here. Authorization is
+// INDEPENDENT of the shared handshake: the friend-session trust policy hard-codes
+// `isTrustedProximityPeer == true`, so the grant carries its own host-signed, invitee-key-bound token
+// (exactly as hearts carry their own eligibility).
 
 import Foundation
 import Observation
 import FernletDomainModel
+import FernletFoundation
+import ProximityKit
 
 /// The state + logic brain for Group Activities (Phase 6): hosting, joining, offers, pending
 /// join requests, and host-authoritative roster convergence — riding the friend mesh with no
 /// radio of its own.
 ///
-/// Owned by ``MeshNetworkManager`` (a sub-manager like ``MeshClothingShop``), which wires in the
-/// two seams this type uses instead of touching a radio: `send` (seal + sign + transmit to one
-/// verified fingerprint's committed slot) and `committedActivityPeerFingerprints`. Authorization
+/// Owned by FernletSocial's mesh composition (``FernletMeshFeatures``), whose mesh wiring
+/// (`attach(to:meshHost:)`) sets the two seams this type uses instead of touching a radio: `send`
+/// (seal + sign + transmit to one verified fingerprint's committed slot) and
+/// `committedActivityPeerFingerprints`, and registers its five payload handlers. Authorization
 /// is independent of the shared handshake: membership is carried by the host-signed,
 /// invitee-key-bound `ActivityJoinToken`, snapshots verify only under the host key PINNED at
 /// join, and roster convergence is max-version-wins. Receive paths reject oversized/hand-crafted
@@ -104,11 +110,12 @@ public final class ProximityActivityManager {
     @ObservationIgnored private let file: JSONSidecarFile<PersistedState>
     @ObservationIgnored private let now: () -> Date
 
-    /// Set by `MeshNetworkManager`: seal+sign+transmit a payload to a verified fingerprint's committed
-    /// slot. `sealed: false` only for the bodyless-ish `.activityJoinRequest`.
+    /// Set by the mesh wiring (`attach(to:meshHost:)`): seal+sign+transmit a payload to a verified
+    /// fingerprint's committed slot. `sealed: false` only for the bodyless-ish `.activityJoinRequest`.
     public typealias ActivitySend = @MainActor (_ type: PayloadType, _ payload: any Encodable, _ toFingerprint: String, _ sealed: Bool) async -> Void
     @ObservationIgnored public var send: ActivitySend?
-    /// Set by `MeshNetworkManager`: fingerprints of currently-committed peers advertising `.activities`.
+    /// Set by the mesh wiring (`attach(to:meshHost:)`): fingerprints of currently-committed peers
+    /// advertising `.activities`.
     @ObservationIgnored public var committedActivityPeerFingerprints: (() -> [String])?
 
     /// Per-peer rate limit on `activitySync` snapshot replies (anti-amplification).
@@ -119,13 +126,13 @@ public final class ProximityActivityManager {
     /// expired ones.
     ///
     /// - Parameters:
-    ///   - store: The host, held `unowned` (the host owns the mesh manager that owns this).
+    ///   - store: The host, held `unowned` (the host owns the mesh composition that owns this).
     ///   - identity: The identity that signs its descriptors, join tokens and rosters, or nil, under
     ///     which hosting and joining refuse.
     ///   - fileURL: The ledger file, which the caller always states: there is no default, so no
-    ///     manager silently lands on a process-wide path. ``MeshNetworkManager`` passes
-    ///     ``fileURL(in:)`` of its host's ``ProximityHost/proximitySupportDirectory``; a test passes
-    ///     a file of its own.
+    ///     manager silently lands on a process-wide path. The mesh composition
+    ///     (``FernletMeshFeatures``) passes ``fileURL(in:)`` of its host's
+    ///     ``ProximityHost/proximitySupportDirectory``; a test passes a file of its own.
     ///   - now: The clock it stamps, expires and rate-limits by.
     public init(
         store: any ProximityHost,
@@ -235,8 +242,8 @@ public final class ProximityActivityManager {
         } catch {
             // R7: `host()`/`admitJoin()` surface signing failures; a silent no-op removal would
             // leave the host believing the participant is gone.
-            ProximityAudit.log("activity.removeParticipant.signFailed",
-                               context: ["error": String(describing: error)])
+            FernletAuditLog.log("activity.removeParticipant.signFailed",
+                                context: ["error": String(describing: error)])
             activityError = "Couldn't update the activity."
             return
         }
@@ -322,8 +329,8 @@ public final class ProximityActivityManager {
             )
         } catch {
             // R7: the orphaned member stays orphaned; say so instead of returning silently.
-            ProximityAudit.log("activity.regrant.signFailed",
-                               context: ["error": String(describing: error)])
+            FernletAuditLog.log("activity.regrant.signFailed",
+                                context: ["error": String(describing: error)])
             activityError = "Couldn't update the activity."
             return
         }
@@ -372,10 +379,11 @@ public final class ProximityActivityManager {
         save()
     }
 
-    // MARK: - Inbound (called by MeshNetworkManager's registered handlers)
+    // MARK: - Inbound (called by the handlers the mesh wiring registers)
 
-    /// A committed host offered an activity. The handler has already gated on committed-slot + block +
-    /// vault trust. `verifiedHostSigningPublicKey` is the sender's transport-verified key — we require it
+    /// A committed host offered an activity. The handler has already gated on committed-slot + block
+    /// (never on vault trust: see the mesh wiring). `verifiedHostSigningPublicKey` is the sender's
+    /// transport-verified key — we require it
     /// to equal the descriptor's `hostSigningPublicKey`, pinning the trust root to the real sender.
     public func receiveOffer(_ payload: ActivityOfferPayload, fromFingerprint: String, verifiedHostSigningPublicKey: Data) {
         guard payload.isWellFormed else { return }
@@ -537,7 +545,7 @@ public final class ProximityActivityManager {
         if replied { lastSyncReplyAt[fromFingerprint] = now() }
     }
 
-    // MARK: - Commit hook (called by MeshNetworkManager on each slot commit)
+    // MARK: - Commit hook (called by the mesh composition's session observer on each slot commit)
 
     /// A peer committed: offer them everything we host, and exchange a version digest so any newer roster
     /// converges.
@@ -551,11 +559,11 @@ public final class ProximityActivityManager {
 
     /// Spawns a detached task that PINS this manager's host for the task's own lifetime.
     ///
-    /// ``store`` is `unowned` because the host owns this manager (`FernletStore.swift`'s `lazy var`
-    /// managers), and the unowned back-reference is that ownership's cycle-breaker. A detached task,
-    /// however, holds `self` STRONGLY for the duration of every `self?.method()` it awaits, so it can
-    /// outlive the host and then read a destroyed object — `swift_abortRetainUnowned` aborts the whole
-    /// process, which is what P5 item 1a's crash reports are. Capturing the host here, read
+    /// ``store`` is `unowned` because the host owns this manager (through `FernletStore.swift`'s
+    /// `lazy var` mesh features), and the unowned back-reference is that ownership's cycle-breaker.
+    /// A detached task, however, holds `self` STRONGLY for the duration of every `self?.method()` it
+    /// awaits, so it can outlive the host and then read a destroyed object — `swift_abortRetainUnowned`
+    /// aborts the whole process, which is what P5 item 1a's crash reports are. Capturing the host here, read
     /// synchronously on the main actor at a point where it is provably alive, makes the read the task
     /// will later perform valid by construction (invariant HP1).
     ///

@@ -91,6 +91,13 @@
 /FernletKit/Sources/FernletSocial/Moderation/ModerationReportRelay.swift @bowman-mw
 /FernletKit/Sources/FernletSocial/Wire/FeatureCanonicalBytes.swift      @bowman-mw
 
+# FernletSocial's Group Activities signing (both moved from ProximityKit in plan step A0.5.8, their
+# canonical bytes into FeatureCanonicalBytes.swift above): the join token's and the roster snapshot's
+# signing and verification, the activity payloads' wire formats, and the activity ledger's file —
+# changing a byte here breaks every grant, roster and ledger already signed or saved
+/FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift @bowman-mw
+/FernletKit/Sources/FernletSocial/Wire/ActivityPayloads.swift              @bowman-mw
+
 # FernletSocial's heart dead-drop: the drop's outer seal and the sidecars' at-rest seal, the prekey
 # store's keychain service and blob, the heart-drop pair secret and day tags, the storage scope and the
 # mesh stores' keychain services derived beside it — changing a byte here breaks every drop in flight

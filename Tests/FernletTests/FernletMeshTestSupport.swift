@@ -52,10 +52,11 @@ enum FernletMeshRig {
 
     /// Every role the composition installs on its mesh is in place before it is handed out: today the
     /// capability provider and the vouch-list exchange (plan step A0.5.5), the session observer (plan
-    /// step A0.5.6) and the payload handlers (``featurePayloadTokens``: the shop's two since A0.5.6, the
-    /// moderation report's and the friend state's since A0.5.7), each read off the mesh's registry. Each
-    /// later feature step adds its own here, and the routed registrations' answers (A0.5.9 on) are each
-    /// held to `true`.
+    /// step A0.5.6), the payload handlers (``featurePayloadTokens``: the shop's two since A0.5.6, the
+    /// moderation report's and the friend state's since A0.5.7, the activity manager's five since
+    /// A0.5.8), each read off the mesh's registry, and the activity manager's two mesh seams (A0.5.8).
+    /// Each later feature step adds its own here, and the routed registrations' answers (A0.5.9 on) are
+    /// each held to `true`.
     ///
     /// - Parameter features: The composition just built.
     private static func expectEveryInstallationHeld(by features: FernletMeshFeatures) {
@@ -70,13 +71,21 @@ enum FernletMeshRig {
             #expect(features.mesh.hasPayloadHandlerForTesting(forToken: token),
                     "the composition registered no handler for \(token) on its mesh")
         }
+        #expect(features.activities.send != nil,
+                "the composition set no mesh send on its activity manager")
+        #expect(features.activities.committedActivityPeerFingerprints != nil,
+                "the composition set no committed-peer query on its activity manager")
     }
 
     /// The payload tokens the composition registers a handler for through the mesh's token door, each
     /// spelled as its feature registers it (`PayloadType.<case>.rawValue`): the clothing catalog and its
-    /// request (plan step A0.5.6), the item report and the friend state (A0.5.7).
+    /// request (plan step A0.5.6), the item report and the friend state (A0.5.7), and the activity
+    /// offer, join request, join grant, roster snapshot and sync (A0.5.8).
     private static let featurePayloadTokens = [
         PayloadType.clothingCatalog.rawValue, PayloadType.clothingCatalogRequest.rawValue,
-        PayloadType.itemReport.rawValue, PayloadType.friendState.rawValue
+        PayloadType.itemReport.rawValue, PayloadType.friendState.rawValue,
+        PayloadType.activityOffer.rawValue, PayloadType.activityJoinRequest.rawValue,
+        PayloadType.activityJoinGrant.rawValue, PayloadType.activityRosterSnapshot.rawValue,
+        PayloadType.activitySync.rawValue
     ]
 }

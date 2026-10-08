@@ -1,25 +1,30 @@
 // ActivityPayloads.swift
-// ProximityKit/Wire
+// FernletSocial/Wire
 //
-// The wire envelopes + signing/verification for Group Activities (Phase 6). The pure value types
+// The wire envelopes + signing/verification for Group Activities (Phase 6), moved from ProximityKit with
+// the activity manager in ProximityKit plan step A0.5.8, with no byte change. The pure value types
 // (`ActivityDescriptor`, `ActivityParticipant`, `ActivityRosterSnapshot`, `ActivityJoinToken`) live in
-// FernletDomainModel; the crypto lives HERE because it needs the `@MainActor IdentityService` +
-// CryptoKit, neither of which DomainModel may name.
+// FernletDomainModel; the crypto lives HERE because it needs ProximityKit's `@MainActor IdentityService`
+// + CryptoKit, neither of which DomainModel may name. The bytes the token and the snapshot are signed
+// over, and the descriptor's params hash is taken over, are `FeatureCanonicalBytes.swift`'s.
 //
-// The token + snapshot mirror `MeshAdmissionToken` (MeshPayloads.swift) — with ONE deliberate
-// improvement: both carry a SIGNED `schemaVersion`, so `verify` gates a SINGLE canonical encoder on the
-// version instead of accepting two encodings forever (the `MeshAdmissionToken` dual-verify trap).
+// The token + snapshot mirror ProximityKit's `MeshAdmissionToken` (MeshPayloads.swift) — with ONE
+// deliberate improvement: both carry a SIGNED `schemaVersion`, so `verify` gates a SINGLE canonical
+// encoder on the version instead of accepting two encodings forever (the `MeshAdmissionToken`
+// dual-verify trap).
 //
-// WI-9: every wire payload is `public nonisolated struct … : Codable, Equatable, Sendable`. ProximityKit
-// sets `.defaultIsolation(MainActor.self)`, which would otherwise MainActor-isolate these value types and
-// their synthesized `Codable` — a hard error when the coordinator decodes untrusted transport bytes
-// (MCSession's then, the QUIC radio's now) off the main actor. `signed(...)` stays `@MainActor` (it signs with the `@MainActor` key); `verify(...)` is
-// `nonisolated` (pure signature math + canonical bytes).
+// WI-9: every wire payload is `public nonisolated struct … : Codable, Equatable, Sendable`. FernletSocial,
+// like ProximityKit, sets `.defaultIsolation(MainActor.self)`, which would otherwise MainActor-isolate
+// these value types and their synthesized `Codable` — a hard error when the coordinator decodes untrusted
+// transport bytes (MCSession's then, the QUIC radio's now) off the main actor. `signed(...)` stays
+// `@MainActor` (it signs with the `@MainActor` key); `verify(...)` is `nonisolated` (pure signature math +
+// canonical bytes).
 
 import Foundation
 import CryptoKit
 import FernletCrypto
 import FernletDomainModel
+import ProximityKit
 
 // MARK: - Params hash
 
@@ -92,7 +97,7 @@ public nonisolated struct ActivityJoinRequestPayload: Codable, Equatable, Sendab
 /// The host's signed grant: an invitee-key-bound token + the roster snapshot at grant time. Sealed.
 ///
 /// The joiner verifies both the token and the snapshot under the host key it pinned from the
-/// offer before treating itself as a member (`ProximityActivityManager.handleJoinGrant`).
+/// offer before treating itself as a member (`ProximityActivityManager.receiveGrant(_:fromFingerprint:)`).
 public nonisolated struct ActivityJoinGrantPayload: Codable, Equatable, Sendable {
     public var format = "fernlet.proximity.activity.join.grant"
     public var version = 1
