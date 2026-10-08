@@ -16,6 +16,7 @@
 
 import CoreGraphics
 import FernletDomainModel
+import FernletSocial
 import Foundation
 import ProximityKit
 import UIKit
@@ -62,8 +63,8 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
     /// Add one friend photo, which broadcasts it to every active committed slot.
     case photo
 
-    /// Exchange clothing-shop catalogs. Nothing is sent by hand: the manager offers a catalog once
-    /// per slot at commit, so this verb supplies a catalog to offer and then observes.
+    /// Exchange clothing-shop catalogs. Nothing is sent by hand: the mesh features' shop offers a
+    /// catalog once per slot at commit, so this verb supplies a catalog to offer and then observes.
     case shop
 
     /// Send one in-session heart to the first trusted session peer (P6 item 10).
@@ -263,8 +264,8 @@ enum MeshFlowDriver {
             displayName: "matrix",
             items: []
         )
-        manager.clothingShop.isSharingEnabledProvider = { true }
-        manager.clothingShop.localCatalogProvider = { catalog }
+        store.meshFeatures.clothingShop.isSharingEnabledProvider = { true }
+        store.meshFeatures.clothingShop.localCatalogProvider = { catalog }
         echo("shop sharing=on catalogItems=\(catalog.items.count)")
     }
 
@@ -541,7 +542,7 @@ enum MeshFlowDriver {
             echo("capabilities peer=[\(capabilities)]")
             state.capabilities = capabilities
         }
-        reportPayloads(manager: manager, state: &state)
+        reportPayloads(manager: manager, store: store, state: &state)
         reportHearts(manager: manager, store: store, state: &state)
     }
 
@@ -566,7 +567,9 @@ enum MeshFlowDriver {
     }
 
     /// The three receive-side counters a flow run is read off.
-    private static func reportPayloads(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
+    private static func reportPayloads(
+        manager: MeshNetworkManager, store: FernletStore, state: inout MeshFlowRunState
+    ) {
         let messages = manager.sessionMessages.messages
         let incoming = messages.filter { !$0.isOutgoing }.count
         let outgoing = messages.count - incoming
@@ -583,7 +586,7 @@ enum MeshFlowDriver {
             echo("photos received=\(photosIn) held=\(held.count) wall=\(manager.meshPhotos.count)")
             state.photosIn = photosIn
         }
-        let catalogs = manager.clothingShop.peerCatalogs.count
+        let catalogs = store.meshFeatures.clothingShop.peerCatalogs.count
         if catalogs != state.catalogs {
             echo("shop peerCatalogs=\(catalogs)")
             state.catalogs = catalogs

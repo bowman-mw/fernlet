@@ -1,24 +1,27 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// The friend-mesh clothing shop (Phase 3a, Docs/Proximity-Mesh-Redesign-2026-07-10.md). Replaces the
 /// standalone `fernlet-clothes` radio (`ProximityClothingShareManager`, deleted): catalogs now ride the
 /// friend mesh as `.clothingCatalog` payloads, exchanged pairwise-sealed during the live session, and the
 /// shop OPENS at session end — a 1-hour, memory-only browse window on the Friends tab.
 ///
-/// Owned by `MeshNetworkManager`, which drives the whole lifecycle:
-///  - **Inbound** — the manager's Phase-1 payload registry dispatches verified `.clothingCatalog`
-///    envelopes here, but only from COMMITTED slots (the committed-slot gate in the manager's dispatch
-///    default is the security boundary — the coordinator dispatches known non-core payloads with
-///    `connectedIdentity ?? pendingPeerIdentity` and no state gate) and only with a transport-VERIFIED,
-///    unblocked sender fingerprint. Catalogs accumulate for the whole session; there is no mid-session
-///    scene-dip clearing (radio privacy is the mesh lifecycle's job).
-///  - **Outbound** — the manager sends `localCatalogProvider()` once per slot at commit, pairwise
+/// Owned by FernletSocial's mesh composition (`FernletMeshFeatures`), whose shop exchange
+/// (`ClothingShopExchange`) and session observer drive the whole lifecycle over the mesh:
+///  - **Inbound** — the exchange's handler, registered on the mesh's Phase-1 payload registry, hands
+///    verified `.clothingCatalog` envelopes here, but only from COMMITTED slots (the committed-slot gate
+///    in the mesh's dispatch default is the security boundary — the coordinator dispatches known
+///    non-core payloads with `connectedIdentity ?? pendingPeerIdentity` and no state gate) and only with
+///    a transport-VERIFIED, unblocked sender fingerprint. Catalogs accumulate for the whole session;
+///    there is no mid-session scene-dip clearing (radio privacy is the mesh lifecycle's job).
+///  - **Outbound** — the exchange sends `localCatalogProvider()` once per slot at commit, pairwise
 ///    sealed, and only to peers advertising the `shop` capability.
 ///  - **Window** — `openWindowAtSessionEnd()` fires at the same last-committed-slot-gone moment that
-///    promotes `pendingFriendReview`; the window stays open `windowDuration` (1 h) and closes early on
-///    the next session FORMATION (`beginNewSession()`, from the manager's first-slot-commit hook — NOT
+///    promotes `pendingFriendReview` (the mesh's session end, told to the composition's observer); the
+///    window stays open `windowDuration` (1 h) and closes early on the next session FORMATION
+///    (`beginNewSession()`, from the observer at the mesh's first slot commit — NOT
 ///    from startJoin/startNewMesh, which fire automatically on every Social-tab entry and scene
 ///    reactivation and must never touch the window) or app quit (state is memory-only). Unlike
 ///    `pendingFriendReview` — which survives search starts AND session formations — the shop window
@@ -54,8 +57,8 @@ public final class MeshClothingShop {
     /// `isWindowOpen`, not just nil-ness.
     public private(set) var window: Window?
 
-    /// The app supplies this device's current shop catalog; the mesh manager sends it once per slot at
-    /// commit. Returning `nil` (sharing disabled) sends nothing.
+    /// The app supplies this device's current shop catalog; the shop's exchange sends it once per slot
+    /// at commit. Returning `nil` (sharing disabled) sends nothing.
     @ObservationIgnored public var localCatalogProvider: (() -> ClothingCatalogPayload?)?
     /// App-side opt-out gate (`allowNearbyClothingShares`): gates inbound accept and the `shop`
     /// capability advertisement. Wired as a closure so the settings read stays app-side and
@@ -82,13 +85,13 @@ public final class MeshClothingShop {
         return max(1, Int((window.expiresAt.timeIntervalSince(now) / 60).rounded(.up)))
     }
 
-    // MARK: - Inbound (called by MeshNetworkManager's registered handler)
+    // MARK: - Inbound (called by ClothingShopExchange's registered handler)
 
     /// Accepts a verified `.clothingCatalog` envelope from a committed, unblocked peer. The caller
-    /// (MeshNetworkManager) has already enforced the committed-slot gate and the blocked-fingerprint
-    /// drop (mirroring `.tempMessage`; the `.friendPhoto` dispatch this once named retired with P5
-    /// item 13); `verifiedFingerprint` is the transport-authenticated identity,
-    /// never a wire-claimed value — catalogs are keyed by it exclusively.
+    /// (the shop exchange's handler, behind the mesh's committed-slot gate) has already enforced the
+    /// committed-slot gate and the blocked-fingerprint drop (mirroring `.tempMessage`; the `.friendPhoto`
+    /// dispatch this once named retired with P5 item 13); `verifiedFingerprint` is the
+    /// transport-authenticated identity, never a wire-claimed value — catalogs are keyed by it exclusively.
     public func receiveCatalog(
         _ envelope: FernletIdentityEnvelope,
         plaintext: Data,
@@ -129,14 +132,15 @@ public final class MeshClothingShop {
         }
     }
 
-    // MARK: - Session lifecycle (called by MeshNetworkManager)
+    // MARK: - Session lifecycle (called by the composition's session observer)
 
     /// A NEW session has FORMED — the first slot COMMIT after a no-session state (the spec's
     /// "'Next session start' = first slot COMMIT, not search start"): the previous window closes early —
     /// the owner decision is "closes when a new session starts" — and its catalogs drop so the fresh
-    /// session accumulates from a clean slate. The caller (`MeshNetworkManager`) fires this exactly once
-    /// per formation; startJoin/startNewMesh (which run on every Social-tab entry / scene reactivation)
-    /// must NOT call it, mirroring why `pendingFriendReview` deliberately survives them.
+    /// session accumulates from a clean slate. The caller (the composition's session observer, on the
+    /// mesh's session-formation fact) fires this exactly once per formation; startJoin/startNewMesh
+    /// (which run on every Social-tab entry / scene reactivation) must NOT call it, mirroring why
+    /// `pendingFriendReview` deliberately survives them.
     public func beginNewSession() {
         window = nil
         peerCatalogs.removeAll()

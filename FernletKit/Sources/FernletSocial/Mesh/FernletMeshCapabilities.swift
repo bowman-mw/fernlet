@@ -8,9 +8,10 @@
 // The ORDER is a signed wire byte: the coordinator carries the array verbatim into the introduction and
 // its acknowledgement, so the composer below is the mesh manager's own `localCapabilities()` body,
 // moved with its nine appends in their order and its comments. The switches it reads are read where
-// they live: the clothing shop's sharing gate, the chat age gate and the friend-state opt-in on the
-// mesh (still the engine's until their features move), the in-person hearts opt-in on the host, the
-// away-hearts consent on this object, and the wire2 token on the namespace the host was read for once.
+// they live: the clothing shop's sharing gate on the composition's shop, the chat age gate and the
+// friend-state opt-in on the mesh (still the engine's until their features move), the in-person hearts
+// opt-in on the host, the away-hearts consent on this object, and the wire2 token on the namespace the
+// host was read for once.
 
 import Foundation
 import FernletDomainModel
@@ -43,14 +44,20 @@ public final class FernletMeshCapabilities {
     /// The host the hearts opt-in is read from, and the namespace the wire2 token is read from.
     private let meshHost: FernletMeshHost
 
-    /// A composer over `mesh`'s feature switches and `meshHost`'s host and namespace.
+    /// The composition's clothing shop, whose sharing gate the `shop` token follows. Held strongly: the
+    /// shop holds nothing back.
+    private let clothingShop: MeshClothingShop
+
+    /// A composer over `mesh`'s feature switches, `meshHost`'s host and namespace, and the shop's gate.
     ///
     /// - Parameters:
     ///   - mesh: The mesh this list is advertised by, held weakly.
     ///   - meshHost: The features' host holder.
-    init(mesh: MeshNetworkManager, meshHost: FernletMeshHost) {
+    ///   - clothingShop: The composition's clothing shop.
+    init(mesh: MeshNetworkManager, meshHost: FernletMeshHost, clothingShop: MeshClothingShop) {
         self.mesh = mesh
         self.meshHost = meshHost
+        self.clothingShop = clothingShop
     }
 
     /// The capability tokens advertised in this device's identity introduction, in their frozen order:
@@ -73,7 +80,7 @@ public final class FernletMeshCapabilities {
         if heartsAwayEnabledProvider?() == true {
             capabilities.append(ProximityCapability.heartsAway.rawValue)
         }
-        if mesh.clothingShop.isSharingEnabled {
+        if clothingShop.isSharingEnabled {
             capabilities.append(ProximityCapability.shop.rawValue)
         }
         // Phase 5: temporary messages are a core in-session feature with no separate v1 opt-out —

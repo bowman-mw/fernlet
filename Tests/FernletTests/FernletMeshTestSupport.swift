@@ -7,8 +7,8 @@
 //
 // THE RULE. A rig node keeps the composition for its whole lifetime, and the rig returns the
 // composition, never a bare mesh: the composition owns the feature objects, so a node that kept only
-// `features.mesh` would lose them, and from the session observer's commit on (A0.5.6) the mesh would run
-// every lifecycle moment with no feature leg, silently. A suite that wants a bare engine builds
+// `features.mesh` would lose them, and the mesh, which holds its session observer weakly (plan step
+// A0.5.6), would run every lifecycle moment with no feature leg, silently. A suite that wants a bare engine builds
 // `MeshNetworkManager(store:)` explicitly: it advertises only the host's wire2 token, holds no vouch
 // list, and from each feature commit on registers no handler for that feature, so a cell that silently
 // depended on a feature fails rather than passing.
@@ -50,8 +50,9 @@ enum FernletMeshRig {
     }
 
     /// Every role the composition installs on its mesh is in place before it is handed out: today the
-    /// capability provider and the vouch-list exchange (plan step A0.5.5). Each later feature step adds
-    /// its own here, and the routed registrations' answers (A0.5.9 on) are each held to `true`.
+    /// capability provider and the vouch-list exchange (plan step A0.5.5) and the session observer (plan
+    /// step A0.5.6; the shop's two payload handlers have no engine-side read to check). Each later feature
+    /// step adds its own here, and the routed registrations' answers (A0.5.9 on) are each held to `true`.
     ///
     /// - Parameter features: The composition just built.
     private static func expectEveryInstallationHeld(by features: FernletMeshFeatures) {
@@ -59,5 +60,7 @@ enum FernletMeshRig {
                 "the composition installed no capability provider on its mesh")
         #expect(features.mesh.vouchListExchange != nil,
                 "the composition installed no vouch-list exchange on its mesh")
+        #expect(features.mesh.sessionObserver != nil,
+                "the composition installed no session observer on its mesh")
     }
 }

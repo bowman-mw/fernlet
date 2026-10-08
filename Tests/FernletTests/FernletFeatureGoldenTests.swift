@@ -3405,24 +3405,25 @@ struct FernletFeatureGoldenTests {
         let rig = try Self.sessionRig(bobAdvertising: [])
         defer { Self.tearDown(rig) }
         let manager = rig.manager
+        let shop = rig.features.clothingShop
         try Self.armSessionToEnd(rig)
         try #require(manager.sessionRoster.count == 1 && manager.sessionPhotos.count == 1
                          && manager.pendingFriendReview == nil,
                      "the roster holds \(manager.sessionRoster.count), the roll \(manager.sessionPhotos.count)")
-        try #require(manager.clothingShop.peerCatalogs.count == 1 && manager.clothingShop.window == nil,
-                     "the shop holds \(manager.clothingShop.peerCatalogs.count) catalogs")
+        try #require(shop.peerCatalogs.count == 1 && shop.window == nil,
+                     "the shop holds \(shop.peerCatalogs.count) catalogs")
         try #require(manager.sessionMessages.messages.count == 1 && manager.sessionHeartState != .idle,
                      "the transcript holds \(manager.sessionMessages.messages.count), the heart \(manager.sessionHeartState)")
         try #require(!manager.isSessionLive, "the session is still live")
         let recorder = LifecycleRecorder()
         defer { recorder.uninstall() }
-        Self.recordSessionEnd(of: manager, into: recorder)
+        Self.recordSessionEnd(of: rig, into: recorder)
         Self.endSession(manager)
         #expect(recorder.order == Self.sessionEndOrder, "the session ended in the order \(recorder.order)")
         let review = manager.pendingFriendReview
         #expect(review?.entries.map(\.fingerprint) == [Self.bobFingerprint] && review?.photos.count == 1,
                 "the review holds \(String(describing: review))")
-        #expect(manager.clothingShop.window != nil && manager.sessionMessages.messages.isEmpty
+        #expect(shop.window != nil && manager.sessionMessages.messages.isEmpty
                     && manager.sessionHeartState == .idle, "a leg left its state; the heart is \(manager.sessionHeartState)")
     }
 
@@ -3897,12 +3898,15 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Fernlet's mesh composition over `store` (held unowned: the caller keeps it alive) on an in-memory
-    /// radio, with `identity` as the device identity it hands its mesh and its features: today
-    /// `FernletMeshRig.features(store:transport:identity:)`, the app's composition over the manager's
-    /// internal designated initializer (plan step A0.5.5). The caller keeps the composition for as long
-    /// as it uses it.
-    static func meshFeatures(over store: FernletStore, identity: IdentityService) -> FernletMeshFeatures {
-        FernletMeshRig.features(store: store, transport: FakeMeshTransportSession(), identity: identity)
+    /// radio, with `identity` as the device identity it hands its mesh and its features and
+    /// `heldPhotoKeys` as the pending corpus's key, or nil, the default, for the keychain row production
+    /// reads: today `FernletMeshRig.features(store:transport:identity:heldPhotoKeys:)`, the app's
+    /// composition over the manager's internal designated initializer (plan step A0.5.5). The caller
+    /// keeps the composition for as long as it uses it.
+    static func meshFeatures(over store: FernletStore, identity: IdentityService,
+                             heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil) -> FernletMeshFeatures {
+        FernletMeshRig.features(store: store, transport: FakeMeshTransportSession(), identity: identity,
+                                heldPhotoKeys: heldPhotoKeys)
     }
 
     /// The wall preferences' entry count: today `photoWallPreferenceEntryCountForTesting`.
@@ -3950,15 +3954,16 @@ extension FernletFeatureGoldenTests {
 
     /// The catalog and the request the mesh sends a just-committed peer, as that peer reads them: a
     /// ``SessionRig`` (groups 26 and 29 drive the same one) whose bob advertises `shop` alone, so the
-    /// catalog is sealed in the legacy framing; alice's shop opted in with `catalog` through its two
-    /// providers; bob seated (`addSlotForTesting`) and committed (`noteSlotCommittedForShop`), whose hook
-    /// sends the catalog and then the request; and the fabric settled until both have left. bob opens the
-    /// catalog. The root and both identities' rows are removed before this returns.
+    /// catalog is sealed in the legacy framing; alice's shop (the rig's composition's, plan step A0.5.6)
+    /// opted in with `catalog` through its two providers; bob seated (`addSlotForTesting`) and committed
+    /// (`noteSlotCommittedForShop`), whose hook tells the composition's session observer, whose shop
+    /// exchange sends the catalog and then the request; and the fabric settled until both have left. bob
+    /// opens the catalog. The root and both identities' rows are removed before this returns.
     static func shopBodiesSentOnCommit(catalog: ClothingCatalog) async throws -> (catalog: Data, request: Data) {
         let rig = try sessionRig(bobAdvertising: [ProximityCapability.shop.rawValue])
         defer { tearDown(rig) }
-        rig.manager.clothingShop.isSharingEnabledProvider = { true }
-        rig.manager.clothingShop.localCatalogProvider = { catalog }
+        rig.features.clothingShop.isSharingEnabledProvider = { true }
+        rig.features.clothingShop.localCatalogProvider = { catalog }
         seatBob(in: rig)
         try commitBob(in: rig)
         let tokens = ["catalog", "catalogRequest"].map { featureToken($0) }
@@ -4041,8 +4046,9 @@ extension FernletFeatureGoldenTests {
 
     /// A ``SessionRig`` whose bob advertises `capabilities` and is a kept friend, not yet seated, with
     /// the pending corpus on an in-memory key: a scratch store
-    /// (`makeTestStore(proximitySupportDirectory:)`), planted alice and bob, the manager over alice and
-    /// one link of a fake fabric for bob's slot, as
+    /// (`makeTestStore(proximitySupportDirectory:)`), planted alice and bob, Fernlet's composition over
+    /// alice (its mesh the rig's manager; plan step A0.5.6, when the shop and the session observer
+    /// joined it) and one link of a fake fabric for bob's slot, as
     /// `ProximityVocabularyGoldenTests.sealedCatalog(underHostOf:peerAdvertising:)` builds its own. A
     /// planting that fails removes what was made.
     static func sessionRig(bobAdvertising capabilities: [String]) throws -> SessionRig {
@@ -4053,9 +4059,9 @@ extension FernletFeatureGoldenTests {
             let alice = try plantedAlice(service: services[0])
             let bob = try plantedIdentity(signing: bobSigningRaw, keyAgreement: bobKeyAgreementRaw, service: services[1])
             keep(bobPeerIdentity(id: UUID(), capabilities: capabilities), in: store)
-            let manager = meshManager(over: store, identity: alice, heldPhotoKeys: SwitchableMediaKeyProvider())
+            let features = meshFeatures(over: store, identity: alice, heldPhotoKeys: SwitchableMediaKeyProvider())
             let network = FakePeerNetwork()
-            return SessionRig(root: root, services: services, store: store, alice: alice, bob: bob, manager: manager,
+            return SessionRig(root: root, services: services, store: store, alice: alice, bob: bob, features: features,
                               network: network, link: network.addEndpoint(named: "ffgt-session-peer"),
                               capabilities: capabilities)
         } catch {
@@ -4078,8 +4084,8 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Runs the commit hook for bob's seated slot: today `noteSlotCommittedForShop(slot:identity:)`,
-    /// which `onSlotConnected` calls at every commit. Re-pointed at A0.5.6, when the commit moment
-    /// becomes the engine's observer.
+    /// which `onSlotConnected` calls at every commit, and which tells the composition's session observer
+    /// the commit (plan step A0.5.6) before the engine's own legs.
     static func commitBob(in rig: SessionRig) throws {
         let slot = try #require(rig.manager.slots.first, "the manager seated no slot")
         let bob = bobPeerIdentity(id: slot.id, capabilities: rig.capabilities)
@@ -4107,11 +4113,12 @@ extension FernletFeatureGoldenTests {
         try rig.bob.open(envelope.payload, from: envelope.senderKeyAgreementPublicKey, format: .legacy)
     }
 
-    /// Removes the rig's keychain rows and root, holding the manager, the store and the fabric to the
-    /// end: the manager's sends hold it weakly, it holds its store `unowned`, and the link holds the
-    /// fabric weakly.
+    /// Removes the rig's keychain rows and root, holding the composition, the store and the fabric to
+    /// the end: the composition owns the manager and its features, whose sends hold them weakly (the
+    /// manager holds its session observer weakly too), they hold their store `unowned`, and the link
+    /// holds the fabric weakly.
     static func tearDown(_ rig: SessionRig) {
-        withExtendedLifetime((rig.manager, rig.store, rig.network)) {}
+        withExtendedLifetime((rig.features, rig.store, rig.network)) {}
         sweep(rig.services)
         removeDirectory(rig.root)
     }
@@ -4187,7 +4194,9 @@ extension FernletFeatureGoldenTests {
     /// `addSlotForTesting(coordinator:peer:fingerprint:)` and
     /// `proximityCoordinator(_:didReceive:plaintext:from:)`, the dispatch `MeshClothingShopTests` drives
     /// with a verified identity. The slot proves no key, so the frame is attributable and reaches the
-    /// feature's handler. Re-pointed at A0.5.6 and A0.5.7, when the handlers move.
+    /// feature's handler: the catalog's and the request's are the composition's shop exchange's, on its
+    /// mesh's payload registry, since plan step A0.5.6 (so `manager` is a composition's mesh,
+    /// ``AuditMeshRig``); the item report's moves at A0.5.7.
     static func deliverUnverified(_ type: PayloadType, to manager: MeshNetworkManager,
                                   coordinatorIdentity: IdentityService) {
         let coordinator = ProximityCoordinator(
@@ -4362,12 +4371,12 @@ extension FernletFeatureGoldenTests {
         ProximityCapability.allCases.map(\.rawValue)
     }
 
-    /// Opts alice's shop in with group 20's frozen catalog: today the shop's two providers. Re-pointed at
-    /// A0.5.6 (setup only).
+    /// Opts alice's shop in with group 20's frozen catalog: today the two providers of the composition's
+    /// shop (plan step A0.5.6; setup only).
     static func armShop(in rig: SessionRig) {
         let catalog = aliceCatalog
-        rig.manager.clothingShop.isSharingEnabledProvider = { true }
-        rig.manager.clothingShop.localCatalogProvider = { catalog }
+        rig.features.clothingShop.isSharingEnabledProvider = { true }
+        rig.features.clothingShop.localCatalogProvider = { catalog }
     }
 
     /// Has alice host one hour-long activity, so a commit with an `activities` peer offers it: today
@@ -4380,14 +4389,15 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Notes the commit's three observable moments into `recorder`, each with how many frames bob's link
-    /// had carried when it fired: today the closeness hook `onFriendSessionCommitted`,
-    /// `onShopCatalogSendForTesting` (fired before the catalog's send) and
-    /// `onShopCatalogRequestSendForTesting` (fired after the request's send). Re-pointed at A0.5.6.
+    /// had carried when it fired: today the composition's closeness hook `onFriendSessionCommitted` and
+    /// its shop exchange's `onShopCatalogSendForTesting` (fired before the catalog's send) and
+    /// `onShopCatalogRequestSendForTesting` (fired after the request's send), plan step A0.5.6.
     static func recordCommitHooks(of rig: SessionRig, into recorder: LifecycleRecorder) {
         let link = rig.link.transport
-        rig.manager.onFriendSessionCommitted = { _ in recorder.note("closeness@\(link.sentFrames.count)") }
-        rig.manager.onShopCatalogSendForTesting = { _ in recorder.note("catalogSend@\(link.sentFrames.count)") }
-        rig.manager.onShopCatalogRequestSendForTesting = { _ in
+        let shop = rig.features.shopExchange
+        rig.features.onFriendSessionCommitted = { _ in recorder.note("closeness@\(link.sentFrames.count)") }
+        shop.onShopCatalogSendForTesting = { _ in recorder.note("catalogSend@\(link.sentFrames.count)") }
+        shop.onShopCatalogRequestSendForTesting = { _ in
             recorder.note("catalogRequestSent@\(link.sentFrames.count)")
         }
     }
@@ -4417,8 +4427,8 @@ extension FernletFeatureGoldenTests {
         let envelope = try FernletIdentityEnvelope.signed(
             identityService: rig.bob, senderDisplayName: "Bob", payloadTypeToken: token,
             payloadSummary: PayloadSummary(title: token), payload: catalog)
-        manager.clothingShop.isSharingEnabledProvider = { true }
-        manager.clothingShop.receiveCatalog(envelope, plaintext: catalog, verifiedFingerprint: bobFingerprint)
+        rig.features.clothingShop.isSharingEnabledProvider = { true }
+        rig.features.clothingShop.receiveCatalog(envelope, plaintext: catalog, verifiedFingerprint: bobFingerprint)
         manager.sessionMessages.appendOutgoing(
             id: uuid("7E57A9E0-4841-4E44-8000-000000000031"), senderFingerprint: aliceFingerprint,
             senderDisplayName: "Alice", text: "frozen", sentAt: Date(timeIntervalSinceReferenceDate: 780_000_000))
@@ -4428,21 +4438,22 @@ extension FernletFeatureGoldenTests {
 
     /// Notes each leg of a session end into `recorder` where it begins: the roster's first change (the
     /// merge empties it), the photo move's audit line (`mesh.session.photosPendingReview`), and the first
-    /// changes of the shop window, the transcript and the heart state. Through Observation
-    /// (`withObservationTracking`, one change each, as `MeshFavoriteObservationTests` observes the
-    /// manager) and `FernletAuditLog.addCaptureHandler`. Nothing the teardown runs before its three legs
-    /// writes any of the five. Re-pointed with each leg.
-    static func recordSessionEnd(of manager: MeshNetworkManager, into recorder: LifecycleRecorder) {
+    /// changes of the shop window (the rig's composition's shop since plan step A0.5.6), the transcript
+    /// and the heart state. Through Observation (`withObservationTracking`, one change each, as
+    /// `MeshFavoriteObservationTests` observes the manager) and `FernletAuditLog.addCaptureHandler`.
+    /// Nothing the teardown runs before its legs writes any of the five. Re-pointed with each leg.
+    static func recordSessionEnd(of rig: SessionRig, into recorder: LifecycleRecorder) {
+        let manager = rig.manager
         withObservationTracking { _ = manager.sessionRoster } onChange: { recorder.note("reviewMerge") }
         recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview")
-        withObservationTracking { _ = manager.clothingShop.window } onChange: { recorder.note("shopWindow") }
+        withObservationTracking { _ = rig.features.clothingShop.window } onChange: { recorder.note("shopWindow") }
         withObservationTracking { _ = manager.sessionMessages.messages } onChange: { recorder.note("transcriptClear") }
         withObservationTracking { _ = manager.sessionHeartState } onChange: { recorder.note("heartReset") }
     }
 
     /// Ends the session on this device, telling nobody: today `leaveSession()`, which tears down through
-    /// `leaveMesh()` and `stopSearching()`, whose last three calls are a session end's three legs, and
-    /// then forgets the photo session's ids.
+    /// `leaveMesh()` and `stopSearching()`, whose last call, `endSessionIfEnded()`, runs a session end's
+    /// legs, and then forgets the photo session's ids.
     static func endSession(_ manager: MeshNetworkManager) {
         manager.leaveSession()
     }
@@ -5150,10 +5161,10 @@ extension FernletFeatureGoldenTests {
         let body: Data
     }
 
-    /// A manager over planted alice on an in-memory radio, bob planted beside it and kept in the store's
-    /// vault, and one link of a fake fabric for bob's slot: what group 20's catalog send, group 26's
-    /// sends and group 29's lifecycle cells drive. Built by ``sessionRig(bobAdvertising:)`` and removed
-    /// by ``tearDown(_:)``.
+    /// Fernlet's composition over planted alice on an in-memory radio, bob planted beside it and kept in
+    /// the store's vault, and one link of a fake fabric for bob's slot: what group 20's catalog send,
+    /// group 26's sends and group 29's lifecycle cells drive. Built by ``sessionRig(bobAdvertising:)`` and
+    /// removed by ``tearDown(_:)``.
     struct SessionRig {
         /// The scratch proximity root the store files under.
         let root: URL
@@ -5165,8 +5176,11 @@ extension FernletFeatureGoldenTests {
         let alice: IdentityService
         /// Planted bob, who opens what the mesh seals to him and signs what he sends.
         let bob: IdentityService
-        /// The mesh manager over alice.
-        let manager: MeshNetworkManager
+        /// Fernlet's composition over alice: it owns the manager and the features (the clothing shop
+        /// among them) and is the manager's session observer, so the rig holds it for its whole life.
+        let features: FernletMeshFeatures
+        /// The mesh manager over alice: ``features``' mesh.
+        @MainActor var manager: MeshNetworkManager { features.mesh }
         /// The fabric bob's link lives on, held here because the link holds it weakly.
         let network: FakePeerNetwork
         /// bob's end of the fabric: the channel his slot sends on, and its handle.
@@ -5369,10 +5383,12 @@ extension FernletFeatureGoldenTests {
         }
     }
 
-    /// One audit cell's mesh: a manager over a scratch store whose proximity root is the cell's own, with
-    /// planted alice as its device identity and its pending corpus sealed under an in-memory key the cell
-    /// can take away (the held-photo suites' `SwitchableMediaKeyProvider`). The rig holds the store,
-    /// which every manager holds unowned; ``tearDown()`` sweeps alice's rows and the root.
+    /// One audit cell's mesh: Fernlet's composition over a scratch store whose proximity root is the
+    /// cell's own, with planted alice as its device identity and its pending corpus sealed under an
+    /// in-memory key the cell can take away (the held-photo suites' `SwitchableMediaKeyProvider`); its
+    /// mesh is the rig's manager, carrying the features' handlers (the shop's since plan step A0.5.6). The
+    /// rig holds the store, which every manager holds unowned, and the composition, which the manager's
+    /// session observer and handlers need alive; ``tearDown()`` sweeps alice's rows and the root.
     @MainActor
     final class AuditMeshRig {
         /// The proximity root every manager of the rig files under.
@@ -5385,7 +5401,9 @@ extension FernletFeatureGoldenTests {
         let alice: IdentityService
         /// The pending corpus's key, which the cell can take away and give back.
         let keys: SwitchableMediaKeyProvider
-        /// The first manager over the root.
+        /// Fernlet's composition over the root: it owns ``manager`` and the features.
+        let features: FernletMeshFeatures
+        /// The first manager over the root: ``features``' mesh.
         let manager: MeshNetworkManager
 
         /// A rig over a fresh root and a freshly planted alice; a failed plant removes what it wrote.
@@ -5407,7 +5425,9 @@ extension FernletFeatureGoldenTests {
             self.store = store
             self.alice = alice
             self.keys = keys
-            manager = FernletFeatureGoldenTests.meshManager(over: store, identity: alice, heldPhotoKeys: keys)
+            let features = FernletFeatureGoldenTests.meshFeatures(over: store, identity: alice, heldPhotoKeys: keys)
+            self.features = features
+            manager = features.mesh
         }
 
         /// Another manager over the same root and identity, as a relaunch builds one, its pending corpus

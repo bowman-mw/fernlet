@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletSocial
 import Foundation
 import FernletDomainModel
 
