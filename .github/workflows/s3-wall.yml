@@ -839,9 +839,20 @@ jobs:
         # FriendsViewLastMemberReviewPresentationTests' overlay window, held up on the one shared scene
         # across a sleep while the suites run in parallel, for its own (it takes the window its presenter
         # adds now). RAISE it when a suite here gains a cell; never lower it in passing.
+        # RAISED 533 -> 534 at A0.5.1, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 48-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: 534 tests in 48 suites (499 Swift Testing cells in 45
+        # suites, passed after 20.893 seconds, and the 35 XCTest cases of ActivityTests, ModerationTests
+        # and FriendStateTests; MeshNetworkManagerTests 40 -> 41, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 534: passed. Run once more at
+        # 534 without MeshFavoriteObservationTests: 532 ran and the floor refused it. 533 + 1 (the
+        # MeshNetworkManagerTests cell holding registerPayloadHandler(forToken:handler:), the token
+        # door, to the typed door's dispatch order: a role-less token reaches its handler on a
+        # committed slot, and a mesh token registered through it never shadows the core switch) = 534
+        # is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-features 533 \
+          Scripts/run-gated-suites.sh mesh-features 534 \
             ActivityTests \
             AgeGateWiringTests \
             ClothingShareCodecTests \
@@ -1399,9 +1410,20 @@ jobs:
         # 173.059 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT
         # 1367: passed. Run once more at 1367 without MeshHostPinTests: 1366 ran and the floor refused
         # it. A0.4's 1367 over the same 154 names is the cross-check, never the source.
+        # At A0.5.1 no suite joined or left, so the NAME count stays 154; two suites here gained a cell:
+        # RAISED 1367 -> 1369 at A0.5.1, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "Test run with 1369 tests in 154 suites passed after
+        # 180.109 seconds" (MeshRoutedTypeRegistryConsumerTests 10 -> 11 and MeshSessionHeartTests
+        # 15 -> 16, no other suite moved), 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. Re-run AT 1369: passed. Run once more at 1369 without MeshHostPinTests: 1368 ran and the
+        # floor refused it. 1367 + 1 (MeshRoutedTypeRegistryConsumerTests' cell holding
+        # isRoutedTypeRegistered(_:) to the shipping registry and to each narrowed one) + 1
+        # (MeshSessionHeartTests' cell holding canSendSessionHeart(toFingerprint:) to the engine's
+        # isAddressableRoutedRecipient(_:)) = 1369 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1367 \
+          Scripts/run-gated-suites.sh mesh-batteries 1369 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

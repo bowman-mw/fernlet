@@ -298,6 +298,25 @@ struct MeshSessionHeartTests {
                 "the pair is linked, so the liveness question is true too")
     }
 
+    /// The heart gate asks the engine (plan step A0.5.1, S6): `canSendSessionHeart(toFingerprint:)`
+    /// equals the public `isAddressableRoutedRecipient(_:)` for an addressable member, for this
+    /// device and for a stranger the roster does not hold — with the member case true, so the
+    /// agreement is not three falses.
+    @Test func theHeartGateIsTheEnginesAddressabilityQuery() async throws {
+        let (rig, _) = try await foundedPair("heart-addressable")
+        defer { rig.teardown() }
+        let manager = rig.nodes[0].manager
+        let recipient = rig.nodes[1].fingerprint
+        try #require(manager.isAddressableRoutedRecipient(recipient), "the member case must be the positive")
+        // R2: bounded by the three fingerprints.
+        for fingerprint in [recipient, rig.nodes[0].fingerprint, "fp-\(UUID().uuidString)"] {
+            #expect(manager.isAddressableRoutedRecipient(fingerprint)
+                    == manager.canSendSessionHeart(toFingerprint: fingerprint),
+                    "the heart gate and the engine's query disagree about \(fingerprint)")
+        }
+        #expect(!manager.isAddressableRoutedRecipient(rig.nodes[0].fingerprint), "never this device itself")
+    }
+
     /// The app's three-way order, as an exhaustive table over the three seams the view reads.
     ///
     /// It is a PRODUCT rule — a custodied heart is strictly worse than a delivered one — and since

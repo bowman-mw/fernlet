@@ -804,6 +804,36 @@ struct MeshNetworkManagerTests {
         #expect(handlerCalled == false)
     }
 
+    /// The token door keeps the typed door's dispatch order (plan step A0.5.1, S1): a role-less
+    /// token registered through `registerPayloadHandler(forToken:handler:)` reaches its handler on a
+    /// committed slot only once the core switch has left it, and a mesh message's token registered
+    /// through the same door is never consulted — the switch runs first, so no registration can
+    /// shadow a mesh frame. The role-less half is the positive control that keeps the other honest.
+    @Test func registry_tokenDoorRoleLessTokenStillMeetsTheCoreSwitchFirst() {
+        let manager = MeshNetworkManager(store: store)
+        var featureCalls = 0
+        var meshCalls = 0
+        manager.registerPayloadHandler(forToken: PayloadType.trainerPlan.rawValue) { _, _, _ in featureCalls += 1 }
+        manager.registerPayloadHandler(forToken: PayloadType.meshDescriptor.rawValue) { _, _, _ in meshCalls += 1 }
+
+        // Committed slot, so a miss is core-switch precedence and not the commit gate.
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Peer"), fingerprint: "fp-peer")
+        let feature = Data("feature payload".utf8)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .trainerPlan, plaintext: feature),
+                                     plaintext: feature,
+                                     from: nil)
+        let notJSON = Data("not json".utf8)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshDescriptor, plaintext: notJSON),
+                                     plaintext: notJSON,
+                                     from: nil)
+
+        #expect(featureCalls == 1, "a role-less token reaches its token-door handler once the switch leaves it")
+        #expect(meshCalls == 0, "a mesh token registered through the token door must never shadow the core switch")
+    }
+
     /// Belt-and-braces: an unknown-token envelope handed straight to the manager (the coordinator
     /// parks these upstream) is dropped before the switch — no handler runs, no state changes.
     @Test func registry_unknownPayloadTypeNeverDispatches() {
