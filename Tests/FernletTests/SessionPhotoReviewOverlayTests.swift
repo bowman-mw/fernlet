@@ -198,10 +198,19 @@ struct SessionPhotoReviewOverlayTests {
         )
         defer { presenter.hide() }
         presenter.attach(to: scene)
+        // Suites run in parallel on the one scene, and another can hold its own review overlay up across a
+        // suspension (FriendsViewLastMemberReviewPresentationTests sleeps with the store's up): so the
+        // overlay asserted here is the window `show` adds, and this cell's main window is key again
+        // before it, as the awaits above may have handed key status to that other overlay.
+        let otherOverlays = Set(scene.windows.filter {
+            $0.accessibilityIdentifier == SessionPhotoReviewOverlayPresenter.windowIdentifier
+        }.map(ObjectIdentifier.init))
+        main.makeKey()
 
         #expect(presenter.show(coordinator), "the presenter draws once it has a scene")
         let overlay = try #require(scene.windows.first {
             $0.accessibilityIdentifier == SessionPhotoReviewOverlayPresenter.windowIdentifier
+                && !otherOverlays.contains(ObjectIdentifier($0))
         })
         #expect(overlay.isKeyWindow && overlay.windowLevel > main.windowLevel, "the overlay is key and above the main window")
         #expect(overlay.overrideUserInterfaceStyle == .dark, "in the appearance it was handed")

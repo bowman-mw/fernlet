@@ -416,6 +416,12 @@ struct PhotoDirectoryIsolationTests {
     /// Deliberately ungated (no trigger list): constructing the service constructs the buffer, and
     /// resetting — which every one of these suites does — wipes it, so every construction site is
     /// a wiper. A trigger list could only create silent false negatives here.
+    ///
+    /// The scan reads each file's code, not its text: `SwiftSourceLexer` empties every string
+    /// literal and drops every comment first, so a construction spelled inside a string is not one.
+    /// `KeyCustodyBoundaryTests`' identity-matcher fixtures hold such a string (since plan step
+    /// A0.4.9, a lock-service construction with no scope, as a neighbour the identity matcher must
+    /// not read), which the text scan counted and failed on until this wall ran on a line.
     @Test func everyLockServiceConstructionPinsItsOwnNarrativeBufferScope() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
@@ -424,8 +430,8 @@ struct PhotoDirectoryIsolationTests {
 
         var scanned = 0
         for file in files.sorted(by: { $0.path < $1.path }) {
-            let source = try String(contentsOf: file, encoding: .utf8)
-            for arguments in Self.constructionArguments(of: "FernletLockService", in: source) {
+            let code = SwiftSourceLexer.lex(try String(contentsOf: file, encoding: .utf8)).code
+            for arguments in Self.constructionArguments(of: "FernletLockService", in: code) {
                 scanned += 1
                 #expect(
                     arguments.contains("narrativeBufferScope"),
