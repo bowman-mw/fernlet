@@ -3,6 +3,7 @@ import Testing
 import FernletFoundation
 import FernletDomainModel
 @testable import ProximityKit
+@testable import FernletSocial
 @testable import Fernlet
 
 /// The clothing-shop codec (Increment 3): building a peer's broadcast catalog from the user's own
@@ -117,5 +118,5 @@ struct ClothingShareCodecTests {
     // NOTE (Phase 3a): the retained-trust-policy blocked-key regression test that lived here drove the
     // deleted `ProximityClothingShareManager`; its port —
     // `MeshClothingShopTests.retainedSlotTrustPolicyDropsEnvelopeFromBlockedKey` — exercises the same
-    // retention pattern on the mesh manager (`slotTrustPolicies`), which now carries the shop.
+    // retention pattern on the mesh manager (`slotTrustPolicies`), whose friend mesh now carries the shop.
 }

@@ -1,5 +1,6 @@
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import SwiftUI
 import UIKit
 import FernletDomainModel
@@ -128,6 +129,8 @@ struct FriendsView: View {
     private static let maxReviewRetries = 4
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
+    /// Fernlet's mesh features over ``manager``: the clothing shop and its post-session window live there.
+    private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level presenter of the session-end photo review (session photos U3).
     private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
 
@@ -399,7 +402,7 @@ struct FriendsView: View {
         guard path.contains(.friendShop) else { return nil }
         return FriendsRoute.shopClosesAt(
             sharingEnabled: store.settings.allowNearbyClothingShares,
-            windowExpiresAt: manager.clothingShop.window?.expiresAt
+            windowExpiresAt: features.clothingShop.window?.expiresAt
         )
     }
 
@@ -428,7 +431,7 @@ struct FriendsView: View {
         case .friendList:
             FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $scrollToTopToken)
         case .friendShop:
-            FriendShopView(store: store, shop: manager.clothingShop)
+            FriendShopView(store: store, shop: features.clothingShop)
         }
     }
 
@@ -497,7 +500,7 @@ struct FriendsView: View {
     private var shopWindowCard: some View {
         if store.settings.allowNearbyClothingShares {
             TimelineView(.periodic(from: .now, by: 60)) { context in
-                if let minutesLeft = manager.clothingShop.remainingWindowMinutes(at: context.date) {
+                if let minutesLeft = features.clothingShop.remainingWindowMinutes(at: context.date) {
                     NavigationLink(value: FriendsRoute.friendShop) {
                         HStack(spacing: 12) {
                             Image(systemName: "bag")

@@ -1,6 +1,7 @@
 import SwiftUI
 import FernletDomainModel
 import ProximityKit
+import FernletSocial
 import FernletUI
 
 /// Browse the shops of friends from your last session and buy items with coins.

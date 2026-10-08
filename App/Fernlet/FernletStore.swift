@@ -254,10 +254,10 @@ final class FernletStore {
         // here as app-side closures so `ProximityHost` stays settings-free. While the setting is off the
         // provider returns nil (nothing sent), inbound catalogs drop, and the `shop` capability is not
         // advertised; `setAllowNearbyClothingShares(false)` also clears held state immediately.
-        manager.clothingShop.isSharingEnabledProvider = { [weak self] in
+        features.clothingShop.isSharingEnabledProvider = { [weak self] in
             self?.settings.allowNearbyClothingShares ?? false
         }
-        manager.clothingShop.localCatalogProvider = { [weak self] in
+        features.clothingShop.localCatalogProvider = { [weak self] in
             guard let self, self.settings.allowNearbyClothingShares else { return nil }
             return self.buildShopCatalog()
         }
@@ -278,7 +278,7 @@ final class FernletStore {
             self?.receiveFriendState(fingerprint: fingerprint, payload: payload)
         }
         // Phase 5: an in-person friend session feeds the closeness signal.
-        manager.onFriendSessionCommitted = { [weak self] fingerprint in
+        features.onFriendSessionCommitted = { [weak self] fingerprint in
             self?.closenessLedger.recordSession(fingerprint: fingerprint)
         }
         // A photo exchanged with a friend this session feeds the closeness photo signal.
@@ -1623,7 +1623,7 @@ final class FernletStore {
     }
 
     // MARK: - Clothing shop (in-person friend shop)
-    // The catalog exchange rides the friend mesh (`meshNetworkManager.clothingShop`, Phase 3a):
+    // The catalog exchange rides the friend mesh (`meshFeatures.clothingShop`, Phase 3a):
     // catalogs are sent pairwise-sealed to committed peers during the session, and the shop opens as a
     // 1-hour post-session window on the Friends tab. Buying is local: spend coins + copy the
     // already-received item into the closet, preserving its provenance.
@@ -1805,14 +1805,14 @@ final class FernletStore {
     }
 
     /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the
-    /// friend mesh — there is no clothing radio to stop): the providers wired in `meshNetworkManager`'s
+    /// friend mesh — there is no clothing radio to stop): the providers wired in `meshFeatures`'
     /// initializer gate outbound catalogs, inbound catalogs, and the `shop` capability on this setting,
     /// and turning it OFF additionally drops every held peer catalog and closes any open shop window
     /// immediately — WITHOUT touching the friend-mesh radio (photos keep working).
     func setAllowNearbyClothingShares(_ value: Bool) {
         settings.allowNearbyClothingShares = value
         if !value {
-            meshNetworkManager.clothingShop.clearAll()
+            meshFeatures.clothingShop.clearAll()
         }
         snapshotSaveCoordinator.schedule()
     }
@@ -6331,7 +6331,7 @@ final class FernletStore {
 
         // 7. Friends' clothing catalogs browsable for an hour after a session. Memory-only, but it is
         // their social data visibly surviving a wipe in the running session.
-        meshNetworkManager.clothingShop.clearAll()
+        meshFeatures.clothingShop.clearAll()
 
         // 7b. The presence radio — and since P7 item 3 every proximity radio: the session, the
         // search and both listeners — stood down at leg 0, through `reapplyProximityRunPolicy()`

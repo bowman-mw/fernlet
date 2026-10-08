@@ -675,9 +675,11 @@ struct ProximityVocabularyGoldenTests {
             assumedForLegacyPeers: ["golden-snapshots", "golden-framing"]))
     }
 
-    /// The clothing catalog a mesh manager over a scratch host of `namespace` seals for a committed
-    /// slot whose peer advertised `shop` and `wire2Token`, opened as a legacy receiver would, so a body
-    /// sealed in the wire2 framing keeps its frame tag. The manager runs on a fake radio with its
+    /// The clothing catalog Fernlet's mesh composition over a scratch host of `namespace` seals for a
+    /// committed slot whose peer advertised `shop` and `wire2Token`, opened as a legacy receiver would,
+    /// so a body sealed in the wire2 framing keeps its frame tag. The shop is the composition's since
+    /// plan step A0.5.6, so the composition is built (the rig's `FernletMeshRig`) and its mesh seals
+    /// the catalog the shop's exchange sends at the commit. The mesh runs on a fake radio with its
     /// identity and the peer's on throwaway services; the host's root and seal-key rows and both
     /// identities' rows are removed before this returns.
     static func sealedCatalog(
@@ -690,7 +692,8 @@ struct ProximityVocabularyGoldenTests {
         let local = IdentityService(namespace: namespace, keychainService: services[0])
         let peer = IdentityService(namespace: namespace, keychainService: services[1])
         try peer.ensureProvisioned()
-        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(), identity: local)
+        let features = FernletMeshRig.features(store: host, transport: FakeMeshTransportSession(), identity: local)
+        let manager = features.mesh
         let network = FakePeerNetwork()
         let link = network.addEndpoint(named: "vocabulary-mesh-peer")
         let capabilities = [frozen("capability.shop"), wire2Token]
@@ -701,8 +704,8 @@ struct ProximityVocabularyGoldenTests {
             peer: link.handle, fingerprint: peer.localFingerprint,
             verifiedKeyAgreementPublicKey: peer.localKeyAgreementPublicKey, peerCapabilities: capabilities,
             channel: link.transport)
-        manager.clothingShop.isSharingEnabledProvider = { true }
-        manager.clothingShop.localCatalogProvider = {
+        features.clothingShop.isSharingEnabledProvider = { true }
+        features.clothingShop.localCatalogProvider = {
             ClothingCatalogPayload(designerID: UUID(), displayName: VocabularyCoordinatorRig.displayName, items: [])
         }
         let slot = try #require(manager.slots.first, "the manager seated the slot")
@@ -717,7 +720,7 @@ struct ProximityVocabularyGoldenTests {
                 .first { $0.payloadTypeToken == catalogToken }
         }
         await VocabularyCoordinatorRig.settle { catalog() != nil }
-        withExtendedLifetime(manager) {}   // its sends hold it weakly
+        withExtendedLifetime(features) {}   // the shop's sends hold its exchange weakly, the exchange the mesh
         let sent = try #require(catalog(), "the manager never sent its catalog")
         return try peer.open(sent.payload, from: sent.senderKeyAgreementPublicKey, format: .legacy)
     }
