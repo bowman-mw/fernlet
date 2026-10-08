@@ -266,15 +266,15 @@ final class FernletStore {
         // fail-closed, matching the nil-means-no contract the provider already documents.
         manager.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
         // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
-        manager.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
-        manager.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
+        features.moderation.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
+        features.moderation.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
         // Phase 4: fuzzy state exchange — advertise/send only when opted in; cache friends' received state.
-        manager.friendStateEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
-        manager.friendStatePayloadProvider = { [weak self] in
+        features.friendState.isEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
+        features.friendState.payloadProvider = { [weak self] in
             guard let self, self.settings.allowNearbyFriendState else { return nil }
             return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance)
         }
-        manager.onFriendStateReceived = { [weak self] fingerprint, payload in
+        features.friendState.onFriendStateReceived = { [weak self] fingerprint, payload in
             self?.receiveFriendState(fingerprint: fingerprint, payload: payload)
         }
         // Phase 5: an in-person friend session feeds the closeness signal.
