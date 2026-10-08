@@ -508,7 +508,7 @@ struct MeshP5AckStageAcceptanceTests {
             MeshRoutedStore(scope: holder.node.store.meshRoutedStorage).committingDelivery(
                 item: key, recipient: holder.fingerprint,
                 stages: MeshRoutedTypeRegistry.increment1.ackStages,
-                evidence: .heartLedgerCommit(ack), now: now
+                evidence: .ledgerCommit(MeshRoutedLedgerCommit(itemID: ack.giftID)), now: now
             )
         }
         guard case .completed(.acknowledged(let witness)) = committed else {
