@@ -588,9 +588,17 @@ jobs:
         # + 50 + 17 + 86), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT
         # 338: passed. Run once more at 338 without CryptographicPurposeBoundaryTests: 332 ran and the
         # floor refused it. 280 + 58 = 338 is the ARITHMETIC CHECK, never the source.
+        # RAISED 338 -> 339 at A0.5.4, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "339 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 17 + 87), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 339:
+        # passed. Run once more at 339 without CryptographicPurposeBoundaryTests: 333 ran and the floor
+        # refused it. 338 + 1 (the feature golden's cell holding the manager's resident bound at
+        # 10 551 337 bytes, where its host's rows put it, after a fixture registry without the photo row
+        # is handed to it) = 339 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 338 \
+          Scripts/run-gated-suites.sh crypto-goldens 339 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

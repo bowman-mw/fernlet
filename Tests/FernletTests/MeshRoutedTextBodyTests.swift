@@ -153,7 +153,7 @@ struct MeshRoutedTextBodyTests {
         )
         #expect(entry.maxItemByteCount == UInt64(MeshRoutedTextBody.maxSealedBlobByteCount))
         #expect(entry.contentScope == .session)
-        #expect(entry.maxItemByteCount < MeshRoutedItemSealFormat.maxResidentBlobByteCount,
+        #expect(entry.maxItemByteCount < MeshRoutedTypeRegistry.increment1.maxItemByteCount,
                 "and it really is NARROWER than the shared resident bound — otherwise it is not a cap")
     }
 

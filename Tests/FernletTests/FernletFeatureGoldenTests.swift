@@ -61,7 +61,8 @@
 //     and a fresh install's.
 // 16. **The routed caps and their bounds**: the numbers the photo, text and heart rows' caps are built
 //     from, each row's cap as its terms, and the widest row's cap as the bound the item seal, its open
-//     and the delivery projection's resident guard read, held at the seal's two edges.
+//     and the delivery projection's resident guard read, held at the seal's two edges, and held by the
+//     manager where no fixture registry handed to it afterwards moves it.
 // 17. **The tokens the senders mint**: one photo, one message and one heart from a founded pair, each
 //     staged under its sender's frozen token.
 // 18. **The routed item bodies**: the routed heart body for an item, a day and a name, and again for a
@@ -1271,7 +1272,7 @@ struct FernletFeatureGoldenTests {
             FeatureGoldenNumberRow(field: "seal.overheadByteCount", frozen: 33,
                                    today: MeshRoutedItemSealFormat.overheadByteCount),
             FeatureGoldenNumberRow(field: "seal.maxPlaintextByteCount", frozen: 10_551_304,
-                                   today: MeshRoutedItemSealFormat.maxPlaintextByteCount),
+                                   today: Self.sealPlaintextBound),
             FeatureGoldenNumberRow(field: "residentBound", frozen: 10_551_337,
                                    today: Self.residentBlobBound)
         ]
@@ -1357,6 +1358,31 @@ struct FernletFeatureGoldenTests {
         #expect(throws: MeshRoutedItemSealError.blobTooLargeToOpen(byteCount: Self.firstRefusedBlobByteCount)) {
             _ = try Self.openRoutedProbe(refusedBlob, typeToken: typeToken)
         }
+    }
+
+    /// The manager holds the resident bound from the rows its host registered, once, at `init`: a
+    /// fixture registry handed to it afterwards narrows every door that resolves a token and leaves
+    /// the bound at 10 551 337 bytes.
+    ///
+    /// The fixture is Fernlet's registry without its widest row, the photo row, so its own widest row
+    /// is the text row's, far below the bound; the manager stops registering the photo token, so the
+    /// fixture took. Plan step A0.5.4 holds the bound from the host registry for exactly this: a bound
+    /// read through the fixture would have moved with it.
+    @Test func aNarrowedFixtureRegistryLeavesTheResidentBound() {
+        let store = makeTestStore()
+        let bound = Self.frozenNumber("residentBound")
+        let photoToken = Self.frozenMintedToken("photo")
+        let narrowed = Self.routedTypes(Self.fernletRoutedTypeRegistry, dropping: photoToken)
+        let narrowedWidest = Self.widestRoutedRow(of: narrowed)
+        #expect(narrowed.tokens.count == 2, "the fixture holds \(narrowed.tokens.count) rows")
+        #expect(narrowedWidest < UInt64(clamping: bound), "the fixture's widest row is \(narrowedWidest) bytes")
+        let before = Self.heldResidentBlobBound(of: store)
+        #expect(before == bound, "the manager holds \(before)")
+        Self.narrowRoutedTypes(of: store, to: narrowed)
+        #expect(!Self.registersRoutedType(photoToken, in: store), "the manager still registers the photo row")
+        let after = Self.heldResidentBlobBound(of: store)
+        #expect(after == bound, "the fixture registry moved the bound to \(after)")
+        withExtendedLifetime(store) {}
     }
 
     // MARK: Group 17 — the tokens the senders mint
@@ -3553,33 +3579,81 @@ extension FernletFeatureGoldenTests {
         MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
     }
 
-    /// The bound the delivery projection's resident guard reads and the open enforces: today
-    /// `MeshRoutedItemSealFormat.maxResidentBlobByteCount`.
+    /// The bound the delivery projection's resident guard reads and the seal and the open enforce, on
+    /// a fresh store's own manager: today ``heldResidentBlobBound(of:)`` of a `makeTestStore()`, the
+    /// app's wiring of the manager (plan step A0.5.4; until then the constant
+    /// `MeshRoutedItemSealFormat.maxResidentBlobByteCount`).
     static var residentBlobBound: Int {
-        MeshRoutedItemSealFormat.maxResidentBlobByteCount
+        heldResidentBlobBound(of: makeTestStore())
     }
 
-    /// The photo row's payload bound: today `PrivateMediaStore.maxIncomingPhotoBytes`, the term
-    /// `MeshRoutedItemSealFormat.maxResidentBlobByteCount` starts from. Its literal is
-    /// `MeshRoutedTypeRegistryTests`' pin.
+    /// The resident bound `store`'s own manager holds (`FernletStore.meshNetworkManager`): today
+    /// `MeshNetworkManager.routedResidentBlobBoundForTesting`, its host registry's widest routed row
+    /// clamped into an `Int` once at `init`.
+    static func heldResidentBlobBound(of store: FernletStore) -> Int {
+        store.meshNetworkManager.routedResidentBlobBoundForTesting
+    }
+
+    /// The widest plaintext the seal takes: today ``residentBlobBound`` less
+    /// `MeshRoutedItemSealFormat.overheadByteCount`, the edge `MeshRoutedItemSealer.seal` draws by
+    /// refusing a plaintext whose length plus the overhead exceeds the bound it is handed (plan step
+    /// A0.5.4; until then the constant `MeshRoutedItemSealFormat.maxPlaintextByteCount`).
+    static var sealPlaintextBound: Int {
+        residentBlobBound - MeshRoutedItemSealFormat.overheadByteCount
+    }
+
+    /// The photo row's payload bound: today `PrivateMediaStore.maxIncomingPhotoBytes`, the term the
+    /// photo row's cap starts from (`MeshRoutedTypeRegistry.increment1Rows(_:)` since plan step
+    /// A0.5.4). Its literal is `MeshRoutedTypeRegistryTests`' pin.
     static var photoPayloadBound: Int {
         PrivateMediaStore.maxIncomingPhotoBytes
     }
 
     /// Seals `plaintext` as one routed item of `typeToken` under the probe key and binding: today
-    /// `MeshRoutedItemSealer.seal(_:contentKey:binding:typeToken:in:)` under `.fernlet`'s purposes, which
-    /// refuses a plaintext above `maxPlaintextByteCount`.
+    /// `MeshRoutedItemSealer.seal(_:contentKey:binding:typeToken:maxBlobByteCount:in:)` under
+    /// `.fernlet`'s purposes and the bound a fresh store's manager holds (``residentBlobBound``), which
+    /// refuses a plaintext whose length plus the seal's overhead exceeds that bound.
     static func sealRoutedProbe(_ plaintext: Data, typeToken: String) throws -> Data {
         try MeshRoutedItemSealer.seal(plaintext, contentKey: routedProbeKey, binding: routedProbeBinding,
-                                      typeToken: typeToken, in: ProximityNamespace.fernlet.family.purposes)
+                                      typeToken: typeToken, maxBlobByteCount: Self.residentBlobBound,
+                                      in: ProximityNamespace.fernlet.family.purposes)
     }
 
     /// Opens a routed item blob of `typeToken` under the probe key and binding: today
-    /// `MeshRoutedItemSealer.open(_:contentKey:binding:typeToken:in:)` under `.fernlet`'s purposes, which
-    /// refuses a blob above `maxResidentBlobByteCount`.
+    /// `MeshRoutedItemSealer.open(_:contentKey:binding:typeToken:maxBlobByteCount:in:)` under
+    /// `.fernlet`'s purposes and the bound a fresh store's manager holds (``residentBlobBound``), which
+    /// refuses a blob above that bound.
     static func openRoutedProbe(_ blob: Data, typeToken: String) throws -> Data {
         try MeshRoutedItemSealer.open(blob, contentKey: routedProbeKey, binding: routedProbeBinding,
-                                      typeToken: typeToken, in: ProximityNamespace.fernlet.family.purposes)
+                                      typeToken: typeToken, maxBlobByteCount: Self.residentBlobBound,
+                                      in: ProximityNamespace.fernlet.family.purposes)
+    }
+
+    /// `registry` without its `token` row, a fixture registry: today `MeshRoutedTypeRegistry(entries:)`
+    /// over `registry`'s other rows, each read back out of it.
+    static func routedTypes(_ registry: MeshRoutedTypeRegistry, dropping token: String) -> MeshRoutedTypeRegistry {
+        MeshRoutedTypeRegistry(entries: registry.tokens.sorted().filter { $0 != token }.compactMap {
+            registry.entry(for: $0)
+        })
+    }
+
+    /// The widest row `registry` accepted, in bytes: today `MeshRoutedTypeRegistry.maxItemByteCount`,
+    /// the value a manager clamps its resident bound from at `init` (plan step A0.5.4).
+    static func widestRoutedRow(of registry: MeshRoutedTypeRegistry) -> UInt64 {
+        registry.maxItemByteCount
+    }
+
+    /// Hands `store`'s own manager `registry` in place of the one it built at `init`: today
+    /// `MeshNetworkManager.routedTypeRegistryForTesting`, which every door that resolves a routed
+    /// token reads and the resident bound does not.
+    static func narrowRoutedTypes(of store: FernletStore, to registry: MeshRoutedTypeRegistry) {
+        store.meshNetworkManager.routedTypeRegistryForTesting = registry
+    }
+
+    /// Whether `store`'s own manager registers `token` right now: today
+    /// `MeshNetworkManager.isRoutedTypeRegistered(_:)`, which reads a fixture registry when one is set.
+    static func registersRoutedType(_ token: String, in store: FernletStore) -> Bool {
+        store.meshNetworkManager.isRoutedTypeRegistered(token)
     }
 
     /// Captures one photo at `node` through the photo sender: today `MeshFoundingRig.capturePhoto(at:)`,
