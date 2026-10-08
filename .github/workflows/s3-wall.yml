@@ -1421,9 +1421,25 @@ jobs:
         # isRoutedTypeRegistered(_:) to the shipping registry and to each narrowed one) + 1
         # (MeshSessionHeartTests' cell holding canSendSessionHeart(toFingerprint:) to the engine's
         # isAddressableRoutedRecipient(_:)) = 1369 is the ARITHMETIC CHECK, never the source.
+        # At A0.5.2 no suite joined or left, so the NAME count stays 154; one suite here lost a cell:
+        # LOWERED 1369 -> 1368 at A0.5.2, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run after the strict build-for-testing (WALL CHECK PASSED), read off
+        # its own result bundle: "Test run with 1368 tests in 154 suites passed after 175.259 seconds"
+        # (MeshRoutedTypeRegistryTests 19 -> 18, no other suite moved), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, and the floor of 1369 refused it. ONE cell LEFT,
+        # deliberately: MeshRoutedTypeRegistryTests' theCanonicalStoreSlotNamesTheThreeP6Stores, the
+        # raw-value pin of MeshRoutedCanonicalStore, deleted with that type when the routed-type row's
+        # canonical-store column became its content scope and the projection began looking a
+        # registered handler up by token. It had to go: the type it pinned no longer exists, and its
+        # raw values were never on the wire or at rest (the enum was never encoded or stored; the three
+        # senders' token lookup, the projection's two filters and its dispatch switch read it in
+        # memory, and every one of those reads went with it), so no byte pin left with it. The
+        # column's replacement is pinned per row by everyFieldOfEveryEntryIsSet in the same suite.
+        # Re-run AT 1368: passed. Run once more at 1368 without MeshHostPinTests: 1367 ran and the
+        # floor refused it. 1369 - 1 (the deleted pin) = 1368 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1369 \
+          Scripts/run-gated-suites.sh mesh-batteries 1368 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

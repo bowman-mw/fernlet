@@ -577,15 +577,25 @@ struct MeshRoutedStoreIsolationTests {
     /// `MeshNetworkManager.swift` (the registry its `init` builds) is the one place a registry value
     /// stands where a leading dot would compile — and where `shippingCodeNamesOneTypeRegistry` would
     /// then see nothing at all. The manifest mint's `types:` takes no default, so it holds none.
+    ///
+    /// The positive needle carries the call's parenthesis since plan step A0.5.2, which allows the
+    /// same `init` a second, fully spelled read: `MeshRoutedTypeRegistry.increment1Rows(…)`, the
+    /// resident rows its built-in handlers register under and its senders mint under. That read is
+    /// typed `MeshRoutedResidentRows`, where a leading dot cannot reach the registry's static, so it
+    /// holds no blind spot of its own — but without the parenthesis it would satisfy this positive
+    /// on its own while the registry read shortened to the inferred form.
     private static func expectTheMemberScannersBlindSpotIsStillEmpty() throws {
         let inferred = "self.hostRoutedTypeRegistry = .increment1(namespace.family.vocabulary.routedTypes)"
         #expect(inferred.components(separatedBy: "MeshRoutedTypeRegistry.").count == 1,
                 "the member scanner's blind spot moved: an inferred member is now visible to it")
+        let rowsOnly = "self.residentRoutedRows = MeshRoutedTypeRegistry.increment1Rows(routedTypes)"
+        #expect(!rowsOnly.contains("MeshRoutedTypeRegistry.increment1("),
+                "the positive needle no longer tells the registry read from the resident rows' read")
         let sources = try proximitySources()
         for name in ["MeshNetworkManager.swift"] {
             let code = try #require(sources.first { $0.0 == name }?.1,
                                     "the sweep no longer reaches a file that holds a registry value")
-            #expect(code.contains("MeshRoutedTypeRegistry.increment1"),
+            #expect(code.contains("MeshRoutedTypeRegistry.increment1("),
                     "\(name) shortened its registry value to a member the one-registry wall cannot see")
         }
     }

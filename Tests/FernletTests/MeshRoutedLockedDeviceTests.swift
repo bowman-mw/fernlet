@@ -774,18 +774,34 @@ extension MeshRoutedLockedDeviceTests {
     ///   another file still fails.
     /// * `MeshRoutedItemSealer.open(` — **1**, beside it: the plaintext seam's other half.
     /// * `routedCanonicalDispatch(` — **4** in the manager: two declarations (photo, text) plus
-    ///   their two call sites in `dispatchRoutedPlaintext`. This is W2(b), the canonical-mutation
-    ///   half item 10 handed forward; a second, ungated mutation is now a build failure rather than
-    ///   a review catch.
+    ///   their two call sites, one in each built-in projection handler's `projectRoutedItem` since
+    ///   plan step A0.5.2 (in `dispatchRoutedPlaintext` before it). This is W2(b), the
+    ///   canonical-mutation half item 10 handed forward; a second, ungated mutation is now a build
+    ///   failure rather than a review catch.
     /// * `dispatchRoutedPlaintext(` — **2** in the manager: the declaration plus its single call
     ///   site in `routedProjectionVerdict`. It is the row the P6 item 4 fix review added (finding
     ///   P2-2), and the reason is that item 4 HOISTED the mutation guard one level up: both arms
-    ///   now reach `cachePhoto` and `sessionMessages.receiveIncoming` through this one verb, which
-    ///   sits *above* the pinned needle, so a second caller of it — a live-door shortcut, say —
+    ///   now reach `holdSessionPhoto` and `sessionMessages.receiveIncoming` through this one verb,
+    ///   which sits *above* the pinned needle, so a second caller of it — a live-door shortcut, say —
     ///   would reach both canonical stores with no mutation guard, leave
     ///   `routedCanonicalDispatch(` at 4, and satisfy the containment half (a whole-file
     ///   `contains`, vacuous in the defining file) for free. Pinning the outer verb is what closes
-    ///   that; it names the same predicate in the containment half below.
+    ///   that; it names the same predicate in the containment half below. **Pinned by shape** since
+    ///   plan step A0.5.2: the verb stays non-generic, over the type-erased box its handlers are
+    ///   stored in, so its declaration is still matched by the needle and the count stays 2. A
+    ///   generic declaration (`dispatchRoutedPlaintext<`) would drop the count to 1 and owe a
+    ///   separate pin of `func dispatchRoutedPlaintext<` at 1, or a second declaration would hide.
+    /// * `.projectRoutedItem(` — **1** in the manager since plan step A0.5.2: the ONE call of a
+    ///   registered projection handler's canonical write, inside the open-then-project step that
+    ///   `registerRoutedProjectionHandler(_:forToken:)` builds. The needle's leading dot matches a
+    ///   call and never a handler's own `func projectRoutedItem(` declaration, so a second call of a
+    ///   handler's write, reached any other way, moves it.
+    /// * `.openThenProject(` — **1** in the manager since plan step A0.5.2: the ONE invocation of
+    ///   that step, in `dispatchRoutedPlaintext`. The box's closure is a verb of its own: a second
+    ///   invocation would reach every registered handler's canonical write ungated while
+    ///   `.projectRoutedItem(` (the closure's body) and `dispatchRoutedPlaintext(` both stood still,
+    ///   so it is pinned for the reason the outer verb is. The box is the design's fallback for
+    ///   opening an existential handler in the engine; a generic dispatch would retire this row.
     /// * `MeshRoutedHeartAck(` — **1** in the manager since P6 item 6: the ONE construction, in
     ///   `heartLedgerJudgement`. It matches neither the type's declaration (`nonisolated struct
     ///   MeshRoutedHeartAck: Equatable`, no paren) nor either of its two `init?(` forms, so the pin
@@ -814,7 +830,12 @@ extension MeshRoutedLockedDeviceTests {
         ("routedCanonicalDispatch(", ["MeshNetworkManager.swift"], 4),
         // Added at the P6 item 4 fix review: the hoisted mutation guard lives one level ABOVE
         // `routedCanonicalDispatch`, so the pin has to reach the outer verb too (finding P2-2).
+        // Pinned by shape since plan step A0.5.2: non-generic over the handler box, so still 2.
         ("dispatchRoutedPlaintext(", ["MeshNetworkManager.swift"], 2),
+        // Plan step A0.5.2: the handler's canonical write is called once, inside the box's
+        // open-then-project step, and that step is invoked once, in `dispatchRoutedPlaintext`.
+        (".projectRoutedItem(", ["MeshNetworkManager.swift"], 1),
+        (".openThenProject(", ["MeshNetworkManager.swift"], 1),
         ("MeshRoutedHeartAck(", ["MeshNetworkManager.swift"], 1),
         (".heartLedgerCommit(", ["MeshRoutedDeliveryCommit.swift", "MeshNetworkManager.swift"], 2)
     ]
@@ -827,7 +848,7 @@ extension MeshRoutedLockedDeviceTests {
     /// **W2.** No routed plaintext seam exists that does not name its predicate — and today none
     /// exists at all.
     ///
-    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the six
+    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the eight
     /// qualified spellings across `FernletKit/Sources/ProximityKit` — the whole module, not just
     /// `Mesh/`, because `MeshRoutedContentKeyWrapper` and its `unwrap` are internal to all of it, so
     /// a decrypt under `HeartSharing/` or `Messaging/` would otherwise be invisible — and requires
@@ -872,15 +893,20 @@ extension MeshRoutedLockedDeviceTests {
     /// predicate as a parameter under that exact spelling and guards on it as its first line.
     ///
     /// **And this half cannot see a SECOND entry point in an already-guarding file** (P6 item 4).
-    /// The scan is a whole-FILE `contains`, so `openTextBody` could have skipped the guard entirely
-    /// while `openPhotoBody`'s occurrence kept the file green. That is closed by structure rather
-    /// than by a wall: both doors reach the ciphertext through one private `openPlaintext(…)` whose
-    /// first line is the guard, which is also what keeps the `unwrap(` / `open(` pins at 1 as P6
-    /// adds callers. Anyone adding a third body family adds it there or writes a second guard.
+    /// The scan is a whole-FILE `contains`, so a second door could skip the guard entirely while the
+    /// first door's occurrence kept the file green. That is closed by structure rather than by a
+    /// wall: every door — the generic `openBody` every projected family opens through since plan
+    /// step A0.5.2, and the heart's — reaches the ciphertext through one private `openPlaintext(…)`
+    /// whose first line is the guard, which is also what keeps the `unwrap(` / `open(` pins at 1 as
+    /// callers are added. A new body family conforms to `MeshRoutedBody` and opens through
+    /// `openBody`, or writes a second guard.
     ///
     /// The manager arm is the mention, because containment there is vacuous by construction (it
-    /// DEFINES the predicates); the pinned count of `routedCanonicalDispatch(` is the enforcement
-    /// on that side, exactly as D-10.17 argued.
+    /// DEFINES the predicates); the pinned counts of `routedCanonicalDispatch(` and the three verbs
+    /// above it are the enforcement on that side, exactly as D-10.17 argued. The canonical-mutation
+    /// list carries all four since plan step A0.5.2 — the inner arm, the outer verb, the handler's
+    /// write and the box step that calls it — so a file outside the manager that spells any of
+    /// them must name the mutation predicate.
     ///
     /// Note the deliberate pairing with W3(b), which exempts exactly the files this half matches — a
     /// new decrypting file MUST name the decrypt predicate here, so W3(b) may not forbid the token
@@ -894,9 +920,10 @@ extension MeshRoutedLockedDeviceTests {
             #expect(source.code.contains("guard mayDecryptRoutedContent"),
                     "a routed decrypt appeared in a file that does not GUARD on the decrypt predicate")
         }
-        // R2: the module's file list times the two canonical-mutation spellings — the inner verb
-        // and the hoisted outer one that reaches both arms (P6 item 4 fix review, finding P2-2).
-        for needle in ["routedCanonicalDispatch(", "dispatchRoutedPlaintext("] {
+        // R2: the module's file list times the four canonical-mutation spellings — the inner verb,
+        // the hoisted outer one that reaches both arms (P6 item 4 fix review, finding P2-2), and
+        // since plan step A0.5.2 a registered handler's write and the box step that invokes it.
+        for needle in ["routedCanonicalDispatch(", "dispatchRoutedPlaintext(", ".projectRoutedItem(", ".openThenProject("] {
             for source in sources where source.code.contains(needle) {
                 #expect(source.code.contains("mayMutateCanonicalStoreWithRoutedContent"),
                         "a routed canonical mutation appeared in a file that never names its predicate")

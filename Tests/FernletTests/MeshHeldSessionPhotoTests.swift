@@ -542,17 +542,30 @@ struct MeshHeldSessionPhotoTests {
         #expect(rebuilt.pendingFriendReview == nil, "and nothing unchosen comes back")
     }
 
-    /// The I5 source half: the tombstone refusal sits in the photo arm BEFORE the body is opened
-    /// (no decrypt) and so before the quota (spent inside the canonical dispatch), and the ending's
-    /// memory move never names a store (I6).
+    /// The I5 source half: the tombstone refusal is the photo row's pre-open verdict, which the
+    /// engine asks BEFORE the body is opened (no decrypt) and so before the quota (spent inside the
+    /// canonical write), and the ending's memory move never names a store (I6).
+    ///
+    /// Three brace-matched bodies since plan step A0.5.2, because the order is now held in three
+    /// places: `dispatchRoutedPlaintext` asks the handler's `.verdictBeforeOpen(` before it invokes
+    /// the box's open-then-project step; that step, built by `registerRoutedProjectionHandler`,
+    /// opens through `MeshRoutedItemDelivery.openBody(` before it calls the handler's
+    /// `.projectRoutedItem(`; and the photo handler's `verdictBeforeOpen` is the settlement.
     @Test func theRoutedRefusalPrecedesTheDecryptAndTheQuota() throws {
         let source = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
         )
         let dispatch = try #require(MeshRoutedSourceScan.bracedBody(after: "private func dispatchRoutedPlaintext(", in: source))
-        let settle = try #require(dispatch.range(of: "routedPhotoSettlement(manifest)"))
-        let open = try #require(dispatch.range(of: "openedRoutedPhotoBody(blob, manifest: manifest)"))
-        #expect(settle.lowerBound < open.lowerBound, "the tombstone is read before anything is decrypted")
+        let verdict = try #require(dispatch.range(of: ".verdictBeforeOpen(delivery)"))
+        let open = try #require(dispatch.range(of: ".openThenProject("))
+        #expect(verdict.lowerBound < open.lowerBound, "the pre-open verdict is read before anything is decrypted")
+        let register = try #require(MeshRoutedSourceScan.bracedBody(after: "func registerRoutedProjectionHandler<", in: source))
+        let decrypt = try #require(register.range(of: "MeshRoutedItemDelivery.openBody("))
+        let write = try #require(register.range(of: ".projectRoutedItem("))
+        #expect(decrypt.lowerBound < write.lowerBound, "the open precedes the canonical write, and the quota inside it")
+        let photo = try #require(MeshRoutedSourceScan.bracedBody(after: "private final class BuiltInPhotoProjection", in: source))
+        let settle = try #require(MeshRoutedSourceScan.bracedBody(after: "func verdictBeforeOpen(", in: photo))
+        #expect(settle.contains("routedPhotoSettlement(delivery)"), "the photo row's pre-open verdict is the tombstone read")
         #expect(!source.contains("cachePhoto("), "the wall-first hold is gone for both producers")
         #expect(!source.contains("isPhotoFromCurrentSession"), "live is the signed mesh id's call, never the header's")
     }
