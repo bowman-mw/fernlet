@@ -745,6 +745,41 @@ struct MeshRoutedTypeRegistryConsumerTests {
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: inbound.key) == nil,
                 "the verifier admitted a token the SAME registry refuses at the ack pass")
     }
+
+    /// The sender's registry question reads the same seam (plan step A0.5.1, S6):
+    /// `isRoutedTypeRegistered(_:)` answers yes for each of the three shipping tokens and no for the
+    /// reserved control token and the probe, and under each narrowed registry it agrees with that
+    /// registry row for row — so a sender that asks before it mints refuses exactly what a narrowed
+    /// build refuses at every other door.
+    @Test func theRegisteredTypeQueryAgreesWithTheRegistry() {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }   // `MeshNetworkManager.store` is `unowned`
+        let manager = MeshNetworkManager(store: store)
+        let tokens = [MeshRoutedTypeToken.photo, MeshRoutedTypeToken.tempMessage, MeshRoutedTypeToken.heart]
+        // R2: bounded by the three shipping rows.
+        for token in tokens {
+            #expect(manager.isRoutedTypeRegistered(token), "\(token) is a shipping row")
+            #expect(manager.isRoutedTypeRegistered(token)
+                    == (MeshRoutedTypeRegistry.increment1.entry(for: token) != nil))
+        }
+        #expect(!manager.isRoutedTypeRegistered(MeshRoutedTypeToken.control), "the reserved token has no row")
+        #expect(!manager.isRoutedTypeRegistered(MeshRoutedTypeRegistryFixtures.probeToken))
+        // R2: bounded by the three shipping rows, twice.
+        for dropped in tokens {
+            let narrowed = MeshRoutedTypeRegistryFixtures.narrowed(dropping: dropped)
+            manager.routedTypeRegistryForTesting = narrowed
+            #expect(!manager.isRoutedTypeRegistered(dropped), "a narrowed build must mint nothing for \(dropped)")
+            for token in tokens {
+                #expect(manager.isRoutedTypeRegistered(token) == (narrowed.entry(for: token) != nil),
+                        "the query must read the narrowed registry, not the shipping one")
+            }
+        }
+        manager.routedTypeRegistryForTesting = nil
+        // R2: bounded by the three shipping rows.
+        for token in tokens {
+            #expect(manager.isRoutedTypeRegistered(token), "clearing the override must restore \(token)")
+        }
+    }
 }
 
 // MARK: - Unknown at every door
