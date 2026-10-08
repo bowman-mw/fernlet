@@ -389,7 +389,7 @@ struct MeshRoutedLockedDeviceTests {
         #expect(report.sweptPeerCount == 0, "a duress fall owes no sweep")
         // Still 1 after P6 item 6, and the REASON changed: the gate is open, so the stage's
         // predicate holds, but this rig's manager has no `heartLedger` at all, so
-        // `routedHeartJudgementReadiness()` is false and the heart is filtered before the allowance
+        // `routedHeartJudgementReadiness(_:)` is false and the heart is filtered before the allowance
         // is planned. The count is what the filter refused a slot to — which is exactly what
         // `heartsPending` has always meant.
         #expect(manager.heartLedger == nil, "the rig wires no heart ledger, which is what withholds the judgement")
@@ -431,7 +431,7 @@ struct MeshRoutedLockedDeviceTests {
         let record = try #require(rig.routedIndex(rig.nodes[1])?.record(for: heart.key))
         // **Re-aimed at P6 item 6.** The ceremony is real now, so "no heart is committed" is no
         // longer a phase claim — it is a claim about THIS device, and the reason is the ledger: this
-        // rig wires none, so `routedHeartJudgementReadiness()` is false, the heart is filtered
+        // rig wires none, so `routedHeartJudgementReadiness(_:)` is false, the heart is filtered
         // before a slot is spent, and nothing is judged. The whole-gate predicate above is
         // necessary for a judgement and not sufficient, which is the honest statement of the
         // stage's three legs. The ceremony's own coverage is `MeshRoutedHeartCeremonyTests`.
@@ -802,25 +802,40 @@ extension MeshRoutedLockedDeviceTests {
     ///   `.projectRoutedItem(` (the closure's body) and `dispatchRoutedPlaintext(` both stood still,
     ///   so it is pinned for the reason the outer verb is. The box is the design's fallback for
     ///   opening an existential handler in the engine; a generic dispatch would retire this row.
+    /// * `.judgeRoutedItem(` — **1** in the manager since plan step A0.5.3: the ONE call of a
+    ///   registered ledger judge's commit, inside the open-then-judge step that
+    ///   `registerRoutedLedgerJudge(_:forToken:)` builds. The leading dot matches a call and never a
+    ///   judge's own `func judgeRoutedItem(` declaration (the protocol's, in
+    ///   `MeshRoutedLedgerJudge.swift`, or the built-in heart judge's), so a second call of a judge's
+    ///   commit, reached any other way, moves it.
+    /// * `.openThenJudge(` — **1** in the manager since plan step A0.5.3: the ONE invocation of that
+    ///   step, in `ledgerJudgement`, behind the ceremony's readiness, author, admission and blob
+    ///   legs. Pinned for the reason `.openThenProject(` is: a second invocation would reach every
+    ///   registered judge's commit with those legs skipped while `.judgeRoutedItem(` (the closure's
+    ///   body) stood still. The box is the design's fallback for opening an existential judge inside
+    ///   the ack door's `@autoclosure`; a generic ceremony would retire this row.
     /// * `MeshRoutedHeartAck(` — **1** in the manager since P6 item 6: the ONE construction, in
-    ///   `heartLedgerJudgement`. It matches neither the type's declaration (`nonisolated struct
+    ///   the built-in heart judge's `judgeRoutedItem` since plan step A0.5.3 (in
+    ///   `heartLedgerJudgement` before it), where the ack is the judge's proof gate rather than the
+    ///   evidence. It matches neither the type's declaration (`nonisolated struct
     ///   MeshRoutedHeartAck: Equatable`, no paren) nor either of its two `init?(` forms, so the pin
     ///   counts constructions and nothing else — and the scan covers
     ///   `FernletKit/Sources/ProximityKit` only, so an ack a TEST builds is invisible to it. That is
     ///   why the ceremony's cells assert a stored `MeshRecipientReceipt` from the real
     ///   `commitLocalDelivery` rather than an ack value they built (`MeshRoutedHeartTests`' header).
-    /// * `.heartLedgerCommit(` — **2** since P6 item 6, and in **two** files: the stage
-    ///   precondition's own `guard case` in `MeshRoutedDeliveryCommit.stageShortfall` (the *reader*
-    ///   of the evidence, which judges nothing) and `commitLocalDelivery`'s `evidence:` argument in
-    ///   the manager. That second home is why ``routedPlaintextSeams`` had to grow a `homes` SET:
-    ///   with one home per needle, `elsewhere == 0` fails for this row no matter what number is
+    /// * `.ledgerCommit(` — **2** since plan step A0.5.3 (`.heartLedgerCommit(` at 2 since P6 item
+    ///   6), and in **two** files: the stage precondition's own `guard case` in
+    ///   `MeshRoutedDeliveryCommit.stageShortfall` (the *reader* of the evidence, which judges
+    ///   nothing) and the engine's one mint in the manager's `ledgerJudgement`, from a judge's
+    ///   `.committed` answer. That second home is why ``routedPlaintextSeams`` had to grow a `homes`
+    ///   SET: with one home per needle, `elsewhere == 0` fails for this row no matter what number is
     ///   pinned. **The widening is forced, not chosen**, and both escapes are blocked — a factory on
-    ///   the enum or on `MeshRoutedHeartAck` would put the spelling in `MeshRoutedAck.swift`, which
-    ///   is in ``heartEvidenceHomes`` and therefore EXEMPT from the containment half, so the
-    ///   judgement would sit in a file the wall does not require to name
-    ///   `mayCommitRoutedHeartLedgerJudgement`; and building the evidence inside
-    ///   `MeshRoutedDeliveryCommit.swift` is impossible, because it is a `nonisolated extension
-    ///   MeshRoutedStore` and `ProximityHeartLedger` is a `@MainActor final class`.
+    ///   the enum or on `MeshRoutedLedgerCommit` would put the spelling in `MeshRoutedAck.swift`,
+    ///   which is in ``heartEvidenceHomes`` and therefore EXEMPT from the containment half, so the
+    ///   mint would sit in a file the wall does not require to name
+    ///   `mayCommitRoutedHeartLedgerJudgement`, and it would move this pin; and a mint inside
+    ///   `MeshRoutedDeliveryCommit.swift` — a `nonisolated extension MeshRoutedStore` that could
+    ///   build the bare value but ask no judge — moves this pin too.
     private static let routedPlaintextSeams: [(needle: String, homes: Set<String>, pinned: Int)] = [
         ("MeshRoutedContentKeyWrapper.unwrap(", ["MeshRoutedItemDelivery.swift"], 1),
         ("MeshRoutedItemSealer.open(", ["MeshRoutedItemDelivery.swift"], 1),
@@ -836,8 +851,12 @@ extension MeshRoutedLockedDeviceTests {
         // open-then-project step, and that step is invoked once, in `dispatchRoutedPlaintext`.
         (".projectRoutedItem(", ["MeshNetworkManager.swift"], 1),
         (".openThenProject(", ["MeshNetworkManager.swift"], 1),
+        // Plan step A0.5.3: a registered judge's commit is called once, inside the box's
+        // open-then-judge step, and that step is invoked once, in `ledgerJudgement`.
+        (".judgeRoutedItem(", ["MeshNetworkManager.swift"], 1),
+        (".openThenJudge(", ["MeshNetworkManager.swift"], 1),
         ("MeshRoutedHeartAck(", ["MeshNetworkManager.swift"], 1),
-        (".heartLedgerCommit(", ["MeshRoutedDeliveryCommit.swift", "MeshNetworkManager.swift"], 2)
+        (".ledgerCommit(", ["MeshRoutedDeliveryCommit.swift", "MeshNetworkManager.swift"], 2)
     ]
 
     /// The two files that name the heart evidence without judging anything: the enum's own
@@ -848,7 +867,7 @@ extension MeshRoutedLockedDeviceTests {
     /// **W2.** No routed plaintext seam exists that does not name its predicate — and today none
     /// exists at all.
     ///
-    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the eight
+    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the ten
     /// qualified spellings across `FernletKit/Sources/ProximityKit` — the whole module, not just
     /// `Mesh/`, because `MeshRoutedContentKeyWrapper` and its `unwrap` are internal to all of it, so
     /// a decrypt under `HeartSharing/` or `Messaging/` would otherwise be invisible — and requires
@@ -876,7 +895,7 @@ extension MeshRoutedLockedDeviceTests {
         // this, a later edit could relax `unwrap(`, `open(`, `routedCanonicalDispatch(` or
         // `MeshRoutedHeartAck(` to two homes with no deliberate decision anywhere.
         let widened = Self.routedPlaintextSeams.filter { $0.homes.count > 1 }
-        #expect(widened.map(\.needle) == [".heartLedgerCommit("],
+        #expect(widened.map(\.needle) == [".ledgerCommit("],
                 "exactly ONE seam may stand in two files, and it is the heart evidence's")
         Self.expectPlaintextSeamsNameTheirPredicate(sources)
     }
@@ -895,18 +914,21 @@ extension MeshRoutedLockedDeviceTests {
     /// **And this half cannot see a SECOND entry point in an already-guarding file** (P6 item 4).
     /// The scan is a whole-FILE `contains`, so a second door could skip the guard entirely while the
     /// first door's occurrence kept the file green. That is closed by structure rather than by a
-    /// wall: every door — the generic `openBody` every projected family opens through since plan
-    /// step A0.5.2, and the heart's — reaches the ciphertext through one private `openPlaintext(…)`
-    /// whose first line is the guard, which is also what keeps the `unwrap(` / `open(` pins at 1 as
-    /// callers are added. A new body family conforms to `MeshRoutedBody` and opens through
-    /// `openBody`, or writes a second guard.
+    /// wall: the one door left — the generic `openBody`, which every projected family opens through
+    /// since plan step A0.5.2 and the heart since plan step A0.5.3 retired its own — reaches the
+    /// ciphertext through one private `openPlaintext(…)` whose first line is the guard, which is also
+    /// what keeps the `unwrap(` / `open(` pins at 1 as callers are added. A new body family conforms
+    /// to `MeshRoutedBody` and opens through `openBody`, or writes a second guard.
     ///
     /// The manager arm is the mention, because containment there is vacuous by construction (it
     /// DEFINES the predicates); the pinned counts of `routedCanonicalDispatch(` and the three verbs
     /// above it are the enforcement on that side, exactly as D-10.17 argued. The canonical-mutation
     /// list carries all four since plan step A0.5.2 — the inner arm, the outer verb, the handler's
     /// write and the box step that calls it — so a file outside the manager that spells any of
-    /// them must name the mutation predicate.
+    /// them must name the mutation predicate. The heart-judgement list carries four the same way
+    /// since plan step A0.5.3 — the ack's construction, the evidence's mint, a registered judge's
+    /// commit and the box step that calls it — so a file outside the evidence's two homes that
+    /// spells any of them must name the heart stage's predicate.
     ///
     /// Note the deliberate pairing with W3(b), which exempts exactly the files this half matches — a
     /// new decrypting file MUST name the decrypt predicate here, so W3(b) may not forbid the token
@@ -929,10 +951,14 @@ extension MeshRoutedLockedDeviceTests {
                         "a routed canonical mutation appeared in a file that never names its predicate")
             }
         }
-        // R2: the same bound.
+        // R2: the same bound — over the four heart-judgement spellings: the ack's construction,
+        // the evidence's mint, and since plan step A0.5.3 a registered judge's commit and the box
+        // step that invokes it.
         for source in sources where !Self.heartEvidenceHomes.contains(source.name) {
             let mutates = source.code.contains("MeshRoutedHeartAck(")
-                || source.code.contains(".heartLedgerCommit(")
+                || source.code.contains(".ledgerCommit(")
+                || source.code.contains(".judgeRoutedItem(")
+                || source.code.contains(".openThenJudge(")
             guard mutates else { continue }
             #expect(source.code.contains("mayCommitRoutedHeartLedgerJudgement"),
                     "a routed heart judgement appeared in a file that never names its predicate")
