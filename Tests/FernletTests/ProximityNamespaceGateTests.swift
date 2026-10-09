@@ -790,7 +790,7 @@ private enum GateAuditLines {
 /// service: the identity no Fernlet host builds, so each manager's check of its host's door can be
 /// seen refusing.
 @MainActor
-private final class ForeignIdentityHost: ProximityHost {
+private final class ForeignIdentityHost: FernletSocialHost {
     /// The throwaway keychain service the identities ``makeProximityIdentity()`` builds keep their rows under.
     let identityService: String
     /// How many identities ``makeProximityIdentity()`` has built.

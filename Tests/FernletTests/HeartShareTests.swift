@@ -739,10 +739,10 @@ struct HeartShareTests {
     }
 }
 
-/// Minimal `ProximityHost` — the heart manager reads the display name, the trust vault, and the
+/// Minimal `FernletSocialHost` — the heart manager reads the display name, the trust vault, and the
 /// blocked-fingerprint check (which defers to the vault here, matching the store's behavior).
 @MainActor
-private final class MockHeartProximityHost: ProximityHost {
+private final class MockHeartProximityHost: FernletSocialHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()

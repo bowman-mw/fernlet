@@ -522,9 +522,10 @@ enum MeshFlowDriver {
             echo("heart NOT sent: no trust-vault row for \(peer.fingerprint)")
             return
         }
+        let hearts = store.meshFeatures.hearts
         echo("sending heart to=\(friend.fingerprint) "
-            + "canSendSessionHeart=\(manager.canSendSessionHeart(toFingerprint: friend.fingerprint))")
-        manager.sendSessionHeart(to: friend)
+            + "canSendSessionHeart=\(hearts.canSendSessionHeart(toFingerprint: friend.fingerprint))")
+        hearts.sendSessionHeart(to: friend)
     }
 
     // MARK: - Observation
@@ -561,7 +562,7 @@ enum MeshFlowDriver {
         let summary = "vault friends=\(store.trustedProximityPeers.count) "
             + "heartsReceived=\(store.heartLedger.receivedHearts.count) "
             + "ledgerLoaded=\(store.heartLedger.isLoaded) "
-            + "heartState=\(manager.sessionHeartState)"
+            + "heartState=\(store.meshFeatures.hearts.sessionHeartState)"
         guard summary != state.hearts else { return }
         echo(summary)
         state.hearts = summary

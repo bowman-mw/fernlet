@@ -2116,6 +2116,12 @@ struct MeshRoutedDrainWallTests {
         try RepoRoot.source("FernletKit/Sources/FernletSocial/Messaging/MeshSessionChat.swift")
     }
 
+    /// The session hearts' own file, where the heart path's code went when the hearts left the manager
+    /// for FernletSocial (plan step A0.5.10): the heart retirement wall reads it beside the manager's.
+    private func heartsSource() throws -> String {
+        try RepoRoot.source("FernletKit/Sources/FernletSocial/HeartSharing/MeshSessionHearts.swift")
+    }
+
     /// **The mechanical form of "do NOT add a second reconnect path".** The routed ask rides exactly
     /// the three **ask** doors; the membership digest has two additional, non-ask doors — the
     /// post-merge **proof** and the joiner's post-**adoption** digest — each of which opens no
@@ -2551,17 +2557,25 @@ struct MeshRoutedDrainWallTests {
     /// presence path and by `HeartDropService`. There is nothing to park —
     /// `sealedPayloadTypeCoverageIsComplete` and the sealed-framing pins are untouched — and the
     /// presence heart path is deliberately left alone (P9's).
+    ///
+    /// Read over the manager AND the session hearts' file since plan step A0.5.10, when the heart
+    /// sender, its seams and the heart row's ledger judge left the manager for FernletSocial's
+    /// `MeshSessionHearts`: a retired name coming back belongs to whichever of the two now holds the
+    /// heart path.
     @Test func theRetiredMeshHeartTransportIsGone() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let hearts = MeshRoutedSourceScan.codeOnly(try heartsSource())
+        let source = manager + "\n" + hearts
         let retired = [
             "registerSessionHeartHandler", "receiveSessionHeart", "deliverSessionHeart",
             "onSessionHeartSendForTesting", ".friendHeart"
         ]
         var scanned = 0
-        // R2: five names over one file.
+        // R2: five names over two files.
         for symbol in retired {
             scanned += 1
-            #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
+            #expect(!source.contains(symbol),
+                    "\(symbol) came back to MeshNetworkManager.swift or MeshSessionHearts.swift")
         }
         #expect(scanned == retired.count, "the retired-mesh-heart scan lost a symbol")
         // And the payload type is live elsewhere, so a "park it too" edit would be wrong.

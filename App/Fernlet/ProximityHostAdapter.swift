@@ -6,15 +6,19 @@ import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
-/// `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore`,
-/// `makeProximityTrustPolicy()`, `makeProximityIdentity()` and `meshRoutedTypeEntries` is already
-/// satisfied by existing store members (`trustedProximityPeers`, `isBlockedFingerprint`,
-/// `blockProximityPeer`). Kept in the app target: this conformance is the one piece that cannot
-/// move into `ProximityKit`, since it bridges the module's abstraction to the app's concrete store.
+/// `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`,
+/// `makeProximityIdentity()` and `meshRoutedTypeEntries` is already satisfied by existing store
+/// members (`isBlockedFingerprint`, `blockProximityPeer`). This extension also holds the two members
+/// the store's `FernletSocialHost` conformance (below) adds, `allowNearbyHearts` and
+/// `proximityTrustStore`, which were `ProximityHost` requirements until ProximityKit plan step A0.5.10.
+/// Kept in the app target: this conformance is the one piece that cannot move into `ProximityKit`,
+/// since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
     var proximityDisplayName: String { settings.proximityDisplayName }
     /// The live hearts opt-in — `PresenceManager` gates both the outbound send and the inbound
-    /// drop on this (mesh redesign Phase 4b). Overrides the protocol's `true` default.
+    /// drop on this (mesh redesign Phase 4b), and the session hearts their send and their ledger
+    /// judge's readiness. Witnesses `FernletSocialHost.allowNearbyHearts`, overriding its `true`
+    /// default.
     var allowNearbyHearts: Bool { settings.allowNearbyHearts }
     /// This store's own proximity-sidecar root, so the friend photo wall is isolated per store the
     /// same way the own-photo corpora are. Production resolves to the unchanged
@@ -44,10 +48,11 @@ extension FernletStore: ProximityHost {
     /// storage-scope properties hand it to both scopes.
     nonisolated var proximityInstallBinding: any ProximityInstallBinding { FernletDeviceBindingAdapter() }
     /// Fernlet's durable trust records, this store's `ProximityTrustVault` from `FernletConnections`:
-    /// the mesh's kept-friend gates and presence's heart eligibility ask it whether a key is a
-    /// remembered, unrevoked friend and whether it is blocked, and `trustedProximityPeers` reads the
-    /// same vault's records. The requirement has no default, so a host that left this out would not
-    /// compile.
+    /// FernletSocial's kept-friend gates (the moderation report's and the friend state's exchanges)
+    /// and its heart eligibility (presence's and the session hearts' ledger judge's) ask it whether a
+    /// key is a remembered, unrevoked friend and whether it is blocked, and `trustedProximityPeers`
+    /// reads the same vault's records. Witnesses `FernletSocialHost.proximityTrustStore`, which has no
+    /// default, so a host that left this out would not compile.
     var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     /// Fernlet's friend-session rule, `FriendSessionTrustPolicy` from `FernletConnections`, fresh for
     /// each connection the mesh, presence and recipe-share managers open, over this store's vault:
@@ -66,11 +71,19 @@ extension FernletStore: ProximityHost {
     func makeProximityIdentity() -> IdentityService { .fernletApp() }
     /// Fernlet's routed-type rows beyond the mesh engine's resident ones: FernletSocial's
     /// `FernletRoutedTypes.entries` over this store's namespace's routed types (ProximityKit plan step
-    /// A0.5.9) — the temporary-message row today, spelled as the engine spelled it before the chat
-    /// left it, so the registry the mesh builds from its resident rows and these is the one it built
-    /// before. Read once, by the mesh's initializer. The requirement has no default, so a host that
-    /// left this out would not compile.
+    /// A0.5.9) — the temporary-message and heart rows today, each spelled as the engine spelled it
+    /// before its feature left it, so the registry the mesh builds from its resident rows and these
+    /// holds the rows it built before. Read once, by the mesh's initializer. The requirement has no
+    /// default, so a host that left this out would not compile.
     var meshRoutedTypeEntries: [MeshRoutedTypeEntry] {
         FernletRoutedTypes.entries(proximityNamespace.family.vocabulary.routedTypes)
     }
 }
+
+/// Conforms `FernletStore` to FernletSocial's `FernletSocialHost`, the host its features read
+/// (ProximityKit plan step A0.5.10, S17): the composition (`FernletMeshFeatures`) and presence
+/// (`PresenceManager`) take this store as one. Empty, because the store already has all three members:
+/// `trustedProximityPeers` (`FernletStore.swift`), and `allowNearbyHearts` and `proximityTrustStore`
+/// (above); the eligibility check, `isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`, is the
+/// protocol's own.
+extension FernletStore: FernletSocialHost {}

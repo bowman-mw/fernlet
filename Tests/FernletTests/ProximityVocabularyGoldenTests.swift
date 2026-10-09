@@ -1016,13 +1016,15 @@ struct ProximityVocabularyGoldenTests {
     }
 
     /// Fernlet's three routed rows by name, in the order the registry declared them — photo,
-    /// temporary message, heart — built from `routedTypes`: the engine's resident photo and heart rows
-    /// (`MeshRoutedTypeRegistry.increment1Rows(_:)`) and FernletSocial's text row (`FernletRoutedTypes`,
-    /// the host's since plan step A0.5.9, when the resident rows lost it). Re-pointed at A0.5.9; the
-    /// tokens it is held to are the group's frozen literals.
+    /// temporary message, heart — built from `routedTypes`: the engine's resident photo row
+    /// (`MeshRoutedTypeRegistry.increment1Rows(_:)`) and FernletSocial's text and heart rows
+    /// (`FernletRoutedTypes`, the host's since plan steps A0.5.9 and A0.5.10, when the resident rows
+    /// lost them). Re-pointed at A0.5.9 and A0.5.10; the tokens it is held to are the group's frozen
+    /// literals.
     static func fernletRoutedRows(_ routedTypes: ProximityNamespace.RoutedTypes) -> [MeshRoutedTypeEntry] {
         let resident = MeshRoutedTypeRegistry.increment1Rows(routedTypes)
-        return [resident.photo, FernletRoutedTypes(routedTypes).text, resident.heart]
+        let hosted = FernletRoutedTypes(routedTypes)
+        return [resident.photo, hosted.text, hosted.heart]
     }
 
     /// A mesh's registry is built from its host namespace's routed types: what Fernlet's mesh can
@@ -2537,11 +2539,11 @@ final class VocabularyCoordinatorRig {
 
 // MARK: - A host of one namespace
 
-/// A `ProximityHost` that supplies the namespace a cell hands it and the requirements with no default,
-/// so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
+/// A `FernletSocialHost` that supplies the namespace a cell hands it and the requirements with no
+/// default, so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
 /// presentation strings or peer-name policy are its own. Building one touches no disk and no keychain.
 @MainActor
-private final class PresentationNamespaceHost: ProximityHost {
+private final class PresentationNamespaceHost: FernletSocialHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximityTrustVault = ProximityTrustVault()
@@ -2563,12 +2565,12 @@ private final class PresentationNamespaceHost: ProximityHost {
 
 // MARK: - A host of one namespace on a scratch root
 
-/// A `ProximityHost` that supplies the namespace a cell hands it on a scratch sidecar root and
-/// seal-key services of its own, so a mesh manager can be built over `.fernlet` or over a namespace
-/// whose tokens are its own and touch nothing another suite holds. ``tearDown()`` removes the root and
-/// both seal-key rows.
+/// A `FernletSocialHost` that supplies the namespace a cell hands it on a scratch sidecar root and
+/// seal-key services of its own, so a mesh manager, or Fernlet's composition over one, can be built over
+/// `.fernlet` or over a namespace whose tokens are its own and touch nothing another suite holds.
+/// ``tearDown()`` removes the root and both seal-key rows.
 @MainActor
-private final class ScratchNamespaceHost: ProximityHost {
+private final class ScratchNamespaceHost: FernletSocialHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximitySupportDirectory: URL

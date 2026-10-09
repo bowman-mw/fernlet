@@ -1,5 +1,9 @@
 // ProximityHeartLedger.swift
-// ProximityKit/HeartSharing
+// FernletSocial/HeartSharing
+//
+// Moved from ProximityKit's `HeartSharing/` with the session hearts at ProximityKit plan step A0.5.10,
+// verbatim: its sidecar (ProximityKit's public `ProtectedSidecar`), its file name and its persisted
+// shape are unchanged.
 //
 // Device-local persistence for the hearts feature: received hearts (for the Home bubble and
 // the 24h health-bar glow) plus the per-friend rate limit, enforced in BOTH directions.
@@ -25,6 +29,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// One received heart. `senderDisplayName` is sanitized at the wire boundary before it is
 /// handed to the ledger (see `PresenceManager`), so nothing peer-controlled lands here raw.

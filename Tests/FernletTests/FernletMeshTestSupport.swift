@@ -32,13 +32,14 @@ enum FernletMeshRig {
     /// composition's own initializer; this signature does not change then.
     ///
     /// - Parameters:
-    ///   - store: The host; the caller keeps it alive (the mesh and the features hold it `unowned`).
+    ///   - store: The host, as the composition takes it since plan step A0.5.10 (FernletSocial's
+    ///     `FernletSocialHost`); the caller keeps it alive (the mesh and the features hold it `unowned`).
     ///   - transport: The radio, or nil for the one the app's build selects.
     ///   - identity: The device identity, or nil for the host's door.
     ///   - heldPhotoKeys: The pending corpus's key provider, or nil for the keychain row.
     /// - Returns: The composition; keep it for as long as its mesh is used.
     static func features(
-        store: any ProximityHost,
+        store: any FernletSocialHost,
         transport: (any MeshTransportSession)? = nil,
         identity: IdentityService? = nil,
         heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil
@@ -55,9 +56,9 @@ enum FernletMeshRig {
     /// step A0.5.6), the payload handlers (``featurePayloadTokens``: the shop's two since A0.5.6, the
     /// moderation report's and the friend state's since A0.5.7, the activity manager's five since
     /// A0.5.8), each read off the mesh's registry, the activity manager's two mesh seams (A0.5.8), and
-    /// every routed registration's answer held to `true` (A0.5.9 on: the chat's projection handler,
-    /// whose refusal the composition records and logs rather than drops). Each later feature step adds
-    /// its own here.
+    /// every routed registration's answer held to `true` (A0.5.9 on: the chat's projection handler, and
+    /// from A0.5.10 the hearts' ledger judge, whose refusals the composition records and logs rather than
+    /// drops). Each later feature step adds its own here.
     ///
     /// - Parameter features: The composition just built.
     private static func expectEveryInstallationHeld(by features: FernletMeshFeatures) {

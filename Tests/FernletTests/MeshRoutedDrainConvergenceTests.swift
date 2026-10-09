@@ -840,7 +840,7 @@ extension MeshConvergenceRun {
         // R2: a fixed two-element list.
         for member in [origin, recipient] {
             member.node.store.setAllowNearbyHearts(true)
-            member.node.manager.heartLedger = isolatedHeartLedger()
+            member.node.features.hearts.heartLedger = isolatedHeartLedger()
         }
         origin.node.store.proximityTrustVault.trust(heartPeerIdentity(of: recipient), mode: .friend)
         recipient.node.store.proximityTrustVault.trust(heartPeerIdentity(of: origin), mode: .friend)
@@ -881,7 +881,7 @@ extension MeshConvergenceRun {
         // R2: bounded by the roster cap.
         for member in members {
             let fingerprint = member.fingerprint
-            member.node.manager.onHeartJudgedForTesting = { [weak log] ack in
+            member.node.features.hearts.onHeartJudgedForTesting = { [weak log] ack in
                 log?.record(ack, at: fingerprint)
             }
         }
@@ -905,7 +905,7 @@ extension MeshConvergenceRun {
     ) throws -> MeshRoutedItemKey {
         let before = Set(routedHeartKeys(at: member))
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            member.node.manager.sendSessionHeart(to: heartFriendRecord(of: recipient))
+            member.node.features.hearts.sendSessionHeart(to: heartFriendRecord(of: recipient))
         }
         let minted = Set(routedHeartKeys(at: member)).subtracting(before)
         guard minted.count == 1, let key = minted.first else {
@@ -969,7 +969,7 @@ extension MeshConvergenceRun {
     /// The heart-ledger rows one member holds for a gift — the ledger's own dedup, read at the
     /// device that holds it.
     func heartLedgerRows(at member: MeshConvergenceMember, giftID: UUID) -> [ReceivedHeartRecord] {
-        member.node.manager.heartLedger?.receivedHearts.filter { $0.id == giftID } ?? []
+        member.node.features.hearts.heartLedger?.receivedHearts.filter { $0.id == giftID } ?? []
     }
 
     /// One bounded full-mesh round for the feature window: every pair commits, then the fabric
@@ -1584,7 +1584,7 @@ extension MeshConvergenceRun {
     ) -> Bool {
         switch token {
         case MeshRoutedTypeToken.heart:
-            return member.node.manager.heartLedger?.receivedHearts
+            return member.node.features.hearts.heartLedger?.receivedHearts
                 .contains { $0.id == key.itemID } == true
         case MeshRoutedTypeToken.tempMessage:
             return member.node.features.chat.sessionMessages.messages

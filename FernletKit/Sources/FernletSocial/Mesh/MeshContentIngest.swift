@@ -5,8 +5,8 @@
 // receiving member.** ProximityKit's `MeshContentMerge.swift` owns the generic union and this module's
 // `MeshContentLedger.swift` the content kinds it holds; this file owns the three things that run
 // around it. Moved from ProximityKit with chat at plan step A0.5.9; the heart receipt's commit through
-// the ledger (`MeshHeartCommit`) stayed behind in ProximityKit's `MeshHeartCommit.swift` for one
-// commit, with the merged heart, and joins FernletSocial with the heart ledger at plan step A0.5.10.
+// the ledger (`MeshHeartCommit`) followed at plan step A0.5.10, with the merged heart and the heart
+// ledger, into this module's `HeartSharing/MeshHeartCommit.swift`.
 //
 //   1. **Hash validation at reassembly** (``MeshPhotoReassembly``). A manifest whose reassembled
 //      bytes do not match its digest is *rejected at reassembly* — structurally, because the only
@@ -18,8 +18,8 @@
 //      as a **view filter over an unmutated union** — the item still merges, it simply does not
 //      render where the gate refuses it. Same shape as termination-derived-at-read, and for the
 //      same reason: a merge that mutated the record would break the union laws.
-//   3. **The heart receipt** (``MeshHeartReceipt``; the commit through the ledger is ProximityKit's
-//      `MeshHeartCommit` until plan step A0.5.10). §10.3 keeps the final receipt at the foreground
+//   3. **The heart receipt** (``MeshHeartReceipt``; the commit through the ledger is
+//      `MeshHeartCommit`, in `HeartSharing/`). §10.3 keeps the final receipt at the foreground
 //      decrypt + ledger commit, so the union produces *pending* hearts and the existing
 //      `ProximityHeartLedger` — its id-dedup and its 5-minute per-sender cooldown, not a second
 //      copy of them — arbitrates. A duplicate that crossed the split is collapsed by the union
@@ -187,8 +187,8 @@ extension MeshContentLedger {
     /// Whether a merged heart has become a receipt at this member.
     ///
     /// The union alone answers ``MeshHeartReceipt/pending`` for everything: only the foreground
-    /// decrypt + `ProximityHeartLedger` commit (ProximityKit's `MeshHeartCommit.commit(_:into:)`) can
-    /// move it, and `committed` is that commit's own answer.
+    /// decrypt + `ProximityHeartLedger` commit (``MeshHeartCommit/commit(_:into:)``) can move it, and
+    /// `committed` is that commit's own answer.
     func heartReceipt(_ giftID: UUID, committed: Set<UUID>) -> MeshHeartReceipt {
         committed.contains(giftID) ? .received : .pending
     }

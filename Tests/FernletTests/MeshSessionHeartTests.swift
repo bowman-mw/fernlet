@@ -24,6 +24,7 @@
 //   tap leaves the cooldown clear. Both directions are asserted, because the old assertion in this
 //   file ("the refusal burns no cooldown") inverts under the new rule for a STAGED send.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import Foundation
 import Testing
@@ -70,8 +71,8 @@ struct MeshSessionHeartTests {
         rig.commit(1, 0)
         try await rig.settle()
         let ledger = isolatedLedger()
-        rig.nodes[0].manager.heartLedger = ledger
-        rig.nodes[1].manager.heartLedger = isolatedLedger()
+        rig.nodes[0].features.hearts.heartLedger = ledger
+        rig.nodes[1].features.hearts.heartLedger = isolatedLedger()
         rig.nodes[0].store.setAllowNearbyHearts(true)
         rig.nodes[1].store.setAllowNearbyHearts(true)
         return (rig, ledger)
@@ -89,8 +90,8 @@ struct MeshSessionHeartTests {
         try #require(rig.roster(0).contains(recipient), "the pair must have founded with a ledger")
         var outcomes: [MeshRoutedOriginationOutcome] = []
         var closeness: [String] = []
-        rig.nodes[0].manager.onHeartSendForTesting = { outcomes.append($0) }
-        rig.nodes[0].manager.onHeartSent = { closeness.append($0) }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { outcomes.append($0) }
+        rig.nodes[0].features.hearts.onHeartSent = { closeness.append($0) }
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: recipient, name: "Robin"))
 
@@ -108,7 +109,7 @@ struct MeshSessionHeartTests {
         #expect(manifest.typeToken == MeshRoutedTypeToken.heart)
         #expect(closeness == [recipient], "the stage feeds closeness, once")
         #expect(!ledger.canSendHeart(to: recipient), "and arms the cooldown — consume-on-stage")
-        #expect(rig.nodes[0].manager.sessionHeartState == .sent(recipientName: "Robin"))
+        #expect(rig.nodes[0].features.hearts.sessionHeartState == .sent(recipientName: "Robin"))
     }
 
     /// The body's id IS the gift id, and the gift id IS the routed item id. One `UUID`, three roles,
@@ -117,7 +118,7 @@ struct MeshSessionHeartTests {
         let (rig, _) = try await foundedPair("heart-body-id")
         defer { rig.teardown() }
         var outcomes: [MeshRoutedOriginationOutcome] = []
-        rig.nodes[0].manager.onHeartSendForTesting = { outcomes.append($0) }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { outcomes.append($0) }
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin"))
 
@@ -139,13 +140,13 @@ struct MeshSessionHeartTests {
         defer { rig.teardown() }
         rig.nodes[0].store.setAllowNearbyHearts(false)
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
         let recipient = rig.nodes[1].fingerprint
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: recipient, name: "Robin"))
 
         #expect(sends == 0, "hearts-off refuses before the mint")
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.heartsOff, recipientName: "Robin"))
         #expect(ledger.canSendHeart(to: recipient), "a refusal burns no cooldown")
     }
@@ -169,14 +170,14 @@ struct MeshSessionHeartTests {
             readData: { _ in throw CocoaError(.fileReadNoPermission) }
         )
         try #require(!unreadable.isLoaded, "the precondition: this ledger cannot be read")
-        rig.nodes[0].manager.heartLedger = unreadable
+        rig.nodes[0].features.hearts.heartLedger = unreadable
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin"))
 
         #expect(sends == 0)
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.ledgerUnavailable, recipientName: "Robin"),
                 "an unloaded ledger is not a cooldown — nothing was sent")
     }
@@ -187,12 +188,12 @@ struct MeshSessionHeartTests {
         let recipient = rig.nodes[1].fingerprint
         ledger.recordHeartSent(to: recipient)
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: recipient, name: "Robin"))
 
         #expect(sends == 0, "a heart inside the 5-minute cooldown is not re-minted")
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.cooldown, recipientName: "Robin"))
     }
 
@@ -200,14 +201,14 @@ struct MeshSessionHeartTests {
         let (rig, _) = try await foundedPair("heart-revoked")
         defer { rig.teardown() }
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
         var revoked = friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin")
         revoked.revokedAt = day
 
         rig.sendHeart(from: 0, to: revoked)
 
         #expect(sends == 0)
-        #expect(rig.nodes[0].manager.sessionHeartState == .idle,
+        #expect(rig.nodes[0].features.hearts.sessionHeartState == .idle,
                 "silent: the affordance is not drawn for such a record, so reaching here is a caller bug")
     }
 
@@ -220,7 +221,7 @@ struct MeshSessionHeartTests {
         defer { rig.teardown() }
         let recipient = rig.nodes[1].fingerprint
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
         let friend = friendRecord(fingerprint: recipient, name: "Robin")
 
         rig.sendHeart(from: 0, to: friend)
@@ -229,7 +230,7 @@ struct MeshSessionHeartTests {
         rig.sendHeart(from: 0, to: friend)
 
         #expect(sends == 1, "only one heart is minted for two taps")
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.cooldown, recipientName: "Robin"),
                 "and the second is refused by the cooldown the STAGE armed, not by the in-flight claim")
     }
@@ -240,13 +241,14 @@ struct MeshSessionHeartTests {
         let (rig, _) = try await foundedPair("heart-stranded")
         defer { rig.teardown() }
         let manager = rig.nodes[0].manager
-        manager.claimSessionHeartForTesting(rig.nodes[1].fingerprint)
-        #expect(manager.holdsSessionHeartClaimForTesting(rig.nodes[1].fingerprint),
+        let hearts = rig.nodes[0].features.hearts
+        hearts.claimSessionHeartForTesting(rig.nodes[1].fingerprint)
+        #expect(hearts.holdsSessionHeartClaimForTesting(rig.nodes[1].fingerprint),
                 "the precondition: the claim is held")
 
         manager.leaveMesh()
 
-        #expect(!manager.holdsSessionHeartClaimForTesting(rig.nodes[1].fingerprint),
+        #expect(!hearts.holdsSessionHeartClaimForTesting(rig.nodes[1].fingerprint),
                 "a fresh session's first heart must not be refused by a stranded claim")
     }
 
@@ -256,14 +258,14 @@ struct MeshSessionHeartTests {
         let (rig, ledger) = try await foundedPair("heart-departed")
         defer { rig.teardown() }
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
         let stranger = "fp-\(UUID().uuidString)"
         try #require(!rig.roster(0).contains(stranger))
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: stranger, name: "Robin"))
 
         #expect(sends == 1, "the mint was attempted — the seam fires on every outcome")
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.recipientLeft, recipientName: "Robin"))
         #expect(ledger.canSendHeart(to: stranger), "and a skip burns no cooldown")
     }
@@ -271,7 +273,7 @@ struct MeshSessionHeartTests {
     /// Every origination outcome maps to a cause, exhaustively — the switch is the wall, this is the
     /// statement that the vocabulary has no gap the compiler cannot see.
     @Test func everyHeartFailureCauseIsAFrozenToken() {
-        #expect(MeshNetworkManager.SessionHeartFailure.allCases.map(\.rawValue) == [
+        #expect(MeshSessionHearts.SessionHeartFailure.allCases.map(\.rawValue) == [
             "heartsOff", "ledgerUnavailable", "cooldown", "alreadySending", "recipientLeft",
             "notReachableYet", "identityUnconfirmed", "couldNotSend", "storageUnreachable",
             "holdingAllItCan"
@@ -285,33 +287,35 @@ struct MeshSessionHeartTests {
     @Test func addressabilityAndLivenessAreTwoQuestions() async throws {
         let (rig, _) = try await foundedPair("heart-reach")
         defer { rig.teardown() }
-        let manager = rig.nodes[0].manager
+        let hearts = rig.nodes[0].features.hearts
         let recipient = rig.nodes[1].fingerprint
 
-        #expect(manager.canSendSessionHeart(toFingerprint: recipient),
+        #expect(hearts.canSendSessionHeart(toFingerprint: recipient),
                 "an admitted member with a resolvable key is addressable")
-        #expect(!manager.canSendSessionHeart(toFingerprint: rig.nodes[0].fingerprint),
+        #expect(!hearts.canSendSessionHeart(toFingerprint: rig.nodes[0].fingerprint),
                 "this device is never addressable for its own heart")
-        #expect(!manager.canSendSessionHeart(toFingerprint: "fp-\(UUID().uuidString)"),
+        #expect(!hearts.canSendSessionHeart(toFingerprint: "fp-\(UUID().uuidString)"),
                 "and a stranger is not in the roster")
-        #expect(manager.hasLiveHeartSlot(forFingerprint: recipient),
+        #expect(hearts.hasLiveHeartSlot(forFingerprint: recipient),
                 "the pair is linked, so the liveness question is true too")
     }
 
-    /// The heart gate asks the engine (plan step A0.5.1, S6): `canSendSessionHeart(toFingerprint:)`
-    /// equals the public `isAddressableRoutedRecipient(_:)` for an addressable member, for this
+    /// The heart gate asks the engine (plan step A0.5.1, S6): the session hearts'
+    /// `canSendSessionHeart(toFingerprint:)` (FernletSocial's since plan step A0.5.10) equals the
+    /// mesh's public `isAddressableRoutedRecipient(_:)` for an addressable member, for this
     /// device and for a stranger the roster does not hold — with the member case true, so the
     /// agreement is not three falses.
     @Test func theHeartGateIsTheEnginesAddressabilityQuery() async throws {
         let (rig, _) = try await foundedPair("heart-addressable")
         defer { rig.teardown() }
         let manager = rig.nodes[0].manager
+        let hearts = rig.nodes[0].features.hearts
         let recipient = rig.nodes[1].fingerprint
         try #require(manager.isAddressableRoutedRecipient(recipient), "the member case must be the positive")
         // R2: bounded by the three fingerprints.
         for fingerprint in [recipient, rig.nodes[0].fingerprint, "fp-\(UUID().uuidString)"] {
             #expect(manager.isAddressableRoutedRecipient(fingerprint)
-                    == manager.canSendSessionHeart(toFingerprint: fingerprint),
+                    == hearts.canSendSessionHeart(toFingerprint: fingerprint),
                     "the heart gate and the engine's query disagree about \(fingerprint)")
         }
         #expect(!manager.isAddressableRoutedRecipient(rig.nodes[0].fingerprint), "never this device itself")
@@ -389,7 +393,7 @@ struct MeshSessionHeartTests {
                 "the refusal names the fact it actually found")
         #expect(capture.count(of: "mesh.routedShare.destinationSemanticsMismatch") == 0,
                 "and no longer borrows the audience-vs-column token")
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.couldNotSend, recipientName: "Robin"),
                 "while what the user is told is unchanged — there is nothing here they can act on")
     }
@@ -403,14 +407,14 @@ struct MeshSessionHeartTests {
     @Test func anAbsentLedgerRefusesTheSendFailClosed() async throws {
         let (rig, _) = try await foundedPair("heart-no-ledger")
         defer { rig.teardown() }
-        rig.nodes[0].manager.heartLedger = nil
+        rig.nodes[0].features.hearts.heartLedger = nil
         var sends = 0
-        rig.nodes[0].manager.onHeartSendForTesting = { _ in sends += 1 }
+        rig.nodes[0].features.hearts.onHeartSendForTesting = { _ in sends += 1 }
 
         rig.sendHeart(from: 0, to: friendRecord(fingerprint: rig.nodes[1].fingerprint, name: "Robin"))
 
         #expect(sends == 0, "no ledger means no cooldown to check, so nothing is minted")
-        #expect(rig.nodes[0].manager.sessionHeartState
+        #expect(rig.nodes[0].features.hearts.sessionHeartState
                 == .failed(.ledgerUnavailable, recipientName: "Robin"),
                 "and the cause is the honest one, not a cooldown that was never armed")
     }

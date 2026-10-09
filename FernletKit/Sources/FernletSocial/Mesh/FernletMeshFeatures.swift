@@ -10,10 +10,11 @@
 //
 // It grows one feature per plan step (A0.5.6 to A0.5.11). Today it holds the capability list the mesh
 // advertises, the friend vouch list's content, the clothing shop, the moderation report relay, the
-// fuzzy friend state, the Group Activities manager and the live-session chat, registers the chat's
-// projection handler for the temporary-message row it declares through the host
-// (`FernletRoutedTypes`), and it is the mesh's session observer, through a private adapter, for the
-// moments its features act on.
+// fuzzy friend state, the Group Activities manager, the live-session chat and the in-session hearts,
+// registers the chat's projection handler and the hearts' ledger judge for the temporary-message and
+// heart rows it declares through the host (`FernletRoutedTypes`), and it is the mesh's session
+// observer, through a private adapter, for the moments its features act on. Since plan step A0.5.10
+// its host is FernletSocial's own refinement, `FernletSocialHost`.
 
 import Foundation
 import FernletDomainModel
@@ -28,16 +29,18 @@ import ProximityKit
 /// identity, the activity manager first, whose ledger loads, collects and may write as it is built),
 /// then the installations on the mesh — the capability provider, the vouch-list exchange, the clothing
 /// shop's two payload handlers, the moderation report's, the friend state's, the activity manager's
-/// five and its two mesh seams, the chat's projection handler and, last, the session observer — all
-/// before the initializer returns. The mesh is reachable by no other code until then.
+/// five and its two mesh seams, the chat's projection handler, the hearts' ledger judge and, last, the
+/// session observer — all before the initializer returns. The mesh is reachable by no other code until
+/// then.
 ///
 /// **Ownership.** This object holds the mesh and every feature strongly, and the session observer, a
 /// private adapter that holds this object `unowned`. The mesh retains only what it calls: the capability
 /// provider's closure, which captures ``capabilities`` alone, the vouch-list exchange, a private adapter
 /// that holds ``vouchList``, the nine payload handlers, which hold their features weakly (the activity
-/// manager's hold the features' host holder too), and the chat's projection handler, a private adapter
-/// that holds ``chat``; it holds the session observer weakly, so the adapter lives exactly as long as
-/// this object. Each feature holds the mesh weakly (the activity
+/// manager's hold the features' host holder too), the chat's projection handler, a private adapter
+/// that holds ``chat``, and the hearts' ledger judge, a private adapter that holds ``hearts``; it holds
+/// the session observer weakly, so the adapter lives exactly as long as this object. Each feature holds
+/// the mesh weakly (the activity
 /// manager in its two seams), and the host `unowned`, through the features' host holder as the mesh
 /// holds it (the activity manager in its own reference), so nothing the mesh retains retains the mesh
 /// or this object.
@@ -83,6 +86,12 @@ public final class FernletMeshFeatures {
     /// and a privacy wipe's start, right after the mesh advances its session-content generation.
     public let chat: MeshSessionChat
 
+    /// The in-session hearts (TF b19 item 5; on the routed store since P6 item 6): the send to one
+    /// recipient, its state and failure vocabulary, and the heart row's ledger judge through a private
+    /// adapter (plan step A0.5.10). The app wires their ledger and closeness hooks; their feedback and
+    /// in-flight claims are dropped by this object's session observer, last, when a session ends.
+    public let hearts: MeshSessionHearts
+
     /// Phase 5: a friend session committed with this fingerprint (an in-person meeting) — feeds
     /// closeness. Called first at every slot commit, before any other feature's commit leg.
     public var onFriendSessionCommitted: ((String) -> Void)?
@@ -99,13 +108,14 @@ public final class FernletMeshFeatures {
     private let meshHost: FernletMeshHost
 
     /// Fernlet's routed-type rows over the host's namespace, read once: the chat mints under the text
-    /// row's token and its projection adapter is registered under the same one.
+    /// row's token and its projection adapter is registered under the same one; the hearts mint under
+    /// the heart row's token and their ledger judge is registered under the same one.
     private let routedRows: FernletRoutedTypes
 
     /// The routed registrations the mesh refused while this composition installed its roles, by
-    /// token. Always empty for Fernlet's own rows, which the host declares beside the handlers (S9):
-    /// each refusal also writes one `meshFeatures.registrationRefused` line, and the test rig holds
-    /// this empty. Internal, for that rig.
+    /// token. Always empty for Fernlet's own rows, which the host declares beside the handlers and the
+    /// judge (S9, S10): each refusal also writes one `meshFeatures.registrationRefused` line, and the
+    /// test rig holds this empty. Internal, for that rig.
     private(set) var refusedRoutedRegistrations: [String] = []
 
     /// The mesh's session observer: the private adapter this composition installs on the mesh last,
@@ -121,7 +131,7 @@ public final class FernletMeshFeatures {
     /// the features.
     ///
     /// - Parameter host: The app's host, which owns this composition and keeps it alive.
-    public convenience init(host: any ProximityHost) {
+    public convenience init(host: any FernletSocialHost) {
         self.init(host: host, identity: nil) { identity in
             MeshNetworkManager(store: host, identity: identity)
         }
@@ -134,7 +144,7 @@ public final class FernletMeshFeatures {
     ///   - host: The app's host; the caller keeps it alive.
     ///   - injected: The device identity, or nil to ask the host's door once.
     ///   - makeMesh: Builds the mesh with the identity.
-    init(host: any ProximityHost, identity injected: IdentityService?, makeMesh: MakeMesh) {
+    init(host: any FernletSocialHost, identity injected: IdentityService?, makeMesh: MakeMesh) {
         let identity = injected ?? host.makeProximityIdentity()
         let mesh = makeMesh(identity)
         // Per-HOST root like the mesh's photo wall: `FernletStore.resetAll` calls
@@ -149,6 +159,7 @@ public final class FernletMeshFeatures {
         let clothingShop = MeshClothingShop()
         let friendState = FriendStateExchange(mesh: mesh, meshHost: meshHost)
         let chat = MeshSessionChat(mesh: mesh, meshHost: meshHost, textToken: routedRows.text.token)
+        let hearts = MeshSessionHearts(mesh: mesh, meshHost: meshHost, heartToken: routedRows.heart.token)
         self.identity = identity
         self.meshHost = meshHost
         self.routedRows = routedRows
@@ -158,6 +169,7 @@ public final class FernletMeshFeatures {
         self.friendState = friendState
         self.activities = activities
         self.chat = chat
+        self.hearts = hearts
         self.capabilities = FernletMeshCapabilities(
             mesh: mesh, meshHost: meshHost, clothingShop: clothingShop, friendState: friendState, chat: chat)
         self.vouchList = FernletVouchList(meshHost: meshHost, identity: identity)
@@ -170,8 +182,9 @@ public final class FernletMeshFeatures {
     /// exchange, the payload handlers (the clothing shop's two, then the moderation report's, the
     /// friend state's and the activity manager's five, the order the mesh manager registered them in),
     /// the activity manager's two mesh seams, the chat's projection handler under the text row's token
-    /// (plan step A0.5.9) and, last, the session observer, created here once every stored property is
-    /// set, so it may hold this object `unowned`.
+    /// (plan step A0.5.9), the hearts' ledger judge under the heart row's token (plan step A0.5.10)
+    /// and, last, the session observer, created here once every stored property is set, so it may hold
+    /// this object `unowned`.
     private func installOnMesh() {
         let capabilities = self.capabilities
         mesh.localCapabilitiesProvider = { capabilities.localCapabilities() }
@@ -181,6 +194,7 @@ public final class FernletMeshFeatures {
         friendState.registerHandler(on: mesh)
         activities.attach(to: mesh, meshHost: meshHost)
         registerProjector(chat.makeProjector(), forToken: routedRows.text.token)
+        registerJudge(hearts.makeJudge(), forToken: routedRows.heart.token)
         let observer = SessionObserver(features: self)
         sessionObserver = observer
         mesh.sessionObserver = observer
@@ -189,7 +203,7 @@ public final class FernletMeshFeatures {
     /// Registers one feature's routed projection adapter on the mesh and checks the answer (S9).
     ///
     /// A refusal is unreachable for Fernlet's rows — the host declares each row beside its handler,
-    /// and none is a judge row — so it is not silent either: it writes one
+    /// and none it hands a projection adapter is a judge row — so it is not silent either: it writes one
     /// `meshFeatures.registrationRefused` line naming the token and the role, and is kept in
     /// ``refusedRoutedRegistrations``, which the test rig holds empty. A refused row then answers
     /// `noDispatchArm` at the engine's dispatch, as a row with no handler always has.
@@ -201,6 +215,25 @@ public final class FernletMeshFeatures {
         let registered = mesh.registerRoutedProjectionHandler(projector, forToken: token)
         guard !registered else { return }
         FernletAuditLog.log("meshFeatures.registrationRefused", context: ["token": token, "kind": "projector"])
+        refusedRoutedRegistrations.append(token)
+    }
+
+    /// Registers one feature's routed ledger judge on the mesh and checks the answer (S10), the way
+    /// ``registerProjector(_:forToken:)`` checks a projection adapter's.
+    ///
+    /// A refusal is unreachable for Fernlet's rows — the host declares the heart row beside its judge,
+    /// and it is a judge row — so it is not silent either: it writes one
+    /// `meshFeatures.registrationRefused` line naming the token and the role, and is kept in
+    /// ``refusedRoutedRegistrations``, which the test rig holds empty. A refused row's items then wait,
+    /// counted as pending and never judged, as a judge row with no judge always has.
+    ///
+    /// - Parameters:
+    ///   - judge: The feature's adapter.
+    ///   - token: The routed type token of the feature's row.
+    private func registerJudge<J: MeshRoutedLedgerJudge>(_ judge: J, forToken token: String) {
+        let registered = mesh.registerRoutedLedgerJudge(judge, forToken: token)
+        guard !registered else { return }
+        FernletAuditLog.log("meshFeatures.registrationRefused", context: ["token": token, "kind": "judge"])
         refusedRoutedRegistrations.append(token)
     }
 
@@ -263,13 +296,16 @@ public final class FernletMeshFeatures {
         }
 
         /// The session ended: the shop's one-hour browse window opens over the catalogs it holds, then
-        /// the chat transcript is dropped (messages vanish), in the order the mesh manager ran them;
-        /// the mesh advanced its session-content generation just before this call.
+        /// the chat transcript is dropped (messages vanish), then, last, the in-session heart's feedback
+        /// and its in-flight claims go, in the order the mesh manager ran them (it reset the hearts
+        /// itself, just after this call, until plan step A0.5.10); the mesh advanced its
+        /// session-content generation just before this call.
         ///
         /// - Parameter end: The ending.
         func meshSessionDidEnd(_ end: MeshSessionEnd) {
             features.clothingShop.openWindowAtSessionEnd()
             features.chat.clearTranscript()
+            features.hearts.resetSessionHeartState()
         }
 
         /// A privacy wipe began: the chat transcript is dropped. The mesh raised its projection

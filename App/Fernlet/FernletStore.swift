@@ -289,9 +289,13 @@ final class FernletStore {
         // on-demand presence connect. Share the SAME device-local ledger the presence path uses so the
         // 5-minute cooldown + received-heart dedup stay consistent across both transports, and route the
         // sent/received closeness signals to the SAME hooks (day-capped downstream).
-        manager.heartLedger = heartLedger
-        manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
-        manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        features.hearts.heartLedger = heartLedger
+        features.hearts.onHeartSent = { [weak self] fingerprint in
+            self?.closenessLedger.recordHeartSent(fingerprint: fingerprint)
+        }
+        features.hearts.onHeartReceived = { [weak self] fingerprint in
+            self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint)
+        }
         // Away hearts (Increment 3): prekey-bundle gossip over the mesh intros, mirroring the
         // presence path; the `heartsAway` capability advertises only under the user's consent.
         manager.heartDropBundleProvider = { [weak self] in self?.heartDropService.currentLocalBundle() }

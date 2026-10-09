@@ -146,7 +146,7 @@ import FernletSocial
         #expect(!sent.localizedCaseInsensitiveContains(fingerprint), "the sent line names no fingerprint")
         #expect(sent.contains(placeholder), "it names the placeholder instead")
         // R2: bounded by the enum's cases.
-        for cause in MeshNetworkManager.SessionHeartFailure.allCases {
+        for cause in MeshSessionHearts.SessionHeartFailure.allCases {
             let line = String(describing: SessionHeartStatusCopy.message(cause, recipientName: fingerprint))
             #expect(!line.localizedCaseInsensitiveContains(fingerprint), "\(cause) names no fingerprint")
             #expect(!line.contains("\"Someone\""), "\(cause) keeps the placeholder whole")

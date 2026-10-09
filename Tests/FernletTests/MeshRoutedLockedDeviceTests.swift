@@ -30,6 +30,7 @@ import Testing
 @testable import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -388,11 +389,12 @@ struct MeshRoutedLockedDeviceTests {
         #expect(report.committedCustodyCount == 0, "a duress fall owes no custody commit")
         #expect(report.sweptPeerCount == 0, "a duress fall owes no sweep")
         // Still 1 after P6 item 6, and the REASON changed: the gate is open, so the stage's
-        // predicate holds, but this rig's manager has no `heartLedger` at all, so
+        // predicate holds, but this rig's session hearts have no `heartLedger` at all, so
         // `routedHeartJudgementReadiness(_:)` is false and the heart is filtered before the allowance
         // is planned. The count is what the filter refused a slot to — which is exactly what
         // `heartsPending` has always meant.
-        #expect(manager.heartLedger == nil, "the rig wires no heart ledger, which is what withholds the judgement")
+        #expect(rig.nodes[1].features.hearts.heartLedger == nil,
+                "the rig wires no heart ledger, which is what withholds the judgement")
         #expect(report.heartsPending == 1, "the pending heart must be counted")
         #expect(capture.count(of: "mesh.routedAccess.heartStageEvaluable", where: heldBy(rig.meshID)) == 1,
                 "the heart stage was not re-evaluated when duress cleared")
@@ -435,7 +437,7 @@ struct MeshRoutedLockedDeviceTests {
         // before a slot is spent, and nothing is judged. The whole-gate predicate above is
         // necessary for a judgement and not sufficient, which is the honest statement of the
         // stage's three legs. The ceremony's own coverage is `MeshRoutedHeartCeremonyTests`.
-        #expect(manager.heartLedger == nil, "no ledger is wired, so the judgement cannot be made")
+        #expect(rig.nodes[1].features.hearts.heartLedger == nil, "no ledger is wired, so the judgement cannot be made")
         #expect(record.deliveredAt == nil, "so no delivery is stamped")
         #expect(record.recipientReceipts.isEmpty, "and no receipt is minted")
     }
@@ -809,23 +811,19 @@ extension MeshRoutedLockedDeviceTests {
     ///   registered ledger judge's commit, inside the open-then-judge step that
     ///   `registerRoutedLedgerJudge(_:forToken:)` builds. The leading dot matches a call and never a
     ///   judge's own `func judgeRoutedItem(` declaration (the protocol's, in
-    ///   `MeshRoutedLedgerJudge.swift`, or the built-in heart judge's), so a second call of a judge's
-    ///   commit, reached any other way, moves it.
+    ///   `MeshRoutedLedgerJudge.swift`, or a host's judge's, FernletSocial's session hearts' since plan
+    ///   step A0.5.10), so a second call of a judge's commit, reached any other way, moves it.
     /// * `.openThenJudge(` — **1** in the manager since plan step A0.5.3: the ONE invocation of that
     ///   step, in `ledgerJudgement`, behind the ceremony's readiness, author, admission and blob
     ///   legs. Pinned for the reason `.openThenProject(` is: a second invocation would reach every
     ///   registered judge's commit with those legs skipped while `.judgeRoutedItem(` (the closure's
     ///   body) stood still. The box is the design's fallback for opening an existential judge inside
     ///   the ack door's `@autoclosure`; a generic ceremony would retire this row.
-    /// * `MeshRoutedHeartAck(` — **1** in the manager since P6 item 6: the ONE construction, in
-    ///   the built-in heart judge's `judgeRoutedItem` since plan step A0.5.3 (in
-    ///   `heartLedgerJudgement` before it), where the ack is the judge's proof gate rather than the
-    ///   evidence. It matches neither the type's declaration (`nonisolated struct
-    ///   MeshRoutedHeartAck: Equatable`, no paren) nor either of its two `init?(` forms, so the pin
-    ///   counts constructions and nothing else — and the scan covers
-    ///   `FernletKit/Sources/ProximityKit` only, so an ack a TEST builds is invisible to it. That is
-    ///   why the ceremony's cells assert a stored `MeshRecipientReceipt` from the real
-    ///   `commitLocalDelivery` rather than an ack value they built (`MeshRoutedHeartTests`' header).
+    /// * `MeshRoutedHeartAck(` — no row since plan step A0.5.10: the ack and its ONE construction left
+    ///   with the session hearts, and W2's FernletSocial half
+    ///   (``fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite()``) pins it there,
+    ///   inside the heart judge's `judgeRoutedItem` (the built-in heart judge's in the manager from
+    ///   plan step A0.5.3, `heartLedgerJudgement`'s before it, at 1 since P6 item 6).
     /// * `.ledgerCommit(` — **2** since plan step A0.5.3 (`.heartLedgerCommit(` at 2 since P6 item
     ///   6), and in **two** files: the stage precondition's own `guard case` in
     ///   `MeshRoutedDeliveryCommit.stageShortfall` (the *reader* of the evidence, which judges
@@ -859,7 +857,6 @@ extension MeshRoutedLockedDeviceTests {
         // open-then-judge step, and that step is invoked once, in `ledgerJudgement`.
         (".judgeRoutedItem(", ["MeshNetworkManager.swift"], 1),
         (".openThenJudge(", ["MeshNetworkManager.swift"], 1),
-        ("MeshRoutedHeartAck(", ["MeshNetworkManager.swift"], 1),
         (".ledgerCommit(", ["MeshRoutedDeliveryCommit.swift", "MeshNetworkManager.swift"], 2)
     ]
 
@@ -871,7 +868,7 @@ extension MeshRoutedLockedDeviceTests {
     /// **W2.** No routed plaintext seam exists that does not name its predicate — and today none
     /// exists at all.
     ///
-    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the ten
+    /// Two halves. **The pin** (``routedPlaintextSeams``) counts every occurrence of the nine
     /// qualified spellings across `FernletKit/Sources/ProximityKit` — the whole module, not just
     /// `Mesh/`, because `MeshRoutedContentKeyWrapper` and its `unwrap` are internal to all of it, so
     /// a decrypt under `HeartSharing/` or `Messaging/` would otherwise be invisible — and requires
@@ -896,8 +893,8 @@ extension MeshRoutedLockedDeviceTests {
         // **The guard on the shape change itself** (P6 item 6). For a single-element `homes` set the
         // summed form is semantically identical to the one-home form it replaced, so the widening
         // costs nothing — but only while it stays confined to the one row that forced it. Without
-        // this, a later edit could relax `unwrap(`, `open(`, `routedCanonicalDispatch(` or
-        // `MeshRoutedHeartAck(` to two homes with no deliberate decision anywhere.
+        // this, a later edit could relax `unwrap(`, `open(` or `routedCanonicalDispatch(` to two homes
+        // with no deliberate decision anywhere.
         let widened = Self.routedPlaintextSeams.filter { $0.homes.count > 1 }
         #expect(widened.map(\.needle) == [".ledgerCommit("],
                 "exactly ONE seam may stand in two files, and it is the heart evidence's")
@@ -932,7 +929,9 @@ extension MeshRoutedLockedDeviceTests {
     /// them must name the mutation predicate. The heart-judgement list carries four the same way
     /// since plan step A0.5.3 — the ack's construction, the evidence's mint, a registered judge's
     /// commit and the box step that calls it — so a file outside the evidence's two homes that
-    /// spells any of them must name the heart stage's predicate.
+    /// spells any of them must name the heart stage's predicate. (The ack's construction is
+    /// FernletSocial's since plan step A0.5.10, where the FernletSocial half pins it; its spelling stays
+    /// on this list, so it cannot come back to a ProximityKit file that names no predicate.)
     ///
     /// Note the deliberate pairing with W3(b), which exempts exactly the files this half matches — a
     /// new decrypting file MUST name the decrypt predicate here, so W3(b) may not forbid the token
@@ -984,6 +983,15 @@ extension MeshRoutedLockedDeviceTests {
     /// the photo object joins at A0.5.11).
     private static let featureArmHomes: [String: Int] = ["MeshSessionChat.swift": 2]
 
+    /// The FernletSocial files that construct the routed heart's ack, each with its pinned count of
+    /// `MeshRoutedHeartAck(`: the one construction, the heart judge's proof gate (plan step A0.5.10's
+    /// session hearts). The needle matches neither the type's declaration (`nonisolated struct
+    /// MeshRoutedHeartAck: Equatable`, no paren) nor either of its two `init?(` forms, so it counts
+    /// constructions and nothing else, and the sweep reads shipping sources only, so an ack a TEST
+    /// builds is invisible to it: the ceremony's cells assert a stored `MeshRecipientReceipt` from the
+    /// real `commitLocalDelivery` instead (`MeshRoutedHeartTests`' header).
+    private static let heartAckHomes: [String: Int] = ["MeshSessionHearts.swift": 1]
+
     /// **W2's FernletSocial half** (plan step A0.5.9): the features project through the engine and
     /// never around it.
     ///
@@ -994,7 +1002,9 @@ extension MeshRoutedLockedDeviceTests {
     /// (`routedCanonicalDispatch(`) stands only in its home (``featureArmHomes``), at its declaration
     /// and one call, and that call sits inside the braced body of the file's `func projectRoutedItem(`
     /// — the adapter the engine calls behind its whole guard chain — so a second, ungated call of an
-    /// arm is a build failure, wherever it is written.
+    /// arm is a build failure, wherever it is written. The heart ack's construction is held the same
+    /// way since plan step A0.5.10 (``heartAckHomes``): once, in the session hearts' file, inside the
+    /// braced body of its judge's `func judgeRoutedItem(`, which the engine calls behind its ceremony.
     @Test func fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite() throws {
         let sources = try Self.codeSources(under: "FernletKit/Sources/FernletSocial")
         #expect(sources.count >= 15, "the FernletSocial source sweep found too few files")
@@ -1016,6 +1026,20 @@ extension MeshRoutedLockedDeviceTests {
                                      "\(name) holds no handler's write")
             #expect(Self.occurrences(of: "routedCanonicalDispatch(", in: write) == 1,
                     "\(name)'s arm is not called from inside its handler's write")
+        }
+        // R2: the module's own bounded file list.
+        for source in sources {
+            let found = Self.occurrences(of: "MeshRoutedHeartAck(", in: source.code)
+            #expect(found == (Self.heartAckHomes[source.name] ?? 0),
+                    "the heart ack is built outside its pinned home: \(source.name) spells it \(found) times")
+        }
+        // R2: bounded by the ack homes.
+        for name in Self.heartAckHomes.keys {
+            let home = try #require(sources.first { $0.name == name }, "the ack's home \(name) is gone")
+            let judgement = try #require(MeshRoutedSourceScan.bracedBody(after: "func judgeRoutedItem(", in: home.code),
+                                         "\(name) holds no judge's judgement")
+            #expect(Self.occurrences(of: "MeshRoutedHeartAck(", in: judgement) == 1,
+                    "\(name)'s ack is not built inside its judge's judgement")
         }
     }
 

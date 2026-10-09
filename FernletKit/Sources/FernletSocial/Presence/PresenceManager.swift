@@ -169,7 +169,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     static let maxRememberedEphemeralNames = 32
     static let heartReinviteDelaySeconds: TimeInterval = 2
 
-    @ObservationIgnored private unowned let store: any ProximityHost
+    @ObservationIgnored private unowned let store: any FernletSocialHost
     /// The host's protocol identity, read once from ``store`` at construction and kept as this
     /// manager's own copy (ProximityKit plan step A0.2.3), so no later read reaches back to the
     /// host. The default identity, the host's `makeProximityIdentity()`, is checked against it, and
@@ -299,7 +299,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// exercise the once-per-epoch budget above.
     @ObservationIgnored var postureMint: (PresenceEpochPosture?, Date) throws -> PresenceEpochPosture
 
-    public init(store: any ProximityHost, ledger: ProximityHeartLedger, identity: IdentityService? = nil) {
+    public init(store: any FernletSocialHost, ledger: ProximityHeartLedger, identity: IdentityService? = nil) {
         self.store = store
         self.ledger = ledger
         let namespace = store.proximityNamespace
@@ -1504,7 +1504,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// A thin delegation to ``isHeartEligible(signingPublicKey:fingerprint:in:)`` since P6 item 6,
     /// so the routed heart path — which has no `PeerIdentity` — reaches the same three legs rather
     /// than re-implementing them.
-    static func isHeartEligibleFriend(_ peerIdentity: ProximityCoordinator.PeerIdentity, in host: any ProximityHost) -> Bool {
+    static func isHeartEligibleFriend(_ peerIdentity: ProximityCoordinator.PeerIdentity, in host: any FernletSocialHost) -> Bool {
         isHeartEligible(
             signingPublicKey: peerIdentity.signingPublicKey,
             fingerprint: peerIdentity.fingerprint,
@@ -1527,9 +1527,11 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// block check (blocking is local and does not remove a member from the derived roster, so this
     /// is a live case rather than a hypothetical).
     ///
-    /// The legs are the core's ``ProximityHost/isTrustedUnblockedPeer(signingPublicKey:fingerprint:)``,
-    /// which this delegates to and which the mesh's routed heart path asks directly, so the two
-    /// callers still read one definition.
+    /// The legs are ``FernletSocialHost/isTrustedUnblockedPeer(signingPublicKey:fingerprint:)``, which
+    /// this delegates to and which the routed heart path, the session hearts' ledger judge
+    /// (``MeshSessionHearts``), asks directly, so the two callers still read one definition. Both read
+    /// it off this module's host refinement since plan step A0.5.10, when it left ProximityKit's
+    /// `ProximityHost`.
     ///
     /// - Parameters:
     ///   - signingPublicKey: The peer's Ed25519 signing key.
@@ -1537,7 +1539,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     ///   - host: The host answering the trust questions (its trust store) and holding the block list.
     /// - Returns: whether a heart from or to this peer may be recorded.
     static func isHeartEligible(
-        signingPublicKey: Data, fingerprint: String, in host: any ProximityHost
+        signingPublicKey: Data, fingerprint: String, in host: any FernletSocialHost
     ) -> Bool {
         host.isTrustedUnblockedPeer(signingPublicKey: signingPublicKey, fingerprint: fingerprint)
     }
@@ -1665,7 +1667,7 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     /// Pure friend gate keyed by a host — the exact accept/reject decision, unit-testable without
     /// driving a live handshake to `.connected`.
-    static func isHeartEligibleFriendForTesting(_ peerIdentity: ProximityCoordinator.PeerIdentity, in host: any ProximityHost) -> Bool {
+    static func isHeartEligibleFriendForTesting(_ peerIdentity: ProximityCoordinator.PeerIdentity, in host: any FernletSocialHost) -> Bool {
         isHeartEligibleFriend(peerIdentity, in: host)
     }
 
