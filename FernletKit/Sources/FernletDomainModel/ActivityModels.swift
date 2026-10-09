@@ -9,12 +9,12 @@
 // grow-only deltas).  Design source: 2026-07-11 group-activities memo.
 //
 // These are PURE value types (`nonisolated Codable Sendable`) — no manager, wire, or crypto logic.
-// The signing / verification (`signed` / `verify` + `canonicalBytes` overloads) lives in ProximityKit
-// (`Wire/ActivityPayloads.swift` + `CanonicalSignatureSerializer.swift`), because it needs the
+// The signing / verification (`signed` / `verify` + `canonicalBytes` overloads) lives in FernletSocial
+// (`Wire/ActivityPayloads.swift` + `Wire/FeatureCanonicalBytes.swift`), because it needs the
 // `@MainActor IdentityService` and CryptoKit — neither of which DomainModel may name. Keeping the data
 // here lets the app + tests reach the types without an upward edge, and lets the wire payloads wrap them.
 //
-// KEY PRIVACY / SECURITY INVARIANTS (enforced by the ProximityKit `verify` + the manager):
+// KEY PRIVACY / SECURITY INVARIANTS (enforced by FernletSocial's `verify` + its activity manager):
 //  * `schemaVersion` is SIGNED on both the token and the snapshot from day one, so a SINGLE canonical
 //    encoder can be gated on it — avoiding the permanent dual-verify trap `MeshAdmissionToken` is stuck
 //    with (it has no version field, so it must accept both v2 + legacy bytes forever).

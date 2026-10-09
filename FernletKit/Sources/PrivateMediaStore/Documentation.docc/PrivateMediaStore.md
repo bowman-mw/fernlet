@@ -9,7 +9,8 @@ bytes that must never sit on disk in the clear and must never be reachable by th
 It holds four kinds of media, each with its own store type but one shared at-rest scheme:
 
 - ``PrivateMediaStore`` — the friend **photowall cache**: photos peers share over the proximity
-  mesh, owned by `MeshNetworkManager` in `ProximityKit`. Because its input is peer-supplied, this
+  mesh, owned by the session photos (`MeshSessionPhotos`) in `FernletSocial`. Because its input is
+  peer-supplied, this
   store carries the decompression-bomb defenses (a byte cap plus an ImageIO pixel-bounds check,
   ``PrivateMediaStore/isWithinSafePixelBounds(_:)``, that never decodes the full bitmap).
   ``PrivateMediaStore/commitKept(_:onto:)`` is the per-photo keep commit a review answer uses: it
@@ -89,7 +90,8 @@ Session photos never touch the wall until the person chooses them (owner decisio
 `<proximitySupportDirectory>/PendingSessionPhotos/` (`Photos/`, `Thumbnails/`,
 `PendingSessionPhotoIndex.sealed` — frozen names), and its sealed ``PendingSessionPhotoIndex`` is
 the durable truth a review is rebuilt from after a process kill. The store is built for one owner,
-`MeshNetworkManager`, which keeps the in-memory mirror and passes it into every write.
+`FernletSocial`'s session photos (`MeshSessionPhotos`), which keep the in-memory mirror and pass it
+into every write.
 
 - **Why not the wall with a flag.** The wall's index is its file manifest with a FIFO cap (a
   pending photo could evict a kept one, or be evicted unseen), every wall reader would need a
@@ -244,8 +246,9 @@ In `FernletKit/Package.swift` this target depends only on `FernletFoundation` an
 **protected side** of the wall: the walled consumers `AIProviders` and `CloudKitSync` omit every `Private*` store from
 their dependency lists by construction, so `import PrivateMediaStore` there is a hard build
 error under `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` (see `Scripts/spm-wall-check.sh`
-and `Tests/FernletTests/S3BoundaryTests`). Its own dependents are `ProximityKit` (the mesh manager's
-photowall cache) and the app target (`FernletStore` owns the meal/recipe/progress stores).
+and `Tests/FernletTests/S3BoundaryTests`). Its own dependents are `FernletSocial` (the session
+photos' photowall cache and pending corpus) and the app target (`FernletStore` owns the
+meal/recipe/progress stores).
 
 ### Fail-closed invariants
 
@@ -284,7 +287,7 @@ Every store here fails **closed**, and changes must preserve that:
 Everything here is nonisolated: plain structs plus one non-`Sendable` class
 (``KeychainPrivateMediaKeyProvider``, whose cached key is unsynchronized). Safety is by
 confinement — each store and its key provider live inside one isolation domain, in practice the
-main actor of the owner (`MeshNetworkManager` or the app's `FernletStore`). Do not share a
+main actor of the owner (`FernletSocial`'s `MeshSessionPhotos` or the app's `FernletStore`). Do not share a
 provider instance across isolation domains.
 
 ## Topics

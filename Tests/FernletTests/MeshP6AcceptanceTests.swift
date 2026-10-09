@@ -318,8 +318,8 @@ struct MeshP6TextRoutingAcceptanceTests {
     ///   the delivery-time projection marks this item at the gated member either way (measured: a
     ///   mark claim was written, run, and reddened with leg 4 INTACT, then withdrawn). It is a
     ///   pass-slot economy, and this battery does not claim it.
-    /// * **leg 3**, the `.sessionTranscript` arm's own `guard isChatAllowed`, applied BEFORE the
-    ///   unwrap. Deleting it alone also leaves this cell green (`neg-05.log`): the row is received
+    /// * **leg 3**, the text row's handler's own 13+ gate (`verdictBeforeOpen(_:)`), applied BEFORE
+    ///   the unwrap. Deleting it alone also leaves this cell green (`neg-05.log`): the row is received
     ///   and HELD, and the view gate below still hides it. Leg 3 is a *decrypt* claim — it is what
     ///   stops the plaintext existing — and the honest wall for it is an audit-line claim nobody has
     ///   written yet.
@@ -372,8 +372,8 @@ struct MeshP6TextRoutingAcceptanceTests {
                     "an ungated survivor's transcript is missing the message")
         }
         #expect(gateAudit.count(of: "mesh.routedProjection.transcriptAgeGated") > 0, """
-            leg 3 — the `.sessionTranscript` arm's own `guard isChatAllowed`, applied BEFORE the \
-            unwrap — never refused anything while this cell ran, so the empty transcript above is \
+            leg 3 — the text row's handler's own 13+ gate (`verdictBeforeOpen(_:)`), applied BEFORE \
+            the unwrap — never refused anything while this cell ran, so the empty transcript above is \
             the VIEW gate's doing and the plaintext was decrypted below the 13+ line
             """)
     }

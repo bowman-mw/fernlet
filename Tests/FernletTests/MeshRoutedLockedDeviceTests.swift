@@ -775,62 +775,59 @@ extension MeshRoutedLockedDeviceTests {
     ///   is what makes the home load-bearing, so a second call site or the same call moved to
     ///   another file still fails.
     /// * `MeshRoutedItemSealer.open(` — **1**, beside it: the plaintext seam's other half.
-    /// * `routedCanonicalDispatch(` — **0** in ProximityKit since plan step A0.5.11, a zero-pin kept so
-    ///   an arm cannot come back to the engine unseen: the photo arm and its built-in projection
-    ///   handler left the manager with the photos then (it stood at 2 — the arm's declaration plus its
-    ///   call in the built-in's `projectRoutedItem` — from plan step A0.5.2, and at 4 while the text arm
-    ///   and its built-in were the manager's too, until they left with chat at A0.5.9). FernletSocial's
-    ///   arms are held by ``fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite()``.
-    ///   This is W2(b), the canonical-mutation half item 10 handed forward; a second, ungated mutation
-    ///   is a build failure rather than a review catch.
+    /// * `routedCanonicalDispatch(` — **0** in ProximityKit, a zero-pin, so an arm cannot come back to
+    ///   the engine unseen: every projection arm is its host's, behind the projection handler the host
+    ///   registers for its routed type's token (Fernlet's chat and session photos, in FernletSocial,
+    ///   whose arms ``fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite()`` holds to
+    ///   their handlers' writes). This is W2(b), the canonical-mutation half item 10 handed forward; a
+    ///   second, ungated mutation is a build failure rather than a review catch.
     /// * `dispatchRoutedPlaintext(` — **2** in the manager: the declaration plus its single call
     ///   site in `routedProjectionVerdict`. It is the row the P6 item 4 fix review added (finding
     ///   P2-2), and the reason is that item 4 HOISTED the mutation guard one level up: every arm
-    ///   reaches its canonical store (the session photos' `holdSessionPhoto` and the chat's
-    ///   `receiveIncoming`, through FernletSocial's handlers since plan steps A0.5.11 and A0.5.9) through
-    ///   this one verb, which sits *above* the
+    ///   reaches its canonical store (FernletSocial's session photos' `holdSessionPhoto` and chat's
+    ///   `receiveIncoming`, each through its handler) through this one verb, which sits *above* the
     ///   pinned needle, so a second caller of it — a live-door shortcut, say — would reach every
     ///   canonical store with no mutation guard, leave `routedCanonicalDispatch(` where it stands,
     ///   and satisfy the containment half (a whole-file `contains`, vacuous in the defining file) for
     ///   free. Pinning the outer verb is what closes
-    ///   that; it names the same predicate in the containment half below. **Pinned by shape** since
-    ///   plan step A0.5.2: the verb stays non-generic, over the type-erased box its handlers are
-    ///   stored in, so its declaration is still matched by the needle and the count stays 2. A
-    ///   generic declaration (`dispatchRoutedPlaintext<`) would drop the count to 1 and owe a
-    ///   separate pin of `func dispatchRoutedPlaintext<` at 1, or a second declaration would hide.
-    /// * `.projectRoutedItem(` — **1** in the manager since plan step A0.5.2: the ONE call of a
-    ///   registered projection handler's canonical write, inside the open-then-project step that
-    ///   `registerRoutedProjectionHandler(_:forToken:)` builds. The needle's leading dot matches a
-    ///   call and never a handler's own `func projectRoutedItem(` declaration, so a second call of a
-    ///   handler's write, reached any other way, moves it.
-    /// * `.openThenProject(` — **1** in the manager since plan step A0.5.2: the ONE invocation of
-    ///   that step, in `dispatchRoutedPlaintext`. The box's closure is a verb of its own: a second
-    ///   invocation would reach every registered handler's canonical write ungated while
-    ///   `.projectRoutedItem(` (the closure's body) and `dispatchRoutedPlaintext(` both stood still,
-    ///   so it is pinned for the reason the outer verb is. The box is the design's fallback for
-    ///   opening an existential handler in the engine; a generic dispatch would retire this row.
-    /// * `.judgeRoutedItem(` — **1** in the manager since plan step A0.5.3: the ONE call of a
-    ///   registered ledger judge's commit, inside the open-then-judge step that
-    ///   `registerRoutedLedgerJudge(_:forToken:)` builds. The leading dot matches a call and never a
-    ///   judge's own `func judgeRoutedItem(` declaration (the protocol's, in
-    ///   `MeshRoutedLedgerJudge.swift`, or a host's judge's, FernletSocial's session hearts' since plan
-    ///   step A0.5.10), so a second call of a judge's commit, reached any other way, moves it.
-    /// * `.openThenJudge(` — **1** in the manager since plan step A0.5.3: the ONE invocation of that
-    ///   step, in `ledgerJudgement`, behind the ceremony's readiness, author, admission and blob
-    ///   legs. Pinned for the reason `.openThenProject(` is: a second invocation would reach every
-    ///   registered judge's commit with those legs skipped while `.judgeRoutedItem(` (the closure's
-    ///   body) stood still. The box is the design's fallback for opening an existential judge inside
-    ///   the ack door's `@autoclosure`; a generic ceremony would retire this row.
-    /// * `MeshRoutedHeartAck(` — no row since plan step A0.5.10: the ack and its ONE construction left
-    ///   with the session hearts, and W2's FernletSocial half
-    ///   (``fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite()``) pins it there,
-    ///   inside the heart judge's `judgeRoutedItem` (the built-in heart judge's in the manager from
-    ///   plan step A0.5.3, `heartLedgerJudgement`'s before it, at 1 since P6 item 6).
-    /// * `.ledgerCommit(` — **2** since plan step A0.5.3 (`.heartLedgerCommit(` at 2 since P6 item
-    ///   6), and in **two** files: the stage precondition's own `guard case` in
-    ///   `MeshRoutedDeliveryCommit.stageShortfall` (the *reader* of the evidence, which judges
-    ///   nothing) and the engine's one mint in the manager's `ledgerJudgement`, from a judge's
-    ///   `.committed` answer. That second home is why ``routedPlaintextSeams`` had to grow a `homes`
+    ///   that; it names the same predicate in the containment half below. **Pinned by shape**: the
+    ///   verb is non-generic, over the type-erased box each token's handler is stored in, so its
+    ///   declaration is matched by the needle and the count is 2. A generic declaration
+    ///   (`dispatchRoutedPlaintext<`) would drop the count to 1 and owe a separate pin of
+    ///   `func dispatchRoutedPlaintext<` at 1, or a second declaration would hide.
+    /// * `.projectRoutedItem(` — **1** in the manager: the ONE call of a registered projection
+    ///   handler's canonical write, inside the open-then-project step that
+    ///   `registerRoutedProjectionHandler(_:forToken:)` builds for the handler's token. The needle's
+    ///   leading dot matches a call and never a handler's own `func projectRoutedItem(` declaration, so
+    ///   a second call of a handler's write, reached any other way, moves it.
+    /// * `.openThenProject(` — **1** in the manager: the ONE invocation of that step, in
+    ///   `dispatchRoutedPlaintext`. The box's closure is a verb of its own: a second invocation would
+    ///   reach every registered handler's canonical write ungated while `.projectRoutedItem(` (the
+    ///   closure's body) and `dispatchRoutedPlaintext(` both stood still, so it is pinned for the
+    ///   reason the outer verb is. The box is how the engine calls a handler without opening an
+    ///   existential; a generic dispatch would retire this row.
+    /// * `.judgeRoutedItem(` — **1** in the manager: the ONE call of a registered ledger judge's
+    ///   commit, inside the open-then-judge step that `registerRoutedLedgerJudge(_:forToken:)` builds
+    ///   for the judge's token. The leading dot matches a call and never a judge's own
+    ///   `func judgeRoutedItem(` declaration (the protocol's, in `MeshRoutedLedgerJudge.swift`, or a
+    ///   host's judge's, FernletSocial's session hearts'), so a second call of a judge's commit, reached
+    ///   any other way, moves it.
+    /// * `.openThenJudge(` — **1** in the manager: the ONE invocation of that step, in
+    ///   `ledgerJudgement`, behind the ceremony's readiness, author, admission and blob legs. Pinned
+    ///   for the reason `.openThenProject(` is: a second invocation would reach every registered
+    ///   judge's commit with those legs skipped while `.judgeRoutedItem(` (the closure's body) stood
+    ///   still. The box is how the engine calls a judge inside the ack door's `@autoclosure` without
+    ///   opening an existential; a generic ceremony would retire this row.
+    /// * `MeshRoutedHeartAck(` — no row: the ack is the heart judge's proof gate, FernletSocial's, and
+    ///   W2's FernletSocial half (``fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite()``)
+    ///   pins its ONE construction there, inside the session hearts' judge's `judgeRoutedItem` (at 1
+    ///   since P6 item 6). The ack proves the ledger stands behind the gift; it is not the evidence.
+    /// * `.ledgerCommit(` — **2** (`.heartLedgerCommit(` at 2 since P6 item 6), and in **two** files:
+    ///   the stage precondition's own `guard case` in `MeshRoutedDeliveryCommit.stageShortfall` (the
+    ///   *reader* of the evidence, which judges nothing) and the engine's one mint in the manager's
+    ///   `ledgerJudgement`, from a registered judge's `.committed` answer: the evidence is the
+    ///   engine's, minted for the judged item and never by a judge or a host. That second home is why
+    ///   ``routedPlaintextSeams`` had to grow a `homes`
     ///   SET: with one home per needle, `elsewhere == 0` fails for this row no matter what number is
     ///   pinned. **The widening is forced, not chosen**, and both escapes are blocked — a factory on
     ///   the enum or on `MeshRoutedLedgerCommit` would put the spelling in `MeshRoutedAck.swift`,
@@ -842,23 +839,20 @@ extension MeshRoutedLockedDeviceTests {
     private static let routedPlaintextSeams: [(needle: String, homes: Set<String>, pinned: Int)] = [
         ("MeshRoutedContentKeyWrapper.unwrap(", ["MeshRoutedItemDelivery.swift"], 1),
         ("MeshRoutedItemSealer.open(", ["MeshRoutedItemDelivery.swift"], 1),
-        // 2 → 4 at P6 item 4: a second OVERLOAD for `MeshRoutedTextBody` plus its call site. The
-        // alternative — one verb over a body enum, keeping the pin at 2 — was rejected because the
-        // pin would then be blind to a third arm, and item 6 has to move it either way. 4 → 2 at plan
-        // step A0.5.9: the text overload and its call left with chat, for FernletSocial's half below.
-        // 2 → 0 at plan step A0.5.11: the photo arm and its built-in left with the photos; a zero-pin,
-        // so an arm spelled anywhere in ProximityKit again is a failure.
+        // A zero-pin: every projection arm is a host's, behind the handler it registers for its token
+        // (FernletSocial's chat and session photos, held by the FernletSocial half below), so an arm
+        // spelled anywhere in ProximityKit is a failure.
         ("routedCanonicalDispatch(", ["MeshNetworkManager.swift"], 0),
         // Added at the P6 item 4 fix review: the hoisted mutation guard lives one level ABOVE
         // `routedCanonicalDispatch`, so the pin has to reach the outer verb too (finding P2-2).
-        // Pinned by shape since plan step A0.5.2: non-generic over the handler box, so still 2.
+        // Pinned by shape: non-generic over the handler box, so 2.
         ("dispatchRoutedPlaintext(", ["MeshNetworkManager.swift"], 2),
-        // Plan step A0.5.2: the handler's canonical write is called once, inside the box's
-        // open-then-project step, and that step is invoked once, in `dispatchRoutedPlaintext`.
+        // A registered handler's canonical write is called once, inside the box's open-then-project
+        // step, and that step is invoked once, in `dispatchRoutedPlaintext`.
         (".projectRoutedItem(", ["MeshNetworkManager.swift"], 1),
         (".openThenProject(", ["MeshNetworkManager.swift"], 1),
-        // Plan step A0.5.3: a registered judge's commit is called once, inside the box's
-        // open-then-judge step, and that step is invoked once, in `ledgerJudgement`.
+        // A registered judge's commit is called once, inside the box's open-then-judge step, and that
+        // step is invoked once, in `ledgerJudgement`.
         (".judgeRoutedItem(", ["MeshNetworkManager.swift"], 1),
         (".openThenJudge(", ["MeshNetworkManager.swift"], 1),
         (".ledgerCommit(", ["MeshRoutedDeliveryCommit.swift", "MeshNetworkManager.swift"], 2)
@@ -919,23 +913,23 @@ extension MeshRoutedLockedDeviceTests {
     /// **And this half cannot see a SECOND entry point in an already-guarding file** (P6 item 4).
     /// The scan is a whole-FILE `contains`, so a second door could skip the guard entirely while the
     /// first door's occurrence kept the file green. That is closed by structure rather than by a
-    /// wall: the one door left — the generic `openBody`, which every projected family opens through
-    /// since plan step A0.5.2 and the heart since plan step A0.5.3 retired its own — reaches the
-    /// ciphertext through one private `openPlaintext(…)` whose first line is the guard, which is also
-    /// what keeps the `unwrap(` / `open(` pins at 1 as callers are added. A new body family conforms
-    /// to `MeshRoutedBody` and opens through `openBody`, or writes a second guard.
+    /// wall: the one door left — the generic `openBody`, which every family's body opens through, a
+    /// projection handler's and a ledger judge's alike — reaches the ciphertext through one private
+    /// `openPlaintext(…)` whose first line is the guard, which is also what keeps the `unwrap(` /
+    /// `open(` pins at 1 as callers are added. A new body family conforms to `MeshRoutedBody` and
+    /// opens through `openBody`, or writes a second guard.
     ///
     /// The manager arm is the mention, because containment there is vacuous by construction (it
     /// DEFINES the predicates); the pinned counts of `routedCanonicalDispatch(` and the three verbs
     /// above it are the enforcement on that side, exactly as D-10.17 argued. The canonical-mutation
-    /// list carries all four since plan step A0.5.2 — the inner arm, the outer verb, the handler's
-    /// write and the box step that calls it — so a file outside the manager that spells any of
-    /// them must name the mutation predicate. The heart-judgement list carries four the same way
-    /// since plan step A0.5.3 — the ack's construction, the evidence's mint, a registered judge's
-    /// commit and the box step that calls it — so a file outside the evidence's two homes that
-    /// spells any of them must name the heart stage's predicate. (The ack's construction is
-    /// FernletSocial's since plan step A0.5.10, where the FernletSocial half pins it; its spelling stays
-    /// on this list, so it cannot come back to a ProximityKit file that names no predicate.)
+    /// list carries all four — the inner arm, the outer verb, a registered handler's write and the
+    /// box step that calls it — so a file outside the manager that spells any of them must name the
+    /// mutation predicate. The heart-judgement list carries four the same way — the ack's
+    /// construction, the evidence's mint, a registered judge's commit and the box step that calls it
+    /// — so a file outside the evidence's two homes that spells any of them must name the heart
+    /// stage's predicate. (The ack's construction is FernletSocial's, where the FernletSocial half
+    /// pins it; its spelling stays on this list, so it cannot come back to a ProximityKit file that
+    /// names no predicate.)
     ///
     /// Note the deliberate pairing with W3(b), which exempts exactly the files this half matches — a
     /// new decrypting file MUST name the decrypt predicate here, so W3(b) may not forbid the token
@@ -950,8 +944,8 @@ extension MeshRoutedLockedDeviceTests {
                     "a routed decrypt appeared in a file that does not GUARD on the decrypt predicate")
         }
         // R2: the module's file list times the four canonical-mutation spellings — the inner verb,
-        // the hoisted outer one that reaches both arms (P6 item 4 fix review, finding P2-2), and
-        // since plan step A0.5.2 a registered handler's write and the box step that invokes it.
+        // the hoisted outer one that reaches every arm (P6 item 4 fix review, finding P2-2), a
+        // registered handler's write and the box step that invokes it.
         for needle in ["routedCanonicalDispatch(", "dispatchRoutedPlaintext(", ".projectRoutedItem(", ".openThenProject("] {
             for source in sources where source.code.contains(needle) {
                 #expect(source.code.contains("mayMutateCanonicalStoreWithRoutedContent"),
@@ -959,8 +953,7 @@ extension MeshRoutedLockedDeviceTests {
             }
         }
         // R2: the same bound — over the four heart-judgement spellings: the ack's construction,
-        // the evidence's mint, and since plan step A0.5.3 a registered judge's commit and the box
-        // step that invokes it.
+        // the evidence's mint, a registered judge's commit and the box step that invokes it.
         for source in sources where !Self.heartEvidenceHomes.contains(source.name) {
             let mutates = source.code.contains("MeshRoutedHeartAck(")
                 || source.code.contains(".ledgerCommit(")
@@ -983,12 +976,12 @@ extension MeshRoutedLockedDeviceTests {
     ]
 
     /// The FernletSocial files that hold a feature's projection arm, each with its pinned count of
-    /// `routedCanonicalDispatch(`: the arm's declaration and its one call (plan step A0.5.9's chat and
-    /// plan step A0.5.11's session photos).
+    /// `routedCanonicalDispatch(`: the arm's declaration and its one call (the chat's, for the
+    /// temporary-message row, and the session photos', for the photo row).
     private static let featureArmHomes: [String: Int] = ["MeshSessionChat.swift": 2, "MeshSessionPhotos.swift": 2]
 
     /// The FernletSocial files that name the routed access gate's type, each with its pinned count of
-    /// `MeshRoutedAccessGate` (plan step A0.5.11): the session photos, whose held-photo decisions read
+    /// `MeshRoutedAccessGate`: the session photos, whose held-photo decisions read
     /// the gate value the mesh reports — the mirror they keep and the moment that sets it — and the
     /// composition, whose session observer's `meshRoutedAccessGateDidChange(_:isRising:now:)` witness
     /// must spell the type once to hand the value on. W3(b) confines the gate's vocabulary under
@@ -997,16 +990,15 @@ extension MeshRoutedLockedDeviceTests {
     private static let accessGateHomes: [String: Int] = ["MeshSessionPhotos.swift": 2, "FernletMeshFeatures.swift": 1]
 
     /// The FernletSocial files that construct the routed heart's ack, each with its pinned count of
-    /// `MeshRoutedHeartAck(`: the one construction, the heart judge's proof gate (plan step A0.5.10's
-    /// session hearts). The needle matches neither the type's declaration (`nonisolated struct
+    /// `MeshRoutedHeartAck(`: the one construction, the heart judge's proof gate (the session
+    /// hearts'). The needle matches neither the type's declaration (`nonisolated struct
     /// MeshRoutedHeartAck: Equatable`, no paren) nor either of its two `init?(` forms, so it counts
     /// constructions and nothing else, and the sweep reads shipping sources only, so an ack a TEST
     /// builds is invisible to it: the ceremony's cells assert a stored `MeshRecipientReceipt` from the
     /// real `commitLocalDelivery` instead (`MeshRoutedHeartTests`' header).
     private static let heartAckHomes: [String: Int] = ["MeshSessionHearts.swift": 1]
 
-    /// **W2's FernletSocial half** (plan step A0.5.9): the features project through the engine and
-    /// never around it.
+    /// **W2's FernletSocial half**: the features project through the engine and never around it.
     ///
     /// The engine's half above pins the plaintext seams in ProximityKit, whose predicates a
     /// FernletSocial file cannot name; so this half pins what a feature may spell. No FernletSocial
@@ -1014,13 +1006,13 @@ extension MeshRoutedLockedDeviceTests {
     /// calls a registered handler or judge, steps a box and mints evidence. And a feature's arm
     /// (`routedCanonicalDispatch(`) stands only in its home (``featureArmHomes``), at its declaration
     /// and one call, and that call sits inside the braced body of the file's `func projectRoutedItem(`
-    /// — the adapter the engine calls behind its whole guard chain — so a second, ungated call of an
-    /// arm is a build failure, wherever it is written. The heart ack's construction is held the same
-    /// way since plan step A0.5.10 (``heartAckHomes``): once, in the session hearts' file, inside the
-    /// braced body of its judge's `func judgeRoutedItem(`, which the engine calls behind its ceremony.
-    /// And since plan step A0.5.11 the routed access gate's value is confined (``accessGateHomes``): the
-    /// gate reaches the session photos through the composition's session observer, and no other
-    /// feature names it.
+    /// — the adapter the engine calls, by its row's token, behind its whole guard chain — so a second,
+    /// ungated call of an arm is a build failure, wherever it is written. The heart ack's construction
+    /// is held the same way (``heartAckHomes``): once, in the session hearts' file, inside the braced
+    /// body of its judge's `func judgeRoutedItem(`, which the engine calls behind its ceremony and
+    /// whose `.committed` answer is all the engine mints its evidence from. And the routed access
+    /// gate's value is confined (``accessGateHomes``): the gate reaches the session photos through the
+    /// composition's session observer, and no other feature names it.
     @Test func fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite() throws {
         let sources = try Self.codeSources(under: "FernletKit/Sources/FernletSocial")
         #expect(sources.count >= 15, "the FernletSocial source sweep found too few files")

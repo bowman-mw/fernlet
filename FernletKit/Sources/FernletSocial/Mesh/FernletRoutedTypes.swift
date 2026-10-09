@@ -1,13 +1,12 @@
 // FernletRoutedTypes.swift
 // FernletSocial/Mesh
 //
-// ProximityKit plan step A0.5.9 (seam S16): Fernlet's routed-type rows, declared by the host rather
-// than resident in the mesh engine. The engine builds its routed type registry from the host's rows
-// alone since plan step A0.5.11 (`ProximityHost.meshRoutedTypeEntries`, its resident rows until then);
-// FernletStore answers this file's `entries`, and the test target's host doubles answer the same. A row
-// moved here with its feature, spelled exactly as the engine's registry spelled it, each cap the same
-// formula over the moved body's constants: the temporary-message row with chat (A0.5.9), the heart row
-// with hearts (A0.5.10) and the photo row with photos (A0.5.11), the last of them.
+// ProximityKit plan step A0.5.9 (seam S16): Fernlet's routed-type rows, declared by the host. The
+// engine builds its routed type registry from the host's rows alone
+// (`ProximityHost.meshRoutedTypeEntries`); FernletStore answers this file's `entries`, and the test
+// target's host doubles answer the same. Three rows, each beside its feature and each cap a formula
+// over its body's constants: the temporary-message row (the chat's), the heart row (the session
+// hearts') and the photo row (the session photos').
 //
 // The one FernletSocial file that reads a routed type off the namespace (the field-homes wall in
 // `MeshRoutedStoreIsolationTests`): the composition registers each feature's projection or ledger
@@ -20,10 +19,9 @@ import PrivateMediaStore
 import ProximityKit
 
 /// Fernlet's routed-type rows by name, each built from the routed types of the namespace the host
-/// holds (plan step A0.5.9, S16): every row the mesh registers (since plan step A0.5.11, when its last
-/// resident row, the photo row, joined them).
+/// holds (plan step A0.5.9, S16): every row the mesh registers.
 ///
-/// A value: the mesh still admits, resolves and forwards by its own registry alone, built once from
+/// A value: the mesh admits, resolves and forwards by its own registry alone, built once from
 /// ``entries``, and asks that registry whether a row is registered before a sender mints under the
 /// row's token. The rows by name say which token is whose — the token the chat sends under and the
 /// composition registers its projection adapter under, the token the session hearts send under and
@@ -32,16 +30,15 @@ import ProximityKit
 /// host's ``ProximityHost/meshRoutedTypeEntries``.
 public nonisolated struct FernletRoutedTypes: Equatable, Sendable {
 
-    /// The temporary-message row: the live-session chat's routed type (P6 item 4), FernletSocial's
-    /// since the chat left the engine (plan step A0.5.9).
+    /// The temporary-message row: the live-session chat's routed type (P6 item 4).
     public let text: MeshRoutedTypeEntry
 
     /// The heart row: the in-session hearts' routed type (P6 item 6), whose final ack is the ledger
-    /// judgement, FernletSocial's since the hearts left the engine (plan step A0.5.10).
+    /// judgement.
     public let heart: MeshRoutedTypeEntry
 
     /// The photo row: the session photos' routed type (P5 item 13), the widest row and so the mesh's
-    /// resident-blob bound, FernletSocial's since the photos left the engine (plan step A0.5.11).
+    /// resident-blob bound.
     public let photo: MeshRoutedTypeEntry
 
     /// Fernlet's rows over `routedTypes`, each row's token read off them: this file spells no routed
@@ -84,11 +81,10 @@ public nonisolated struct FernletRoutedTypes: Equatable, Sendable {
         // formula rather than a number: `PrivateMediaStore.maxIncomingPhotoBytes` (the photo
         // wall's PLAINTEXT bound) plus `MeshRoutedPhotoBody.maxFramedHeaderByteCount` plus the
         // seal's own overhead — i.e. the widest CIPHERTEXT a routed photo can measure, 10 551 337 B.
-        // Each term is read from the type that owns it, never copied. The formula was the seal
-        // file's resident bound until plan step A0.5.4 moved it to the engine's resident row, and it
-        // moved here with the photos at plan step A0.5.11: the bound is the registry's widest row,
-        // which this row is, so the manifest door's check and the projection's resident-blob guard
-        // are the same number and cannot drift; see the unit caveat on `MeshRoutedTypeEntry`.
+        // Each term is read from the type that owns it, never copied. The mesh's resident bound is
+        // the registry's widest row, which this row is, so the manifest door's check and the
+        // projection's resident-blob guard are the same number and cannot drift; see the unit
+        // caveat on `MeshRoutedTypeEntry`.
         self.photo = MeshRoutedTypeEntry(
             token: routedTypes.photo,
             maxItemByteCount: UInt64(

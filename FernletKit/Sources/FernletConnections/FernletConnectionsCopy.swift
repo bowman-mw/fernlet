@@ -1,7 +1,7 @@
 // FernletConnectionsCopy.swift
 // FernletConnections
 //
-// This module's copy vault: a sibling of `FernletUICopy`, `FernletLockCopy`, `ProximityUICopy` and
+// This module's copy vault: a sibling of `FernletUICopy`, `FernletLockCopy`, `FernletSocialCopy` and
 // `FernletProximityUICopy`, for the same reason and in the same shape. It holds the two plain
 // phrases that stand in for a person whose name is not known, which this module's extension of
 // ProximityKit's `PeerNameDisplay` (`PeerNameDisplay+Placeholders.swift`) hands the app's in-person

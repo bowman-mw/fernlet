@@ -1,9 +1,8 @@
 // MeshContentLedger.swift
 // FernletSocial/Mesh
 //
-// P4 item 7 (plan §10.3): the content kinds a partition can split, and the ledger that holds them —
-// moved from ProximityKit's `MeshContentMerge.swift` with chat at plan step A0.5.9. ProximityKit keeps
-// the generic union every kind merges by (``MeshContentKey``, ``MeshMergeableContent``,
+// P4 item 7 (plan §10.3): the content kinds a partition can split, and the ledger that holds them.
+// ProximityKit holds the generic union every kind merges by (``MeshContentKey``, ``MeshMergeableContent``,
 // ``MeshContentOrder``, ``MeshContentSet``, each public with its union laws); this file holds Fernlet's
 // kinds over it and the one value that carries all three:
 //
@@ -13,10 +12,9 @@
 //     re-derived in total order `(claimedSentAt clamped to ±10 min of first-seen, senderFingerprint,
 //     messageID)` by ``SessionMessageStore``, this kind's one shipping holder.
 //   * **Hearts** — ``MeshMergedHeart``, union by `(author, gift ID)`, in `HeartSharing/` beside the
-//     heart ledger and the heart commit (`MeshHeartCommit`), which joined this module with it at plan
-//     step A0.5.10.
+//     heart ledger and the heart commit (`MeshHeartCommit`).
 //
-// Moved verbatim. Nothing here is persisted and nothing here is wire: these are in-memory projections
+// Nothing here is persisted and nothing here is wire: these are in-memory projections
 // built from payloads that already exist, and the gates that filter them are a view filter over an
 // unmutated union (`MeshContentIngest.swift`).
 

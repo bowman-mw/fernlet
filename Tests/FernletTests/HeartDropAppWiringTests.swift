@@ -478,11 +478,10 @@ struct HeartDropAppWiringTests {
     /// the shipped scope all of that is one directory and one service, so under the test runner
     /// (XCTest and Swift Testing suites run in parallel inside ONE process) a wipe here landed in
     /// the middle of whichever suite happened to be running beside it. Third member of the family
-    /// fixed for the own-photo corpora (329ceb4) and the friend photo wall (ff7dadb) — NOT the last:
-    /// `ModerationLedger`, `FriendStateCache` and `ClosenessLedger` are still built with no
-    /// `fileURL:` (so on `JSONSidecarFile`'s fixed `Application Support/Fernlet` path) and `resetAll`
-    /// calls `clearAll()` on all three. Latent rather than live today — no suite reads them across
-    /// another's wipe — but the same shape, and unsealed, so they need a root and no keychain half.
+    /// fixed for the own-photo corpora (329ceb4) and the friend photo wall (ff7dadb), and not the
+    /// last: `ModerationLedger`, `FriendStateCache`, `ClosenessLedger` and the activity ledger, which
+    /// `resetAll` clears through `clearAll()`, take their store's root too (the next test pins them);
+    /// being unsealed, they need a root and no keychain half.
     ///
     /// The shape mirrors those: `mine` and `theirs` are two live stores on different scopes, and the
     /// wipe runs on `theirs`. `relaunched` — a THIRD store, on `mine`'s scope, built after the wipe —
@@ -541,14 +540,16 @@ struct HeartDropAppWiringTests {
 
     /// The rest of the proximity root, closed out after the heart state: moderation reports, the
     /// friend fuzzy-state cache, the closeness signal and the group-activity ledger all hung off
-    /// `JSONSidecarFile`'s fixed `Application Support/Fernlet` path while `resetAll` calls
-    /// `clearAll()` on every one of them — so one store's "Reset everything" deleted all four for
-    /// every concurrently-live store.
+    /// one fixed `Application Support/Fernlet` path while `resetAll` called `clearAll()` on every
+    /// one of them — so one store's "Reset everything" deleted all four for every
+    /// concurrently-live store. Each now takes its store's root.
     ///
     /// These were LATENT where the heart sidecars were live: same shape, but no suite read them
-    /// across another's wipe, so nothing was failing yet. This test is what makes them stay fixed —
-    /// it is the first reader, and without it the isolation is unenforced by anything but the
-    /// grep-wall. All four are unsealed, so a root is the whole fix and there is no keychain half.
+    /// across another's wipe, so nothing was failing yet. This test reads three of them back — the
+    /// moderation ledger, the friend-state cache and the closeness ledger — and is their first
+    /// reader; the activity ledger, like all four, is held to its root by the construction
+    /// grep-wall alone. All four are unsealed, so a root is the whole fix and there is no keychain
+    /// half.
     ///
     /// Same three-store shape as the heart test above: `theirs` wipes, `mine` must not notice, and
     /// `relaunched` (built on `mine`'s root AFTER the wipe) is what proves the state was really on

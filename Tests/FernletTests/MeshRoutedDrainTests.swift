@@ -2101,7 +2101,9 @@ private final class MeshRoutedDrainAuditCapture {
 // MARK: - The walls
 
 /// The mechanical halves of "no second reconnect path", "no epoch on the routed path" and "item 12
-/// inherits a clean seam" — grep-walls over the manager's own source.
+/// inherits a clean seam" — grep-walls over the manager's own source and, for the retired
+/// transports, over the FernletSocial feature file that holds each routed family's send, budget and
+/// projection handler or ledger judge.
 @MainActor
 @Suite(.serialized)
 struct MeshRoutedDrainWallTests {
@@ -2110,20 +2112,23 @@ struct MeshRoutedDrainWallTests {
         try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
     }
 
-    /// The chat's own file, where the text path's code went when chat left the manager for
-    /// FernletSocial (plan step A0.5.9): the text retirement wall reads it beside the manager's.
+    /// The chat's own file (FernletSocial's `MeshSessionChat`), which holds the text path's sender,
+    /// budget and the temporary-message row's projection handler: the text retirement wall reads it
+    /// beside the manager's.
     private func chatSource() throws -> String {
         try RepoRoot.source("FernletKit/Sources/FernletSocial/Messaging/MeshSessionChat.swift")
     }
 
-    /// The session hearts' own file, where the heart path's code went when the hearts left the manager
-    /// for FernletSocial (plan step A0.5.10): the heart retirement wall reads it beside the manager's.
+    /// The session hearts' own file (FernletSocial's `MeshSessionHearts`), which holds the heart
+    /// path's sender, its seams and the heart row's ledger judge: the heart retirement wall reads it
+    /// beside the manager's.
     private func heartsSource() throws -> String {
         try RepoRoot.source("FernletKit/Sources/FernletSocial/HeartSharing/MeshSessionHearts.swift")
     }
 
-    /// The session photos' own file, where the photo path's code went when the photos left the manager
-    /// for FernletSocial (plan step A0.5.11): the photo retirement walls read it beside the manager's.
+    /// The session photos' own file (FernletSocial's `MeshSessionPhotos`), which holds the photo
+    /// path's sender, its quota, the incoming-photo coercion and the photo row's projection handler:
+    /// the photo retirement walls read it beside the manager's.
     private func photosSource() throws -> String {
         try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshSessionPhotos.swift")
     }
@@ -2455,10 +2460,9 @@ struct MeshRoutedDrainWallTests {
     /// green-making move — widening the exemption — would quietly re-admit
     /// `if x.keyEpoch > localJoinedEpoch` anywhere in the manager.
     ///
-    /// Read over the manager AND the session photos' file since plan step A0.5.11, when
-    /// `sanitizedIncomingPhoto` (and with it three of the four `keyEpoch` survivors) left the manager
-    /// for FernletSocial's `MeshSessionPhotos`: the pins keep their numbers over the two, and a retired
-    /// gate coming back belongs to whichever of them now holds the photo path.
+    /// Read over the manager AND the session photos' file, which holds `sanitizedIncomingPhoto` (and
+    /// with it three of the four `keyEpoch` survivors): the pins count over the two, and a retired
+    /// gate coming back belongs to whichever of them holds the photo path.
     @Test func theRetiredEpochGatesAreGoneAndTheSurvivorsArePinned() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
         let photos = MeshRoutedSourceScan.codeOnly(try photosSource())
@@ -2487,10 +2491,9 @@ struct MeshRoutedDrainWallTests {
     /// A count is not enough here — a re-introduction under any of these names is the regression —
     /// so each is pinned at zero by name.
     ///
-    /// Read over the manager AND the session photos' file since plan step A0.5.11, when the photo
-    /// sender, its quota and its projection arm left the manager for FernletSocial's
-    /// `MeshSessionPhotos`: a retired name coming back belongs to whichever of the two now holds the
-    /// photo path.
+    /// Read over the manager AND the session photos' file, which holds the photo sender, its quota and
+    /// its projection arm: a retired name coming back belongs to whichever of the two holds the photo
+    /// path.
     @Test func theRetiredPhotoTransportIsGone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
         let photos = MeshRoutedSourceScan.codeOnly(try photosSource())
@@ -2529,9 +2532,8 @@ struct MeshRoutedDrainWallTests {
     /// be unsatisfiable: the token the routed path mints under is exactly the one whose legacy
     /// wire twin is retired here.
     ///
-    /// Read over the manager AND the chat's file since plan step A0.5.9, when the text sender, its
-    /// budget and its projection arm left the manager for FernletSocial's `MeshSessionChat`: a
-    /// retired name coming back belongs to whichever of the two now holds the text path.
+    /// Read over the manager AND the chat's file, which holds the text sender, its budget and its
+    /// projection arm: a retired name coming back belongs to whichever of the two holds the text path.
     @Test func theRetiredTextTransportIsGone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
         let chat = MeshRoutedSourceScan.codeOnly(try chatSource())
@@ -2568,8 +2570,9 @@ struct MeshRoutedDrainWallTests {
     /// was this module's only `.friendHeart` call site (`deliverSessionHeart`), the slot-id test seam
     /// that could not be re-aimed in place because the routed path has no slot
     /// (`onSessionHeartSendForTesting`), and the payload spelling itself over comment-stripped
-    /// source — `localCapabilities()`'s mention of it is inside a comment and `codeOnly` strips it,
-    /// so the mesh manager names the legacy payload type NOWHERE after the retirement.
+    /// source, so neither file names the legacy payload type in code (the capability composer's
+    /// mention of it, in FernletSocial's `FernletMeshCapabilities`, is a comment, and that file is not
+    /// read here).
     ///
     /// **`PayloadType.friendHeart` is NOT parked, and that is the one place this row differs from
     /// the text row's.** Parking is what the `.tempMessage` and `.friendPhoto` retirements did
@@ -2579,10 +2582,9 @@ struct MeshRoutedDrainWallTests {
     /// `sealedPayloadTypeCoverageIsComplete` and the sealed-framing pins are untouched — and the
     /// presence heart path is deliberately left alone (P9's).
     ///
-    /// Read over the manager AND the session hearts' file since plan step A0.5.10, when the heart
-    /// sender, its seams and the heart row's ledger judge left the manager for FernletSocial's
-    /// `MeshSessionHearts`: a retired name coming back belongs to whichever of the two now holds the
-    /// heart path.
+    /// Read over the manager AND the session hearts' file, which holds the heart sender, its seams and
+    /// the heart row's ledger judge: a retired name coming back belongs to whichever of the two holds
+    /// the heart path.
     @Test func theRetiredMeshHeartTransportIsGone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
         let hearts = MeshRoutedSourceScan.codeOnly(try heartsSource())
@@ -2618,10 +2620,9 @@ struct MeshRoutedDrainWallTests {
     /// CONTROL, so deleting it would drag them into this item.
     ///
     /// Nothing registers a handler for it, in either module a registration can come from: the mesh
-    /// registers a feature's handler only through its token door since the typed registration left
-    /// ProximityKit with its last caller (plan step A0.5.8), and every feature in FernletSocial spells
-    /// `forToken: PayloadType.<case>.rawValue`, so that spelling and the typed one are both refused across
-    /// ProximityKit and FernletSocial.
+    /// registers a feature's handler only through its token door (ProximityKit has no typed
+    /// registration), and every feature in FernletSocial spells `forToken: PayloadType.<case>.rawValue`,
+    /// so that spelling and the typed one are both refused across ProximityKit and FernletSocial.
     @Test func theLegacyTextPayloadTypeIsParkedNotDeleted() throws {
         #expect(PayloadType(rawValue: "fernlet.message.temp.v1") == .tempMessage,
                 "the wire token still decodes — a parked type is not an unknown one")

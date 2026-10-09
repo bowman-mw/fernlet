@@ -34,7 +34,10 @@ depends on `ProximityKit` and never the reverse; its first value is `ProximityNa
 Fernlet's protocol identity: step A0.2.2 of the same plan), and `FernletSocial` (Fernlet's social
 features on top of `ProximityKit`, which also depends on it and never the reverse: presence, the heart
 dead-drop, moderation's ledger, ban store and content hash, closeness, friend state and the parked
-chat payload, moved out of `ProximityKit` in step A0.4 of the same plan). Not built:
+chat payload, moved out of `ProximityKit` in step A0.4 of the same plan, and the mesh's features —
+the session photos and their review, the chat, the session hearts and the heart ledger, the clothing
+shop, the activities, the moderation relay and the friend-state and vouch-list exchanges — with the
+composition that owns the mesh engine, `FernletMeshFeatures`, in step A0.5). Not built:
 `Onboarding` — the onboarding state machine and its views stayed in the app target
 (`App/Fernlet/Onboarding*.swift`). Narrower than planned: `FernletUI` is the **design system**
 (theme, primitives, components, `ModelColors`, `CaptureProtection`), not "all SwiftUI screens" —
@@ -131,7 +134,7 @@ injected dependency (`HealthSampleSource`), so the export contract stays portabl
 | `FernletLock` | App lock: `FernletLockService`, `FernletLockGate`, `FernletLockView`. Conforms to `SecureKeyValueStore`/`BiometricGate`. Re-declares `CryptoSwift`. | `FernletFoundation`, `FernletCrypto` | [S] | |
 | `CloudKitSync` | `CoreDataFernletRepository`, `CloudKitDataService`, `Persistence`, CoreData `SavedRecipe`. Alternate `FernletRepository`. **Must omit all `Private*` stores** (verify exact upper deps at extraction). | `FernletPersistence` | [S] | |
 | `AppServices` | `NotificationService`, `WeatherKitService`, `NutritionLabelScanner`, `SharedRecipeImportQueue`. | `FernletDomainModel` | [S] | |
-| `ProximityKit` | **One black-box module** — whole `Proximity/` tree. Depends only on a narrow `ProximityHost` protocol + `PrivateMediaStore`. | `FernletDomainModel`, `PrivateMediaStore` | [S] | |
+| `ProximityKit` | **One black-box module** — whole `Proximity/` tree. Depends only on a narrow `ProximityHost` protocol, `FernletDomainModel` (until steps A0.7 and C5) and `FernletCrypto` (its `CryptographicPurpose` signing overloads, until C1); `PrivateMediaStore` left with the session photos at step A0.5. | `FernletDomainModel`, `FernletCrypto` | [S] | |
 
 ### Layer 7 — UI / App
 | Module | Responsibility | Depends on | Tag | S3 |

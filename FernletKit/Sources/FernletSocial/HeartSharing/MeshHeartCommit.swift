@@ -1,12 +1,10 @@
 // MeshHeartCommit.swift
 // FernletSocial/HeartSharing
 //
-// P4 item 7, second half (plan §10.3): the heart receipt's commit through the ledger, which ran beside
-// the merge's other two rules in `MeshContentIngest.swift` until plan step A0.5.9 moved that file to
-// FernletSocial with chat. The commit names only ``MeshMergedHeart`` and ``ProximityHeartLedger``, and
-// the heart row's ledger judge calls it, so it was parked in ProximityKit for one commit and joined
-// FernletSocial's heart sharing with the ledger, the merged heart and the judge at plan step A0.5.10,
-// verbatim.
+// P4 item 7, second half (plan §10.3): the heart receipt's commit through the ledger, the third of the
+// rules that run around the merge (the other two are in `Mesh/MeshContentIngest.swift`). The commit
+// names only ``MeshMergedHeart`` and ``ProximityHeartLedger``, and the heart row's ledger judge calls
+// it, so it lives in heart sharing beside the ledger, the merged heart and the judge.
 //
 // §10.3 keeps the final receipt at the foreground decrypt + ledger commit, so the union produces
 // *pending* hearts and the existing ``ProximityHeartLedger`` — its id-dedup and its 5-minute

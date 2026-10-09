@@ -1970,11 +1970,11 @@ struct ContentView: View {
     }
 
     // Phase 3a: the clothing-shop listener chain that lived here is gone — the shop rides the friend
-    // mesh (`MeshNetworkManager.clothingShop`), whose radio lifecycle is user-driven
-    // (startJoin/leaveSession), and the `allowNearbyClothingShares` opt-out is payload-layer (providers
-    // wired in FernletStore.meshNetworkManager). There is deliberately NO scene-dip clearing of the
-    // shop's held catalogs: the post-session window outlives the session by design, and radio privacy
-    // is the mesh lifecycle's job.
+    // mesh (FernletSocial's `MeshClothingShop`, the store's `meshFeatures.clothingShop`), whose radio
+    // lifecycle is user-driven (startJoin/leaveSession), and the `allowNearbyClothingShares` opt-out is
+    // payload-layer (providers wired in FernletStore.meshFeatures). There is deliberately NO scene-dip
+    // clearing of the shop's held catalogs: the post-session window outlives the session by design, and
+    // radio privacy is the mesh lifecycle's job.
 
     /// Away-hearts drop sync (bitchat adoptions Increment 3), on the same tab / scene / lock edges
     /// the radio listener chain used to carry it on — beside the run policy now, not inside it,

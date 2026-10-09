@@ -4,9 +4,8 @@
 // P4 item 7, second half (plan §10.3 + §21.3's decision): **what happens to merged content at the
 // receiving member.** ProximityKit's `MeshContentMerge.swift` owns the generic union and this module's
 // `MeshContentLedger.swift` the content kinds it holds; this file owns the three things that run
-// around it. Moved from ProximityKit with chat at plan step A0.5.9; the heart receipt's commit through
-// the ledger (`MeshHeartCommit`) followed at plan step A0.5.10, with the merged heart and the heart
-// ledger, into this module's `HeartSharing/MeshHeartCommit.swift`.
+// around it. The heart receipt's commit through the ledger (`MeshHeartCommit`) lives beside the
+// merged heart and the heart ledger, in this module's `HeartSharing/MeshHeartCommit.swift`.
 //
 //   1. **Hash validation at reassembly** (``MeshPhotoReassembly``). A manifest whose reassembled
 //      bytes do not match its digest is *rejected at reassembly* — structurally, because the only

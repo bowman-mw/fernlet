@@ -114,9 +114,9 @@ public nonisolated struct ModerationLedgerEntry: Codable, Equatable, Identifiabl
         "\(kind.rawValue):\(reporterFingerprint):\(hex(contentHash))"
     }
 
-    // NOTE: the deterministic bytes a reporter signs live in ProximityKit as
-    // `canonicalBytes(for: ModerationLedgerEntry)` (CanonicalSignatureSerializer.swift), alongside every
-    // other signed type. It reuses the length-prefixed, domain-tagged, saturating `CanonicalByteWriter`
+    // NOTE: the deterministic bytes a reporter signs live in FernletSocial as
+    // `canonicalBytes(for: ModerationLedgerEntry)` (Wire/FeatureCanonicalBytes.swift), beside the report
+    // relay. It reuses ProximityKit's length-prefixed, domain-tagged, saturating `CanonicalByteWriter`
     // so (a) an out-of-range wire `createdAt` clamps instead of trapping, and (b) field boundaries can
     // never be forged by a delimiter inside a value. This type stays wall-safe (no crypto here).
 }

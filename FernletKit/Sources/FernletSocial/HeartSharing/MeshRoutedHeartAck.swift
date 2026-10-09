@@ -3,10 +3,10 @@
 //
 // Network migration P5 item 4 (plan §11's heart stage): a routed heart's ledger judgement as PROOF —
 // the heart ledger's commit outcome and its own durability proof for one gift, never a re-implementation
-// of the ledger's rules. Moved from ProximityKit's `MeshRoutedAck.swift` with the heart ledger, its proof
-// and the heart row's ledger judge at plan step A0.5.10, verbatim with both proof-taking initializers:
-// it is the judge's proof gate, and the engine mints the stage's evidence from the judge's answer alone
-// (plan step A0.5.3), so no evidence initializer exists in either module.
+// of the ledger's rules, beside the heart ledger, its proof and the heart row's ledger judge, with both
+// proof-taking initializers: it is the judge's proof gate, and the engine mints the stage's evidence
+// from the judge's answer alone (plan step A0.5.3), so no evidence initializer exists in either
+// module.
 
 import Foundation
 
@@ -19,8 +19,8 @@ import Foundation
 /// The heart row's ledger judge (``MeshSessionHearts``' private adapter since plan step A0.5.10)
 /// answers ProximityKit's `MeshRoutedJudgement.committed` only when this value can be built for the gift
 /// it was handed, and the engine mints the stage's evidence, its internal `.ledgerCommit`, from that
-/// answer alone — so no evidence exists for a gift the ledger does not stand behind (plan step A0.5.3;
-/// before it, this value WAS the evidence).
+/// answer alone — so no evidence exists for a gift the ledger does not stand behind (plan step
+/// A0.5.3).
 ///
 /// Two facts to carry rather than re-derive. **Pruning is not a regression**: a delivered gift may
 /// fall out of the ledger's 32-item / 48-hour window later, and only the FIRST mint consults the

@@ -13,8 +13,7 @@
 // every photo sentence ends "stayed on your own wall", which for a message is both false and
 // unactionable, and the photo path's `routedShareRefusal` alert lives on the view the chat panel
 // covers. Both forks switch exhaustively over the same frozen cause, so a new case is a build error
-// in each. The chat's outcome is FernletSocial's `MeshTextSendOutcome` since ProximityKit plan step
-// A0.5.9, when the chat left the mesh manager.
+// in each. The chat's outcome is FernletSocial's `MeshTextSendOutcome`, its chat's send's answer.
 
 import SwiftUI
 import ProximityKit
@@ -54,7 +53,7 @@ enum RoutedShareRefusalCopy {
     /// The sentence for photos this session that reached nobody — one count, one sentence, nil
     /// for none (P8 item 0, device finding (c)).
     ///
-    /// - Parameter count: `MeshNetworkManager.photosKeptOnThisPhone`.
+    /// - Parameter count: FernletSocial's `MeshSessionPhotos.photosKeptOnThisPhone`.
     /// - Returns: a `LocalizedStringKey`, or nil when every capture was shared.
     static func photoKeptNotice(count: Int) -> LocalizedStringKey? {
         guard count > 0 else { return nil }

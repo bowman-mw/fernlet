@@ -439,7 +439,7 @@ final class FernletStore {
             self?.heartDropService.queueHeart(to: friend) == .queued
         }
         // The away-delivery consent, which presence reads only for its not-nearby copy: the same
-        // provider the mesh manager is handed above.
+        // setting the mesh features' capability list is handed above.
         manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
@@ -6433,8 +6433,7 @@ final class FernletStore {
             try meshNetworkManager.wipeIdentityForDeleteAll()
             // The session photos' two at-rest key caches (the wall's and the pending corpus's), dropped
             // so a post-wipe write can't use an orphaned key: immediately after the mesh's identity wipe,
-            // where the mesh manager dropped them until ProximityKit plan step A0.5.11, so a throwing
-            // identity wipe still skips them and a throwing presence or recipe-share wipe still does not.
+            // so a throwing identity wipe skips them and a throwing presence or recipe-share wipe does not.
             meshFeatures.photos.invalidateEncryptionKeyCaches()
             try presenceManager.wipeIdentityForDeleteAll()
             try recipeShareManager.wipeIdentityForDeleteAll()
@@ -6524,7 +6523,7 @@ final class FernletStore {
         KeychainItem.delete(for: .deviceWorryKey, service: KeychainItem.journalService)
         // NEITHER private-media content key (service `com.fernlet.private-media`) is deleted, and
         // neither must be re-added here.
-        //   • `…contentKey` (friend wall) backs `MeshNetworkManager.photoCacheStore`, which holds
+        //   • `…contentKey` (friend wall) backs `meshFeatures.photos`' `photoCacheStore`, which holds
         //     the friend photo wall this funnel keeps by design (see the survivors list above).
         //     Deleting it would not orphan a key, it would shred the wall: the next `mediaKey()`
         //     finds no row, mints a fresh random one, and every retained photo decrypts to garbage —

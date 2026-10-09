@@ -3,8 +3,8 @@ import FernletDomainModel
 
 /// Outbound-photo sizing helpers for the friend photowall.
 ///
-/// Used by `MeshNetworkManager` to normalize the user's OWN photo before it is shared over the
-/// mesh — keeping outgoing images well under the receiving side's decompression-bomb bounds
+/// Used by FernletSocial's `MeshSessionPhotos` to normalize the user's OWN photo before it is
+/// shared over the mesh — keeping outgoing images well under the receiving side's decompression-bomb bounds
 /// (peers reject anything near ``PrivateMediaStore``'s pixel caps, so senders downscale first).
 extension UIImage {
     /// Returns the image downscaled so its longest side is at most `maxDimension` points

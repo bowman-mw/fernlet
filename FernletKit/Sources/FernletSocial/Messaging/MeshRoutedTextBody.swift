@@ -3,10 +3,9 @@
 //
 // Network migration P6 item 4 (plan §12's temporary-text row): the PLAINTEXT a routed text item
 // carries — what the engine seals for the chat's sender and what its one opener decodes for the chat's
-// projection handler. Moved from ProximityKit's `MeshRoutedItemBody.swift` with chat at plan step
-// A0.5.9, verbatim: the text family's header allowance (an extension of ProximityKit's public
-// ``MeshRoutedItemBodyFormat``, whose framing constants and coders the family shares with the photo
-// and heart bodies left there), the header and the body.
+// projection handler: the text family's header allowance (an extension of ProximityKit's public
+// ``MeshRoutedItemBodyFormat``, whose framing constants and coders the family shares with this
+// module's photo and heart bodies), the header and the body.
 //
 // The framing is the family's frozen one, `u64BE(headerJSON.count) ‖ headerJSON ‖ text.utf8`, written
 // with ProximityKit's public byte writer and coders, so the bytes cannot drift from the photo and heart
@@ -26,9 +25,10 @@ nonisolated extension MeshRoutedItemBodyFormat {
 
     /// What a ``MeshRoutedTextHeader``'s JSON is allowed inside the text row's ciphertext cap — 1 KiB.
     ///
-    /// The same kind of figure as the photo family's `maxHeaderJSONByteCount` (ProximityKit's) and
-    /// narrowed for one reason: it is a term of the text row's **cap** (`maxItemByteCount`), and the
-    /// shared 64 KiB would make that cap 73 577 B while a maximal text header measures ~210 B. A cap
+    /// The same kind of figure as the photo body's `MeshRoutedPhotoBody.maxHeaderJSONByteCount`
+    /// (this module's too, beside the photo row) and narrowed for one reason: it is a term of the
+    /// text row's **cap** (`maxItemByteCount`), and the photo's 64 KiB would make that cap
+    /// 73 577 B while a maximal text header measures ~210 B. A cap
     /// four times the widest honest body is a bound; a cap three hundred times it is decoration,
     /// and it hands a hostile origin 64 KiB of header per message inside a row whose payload bound is
     /// 8 000 B.

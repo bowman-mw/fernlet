@@ -3,8 +3,8 @@
 //
 // ProximityKit plan step A0.5.5 (seam S14's host half): the friend vouch list's content — the cache of
 // lists committed peers sent, the Phase 2 broadcast gate, the list this device would send, the
-// receive hygiene and the "Friend of " label — moved from the mesh manager with no byte, golden or
-// audit change. The mesh engine keeps the frame: the vouch role and token, the committed-slot gate and
+// receive hygiene and the "Friend of " label. The mesh engine keeps the frame: the vouch role and
+// token, the committed-slot gate and
 // its `mesh.vouchList.droppedUncommittedSlot` line, the decode and both commit-time sends. It reaches
 // the content only through the `MeshVouchListExchange` adapter nested below, which the composition
 // (`FernletMeshFeatures`) installs on the mesh, so the engine's entry points are no part of this

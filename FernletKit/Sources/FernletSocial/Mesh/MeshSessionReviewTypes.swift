@@ -1,13 +1,12 @@
 // MeshSessionReviewTypes.swift
 // FernletSocial/Mesh
 //
-// ProximityKit plan step A0.5.11: the session-end review's three values, moved from ProximityKit's
-// `MeshSessionTypes.swift` with the photos, verbatim but for the docs that named their producer: the
+// ProximityKit plan step A0.5.11: the session-end review's three values: the
 // review batch (the ended session's keep-as-friend candidates and the photos still awaiting the
 // person's choice), why an answer could not be applied in full, and what an answer did, photo by
 // photo. FernletSocial's photo object (`MeshSessionPhotos`) is their one producer; the app and
 // FernletProximityUI's review sheet read them. A batch's candidates are ProximityKit's
-// `MeshSessionRosterEntry`, which stays with the session roster the engine records them in.
+// `MeshSessionRosterEntry`, beside the session roster the engine records them in.
 
 import FernletDomainModel
 import Foundation

@@ -21,16 +21,17 @@
 // The family also carries the payload vocabulary (`Vocabulary.fernlet`, in
 // FernletPayloadVocabulary.swift), every group of which ProximityKit reads off the namespace (the
 // envelope's payload rules, the coordinator's session messages and capabilities, the managers' wire2
-// token, the inventory digest's record kinds, the routed type registry's routed types and the mesh
-// manager's mesh messages), and the
+// token, the inventory digest's record kinds and the mesh manager's mesh messages) or holds to its
+// soundness rules (the routed types, under which FernletSocial's `FernletRoutedTypes` builds
+// Fernlet's routed rows), and the
 // radios' three presentation strings: the instance-name prefixes and the certificates' common name, which
 // ProximityKit's radios, their postures and its peer-name display read off the namespace (the app
 // and FernletProximityUI hand the display `.fernlet`). The installation also carries the Fernlet app's
 // peer-name policy (`PeerNames.fernlet`: the 24-character cap Fernlet's item names share, read off
 // `ItemNameModeration` so it keeps one spelling, and the "A friend" floor), which ProximityKit applies
-// wherever a peer's name enters except its activity manager, whose joiners' names keep
-// `ItemNameModeration`'s cap, with no floor, until plan step A0.5 moves activities out with the mesh
-// manager's feature parts.
+// wherever a peer's name enters it, and FernletSocial's features through ProximityKit's coercion;
+// FernletSocial's activity manager keeps `ItemNameModeration`'s cap, with no floor, for its
+// activities' names.
 //
 // The family's purposes also declare Fernlet's two feature salts (`FeaturePurposes.fernlet`, in
 // FernletFeaturePurposes.swift): the heart dead-drop's and presence's pair-secret salts, the only
@@ -56,12 +57,11 @@ nonisolated extension ProximityNamespace {
     /// ProximityKit's wire, keychain and disk formats identify Fernlet, exactly as today's code spells
     /// them, and the two feature salts ProximityKit's pair-secret door derives under. ProximityKit
     /// reads the presentation strings and every vocabulary group off it, the mesh engine's own
-    /// messages included; the mesh features' payload and capability tokens are still `PayloadType`
-    /// and `ProximityCapability` cases until plan steps A0.5 and A0.7, and what ProximityKit
-    /// still spells or reads elsewhere waits for its features to leave: the 4 feature labels, the
-    /// activities' and the moderation report's, at plan step A0.5. Its installation also carries the
-    /// Fernlet app's peer-name policy, which ProximityKit shows a peer's name under everywhere but
-    /// the activity manager, until plan step A0.5.
+    /// messages included; the mesh features' payload and capability tokens are `PayloadType` and
+    /// `ProximityCapability` cases, in FernletSocial's features, and what ProximityKit still spells
+    /// itself waits for the recipe-share manager to leave (plan step A0.7) and its DEBUG test-hook
+    /// names to settle (A1). Its installation also carries the Fernlet app's peer-name policy, which
+    /// ProximityKit shows a peer's name under wherever one enters it.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``
     /// as `.sound`). The Fernlet Coach app will pair this ``ProximityNamespace/Family`` with an

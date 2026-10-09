@@ -1,14 +1,13 @@
 // FeatureCanonicalBytes.swift
 // FernletSocial/Wire
 //
-// The canonical signing bytes of Fernlet's mesh features, moved from ProximityKit's canonical serializer
-// (`CanonicalSignatureSerializer.swift`) with no byte change: each feature's domain tag and its
-// `canonicalBytes(for:)` overload, under the same spelling, written with ProximityKit's public
-// `CanonicalByteWriter`, whose encodings the engine's goldens freeze. The activity feature's three
-// (Phase 6: the descriptor its params hash is taken over, the join token and the roster snapshot) came
-// with the activity manager and its payloads in ProximityKit plan step A0.5.8; the moderation report
-// row's (Phase 3b) with the report relay in A0.5.7. The serializer keeps no feature domain: every one
-// it still writes is its host namespace's.
+// The canonical signing bytes of Fernlet's mesh features: each feature's domain tag and its
+// `canonicalBytes(for:)` overload, written with ProximityKit's public `CanonicalByteWriter`, whose
+// encodings the engine's goldens freeze — the activity feature's three (Phase 6: the descriptor its
+// params hash is taken over, the join token and the roster snapshot), beside the activity manager
+// and its payloads, and the moderation report row's (Phase 3b), beside the report relay.
+// ProximityKit's canonical serializer (`CanonicalSignatureSerializer.swift`) holds no feature
+// domain: every one it writes is its host namespace's.
 //
 // This is signing INPUT only, as the serializer's is: never the wire format, never persisted, never
 // transmitted. Each overload is told apart from the serializer's by its parameter type alone.

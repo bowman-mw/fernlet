@@ -717,10 +717,11 @@ struct MeshRoutedHeartCeremonyTests {
         let projectable = rig.nodes[1].manager.projectableRoutedTypeTokensForTesting
         #expect(!projectable.contains(MeshRoutedTypeToken.heart),
                 "a heart's plaintext pass is its ack ceremony, not a projection")
-        // The set is exactly the two tokens that HAVE an arm, and `.sessionTranscript` is further
-        // conditional on `isChatAllowed` — off in this fixture's store, which is why the claim is
-        // written as a subset plus the heart's absence rather than as a count. A later tidy-up that
-        // added `.heartLedger` would break the first assertion and this one together.
+        // The set is at most the two tokens whose rows have a registered projection handler, and the
+        // text row's is further conditional on the chat's `isChatAllowed` (its handler's
+        // `isProjectable`) — off in this fixture's store, which is why the claim is written as a
+        // subset plus the heart's absence rather than as a count. A later change that made the heart
+        // row projectable would break the first assertion and this one together.
         #expect(projectable.isSubset(of: [MeshRoutedTypeToken.photo, MeshRoutedTypeToken.tempMessage]),
                 "only the two stores with a dispatch arm may be projectable")
         #expect(projectable.contains(MeshRoutedTypeToken.photo), "and the photo arm really is one")

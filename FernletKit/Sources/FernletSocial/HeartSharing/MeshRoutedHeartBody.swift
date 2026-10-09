@@ -3,8 +3,7 @@
 //
 // Network migration P6 item 6 (plan §12's heart row): the PLAINTEXT a routed heart carries — what the
 // engine seals for the session hearts' sender and what its one opener decodes for the heart row's ledger
-// judge. Moved from ProximityKit's `MeshRoutedItemBody.swift` with the session hearts at plan step
-// A0.5.10, verbatim: the header and the body, whose allowance and cap are the body's own constants.
+// judge: the header and the body, whose allowance and cap are the body's own constants.
 //
 // The framing is the family's frozen one, `u64BE(headerJSON.count) ‖ headerJSON`, with no payload half,
 // written with ProximityKit's public byte writer and coders, so the bytes cannot drift from the photo and
@@ -78,7 +77,7 @@ nonisolated struct MeshRoutedHeartHeader: Codable, Equatable, Sendable {
 /// The complete plaintext of a routed heart item — a ``MeshRoutedHeartHeader`` and **nothing else**
 /// (P6 item 6).
 ///
-/// The third routed body family (the photo body is ProximityKit's, the text body the chat's), and the
+/// The third routed body family (the photo body is the session photos', the text body the chat's), and the
 /// first with no payload half. It keeps the family's frozen framing anyway —
 /// `u64BE(headerJSON.count) ‖ headerJSON`, with the payload length zero — rather than shipping bare
 /// JSON, for three reasons: one framing means one place a coder option can

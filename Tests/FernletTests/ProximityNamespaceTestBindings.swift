@@ -733,7 +733,7 @@ enum MeshRoutedTypeToken {
 extension MeshRoutedManifest {
 
     /// `signed(...types:)` with `.fernlet`'s registry, the test target's `increment1(_:)` over its
-    /// routed types (the resident rows and Fernlet's host rows, `FernletSocialTestBindings.swift`).
+    /// routed types (Fernlet's host rows, `FernletSocialTestBindings.swift`).
     @MainActor
     static func signed(
         meshID: UUID, target: MeshDeliveryTarget, typeToken: String, contentHash: Data, size: UInt64,

@@ -1530,8 +1530,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// The legs are ``FernletSocialHost/isTrustedUnblockedPeer(signingPublicKey:fingerprint:)``, which
     /// this delegates to and which the routed heart path, the session hearts' ledger judge
     /// (``MeshSessionHearts``), asks directly, so the two callers still read one definition. Both read
-    /// it off this module's host refinement since plan step A0.5.10, when it left ProximityKit's
-    /// `ProximityHost`.
+    /// it off this module's host refinement, ``FernletSocialHost``.
     ///
     /// - Parameters:
     ///   - signingPublicKey: The peer's Ed25519 signing key.
@@ -1704,8 +1703,8 @@ public final class PresenceManager: ProximityPayloadHandling {
     ///
     /// Read only for COPY, when a heart cannot be delivered in person
     /// (`notNearbyHeartMessage(firstName:)`), so a failed send doesn't tell a user who turned away
-    /// delivery ON that "hearts travel in person for now". Nil reads as off, matching
-    /// MeshNetworkManager's provider of the same name. The enforcement homes are
+    /// delivery ON that "hearts travel in person for now". Nil reads as off, matching the mesh
+    /// capability list's provider of the same name (``FernletMeshCapabilities``). The enforcement homes are
     /// `HeartDropService.queueHeart`/`syncNow`, and the friend row's affordance takes the setting as
     /// an explicit parameter (``heartAffordance(heartsEnabled:presenceEnabled:reachable:awayDeliveryEnabled:)``).
     public var heartsAwayEnabledProvider: (() -> Bool)?

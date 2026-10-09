@@ -2,11 +2,8 @@
 // FernletSocial/HeartSharing
 //
 // P4 item 7 (plan §10.3): the heart as the content merge sees it — union by `(author, gift ID)` over
-// ProximityKit's generic union (``MeshMergeableContent``, ``MeshContentSet``). Moved from ProximityKit's
-// `MeshContentMerge.swift` at plan step A0.5.10, with the heart ledger and the heart commit; it was
-// public there for plan step A0.5.9 alone, while FernletSocial's `MeshContentLedger` named it across
-// the module line, and is internal again now that the ledger, the commit and the judge that build one
-// are this module's. Moved verbatim otherwise.
+// ProximityKit's generic union (``MeshMergeableContent``, ``MeshContentSet``). Internal: the ledger,
+// the commit and the judge that build one are this module's.
 //
 // Nothing here is persisted and nothing here is wire: a heart's final receipt is still only the
 // foreground decrypt + ``ProximityHeartLedger`` commit, which is why receipt state is deliberately NOT

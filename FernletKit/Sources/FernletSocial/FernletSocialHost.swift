@@ -1,12 +1,12 @@
 // FernletSocialHost.swift
 // FernletSocial
 //
-// ProximityKit plan step A0.5.10 (seam S17): the host requirements only Fernlet's social features read,
-// which left ProximityKit's `ProximityHost` once no ProximityKit code read them — the host's
-// trusted-peer records, its durable trust store and the in-person hearts opt-in, with that opt-in's
-// default — and the heart-eligibility check over the trust store and the host's block list. Each moved
-// with its doc and its body; ProximityKit keeps the `ProximityTrustStore` protocol the store is typed
-// by, which FernletConnections' vault conforms to.
+// ProximityKit plan step A0.5.10 (seam S17): the host requirements only Fernlet's social features read
+// — the host's trusted-peer records, its durable trust store and the in-person hearts opt-in, with
+// that opt-in's default — and the heart-eligibility check over the trust store and the host's block
+// list. No ProximityKit code reads any of them, so ProximityKit's `ProximityHost` declares none; it
+// holds the `ProximityTrustStore` protocol the store is typed by, which FernletConnections' vault
+// conforms to.
 //
 // Presence, the session hearts, the vouch list, the moderation report and friend-state exchanges and
 // the capability list read them through this refinement; the mesh engine reads none of them.

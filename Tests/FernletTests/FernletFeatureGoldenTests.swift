@@ -5,7 +5,7 @@
 // friend state, and the sealed-backup escrow beside the identity) put bytes on the wire,
 // in the keychain and on disk that no other suite pins, and plan step A0.4 moved every one of those
 // features or re-derived its bytes (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.4). Plan
-// step A0.5 does the same for the features the routed mesh manager still carries (the advertised
+// step A0.5 did the same for the features the routed mesh manager carried (the advertised
 // capabilities, the routed rows, bodies and senders, activities, the clothing shop, the moderation
 // relay, friend state, the vouch list and the session's photos, chat and hearts), splitting them out
 // of the engine into FernletSocial (§4 A0.5). This suite holds each such byte to the value Fernlet
@@ -3849,7 +3849,7 @@ extension FernletFeatureGoldenTests {
     typealias ActivityRosterGossip = ActivityRosterSnapshotPayload
     /// A version digest, today FernletSocial's `ActivitySyncPayload`.
     typealias ActivitySync = ActivitySyncPayload
-    /// A shop's catalog, today ProximityKit's `ClothingCatalogPayload`.
+    /// A shop's catalog, today FernletSocial's `ClothingCatalogPayload`.
     typealias ClothingCatalog = ClothingCatalogPayload
     /// A moderation report bundle, today FernletSocial's `ModerationReportPayload` (ProximityKit's until
     /// plan step A0.5.7 moved the relay).

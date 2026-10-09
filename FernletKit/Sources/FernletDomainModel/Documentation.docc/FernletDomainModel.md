@@ -597,13 +597,17 @@ coordinator's audits arrive converted from ProximityKit's own `ProximitySessionA
 FernletConnections' one conversion, while the vault builds its block, revoke and report rows itself
 and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
 the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
-names these types and ``ItemNameModeration`` only on the lines `ProximityNamespaceBoundaryTests`
-allowlists, which leave with the mesh manager's feature parts (plan step A0.5) and the recipe
-profile (A0.7) and, for the mode, with the connection profiles (A0.7 and C5); `TrainerAuditEvent` and
+names two of these types, and only on the lines `ProximityNamespaceBoundaryTests` allowlists:
+``PayloadType`` in the typed doors the recipe profile retires (A0.7) and ``ProximityMode`` in the
+coordinator's alias the connection profiles replace (A0.7 and C5); ``ProximityCapability``,
+``ProximityTrustedPeerRecord``, ``ItemNameModeration``, `TrainerAuditEvent` and
 `ConnectionSessionLog` it names nowhere. Fernlet's own modules name them freely: `FernletSocial`'s
-presence and heart dead-drop read ``ProximityTrustedPeerRecord``, the dead-drop titles its envelope
-with a ``PayloadType`` token and presence advertises the hearts ``ProximityCapability``, and
-`FernletConnections` reads the tokens into the vocabulary and keeps the records. The generic types
+presence, heart dead-drop and session hearts read ``ProximityTrustedPeerRecord``, its mesh features
+register and send their payloads under ``PayloadType`` tokens and advertise and check
+``ProximityCapability`` tokens, the dead-drop titles its envelope with a ``PayloadType`` token,
+presence advertises the hearts ``ProximityCapability`` and the activity manager caps its names
+under ``ItemNameModeration``; and `FernletConnections` reads the tokens into the vocabulary and
+keeps the records. The generic types
 an envelope carries (`PayloadEncryption`, `PayloadSummary` and its `DateRange`) and the session's
 role and ranging mode are ProximityKit's own.
 

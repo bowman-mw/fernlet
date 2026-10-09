@@ -1,17 +1,17 @@
 // MeshSessionPhotos.swift
 // FernletSocial/Mesh
 //
-// ProximityKit plan step A0.5.11: the session's photos, moved from the mesh manager with no byte,
-// golden or audit change — the friend-photo wall with its preferences and favourites, the sealed
+// ProximityKit plan step A0.5.11: the session's photos — the friend-photo wall with its preferences
+// and favourites, the sealed
 // pending corpus every session photo is held in until the person answers and the answers that empty
 // it, the film and its quota, the session-end review batch, `addPhoto(_:)` and the routed photo sender,
 // which mints through the engine's public origination door, and the photo row's projection handler, a
 // private adapter nested here that the composition (`FernletMeshFeatures`) registers under the host's
 // photo row: the tombstone settlement before the engine opens an item, then the per-origin quota, the
-// sanitised hold and the closeness hook, in that order. One file, so the moved code's `private`
-// members stay private.
+// sanitised hold and the closeness hook, in that order. One file, so its `private` members stay
+// private.
 //
-// The engine keeps what it always decided: the session roster and its custody (it drains the roster
+// The engine decides the rest: the session roster and its custody (it drains the roster
 // into each session's ending, and this object merges what it is handed), the routed access gate (it
 // tells the observer each change, which this object mirrors), whether a session is live, the mesh the
 // session counts against, and the whole guard chain above a handler. Every leg this object runs at a
@@ -19,7 +19,7 @@
 // leftover photos' move and the new photo session at a new search, the photo session forgotten when
 // it is left, the film's mesh pin at each scope change, a removed member's purge from the review, and
 // the photo indexes' re-read on a rising access edge — is run by the composition's session observer,
-// at the engine position the manager ran it at.
+// at the engine position `MeshSessionObserver` names for that moment.
 
 import Foundation
 import Observation
@@ -77,13 +77,13 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// session-end review batch, the capture (``addPhoto(_:)``) and its routed share, and, through a private
 /// adapter, the photo row's projection handler.
 ///
-/// Built by the composition (``FernletMeshFeatures``) right after the activity manager, the order the
-/// mesh manager's initializer built them in, over its mesh, held weakly, the features' host holder,
+/// Built by the composition (``FernletMeshFeatures``) right after the activity manager, over its
+/// mesh, held weakly, the features' host holder,
 /// under whose proximity root both corpora live and under whose namespace a peer's names are
 /// re-moderated, the token of the host's photo row (FernletSocial's ``FernletRoutedTypes``), which the
 /// sender mints under and the composition registers the adapter under, and the pending corpus's key
 /// provider (nil in every shipping path: the device-bound keychain row). Its construction loads both
-/// corpora — the wall, then the pending corpus, then the reconcile — as the manager's did.
+/// corpora — the wall, then the pending corpus, then the reconcile.
 ///
 /// Session photos are never on the wall before the person chooses (2026-09-30): each one — taken here
 /// or received — is HELD in the sealed pending corpus (`PendingSessionPhotoStore`) from the moment it
@@ -97,15 +97,15 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// two stores' key caches'.
 ///
 /// The session's moments reach it from the mesh through the composition's session observer, each at
-/// the engine position the manager ran its photo leg at: a new search (``beginNewPhotoSession()``),
+/// the engine position `MeshSessionObserver` names for it: a new search (``beginNewPhotoSession()``),
 /// the session's end with the roster the mesh drained (``promoteEndedSessionIntoPendingReview(drainedRoster:)``),
 /// the session left (``forgetPhotoSession()``), the three scope changes (``noteScopeChange(_:)``), a
 /// removed member (``dropRemovedMemberFromReview(fingerprint:)``) and each change of the routed access
 /// gate (``applyAccessGate(_:isRising:now:)``).
 ///
-/// `@MainActor` and `@Observable`, like the mesh manager that held all of this until plan step A0.5.11,
-/// with its `@ObservationIgnored` annotations kept: views observe the wall, the live roll, the review
-/// batch, ``heldPhotosCanBeShown``, the film and the favourites through this object
+/// `@MainActor` and `@Observable`, like the mesh manager, with its bookkeeping, stores and
+/// references `@ObservationIgnored`: views observe the wall, the live roll, the review batch,
+/// ``heldPhotosCanBeShown``, the film and the favourites through this object
 /// (`store.meshFeatures.photos`).
 @MainActor
 @Observable
@@ -249,9 +249,9 @@ public final class MeshSessionPhotos {
 
     /// The routed access gate as the mesh last reported it (``applyAccessGate(_:isRising:now:)``, which
     /// the composition's session observer calls at each change the host pushes), `.closed` until the
-    /// first: the mesh's own value, mirrored, never a second gate. Every held-photo decision reads it as
-    /// it read the manager's own gate — the decrypt seam (``reviewImageData(for:)``), the answers, a
-    /// hold's duress refusal, the persistent unreadable-wall offer and ``heldPhotosCanBeShown``.
+    /// first: the mesh's own value, mirrored, never a second gate. Every held-photo decision reads it —
+    /// the decrypt seam (``reviewImageData(for:)``), the answers, a hold's duress refusal, the
+    /// persistent unreadable-wall offer and ``heldPhotosCanBeShown``.
     @ObservationIgnored private var routedAccessGate: MeshRoutedAccessGate = .closed
 
     /// The mesh the sender mints through and whose session facts the photos read. Weak: the composition
@@ -268,8 +268,7 @@ public final class MeshSessionPhotos {
 
     /// The session photos over `mesh` and `meshHost`, minting under `photoToken`: builds both corpora's
     /// stores under the host's proximity root, loads the wall's preferences, then the wall, the pending
-    /// corpus and the reconcile (``loadPhotoCorpora(now:)``), logging where the manager's initializer
-    /// logged.
+    /// corpus and the reconcile (``loadPhotoCorpora(now:)``).
     ///
     /// - Parameters:
     ///   - mesh: The composition's mesh, held weakly.
@@ -363,8 +362,8 @@ public final class MeshSessionPhotos {
 
     /// A new search began (the mesh's `startJoin()`, before it resets its roster and removal tallies):
     /// the film is reset and its mesh pin dropped, a photo still listed joins the pending review, and only
-    /// then is the new photo session's id and start minted — in the manager's order, where the move read
-    /// the old ids before they were re-minted.
+    /// then is the new photo session's id and start minted — in that order, because the move reads the
+    /// old ids before they are re-minted.
     func beginNewPhotoSession() {
         photosAddedThisSession = 0
         photosKeptOnThisPhone = 0
@@ -541,9 +540,8 @@ public final class MeshSessionPhotos {
     /// calls it first at every ending the mesh reports (``MeshSessionObserver/meshSessionDidEnd(_:)``),
     /// which the mesh reports after every slot-removal path (removeSlot, disconnectSlot — which the
     /// checkCoordinatorStates stale eviction funnels through) and on leaveSession/stopSearching
-    /// teardown. The mesh ran this promotion itself until plan step A0.5.11; since then it keeps the
-    /// roster, drains it into the ending (``MeshSessionEnd/drainedRoster``), and this object merges what
-    /// it is handed.
+    /// teardown. The mesh keeps the roster and drains it into the ending
+    /// (``MeshSessionEnd/drainedRoster``); this object merges what it is handed.
     ///
     /// **The photo half is the 2026-09-30 fix.** The last device left in a mesh ends through a
     /// verified termination (`applyVerifiedTermination()` → `leaveSession()`), with no Develop tap
@@ -572,8 +570,7 @@ public final class MeshSessionPhotos {
 
     /// The roster half of the promotion: merges the roster the mesh drained into the pending batch by
     /// fingerprint (last write wins, capped at the roster's own bound,
-    /// ``MeshNetworkManager/maxSessionRosterEntries``). The mesh emptied its roster as it drained it
-    /// (plan step A0.5.11; this half emptied it until then).
+    /// ``MeshNetworkManager/maxSessionRosterEntries``). The mesh emptied its roster as it drained it.
     ///
     /// - Parameter drainedRoster: The roster the mesh drained at the ending, in its own order.
     private func promoteRosterIntoPendingReview(_ drainedRoster: [MeshSessionRosterEntry]) {
@@ -1040,8 +1037,8 @@ public final class MeshSessionPhotos {
     }
 
     /// Delete-all's leg for the photos nobody chose yet (wipe leg 4d): empties the live roll, the
-    /// mesh's live roster (``MeshNetworkManager/clearSessionRoster()``, in the same synchronous step,
-    /// where the manager emptied its own) and the WHOLE pending batch — candidates too, because a
+    /// mesh's live roster (``MeshNetworkManager/clearSessionRoster()``, in the same synchronous step)
+    /// and the WHOLE pending batch — candidates too, because a
     /// keep-as-friend offer from a session the person just asked to erase would write new trust rows
     /// about it — and the mirror (tombstones included: after delete-all the routed store is wiped and
     /// the identity rotated, so nothing can be re-projected), then removes the `PendingSessionPhotos/`
@@ -1239,11 +1236,10 @@ public final class MeshSessionPhotos {
 
     /// Drops both corpora's cached encryption keys — the wall's (`Role.friendWall`) and the pending
     /// corpus's (`Role.pendingSessionPhotos`) — so a post-wipe write cannot use an orphaned key: the
-    /// half of the mesh manager's identity wipe that left with the two stores (plan step A0.5.11). The
-    /// app's delete-all funnel calls it immediately after the mesh's `wipeIdentityForDeleteAll()` and
-    /// before presence's identity wipe, in the same `do`, so a throwing identity wipe skips it, as it
-    /// skipped the manager's two drops, and a throwing presence or recipe-share wipe does not. The key
-    /// rows themselves survive, like the wall and the emptied corpus they protect.
+    /// stores' half of the delete-all identity wipe. The app's delete-all funnel calls it immediately
+    /// after the mesh's `wipeIdentityForDeleteAll()` and before presence's identity wipe, in the same
+    /// `do`, so a throwing identity wipe skips it and a throwing presence or recipe-share wipe does
+    /// not. The key rows themselves survive, like the wall and the emptied corpus they protect.
     public func invalidateEncryptionKeyCaches() {
         photoCacheStore.invalidateEncryptionKeyCache()
         heldPhotoStore.invalidateEncryptionKeyCache()
@@ -1368,8 +1364,7 @@ public final class MeshSessionPhotos {
     /// opened: tombstoned → `refusedForGood` (it was answered — kept, discarded or deleted — and must
     /// never come back; the verdict takes it off the retry list), already held or on the wall →
     /// `handedOn` with nothing written, otherwise nil. The photo row's pre-open verdict, through its
-    /// projection adapter (the mesh manager's built-in handler from plan step A0.5.2 until the photos
-    /// left it at A0.5.11).
+    /// projection adapter.
     ///
     /// Keyed on the SIGNED origin and item id the delivery carries (``MeshContentKey``), never the
     /// id alone: a member who copies another member's item id can neither make the genuine photo
@@ -1409,10 +1404,10 @@ public final class MeshSessionPhotos {
     /// which the engine calls only from its dispatch, behind its canonical-mutation predicate; the
     /// pins in `MeshRoutedLockedDeviceTests` (W2's FernletSocial half) are what make a second, ungated
     /// one a build failure. A mesh that is gone cannot be the engine calling it, so that unreachable
-    /// case answers the retryable refusal rather than guess a final one. It reads the delivery the engine built
-    /// (plan step A0.5.2) where it read the manifest and the ledger's author, field for field. It
-    /// takes **no clock**: the one instant it stores is the origin's signed `addedAt`, and the
-    /// hold's own `heldAt` is this phone's clock at the write, read there.
+    /// case answers the retryable refusal rather than guess a final one. It reads the delivery the
+    /// engine built (plan step A0.5.2), field for field. It takes **no clock**: the one instant it
+    /// stores is the origin's signed `addedAt`, and the hold's own `heldAt` is this phone's clock at
+    /// the write, read there.
     private func routedCanonicalDispatch(
         _ body: MeshRoutedPhotoBody,
         delivery: MeshRoutedDelivery
@@ -1452,7 +1447,7 @@ public final class MeshSessionPhotos {
     /// re-projection after a restart cannot cost a slot it already spent.
     ///
     /// Counted against `budget`, the delivery's ``MeshRoutedDelivery/quotaKey`` — the item's signed
-    /// `(mesh, origin)` — since plan step A0.5.2, where it built the same key from the manifest.
+    /// `(mesh, origin)` — since plan step A0.5.2.
     private func allowIncomingRoutedPhoto(_ photoID: UUID, from budget: MeshRoutedOriginQuotaKey) -> Bool {
         var accepted = routedOriginPhotoQuota[budget] ?? []
         if accepted.contains(photoID) { return true }
@@ -1690,10 +1685,10 @@ public final class MeshSessionPhotos {
         PhotoProjector(photos: self)
     }
 
-    /// The photo row's projection handler (plan step A0.5.11, S9; the mesh manager's built-in handler
-    /// from plan step A0.5.2 until then): the settlement before the open, then the photo arm, each
-    /// called as it is. Private and nested (design rule 6), so the engine's entry points stay off the
-    /// photo object's public API, and so it reaches the object's private settlement and arm.
+    /// The photo row's projection handler (plan step A0.5.11, S9): the settlement before the open, then
+    /// the photo arm, each called as it is. Private and nested (design rule 6), so the engine's entry
+    /// points stay off the photo object's public API, and so it reaches the object's private
+    /// settlement and arm.
     ///
     /// Holds its photo object strongly: the mesh retains this adapter through its projector map, and
     /// the photo object holds the mesh weakly, so nothing the mesh retains retains the mesh.

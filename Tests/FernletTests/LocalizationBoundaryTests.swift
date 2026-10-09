@@ -2750,9 +2750,9 @@ struct LocalizationBoundaryTests {
     /// most of what §4.0 put in ProximityKit's catalog now lives in that module's. So is
     /// `FernletConnections`, whose catalog holds the two name placeholders
     /// `PeerNameDisplay.text(for:)` resolves (`FernletConnectionsCopy.Peer`, keys `proximity.peer.*`),
-    /// the rest of what §4.0 put there. ProximityKit's catalog kept the camera's hold-failure line
-    /// until plan step A0.5.11, when the line moved with the photos to FernletSocial's first catalog
-    /// (`FernletSocialCopy.Camera`, key `proximity.camera.holdFailed`) and ProximityKit's was deleted.
+    /// the rest of what §4.0 put there. ProximityKit has no catalog: the camera's hold-failure line,
+    /// its last key, is FernletSocial's, in that module's first catalog (`FernletSocialCopy.Camera`,
+    /// key `proximity.camera.holdFailed`, since plan step A0.5.11).
     @Test func theModuleStringCatalogsAddedBySection40StillExist() {
         for module in ["FernletUI", "FernletSocial", "FernletProximityUI", "FernletConnections", "AppServices"] {
             let catalog = RepoRoot.url("FernletKit/Sources/\(module)/Localizable.xcstrings")

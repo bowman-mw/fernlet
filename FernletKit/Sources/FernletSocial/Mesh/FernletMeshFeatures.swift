@@ -2,21 +2,21 @@
 // FernletSocial/Mesh
 //
 // ProximityKit plan step A0.5.5: the composition of Fernlet's mesh features over ProximityKit's routed
-// mesh engine. The app builds one, in the lazy initializer that built the mesh manager before it: it
+// mesh engine. The app builds one, lazily, as FernletStore's `meshFeatures`: it
 // asks the host for the device identity once, builds the mesh through a factory with that identity,
 // builds each feature object over the mesh and the same identity, and installs every engine role a
 // feature plays before its initializer returns, so no restore, re-entry or radio start can see a mesh
 // without them. It owns all of it: FernletStore reaches the mesh as `meshFeatures.mesh`.
 //
-// It grew one feature per plan step (A0.5.6 to A0.5.11). It holds the capability list the mesh
+// It holds the capability list the mesh
 // advertises, the friend vouch list's content, the clothing shop, the moderation report relay, the
 // fuzzy friend state, the Group Activities manager, the live-session chat, the in-session hearts and
 // the session photos, registers the chat's and the photos' projection handlers and the hearts' ledger
 // judge for the temporary-message, photo and heart rows it declares through the host
 // (`FernletRoutedTypes`), and it is the mesh's session observer, through a private adapter, for the
-// moments its features act on. Since plan step A0.5.10 its host is FernletSocial's own refinement,
-// `FernletSocialHost`; since A0.5.11 the pending photo corpus's key provider is handed to it (nil in
-// every shipping path), not to the mesh.
+// moments its features act on. Its host is FernletSocial's own refinement, `FernletSocialHost`, and
+// the pending photo corpus's key provider is handed to it (nil in every shipping path), not to the
+// mesh.
 
 import Foundation
 import FernletDomainModel
@@ -30,8 +30,8 @@ import ProximityKit
 /// ``ProximityHost/makeProximityIdentity()`` exactly once), the mesh (built by the factory with that
 /// identity, which checks and provisions it), the feature objects (over the mesh and the same
 /// identity, the activity manager first, whose ledger loads, collects and may write as it is built,
-/// then the session photos, whose wall, pending corpus and reconcile load as they are built — the
-/// order the mesh manager's initializer ran them in), then the installations on the mesh — the
+/// then the session photos, whose wall, pending corpus and reconcile load as they are built), then
+/// the installations on the mesh — the
 /// capability provider, the vouch-list exchange, the clothing shop's two payload handlers, the
 /// moderation report's, the friend state's, the activity manager's five and its two mesh seams, the
 /// chat's projection handler, the photos' projection handler, the hearts' ledger judge and, last, the
@@ -204,7 +204,7 @@ public final class FernletMeshFeatures {
     /// Installs every engine role a feature plays on the mesh, before the initializer returns: the
     /// capability provider, in a closure that captures the capability list alone, the vouch-list
     /// exchange, the payload handlers (the clothing shop's two, then the moderation report's, the
-    /// friend state's and the activity manager's five, the order the mesh manager registered them in),
+    /// friend state's and the activity manager's five),
     /// the activity manager's two mesh seams, the chat's projection handler under the text row's token
     /// (plan step A0.5.9), the photos' projection handler under the photo row's token (plan step
     /// A0.5.11), the hearts' ledger judge under the heart row's token (plan step A0.5.10) and, last, the
@@ -264,7 +264,7 @@ public final class FernletMeshFeatures {
     }
 
     /// The mesh's session observer (S15): each moment of a session's life the mesh reports, fanned out
-    /// to the features in the order the mesh manager ran them before they left it. Private and nested,
+    /// to the features in one fixed order, written here. Private and nested,
     /// so the engine's entry points stay off this object's public API (design rule 6), and so it
     /// reaches this object's private members.
     private final class SessionObserver: MeshSessionObserver {
@@ -282,9 +282,8 @@ public final class FernletMeshFeatures {
 
         /// A slot committed: the closeness hook first (this committed friend is physically present —
         /// feed closeness, day-capped downstream); on a formation, the shop's new session, the chat
-        /// transcript's drop and the shop's send tracking cleared, in the order the mesh manager ran
-        /// them (the transcript's drop right after the shop's reset, as before the shop left it; the
-        /// mesh advanced its session-content generation just before this call); then the shop's
+        /// transcript's drop and the shop's send tracking cleared (the mesh advanced its
+        /// session-content generation just before this call); then the shop's
         /// catalog offer to this slot, this device's own moderation reports and its friend state, each
         /// send spawned in that order; and, last, the activities this device hosts, offered to this
         /// peer with a roster version digest, their sends spawned after the others.
@@ -324,11 +323,9 @@ public final class FernletMeshFeatures {
         /// The session ended: first the review promotion — the roster the mesh drained merges into the
         /// pending review and the session's unreviewed photos move in with it — then the shop's one-hour
         /// browse window opens over the catalogs it holds, then the chat transcript is dropped (messages
-        /// vanish), then, last, the in-session heart's feedback and its in-flight claims go, in the
-        /// order the mesh manager ran them (it ran the promotion itself, just before this call, until
-        /// plan step A0.5.11, and reset the hearts, just after it, until A0.5.10); the mesh drained its
-        /// roster, ended the formed-session epoch and advanced its session-content generation just
-        /// before this call, none of which the promotion reads.
+        /// vanish), then, last, the in-session heart's feedback and its in-flight claims go; the mesh
+        /// drained its roster, ended the formed-session epoch and advanced its session-content
+        /// generation just before this call, none of which the promotion reads.
         ///
         /// - Parameter end: The ending, with the roster the mesh drained.
         func meshSessionDidEnd(_ end: MeshSessionEnd) {
@@ -346,20 +343,20 @@ public final class FernletMeshFeatures {
         }
 
         /// A new search began: the session photos reset the film, move a photo still listed into the
-        /// pending review and mint the new photo session's ids, where the mesh manager's `startJoin()`
-        /// ran them, before the mesh resets its roster and removal tallies.
+        /// pending review and mint the new photo session's ids, told by the mesh's `startJoin()` before
+        /// it resets its roster and removal tallies.
         func meshSessionWillBegin() {
             features.photos.beginNewPhotoSession()
         }
 
         /// This device left its session: the session photos forget the photo session's ids, after the
-        /// teardown and the ending it ran, where the mesh manager's `leaveSession()` cleared them.
+        /// teardown and the ending the mesh's `leaveSession()` ran.
         func meshSessionDidLeave() {
             features.photos.forgetPhotoSession()
         }
 
-        /// The mesh the session counts against changed: the session photos' film follows it, where the
-        /// mesh manager's founding, abandoned founding and `leaveMesh()` moved it.
+        /// The mesh the session counts against changed: the session photos' film follows it, at the
+        /// mesh's founding, abandoned founding and `leaveMesh()`.
         ///
         /// - Parameter change: The change.
         func meshScopeDidChange(_ change: MeshScopeChange) {
@@ -367,7 +364,7 @@ public final class FernletMeshFeatures {
         }
 
         /// A signed removal took effect: the removed member leaves the session photos' pending review,
-        /// right after the mesh purged it from its live roster, where the mesh manager purged both.
+        /// right after the mesh purged it from its live roster.
         ///
         /// - Parameter fingerprint: The removed member's fingerprint.
         func meshMemberWasRemoved(fingerprint: String) {
@@ -375,8 +372,8 @@ public final class FernletMeshFeatures {
         }
 
         /// The host pushed a changed routed access gate: the session photos mirror it, re-read their
-        /// indexes on a rising edge and recompute whether held photos can be shown, where the mesh
-        /// manager's gate door ran both, before the re-entry pass the edge owes.
+        /// indexes on a rising edge and recompute whether held photos can be shown, before the re-entry
+        /// pass the edge owes.
         ///
         /// - Parameters:
         ///   - gate: The gate as the host now knows it.

@@ -98,7 +98,7 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
     /// the provider is identical. Deliberately NOT `Codable`/persisted anywhere — it is a
     /// compile-time wiring decision made where each store is constructed.
     public enum Role: Sendable, CaseIterable {
-        /// The friend photowall cache (`MeshNetworkManager.photoCacheStore`): the original,
+        /// The friend photowall cache (`MeshSessionPhotos.photoCacheStore`): the original,
         /// backup-restorable row. Never re-encrypted, never wiped.
         case friendWall
         /// The user's own photos — meal, recipe, and gym-progress (body) pictures plus the sealed
@@ -178,7 +178,7 @@ public final class KeychainPrivateMediaKeyProvider: PrivateMediaKeyProviding {
 
     /// In-memory copy of the key, cached to avoid a keychain hit per byte read. Unsynchronized:
     /// confined by convention to the owning store's isolation domain (in practice the main actor
-    /// of `MeshNetworkManager` or the app's `FernletStore`).
+    /// of FernletSocial's `MeshSessionPhotos` or the app's `FernletStore`).
     private var cachedKey: SymmetricKey?
 
     /// Creates a provider for one media-key ``Role``.

@@ -2,7 +2,7 @@
 // FernletSocial/HeartSharing
 //
 // ProximityKit plan step A0.5.10: the in-session hearts (TF b19 item 5; on the routed store since P6
-// item 6), moved from the mesh manager with no byte, golden or audit change: the send to one recipient,
+// item 6): the send to one recipient,
 // which mints through the engine's public origination door, its state and failure vocabulary with their
 // auto-clear, its in-flight claims and their test seams, the two reachability questions the camera's
 // heart button asks (the engine's public addressability query and a seat's capability gate by token),
@@ -11,7 +11,7 @@
 // readiness, a trusted, unblocked author as its admission, and the heart ledger's commit — the
 // closeness feed above the ack's own proof guard — as its judgement.
 //
-// The engine keeps what it always decided: the ceremony's order (readiness, the ledger-resolved author
+// The engine decides the rest: the ceremony's order (readiness, the ledger-resolved author
 // with its removal and block legs, the judge's admission before any byte is read, the blob, its one
 // open, the delivery, the judgement), every `mesh.routedHeart.*` line but the send's, every FINAL mark,
 // and the stage's evidence, which it mints from the judge's `committed` answer alone. Resetting the
@@ -38,9 +38,8 @@ import ProximityKit
 /// ``onHeartReceived``), asks the two reachability questions and sends; the judge and the session-end
 /// reset are not its API.
 ///
-/// `@MainActor` and `@Observable`, like the mesh manager that held all of this until plan step A0.5.10,
-/// with its `@ObservationIgnored` annotations kept: the camera's heart affordance re-renders on
-/// ``sessionHeartState`` alone.
+/// `@MainActor` and `@Observable`, like the mesh manager: the camera's heart affordance re-renders
+/// on ``sessionHeartState`` alone.
 @MainActor
 @Observable
 public final class MeshSessionHearts {
@@ -167,8 +166,7 @@ public final class MeshSessionHearts {
 
     /// Ends the state's clear task if these hearts are released mid-countdown (today they never are:
     /// the composition that owns them lives as long as its host), so its sleep cannot outlive its
-    /// owner. `isolated`: the handle is main-actor state. The mesh manager cancelled it in its own
-    /// teardown until plan step A0.5.10.
+    /// owner. `isolated`: the handle is main-actor state.
     isolated deinit {
         sessionHeartStateClearTask?.cancel()
     }
@@ -403,7 +401,7 @@ public final class MeshSessionHearts {
 
     /// Drops the in-session heart's feedback and its in-flight claims: the session ended. The
     /// composition's session observer calls it as the ending's last leg, after the shop's window and
-    /// the chat transcript's drop, the position the mesh manager ran it at until plan step A0.5.10.
+    /// the chat transcript's drop.
     func resetSessionHeartState() {
         // TF b19 item 5: drop any lingering in-session heart feedback so a "Sent"/failure line
         // can't outlive the session that produced it (there is no "Sending…" state on this path any
@@ -427,11 +425,10 @@ public final class MeshSessionHearts {
         HeartJudge(hearts: self)
     }
 
-    /// The heart row's ledger judge (plan step A0.5.10, S10; the mesh manager's built-in judge since
-    /// plan step A0.5.3 before it): the hearts setting and the ledger's load as its readiness, the trust
-    /// vault as its admission, and the heart ledger's commit as its judgement, each as the ceremony ran
-    /// it. Private and nested (design rule 6), so the engine's entry points stay off the hearts' public
-    /// API, and so it reaches the hearts' private host holder.
+    /// The heart row's ledger judge (plan step A0.5.10, S10): the hearts setting and the ledger's load
+    /// as its readiness, the trust vault as its admission, and the heart ledger's commit as its
+    /// judgement. Private and nested (design rule 6), so the engine's entry points stay off the
+    /// hearts' public API, and so it reaches the hearts' private host holder.
     ///
     /// Holds its hearts strongly: the mesh retains this adapter through its judge map, and the hearts
     /// hold the mesh weakly, so nothing the mesh retains retains the mesh.

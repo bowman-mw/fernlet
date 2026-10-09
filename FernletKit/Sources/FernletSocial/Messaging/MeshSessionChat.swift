@@ -1,15 +1,15 @@
 // MeshSessionChat.swift
 // FernletSocial/Messaging
 //
-// ProximityKit plan step A0.5.9: the live-session chat (Phase 5; a routed item since P6 item 4),
-// moved from the mesh manager with no byte, golden or audit change: the transcript store, the 13+
-// chat gate, the text sender, which mints through the engine's public origination door, its send
+// ProximityKit plan step A0.5.9: the live-session chat (Phase 5; a routed item since P6 item 4): the
+// transcript store, the 13+ chat gate, the text sender, which mints through the engine's public
+// origination door, its send
 // outcome and its test seam, and the per-origin message budget; and the temporary-message row's
 // projection handler, a private adapter nested here that the composition (`FernletMeshFeatures`)
 // registers under the host's text row: the 13+ gate before the engine opens an item, then the
 // session liveness the engine computed, the budget and the transcript, in that order.
 //
-// The engine keeps what it always decided: the whole guard chain above a handler (the privacy-wipe
+// The engine decides the rest: the whole guard chain above a handler (the privacy-wipe
 // refusal, the decrypt predicate, the row, the projected set, the ledger's author with its removal
 // and block legs, the resident bound, the mutation predicate, the blob), the one open, and the
 // session-content generation the liveness reads, which it advances at the three moments the
@@ -69,9 +69,9 @@ public nonisolated enum MeshTextSendOutcome: Equatable, Sendable {
 /// gate (``chatAllowedProvider``), reads the transcript (``sessionMessages``) and sends
 /// (``sendTempMessage(_:)``); the projection handler and the transcript's drop are not its API.
 ///
-/// `@MainActor` and `@Observable`, like the mesh manager that held all of this until plan step A0.5.9,
-/// with its `@ObservationIgnored` annotations kept: the panel re-renders on the store's own
-/// observation (``sessionMessages`` is a constant), never on this object's providers or budget.
+/// `@MainActor` and `@Observable`, like the mesh manager, with its providers, test seam, budget and
+/// references `@ObservationIgnored`: the panel re-renders on the store's own observation
+/// (``sessionMessages`` is a constant), never on this object's providers or budget.
 @MainActor
 @Observable
 public final class MeshSessionChat {
@@ -134,7 +134,7 @@ public final class MeshSessionChat {
     /// materially above 500 would be decoration.
     static let maxTextMessagesPerSenderPerSession = 200
 
-    /// The incoming per-`(mesh, origin)` MESSAGE budget — the twin of the mesh's photo budget, with
+    /// The incoming per-`(mesh, origin)` MESSAGE budget — the twin of the session photos' budget, with
     /// the same keying, the same bounds and the same reason for both: keyed on the ITEM's signed
     /// mesh (D-13.23), memory-only, never cleared by a mesh change, so a deferred projection cannot
     /// buy a fresh budget, and owed no wipe row because nothing here reaches disk.
@@ -171,7 +171,8 @@ public final class MeshSessionChat {
 
     /// Send a live-session chat message to the room, as a **routed item** (P6 item 4, plan §12).
     ///
-    /// The same three lines the mesh's photo sender uses: take the host's temporary-message row's
+    /// The same three lines the session photos' sender uses (`MeshSessionPhotos`'
+    /// `shareRoutedPhoto`): take the host's temporary-message row's
     /// token and ask the mesh whether that row is registered, frame a `MeshRoutedTextBody` under the
     /// family's frozen framing, and hand it to the mesh's
     /// `originateRoutedItem(body:typeToken:itemID:audience:now:)`, which pushes it once to every
@@ -370,8 +371,8 @@ public final class MeshSessionChat {
     }
 
     /// The incoming per-origin MESSAGE budget, keyed on the ITEM's mesh (D-13.23) — the twin of the
-    /// mesh's photo budget, and the routed path's replacement for the retired per-sender token
-    /// bucket.
+    /// session photos' budget (`MeshSessionPhotos`), and the routed path's replacement for the
+    /// retired per-sender token bucket.
     ///
     /// **A policy act, stated plainly** (P6 item 4): a per-SECOND rate limit is replaced by a
     /// per-session TOTAL. The bucket that went with the live transport (burst 5, refill 1/s) is

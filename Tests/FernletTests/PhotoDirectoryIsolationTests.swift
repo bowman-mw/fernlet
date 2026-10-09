@@ -140,13 +140,13 @@ struct PhotoDirectoryIsolationTests {
         #expect(scanned > 20, "the FernletStore construction scan found only \(scanned) sites — scanner broken?")
     }
 
-    /// The friend photo wall is the same hazard one media key over: `MeshNetworkManager` loads
-    /// `MeshPhotoCache.json` at init and re-saves the WHOLE index on `deletePhoto` /
-    /// `deleteAllSessionPhotos`, so on a process-wide root one manager silently inherits — and then
-    /// overwrites — another suite's album.
+    /// The friend photo wall is the same hazard one media key over: FernletSocial's session photos
+    /// (`meshFeatures.photos`) load `MeshPhotoCache.json` at init and re-save the WHOLE index on
+    /// `deletePhoto` / `deleteAllSessionPhotos`, so on a process-wide root one store's photos silently
+    /// inherit — and then overwrite — another suite's album.
     ///
-    /// The root now rides `ProximityHost.proximitySupportDirectory`, so a manager built from a
-    /// helper-made store is isolated for free. What still needs walling is the other half: a file
+    /// The root now rides `ProximityHost.proximitySupportDirectory`, so the photos of a helper-made
+    /// store are isolated for free. What still needs walling is the other half: a file
     /// that reaches proximity state while building its store DIRECTLY gets the production root back,
     /// and the damage lands in whichever suite happens to be running beside it.
     ///
@@ -155,8 +155,8 @@ struct PhotoDirectoryIsolationTests {
     ///
     /// | sidecar | cleared by |
     /// | --- | --- |
-    /// | `MeshPhotoCache.json` + wall prefs | not by the funnel (a documented survivor), but re-saved whole per manager |
-    /// | `PendingSessionPhotos/` (session photos nobody chose yet) | `deleteAllData` leg 4d, and every manager loads and rewrites its index |
+    /// | `MeshPhotoCache.json` + wall prefs | not by the funnel (a documented survivor), but re-saved whole per session-photo object (`meshFeatures.photos`) |
+    /// | `PendingSessionPhotos/` (session photos nobody chose yet) | `deleteAllData` leg 4d, and every session-photo object loads and rewrites its index |
     /// | `HeartLedger.json` | `resetAll` |
     /// | `HeartDropOutbox/Dedup/PeerBundles.json` | `deleteAllData` (plus their seal key — see the next wall) |
     /// | `ModerationLedger.json` | `resetAll` |

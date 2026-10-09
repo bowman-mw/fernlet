@@ -448,7 +448,7 @@ struct CryptographicPurposeBoundaryTests {
         "fernlet.canonical.mesh-admission-token.v2":
             "held by the admission-token round-trip and verify suites, which sign and verify real tokens",
         "fernlet.canonical.activity-descriptor.v2":
-            "held by the group-activity signing suites, which sign and verify real descriptors",
+            "held by FernletFeatureGoldenTests' activity transcripts; a descriptor is hashed, never signed",
         "fernlet.canonical.activity-join-token.v2":
             "held by the group-activity signing suites",
         "fernlet.canonical.activity-roster-snapshot.v2":

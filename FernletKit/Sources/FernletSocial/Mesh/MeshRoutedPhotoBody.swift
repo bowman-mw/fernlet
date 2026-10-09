@@ -3,9 +3,8 @@
 //
 // Network migration P5 item 13 (plan §11, §12's photo bullet): the PLAINTEXT a routed photo carries —
 // what the engine seals for the photo object's sender and what its one opener decodes for the photo
-// row's projection handler. Moved from ProximityKit's `MeshRoutedItemBody.swift` with the photos at plan
-// step A0.5.11, verbatim: the header and the body, with the family's two header allowances, which were
-// ProximityKit's `MeshRoutedItemBodyFormat` members and are the body's own constants now.
+// row's projection handler: the header and the body, with the family's two header allowances as the
+// body's own constants.
 //
 // Two fields the legacy `.friendPhoto` wire carried are deliberately ABSENT: `senderFingerprint`
 // and `senderSigningPublicKey`. Both are filled at hand-off from authenticated sources — the
