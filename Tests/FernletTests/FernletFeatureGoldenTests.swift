@@ -121,7 +121,8 @@
 //     reaper's attributes, their unqualified name and stored shape, and the ending it gives a stranded
 //     activity; and the ranging provider Fernlet's host builds each connection's coordinator over, an
 //     `NIRangingSession` fresh per call, which decides the introduction's `rangingMode` and
-//     `discoveryToken` on a UWB iPhone.
+//     `discoveryToken` on a UWB iPhone (since plan step A0.6.3 the host's own answer, its body read as
+//     source too).
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -255,8 +256,12 @@
 // names, and `JSONEncoder`'s default `.deferredToDate` writes a date as its seconds since the
 // reference date), compared to the frozen texts as objects. Two values are read rather than frozen,
 // because they are the device's: the device's name, of which the cell freezes the rule and that it is
-// not empty, and the type and freshness of the ranging provider, which no simulator can tell from a
-// provider without UWB by its behaviour. Nothing in group 30 was copied out of Swift's output either.
+// not empty, and the ranging provider, of which the cell freezes the type and the freshness, since
+// whether it has UWB is the device's answer, not the host's (an iPad says no; the iOS 26.5 simulator
+// says yes). What tells Fernlet's answer from a provider told it has no UWB on every device is its
+// source, so since plan step A0.6.3 the app host's body is frozen as text, `{NIRangingSession()}`
+// with whitespace removed, the spelling each door built before it asked its host. Nothing in group 30
+// was copied out of Swift's output either.
 
 import ActivityKit
 import CryptoKit
@@ -3662,20 +3667,32 @@ struct FernletFeatureGoldenTests {
         }
     }
 
+    /// The body of the app host's `makeProximityRangingProvider()` with every whitespace character
+    /// removed: a fresh `NIRangingSession()` with no override, so the device's own capability decides.
+    static let frozenRangingAnswerBody = "{NIRangingSession()}"
+
     /// Fernlet's host ranges with NearbyInteraction, a fresh provider per connection: the provider its
     /// channel-ready doors build each coordinator over is an `NIRangingSession`, so a UWB iPhone keeps
     /// introducing itself as `uwb` with its discovery token, and two calls never hand out one instance,
     /// so one session's `stop()` can never invalidate another's `NISession`. Only providers are built,
     /// never a coordinator over one: construction reads one capability flag and creates no `NISession`.
-    /// No simulator behaviour tells this provider from one without UWB, so the type and the freshness are
-    /// what is pinned.
-    @Test func fernletsHostRangesWithNearbyInteractionFreshPerConnection() {
+    /// Whether a provider has UWB is the device's answer, not the host's, so the cell pins no
+    /// capability; what tells Fernlet's answer from `NIRangingSession(isHardwareSupported: false)` is its
+    /// source, so since plan step A0.6.3 the app host's body (comments dropped, whitespace removed) is
+    /// held to ``frozenRangingAnswerBody`` as well.
+    @Test func fernletsHostRangesWithNearbyInteractionFreshPerConnection() throws {
         let store = makeTestStore()
         let first = Self.rangingProvider(of: store)
         let second = Self.rangingProvider(of: store)
         #expect(first is NIRangingSession, "Fernlet's host ranges with \(type(of: first))")
         #expect(second is NIRangingSession, "Fernlet's host ranges with \(type(of: second))")
         #expect(first !== second, "two connections were handed one ranging provider")
+        let adapter = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ProximityHostAdapter.swift"))
+        let signature = "func makeProximityRangingProvider() -> any RangingProvider"
+        let answer = try #require(MeshRoutedSourceScan.bracedBody(after: signature, in: adapter),
+                                  "the app's host no longer answers `\(signature)`")
+        let spelled = answer.filter { !$0.isWhitespace }
+        #expect(spelled == Self.frozenRangingAnswerBody, "the app's host answers \(spelled)")
     }
 }
 
@@ -4705,12 +4722,12 @@ extension FernletFeatureGoldenTests {
         store.proximityFallbackDisplayName
     }
 
-    /// The ranging provider Fernlet's host builds one connection's coordinator over: today the
-    /// channel-ready doors' own `NIRangingSession()` (the mesh's and the recipe radio's in ProximityKit,
-    /// presence's heart door in FernletSocial). Re-pointed at plan step A0.6.3, when each door asks its
-    /// host (`makeProximityRangingProvider()`).
+    /// The ranging provider Fernlet's host builds one connection's coordinator over: since plan step
+    /// A0.6.3 its host's `makeProximityRangingProvider()` (`ProximityHostAdapter.swift`), which the
+    /// mesh's and the recipe radio's channel-ready doors in ProximityKit and presence's heart door in
+    /// FernletSocial each call once per connection; until then each door's own `NIRangingSession()`.
     static func rangingProvider(of store: FernletStore) -> any RangingProvider {
-        NIRangingSession()
+        store.makeProximityRangingProvider()
     }
 
     /// How Fernlet's proximity root is spelled at each site that names it: today ProximityKit's

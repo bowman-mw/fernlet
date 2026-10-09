@@ -262,7 +262,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `updateDiscoveryInfo()` | Restarts advertiser with current discovery metadata. |
 | `hasCommittedSlot(for:)` | **P8 item 3 (findings F-2/F-4)**: whether `peer` holds a slot whose handshake has COMMITTED (`fingerprint != nil`), matched by endpoint through `slot(for:)`. Distinct from `hasSlot(for:)` on purpose — it is the ONLY excuse doors 2 and 3 make while `holdCommittedLinks()` is holding, and answering it with "holds a seat" re-admits the uncommitted candidate the hold has just disconnected. |
 | `handlePeerDiscovered(_:)` | Auto-invites peers during proximity join or into an open mesh when capacity/overflow rules allow. Door 1 of the hold: `isAdmittingNewPeers` is read as its FIRST line, above the `isProximityJoin` branch, and again in the detached re-invite retry `handlePeerDisconnected` schedules (finding F-6). |
-| `handleChannelReady(_:)` | Creates a `ProximityCoordinator` and slot for a ready peer channel, then starts friend-mode handshake. |
+| `handleChannelReady(_:)` | Creates a `ProximityCoordinator` and slot for a ready peer channel, over the ranging provider its host builds for that connection (`store.makeProximityRangingProvider()`, since plan step A0.6.3), then starts friend-mode handshake. |
 | `removeSlot(_:)` | Cancels a slot coordinator, removes the slot/trust policy, and reranks. |
 | `disconnectSlot(_:)` | Sends goodbye, cancels coordinator, removes slot/trust policy, and reranks. Reused by `disconnectUncommittedSlotsForHold()`, so a slot the hold drops dies exactly as any other eviction does. |
 | `disconnectUncommittedSlotsForHold()` | **P8 item 3 (review finding F-2)**: the hold's sweep. Disconnects every slot with no fingerprint — this codebase's one spelling of "not committed" — through `disconnectSlot(_:)`, so `holdCommittedLinks()` leaves exactly the links it is named for. Runs AFTER `isAdmittingNewPeers` is lowered, so the `armSessionGiveUpClock(now:)` each disconnect ends with is refused instead of lighting the fuse the hold is putting out. Bounded by `slots` (R2), which the loop walks as a value copy. |
@@ -1476,20 +1476,41 @@ drives it through; the production conformer is this file.
 | Function | What It Does |
 | --- | --- |
 | `RangingDistance.==` | Equates unknown distances or exact meter/direction tuples. |
-| Protocol methods | Define async start/stop and local discovery token retrieval for ranging providers. |
+| `RangingError` | What every provider throws, the same three cases (plan step A0.6.3 moved it here from `NIRangingSession`, so no host or test names an iOS-only type to catch one): `hardwareUnsupported` from `myDiscoveryToken()` with no ranging hardware, `tokenUnavailable` when the local discovery token never populated, `invalidPeerToken` when a peer's token bytes did not decode. `nonisolated`, `Equatable`, `Sendable`; a provider without hardware never throws from `start(with:)`, it reports `.fallback(rssiOnly: true)`. Its text reaches only a coordinator's inspector. |
+| Protocol methods | Define async start/stop and local discovery token retrieval for ranging providers. Each connection's provider is its host's `ProximityHost.makeProximityRangingProvider()`, which the three channel-ready doors call once per connection; the coordinator owns and stops it. |
 
 ### `NIRangingSession.swift`
+
+Compiled on iOS only: the whole file is `#if os(iOS)` (plan step A0.6.3), because NearbyInteraction's
+module ships in the macOS SDK with every type it declares unavailable there. A host on iOS hands it
+out from `makeProximityRangingProvider()` (Fernlet's does, a new one per connection).
 
 | Function | What It Does |
 | --- | --- |
 | `init(isHardwareSupported:)` | Detects or overrides NearbyInteraction support and publishes RSSI fallback when unsupported. |
-| `myDiscoveryToken()` | Returns archived local `NIDiscoveryToken`, waiting briefly for token availability. |
+| `myDiscoveryToken()` | Returns archived local `NIDiscoveryToken`, waiting briefly for token availability; throws `RangingError.hardwareUnsupported` without UWB. |
 | `start(with:)` | Unarchives peer token, starts `NISession`, and publishes running state. |
 | `stop()` | Invalidates session, clears it, and publishes idle state. |
 | `getOrCreateSession()` | Reuses or creates an `NISession` and assigns delegate. |
 | `session(_:didUpdate:)` | Publishes distance/direction samples or unknown distance. |
 | `session(_:didInvalidateWith:)` | Clears invalidated session and publishes invalidated reason. |
-| Suspension delegate methods | Present but currently no-op. |
+| `sessionWasSuspended(_:)` / `sessionSuspensionEnded(_:)` | Not no-ops: a suspension publishes `.fallback(rssiOnly: false)`, and its end re-runs the last peer configuration on the live session and publishes `.running` (nothing when there is no configuration or no session). |
+
+### `NoopRangingProvider.swift`
+
+The provider for a device or a host without ranging (plan step A0.6.3): a host on macOS, where
+NearbyInteraction's types are unavailable, or one that wants no ranging, answers it from
+`makeProximityRangingProvider()`, and every session over it commits by hand or by the QR ceremony.
+Observably identical to `NIRangingSession` on hardware without UWB, call for call; it touches no
+framework and no radio.
+
+| Function | What It Does |
+| --- | --- |
+| `init()` | A provider for one connection; reads and starts nothing. `isHardwareSupported` is `false`, and `state` holds `.fallback(rssiOnly: true)` from construction. |
+| `myDiscoveryToken()` | Always throws `RangingError.hardwareUnsupported`. |
+| `start(with:)` | Publishes `.fallback(rssiOnly: true)` again and returns without throwing (a coordinator never starts a provider without hardware). |
+| `stop()` | Publishes `.idle`. |
+| `distance` | A subject the provider keeps and never sends to: no value and no completion, never an `Empty`, which would complete at once. |
 
 ### `ProximityForegroundAnchor.swift`
 
@@ -1678,7 +1699,7 @@ overloads of `sign` and `verify`.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityIdentity()`, `meshRoutedTypeEntries` and `proximityFallbackDisplayName`, a requirement the protocol extension **never defaults** (`ProximityHost.swift`'s header names them), so a host that supplies none fails to compile instead of running under another app's identity. |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`, `makeProximityIdentity()`, `meshRoutedTypeEntries` and `proximityFallbackDisplayName`, a requirement the protocol extension **never defaults** (`ProximityHost.swift`'s header names them), so a host that supplies none fails to compile instead of running under another app's identity. |
 | `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
 | `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; each builds its radio from it, and the identity each holds by default is its host's `makeProximityIdentity()`, checked against it. |
 | `IdentityService.init(namespace:keychainService:provisioningParticipant:)` | The identity's namespace, keychain service and provisioning participant — see `IdentityService.swift` below. Every shipping construction is the app's factory `IdentityService.fernletApp(keychainService:)` (`App/Fernlet/SealedBackupEscrowKey.swift`): ProximityKit builds none, its host door having no default; every app construction uses the factory (`HeartDropService`'s identity has no default, and `FernletStore` passes the factory's), and the store's `makeProximityIdentity()` answers it for the three managers. `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` holds every construction to that file, and `theStoresManagersHoldIdentitiesCarryingTheEscrowKey` the managers' identities to its escrow key. |
@@ -1834,7 +1855,7 @@ file chooses for the doubles that state none; a test that pins a value names `.f
 | `ItemNameModeration.moderatedPeerDisplayName(_:)`, `FernletIdentityEnvelope.sanitizedSenderDisplayName` / `disclosedSenderDisplayName` as properties, `RecipeShareAdvertisedName.publishable(_:)` | The peer-name coercion, the envelope's two sender reads and the advertised recipe name under `.fernlet`'s peer-name policy. |
 | `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` | The static key agreement under the spelling the suites were written against: a pure rename of `staticKeyAgreement(withEphemeralPublicKey:)`, which takes no namespace. |
 | `ProximityHost.makeProximityIdentity()` (a test-only extension) | The host doubles' identity door, which the requirement does not default: `IdentityService(namespace: proximityNamespace)`, the participant-less identity under the double's own namespace (not `.fernlet` for the golden suites' five), the shape the doubles were written against. Only conformances in the test target see it; the app's `FernletStore` answers for itself, and `ForeignIdentityHost` keeps its own answer. |
-| `ProximityHost.proximityFallbackDisplayName` (a test-only extension, plan step A0.6.2) | The host's platform facts for the doubles that state none, which the requirement does not default: the fallback name `"Test device"`, a generic word naming no device, chosen here under the rule's second stated exception. Every double states a non-empty name of its own, so only a cell that empties one reads it. Only conformances in the test target see it; the app's `FernletStore` answers `UIDevice.current.name` for itself, and `ProximityVocabularyGoldenTests`' `PresentationNamespaceHost` takes its fallback from the cell that builds it. |
+| `ProximityHost.proximityFallbackDisplayName` (plan step A0.6.2) / `makeProximityRangingProvider()` (plan step A0.6.3), a test-only extension | The host's platform facts for the doubles that state none, which the requirements do not default, chosen here under the rule's second stated exception: the fallback name `"Test device"`, a generic word naming no device (every double states a non-empty name of its own, so only a cell that empties one reads it); and a fresh `NoopRangingProvider()` per connection, which builds no `NISession` (no test fires a channel-ready door; the coordinator tests take a provider of their own through the managers' test seams). Only conformances in the test target see it; the app's `FernletStore` answers `UIDevice.current.name` and `NIRangingSession()` for itself, and `ProximityVocabularyGoldenTests`' `PresentationNamespaceHost` takes its fallback from the cell that builds it. |
 
 ### The test target's FernletSocial bindings (`Tests/FernletTests/FernletSocialTestBindings.swift`)
 
@@ -2289,7 +2310,7 @@ frame.
 | `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`), like the mesh and presence managers. |
 | `handlePeerDiscovered(_:)` | Filters self/blocked peers and updates sorted nearby recipients. |
 | `handlePeerLost(_:)` | Removes lost peer and records diagnostics. |
-| `handleChannelReady(_:)` | Creates a coordinator-backed recipe-share connection and starts friend handshake. |
+| `handleChannelReady(_:)` | Creates a coordinator-backed recipe-share connection, over the ranging provider its host builds for that pairing (`store.makeProximityRangingProvider()`, since plan step A0.6.3), and starts friend handshake. |
 | `startObserving()` | Observes connection coordinator states through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls `checkCoordinatorStates()` after each observed change. |
 | `checkCoordinatorStates()` | Captures verified fingerprints/KA keys, ensures recipients, sends pending payloads, and drops stale connections. |
 | `ensureRecipient(for:identity:)` | Adds/updates a recipient from verified identity. |
@@ -3172,10 +3193,11 @@ whose phrases are Fernlet's display policy, beside `PeerNames.fernlet`.
 
 | Type Or Member | What It Does |
 | --- | --- |
-| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. The requirements the extension never defaults, because each is the host's identity, custody, rule or platform fact rather than the mechanism's, are `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityIdentity()`, `meshRoutedTypeEntries` and `proximityFallbackDisplayName` (the file's header names them). The requirements only Fernlet's features read — the trusted peers, the trust store and the nearby-hearts opt-in — are FernletSocial's `FernletSocialHost` refinement's, which the app's store conforms to as well. |
+| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. The requirements the extension never defaults, because each is the host's identity, custody, rule or platform fact rather than the mechanism's, are `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`, `makeProximityIdentity()`, `meshRoutedTypeEntries` and `proximityFallbackDisplayName` (the file's header names them). The requirements only Fernlet's features read — the trusted peers, the trust store and the nearby-hearts opt-in — are FernletSocial's `FernletSocialHost` refinement's, which the app's store conforms to as well. |
 | `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
+| `makeProximityRangingProvider()` | A fresh `RangingProvider` for one connection (plan step A0.6.3), with **no default**: whether a connection ranges is the host's product and platform decision. The mesh's, the recipe radio's and presence's heart channel-ready doors each call it once per connection and build that connection's coordinator over it, which owns and stops it (the managers' coordinator test seams take a provider of their own). A new value per call, starting nothing: one instance handed to two connections would let one session's `stop()` end the other's ranging. On iOS a host answers `NIRangingSession()`, which needs `NSNearbyInteractionUsageDescription`; a host on macOS, or one that wants no ranging, answers `NoopRangingProvider()`. Fernlet's adapter answers `NIRangingSession()` (`FernletFeatureGoldenTests`' group 30 pins its body); the test target's doubles that state none answer `NoopRangingProvider()` through one test-only extension. |
 | `makeProximityIdentity()` | The identity a manager builds when handed none: the mesh, presence and recipe-share managers call it once each, at construction, and check it against their namespace (`ProximityNamespaceGate.checkIdentity`), so an identity of another namespace starts no radio. **No default**: an identity's custody is the host's, so ProximityKit never guesses one and a host that answers nothing fails to compile. Fernlet's adapter answers its factory's identity, `IdentityService.fernletApp()`, which carries the sealed-backup escrow key (`KeyCustodyBoundaryTests` holds each of the store's three managers to it); sixteen of the test target's seventeen doubles answer `IdentityService(namespace: proximityNamespace)`, with no provisioning participant, through one test-only extension the app's conformance cannot see, and `ProximityNamespaceGateTests`' `ForeignIdentityHost` answers an identity of another namespace, so each manager's check can be seen refusing. |
 | `meshRoutedTypeEntries` | The routed-type rows the host's features carry, with **no default** (plan step A0.5.9, S16): the mesh manager builds its routed type registry from them alone, once, at `init`, and its widest row is the resident bound. Fernlet's adapter answers FernletSocial's `FernletRoutedTypes.entries(_:)` over its namespace's routed types (the text, heart and photo rows); the test target's doubles answer the same through one test-only extension. |
 | `proximityDisplayName`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The name this device advertises and the block surface the managers consume: the fingerprint block list the routed author resolution and the slot gates ask, and the block a session's "Block" action writes. |

@@ -92,8 +92,12 @@ import Testing
 /// `proximitySupportDirectory`, `proximityNamespace` (ProximityKit plan step A0.2.3: Fernlet's
 /// protocol identity, a constant value), `proximityInstallBinding` (a stateless adapter over the
 /// install's binding row), `makeProximityTrustPolicy` (a fresh session trust policy over the vault,
-/// which runs nothing until a coordinator consults it), `makeProximityIdentity` (a fresh identity over
-/// the store's rows, which provisions nothing until asked), `meshRoutedTypeEntries` (ProximityKit plan
+/// which runs nothing until a coordinator consults it), `makeProximityRangingProvider` (ProximityKit
+/// plan step A0.6.3: a fresh ranging provider for one connection; constructing Fernlet's reads one
+/// capability flag and creates no `NISession`, and nothing can start it from the refresh directory,
+/// because its members are ProximityKit's and the import wall refuses ProximityKit there),
+/// `makeProximityIdentity` (a fresh identity over the store's rows, which provisions nothing until
+/// asked), `meshRoutedTypeEntries` (ProximityKit plan
 /// step A0.5.9: FernletSocial's routed-type rows, constant values the mesh reads once at
 /// construction), `proximityDisplayName`, `proximityFallbackDisplayName` (ProximityKit plan step
 /// A0.6.2: an inert string, the device's generic name), `presenceEnablePromptRequested`,

@@ -910,6 +910,13 @@ extension ProximityHost {
 //   fallback must be, never the device's own name, which is what ProximityKit read for the doubles
 //   before. Every double states a non-empty name of its own, so only a cell that empties one reads it;
 //   the cells that pin Fernlet's fallback run on `FernletStore`, which answers `UIDevice.current.name`.
+// - `makeProximityRangingProvider()` (A0.6.3) is a fresh `NoopRangingProvider()`: a provider without
+//   ranging, which builds no `NISession`, reads no capability and names no iOS-only type. No test
+//   fires a channel-ready door (no cell starts a radio), so no cell's behaviour moves; a later test
+//   that reaches one ranges nothing, where the doors' own `NIRangingSession()` would have tried to
+//   range, since NearbyInteraction reports precise-distance support on the iOS 26.5 simulator. The
+//   coordinator tests build theirs through the managers' test seams with a provider of their own,
+//   and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
 
 /// The host's platform facts for the test target's host doubles that state none (plan step A0.6). It
 /// inherits the protocol's main-actor isolation, as the requirements it answers have.
@@ -918,4 +925,8 @@ extension ProximityHost {
     /// `"Test device"`: the name a double goes by when its user set none, a generic word that names no
     /// device (plan step A0.6.2).
     var proximityFallbackDisplayName: String { "Test device" }
+
+    /// A fresh `NoopRangingProvider()` per call: a double's connections range nothing, as a host
+    /// without ranging's do (plan step A0.6.3).
+    func makeProximityRangingProvider() -> any RangingProvider { NoopRangingProvider() }
 }

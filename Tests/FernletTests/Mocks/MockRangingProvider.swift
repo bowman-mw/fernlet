@@ -38,7 +38,7 @@ final class MockRangingProvider: RangingProvider {
     }
 
     func myDiscoveryToken() async throws -> Data {
-        guard isHardwareSupported else { throw NIRangingSession.RangingError.hardwareUnsupported }
+        guard isHardwareSupported else { throw RangingError.hardwareUnsupported }
         return Data(repeating: 0xAB, count: 32)
     }
 

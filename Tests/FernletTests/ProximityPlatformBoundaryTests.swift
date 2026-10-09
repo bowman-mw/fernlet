@@ -10,7 +10,7 @@
 // of the device's name, a platform directory and a default for a fact only the host may state all
 // compile clean on iOS and pass every other test. So this suite reads ProximityKit's source through
 // `ProximityNamespaceBoundaryTests`' one walker (lexed: comments dropped, literals emptied) and holds
-// three rules, its readers fixtured both ways in a fourth cell:
+// four rules, its readers fixtured both ways in a cell of their own:
 //
 //   1. every module a file imports (`import M`, `@preconcurrency import M`, `import struct M.X`) or
 //      tests for with `canImport(M)` is a neutral baseline module, available on both platforms, or an
@@ -24,19 +24,25 @@
 //      temporary and home directories, a search-path call, a container), but on the rows listed, and
 //      no `ProximityHost` extension declares a default for a fact only the host may state (its
 //      namespace, install binding, trust policy, identity, routed rows, fallback name, ranging
-//      provider and storage root), read as declarations at the extension's top level, never as names.
+//      provider and storage root), read as declarations at the extension's top level, never as names;
+//   4. every channel-ready door that builds a connection's coordinator (the mesh's and the recipe
+//      radio's here, and presence's heart door in FernletSocial, Fernlet's half) builds it over its
+//      host's `makeProximityRangingProvider()`, once, naming no provider of its own, and
+//      `NIRangingSession` is named in ProximityKit code only in its own file.
 //
-// Every rule is a ratchet both ways. A new use fails; a use that goes away fails too, until its row is
-// deleted. Each transient row names the plan step that deletes it, and later steps only delete rows,
-// so the wall ends with its permanent rows: `ProtectedSidecar.swift`'s guarded UIKit import (the
-// protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's file once it
-// is guarded whole. Today's rows are 3 seams (2 transient: the NearbyInteraction provider's unguarded
-// import and the Live Activity reaper's ActivityKit), no device-name row, 1 directory row (the
-// namespace's Application Support default) and 1 host-fact default (the extension's storage root);
-// the coordinator's, the mesh manager's and the recipe-share manager's vestigial UIKit imports left at
-// plan step A0.6.1, and the local name's UIKit import and its `UIDevice` read at A0.6.2, when the host
-// began stating the fallback name. Until ProximityKit builds for macOS on every push, this scan is the
-// only thing that sees a platform fact enter it.
+// The first three rules are ratchets both ways. A new use fails; a use that goes away fails too, until
+// its row is deleted. Each transient row names the plan step that deletes it, and later steps only
+// delete rows, so the wall ends with its permanent rows: `ProtectedSidecar.swift`'s guarded UIKit
+// import (the protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's
+// file, guarded whole by `#if os(iOS)` since plan step A0.6.3. Today's rows are 3 seams (those 2
+// permanent, and 1 transient: the Live Activity reaper's ActivityKit), no device-name row, 1 directory
+// row (the namespace's Application Support default) and 1 host-fact default (the extension's storage
+// root). The coordinator's, the mesh manager's and the recipe-share manager's vestigial UIKit imports
+// left at plan step A0.6.1, and the local name's UIKit import and its `UIDevice` read at A0.6.2, when
+// the host began stating the fallback name; at A0.6.3, when the doors began asking their host for each
+// connection's ranging provider, the NearbyInteraction provider's file was guarded whole. Until
+// ProximityKit builds for macOS on every push, this scan is the only thing that sees a platform fact
+// enter it.
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -45,9 +51,9 @@ import Foundation
 import Testing
 
 /// ProximityKit imports only neutral modules and its declared platform seams, reads no device name,
-/// computes no platform directory and defaults no fact only its host may state: four cells, each rule a
-/// ratchet whose transient rows name the plan step that deletes them, and its readers fixtured both
-/// ways.
+/// computes no platform directory and defaults no fact only its host may state, and every channel-ready
+/// door asks its host for each connection's ranging provider: five cells, the first three rules ratchets
+/// whose transient rows name the plan step that deletes them, and their readers fixtured both ways.
 @Suite struct ProximityPlatformBoundaryTests {
 
     /// One ProximityKit file: its path under the module root and its lexed source, as
@@ -61,12 +67,10 @@ import Testing
     // MARK: The rows
 
     /// The plan step that takes a platform fact out of ProximityKit. A step's case is deleted with its
-    /// last row, as A0.6.1's (the vestigial UIKit imports) and A0.6.2's (the local name's `UIDevice`
-    /// read and its file's `import UIKit`) were.
+    /// last row, as A0.6.1's (the vestigial UIKit imports), A0.6.2's (the local name's `UIDevice` read
+    /// and its file's `import UIKit`) and A0.6.3's (the NearbyInteraction provider's unguarded import,
+    /// whose row became the permanent whole-file seam) were.
     enum ExitStep: String, Sendable {
-        /// Ranging comes from the host (A0.6.3): the NearbyInteraction provider's file is guarded whole
-        /// by `#if os(iOS)`, and its row becomes that permanent whole-file seam.
-        case a063 = "A0.6.3"
         /// The Live Activity reaper is the app's (A0.6.4): ActivityKit leaves with it.
         case a064 = "A0.6.4"
         /// The storage root always comes from the host (A0.6.6): the namespace's Application Support
@@ -148,15 +152,17 @@ import Testing
 
     /// Every platform module a ProximityKit file imports, exactly. Permanent: `ProtectedSidecar`'s
     /// protected-data retry, which observes UIKit's protected-data notification and compiles out without
-    /// it. Transient: the NearbyInteraction provider's unguarded import, which becomes a whole-file seam
-    /// under `#if os(iOS)` (A0.6.3); and the Live Activity reaper's ActivityKit (A0.6.4). The
-    /// coordinator's, the mesh manager's and the recipe-share manager's UIKit imports, which nothing in
-    /// them used, left at A0.6.1, and the local name's, which read `UIDevice`, at A0.6.2.
+    /// it; and the NearbyInteraction provider, `NIRangingSession`, its whole file under `#if os(iOS)`
+    /// since A0.6.3 (NearbyInteraction's module ships in the macOS SDK with every type it declares
+    /// unavailable there, so `canImport` would not keep it out of a macOS build). Transient: the Live
+    /// Activity reaper's ActivityKit (A0.6.4). The coordinator's, the mesh manager's and the
+    /// recipe-share manager's UIKit imports, which nothing in them used, left at A0.6.1, and the local
+    /// name's, which read `UIDevice`, at A0.6.2.
     static let seamRows: [SeamRow] = [
         SeamRow(path: "HeartSharing/ProtectedSidecar.swift", module: "UIKit",
                 guarded: .partial("canImport(UIKit)"), exit: nil),
-        SeamRow(path: "Ranging/NIRangingSession.swift", module: "NearbyInteraction", guarded: .unguarded,
-                exit: .a063),
+        SeamRow(path: "Ranging/NIRangingSession.swift", module: "NearbyInteraction",
+                guarded: .wholeFile("os(iOS)"), exit: nil),
         SeamRow(path: "ForegroundAnchor/ProximityForegroundAnchor.swift", module: "ActivityKit",
                 guarded: .partial("canImport(ActivityKit)"), exit: .a064)
     ]
@@ -200,8 +206,8 @@ import Testing
 
     /// The facts only a host may state, which no `ProximityHost` extension in ProximityKit may default:
     /// the requirements `ProximityHost.swift` says are never defaulted (the namespace, the install
-    /// binding, the trust policy, the identity, the routed rows and, since plan step A0.6.2, the fallback
-    /// name), then the ranging provider and the storage root.
+    /// binding, the trust policy, the identity, the routed rows and, since plan steps A0.6.2 and A0.6.3,
+    /// the fallback name and the ranging provider), then the storage root.
     static let hostFacts: Set<String> = [
         "proximityNamespace", "proximityInstallBinding", "makeProximityTrustPolicy", "makeProximityIdentity",
         "meshRoutedTypeEntries", "proximityFallbackDisplayName", "makeProximityRangingProvider",
@@ -430,6 +436,67 @@ import Testing
         #expect(reads == ["namespace"], "a read, a comment or a literal was read as a declaration: \(reads)")
         #expect(try hostExtensionBodies(in: lexedCode("protocol ProximityHost { var a: Int { get } }")).isEmpty,
                 "a protocol's body was read as an extension's")
+    }
+
+    // MARK: W5: the doors' ranging
+
+    /// One channel-ready door: its file and the declaration its brace-matched body follows.
+    struct Door: Sendable {
+        /// The file, by its path under the repository root.
+        let path: String
+        /// The declaration prefix the door's body follows, unique in its file.
+        let signature: String
+    }
+
+    /// The three doors that build one connection's coordinator: the mesh's and the recipe radio's in
+    /// ProximityKit, and presence's heart door in FernletSocial, which is Fernlet's half and stays with
+    /// Fernlet's walls when ProximityKit leaves the tree.
+    static let channelReadyDoors = [
+        Door(path: "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
+             signature: "private func handleChannelReady("),
+        Door(path: "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
+             signature: "private func handleChannelReady("),
+        Door(path: "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
+             signature: "private func handleHeartChannelReady(")
+    ]
+
+    /// The argument each door builds its coordinator's provider with: its host's answer, asked once per
+    /// connection.
+    static let hostRangingArgument = "ranging: store.makeProximityRangingProvider()"
+
+    /// The providers no door may name: a door that builds one has made its host's decision for it.
+    static let doorProviderNeedles: [Needle] = [
+        .identifier("NIRangingSession"), .identifier("NoopRangingProvider"), .identifier("MockRangingProvider")
+    ]
+
+    /// **W5.** Every channel-ready door asks its host for each connection's ranging provider: each door's
+    /// brace-matched body (comments dropped, literals emptied) passes ``hostRangingArgument`` exactly
+    /// once and names none of ``doorProviderNeedles``, and `NIRangingSession` is named in ProximityKit
+    /// code only in its own file. Whether a connection ranges is its host's decision (a host on macOS
+    /// cannot build NearbyInteraction's types at all, and one may want no ranging), so a door, or any
+    /// other ProximityKit file, that builds the NearbyInteraction provider itself takes that decision
+    /// back from every host.
+    @Test func everyChannelReadyDoorAsksItsHostForRanging() throws {
+        // R2: bounded by the three doors.
+        for door in Self.channelReadyDoors {
+            let code = Self.lexedCode(try RepoRoot.source(door.path))
+            let body = try #require(MeshRoutedSourceScan.bracedBody(after: door.signature, in: code),
+                                    "\(door.path) no longer declares `\(door.signature)`")
+            let asks = body.components(separatedBy: Self.hostRangingArgument).count - 1
+            #expect(asks == 1, "\(door.path)'s door passes `\(Self.hostRangingArgument)` \(asks) times")
+            // R2: bounded by the three needles.
+            for needle in Self.doorProviderNeedles {
+                #expect(try Self.mentions(of: needle, in: body) == 0, "\(door.path)'s door names \(needle.token)")
+            }
+        }
+        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
+        let named = try Self.tokenUses(of: [.identifier("NIRangingSession")], in: sources)
+        let home = Self.key("Ranging/NIRangingSession.swift", "NIRangingSession")
+        #expect(named == [home], """
+            `NIRangingSession` is named in ProximityKit code at \(named.sorted()), not only in its own file: \
+            a connection's provider is its host's to build
+            """)
     }
 
     // MARK: The readers

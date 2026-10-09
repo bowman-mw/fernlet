@@ -64,18 +64,21 @@
 //     the mesh role of its `PayloadType` case's name), its token sets and lists are the frozen tables
 //     whole, reflection finds no field left unpinned, and the bounds the namespace's soundness rules
 //     apply are those of the consumers they protect.
-// 14. **The ranging seam and the local name.** A ranging provider without UWB, observed call by call
-//     (its state from construction through a start, which does not throw, and a stop; a distance
-//     stream that never sends and never completes; a discovery token refused as
-//     `hardwareUnsupported`), and a coordinator over one introducing itself as `rssi` with exactly the
-//     keys `capabilities` and `rangingMode`, no discovery token and no prekey bundle, and waiting at the
-//     manual-commit gate for an `rssi` peer and for a `uwb` peer that sends a token, its provider never
-//     started (plan step A0.6, before ProximityKit's doors ask their host for the provider); and the
-//     local name over a host's own fallback (plan step A0.6.2, when the host began stating it): the
-//     setting trimmed of spaces and tabs and never of line breaks, or, when nothing is left, the host's
-//     fallback exactly as the host states it. What a UWB iPhone sends instead, no simulator shows: the
-//     provider Fernlet's host hands its doors is `FernletFeatureGoldenTests`' group 30, as is the
-//     fallback Fernlet's host states, this device's name.
+// 14. **The ranging seam and the local name.** A ranging provider without UWB, `NIRangingSession` told
+//     it has none and, since plan step A0.6.3, ProximityKit's `NoopRangingProvider`, the provider a
+//     host without ranging answers, each observed call by call (its state from construction through a
+//     start, which does not throw, and a stop; a distance stream that never sends and never completes;
+//     a discovery token refused as the protocol-level `RangingError.hardwareUnsupported`), and a
+//     coordinator over each, and over the test target's mock without UWB, introducing itself as `rssi`
+//     with exactly the keys `capabilities` and `rangingMode`, no discovery token and no prekey bundle,
+//     and waiting at the manual-commit gate for an `rssi` peer and for a `uwb` peer that sends a token,
+//     its provider never started (cut at plan step A0.6.0, before ProximityKit's doors asked their host
+//     for the provider); and the local name over a host's own fallback (plan step A0.6.2, when the host
+//     began stating it): the setting trimmed of spaces and tabs and never of line breaks, or, when
+//     nothing is left, the host's fallback exactly as the host states it. Which provider a host hands
+//     its doors, and so whether a UWB iPhone introduces itself as `uwb` with its token, is the host's:
+//     Fernlet's, an `NIRangingSession` fresh per connection, is `FernletFeatureGoldenTests`' group 30,
+//     as is the fallback Fernlet's host states, this device's name.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -2336,12 +2339,15 @@ struct ProximityVocabularyGoldenTests {
     /// One provider row: what the provider is, for failure messages, and how to build a fresh one.
     typealias ProviderRow = (name: String, make: @MainActor () -> any RangingProvider)
 
-    /// The ranging providers this group observes without UWB, each built fresh by its row: today
-    /// `NIRangingSession` told it has none, which reads no capability and creates no `NISession`.
+    /// The ranging providers this group observes without UWB, each built fresh by its row:
+    /// `NIRangingSession` told it has none, which reads no capability and creates no `NISession`, and,
+    /// since plan step A0.6.3, ProximityKit's `NoopRangingProvider`, the provider a host without
+    /// ranging answers, which touches no framework.
     static func noHardwareProviders() -> [ProviderRow] {
         let session: ProviderRow = ("NIRangingSession(isHardwareSupported: false)",
                                     { NIRangingSession(isHardwareSupported: false) })
-        return [session]
+        let noop: ProviderRow = ("NoopRangingProvider()", { NoopRangingProvider() })
+        return [session, noop]
     }
 
     /// The providers without UWB a coordinator is built over: the test target's `MockRangingProvider`
@@ -2352,17 +2358,19 @@ struct ProximityVocabularyGoldenTests {
         return [mock] + noHardwareProviders()
     }
 
-    /// Whether `error` is a provider's refusal for want of ranging hardware: today
-    /// `NIRangingSession.RangingError.hardwareUnsupported`, which the mock throws too.
+    /// Whether `error` is a provider's refusal for want of ranging hardware: since plan step A0.6.3 the
+    /// protocol-level `RangingError.hardwareUnsupported`, which `NIRangingSession`,
+    /// `NoopRangingProvider` and the mock all throw; until then `NIRangingSession.RangingError`.
     static func isHardwareUnsupported(_ error: any Error) -> Bool {
-        (error as? NIRangingSession.RangingError) == .hardwareUnsupported
+        (error as? RangingError) == .hardwareUnsupported
     }
 
     /// A ranging provider without UWB, observed call by call: it says it has none; its state reads the
     /// manual-commit fallback, `fallback(rssiOnly: true)`, from construction and again when it is
     /// started (a start that does not throw), then `idle` when it is stopped; its distance stream never
     /// sends a value and never completes; and it refuses a discovery token as `hardwareUnsupported`.
-    /// What a coordinator degrades to the manual commit on, and what an iPad and the simulator run.
+    /// What a coordinator degrades to the manual commit on: what an iPad runs, and what a host without
+    /// ranging answers.
     @Test func aProviderWithoutUWBReportsTheFallbackAndOffersNoToken() async throws {
         // R2: bounded by the providers.
         for provider in Self.noHardwareProviders() {

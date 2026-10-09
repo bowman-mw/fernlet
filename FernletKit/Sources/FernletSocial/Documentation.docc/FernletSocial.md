@@ -348,13 +348,13 @@ contracts (`MeshRoutedProjectionHandler`, `MeshRoutedLedgerJudge`, `MeshRoutedBo
 (`MeshVouchListExchange`) and the identity-taking initializer; the routed row and its public column
 types (`MeshRoutedTypeEntry`), the body framing (`MeshRoutedItemBodyFormat`, `CanonicalByteWriter`,
 `MeshRoutedItemSealFormat.overheadByteCount`) and the generic content union (`MeshContentSet`); and
-for presence the host seam (`ProximityHost`: its namespace, the per-connection trust policy, the
-resolved display name, the identity presence builds when it is handed none,
-`makeProximityIdentity()`, which it checks against its namespace as an injected one, and the
-fingerprint block list), the session coordinator it builds a heart connection over
-(`ProximityCoordinator`, with `ProximityPayloadHandling`, `NIRangingSession`, `ReplayCache`,
-`PeerHandle` and the coordinator's prekey-bundle hooks), the `ObservationLoop` it watches its
-coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name coercion
+for presence the host seam (`ProximityHost`: its namespace, the per-connection trust policy and
+ranging provider, `makeProximityRangingProvider()`, the resolved display name, the identity presence
+builds when it is handed none, `makeProximityIdentity()`, which it checks against its namespace as an
+injected one, and the fingerprint block list), the session coordinator it builds a heart connection
+over (`ProximityCoordinator`, with `ProximityPayloadHandling`, the host's ranging provider,
+`ReplayCache`, `PeerHandle` and the coordinator's prekey-bundle hooks), the `ObservationLoop` it
+watches its coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name coercion
 `ProximityDisplayName.peerDisplayName(_:in:)`, which every feature here re-moderates a peer's name
 through, the name display `PeerNameDisplay` (its identifier filter, which `FernletConnections`'
 `firstName` runs first) and the recipe-share diagnostics types its connection log rides. Two groups

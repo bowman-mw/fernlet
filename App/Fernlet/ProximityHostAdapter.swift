@@ -8,10 +8,10 @@ import UIKit
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
 /// `proximityFallbackDisplayName`, `proximityNamespace`, `proximityInstallBinding`,
-/// `makeProximityTrustPolicy()`, `makeProximityIdentity()` and `meshRoutedTypeEntries` is already
-/// satisfied by existing store members (`isBlockedFingerprint`, `blockProximityPeer`). This extension
-/// also holds the two members the store's `FernletSocialHost` conformance (below) adds,
-/// `allowNearbyHearts` and `proximityTrustStore`.
+/// `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`, `makeProximityIdentity()` and
+/// `meshRoutedTypeEntries` is already satisfied by existing store members (`isBlockedFingerprint`,
+/// `blockProximityPeer`). This extension also holds the two members the store's `FernletSocialHost`
+/// conformance (below) adds, `allowNearbyHearts` and `proximityTrustStore`.
 /// Kept in the app target: this conformance is the one piece that cannot move into `ProximityKit`,
 /// since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
@@ -73,6 +73,17 @@ extension FernletStore: ProximityHost {
     func makeProximityTrustPolicy() -> any ProximityTrustPolicy {
         FriendSessionTrustPolicy(vault: proximityTrustVault)
     }
+    /// The ranging provider each connection's coordinator measures distance with: a fresh
+    /// `NIRangingSession()`, today's provider, the one the mesh's, the recipe radio's and presence's
+    /// heart channel-ready doors built themselves until ProximityKit plan step A0.6.3, now asked for
+    /// at the same argument position of the same door and built here, a new one per call, so no
+    /// session's `stop()` can end another's ranging. It reads the device's capability and degrades to
+    /// the manual commit without UWB, exactly as before; the app declares
+    /// `NSNearbyInteractionUsageDescription`. The requirement has no default, so a host that left this
+    /// out would not compile; `FernletFeatureGoldenTests`' group 30 pins the type, a new instance per
+    /// call and this body as source, since whether a provider has UWB is the device's answer, not this
+    /// code's.
+    func makeProximityRangingProvider() -> any RangingProvider { NIRangingSession() }
     /// The identity the mesh, presence and recipe-share managers build when they are handed none:
     /// Fernlet's, from the app's one factory, `IdentityService.fernletApp()` (`SealedBackupEscrowKey.swift`),
     /// so it carries the sealed-backup escrow key as its provisioning participant and runs the escrow's
