@@ -405,17 +405,22 @@ let package = Package(
                 // follow-up then dropped `.v5` by reworking the `nonisolated` delegate callbacks
                 // that captured non-Sendable framework objects into their `Task { @MainActor … }`
                 // hops — those captures are the Swift-6 `sending` data races `.v5` had hidden:
-                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` and
-                //     `session(_:didInvalidateWith:)` now extract the Sendable values
-                //     (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop.
+                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` extracts the
+                //     Sendable values (distance/direction) BEFORE the hop, and
+                //     `session(_:didInvalidateWith:)` transfers the invalidated session itself via
+                //     a `nonisolated(unsafe)` local and compares it by identity after the hop (an
+                //     `ObjectIdentifier` would admit address reuse).
                 //   • Transport/MeshMultipeerSession.swift (deleted 2026-09-22 with the
                 //     MultipeerConnectivity radio) — its MCSession / advertiser / browser callbacks
                 //     transferred the non-Sendable `MCPeerID` (and the single-shot
                 //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
                 //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
-                //     ActivityKit `Activity` (a class) is passed to its `nonisolated async` `end`
-                //     via a `nonisolated(unsafe)` local. (P9 item 5 retired the requester, so the
-                //     orphan reaper is the one remaining site; the `update` half went with it.)
+                //     ActivityKit `Activity` (a class) was passed to its `nonisolated async` `end`
+                //     via a `nonisolated(unsafe)` local. (P9 item 5 retired the requester, leaving
+                //     the orphan reaper as the one site; the `update` half went with it.) The
+                //     reaper and its one `end` call are the app's since plan step A0.6
+                //     (App/Fernlet/ProximityLiveActivityReaper.swift), whose target compiles the
+                //     call with no transfer local, so this module holds no ActivityKit code.
                 // All rewrites are behavior-preserving — the UWB/MC/ActivityKit objects keep their
                 // exact runtime semantics — so the target builds clean in Swift 6 mode. (An earlier
                 // estimate of "exactly two errors, both in NIRangingSession" was incomplete: the

@@ -32,15 +32,16 @@
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step (38 lines in 5 files: the presence
 //      radio's, until A1, and the coordinator's two, until A0.7);
-//   6. no type that left ProximityKit for FernletSocial or the app (74 names: the heart dead-drop's,
+//   6. no type that left ProximityKit for FernletSocial or the app (76 names: the heart dead-drop's,
 //      presence's, moderation's (the report relay's among them), closeness's and friend state's types,
 //      the parked chat payload, the clothing shop's, the activity manager's with its payloads and the
 //      two domain types its signing extends, the live-session chat's with the content layer's first
 //      half, the session hearts' with the heart ledger, its proof, the ack, the merged heart, the
 //      commit and the body, the session photos' with the wall's post and preferences, the review batch
 //      and its answer, the routed photo body and the JSON sidecar, the deleted support layout and
-//      camera's copy vault, and the sealed-backup escrow's) is declared, extended or aliased in
-//      ProximityKit code again.
+//      camera's copy vault, the sealed-backup escrow's, and the Live Activity reaper and its
+//      attributes, the app's since plan step A0.6) is declared, extended or aliased in ProximityKit
+//      code again.
 //
 // And ProximityKit's target in `FernletKit/Package.swift` depends on exactly FernletCrypto (the
 // `CryptographicPurpose` signing overloads FernletSocial's feature labels and the app's duress and
@@ -61,13 +62,13 @@
 // or a coach-channel format, and no rule lists a line of a feature that left (the heart dead-drop,
 // presence, moderation's ban store and report relay, closeness, friend state, the parked chat payload,
 // the mesh's capability list and vouch-list content, the clothing shop, activities, the live-session
-// chat, the session hearts and heart ledger, the session photos and their review, and the
-// sealed-backup escrow), which rule 6 keeps out. Rule 5 holds the other direction, the doors
-// ProximityKit opens to Fernlet's own modules while a later step reshapes what is behind them: the
-// presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch posture and the
-// TXT vocabulary, which FernletSocial's presence manager drives (until A1); the coordinator's typed
-// send and manual commit, which presence's heart delivery and the recipe-share manager call (until
-// A0.7).
+// chat, the session hearts and heart ledger, the session photos and their review, the sealed-backup
+// escrow and the Live Activity reaper), which rule 6 keeps out. Rule 5 holds the other direction, the
+// doors ProximityKit opens to Fernlet's own modules while a later step reshapes what is behind them:
+// the presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch posture
+// and the TXT vocabulary, which FernletSocial's presence manager drives (until A1); the coordinator's
+// typed send and manual commit, which presence's heart delivery and the recipe-share manager call
+// (until A0.7).
 
 import Foundation
 import Testing
@@ -977,9 +978,10 @@ private extension UInt8 {
     /// payload, the activity manager with its payloads and the signing its two domain types carry, the
     /// live-session chat with the first half of the content layer, the session hearts with the heart
     /// ledger and everything its routed judgement builds, and the session photos with the session review,
-    /// the routed photo body and the JSON sidecar, for FernletSocial, and the sealed-backup escrow for
-    /// the app; the support layout that named their folder and the camera's copy vault, whose one line
-    /// FernletSocial's own copy holds, were deleted. Rules 2 to 4 cannot see one come back: a feature
+    /// the routed photo body and the JSON sidecar, for FernletSocial, and the sealed-backup escrow and
+    /// (plan step A0.6) the Live Activity reaper with its attributes type for the app; the support
+    /// layout that named their folder and the camera's copy vault, whose one line FernletSocial's own
+    /// copy holds, were deleted. Rules 2 to 4 cannot see one come back: a feature
     /// re-declared here under its old name, with no Fernlet string, no registry label and no domain
     /// type of its own, compiles clean and passes them and every other test, and two declarations of
     /// one name in two modules the app imports compile until a caller names it. So each name is
@@ -1103,8 +1105,9 @@ private extension UInt8 {
     /// preferences, the keep's outcome nested in `MeshSessionPhotos`, the session-end review batch, its
     /// answer and the answer's failure, the routed photo header and body, and the JSON sidecar). The
     /// app's: the sealed-backup escrow's (the escrow key, its reconcile outcome, its candidate and its
-    /// legacy-account name). Deleted: the support layout that named their folder, and the camera's
-    /// copy vault, `ProximityUICopy`, whose one line FernletSocial's copy holds.
+    /// legacy-account name), and, since plan step A0.6, the Live Activity reaper and the attributes
+    /// type it enumerates. Deleted: the support layout that named their folder, and the camera's copy
+    /// vault, `ProximityUICopy`, whose one line FernletSocial's copy holds.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -1125,7 +1128,8 @@ private extension UInt8 {
         "SessionHeartFailure", "SessionHeartState",
         "FriendPhotoWallPost", "FriendPhotoWallPreferences", "MeshFriendReviewBatch", "SessionPhotoAnswer",
         "SessionPhotoAnswerFailure", "MeshRoutedPhotoHeader", "MeshRoutedPhotoBody", "HeldKeepOutcome",
-        "JSONSidecarFile", "ProximityUICopy"
+        "JSONSidecarFile", "ProximityUICopy",
+        "ProximityConnectionActivityAttributes", "ProximityLiveActivityReaper"
     ]
 
     /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must

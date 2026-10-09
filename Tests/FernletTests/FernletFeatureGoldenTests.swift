@@ -119,10 +119,10 @@
 //     store's raw setting, which the activities and the heart dead-drop send as it is); Fernlet's
 //     proximity root, `Application Support/Fernlet`, and its four spellings; the Live Activity
 //     reaper's attributes, their unqualified name and stored shape, and the ending it gives a stranded
-//     activity; and the ranging provider Fernlet's host builds each connection's coordinator over, an
-//     `NIRangingSession` fresh per call, which decides the introduction's `rangingMode` and
-//     `discoveryToken` on a UWB iPhone (since plan step A0.6.3 the host's own answer, its body read as
-//     source too).
+//     activity (since plan step A0.6.4 the app's own reaper, read where it now lives); and the ranging
+//     provider Fernlet's host builds each connection's coordinator over, an `NIRangingSession` fresh
+//     per call, which decides the introduction's `rangingMode` and `discoveryToken` on a UWB iPhone
+//     (since plan step A0.6.3 the host's own answer, its body read as source too).
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -4740,9 +4740,9 @@ extension FernletFeatureGoldenTests {
         ProximityNamespace.fernlet.installation.storage.defaultDirectory
     }
 
-    /// The file holding the proximity Live Activity's attributes and reaper: today ProximityKit's
-    /// foreground anchor. Re-pointed at plan step A0.6.4, when the reaper is the app's.
-    static let reaperPath = "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift"
+    /// The file holding the proximity Live Activity's attributes and reaper: since plan step A0.6.4
+    /// the app's own `ProximityLiveActivityReaper.swift`; until then ProximityKit's foreground anchor.
+    static let reaperPath = "App/Fernlet/ProximityLiveActivityReaper.swift"
 
     /// The activity manager, whose two sends carry the raw local name: today FernletSocial's.
     static let activityManagerPath = "FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift"

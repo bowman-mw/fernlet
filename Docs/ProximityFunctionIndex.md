@@ -1515,14 +1515,24 @@ framework and no radio.
 ### `ProximityForegroundAnchor.swift`
 
 P9 item 5 retired the ActivityKit conformer; `NoopProximityForegroundAnchor` is the only anchor in
-shipping code and `ProximityCoordinator`'s unconditional default.
+shipping code and `ProximityCoordinator`'s unconditional default. The Live Activity reaper and its
+attributes type are the app's since plan step A0.6.4 (below), so the file imports no ActivityKit.
 
 | Function | What It Does |
 | --- | --- |
 | `NoopProximityForegroundAnchor.start(peerName:startedAt:)` | Marks foreground anchoring active. Shows nothing — the app raises no proximity Live Activity. |
 | `NoopProximityForegroundAnchor.update(bytesSent:bytesReceived:)` | No-op byte update. |
 | `NoopProximityForegroundAnchor.stop()` | Marks foreground anchoring inactive. |
-| `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded. Called once per launch from `FernletStoreLoader.startIfNeeded()`; the only remaining reader of the proximity attributes type. |
+
+### `App/Fernlet/ProximityLiveActivityReaper.swift` (the app)
+
+Moved from ProximityKit's foreground anchor at plan step A0.6.4, unchanged in behaviour; app target
+only, outside the widget's dual-membership set.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded, with the content `Ended`, no stale date and `.immediate` dismissal. Called once per launch from `FernletStoreLoader.startIfNeeded()`, before any proximity manager can exist; the only remaining reader of the proximity attributes type. Its `end` call takes no transfer local in the app target. |
+| `ProximityConnectionActivityAttributes` | The proximity Live Activity's attributes (`peerName`, `startedAt`; a `ContentState` of `bytesSent`, `bytesReceived` and `status`), kept only for the reaper's enumeration. ActivityKit matches a stranded activity to it by unqualified type name and decodes it against this stored shape, so neither may change. |
 
 ## Protocol Namespace
 

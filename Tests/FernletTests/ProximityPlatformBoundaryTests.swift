@@ -34,15 +34,15 @@
 // its row is deleted. Each transient row names the plan step that deletes it, and later steps only
 // delete rows, so the wall ends with its permanent rows: `ProtectedSidecar.swift`'s guarded UIKit
 // import (the protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's
-// file, guarded whole by `#if os(iOS)` since plan step A0.6.3. Today's rows are 3 seams (those 2
-// permanent, and 1 transient: the Live Activity reaper's ActivityKit), no device-name row, 1 directory
-// row (the namespace's Application Support default) and 1 host-fact default (the extension's storage
-// root). The coordinator's, the mesh manager's and the recipe-share manager's vestigial UIKit imports
-// left at plan step A0.6.1, and the local name's UIKit import and its `UIDevice` read at A0.6.2, when
-// the host began stating the fallback name; at A0.6.3, when the doors began asking their host for each
-// connection's ranging provider, the NearbyInteraction provider's file was guarded whole. Until
-// ProximityKit builds for macOS on every push, this scan is the only thing that sees a platform fact
-// enter it.
+// file, guarded whole by `#if os(iOS)` since plan step A0.6.3. Today's rows are those 2 permanent
+// seams, no device-name row, 1 directory row (the namespace's Application Support default) and 1
+// host-fact default (the extension's storage root). The coordinator's, the mesh manager's and the
+// recipe-share manager's vestigial UIKit imports left at plan step A0.6.1, and the local name's UIKit
+// import and its `UIDevice` read at A0.6.2, when the host began stating the fallback name; at A0.6.3,
+// when the doors began asking their host for each connection's ranging provider, the NearbyInteraction
+// provider's file was guarded whole; and at A0.6.4 the Live Activity reaper's ActivityKit import left
+// with the reaper, which is the app's. Until ProximityKit builds for macOS on every push, this scan is
+// the only thing that sees a platform fact enter it.
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -68,11 +68,10 @@ import Testing
 
     /// The plan step that takes a platform fact out of ProximityKit. A step's case is deleted with its
     /// last row, as A0.6.1's (the vestigial UIKit imports), A0.6.2's (the local name's `UIDevice` read
-    /// and its file's `import UIKit`) and A0.6.3's (the NearbyInteraction provider's unguarded import,
-    /// whose row became the permanent whole-file seam) were.
+    /// and its file's `import UIKit`), A0.6.3's (the NearbyInteraction provider's unguarded import,
+    /// whose row became the permanent whole-file seam) and A0.6.4's (the Live Activity reaper's
+    /// ActivityKit import, which left with the reaper for the app) were.
     enum ExitStep: String, Sendable {
-        /// The Live Activity reaper is the app's (A0.6.4): ActivityKit leaves with it.
-        case a064 = "A0.6.4"
         /// The storage root always comes from the host (A0.6.6): the namespace's Application Support
         /// default and the host extension's default root.
         case a066 = "A0.6.6"
@@ -150,21 +149,20 @@ import Testing
         "Dispatch", "Compression", "simd", "FernletCrypto", "FernletDomainModel"
     ]
 
-    /// Every platform module a ProximityKit file imports, exactly. Permanent: `ProtectedSidecar`'s
-    /// protected-data retry, which observes UIKit's protected-data notification and compiles out without
-    /// it; and the NearbyInteraction provider, `NIRangingSession`, its whole file under `#if os(iOS)`
-    /// since A0.6.3 (NearbyInteraction's module ships in the macOS SDK with every type it declares
-    /// unavailable there, so `canImport` would not keep it out of a macOS build). Transient: the Live
-    /// Activity reaper's ActivityKit (A0.6.4). The coordinator's, the mesh manager's and the
-    /// recipe-share manager's UIKit imports, which nothing in them used, left at A0.6.1, and the local
-    /// name's, which read `UIDevice`, at A0.6.2.
+    /// Every platform module a ProximityKit file imports, exactly, and both rows are permanent:
+    /// `ProtectedSidecar`'s protected-data retry, which observes UIKit's protected-data notification and
+    /// compiles out without it; and the NearbyInteraction provider, `NIRangingSession`, its whole file
+    /// under `#if os(iOS)` since A0.6.3 (NearbyInteraction's module ships in the macOS SDK with every
+    /// type it declares unavailable there, so `canImport` would not keep it out of a macOS build). No
+    /// transient row is left: the coordinator's, the mesh manager's and the recipe-share manager's
+    /// UIKit imports, which nothing in them used, left at A0.6.1, the local name's, which read
+    /// `UIDevice`, at A0.6.2, and the Live Activity reaper's ActivityKit, with the reaper, which is the
+    /// app's, at A0.6.4.
     static let seamRows: [SeamRow] = [
         SeamRow(path: "HeartSharing/ProtectedSidecar.swift", module: "UIKit",
                 guarded: .partial("canImport(UIKit)"), exit: nil),
         SeamRow(path: "Ranging/NIRangingSession.swift", module: "NearbyInteraction",
-                guarded: .wholeFile("os(iOS)"), exit: nil),
-        SeamRow(path: "ForegroundAnchor/ProximityForegroundAnchor.swift", module: "ActivityKit",
-                guarded: .partial("canImport(ActivityKit)"), exit: .a064)
+                guarded: .wholeFile("os(iOS)"), exit: nil)
     ]
 
     /// Every source of the device's name within a module's reach: UIKit's `UIDevice`, Foundation's
