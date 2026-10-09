@@ -262,9 +262,9 @@ final class FernletStore {
             return self.buildShopCatalog()
         }
         // The 13+ mesh-chat gate. Withholds the `messages` capability, refuses sends, and drops inbound
-        // messages — see `MeshNetworkManager.chatAllowedProvider`. `?? false` keeps a deallocated facade
+        // messages — see `MeshSessionChat.chatAllowedProvider`. `?? false` keeps a deallocated facade
         // fail-closed, matching the nil-means-no contract the provider already documents.
-        manager.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
+        features.chat.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
         // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
         features.moderation.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
         features.moderation.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }

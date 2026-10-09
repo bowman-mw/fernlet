@@ -567,7 +567,7 @@ enum DisposableCameraOrientation {
 /// island-morphing viewfinder (geometry from ``IslandViewfinderMetrics``), the shutter with a
 /// shared per-session film counter (`MeshNetworkManager.filmRemaining`), and the session-info
 /// sheet (rename, open/closed access, roster with removal seconding / blocking, in-session
-/// hearts). It also hosts the session-scoped chat entry (13+ gated via `manager.isChatAllowed`),
+/// hearts). It also hosts the session-scoped chat entry (13+ gated via `features.chat.isChatAllowed`),
 /// the admission-prompt sheet for join requests, and the develop flow: "Develop" stops the
 /// capture session and either leaves immediately (no photos — the keep-as-friend prompt is then
 /// FriendsView's job via the pending review batch) or presents `FriendPhotoReviewSheet` with
@@ -645,7 +645,8 @@ struct DisposableCameraView: View {
     private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
-    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels live there.
+    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels and the session chat
+    /// live there.
     private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level session-end review (session photos U3): told when the Develop review is up, and
     /// around this view's answer.
@@ -688,14 +689,14 @@ struct DisposableCameraView: View {
         // TF b19 item 6: a rising unread count means an inbound message arrived while the chat sheet
         // was closed (the store only increments unread when it isn't being viewed). Signal it — a light
         // haptic while the app is active, a best-effort local notification while it isn't.
-        .onChange(of: manager.sessionMessages.unreadCount) { oldValue, newValue in
+        .onChange(of: features.chat.sessionMessages.unreadCount) { oldValue, newValue in
             guard newValue > oldValue else { return }
             handleUnreadMessageArrival()
         }
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .sheet(isPresented: $showInfo) { infoSheet }
         .sheet(isPresented: $showChat) {
-            SessionChatPanel(manager: manager, onDone: { showChat = false })
+            SessionChatPanel(chat: features.chat, onDone: { showChat = false })
         }
         .modifier(SessionPromptsModifier(
             manager: manager,
@@ -774,7 +775,7 @@ struct DisposableCameraView: View {
             // the affordance can't survive a gate the send/receive seams are already refusing. Settings
             // carries the explanation and the way to unlock it — a camera overlay is the wrong place to
             // tell someone they're too young.
-            if manager.isChatAllowed {
+            if features.chat.isChatAllowed {
                 chatButton
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
@@ -796,7 +797,7 @@ struct DisposableCameraView: View {
     /// TF b19 item 6: a dot badge appears while there are unread inbound messages (cleared when the
     /// panel opens).
     private var chatButton: some View {
-        let hasUnread = manager.sessionMessages.hasUnread
+        let hasUnread = features.chat.sessionMessages.hasUnread
         return Button { showChat = true } label: {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 18))
@@ -2076,7 +2077,7 @@ struct DisposableCameraView: View {
     private func postSessionMessageNotification() {
         // The most recent inbound message drives the notification's sender name. It was already
         // sanitized by SessionMessageStore.receiveIncoming; NotificationService re-sanitizes defensively.
-        guard let latest = manager.sessionMessages.messages.last(where: { !$0.isOutgoing }) else { return }
+        guard let latest = features.chat.sessionMessages.messages.last(where: { !$0.isOutgoing }) else { return }
         // R3: one in-flight post at a time. Peers drive this event, so an unbounded Task per inbound
         // message would be peer-controlled fan-out; the notification is a nudge, not a log, so
         // coalescing to the newest sender while one is posting is the right bound.

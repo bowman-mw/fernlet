@@ -773,19 +773,22 @@ extension MeshRoutedLockedDeviceTests {
     ///   is what makes the home load-bearing, so a second call site or the same call moved to
     ///   another file still fails.
     /// * `MeshRoutedItemSealer.open(` — **1**, beside it: the plaintext seam's other half.
-    /// * `routedCanonicalDispatch(` — **4** in the manager: two declarations (photo, text) plus
-    ///   their two call sites, one in each built-in projection handler's `projectRoutedItem` since
-    ///   plan step A0.5.2 (in `dispatchRoutedPlaintext` before it). This is W2(b), the
-    ///   canonical-mutation half item 10 handed forward; a second, ungated mutation is now a build
-    ///   failure rather than a review catch.
+    /// * `routedCanonicalDispatch(` — **2** in the manager: the photo arm's declaration plus its call
+    ///   site in the photo row's built-in projection handler's `projectRoutedItem` (since plan step
+    ///   A0.5.2; in `dispatchRoutedPlaintext` before it). It was 4 while the text arm and its built-in
+    ///   were the manager's too; both left with chat at plan step A0.5.9, and FernletSocial's half is
+    ///   held by ``fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite()``. This is
+    ///   W2(b), the canonical-mutation half item 10 handed forward; a second, ungated mutation is now
+    ///   a build failure rather than a review catch.
     /// * `dispatchRoutedPlaintext(` — **2** in the manager: the declaration plus its single call
     ///   site in `routedProjectionVerdict`. It is the row the P6 item 4 fix review added (finding
-    ///   P2-2), and the reason is that item 4 HOISTED the mutation guard one level up: both arms
-    ///   now reach `holdSessionPhoto` and `sessionMessages.receiveIncoming` through this one verb,
-    ///   which sits *above* the pinned needle, so a second caller of it — a live-door shortcut, say —
-    ///   would reach both canonical stores with no mutation guard, leave
-    ///   `routedCanonicalDispatch(` at 4, and satisfy the containment half (a whole-file
-    ///   `contains`, vacuous in the defining file) for free. Pinning the outer verb is what closes
+    ///   P2-2), and the reason is that item 4 HOISTED the mutation guard one level up: every arm
+    ///   reaches its canonical store (`holdSessionPhoto`, and the chat's `receiveIncoming` since plan
+    ///   step A0.5.9 through FernletSocial's handler) through this one verb, which sits *above* the
+    ///   pinned needle, so a second caller of it — a live-door shortcut, say — would reach every
+    ///   canonical store with no mutation guard, leave `routedCanonicalDispatch(` where it stands,
+    ///   and satisfy the containment half (a whole-file `contains`, vacuous in the defining file) for
+    ///   free. Pinning the outer verb is what closes
     ///   that; it names the same predicate in the containment half below. **Pinned by shape** since
     ///   plan step A0.5.2: the verb stays non-generic, over the type-erased box its handlers are
     ///   stored in, so its declaration is still matched by the needle and the count stays 2. A
@@ -841,8 +844,9 @@ extension MeshRoutedLockedDeviceTests {
         ("MeshRoutedItemSealer.open(", ["MeshRoutedItemDelivery.swift"], 1),
         // 2 → 4 at P6 item 4: a second OVERLOAD for `MeshRoutedTextBody` plus its call site. The
         // alternative — one verb over a body enum, keeping the pin at 2 — was rejected because the
-        // pin would then be blind to a third arm, and item 6 has to move it either way.
-        ("routedCanonicalDispatch(", ["MeshNetworkManager.swift"], 4),
+        // pin would then be blind to a third arm, and item 6 has to move it either way. 4 → 2 at plan
+        // step A0.5.9: the text overload and its call left with chat, for FernletSocial's half below.
+        ("routedCanonicalDispatch(", ["MeshNetworkManager.swift"], 2),
         // Added at the P6 item 4 fix review: the hoisted mutation guard lives one level ABOVE
         // `routedCanonicalDispatch`, so the pin has to reach the outer verb too (finding P2-2).
         // Pinned by shape since plan step A0.5.2: non-generic over the handler box, so still 2.
@@ -962,6 +966,56 @@ extension MeshRoutedLockedDeviceTests {
             guard mutates else { continue }
             #expect(source.code.contains("mayCommitRoutedHeartLedgerJudgement"),
                     "a routed heart judgement appeared in a file that never names its predicate")
+        }
+    }
+
+    /// The spellings only the engine may write — a decrypt, the dispatch above every handler, a
+    /// handler's or a judge's call, the boxes' steps, the evidence's mint — and the three gating
+    /// predicates, which FernletSocial may not even mention (a decorative mention is the vacuity W2's
+    /// containment half was written against).
+    private static let engineOnlyRoutedSpellings = [
+        "MeshRoutedContentKeyWrapper.unwrap(", "MeshRoutedItemSealer.open(", "dispatchRoutedPlaintext(",
+        ".projectRoutedItem(", ".openThenProject(", ".judgeRoutedItem(", ".openThenJudge(", ".ledgerCommit(",
+        "mayDecryptRoutedContent", "mayMutateCanonicalStoreWithRoutedContent", "mayCommitRoutedHeartLedgerJudgement"
+    ]
+
+    /// The FernletSocial files that hold a feature's projection arm, each with its pinned count of
+    /// `routedCanonicalDispatch(`: the arm's declaration and its one call (plan step A0.5.9's chat;
+    /// the photo object joins at A0.5.11).
+    private static let featureArmHomes: [String: Int] = ["MeshSessionChat.swift": 2]
+
+    /// **W2's FernletSocial half** (plan step A0.5.9): the features project through the engine and
+    /// never around it.
+    ///
+    /// The engine's half above pins the plaintext seams in ProximityKit, whose predicates a
+    /// FernletSocial file cannot name; so this half pins what a feature may spell. No FernletSocial
+    /// file spells an engine-only seam (``engineOnlyRoutedSpellings``): only the engine decrypts,
+    /// calls a registered handler or judge, steps a box and mints evidence. And a feature's arm
+    /// (`routedCanonicalDispatch(`) stands only in its home (``featureArmHomes``), at its declaration
+    /// and one call, and that call sits inside the braced body of the file's `func projectRoutedItem(`
+    /// — the adapter the engine calls behind its whole guard chain — so a second, ungated call of an
+    /// arm is a build failure, wherever it is written.
+    @Test func fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite() throws {
+        let sources = try Self.codeSources(under: "FernletKit/Sources/FernletSocial")
+        #expect(sources.count >= 15, "the FernletSocial source sweep found too few files")
+        // R2: the forbidden spellings over the module's own bounded file list.
+        for needle in Self.engineOnlyRoutedSpellings {
+            let homes = sources.filter { Self.occurrences(of: needle, in: $0.code) > 0 }.map(\.name)
+            #expect(homes.isEmpty, "FernletSocial spells the engine's \(needle) in \(homes)")
+        }
+        // R2: the module's own bounded file list.
+        for source in sources {
+            let found = Self.occurrences(of: "routedCanonicalDispatch(", in: source.code)
+            #expect(found == (Self.featureArmHomes[source.name] ?? 0),
+                    "a feature's arm stands outside its pinned home: \(source.name) spells it \(found) times")
+        }
+        // R2: bounded by the arm homes.
+        for name in Self.featureArmHomes.keys {
+            let home = try #require(sources.first { $0.name == name }, "the arm's home \(name) is gone")
+            let write = try #require(MeshRoutedSourceScan.bracedBody(after: "func projectRoutedItem(", in: home.code),
+                                     "\(name) holds no handler's write")
+            #expect(Self.occurrences(of: "routedCanonicalDispatch(", in: write) == 1,
+                    "\(name)'s arm is not called from inside its handler's write")
         }
     }
 

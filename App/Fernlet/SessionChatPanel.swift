@@ -1,13 +1,15 @@
 import SwiftUI
 import ProximityKit
+import FernletSocial
 import FernletUI
 
 /// The live-session chat panel (mesh redesign Phase 5, Docs/Proximity-Mesh-Redesign-2026-07-10.md).
 /// Presented from the in-session disposable-camera surface. Reads the observable
-/// `manager.sessionMessages` transcript and sends via `manager.sendTempMessage(_:)`.
+/// `chat.sessionMessages` transcript and sends via `chat.sendTempMessage(_:)` — FernletSocial's
+/// `MeshSessionChat`, the store's `meshFeatures.chat` (ProximityKit plan step A0.5.9).
 ///
-/// Session-scoped by construction: the VISIBLE transcript is memory-only and the manager clears it
-/// at session end, so this list empties when the outing ends. Since P6 item 4 the messages
+/// Session-scoped by construction: the VISIBLE transcript is memory-only and the chat drops it at
+/// session end, so this list empties when the outing ends. Since P6 item 4 the messages
 /// themselves ride the routed store as sealed ciphertext beneath it, held until the item expires —
 /// which is what lets a message reach an admitted member who is not linked at that instant.
 ///
@@ -16,7 +18,7 @@ import FernletUI
 /// compose bar is deliberately not gated on "is there anybody to send to", because that would need
 /// a second published mirror of the mint's own answer and would flicker on every link blip.
 struct SessionChatPanel: View {
-    var manager: MeshNetworkManager
+    var chat: MeshSessionChat
     var onDone: () -> Void
 
     @State private var draft = ""
@@ -28,7 +30,7 @@ struct SessionChatPanel: View {
     @State private var sendNotice: LocalizedStringKey?
     @FocusState private var composeFocused: Bool
 
-    private var messages: [SessionMessageStore.Message] { manager.sessionMessages.messages }
+    private var messages: [SessionMessageStore.Message] { chat.sessionMessages.messages }
 
     var body: some View {
         NavigationStack {
@@ -51,10 +53,10 @@ struct SessionChatPanel: View {
         // Opening the panel is already "I want to type" — land the caret in the field rather than
         // charging every message an extra tap.
         .onAppear {
-            manager.sessionMessages.beginViewing()
+            chat.sessionMessages.beginViewing()
             composeFocused = true
         }
-        .onDisappear { manager.sessionMessages.endViewing() }
+        .onDisappear { chat.sessionMessages.endViewing() }
     }
 
     // MARK: - Transcript
@@ -204,7 +206,7 @@ struct SessionChatPanel: View {
         // sent. `.noDestinations` is the real case that makes this necessary — the founding window
         // (commit → found → grant → adopt) is a second or two in which the roster names nobody
         // else, and destinations are frozen at the mint, so the item can never acquire one later.
-        let outcome = manager.sendTempMessage(text)
+        let outcome = chat.sendTempMessage(text)
         sendNotice = RoutedShareRefusalCopy.chatNotice(outcome)
         // The draft survives anything but a staged send, so "send again" is the retry.
         guard outcome == .staged else { return }

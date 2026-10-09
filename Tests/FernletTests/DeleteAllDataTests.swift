@@ -11,6 +11,7 @@ import FernletExchange
 import FernletFoundation
 import FernletLock
 import FernletPersistence
+@testable import FernletSocial
 import HealthKitGateway
 import LocalPersistence
 import PrivateHealthStore
@@ -361,8 +362,9 @@ struct DeleteAllDataTests {
         #expect(queue.records().isEmpty)
     }
 
-    /// **The live chat transcript goes through the MANAGER's clear funnel, not around it**
-    /// (P6 item 4 fix review, finding P2-1).
+    /// **The live chat transcript goes through the MANAGER's funnel, not around it** (P6 item 4 fix
+    /// review, finding P2-1): since plan step A0.5.9 the funnel's begin advances the generation and
+    /// tells the session observer, whose chat leg drops the transcript (the chat is FernletSocial's).
     ///
     /// Leg 7b used to call `sessionMessages.clear()` directly. That emptied the transcript and did
     /// two things it should not: it did not bump `transcriptGeneration`, which is what the routed
@@ -377,16 +379,17 @@ struct DeleteAllDataTests {
     @Test func deleteAllDropsTheTranscriptThroughTheGenerationFunnel() async {
         let store = makeStore("delete-all-transcript")
         let manager = store.meshNetworkManager
-        #expect(manager.sessionMessages.receiveIncoming(
+        let transcript = store.meshFeatures.chat.sessionMessages
+        #expect(transcript.receiveIncoming(
             id: UUID(), senderFingerprint: "fp-robin", senderDisplayName: "Robin",
             text: "said in the session", sentAt: Date(), seenAt: Date()
         ) == .appended)
-        #expect(!manager.sessionMessages.messages.isEmpty, "precondition: the seeded row did not land")
+        #expect(!transcript.messages.isEmpty, "precondition: the seeded row did not land")
         let generationBefore = manager.transcriptGeneration
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(manager.sessionMessages.messages.isEmpty, "the transcript is gone")
+        #expect(transcript.messages.isEmpty, "the transcript is gone")
         #expect(manager.transcriptGeneration > generationBefore, """
             and the generation MOVED with it, so a routed item custodied before the wipe can never \
             project into a transcript the user was told was emptied

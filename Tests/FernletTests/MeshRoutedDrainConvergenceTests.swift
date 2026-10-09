@@ -27,6 +27,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 @testable import Fernlet
@@ -639,16 +640,17 @@ extension MeshConvergenceRun {
 
     /// Opens the 13+ chat gate at every living member, except one that is deliberately left shut.
     ///
-    /// `chatAllowedProvider` is **nil** on a freshly built manager and `isChatAllowed` reads
-    /// `provider?() == true`, i.e. fail-closed — so without this call `sendTempMessage(_:)` answers
-    /// `.ageGated` at every member and the whole text half is green over nothing.
+    /// `chatAllowedProvider` is **nil** on a freshly built node's chat (FernletSocial's, the node's
+    /// `features.chat`, since plan step A0.5.9) and `isChatAllowed` reads `provider?() == true`, i.e.
+    /// fail-closed — so without this call `sendTempMessage(_:)` answers `.ageGated` at every member
+    /// and the whole text half is green over nothing.
     ///
     /// - Parameter gated: The member index to leave gated, or nil to open every member.
     func allowChatEverywhere(except gated: Int?) {
         // R2: bounded by the roster cap.
         for member in livingMembers {
             let allowed = member.index != gated
-            member.node.manager.chatAllowedProvider = { allowed }
+            member.node.features.chat.chatAllowedProvider = { allowed }
         }
     }
 
@@ -715,7 +717,7 @@ extension MeshConvergenceRun {
     /// and that named answer is what makes the arming door load-bearing instead of decorative.
     func sendTextOutcome(at member: MeshConvergenceMember, round: Int) -> MeshTextSendOutcome {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            member.node.manager.sendTempMessage(Self.featureText(round))
+            member.node.features.chat.sendTempMessage(Self.featureText(round))
         }
     }
 
@@ -1585,7 +1587,7 @@ extension MeshConvergenceRun {
             return member.node.manager.heartLedger?.receivedHearts
                 .contains { $0.id == key.itemID } == true
         case MeshRoutedTypeToken.tempMessage:
-            return member.node.manager.sessionMessages.messages
+            return member.node.features.chat.sessionMessages.messages
                 .contains { $0.messageID == key.itemID }
         default:
             // A photo is HELD for the person's review since 2026-09-30, never on the wall first.

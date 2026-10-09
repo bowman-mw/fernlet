@@ -976,9 +976,10 @@ struct ProximityVocabularyGoldenTests {
 
     /// The registry and its ack-stage projection take every row's token from the routed types they
     /// are handed and nothing else. Built from `.fernlet`'s, the registry holds exactly the three
-    /// frozen tokens, each as its named resident row (the photo, temporary-message and heart rows the
-    /// manager registers its built-in handlers under and mints under, plan step A0.5.2); built from a
-    /// namespace whose record kinds and routed types alone are its own, it holds that namespace's
+    /// frozen tokens, each as its named row (``fernletRoutedRows(_:)``: the photo and heart rows the
+    /// engine keeps resident and registers its built-ins under and mints under, plan step A0.5.2, and
+    /// the temporary-message row FernletSocial declares through its host, plan step A0.5.9); built from
+    /// a namespace whose record kinds and routed types alone are its own, it holds that namespace's
     /// three and none of Fernlet's, every row otherwise the very row Fernlet's registry holds under
     /// the same name, and the projection keys the same stages by them. The control type has no row
     /// under either.
@@ -986,7 +987,7 @@ struct ProximityVocabularyGoldenTests {
         let fernlet = ProximityNamespace.fernlet.family.vocabulary.routedTypes
         let shipped = MeshRoutedTypeRegistry.increment1(fernlet)
         let frozen = ["routedType.photo", "routedType.tempMessage", "routedType.heart"].map { Self.frozen($0) }
-        let resident = MeshRoutedTypeRegistry.increment1Rows(fernlet).rows
+        let resident = Self.fernletRoutedRows(fernlet)
         #expect(shipped.tokens == Set(frozen), "Fernlet's registry holds \(shipped.tokens.sorted())")
         #expect(resident.map(\.token) == frozen, "Fernlet's rows are named under other tokens")
         #expect(resident.allSatisfy { shipped.entry(for: $0.token) == $0 }, "Fernlet's registry is not its resident rows")
@@ -995,7 +996,7 @@ struct ProximityVocabularyGoldenTests {
         let stages = MeshRoutedAckStageTable.increment1(renamed)
         let theirs = [renamed.photo, renamed.tempMessage, renamed.heart]
         #expect(other.tokens == Set(theirs), "another namespace's registry holds \(other.tokens.sorted())")
-        #expect(MeshRoutedTypeRegistry.increment1Rows(renamed).rows.map(\.token) == theirs, "its rows are named under other tokens")
+        #expect(Self.fernletRoutedRows(renamed).map(\.token) == theirs, "its rows are named under other tokens")
         // R2: bounded by the three rows.
         for (token, twinToken) in zip(theirs, frozen) {
             let twin = try #require(shipped.entry(for: twinToken), "Fernlet's registry has no \(twinToken) row")
@@ -1014,10 +1015,20 @@ struct ProximityVocabularyGoldenTests {
                 "another namespace's control type is registered")
     }
 
-    /// A mesh manager's registry is built from its host namespace's routed types: what it can project
-    /// once chat is allowed (the photo wall's type and the transcript's) is `.fernlet`'s frozen photo
-    /// and temporary-message tokens under a host of `.fernlet`, and that namespace's own under a host
-    /// of the namespace whose record kinds and routed types alone are its own.
+    /// Fernlet's three routed rows by name, in the order the registry declared them — photo,
+    /// temporary message, heart — built from `routedTypes`: the engine's resident photo and heart rows
+    /// (`MeshRoutedTypeRegistry.increment1Rows(_:)`) and FernletSocial's text row (`FernletRoutedTypes`,
+    /// the host's since plan step A0.5.9, when the resident rows lost it). Re-pointed at A0.5.9; the
+    /// tokens it is held to are the group's frozen literals.
+    static func fernletRoutedRows(_ routedTypes: ProximityNamespace.RoutedTypes) -> [MeshRoutedTypeEntry] {
+        let resident = MeshRoutedTypeRegistry.increment1Rows(routedTypes)
+        return [resident.photo, FernletRoutedTypes(routedTypes).text, resident.heart]
+    }
+
+    /// A mesh's registry is built from its host namespace's routed types: what Fernlet's mesh can
+    /// project once chat is allowed (the photo wall's type and the transcript's) is `.fernlet`'s frozen
+    /// photo and temporary-message tokens under a host of `.fernlet`, and that namespace's own under a
+    /// host of the namespace whose record kinds and routed types alone are its own.
     @Test func theManagersRegistryIsItsHostNamespaces() {
         let fernlet = Self.projectableRoutedTypes(underHostOf: .fernlet)
         #expect(fernlet == [Self.frozen("routedType.photo"), Self.frozen("routedType.tempMessage")],
@@ -1028,18 +1039,22 @@ struct ProximityVocabularyGoldenTests {
         #expect(other == [routed.photo, routed.tempMessage], "a manager of another namespace projects \(other.sorted())")
     }
 
-    /// The routed types a manager over a scratch host of `namespace` can project once chat is allowed.
-    /// It runs on a fake radio, with an identity on a throwaway service; the host's root and seal-key
-    /// rows and the identity's rows are removed before this returns.
+    /// The routed types Fernlet's mesh over a scratch host of `namespace` can project once chat is
+    /// allowed: the app's composition through `FernletMeshRig`, because the transcript's projection
+    /// handler is the composition's chat's since plan step A0.5.9 (the photo's is still the manager's
+    /// built-in until A0.5.11), its chat gate opened. It runs on a fake radio, with an identity on a
+    /// throwaway service; the host's root and seal-key rows and the identity's rows are removed before
+    /// this returns. Re-pointed at A0.5.9 (setup only; the expected sets are unchanged).
     static func projectableRoutedTypes(underHostOf namespace: ProximityNamespace) -> Set<String> {
         let host = ScratchNamespaceHost(namespace: namespace)
         defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
         let service = isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
-                                         identity: IdentityService(namespace: namespace, keychainService: service))
-        manager.chatAllowedProvider = { true }
-        return manager.projectableRoutedTypeTokensForTesting
+        let features = FernletMeshRig.features(
+            store: host, transport: FakeMeshTransportSession(),
+            identity: IdentityService(namespace: namespace, keychainService: service))
+        features.chat.chatAllowedProvider = { true }
+        return features.mesh.projectableRoutedTypeTokensForTesting
     }
 
     // MARK: Group 7 — the coordinator's session messages

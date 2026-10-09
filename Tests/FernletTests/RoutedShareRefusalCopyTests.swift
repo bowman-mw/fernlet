@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import FernletSocial
 import ProximityKit
 @testable import Fernlet
 

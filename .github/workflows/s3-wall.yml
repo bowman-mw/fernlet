@@ -858,9 +858,22 @@ jobs:
         # door, to the typed door's dispatch order: a role-less token reaches its handler on a
         # committed slot, and a mesh token registered through it never shadows the core switch) = 534
         # is the ARITHMETIC CHECK, never the source.
+        # RAISED 534 -> 536 at A0.5.9, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 48-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: 536 tests in 48 suites (501 Swift Testing cells in 45
+        # suites, passed after 30.588 seconds, and the 35 XCTest cases of ActivityTests, ModerationTests
+        # and FriendStateTests; SessionMessageTests 19 -> 21, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 536: passed. Run once more at
+        # 536 without MeshFavoriteObservationTests: 534 ran and the floor refused it. 534 + 2 (the
+        # SessionMessageTests cells holding the session-content generation: by behaviour, one advance
+        # at each of its three moments, a forming commit, a privacy wipe's begin and the session's end,
+        # with the chat's transcript dropped after each and nothing moved between them; by a source pin,
+        # its one writer with exactly three callers, each before its observer moment, and the
+        # composition's three drops in the order the manager ran them) = 536 is the ARITHMETIC CHECK,
+        # never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-features 534 \
+          Scripts/run-gated-suites.sh mesh-features 536 \
             ActivityTests \
             AgeGateWiringTests \
             ClothingShareCodecTests \
@@ -1445,9 +1458,19 @@ jobs:
         # column's replacement is pinned per row by everyFieldOfEveryEntryIsSet in the same suite.
         # Re-run AT 1368: passed. Run once more at 1368 without MeshHostPinTests: 1367 ran and the
         # floor refused it. 1369 - 1 (the deleted pin) = 1368 is the ARITHMETIC CHECK, never the source.
+        # At A0.5.9 no suite joined or left, so the NAME count stays 154; one suite here gained a cell:
+        # RAISED 1368 -> 1369 at A0.5.9, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "Test run with 1369 tests in 154 suites passed after
+        # 175.389 seconds" (MeshRoutedLockedDeviceTests 27 -> 28, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 1369: passed. Run once more at
+        # 1369 without MeshHostPinTests: 1368 ran and the floor refused it. 1368 + 1 (W2's FernletSocial
+        # half: no FernletSocial file spells an engine-only seam or a gating predicate, and a feature's
+        # arm stands only in its pinned home, called once from inside its handler's write) = 1369 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1368 \
+          Scripts/run-gated-suites.sh mesh-batteries 1369 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

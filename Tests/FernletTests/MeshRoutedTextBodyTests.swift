@@ -18,7 +18,11 @@
 // The FIFTH arrived with item 4's fix review (P3-1): a decoded `senderName` above the 128-byte
 // bound. That bound used to be enforced at the SENDER only, so the answer to "is it enforced on the
 // wire" was no — while the header allowance's entire arithmetic is a statement about it.
+//
+// The body, its header and the text family's header allowance are FernletSocial's since ProximityKit
+// plan step A0.5.9 (`Messaging/MeshRoutedTextBody.swift`), over ProximityKit's framing and seal.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import Foundation
 import Testing
@@ -274,11 +278,11 @@ struct MeshRoutedTextBodyTests {
 
     /// The routed text body names no epoch, group key, branch or partition symbol — the same
     /// precondition `theRoutedPathNamesNoEpochSymbol` states for the manager's routed sections,
-    /// asserted for the file the body lives in because an epoch inside a routed body would put
-    /// back exactly what P5 item 13 retired.
+    /// asserted for the file the body lives in (FernletSocial's since plan step A0.5.9) because an
+    /// epoch inside a routed body would put back exactly what P5 item 13 retired.
     @Test func theRoutedTextBodyNamesNoEpoch() throws {
         let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemBody.swift")
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Messaging/MeshRoutedTextBody.swift")
         )
         for forbidden in ["keyEpoch", "currentGroupKey", "branchView", "partition"] {
             #expect(!source.contains(forbidden), "the routed body names \(forbidden)")

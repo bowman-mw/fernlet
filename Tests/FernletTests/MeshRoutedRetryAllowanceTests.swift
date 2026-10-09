@@ -27,7 +27,8 @@
 // **The projection list's retryable population IS reachable in production, and three documents said
 // otherwise** (item 5 review, P2-3; the commit message, the ledger row and this header's earlier
 // wording all claimed it was structural). Two real routes pass `isProjectableAtThisPass` and reach
-// the arm: `routedCanonicalDispatch(_: MeshRoutedTextBody, …)` answers `.refusedForNow` whenever
+// the arm: the text arm (`routedCanonicalDispatch(_: MeshRoutedTextBody, …)`, FernletSocial's chat's
+// since ProximityKit plan step A0.5.9) answers `.refusedForNow` whenever
 // `transcriptLiveness` is `.notLiveRightNow` — a session ended by the five-minute give-up door that
 // `startSearching()` can un-end, in the right mesh and the right generation — and
 // `routedProjectionBlob` answers nil for a store read that is `.unavailable` or `.refused`, which

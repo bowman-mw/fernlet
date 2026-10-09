@@ -3107,12 +3107,12 @@ struct FernletFeatureGoldenTests {
         let rig = try AuditMeshRig()
         defer { rig.tearDown() }
         var outcome = MeshTextSendOutcome.empty
-        let gated = MovedAuditLines.delivered { outcome = Self.sendChat("hello", from: rig.manager) }
+        let gated = MovedAuditLines.delivered { outcome = Self.sendChat("hello", from: rig.features.chat) }
         #expect(outcome == .ageGated, "the age gate answered \(outcome)")
         #expect(Self.movedLines(gated) == [Self.auditLine("mesh.routedShare.textBlockedAgeGated")],
                 "the gated message wrote \(gated)")
-        Self.allowChat(on: rig.manager)
-        let cut = MovedAuditLines.delivered { outcome = Self.sendChat(Self.overlongChatDraft, from: rig.manager) }
+        Self.allowChat(on: rig.features.chat)
+        let cut = MovedAuditLines.delivered { outcome = Self.sendChat(Self.overlongChatDraft, from: rig.features.chat) }
         #expect(outcome == .noDestinations, "the cut message answered \(outcome)")
         #expect(Self.movedLines(cut) == [Self.auditLine("mesh.routedShare.textByteBounded",
                                                          ["characters": "500", "bytes": "15500"])],
@@ -3127,17 +3127,17 @@ struct FernletFeatureGoldenTests {
         let manifest = Self.quotaManifest(origin: "ffgt-quota-origin")
         // R2: bounded by the quota's own cap.
         for _ in 0..<Self.textQuotaCap {
-            _ = Self.textQuotaAdmits(UUID(), from: manifest, on: rig.manager)
+            _ = Self.textQuotaAdmits(UUID(), from: manifest, on: rig.features.chat)
         }
-        let spent = MovedAuditLines.delivered { _ = Self.textQuotaAdmits(UUID(), from: manifest, on: rig.manager) }
+        let spent = MovedAuditLines.delivered { _ = Self.textQuotaAdmits(UUID(), from: manifest, on: rig.features.chat) }
         #expect(Self.movedLines(spent) == [Self.auditLine("mesh.routedProjection.textQuotaSpent")],
                 "the message past the cap wrote \(spent)")
         // R2: bounded by the map's key bound; the first origin already holds one key.
         for index in 1..<Self.textQuotaKeyBound {
-            _ = Self.textQuotaAdmits(UUID(), from: Self.quotaManifest(origin: "ffgt-bulk-\(index)"), on: rig.manager)
+            _ = Self.textQuotaAdmits(UUID(), from: Self.quotaManifest(origin: "ffgt-bulk-\(index)"), on: rig.features.chat)
         }
         let full = MovedAuditLines.delivered {
-            _ = Self.textQuotaAdmits(UUID(), from: Self.quotaManifest(origin: "ffgt-one-too-many"), on: rig.manager)
+            _ = Self.textQuotaAdmits(UUID(), from: Self.quotaManifest(origin: "ffgt-one-too-many"), on: rig.features.chat)
         }
         #expect(Self.movedLines(full) == [Self.auditLine("mesh.routedProjection.textQuotaMapFull")],
                 "the origin past the map's bound wrote \(full)")
@@ -3415,8 +3415,9 @@ struct FernletFeatureGoldenTests {
                      "the roster holds \(manager.sessionRoster.count), the roll \(manager.sessionPhotos.count)")
         try #require(shop.peerCatalogs.count == 1 && shop.window == nil,
                      "the shop holds \(shop.peerCatalogs.count) catalogs")
-        try #require(manager.sessionMessages.messages.count == 1 && manager.sessionHeartState != .idle,
-                     "the transcript holds \(manager.sessionMessages.messages.count), the heart \(manager.sessionHeartState)")
+        let transcript = rig.features.chat.sessionMessages
+        try #require(transcript.messages.count == 1 && manager.sessionHeartState != .idle,
+                     "the transcript holds \(transcript.messages.count), the heart \(manager.sessionHeartState)")
         try #require(!manager.isSessionLive, "the session is still live")
         let recorder = LifecycleRecorder()
         defer { recorder.uninstall() }
@@ -3426,7 +3427,7 @@ struct FernletFeatureGoldenTests {
         let review = manager.pendingFriendReview
         #expect(review?.entries.map(\.fingerprint) == [Self.bobFingerprint] && review?.photos.count == 1,
                 "the review holds \(String(describing: review))")
-        #expect(shop.window != nil && manager.sessionMessages.messages.isEmpty
+        #expect(shop.window != nil && transcript.messages.isEmpty
                     && manager.sessionHeartState == .idle, "a leg left its state; the heart is \(manager.sessionHeartState)")
     }
 
@@ -3578,9 +3579,11 @@ extension FernletFeatureGoldenTests {
     }
 
     /// The routed-type rows Fernlet's mesh registers: today the registry `MeshNetworkManager` builds once
-    /// in `init` and reads through `routedTypes`, which is `MeshRoutedTypeRegistry.increment1(_:)` over
-    /// `.fernlet`'s routed types. The manager's own copy is private, so this is the expression it is
-    /// built from. A0.5 re-points it at the host-registered rows the manager is handed.
+    /// in `init` and reads through `routedTypes`, its resident rows and the host's
+    /// (`increment1(_:hostEntries:)` with `ProximityHost.meshRoutedTypeEntries`, since plan step A0.5.9),
+    /// which for `.fernlet`'s routed types is the test target's `MeshRoutedTypeRegistry.increment1(_:)`
+    /// (the resident rows and `FernletRoutedTypes.entries`). The manager's own copy is private, so this
+    /// is the expression it is built from.
     static var fernletRoutedTypeRegistry: MeshRoutedTypeRegistry {
         MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
     }
@@ -3670,8 +3673,8 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Sends one message at `node` through the text sender: today `MeshFoundingRig.sendText(at:_:)`,
-    /// which calls `MeshNetworkManager.sendTempMessage(_:)`, which originates the item under the
-    /// transcript's token to the full roster.
+    /// which calls the node's chat's `sendTempMessage(_:)` (FernletSocial's since plan step A0.5.9),
+    /// which originates the item under the host's text row's token to the full roster.
     static func sendText(_ text: String, at node: Int, in rig: MeshFoundingRig) -> MeshTextSendOutcome {
         rig.sendText(at: node, text)
     }
@@ -3716,7 +3719,7 @@ extension FernletFeatureGoldenTests {
 
     /// The routed text body production mints for a message: today
     /// `MeshRoutedTextBody(header: MeshRoutedTextHeader(id:sentAt:senderName:), text:).encoded()` in
-    /// ProximityKit, which the text sender calls.
+    /// FernletSocial (ProximityKit's until plan step A0.5.9), which the text sender calls.
     static func routedTextBody(id: UUID, sentAt: Date, senderName: String, text: String) throws -> Data {
         try MeshRoutedTextBody(header: MeshRoutedTextHeader(id: id, sentAt: sentAt, senderName: senderName), text: text)
             .encoded()
@@ -4250,28 +4253,30 @@ extension FernletFeatureGoldenTests {
         manager.claimSessionHeartForTesting(fingerprint)
     }
 
-    /// Opens the 13+ chat gate on `manager`: today `chatAllowedProvider`. Re-pointed at A0.5.9.
-    static func allowChat(on manager: MeshNetworkManager) {
-        manager.chatAllowedProvider = { true }
+    /// Opens the 13+ chat gate on `chat`: today the composition's chat's `chatAllowedProvider`
+    /// (FernletSocial's `MeshSessionChat`; the manager's until plan step A0.5.9, when this re-pointed).
+    static func allowChat(on chat: MeshSessionChat) {
+        chat.chatAllowedProvider = { true }
     }
 
-    /// Sends one chat message from `manager` and answers what the send decided: today
-    /// `sendTempMessage(_:)`. Re-pointed at A0.5.9.
-    static func sendChat(_ text: String, from manager: MeshNetworkManager) -> MeshTextSendOutcome {
-        manager.sendTempMessage(text)
+    /// Sends one chat message from `chat` and answers what the send decided: today the composition's
+    /// chat's `sendTempMessage(_:)`, through the mesh's origination door. Re-pointed at A0.5.9.
+    static func sendChat(_ text: String, from chat: MeshSessionChat) -> MeshTextSendOutcome {
+        chat.sendTempMessage(text)
     }
 
-    /// Whether `manager`'s incoming per-origin text quota admits `messageID` from `manifest`'s origin in
-    /// its mesh: today `allowIncomingRoutedText(_:from:)`. Re-pointed at A0.5.9.
+    /// Whether `chat`'s incoming per-origin text quota admits `messageID` from `manifest`'s origin in its
+    /// mesh: today the chat's `allowIncomingRoutedText(_:from:)` over the item's `(mesh, origin)` key,
+    /// through the test target's manifest binding. Re-pointed at A0.5.9.
     static func textQuotaAdmits(_ messageID: UUID, from manifest: MeshRoutedManifest,
-                                on manager: MeshNetworkManager) -> Bool {
-        manager.allowIncomingRoutedText(messageID, from: manifest)
+                                on chat: MeshSessionChat) -> Bool {
+        chat.allowIncomingRoutedText(messageID, from: manifest)
     }
 
     /// How many messages one origin may have accepted in one mesh: today
-    /// `MeshNetworkManager.maxTextMessagesPerSenderPerSession`. Re-pointed at A0.5.9.
+    /// `MeshSessionChat.maxTextMessagesPerSenderPerSession`. Re-pointed at A0.5.9.
     static var textQuotaCap: Int {
-        MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        MeshSessionChat.maxTextMessagesPerSenderPerSession
     }
 
     /// How many `(mesh, origin)` keys the text quota's map holds: today `MeshRoutedStoreFormat.maxItems`,
@@ -4430,8 +4435,8 @@ extension FernletFeatureGoldenTests {
     /// Gives the rig's session one thing for each leg of its end to act on, each through today's seam:
     /// bob in the live roster (`recordSessionParticipant`, the commit's own ingest); one live photo
     /// (``holdLive(_:on:)``); bob's catalog held by the opted-in shop (`MeshClothingShop.receiveCatalog`,
-    /// over group 20's frozen catalog in an envelope bob signs); one message
-    /// (`SessionMessageStore.appendOutgoing`); and a heart to bob refused with the hearts opt-in off
+    /// over group 20's frozen catalog in an envelope bob signs); one message (the composition's chat's
+    /// `SessionMessageStore.appendOutgoing` since A0.5.9); and a heart to bob refused with the hearts opt-in off
     /// (`sendSessionHeart(to:)`), so the heart state is not idle. Re-pointed leg by leg at A0.5.6 (shop),
     /// A0.5.9 (chat), A0.5.10 (hearts) and A0.5.11 (photos, review).
     static func armSessionToEnd(_ rig: SessionRig) throws {
@@ -4446,7 +4451,7 @@ extension FernletFeatureGoldenTests {
             payloadSummary: PayloadSummary(title: token), payload: catalog)
         rig.features.clothingShop.isSharingEnabledProvider = { true }
         rig.features.clothingShop.receiveCatalog(envelope, plaintext: catalog, verifiedFingerprint: bobFingerprint)
-        manager.sessionMessages.appendOutgoing(
+        rig.features.chat.sessionMessages.appendOutgoing(
             id: uuid("7E57A9E0-4841-4E44-8000-000000000031"), senderFingerprint: aliceFingerprint,
             senderDisplayName: "Alice", text: "frozen", sentAt: Date(timeIntervalSinceReferenceDate: 780_000_000))
         rig.store.settings.allowNearbyHearts = false
@@ -4456,15 +4461,16 @@ extension FernletFeatureGoldenTests {
     /// Notes each leg of a session end into `recorder` where it begins: the roster's first change (the
     /// merge empties it), the photo move's audit line (`mesh.session.photosPendingReview`), and the first
     /// changes of the shop window (the rig's composition's shop since plan step A0.5.6), the transcript
-    /// and the heart state. Through Observation (`withObservationTracking`, one change each, as
-    /// `MeshFavoriteObservationTests` observes the manager) and `FernletAuditLog.addCaptureHandler`.
+    /// (its chat's since A0.5.9) and the heart state. Through Observation (`withObservationTracking`, one
+    /// change each, as `MeshFavoriteObservationTests` observes the manager) and
+    /// `FernletAuditLog.addCaptureHandler`.
     /// Nothing the teardown runs before its legs writes any of the five. Re-pointed with each leg.
     static func recordSessionEnd(of rig: SessionRig, into recorder: LifecycleRecorder) {
         let manager = rig.manager
         withObservationTracking { _ = manager.sessionRoster } onChange: { recorder.note("reviewMerge") }
         recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview")
         withObservationTracking { _ = rig.features.clothingShop.window } onChange: { recorder.note("shopWindow") }
-        withObservationTracking { _ = manager.sessionMessages.messages } onChange: { recorder.note("transcriptClear") }
+        withObservationTracking { _ = rig.features.chat.sessionMessages.messages } onChange: { recorder.note("transcriptClear") }
         withObservationTracking { _ = manager.sessionHeartState } onChange: { recorder.note("heartReset") }
     }
 

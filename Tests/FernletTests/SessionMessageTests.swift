@@ -9,13 +9,16 @@
 // dedup, per-sender rate limit); the transcript clearing on EVERY session-end path (leaveSession,
 // leaveMesh, removeSlot via evictSlotForTesting) AND on the next session formation; the structural
 // guarantee that the transcript never reaches the persisted snapshot; and the capability-gated room
-// broadcast (a legacy / photos-only peer is skipped).
+// broadcast (a legacy / photos-only peer is skipped). Since ProximityKit plan step A0.5.9 the
+// transcript, the sender and the gate are FernletSocial's chat (`store.meshFeatures.chat`), and the
+// mesh keeps the session-content generation, which it advances at the three moments the chat's
+// transcript is dropped: two cells hold it to exactly those moments.
 
 @testable import ProximityKit
 import Foundation
 import Testing
 import FernletFoundation
-import FernletSocial
+@testable import FernletSocial
 import FernletDomainModel
 import FernletPersistence
 import CloudKitSync
@@ -43,6 +46,10 @@ struct SessionMessageTests {
     private var messagesCap: [String] {
         [ProximityCapability.photos.rawValue, ProximityCapability.messages.rawValue]
     }
+
+    /// The store's chat: the transcript, the sender and the gate (FernletSocial's since plan step
+    /// A0.5.9, the store's mesh manager's before).
+    private var chat: MeshSessionChat { store.meshFeatures.chat }
 
     // MARK: - Fixtures
 
@@ -137,7 +144,7 @@ struct SessionMessageTests {
     /// rather than the transport. The routed receive path has its own suite
     /// (`MeshRoutedTextDeliveryTests`) and drives a real pair end to end.
     private func seedTranscript(via manager: MeshNetworkManager, text: String) {
-        manager.sessionMessages.appendOutgoing(
+        chat.sessionMessages.appendOutgoing(
             id: UUID(), senderFingerprint: manager.localFingerprint,
             senderDisplayName: "Local", text: text, sentAt: day
         )
@@ -164,7 +171,7 @@ struct SessionMessageTests {
     @Test func aParkedTempMessageEnvelopeFromACommittedPeerIsNeverDispatched() throws {
         let manager = store.meshNetworkManager
         _ = try deliverParkedMessageEnvelope(via: manager, text: "hello")
-        #expect(manager.sessionMessages.messages.isEmpty, """
+        #expect(chat.sessionMessages.messages.isEmpty, """
             the legacy `.tempMessage` handler is gone — chat arrives as a routed item and nothing \
             else may write the transcript
             """)
@@ -350,19 +357,19 @@ struct SessionMessageTests {
     @Test func leaveSessionClearsTheTranscript() {
         let manager = store.meshNetworkManager
         seedTranscript(via: manager, text: "in-session")
-        #expect(!manager.sessionMessages.messages.isEmpty)
+        #expect(!chat.sessionMessages.messages.isEmpty)
 
         manager.leaveSession()   // → leaveMesh → stopSearching teardown funnel
-        #expect(manager.sessionMessages.messages.isEmpty, "Messages vanish at session end")
+        #expect(chat.sessionMessages.messages.isEmpty, "Messages vanish at session end")
     }
 
     @Test func leaveMeshClearsTheTranscript() {
         let manager = store.meshNetworkManager
         seedTranscript(via: manager, text: "in-session")
-        #expect(!manager.sessionMessages.messages.isEmpty)
+        #expect(!chat.sessionMessages.messages.isEmpty)
 
         manager.leaveMesh()
-        #expect(manager.sessionMessages.messages.isEmpty)
+        #expect(chat.sessionMessages.messages.isEmpty)
     }
 
     @Test func lastSlotEvictionClearsTheTranscript() throws {
@@ -375,23 +382,23 @@ struct SessionMessageTests {
         )
         seedTranscript(via: manager, text: "in-session")
         let slotID = try #require(manager.slots.first { $0.fingerprint == identity.fingerprint }?.id)
-        #expect(!manager.sessionMessages.messages.isEmpty)
+        #expect(!chat.sessionMessages.messages.isEmpty)
 
         // The LEDGERLESS shape (no mesh was ever founded here), which is door 4 of `isSessionLive`
         // and still means "the last committed slot going away is the session ending".
         manager.evictSlotForTesting(peerID: slotID)   // removeSlot funnel
         #expect(!manager.isInSession)
-        #expect(manager.sessionMessages.messages.isEmpty)
+        #expect(chat.sessionMessages.messages.isEmpty)
     }
 
     @Test func newSessionFormationStartsWithAnEmptyTranscript() throws {
         let manager = store.meshNetworkManager
         // A stale message lingering in the store (no live session).
-        #expect(manager.sessionMessages.receiveIncoming(
+        #expect(chat.sessionMessages.receiveIncoming(
             id: UUID(), senderFingerprint: "fp", senderDisplayName: "Ghost", text: "stale",
             sentAt: day, seenAt: day
         ) == .appended)
-        #expect(!manager.sessionMessages.messages.isEmpty)
+        #expect(!chat.sessionMessages.messages.isEmpty)
         let generationBefore = manager.transcriptGeneration
 
         // First slot COMMIT (session formation) clears it.
@@ -402,7 +409,7 @@ struct SessionMessageTests {
         let slot = try #require(manager.slots.first { $0.id == peer.id })
         manager.noteSlotCommittedForShop(slot: slot, identity: identity)
 
-        #expect(manager.sessionMessages.messages.isEmpty, "A new session forms with a clean transcript")
+        #expect(chat.sessionMessages.messages.isEmpty, "A new session forms with a clean transcript")
         #expect(manager.transcriptGeneration > generationBefore, """
             and the formation clear BUMPS the generation, so a routed text item custodied under the \
             previous one can never project into this transcript (item 2 fix review P2-3)
@@ -417,11 +424,11 @@ struct SessionMessageTests {
     @Test func messagesNeverEnterThePersistedSnapshot() throws {
         let (persistStore, repository, _) = makeTestStoreWithRepositories(date: day)
         let sentinel = "SECRET-CHAT-SENTINEL-9x7q"
-        #expect(persistStore.meshNetworkManager.sessionMessages.receiveIncoming(
+        #expect(persistStore.meshFeatures.chat.sessionMessages.receiveIncoming(
             id: UUID(), senderFingerprint: "fp-robin", senderDisplayName: "Robin",
             text: sentinel, sentAt: day, seenAt: day
         ) == .appended)
-        #expect(!persistStore.meshNetworkManager.sessionMessages.messages.isEmpty)
+        #expect(!persistStore.meshFeatures.chat.sessionMessages.messages.isEmpty)
 
         // Force the store to persist everything it CAN persist.
         persistStore.scheduleSnapshotSave()
@@ -445,7 +452,7 @@ struct SessionMessageTests {
     @Test func theDestinationSetIsTheDerivedRosterNotTheCapability() {
         let manager = store.meshNetworkManager
         var outcomes: [MeshTextSendOutcome] = []
-        manager.onTextSendForTesting = { outcomes.append($0) }
+        chat.onTextSendForTesting = { outcomes.append($0) }
 
         // Three committed slots, one per capability shape the legacy fan-out used to sort on.
         for (index, capabilities) in [messagesCap, [ProximityCapability.photos.rawValue], nil].enumerated() {
@@ -456,12 +463,12 @@ struct SessionMessageTests {
             )
         }
 
-        #expect(manager.sendTempMessage("hello everyone") == .noDestinations, """
+        #expect(chat.sendTempMessage("hello everyone") == .noDestinations, """
             slots are not destinations: with no mesh and no membership ledger the derived roster \
             names nobody, and the capability column no longer decides anything
             """)
         #expect(outcomes == [.noDestinations], "reported exactly once, and not silently")
-        #expect(manager.sessionMessages.messages.isEmpty, """
+        #expect(chat.sessionMessages.messages.isEmpty, """
             and NOTHING is echoed for a message that reached nobody — destinations are frozen at \
             the mint and there is no offline queue, so the echo would be a claim that never comes true
             """)
@@ -470,31 +477,119 @@ struct SessionMessageTests {
     @Test func sendDropsEmptyOrWhitespaceOnlyText() {
         let manager = store.meshNetworkManager
         var outcomes: [MeshTextSendOutcome] = []
-        manager.onTextSendForTesting = { outcomes.append($0) }
+        chat.onTextSendForTesting = { outcomes.append($0) }
         manager.addSlotForTesting(
             coordinator: throwawayCoordinator(), peer: makePeerHandle(name: "Capable"),
             fingerprint: "fp-capable", verifiedKeyAgreementPublicKey: Data([1]), peerCapabilities: messagesCap
         )
 
-        #expect(manager.sendTempMessage("   \n\t ") == .empty)
+        #expect(chat.sendTempMessage("   \n\t ") == .empty)
         #expect(outcomes == [.empty])
-        #expect(manager.sessionMessages.messages.isEmpty, "Nothing is echoed for an empty message")
+        #expect(chat.sessionMessages.messages.isEmpty, "Nothing is echoed for an empty message")
     }
 
     /// The byte bound can empty a message the `Character` cap admitted — one base plus four
     /// thousand combining marks is a SINGLE `Character` and 8 001 bytes — and minting that would
     /// echo an empty row the user cannot dismiss (the design check's finding A3b).
     @Test func aCombiningMarkFloodIsByteBoundedAndMintsNothingWhenItEmpties() {
-        let manager = store.meshNetworkManager
         var outcomes: [MeshTextSendOutcome] = []
-        manager.onTextSendForTesting = { outcomes.append($0) }
+        chat.onTextSendForTesting = { outcomes.append($0) }
         let flood = "a" + String(repeating: "\u{0301}", count: 4_000)
         #expect(flood.count == 1, "the whole flood is ONE Character, which is the trap")
         #expect(flood.utf8.count > MeshRoutedTextBody.maxTextUTF8ByteCount)
 
-        #expect(manager.sendTempMessage(flood) == .empty)
+        #expect(chat.sendTempMessage(flood) == .empty)
         #expect(outcomes == [.empty])
-        #expect(manager.sessionMessages.messages.isEmpty)
+        #expect(chat.sessionMessages.messages.isEmpty)
+    }
+
+    // MARK: - The session-content generation (plan step A0.5.9)
+
+    /// **The generation advances exactly once at each of the three moments the transcript goes, and
+    /// the transcript goes with it** (plan step A0.5.9). The mesh advances its session-content
+    /// generation where the transcript's clear used to run — a forming commit, a privacy wipe's begin
+    /// and the session's end — and the composition's session observer drops the chat's transcript
+    /// right after. The non-moments in between move nothing: a commit that forms no session, and the
+    /// wipe's end. Counted as deltas, so a second advance at any moment, or one at a non-moment, reds.
+    @Test func theGenerationAdvancesOnceAtEachMomentAndTheTranscriptGoesWithIt() throws {
+        let manager = store.meshNetworkManager
+        let start = manager.transcriptGeneration
+        let identity = makePeerIdentity(name: "Alex", signingPublicKey: Data([4, 5, 6]))
+        let peer = makePeerHandle(name: "Alex")
+        manager.addSlotForTesting(coordinator: throwawayCoordinator(), peer: peer,
+                                  fingerprint: identity.fingerprint, peerCapabilities: messagesCap)
+        let slot = try #require(manager.slots.first { $0.id == peer.id })
+
+        seedTranscript(via: manager, text: "before the formation")
+        manager.noteSlotCommittedForShop(slot: slot, identity: identity)
+        #expect(manager.transcriptGeneration == start + 1, "a forming commit advances it once")
+        #expect(chat.sessionMessages.messages.isEmpty, "and the formation drops the transcript")
+
+        seedTranscript(via: manager, text: "in the session")
+        manager.noteSlotCommittedForShop(slot: slot, identity: identity)
+        #expect(manager.transcriptGeneration == start + 1, "a commit that forms nothing advances nothing")
+        #expect(chat.sessionMessages.messages.map(\.text) == ["in the session"], "and drops nothing")
+
+        manager.beginPrivacyWipe()
+        #expect(manager.transcriptGeneration == start + 2, "a privacy wipe's begin advances it once")
+        #expect(chat.sessionMessages.messages.isEmpty, "and the wipe drops the transcript")
+        manager.endPrivacyWipe()
+        #expect(manager.transcriptGeneration == start + 2, "the wipe's end advances nothing")
+
+        seedTranscript(via: manager, text: "before the end")
+        manager.evictSlotForTesting(peerID: slot.id)   // the last committed slot: the session ends
+        #expect(!manager.isSessionLive, "precondition: the eviction ended the session")
+        #expect(manager.transcriptGeneration == start + 3, "the session's end advances it once")
+        #expect(chat.sessionMessages.messages.isEmpty, "and the end drops the transcript")
+    }
+
+    /// **…and nowhere else** (plan step A0.5.9): the generation has ONE writer,
+    /// `advanceTranscriptGeneration()`, which adds one, and that writer has exactly three callers — the
+    /// forming commit, the session's end and the privacy wipe's begin — each before its session
+    /// observer moment. The composition drops the chat's transcript in exactly those three observer
+    /// legs, in the order the manager ran them (the formation's between the shop's reset and its
+    /// send-tracking clear, the end's after the shop's window), and the chat in one place. A source
+    /// pin, because "never elsewhere" is a claim about every path, which no behaviour enumerates.
+    @Test func theGenerationHasOneWriterWhoseThreeCallersPrecedeTheirObserverMoments() throws {
+        let engine = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
+        #expect(engine.components(separatedBy: "transcriptGeneration +=").count - 1 == 1,
+                "the generation is advanced in exactly one place")
+        #expect(engine.components(separatedBy: "transcriptGeneration = ").count - 1 == 1,
+                "and assigned only by its declaration")
+        let writer = try #require(MeshRoutedSourceScan.bracedBody(
+            after: "private func advanceTranscriptGeneration(", in: engine), "the generation's writer is gone")
+        #expect(writer.contains("transcriptGeneration += 1"), "the writer advances it by one")
+        #expect(engine.components(separatedBy: "advanceTranscriptGeneration()").count - 1 == 4,
+                "the writer's declaration and exactly three callers")
+        let moments = [("func noteSlotCommittedForShop(", "sessionObserver?.meshSlotDidCommit("),
+                       ("private func endSessionIfEnded(", "sessionObserver?.meshSessionDidEnd("),
+                       ("public func beginPrivacyWipe(", "sessionObserver?.meshPrivacyWipeDidBegin(")]
+        // R2: bounded by the three moments.
+        for (site, observer) in moments {
+            let body = try #require(MeshRoutedSourceScan.bracedBody(after: site, in: engine), "\(site) is gone")
+            let advance = try #require(body.range(of: "advanceTranscriptGeneration()"), "\(site) advances nothing")
+            let told = try #require(body.range(of: observer), "\(site) tells no observer")
+            #expect(advance.upperBound <= told.lowerBound, "\(site) advances after its observer moment")
+        }
+        let composition = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/FernletMeshFeatures.swift"))
+        #expect(composition.components(separatedBy: "chat.clearTranscript()").count - 1 == 3,
+                "the composition drops the transcript at exactly three moments")
+        let legs = [("func meshSlotDidCommit(", ["clothingShop.beginNewSession()", "chat.clearTranscript()",
+                                                 "shopExchange.clearShopSendTracking()"]),
+                    ("func meshSessionDidEnd(", ["clothingShop.openWindowAtSessionEnd()", "chat.clearTranscript()"]),
+                    ("func meshPrivacyWipeDidBegin(", ["chat.clearTranscript()"])]
+        // R2: bounded by the three legs and their few steps.
+        for (leg, steps) in legs {
+            let body = try #require(MeshRoutedSourceScan.bracedBody(after: leg, in: composition), "\(leg) is gone")
+            let found = steps.compactMap { body.range(of: $0)?.lowerBound }
+            #expect(found.count == steps.count && found == found.sorted(), "\(leg) runs \(steps) out of order")
+        }
+        let chatSource = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Messaging/MeshSessionChat.swift"))
+        #expect(chatSource.components(separatedBy: "sessionMessages.clear()").count - 1 == 1,
+                "the chat drops its transcript in one place, the observer legs' call")
     }
 
     // MARK: - Capability advertisement

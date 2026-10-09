@@ -19,6 +19,7 @@ import Foundation
 import Testing
 import FernletDomainModel
 import LocalPersistence
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -370,19 +371,19 @@ struct AgeGateWiringTests {
     /// that kept our capabilities from an earlier session could otherwise still be replied to.
     @Test func sendingIsRefusedBelowTheChatGate() {
         let store = makeStore("age-gate-chat-send")
-        let manager = store.meshNetworkManager
+        let chat = store.meshFeatures.chat
         var outcomes: [MeshTextSendOutcome] = []
-        manager.onTextSendForTesting = { outcomes.append($0) }
+        chat.onTextSendForTesting = { outcomes.append($0) }
 
         store.ageAssurance.applyDetermination(
             lowerBound: nil, upperBound: AgeGate.chat.minimumAge, provenance: .guardianDeclared
         )
-        #expect(manager.sendTempMessage("hello") == .ageGated)
+        #expect(chat.sendTempMessage("hello") == .ageGated)
 
         #expect(outcomes == [.ageGated], "the gate refuses BY NAME, before any mint")
-        #expect(manager.sessionMessages.messages.isEmpty,
+        #expect(chat.sessionMessages.messages.isEmpty,
                 "Not even the local echo — a transcript below the gate must stay empty")
-        #expect(!manager.isChatAllowed)
+        #expect(!chat.isChatAllowed)
     }
 
     /// Guardian communication limits reach the transport, not just the copy in Settings: an of-age
@@ -390,31 +391,32 @@ struct AgeGateWiringTests {
     @Test func communicationLimitsCloseTheChatTransport() {
         let store = makeStore("age-gate-chat-parental")
         let manager = store.meshNetworkManager
+        let chat = store.meshFeatures.chat
         var outcomes: [MeshTextSendOutcome] = []
-        manager.onTextSendForTesting = { outcomes.append($0) }
+        chat.onTextSendForTesting = { outcomes.append($0) }
 
         store.ageAssurance.applyDetermination(
             lowerBound: AgeGate.adult.minimumAge, upperBound: nil,
             provenance: .confirmed, hasCommunicationLimits: true
         )
 
-        #expect(!manager.isChatAllowed)
+        #expect(!chat.isChatAllowed)
         #expect(!manager.localCapabilities().contains(ProximityCapability.messages.rawValue))
-        #expect(manager.sendTempMessage("hello") == .ageGated)
+        #expect(chat.sendTempMessage("hello") == .ageGated)
         #expect(outcomes == [.ageGated])
-        #expect(manager.sessionMessages.messages.isEmpty)
+        #expect(chat.sessionMessages.messages.isEmpty)
         // The restriction is scoped to contacting people — intimacy is untouched.
         #expect(store.isIntimateLoggingAllowed)
     }
 
-    /// An unwired manager refuses rather than opens. `chatAllowedProvider` is optional, and nil must
+    /// An unwired chat refuses rather than opens. `chatAllowedProvider` is optional, and nil must
     /// mean no.
     @Test func anUnwiredChatProviderFailsClosed() {
         let store = makeStore("age-gate-chat-unwired")
         let manager = store.meshNetworkManager
-        manager.chatAllowedProvider = nil
+        store.meshFeatures.chat.chatAllowedProvider = nil
 
-        #expect(!manager.isChatAllowed)
+        #expect(!store.meshFeatures.chat.isChatAllowed)
         #expect(!manager.localCapabilities().contains(ProximityCapability.messages.rawValue))
     }
 

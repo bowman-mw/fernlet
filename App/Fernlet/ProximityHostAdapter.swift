@@ -1,13 +1,14 @@
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import Foundation
 import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
 /// `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore`,
-/// `makeProximityTrustPolicy()` and `makeProximityIdentity()` is already satisfied by existing store
-/// members (`trustedProximityPeers`, `isBlockedFingerprint`,
+/// `makeProximityTrustPolicy()`, `makeProximityIdentity()` and `meshRoutedTypeEntries` is already
+/// satisfied by existing store members (`trustedProximityPeers`, `isBlockedFingerprint`,
 /// `blockProximityPeer`). Kept in the app target: this conformance is the one piece that cannot
 /// move into `ProximityKit`, since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
@@ -63,4 +64,13 @@ extension FernletStore: ProximityHost {
     /// `KeyCustodyBoundaryTests` holds each of the store's three managers to an identity carrying the
     /// escrow key.
     func makeProximityIdentity() -> IdentityService { .fernletApp() }
+    /// Fernlet's routed-type rows beyond the mesh engine's resident ones: FernletSocial's
+    /// `FernletRoutedTypes.entries` over this store's namespace's routed types (ProximityKit plan step
+    /// A0.5.9) — the temporary-message row today, spelled as the engine spelled it before the chat
+    /// left it, so the registry the mesh builds from its resident rows and these is the one it built
+    /// before. Read once, by the mesh's initializer. The requirement has no default, so a host that
+    /// left this out would not compile.
+    var meshRoutedTypeEntries: [MeshRoutedTypeEntry] {
+        FernletRoutedTypes.entries(proximityNamespace.family.vocabulary.routedTypes)
+    }
 }

@@ -8,10 +8,10 @@
 // The ORDER is a signed wire byte: the coordinator carries the array verbatim into the introduction and
 // its acknowledgement, so the composer below is the mesh manager's own `localCapabilities()` body,
 // moved with its nine appends in their order and its comments. The switches it reads are read where
-// they live: the clothing shop's sharing gate on the composition's shop, the chat age gate on the mesh
-// (still the engine's until chat moves), the friend-state opt-in on the composition's friend-state
-// exchange, the in-person hearts opt-in on the host, the away-hearts consent on this object, and the
-// wire2 token on the namespace the host was read for once.
+// they live: the clothing shop's sharing gate on the composition's shop, the chat age gate on the
+// composition's chat (since plan step A0.5.9), the friend-state opt-in on the composition's
+// friend-state exchange, the in-person hearts opt-in on the host, the away-hearts consent on this
+// object, and the wire2 token on the namespace the host was read for once.
 
 import Foundation
 import FernletDomainModel
@@ -37,8 +37,8 @@ public final class FernletMeshCapabilities {
     /// accepts drops. Optional-and-nil means not consented, so a list nobody wired never advertises it.
     public var heartsAwayEnabledProvider: (() -> Bool)?
 
-    /// The mesh whose feature switches the list reads. Weak: the mesh retains the provider closure
-    /// that retains this object.
+    /// The mesh that advertises the list: while it is gone, the list is the engine's own. Weak: the
+    /// mesh retains the provider closure that retains this object.
     private weak var mesh: MeshNetworkManager?
 
     /// The host the hearts opt-in is read from, and the namespace the wire2 token is read from.
@@ -52,20 +52,26 @@ public final class FernletMeshCapabilities {
     /// strongly: the exchange holds the mesh weakly and nothing else back.
     private let friendState: FriendStateExchange
 
-    /// A composer over `mesh`'s feature switches, `meshHost`'s host and namespace, the shop's gate and
-    /// the friend-state opt-in.
+    /// The composition's chat, whose 13+ age gate the `messages` token follows. Held strongly: the
+    /// chat holds the mesh weakly and nothing else back.
+    private let chat: MeshSessionChat
+
+    /// A composer for `mesh`, over `meshHost`'s host and namespace, the shop's gate, the friend-state
+    /// opt-in and the chat's age gate.
     ///
     /// - Parameters:
     ///   - mesh: The mesh this list is advertised by, held weakly.
     ///   - meshHost: The features' host holder.
     ///   - clothingShop: The composition's clothing shop.
     ///   - friendState: The composition's friend-state exchange.
+    ///   - chat: The composition's chat.
     init(mesh: MeshNetworkManager, meshHost: FernletMeshHost, clothingShop: MeshClothingShop,
-         friendState: FriendStateExchange) {
+         friendState: FriendStateExchange, chat: MeshSessionChat) {
         self.mesh = mesh
         self.meshHost = meshHost
         self.clothingShop = clothingShop
         self.friendState = friendState
+        self.chat = chat
     }
 
     /// The capability tokens advertised in this device's identity introduction, in their frozen order:
@@ -77,7 +83,7 @@ public final class FernletMeshCapabilities {
     ///
     /// - Returns: the ordered capability tokens.
     func localCapabilities() -> [String] {
-        guard let mesh else { return [meshHost.namespace.family.vocabulary.capabilities.wire2] }
+        guard mesh != nil else { return [meshHost.namespace.family.vocabulary.capabilities.wire2] }
         var capabilities = [ProximityCapability.photos.rawValue]
         // wire2 (bitchat adoptions Increment 2): sealed-payload compress+pad framing. A wire
         // format, not a user feature — no opt-out; advertised by every build that ships it, under
@@ -95,7 +101,7 @@ public final class FernletMeshCapabilities {
         // session membership (the UWB dwell + admission) IS the consent gate. The one thing that DOES
         // withhold it is the 13+ age gate: a device below the line never advertises `messages`, so
         // friends' devices skip it in the room broadcast instead of sending into a surface it will drop.
-        if mesh.isChatAllowed {
+        if chat.isChatAllowed {
             capabilities.append(ProximityCapability.messages.rawValue)
         }
         // Content-moderation reports are a safety feature with no opt-out — always advertised so a

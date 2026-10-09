@@ -54,9 +54,10 @@ enum FernletMeshRig {
     /// capability provider and the vouch-list exchange (plan step A0.5.5), the session observer (plan
     /// step A0.5.6), the payload handlers (``featurePayloadTokens``: the shop's two since A0.5.6, the
     /// moderation report's and the friend state's since A0.5.7, the activity manager's five since
-    /// A0.5.8), each read off the mesh's registry, and the activity manager's two mesh seams (A0.5.8).
-    /// Each later feature step adds its own here, and the routed registrations' answers (A0.5.9 on) are
-    /// each held to `true`.
+    /// A0.5.8), each read off the mesh's registry, the activity manager's two mesh seams (A0.5.8), and
+    /// every routed registration's answer held to `true` (A0.5.9 on: the chat's projection handler,
+    /// whose refusal the composition records and logs rather than drops). Each later feature step adds
+    /// its own here.
     ///
     /// - Parameter features: The composition just built.
     private static func expectEveryInstallationHeld(by features: FernletMeshFeatures) {
@@ -75,6 +76,8 @@ enum FernletMeshRig {
                 "the composition set no mesh send on its activity manager")
         #expect(features.activities.committedActivityPeerFingerprints != nil,
                 "the composition set no committed-peer query on its activity manager")
+        #expect(features.refusedRoutedRegistrations.isEmpty,
+                "the mesh refused the composition's routed registrations for \(features.refusedRoutedRegistrations)")
     }
 
     /// The payload tokens the composition registers a handler for through the mesh's token door, each

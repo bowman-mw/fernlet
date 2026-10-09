@@ -26,6 +26,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -169,7 +170,7 @@ struct MeshP6KeyAdvertisementAcceptanceTests {
             `chatAllowedProvider` is nil on a freshly built manager and `isChatAllowed` reads \
             `provider?() == true`, so the gate is fail-closed and the mint never reaches a resolver
             """)
-        #expect(run.livingMembers.allSatisfy { $0.node.manager.sessionMessages.messages.isEmpty },
+        #expect(run.livingMembers.allSatisfy { $0.node.features.chat.sessionMessages.messages.isEmpty },
                 "and no transcript anywhere holds a row for a message that was never minted")
     }
 }
@@ -331,7 +332,8 @@ struct MeshP6TextRoutingAcceptanceTests {
     ///
     /// **Leg 3's own tripwire is one line, not a cell** (P6 item 9's second fix review, P3-6).
     /// `mesh.routedProjection.transcriptAgeGated` is written in exactly ONE place in the tree —
-    /// leg 3's refusal arm, `MeshNetworkManager.swift:7919` — so capturing it around this run says
+    /// leg 3's refusal arm, the text row's projection adapter in `MeshSessionChat.swift`
+    /// (FernletSocial's since plan step A0.5.9) — so capturing it around this run says
     /// leg 3 fired, which the view gate cannot fake. **Its one weakness, named rather than left for
     /// a reader to find:** the audit log is process-global and suites run in parallel, so a
     /// concurrent suite driving its own gated projection could satisfy the count. It is therefore a
@@ -353,9 +355,9 @@ struct MeshP6TextRoutingAcceptanceTests {
                                       "this clause runs only cells that really shut a gate")
         let gated = try #require(run.participant(global: gatedIndex),
                                  "the overlay named a gated member this run does not leave alive")
-        #expect(gated.node.manager.isChatAllowed == false,
+        #expect(gated.node.features.chat.isChatAllowed == false,
                 "the gated member's own precondition, read at the device rather than assumed")
-        #expect(gated.node.manager.sessionMessages.messages.isEmpty,
+        #expect(gated.node.features.chat.sessionMessages.messages.isEmpty,
                 "a routed text was projected below the 13+ line")
         #expect(run.routedIndex(of: gated)?.items
             .contains { $0.key == outcome.textKey } == true, """
@@ -366,7 +368,7 @@ struct MeshP6TextRoutingAcceptanceTests {
         // R2: bounded by the roster cap.
         for member in run.livingMembers
         where member.index != outcome.textOrigin.index && member.index != gatedIndex {
-            #expect(member.node.manager.sessionMessages.messages.map(\.text).contains(wanted),
+            #expect(member.node.features.chat.sessionMessages.messages.map(\.text).contains(wanted),
                     "an ungated survivor's transcript is missing the message")
         }
         #expect(gateAudit.count(of: "mesh.routedProjection.transcriptAgeGated") > 0, """
@@ -393,7 +395,7 @@ struct MeshP6TextRoutingAcceptanceTests {
         let outcome = try await MeshP6Acceptance.feature(cell, label: "p6text-order")
         defer { MeshP6Acceptance.teardown(outcome.run) }
         let readers = outcome.run.livingMembers.filter { $0.index != outcome.overlay.ageGatedMember }
-        let transcripts = readers.map { $0.node.manager.sessionMessages.messages }
+        let transcripts = readers.map { $0.node.features.chat.sessionMessages.messages }
         #expect(transcripts.first?.isEmpty == false, "an empty transcript everywhere compares nothing")
 
         let orders = transcripts.map { rows in

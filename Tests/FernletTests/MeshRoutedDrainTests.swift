@@ -2110,6 +2110,12 @@ struct MeshRoutedDrainWallTests {
         try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
     }
 
+    /// The chat's own file, where the text path's code went when chat left the manager for
+    /// FernletSocial (plan step A0.5.9): the text retirement wall reads it beside the manager's.
+    private func chatSource() throws -> String {
+        try RepoRoot.source("FernletKit/Sources/FernletSocial/Messaging/MeshSessionChat.swift")
+    }
+
     /// **The mechanical form of "do NOT add a second reconnect path".** The routed ask rides exactly
     /// the three **ask** doors; the membership digest has two additional, non-ask doors — the
     /// post-merge **proof** and the joiner's post-**adoption** digest — each of which opens no
@@ -2495,8 +2501,14 @@ struct MeshRoutedDrainWallTests {
     /// registered routed type with the same last component, so a bare `.tempMessage` needle would
     /// be unsatisfiable: the token the routed path mints under is exactly the one whose legacy
     /// wire twin is retired here.
+    ///
+    /// Read over the manager AND the chat's file since plan step A0.5.9, when the text sender, its
+    /// budget and its projection arm left the manager for FernletSocial's `MeshSessionChat`: a
+    /// retired name coming back belongs to whichever of the two now holds the text path.
     @Test func theRetiredTextTransportIsGone() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let chat = MeshRoutedSourceScan.codeOnly(try chatSource())
+        let source = manager + "\n" + chat
         let retired = [
             "registerSessionMessageHandler", "TempMessagePayload", "for: .tempMessage",
             "mesh.tempMessage.", "onTempMessageSendForTesting",
@@ -2511,10 +2523,11 @@ struct MeshRoutedDrainWallTests {
             "rateBucketBySender"
         ]
         var scanned = 0
-        // R2: seven names over one file.
+        // R2: seven names over two files.
         for symbol in retired {
             scanned += 1
-            #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
+            #expect(!source.contains(symbol),
+                    "\(symbol) came back to MeshNetworkManager.swift or MeshSessionChat.swift")
         }
         #expect(scanned == retired.count, "the retired-text-transport scan lost a symbol")
     }
