@@ -1016,15 +1016,13 @@ struct ProximityVocabularyGoldenTests {
     }
 
     /// Fernlet's three routed rows by name, in the order the registry declared them — photo,
-    /// temporary message, heart — built from `routedTypes`: the engine's resident photo row
-    /// (`MeshRoutedTypeRegistry.increment1Rows(_:)`) and FernletSocial's text and heart rows
-    /// (`FernletRoutedTypes`, the host's since plan steps A0.5.9 and A0.5.10, when the resident rows
-    /// lost them). Re-pointed at A0.5.9 and A0.5.10; the tokens it is held to are the group's frozen
-    /// literals.
+    /// temporary message, heart — built from `routedTypes`: FernletSocial's photo, text and heart rows
+    /// (`FernletRoutedTypes`, the host's since plan steps A0.5.9, A0.5.10 and A0.5.11, when the engine's
+    /// resident rows, `MeshRoutedTypeRegistry.increment1Rows(_:)` until then, lost them). Re-pointed at
+    /// A0.5.9, A0.5.10 and A0.5.11; the tokens it is held to are the group's frozen literals.
     static func fernletRoutedRows(_ routedTypes: ProximityNamespace.RoutedTypes) -> [MeshRoutedTypeEntry] {
-        let resident = MeshRoutedTypeRegistry.increment1Rows(routedTypes)
-        let hosted = FernletRoutedTypes(routedTypes)
-        return [resident.photo, hosted.text, hosted.heart]
+        let rows = FernletRoutedTypes(routedTypes)
+        return [rows.photo, rows.text, rows.heart]
     }
 
     /// A mesh's registry is built from its host namespace's routed types: what Fernlet's mesh can

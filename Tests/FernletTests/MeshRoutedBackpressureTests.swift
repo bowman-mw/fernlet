@@ -843,7 +843,7 @@ struct MeshRoutedParkedDropDoorTests {
         #expect(mounts.count == 1, "exactly one mount")
         let mount = try #require(mounts.first)
         let album = try #require(
-            lines.firstIndex(where: { $0.contains("if manager.meshPhotos.isEmpty") }),
+            lines.firstIndex(where: { $0.contains("if features.photos.meshPhotos.isEmpty") }),
             "the album branch moved; re-check where the banner is mounted"
         )
         #expect(mount.offset < album,

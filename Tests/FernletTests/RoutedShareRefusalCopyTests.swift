@@ -57,7 +57,7 @@ import ProximityKit
         let view = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/DisposableCameraView.swift"))
         let reads = view.components(separatedBy: "photosKeptOnThisPhone").count - 1
         #expect(reads >= 1, "the camera view reads the count")
-        #expect(view.contains("RoutedShareRefusalCopy.photoKeptNotice(count: manager.photosKeptOnThisPhone)"),
+        #expect(view.contains("RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone)"),
                 "and only through the copy table — no sentence is composed in the view")
         #expect(view.contains(".accessibilityIdentifier(\"camera.photosKeptNotice\")"),
                 "the sentence is reachable by identifier for the UI suite")

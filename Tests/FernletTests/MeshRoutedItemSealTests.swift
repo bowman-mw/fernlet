@@ -28,6 +28,7 @@ import Foundation
 @testable import FernletCrypto
 import FernletDomainModel
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - Fixtures
@@ -314,9 +315,10 @@ struct MeshRoutedItemSealTests {
     }
 
     /// B-2: the sealed plaintext names no epoch — the property that makes branch and epoch stop
-    /// deciding decryptability.
+    /// deciding decryptability. The body is FernletSocial's since plan step A0.5.11
+    /// (`MeshRoutedPhotoBody.swift`, moved from ProximityKit's `MeshRoutedItemBody.swift`).
     @Test func theRoutedPhotoBodyNamesNoEpoch() throws {
-        let body = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemBody.swift")
+        let body = try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshRoutedPhotoBody.swift")
         let seal = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemSeal.swift")
         #expect(!MeshRoutedSourceScan.codeOnly(body).contains("keyEpoch"))
         #expect(!MeshRoutedSourceScan.codeOnly(seal).contains("keyEpoch"))

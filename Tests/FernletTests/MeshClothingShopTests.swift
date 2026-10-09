@@ -339,13 +339,13 @@ struct MeshClothingShopTests {
 
         manager.leaveSession()
         #expect(features.clothingShop.isWindowOpen)
-        #expect(manager.pendingFriendReview != nil)
+        #expect(features.photos.pendingFriendReview != nil)
 
         manager.resetSessionRosterForNewSession()   // the startJoin/startNewMesh seam (tab entry / scene dip)
 
         #expect(features.clothingShop.isWindowOpen, "The window survives search starts — it closes at session FORMATION")
         #expect(features.clothingShop.peerCatalogs.count == 1, "Held catalogs survive with it")
-        #expect(manager.pendingFriendReview != nil, "The friend-review batch survives search starts by design")
+        #expect(features.photos.pendingFriendReview != nil, "The friend-review batch survives search starts by design")
     }
 
     /// The owner decision "closes when a new session starts" keys on FORMATION: the first slot

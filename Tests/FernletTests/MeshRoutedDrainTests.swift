@@ -2122,6 +2122,12 @@ struct MeshRoutedDrainWallTests {
         try RepoRoot.source("FernletKit/Sources/FernletSocial/HeartSharing/MeshSessionHearts.swift")
     }
 
+    /// The session photos' own file, where the photo path's code went when the photos left the manager
+    /// for FernletSocial (plan step A0.5.11): the photo retirement walls read it beside the manager's.
+    private func photosSource() throws -> String {
+        try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshSessionPhotos.swift")
+    }
+
     /// **The mechanical form of "do NOT add a second reconnect path".** The routed ask rides exactly
     /// the three **ask** doors; the membership digest has two additional, non-ask doors — the
     /// post-merge **proof** and the joiner's post-**adoption** digest — each of which opens no
@@ -2448,8 +2454,15 @@ struct MeshRoutedDrainWallTests {
     /// `payload.keyEpoch > 0`, so the wall would have gone red on its own commit and the obvious
     /// green-making move — widening the exemption — would quietly re-admit
     /// `if x.keyEpoch > localJoinedEpoch` anywhere in the manager.
+    ///
+    /// Read over the manager AND the session photos' file since plan step A0.5.11, when
+    /// `sanitizedIncomingPhoto` (and with it three of the four `keyEpoch` survivors) left the manager
+    /// for FernletSocial's `MeshSessionPhotos`: the pins keep their numbers over the two, and a retired
+    /// gate coming back belongs to whichever of them now holds the photo path.
     @Test func theRetiredEpochGatesAreGoneAndTheSurvivorsArePinned() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let photos = MeshRoutedSourceScan.codeOnly(try photosSource())
+        let source = manager + "\n" + photos
         let pins: [(needle: String, pinned: Int)] = [
             ("key.epoch == photo.keyEpoch", 0),
             ("keyEpoch >= localJoinedEpoch", 0),
@@ -2458,7 +2471,7 @@ struct MeshRoutedDrainWallTests {
             ("keyEpoch", 4),
             ("localJoinedEpoch", 7)
         ]
-        // R2: six needles over one file.
+        // R2: six needles over two files.
         for pin in pins {
             let found = source.components(separatedBy: pin.needle).count - 1
             #expect(found == pin.pinned,
@@ -2473,8 +2486,15 @@ struct MeshRoutedDrainWallTests {
     /// that pull, and the two public statics that sealed and opened a photo under the group key.
     /// A count is not enough here — a re-introduction under any of these names is the regression —
     /// so each is pinned at zero by name.
+    ///
+    /// Read over the manager AND the session photos' file since plan step A0.5.11, when the photo
+    /// sender, its quota and its projection arm left the manager for FernletSocial's
+    /// `MeshSessionPhotos`: a retired name coming back belongs to whichever of the two now holds the
+    /// photo path.
     @Test func theRetiredPhotoTransportIsGone() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let manager = MeshRoutedSourceScan.codeOnly(try managerSource())
+        let photos = MeshRoutedSourceScan.codeOnly(try photosSource())
+        let source = manager + "\n" + photos
         let retired = [
             "handleFriendPhotoEnvelope", "decryptedIncomingPhoto", "dispatchPhotoPayload",
             "photoAuthorIsAcceptable", "handlePhotoManifest", "syncPhotoManifest",
@@ -2487,10 +2507,11 @@ struct MeshRoutedDrainWallTests {
             "allowIncomingPhoto", "receivedPhotoIDsByFingerprint", "receiveQuotaMeshID"
         ]
         var scanned = 0
-        // R2: fourteen names over one file.
+        // R2: fourteen names over two files.
         for symbol in retired {
             scanned += 1
-            #expect(!source.contains(symbol), "\(symbol) came back to MeshNetworkManager.swift")
+            #expect(!source.contains(symbol),
+                    "\(symbol) came back to MeshNetworkManager.swift or MeshSessionPhotos.swift")
         }
         #expect(scanned == retired.count, "the retired-transport scan lost a symbol")
     }

@@ -8,17 +8,20 @@
 // feature plays before its initializer returns, so no restore, re-entry or radio start can see a mesh
 // without them. It owns all of it: FernletStore reaches the mesh as `meshFeatures.mesh`.
 //
-// It grows one feature per plan step (A0.5.6 to A0.5.11). Today it holds the capability list the mesh
+// It grew one feature per plan step (A0.5.6 to A0.5.11). It holds the capability list the mesh
 // advertises, the friend vouch list's content, the clothing shop, the moderation report relay, the
-// fuzzy friend state, the Group Activities manager, the live-session chat and the in-session hearts,
-// registers the chat's projection handler and the hearts' ledger judge for the temporary-message and
-// heart rows it declares through the host (`FernletRoutedTypes`), and it is the mesh's session
-// observer, through a private adapter, for the moments its features act on. Since plan step A0.5.10
-// its host is FernletSocial's own refinement, `FernletSocialHost`.
+// fuzzy friend state, the Group Activities manager, the live-session chat, the in-session hearts and
+// the session photos, registers the chat's and the photos' projection handlers and the hearts' ledger
+// judge for the temporary-message, photo and heart rows it declares through the host
+// (`FernletRoutedTypes`), and it is the mesh's session observer, through a private adapter, for the
+// moments its features act on. Since plan step A0.5.10 its host is FernletSocial's own refinement,
+// `FernletSocialHost`; since A0.5.11 the pending photo corpus's key provider is handed to it (nil in
+// every shipping path), not to the mesh.
 
 import Foundation
 import FernletDomainModel
 import FernletFoundation
+import PrivateMediaStore
 import ProximityKit
 
 /// Fernlet's mesh features and the mesh engine they ride: the composition the app builds once and owns.
@@ -26,10 +29,12 @@ import ProximityKit
 /// The initializer runs in a fixed order: the device identity (handed in, or asked of the host's
 /// ``ProximityHost/makeProximityIdentity()`` exactly once), the mesh (built by the factory with that
 /// identity, which checks and provisions it), the feature objects (over the mesh and the same
-/// identity, the activity manager first, whose ledger loads, collects and may write as it is built),
-/// then the installations on the mesh — the capability provider, the vouch-list exchange, the clothing
-/// shop's two payload handlers, the moderation report's, the friend state's, the activity manager's
-/// five and its two mesh seams, the chat's projection handler, the hearts' ledger judge and, last, the
+/// identity, the activity manager first, whose ledger loads, collects and may write as it is built,
+/// then the session photos, whose wall, pending corpus and reconcile load as they are built — the
+/// order the mesh manager's initializer ran them in), then the installations on the mesh — the
+/// capability provider, the vouch-list exchange, the clothing shop's two payload handlers, the
+/// moderation report's, the friend state's, the activity manager's five and its two mesh seams, the
+/// chat's projection handler, the photos' projection handler, the hearts' ledger judge and, last, the
 /// session observer — all before the initializer returns. The mesh is reachable by no other code until
 /// then.
 ///
@@ -37,13 +42,12 @@ import ProximityKit
 /// private adapter that holds this object `unowned`. The mesh retains only what it calls: the capability
 /// provider's closure, which captures ``capabilities`` alone, the vouch-list exchange, a private adapter
 /// that holds ``vouchList``, the nine payload handlers, which hold their features weakly (the activity
-/// manager's hold the features' host holder too), the chat's projection handler, a private adapter
-/// that holds ``chat``, and the hearts' ledger judge, a private adapter that holds ``hearts``; it holds
-/// the session observer weakly, so the adapter lives exactly as long as this object. Each feature holds
-/// the mesh weakly (the activity
-/// manager in its two seams), and the host `unowned`, through the features' host holder as the mesh
-/// holds it (the activity manager in its own reference), so nothing the mesh retains retains the mesh
-/// or this object.
+/// manager's hold the features' host holder too), the chat's and the photos' projection handlers,
+/// private adapters that hold ``chat`` and ``photos``, and the hearts' ledger judge, a private adapter
+/// that holds ``hearts``; it holds the session observer weakly, so the adapter lives exactly as long as
+/// this object. Each feature holds the mesh weakly (the activity manager in its two seams), and the
+/// host `unowned`, through the features' host holder as the mesh holds it (the activity manager in its
+/// own reference), so nothing the mesh retains retains the mesh or this object.
 ///
 /// Conforms to nothing of the engine's: each engine role a feature plays is a private adapter nested in
 /// that feature, and the session observer one nested here (design rule 6), so the engine's entry points
@@ -92,6 +96,14 @@ public final class FernletMeshFeatures {
     /// in-flight claims are dropped by this object's session observer, last, when a session ends.
     public let hearts: MeshSessionHearts
 
+    /// The session photos (P5 item 13; held for the person's answer since 2026-09-30): the friend-photo
+    /// wall with its preferences and favourites, the sealed pending corpus and its answers, the film and
+    /// its quota, the session-end review batch, the capture and its routed share, and the photo row's
+    /// projection handler through a private adapter (plan step A0.5.11). Built right after the activity
+    /// manager; this object's session observer runs its legs at each moment the mesh reports — the
+    /// review merge and the photo move first when a session ends.
+    public let photos: MeshSessionPhotos
+
     /// Phase 5: a friend session committed with this fingerprint (an in-person meeting) — feeds
     /// closeness. Called first at every slot commit, before any other feature's commit leg.
     public var onFriendSessionCommitted: ((String) -> Void)?
@@ -108,8 +120,9 @@ public final class FernletMeshFeatures {
     private let meshHost: FernletMeshHost
 
     /// Fernlet's routed-type rows over the host's namespace, read once: the chat mints under the text
-    /// row's token and its projection adapter is registered under the same one; the hearts mint under
-    /// the heart row's token and their ledger judge is registered under the same one.
+    /// row's token and its projection adapter is registered under the same one; the photos mint under
+    /// the photo row's token and their projection adapter is registered under the same one; the hearts
+    /// mint under the heart row's token and their ledger judge is registered under the same one.
     private let routedRows: FernletRoutedTypes
 
     /// The routed registrations the mesh refused while this composition installed its roles, by
@@ -132,22 +145,27 @@ public final class FernletMeshFeatures {
     ///
     /// - Parameter host: The app's host, which owns this composition and keeps it alive.
     public convenience init(host: any FernletSocialHost) {
-        self.init(host: host, identity: nil) { identity in
+        self.init(host: host, identity: nil, heldPhotoKeys: nil) { identity in
             MeshNetworkManager(store: host, identity: identity)
         }
     }
 
     /// The composition over a mesh the factory builds: the seam the test rig uses to inject an
-    /// identity and a mesh over a fake radio.
+    /// identity, the pending photo corpus's key provider and a mesh over a fake radio.
     ///
     /// - Parameters:
     ///   - host: The app's host; the caller keeps it alive.
     ///   - injected: The device identity, or nil to ask the host's door once.
+    ///   - heldPhotoKeys: The pending photo corpus's key provider, handed to the session photos: nil (the
+    ///     app's) for the device-bound keychain row; a test passes an in-memory or wrong key.
     ///   - makeMesh: Builds the mesh with the identity.
-    init(host: any FernletSocialHost, identity injected: IdentityService?, makeMesh: MakeMesh) {
+    init(
+        host: any FernletSocialHost, identity injected: IdentityService?,
+        heldPhotoKeys: (any PrivateMediaKeyProviding)?, makeMesh: MakeMesh
+    ) {
         let identity = injected ?? host.makeProximityIdentity()
         let mesh = makeMesh(identity)
-        // Per-HOST root like the mesh's photo wall: `FernletStore.resetAll` calls
+        // Per-HOST root like the photo wall: `FernletStore.resetAll` calls
         // `meshFeatures.activities.clearAll()`, which removes this sidecar.
         let activities = ProximityActivityManager(
             store: host,
@@ -156,6 +174,11 @@ public final class FernletMeshFeatures {
         )
         let meshHost = FernletMeshHost(host: host)
         let routedRows = FernletRoutedTypes(meshHost.namespace.family.vocabulary.routedTypes)
+        // Right after the activity manager, as the mesh manager's initializer ordered them: the wall,
+        // the pending corpus and the reconcile load as the photo object is built.
+        let photos = MeshSessionPhotos(
+            mesh: mesh, meshHost: meshHost, photoToken: routedRows.photo.token, heldPhotoKeys: heldPhotoKeys
+        )
         let clothingShop = MeshClothingShop()
         let friendState = FriendStateExchange(mesh: mesh, meshHost: meshHost)
         let chat = MeshSessionChat(mesh: mesh, meshHost: meshHost, textToken: routedRows.text.token)
@@ -170,6 +193,7 @@ public final class FernletMeshFeatures {
         self.activities = activities
         self.chat = chat
         self.hearts = hearts
+        self.photos = photos
         self.capabilities = FernletMeshCapabilities(
             mesh: mesh, meshHost: meshHost, clothingShop: clothingShop, friendState: friendState, chat: chat)
         self.vouchList = FernletVouchList(meshHost: meshHost, identity: identity)
@@ -182,9 +206,10 @@ public final class FernletMeshFeatures {
     /// exchange, the payload handlers (the clothing shop's two, then the moderation report's, the
     /// friend state's and the activity manager's five, the order the mesh manager registered them in),
     /// the activity manager's two mesh seams, the chat's projection handler under the text row's token
-    /// (plan step A0.5.9), the hearts' ledger judge under the heart row's token (plan step A0.5.10)
-    /// and, last, the session observer, created here once every stored property is set, so it may hold
-    /// this object `unowned`.
+    /// (plan step A0.5.9), the photos' projection handler under the photo row's token (plan step
+    /// A0.5.11), the hearts' ledger judge under the heart row's token (plan step A0.5.10) and, last, the
+    /// session observer, created here once every stored property is set, so it may hold this object
+    /// `unowned`.
     private func installOnMesh() {
         let capabilities = self.capabilities
         mesh.localCapabilitiesProvider = { capabilities.localCapabilities() }
@@ -194,6 +219,7 @@ public final class FernletMeshFeatures {
         friendState.registerHandler(on: mesh)
         activities.attach(to: mesh, meshHost: meshHost)
         registerProjector(chat.makeProjector(), forToken: routedRows.text.token)
+        registerProjector(photos.makeProjector(), forToken: routedRows.photo.token)
         registerJudge(hearts.makeJudge(), forToken: routedRows.heart.token)
         let observer = SessionObserver(features: self)
         sessionObserver = observer
@@ -295,14 +321,18 @@ public final class FernletMeshFeatures {
             features.shopExchange.clearShopSendTracking()
         }
 
-        /// The session ended: the shop's one-hour browse window opens over the catalogs it holds, then
-        /// the chat transcript is dropped (messages vanish), then, last, the in-session heart's feedback
-        /// and its in-flight claims go, in the order the mesh manager ran them (it reset the hearts
-        /// itself, just after this call, until plan step A0.5.10); the mesh advanced its
-        /// session-content generation just before this call.
+        /// The session ended: first the review promotion — the roster the mesh drained merges into the
+        /// pending review and the session's unreviewed photos move in with it — then the shop's one-hour
+        /// browse window opens over the catalogs it holds, then the chat transcript is dropped (messages
+        /// vanish), then, last, the in-session heart's feedback and its in-flight claims go, in the
+        /// order the mesh manager ran them (it ran the promotion itself, just before this call, until
+        /// plan step A0.5.11, and reset the hearts, just after it, until A0.5.10); the mesh drained its
+        /// roster, ended the formed-session epoch and advanced its session-content generation just
+        /// before this call, none of which the promotion reads.
         ///
-        /// - Parameter end: The ending.
+        /// - Parameter end: The ending, with the roster the mesh drained.
         func meshSessionDidEnd(_ end: MeshSessionEnd) {
+            features.photos.promoteEndedSessionIntoPendingReview(drainedRoster: end.drainedRoster)
             features.clothingShop.openWindowAtSessionEnd()
             features.chat.clearTranscript()
             features.hearts.resetSessionHeartState()
@@ -313,6 +343,47 @@ public final class FernletMeshFeatures {
         /// projects into the transcript again while the wipe runs, or after it from before it.
         func meshPrivacyWipeDidBegin() {
             features.chat.clearTranscript()
+        }
+
+        /// A new search began: the session photos reset the film, move a photo still listed into the
+        /// pending review and mint the new photo session's ids, where the mesh manager's `startJoin()`
+        /// ran them, before the mesh resets its roster and removal tallies.
+        func meshSessionWillBegin() {
+            features.photos.beginNewPhotoSession()
+        }
+
+        /// This device left its session: the session photos forget the photo session's ids, after the
+        /// teardown and the ending it ran, where the mesh manager's `leaveSession()` cleared them.
+        func meshSessionDidLeave() {
+            features.photos.forgetPhotoSession()
+        }
+
+        /// The mesh the session counts against changed: the session photos' film follows it, where the
+        /// mesh manager's founding, abandoned founding and `leaveMesh()` moved it.
+        ///
+        /// - Parameter change: The change.
+        func meshScopeDidChange(_ change: MeshScopeChange) {
+            features.photos.noteScopeChange(change)
+        }
+
+        /// A signed removal took effect: the removed member leaves the session photos' pending review,
+        /// right after the mesh purged it from its live roster, where the mesh manager purged both.
+        ///
+        /// - Parameter fingerprint: The removed member's fingerprint.
+        func meshMemberWasRemoved(fingerprint: String) {
+            features.photos.dropRemovedMemberFromReview(fingerprint: fingerprint)
+        }
+
+        /// The host pushed a changed routed access gate: the session photos mirror it, re-read their
+        /// indexes on a rising edge and recompute whether held photos can be shown, where the mesh
+        /// manager's gate door ran both, before the re-entry pass the edge owes.
+        ///
+        /// - Parameters:
+        ///   - gate: The gate as the host now knows it.
+        ///   - isRising: Whether a ciphertext leg rose.
+        ///   - now: The instant the host pushed it.
+        func meshRoutedAccessGateDidChange(_ gate: MeshRoutedAccessGate, isRising: Bool, now: Date) {
+            features.photos.applyAccessGate(gate, isRising: isRising, now: now)
         }
     }
 }

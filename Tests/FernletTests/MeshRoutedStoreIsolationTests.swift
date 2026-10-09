@@ -434,14 +434,16 @@ struct MeshRoutedStoreIsolationTests {
     /// four forwarding gates — so a second shipping registry would be a second answer to "is this
     /// type known", and that is the one question plan §11 says must have one answer everywhere.
     ///
-    /// The member half is why `MeshNetworkManager`'s `init` spells the registry it builds out in full
-    /// (`= MeshRoutedTypeRegistry.increment1(namespace.family.vocabulary.routedTypes, hostEntries: …)`
-    /// since plan step A0.5.9, the resident rows and the host's): a leading-dot `.increment1(…)` — or
-    /// a future `.increment2(…)` — is invisible to this scanner. The sweep reads FernletSocial too
-    /// since that step, so the host's rows cannot become a second registry there either.
-    /// The mint takes its registry with no default, so the registry the manager builds is the one
-    /// value position left. `theTypeRegistryScannersMatchAcrossLines` fixtures that blind spot from
-    /// both sides, asserting the manager's file still names the type in full.
+    /// The construction half is why `MeshNetworkManager`'s `init` spells the registry it builds out in
+    /// full (`MeshRoutedTypeRegistry(entries: store.meshRoutedTypeEntries)` since plan step A0.5.11, its
+    /// host's rows alone; a fully spelled `increment1(…)` builder over the resident rows and the host's
+    /// before it): a leading-dot `.init(entries:)` is invisible to this scanner. The member half admits
+    /// no member at all since that step, when the last builder, `increment1`, was deleted with the
+    /// resident rows. The sweep reads FernletSocial too since plan step A0.5.9, so the host's rows
+    /// cannot become a second registry there either. The mint takes its registry with no default, so
+    /// the registry the manager builds is the one value position left.
+    /// `theTypeRegistryScannersMatchAcrossLines` fixtures that blind spot from both sides, asserting
+    /// the manager's file still names the type in full.
     @Test func shippingCodeNamesOneTypeRegistry() throws {
         var constructionSites: [String] = []
         var otherValues: [String] = []
@@ -451,15 +453,14 @@ struct MeshRoutedStoreIsolationTests {
             ) {
                 constructionSites.append(file)
             }
-            for fragment in code.components(separatedBy: "MeshRoutedTypeRegistry.").dropFirst()
-            where !fragment.hasPrefix("increment1") {
+            for fragment in code.components(separatedBy: "MeshRoutedTypeRegistry.").dropFirst() {
                 otherValues.append("\(file): …MeshRoutedTypeRegistry.\(fragment.prefix(24))")
             }
         }
-        #expect(constructionSites == ["MeshRoutedTypeRegistry.swift"],
+        #expect(constructionSites == ["MeshNetworkManager.swift"],
                 "a second shipping `MeshRoutedTypeRegistry(entries:)` is a second policy: \(constructionSites)")
         #expect(otherValues.isEmpty,
-                "shipping code names a type registry other than its `increment1` builders: \(otherValues)")
+                "shipping code names a type registry other than the manager's one construction: \(otherValues)")
     }
 
     /// No shipping code branches on a routed type token — the registry IS the only per-type switch.
@@ -467,12 +468,12 @@ struct MeshRoutedStoreIsolationTests {
     /// The allowlist is **per substring**, not per file, because the spelling needles have different
     /// single-source rules. The tokens are the host's: a routed type may be read off the namespace's
     /// routed types (`routedTypes.photo` and its three siblings) only where rows are built from them —
-    /// the registry's resident rows and, since plan step A0.5.9, FernletSocial's host rows — and in the
-    /// namespace's own soundness rules, which name each field's path. No ProximityKit or FernletSocial
-    /// file may spell one: the raw `fernlet.mesh.routed-type.` literal lives in
-    /// FernletConnections, which spells Fernlet's, and the old `MeshRoutedTypeToken.` constants are
-    /// gone (the test target's binding keeps that spelling for the suites), so typing a spelling
-    /// straight into a row would give one token two sources that drift silently.
+    /// FernletSocial's host rows, every row since plan step A0.5.11 (the registry's resident rows
+    /// before it) — and in the namespace's own soundness rules, which name each field's path. No
+    /// ProximityKit or FernletSocial file may spell one: the raw `fernlet.mesh.routed-type.` literal
+    /// lives in FernletConnections, which spells Fernlet's, and the old `MeshRoutedTypeToken.`
+    /// constants are gone (the test target's binding keeps that spelling for the suites), so typing a
+    /// spelling straight into a row would give one token two sources that drift silently.
     ///
     /// Legal by construction, and it must stay legal: passing `manifest.typeToken` as a **lookup
     /// argument**, logging it as a context value, and branching on a **resolved** value
@@ -516,12 +517,13 @@ struct MeshRoutedStoreIsolationTests {
         "typeToken.hasPrefix(": []
     ]
 
-    /// The three files that may read a single routed type off the namespace's routed types: the
-    /// registry, which builds its resident rows from them, the namespace's soundness rules, whose
-    /// field paths spell each one, and FernletSocial's host rows, which build the rows Fernlet
-    /// declares through its host since plan step A0.5.9 (the sweep reads FernletSocial since then).
+    /// The two files that may read a single routed type off the namespace's routed types: the
+    /// namespace's soundness rules, whose field paths spell each one, and FernletSocial's host rows,
+    /// which build the rows Fernlet declares through its host (since plan step A0.5.9; the sweep reads
+    /// FernletSocial since then) — every row since plan step A0.5.11, when the registry, which built its
+    /// resident rows from them until then, stopped being a home.
     private static let routedTypeFieldHomes: Set<String> = [
-        "MeshRoutedTypeRegistry.swift", "ProximityNamespace+Soundness.swift", "FernletRoutedTypes.swift"
+        "ProximityNamespace+Soundness.swift", "FernletRoutedTypes.swift"
     ]
 
     /// The four bare per-type branch forms, each written so that EXACTLY ONE needle catches it.
@@ -546,8 +548,8 @@ struct MeshRoutedStoreIsolationTests {
     /// dictionary, or widening `"fernlet.mesh.routed-type."`'s empty allowlist to admit any file,
     /// fails HERE rather than silently narrowing what wall 3 catches.
     ///
-    /// The member scanner's blind spot is fixtured from both sides: a leading-dot `= .increment1(…)`
-    /// is invisible to it (the negative), and the one shipping file that holds a registry value in a
+    /// The scanners' blind spot is fixtured from both sides: a leading-dot `= .init(entries: …)` is
+    /// invisible to both (the negative), and the one shipping file that holds a registry value in a
     /// **type-inferred position** is asserted to spell the type out in full (the positive) — which is
     /// the only thing keeping the blind spot documented rather than occupied.
     @Test func theTypeRegistryScannersMatchAcrossLines() throws {
@@ -565,7 +567,7 @@ struct MeshRoutedStoreIsolationTests {
                 "the registry scanner missed a \(label) construction"
             )
         }
-        let dotRead = "let y = MeshRoutedTypeRegistry.increment1(routedTypes).tokens"
+        let dotRead = "let y = MeshRoutedTypeRegistry.maxEntries"
         #expect(
             MeshSessionStoreIsolationTests.constructionArguments(
                 of: "MeshRoutedTypeRegistry(", in: dotRead
@@ -576,32 +578,31 @@ struct MeshRoutedStoreIsolationTests {
         Self.expectTheWallsNeedlesStillDiscriminate()
     }
 
-    /// The blind spot, both ways: the inferred form is invisible to the member scanner, and no
-    /// shipping value-position read has moved into it.
+    /// The blind spot, both ways: the inferred form is invisible to both scanners, and no shipping
+    /// value-position read has moved into it.
     ///
     /// `MeshNetworkManager.swift` (the registry its `init` builds) is the one place a registry value
     /// stands where a leading dot would compile — and where `shippingCodeNamesOneTypeRegistry` would
     /// then see nothing at all. The manifest mint's `types:` takes no default, so it holds none.
     ///
-    /// The positive needle carries the call's parenthesis since plan step A0.5.2, which allows the
-    /// same `init` a second, fully spelled read: `MeshRoutedTypeRegistry.increment1Rows(…)`, the
-    /// resident rows its built-in handlers register under and its senders mint under. That read is
-    /// typed `MeshRoutedResidentRows`, where a leading dot cannot reach the registry's static, so it
-    /// holds no blind spot of its own — but without the parenthesis it would satisfy this positive
-    /// on its own while the registry read shortened to the inferred form.
+    /// The positive needle is the construction spelled in full, `MeshRoutedTypeRegistry(entries:`,
+    /// since plan step A0.5.11, when the manager stopped calling a builder (`increment1(…)`, the
+    /// positive until then, with its parenthesis so the resident rows' `increment1Rows(…)` could not
+    /// satisfy it) and builds the registry from its host's rows directly.
     private static func expectTheMemberScannersBlindSpotIsStillEmpty() throws {
-        let inferred = "self.hostRoutedTypeRegistry = .increment1(namespace.family.vocabulary.routedTypes)"
+        let inferred = "self.hostRoutedTypeRegistry = .init(entries: store.meshRoutedTypeEntries)"
         #expect(inferred.components(separatedBy: "MeshRoutedTypeRegistry.").count == 1,
                 "the member scanner's blind spot moved: an inferred member is now visible to it")
-        let rowsOnly = "self.residentRoutedRows = MeshRoutedTypeRegistry.increment1Rows(routedTypes)"
-        #expect(!rowsOnly.contains("MeshRoutedTypeRegistry.increment1("),
-                "the positive needle no longer tells the registry read from the resident rows' read")
+        #expect(MeshSessionStoreIsolationTests.constructionArguments(
+                    of: "MeshRoutedTypeRegistry(", in: inferred
+                ).isEmpty,
+                "the construction scanner's blind spot moved: an inferred construction is now visible to it")
         let sources = try proximitySources()
         for name in ["MeshNetworkManager.swift"] {
             let code = try #require(sources.first { $0.0 == name }?.1,
                                     "the sweep no longer reaches a file that holds a registry value")
-            #expect(code.contains("MeshRoutedTypeRegistry.increment1("),
-                    "\(name) shortened its registry value to a member the one-registry wall cannot see")
+            #expect(code.contains("MeshRoutedTypeRegistry(entries:"),
+                    "\(name) shortened its registry value to a form the one-registry wall cannot see")
         }
     }
 
@@ -619,7 +620,7 @@ struct MeshRoutedStoreIsolationTests {
         let lookup = "routedTypes.entry(for: manifest.typeToken)"
         #expect(routedTokenNeedles.keys.contains { lookup.contains($0) } == false,
                 "a registry lookup is being read as a per-type branch")
-        let registryRead = "MeshRoutedTypeRegistry.increment1(namespace.family.vocabulary.routedTypes)"
+        let registryRead = "MeshRoutedTypeRegistry(entries: store.meshRoutedTypeEntries)"
         #expect(routedTokenNeedles.keys.contains { registryRead.contains($0) } == false,
                 "the manager's registry read is being read as a per-type read")
         let senderRead = "let token = namespace.family.vocabulary.routedTypes.heart"

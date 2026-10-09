@@ -3,6 +3,7 @@ import Testing
 import Foundation
 import Observation
 import FernletDomainModel
+@testable import FernletSocial
 @testable import Fernlet
 
 // MARK: - MeshFavoriteObservationTests
@@ -22,17 +23,18 @@ struct MeshFavoriteObservationTests {
     /// Observing `favoritePhotoID(for:)` must fire `onChange` when `toggleFavorite` runs — proof the
     /// tap now drives a re-render instead of silently mutating an ignored property.
     @Test func toggleFavorite_notifiesFavoritePhotoIDObservers() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let photos = features.photos
         let post = makeWallPost()
 
         let recorder = FavoriteObservationRecorder()
         withObservationTracking {
-            _ = manager.favoritePhotoID(for: post)
+            _ = photos.favoritePhotoID(for: post)
         } onChange: {
             MainActor.assumeIsolated { recorder.recordChange() }
         }
 
-        manager.toggleFavorite(photoID: post.coverPhoto.id, in: post)
+        photos.toggleFavorite(photoID: post.coverPhoto.id, in: post)
 
         #expect(recorder.didChange,
                 "toggleFavorite must notify favoritePhotoID(for:) observers so the heart re-renders")
@@ -41,17 +43,18 @@ struct MeshFavoriteObservationTests {
     /// The same bump must also feed the grid: observing `photoWallPosts` (which reads the revision
     /// counter) must fire on a favorite toggle so the session cover updates live.
     @Test func toggleFavorite_notifiesPhotoWallPostsObservers() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let photos = features.photos
         let post = makeWallPost()
 
         let recorder = FavoriteObservationRecorder()
         withObservationTracking {
-            _ = manager.photoWallPosts
+            _ = photos.photoWallPosts
         } onChange: {
             MainActor.assumeIsolated { recorder.recordChange() }
         }
 
-        manager.toggleFavorite(photoID: post.coverPhoto.id, in: post)
+        photos.toggleFavorite(photoID: post.coverPhoto.id, in: post)
 
         #expect(recorder.didChange,
                 "toggleFavorite must notify photoWallPosts observers so the wall cover re-renders")

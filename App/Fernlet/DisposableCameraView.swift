@@ -565,14 +565,14 @@ enum DisposableCameraOrientation {
 ///
 /// Owns a ``CameraCaptureController`` as `@State` and renders the wind-to-arm thumbwheel, the
 /// island-morphing viewfinder (geometry from ``IslandViewfinderMetrics``), the shutter with a
-/// shared per-session film counter (`MeshNetworkManager.filmRemaining`), and the session-info
+/// shared per-session film counter (`MeshSessionPhotos.filmRemaining`), and the session-info
 /// sheet (rename, open/closed access, roster with removal seconding / blocking, in-session
 /// hearts). It also hosts the session-scoped chat entry (13+ gated via `features.chat.isChatAllowed`),
 /// the admission-prompt sheet for join requests, and the develop flow: "Develop" stops the
 /// capture session and either leaves immediately (no photos — the keep-as-friend prompt is then
 /// FriendsView's job via the pending review batch) or presents `FriendPhotoReviewSheet` with
 /// friend candidates computed at presentation time against the live trust vault — over the photo ids
-/// snapshotted at Develop, rendered and answered wherever the manager holds them, so an ending that
+/// snapshotted at Develop, rendered and answered wherever the session photos hold them, so an ending that
 /// moves the roll under the open review (door 3's give-up) cannot empty it. It reports whether any
 /// sheet or alert of its own is up (`presentsOwnSheet`), so FriendsView never requests its
 /// keep-as-friends prompt over one, and — session photos U3 — whether its Develop review is up
@@ -645,8 +645,9 @@ struct DisposableCameraView: View {
     private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
-    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels, the session chat and
-    /// the in-session hearts live there.
+    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels, the session chat, the
+    /// in-session hearts and the session photos (the film, the live roll, the capture and the Develop
+    /// review's answers) live there.
     private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level session-end review (session photos U3): told when the Develop review is up, and
     /// around this view's answer.
@@ -718,9 +719,9 @@ struct DisposableCameraView: View {
     }
 
     /// The Develop review's photos: the snapshotted ids still awaiting an answer, wherever the
-    /// manager holds them (`MeshNetworkManager.photosAwaitingAnswer(among:)`).
+    /// session photos hold them (`MeshSessionPhotos.photosAwaitingAnswer(among:)`).
     private var developReviewPhotos: [FriendPhotoPayload] {
-        manager.photosAwaitingAnswer(among: developReviewIDs)
+        features.photos.photosAwaitingAnswer(among: developReviewIDs)
     }
 
     /// The full-screen camera "hardware" scene for the current geometry.
@@ -862,16 +863,16 @@ struct DisposableCameraView: View {
         HStack(spacing: 5) {
             Image(systemName: "film")
                 .font(.system(size: 11, weight: .semibold))
-            Text("\(manager.filmRemaining)")
+            Text("\(features.photos.filmRemaining)")
                 .font(.fernlet(.stat))
             // The always-visible half of the kept-photo notice: a glyph, with the sentence itself
             // in the info sheet and in this badge's accessibility label.
-            if manager.photosKeptOnThisPhone > 0 {
+            if features.photos.photosKeptOnThisPhone > 0 {
                 Image(systemName: "iphone")
                     .font(.system(size: 11, weight: .semibold))
             }
         }
-        .foregroundStyle(manager.filmRemaining > 0 ? Color.goldenrod : Color.terracotta)
+        .foregroundStyle(features.photos.filmRemaining > 0 ? Color.goldenrod : Color.terracotta)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 7))
@@ -886,10 +887,10 @@ struct DisposableCameraView: View {
     /// The badge's label, with the kept-photo sentence appended when there is one — `Text`
     /// interpolating `Text`, so both halves are harvested (review T2-1).
     private var filmCounterAccessibilityLabel: Text {
-        guard let kept = RoutedShareRefusalCopy.photoKeptNotice(count: manager.photosKeptOnThisPhone) else {
-            return Text("Film remaining: \(manager.filmRemaining)")
+        guard let kept = RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone) else {
+            return Text("Film remaining: \(features.photos.filmRemaining)")
         }
-        return Text("Film remaining: \(manager.filmRemaining). \(Text(kept))")
+        return Text("Film remaining: \(features.photos.filmRemaining). \(Text(kept))")
     }
 
     // MARK: - Viewfinder
@@ -1151,7 +1152,7 @@ struct DisposableCameraView: View {
             // With photos there is a review sheet to back out of. With none, "Develop" used to end
             // the live session on the spot — chat transcript gone, camera gone — off a photo verb.
             // Ask with the same "End session?" alert the info sheet raises.
-            if manager.sessionPhotos.isEmpty {
+            if features.photos.sessionPhotos.isEmpty {
                 leaveSessionConfirm = true
             } else {
                 beginDevelop()
@@ -1173,7 +1174,7 @@ struct DisposableCameraView: View {
     }
 
     private var shutterButton: some View {
-        let canShoot = camera.isArmed && manager.filmRemaining > 0 && camera.canCapturePhoto
+        let canShoot = camera.isArmed && features.photos.filmRemaining > 0 && camera.canCapturePhoto
         return Button {
             guard canShoot else { return }
             Task { await takePhoto() }
@@ -1188,11 +1189,11 @@ struct DisposableCameraView: View {
                     Circle()
                         .fill(canShoot ? Self.shutterCream : Color.white.opacity(0.14))
                         .frame(width: 70, height: 70)
-                    if !camera.isArmed && manager.filmRemaining > 0 {
+                    if !camera.isArmed && features.photos.filmRemaining > 0 {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.5))
-                    } else if manager.filmRemaining == 0 {
+                    } else if features.photos.filmRemaining == 0 {
                         Image(systemName: "film.slash")
                             .font(.system(size: 18))
                             .foregroundStyle(Color.terracotta.opacity(0.9))
@@ -1218,7 +1219,7 @@ struct DisposableCameraView: View {
     /// A short caption under the shutter, so its ring state reads without decoding a glyph.
     private func shutterCaption(canShoot: Bool) -> String {
         if canShoot { return "Tap to shoot" }
-        if manager.filmRemaining == 0 { return "No film left" }
+        if features.photos.filmRemaining == 0 { return "No film left" }
         if !camera.canCapturePhoto { return "Camera off" }
         return "Wind to arm"
     }
@@ -1227,7 +1228,7 @@ struct DisposableCameraView: View {
     /// through the verbatim overload, so none of these four states was ever harvested.
     private func shutterAccessibilityLabel(canShoot: Bool) -> Text {
         if canShoot { return Text("Take photo") }
-        if manager.filmRemaining == 0 { return Text("No film remaining") }
+        if features.photos.filmRemaining == 0 { return Text("No film remaining") }
         if !camera.canCapturePhoto { return Text("Camera unavailable") }
         return Text("Wind camera first")
     }
@@ -1349,13 +1350,13 @@ struct DisposableCameraView: View {
     // MARK: - Photo capture
 
     private func takePhoto() async {
-        guard camera.isArmed, manager.filmRemaining > 0, camera.canCapturePhoto else { return }
+        guard camera.isArmed, features.photos.filmRemaining > 0, camera.canCapturePhoto else { return }
         camera.disarm()  // openness → 0: the viewfinder retracts into the island.
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         flashShutter()
         do {
             let data = try await camera.capturePhoto()
-            manager.addPhoto(data)
+            features.photos.addPhoto(data)
         } catch {
             manager.meshError = error.localizedDescription
         }
@@ -1371,15 +1372,15 @@ struct DisposableCameraView: View {
 
     private func beginDevelop() {
         camera.stopSession()
-        if manager.sessionPhotos.isEmpty {
+        if features.photos.sessionPhotos.isEmpty {
             // No photos to review here. The keep-as-friend prompt for a photo-less session is
-            // presented by FriendsView off the manager's pendingFriendReview batch — teardown
+            // presented by FriendsView off the session photos' pendingFriendReview batch — teardown
             // promotes the roster into it, so nothing is lost by deferring past leaveSession.
             // Photos that land during the leave's handoff are promoted into the same batch, and
             // FriendsView offers them there (2026-09-30); none is kept unasked.
             Task { await manager.leaveSessionAfterNotifyingPeers() }
         } else {
-            // The review offers exactly these ids and answers them wherever the manager holds them
+            // The review offers exactly these ids and answers them wherever the session photos hold them
             // when the person answers. Door 3's give-up can end the session under it with the mesh
             // held, so this view stays up while the ending moves the photos into
             // pendingFriendReview; the snapshot keeps them offered and the answer still lands. A
@@ -1393,7 +1394,7 @@ struct DisposableCameraView: View {
                 trustedPeers: store.trustedProximityPeers
             )
             keptFriendFingerprints = []
-            developReviewIDs = Set(manager.sessionPhotos.map(\.id))
+            developReviewIDs = Set(features.photos.sessionPhotos.map(\.id))
             selectedForSave = developReviewIDs
             alsoSaveToPhotos = false
             reviewAnswerFailure = nil
@@ -1406,7 +1407,7 @@ struct DisposableCameraView: View {
     /// Completes the keep-as-friend flow: mints the kept candidates (one-sided, local-only) and
     /// consumes ONLY the roster entries this review presented (`consumeRosterEntries`, scoped) —
     /// never clearSessionRoster(): a peer who commits mid-review stays in the live roster and is
-    /// offered at true session end via the manager's pendingFriendReview batch. The embedded
+    /// offered at true session end via the session photos' pendingFriendReview batch. The embedded
     /// friend section keeps its presentation-time snapshot for display. Only called on the paths
     /// that actually end the session — a cancelled review resumes the camera and keeps the
     /// roster for the real session end.
@@ -1453,14 +1454,14 @@ struct DisposableCameraView: View {
             friendCandidates: friendCandidates,
             keptFriendFingerprints: $keptFriendFingerprints,
             alsoSaveToPhotos: $alsoSaveToPhotos,
-            canKeep: manager.wallCanTakeKeeps,
+            canKeep: features.photos.wallCanTakeKeeps,
             workingMessage: reviewWorking,
             answerFailure: reviewAnswerFailure,
             unreadableCount: reviewUnreadableCount,
-            tileReloadToken: manager.heldPhotosCanBeShown ? 1 : 0,
+            tileReloadToken: features.photos.heldPhotosCanBeShown ? 1 : 0,
             keepSelected: { await keepSelectedSessionPhotos() },
             discardAll: { await discardAllSessionPhotos() },
-            loadImageData: { manager.reviewThumbnailData(for: $0) }
+            loadImageData: { features.photos.reviewThumbnailData(for: $0) }
         )
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
         // The alert closing — either button, or the system taking it down — releases an answer
@@ -1485,7 +1486,7 @@ struct DisposableCameraView: View {
         // only after this answer's leave has returned.
         reviewCoordinator.beginAnswer()
         defer { reviewCoordinator.endAnswer() }
-        let answer = manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
+        let answer = features.photos.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)
         finalizeFriendKeeps()
         await exportKeptPhotosIfAsked(answer)
         if photoSaveError != nil { await saveFailureAcknowledgement.wait() }
@@ -1499,7 +1500,7 @@ struct DisposableCameraView: View {
     /// alert the sheet shows while the caller waits for it to be closed, and never touches the keep.
     private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async {
         guard alsoSaveToPhotos, !answer.keptOnWall.isEmpty else { return }
-        let toSave = manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
+        let toSave = features.photos.hydratedPhotos(features.photos.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
         // If no bytes could be loaded/decrypted, don't report a false success.
         guard !toSave.isEmpty else {
             photoSaveError = .generic
@@ -1520,7 +1521,7 @@ struct DisposableCameraView: View {
     private func discardAllSessionPhotos() async {
         reviewCoordinator.beginAnswer()
         defer { reviewCoordinator.endAnswer() }
-        let answer = manager.finishSessionPhotos(keeping: [], of: developReviewIDs)
+        let answer = features.photos.finishSessionPhotos(keeping: [], of: developReviewIDs)
         finalizeFriendKeeps()
         await finishDevelopReview(after: answer)
     }
@@ -1635,7 +1636,7 @@ struct DisposableCameraView: View {
     private var sessionStats: some View {
         // Real plurals — "2 person(s) connected" is a placeholder that shipped.
         let people = manager.sessionParticipants.count
-        let shots = manager.filmRemaining
+        let shots = features.photos.filmRemaining
         return VStack(alignment: .leading, spacing: 22) {
             Text(people == 1 ? "1 person connected" : "\(people) people connected")
                 .font(.fernlet(.bubble))
@@ -1651,7 +1652,7 @@ struct DisposableCameraView: View {
 
             // P8 item 0 (c): photos that reached nobody are said once, as a count — through the
             // copy table, never composed here — and never as an alert per shot.
-            if let kept = RoutedShareRefusalCopy.photoKeptNotice(count: manager.photosKeptOnThisPhone) {
+            if let kept = RoutedShareRefusalCopy.photoKeptNotice(count: features.photos.photosKeptOnThisPhone) {
                 Text(kept)
                     .font(.fernlet(.bodySmall))
                     .foregroundStyle(Color.terracotta)

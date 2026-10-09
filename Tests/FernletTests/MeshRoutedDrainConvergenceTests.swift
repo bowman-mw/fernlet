@@ -1591,7 +1591,7 @@ extension MeshConvergenceRun {
                 .contains { $0.messageID == key.itemID }
         default:
             // A photo is HELD for the person's review since 2026-09-30, never on the wall first.
-            return HeldPhotos.all(member.node.manager).contains { $0.id == key.itemID }
+            return HeldPhotos.all(member.node.features.photos).contains { $0.id == key.itemID }
         }
     }
 
@@ -2550,7 +2550,7 @@ struct MeshRoutedDrainConvergenceTests {
         #expect(destinations.isEmpty == false, "the cell needs at least one destination")
         // R2: bounded by the roster cap.
         for member in destinations {
-            #expect(HeldPhotos.all(member.node.manager).filter { $0.id == key.itemID }.count == 1,
+            #expect(HeldPhotos.all(member.node.features.photos).filter { $0.id == key.itemID }.count == 1,
                     "every destination holds exactly one entry for the delivered item, for review")
         }
     }
@@ -2581,7 +2581,7 @@ struct MeshRoutedDrainConvergenceTests {
         #expect(destinations.isEmpty == false, "the cell needs at least one destination")
         // R2: bounded by the roster cap.
         for member in destinations {
-            #expect(HeldPhotos.all(member.node.manager).filter { $0.id == key.itemID }.count == 1,
+            #expect(HeldPhotos.all(member.node.features.photos).filter { $0.id == key.itemID }.count == 1,
                     "every destination holds exactly one entry for the delivered item, for review")
         }
     }

@@ -1251,9 +1251,9 @@ struct FernletFeatureGoldenTests {
     static var routedCapNumbers: [FeatureGoldenNumberRow] {
         [
             FeatureGoldenNumberRow(field: "photo.headerJSONAllowance", frozen: 65_536,
-                                   today: MeshRoutedItemBodyFormat.maxHeaderJSONByteCount),
+                                   today: MeshRoutedPhotoBody.maxHeaderJSONByteCount),
             FeatureGoldenNumberRow(field: "photo.framedHeaderAllowance", frozen: 65_544,
-                                   today: MeshRoutedItemBodyFormat.maxFramedHeaderByteCount),
+                                   today: MeshRoutedPhotoBody.maxFramedHeaderByteCount),
             FeatureGoldenNumberRow(field: "text.maxTextLengthCharacters", frozen: 500,
                                    today: SessionMessageStore.maxTextLength),
             FeatureGoldenNumberRow(field: "text.payloadBound", frozen: 8_000,
@@ -2612,11 +2612,12 @@ struct FernletFeatureGoldenTests {
         try Self.write(Self.frozenWallPreferencesJSON, to: preferences)
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
-        #expect(manager.meshPhotos == Self.wallNewestFirst, "the wall loaded \(manager.meshPhotos.map(\.id))")
-        Self.expectWallPosts(of: manager)
+        let features = Self.meshFeatures(over: store, identity: alice)
+        let photos = features.photos
+        #expect(photos.meshPhotos == Self.wallNewestFirst, "the wall loaded \(photos.meshPhotos.map(\.id))")
+        Self.expectWallPosts(of: photos)
         #expect(try Data(contentsOf: preferences) == Data(Self.frozenWallPreferencesJSON.utf8), "init rewrote live preferences")
-        withExtendedLifetime(store) {}
+        withExtendedLifetime((features, store)) {}
     }
 
     /// Over the stale preferences init prunes all three stale entries and writes what is left, which is
@@ -2634,23 +2635,23 @@ struct FernletFeatureGoldenTests {
         try Self.write(Self.frozenWallPreferencesWithStaleJSON, to: preferences)
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
-        Self.expectWallPosts(of: manager)
+        let features = Self.meshFeatures(over: store, identity: alice)
+        Self.expectWallPosts(of: features.photos)
         let written = try Self.wallPreferencesShape(Data(contentsOf: preferences))
         let frozen = try Self.wallPreferencesShape(Data(Self.frozenWallPreferencesJSON.utf8))
         #expect(written == frozen, "the prune wrote \(written)")
-        withExtendedLifetime(store) {}
+        withExtendedLifetime((features, store)) {}
     }
 
-    /// The mesh and its composition file every store they build under its frozen name directly inside
-    /// the host's proximity root (the activity manager is the composition's since plan step A0.5.8, the
-    /// photo stores the mesh's): over a root holding bob's ledger (every row long expired at the real
-    /// clock), the wall index and the preferences, the composition rewrites `ActivityLedger.json` as the
-    /// empty ledger, and the mesh reads `MeshPhotoCache.json` and reseals it as `MeshPhotoCache.sealed`
-    /// beside `MeshPhotos/` and `MeshPhotoThumbnails/`, reads `MeshPhotoWallPreferences.json`, and holds
-    /// a photo inside `PendingSessionPhotos/`; a wall store at the index path the mesh builds files a
-    /// photo's bytes under `MeshPhotos/` and `MeshPhotoThumbnails/` by its id; and the pending corpus's
-    /// names are frozen.
+    /// The mesh's composition files every store it builds under its frozen name directly inside the
+    /// host's proximity root (the activity manager is the composition's since plan step A0.5.8, the
+    /// photo stores its session photos' since A0.5.11): over a root holding bob's ledger (every row long
+    /// expired at the real clock), the wall index and the preferences, the composition rewrites
+    /// `ActivityLedger.json` as the empty ledger, and the session photos read `MeshPhotoCache.json` and
+    /// reseal it as `MeshPhotoCache.sealed` beside `MeshPhotos/` and `MeshPhotoThumbnails/`, read
+    /// `MeshPhotoWallPreferences.json`, and hold a photo inside `PendingSessionPhotos/`; a wall store at
+    /// the index path the session photos build files a photo's bytes under `MeshPhotos/` and
+    /// `MeshPhotoThumbnails/` by its id; and the pending corpus's names are frozen.
     @Test func theMeshFilesItsStoresUnderTheirFrozenNames() throws {
         #expect(Self.expectFrozen(Self.pendingCorpusNameRows) == 4)
         let root = Self.scratchDirectory()
@@ -2665,17 +2666,17 @@ struct FernletFeatureGoldenTests {
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
         let features = Self.meshFeatures(over: store, identity: alice)
-        let manager = features.mesh
+        let photos = features.photos
         #expect(features.activities.hostedActivities.isEmpty && features.activities.joinedActivities.isEmpty)
         let ledger = try Data(contentsOf: root.appendingPathComponent("ActivityLedger.json"))
         #expect(try Self.jsonObjectsEqual(ledger, Data(Self.frozenActivityLedgerEmptyJSON.utf8)),
                 "the mesh's activity ledger wrote \(String(decoding: ledger, as: UTF8.self))")
-        #expect(manager.meshPhotos.count == 6 && Self.wallPreferenceEntryCount(manager) == 5)
+        #expect(photos.meshPhotos.count == 6 && Self.wallPreferenceEntryCount(photos) == 5)
         let held = FriendPhotoPayload(
             id: Self.pendingLocalID, imageData: MeshRoutedPhotoFixtures.tinyJPEG(),
             addedAt: Date(timeIntervalSinceReferenceDate: 780_000_000), senderName: "Bob",
             senderFingerprint: Self.bobFingerprint, senderSigningPublicKey: Self.bobSigningPub)
-        #expect(Self.hold(held, on: manager) == .held, "the photo was not held")
+        #expect(Self.hold(held, on: photos) == .held, "the photo was not held")
         let wallRoot = Self.scratchDirectory()
         defer { Self.removeDirectory(wallRoot) }
         let p1 = FriendPhotoPayload(
@@ -2705,22 +2706,23 @@ struct FernletFeatureGoldenTests {
 
     /// Which keychain role seals each photo corpus, and which role's key must not open it: the wall's
     /// index under the friend-wall role (`…contentKey`, the backup-restorable row) and a held photo under
-    /// the pending-session-photos role (`…pendingContentKey`, born device-bound), as the manager picks
-    /// each store's key provider at construction. FROZEN: a swap is invisible to every other cell, since
-    /// one process seals and opens under the same wrong key, and on a device it would read the wall's
-    /// index as unrecoverable and start the wall empty.
+    /// the pending-session-photos role (`…pendingContentKey`, born device-bound), as the session photos
+    /// pick each store's key provider at construction (the manager did until plan step A0.5.11).
+    /// FROZEN: a swap is invisible to every other cell, since one process seals and opens under the
+    /// same wrong key, and on a device it would read the wall's index as unrecoverable and start the
+    /// wall empty.
     static let photoCorpusSealRoles: [(corpus: String, sealedBy: KeychainPrivateMediaKeyProvider.Role,
                                        refusedBy: KeychainPrivateMediaKeyProvider.Role)] = [
         ("wallIndex", .friendWall, .pendingSessionPhotos),
         ("heldPhoto", .pendingSessionPhotos, .friendWall)
     ]
 
-    /// A manager built over a root holding the legacy wall index (group 23's P1 to P6) reseals it as
+    /// Session photos built over a root holding the legacy wall index (group 23's P1 to P6) reseal it as
     /// `MeshPhotoCache.sealed`. The friend-wall key opens the sealed index under the wall index's purpose
     /// to the six frozen entries, newest first, as values and as the wall's JSON; the
-    /// pending-session-photos key, present in the keychain, does not open it. Over today's manager with
-    /// the held corpus on its keychain row (`heldPhotoKeys` nil), so both providers are the ones
-    /// production builds.
+    /// pending-session-photos key, present in the keychain, does not open it. Over today's composition
+    /// with the held corpus on its keychain row (`heldPhotoKeys` nil), so both providers are the ones
+    /// production builds, its session photos' (the manager's until plan step A0.5.11).
     @Test func theWallIndexIsSealedUnderTheFriendWallRoleAlone() throws {
         let row = try #require(Self.photoCorpusSealRoles.first { $0.corpus == "wallIndex" }, "the table holds no wall row")
         let root = Self.scratchDirectory()
@@ -2732,10 +2734,11 @@ struct FernletFeatureGoldenTests {
         try Self.write(Self.frozenWallIndexJSON, to: root.appendingPathComponent("MeshPhotoCache.json"))
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
+        let features = Self.meshFeatures(over: store, identity: alice)
+        let photos = features.photos
         let sealedURL = root.appendingPathComponent("MeshPhotoCache.sealed")
-        try #require(manager.meshPhotos.count == 6 && FileManager.default.fileExists(atPath: sealedURL.path),
-                     "the wall loaded \(manager.meshPhotos.count) photos and resealed no index")
+        try #require(photos.meshPhotos.count == 6 && FileManager.default.fileExists(atPath: sealedURL.path),
+                     "the wall loaded \(photos.meshPhotos.count) photos and resealed no index")
         let sealed = try Data(contentsOf: sealedURL)
         try #require(Self.hasMediaKey(for: row.refusedBy), "no \(row.refusedBy) key to refuse with")
         let opened = try #require(Self.openedAtRest(sealed, under: row.sealedBy, purpose: Self.wallIndexPurpose),
@@ -2746,10 +2749,10 @@ struct FernletFeatureGoldenTests {
                 "the sealed index is \(String(decoding: opened, as: UTF8.self))")
         #expect(Self.openedAtRest(sealed, under: row.refusedBy, purpose: Self.wallIndexPurpose) == nil,
                 "the \(row.refusedBy) key opens the wall index")
-        withExtendedLifetime((store, manager)) {}
+        withExtendedLifetime((store, features)) {}
     }
 
-    /// A photo held for review through today's manager lands at the pending corpus's photo path sealed
+    /// A photo held for review through today's session photos lands at the pending corpus's photo path sealed
     /// under the pending-session-photos key: that key opens `PendingSessionPhotos/Photos/<id>.jpg` under
     /// the held photo's purpose to the very JPEG held, and the friend-wall key, present in the keychain,
     /// does not open it. The path is group 23's layout vector, and the photo is the one its layout cell
@@ -2764,12 +2767,13 @@ struct FernletFeatureGoldenTests {
         }
         let store = makeTestStore(proximitySupportDirectory: root)
         let alice = try Self.plantedAlice(service: service)
-        let manager = Self.meshManager(over: store, identity: alice)
+        let features = Self.meshFeatures(over: store, identity: alice)
+        let photos = features.photos
         let jpeg = MeshRoutedPhotoFixtures.tinyJPEG()
         let held = FriendPhotoPayload(
             id: Self.pendingLocalID, imageData: jpeg, addedAt: Date(timeIntervalSinceReferenceDate: 780_000_000),
             senderName: "Bob", senderFingerprint: Self.bobFingerprint, senderSigningPublicKey: Self.bobSigningPub)
-        try #require(Self.hold(held, on: manager) == .held, "the photo was not held")
+        try #require(Self.hold(held, on: photos) == .held, "the photo was not held")
         let stored = try Data(contentsOf: root.appendingPathComponent(
             "PendingSessionPhotos/Photos/F0700010-4A53-4F4E-8000-000000000050.jpg"))
         try #require(Self.hasMediaKey(for: row.refusedBy), "no \(row.refusedBy) key to refuse with")
@@ -2778,7 +2782,7 @@ struct FernletFeatureGoldenTests {
                 "the \(row.sealedBy) key opens the held photo to \(opened.map { Self.hex($0.prefix(16)) } ?? "nothing")")
         #expect(Self.openedAtRest(stored, under: row.refusedBy, purpose: Self.heldPhotoImagePurpose) == nil,
                 "the \(row.refusedBy) key opens the held photo")
-        withExtendedLifetime((store, manager)) {}
+        withExtendedLifetime((store, features)) {}
     }
 
     // MARK: Group 25 — the vouch list's two-hour lifetime and its label
@@ -2892,7 +2896,7 @@ struct FernletFeatureGoldenTests {
 
     // MARK: Group 27 — the camera's hold-failure line
 
-    /// The camera's hold-failure line's key, as its copy vault spells it today and ProximityKit's catalog
+    /// The camera's hold-failure line's key, as its copy vault spells it today and FernletSocial's catalog
     /// files it (Localizable.xcstrings): what the catalog is looked up by, never translated.
     static let cameraHoldFailedKey = "proximity.camera.holdFailed"
 
@@ -3161,17 +3165,17 @@ struct FernletFeatureGoldenTests {
         defer { rig.tearDown() }
         let first = Self.heldPhoto(origin: "ffgt-origin-a")
         let rows: [(what: String, act: () -> Void, expected: [MovedAuditLines.Line])] = [
-            ("a held photo", { _ = Self.hold(first, on: rig.manager) },
+            ("a held photo", { _ = Self.hold(first, on: rig.photos) },
              [Self.auditLine("mesh.heldPhotos.heldAwaiting", ["pending": "1"])]),
-            ("a reused id", { _ = Self.hold(Self.heldPhoto(id: first.id, origin: "ffgt-origin-b"), on: rig.manager) },
+            ("a reused id", { _ = Self.hold(Self.heldPhoto(id: first.id, origin: "ffgt-origin-b"), on: rig.photos) },
              [Self.auditLine("mesh.heldPhotos.idCollision"), Self.auditLine("mesh.heldPhotos.heldAwaiting", ["pending": "2"])]),
-            ("a held photo's delete", { Self.deleteWallPhoto(first.id, on: rig.manager) },
+            ("a held photo's delete", { Self.deleteWallPhoto(first.id, on: rig.photos) },
              [Self.auditLine("mesh.heldPhotos.deleteRefused")]),
-            ("unreadable bytes", { _ = Self.hold(Self.unreadableImagePhoto(origin: "ffgt-origin-c"), on: rig.manager) },
+            ("unreadable bytes", { _ = Self.hold(Self.unreadableImagePhoto(origin: "ffgt-origin-c"), on: rig.photos) },
              [Self.auditLine("mesh.heldPhotos.holdRefused", ["reason": "unsafeImage"])]),
             ("no key", {
                 rig.keys.available = false
-                _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-d"), on: rig.manager)
+                _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-d"), on: rig.photos)
             }, [Self.auditLine("mesh.heldPhotos.holdRefused", ["reason": "notPersisted"])])
         ]
         // R2: bounded by the five rows.
@@ -3189,25 +3193,25 @@ struct FernletFeatureGoldenTests {
         let rig = try AuditMeshRig()
         defer { rig.tearDown() }
         let photo = Self.heldPhoto(origin: "ffgt-origin-live")
-        let held = MovedAuditLines.delivered { _ = Self.holdLive(photo, on: rig.manager) }
+        let held = MovedAuditLines.delivered { _ = Self.holdLive(photo, on: rig.photos) }
         #expect(Self.movedLines(held).isEmpty, "a live hold wrote \(held)")
         let ending = MovedAuditLines.delivered { Self.endSession(rig.manager) }
         #expect(Self.movedLines(ending) == [Self.auditLine("mesh.session.photosPendingReview", ["moved": "1", "pending": "1"])],
                 "the ending wrote \(ending)")
-        let batch = try #require(Self.pendingReview(on: rig.manager), "the ending offered no review")
+        let batch = try #require(Self.pendingReview(on: rig.photos), "the ending offered no review")
         let closed = Self.auditLine("mesh.heldPhotos.answerRefused", ["reason": "gateClosed"])
         let develop = MovedAuditLines.delivered {
-            _ = Self.answerDevelop(showing: [photo.id], keeping: [], on: rig.manager)
+            _ = Self.answerDevelop(showing: [photo.id], keeping: [], on: rig.photos)
         }
         #expect(Self.movedLines(develop) == [closed, Self.auditLine("mesh.session.developAnsweredPendingPhotos", ["answered": "1"])],
                 "the Develop review's answer wrote \(develop)")
         let review = MovedAuditLines.delivered {
-            _ = Self.answerReview(showing: [photo.id], keeping: [], in: batch.id, on: rig.manager)
+            _ = Self.answerReview(showing: [photo.id], keeping: [], in: batch.id, on: rig.photos)
         }
         #expect(Self.movedLines(review) == [closed, Self.reviewAnswered(kept: 0, discarded: 0, unreadable: 0,
                                                                         notApplied: 1, stillPending: 1)],
                 "the session-end review's answer wrote \(review)")
-        let purge = MovedAuditLines.delivered { _ = Self.purgeHeldPhotos(on: rig.manager) }
+        let purge = MovedAuditLines.delivered { _ = Self.purgeHeldPhotos(on: rig.photos) }
         #expect(Self.movedLines(purge) == [Self.auditLine("mesh.heldPhotos.purgedForDeleteAll", ["purged": "true"])],
                 "delete-all's purge wrote \(purge)")
     }
@@ -3221,13 +3225,13 @@ struct FernletFeatureGoldenTests {
         defer { rig.tearDown() }
         let gone = Self.heldPhoto(origin: "ffgt-origin-gone")
         let locked = Self.heldPhoto(origin: "ffgt-origin-locked")
-        try #require(Self.hold(gone, on: rig.manager) == .held, "the photo whose bytes will not open was not held")
-        try #require(Self.hold(locked, on: rig.manager) == .held, "the photo whose key will go was not held")
+        try #require(Self.hold(gone, on: rig.photos) == .held, "the photo whose bytes will not open was not held")
+        try #require(Self.hold(locked, on: rig.photos) == .held, "the photo whose key will go was not held")
         Self.openRoutedGate(on: rig.manager)
         try Data("FMA2 corrupt".utf8).write(to: Self.heldImageFile(in: rig.store, localID: gone.id))
-        let batch = try #require(Self.pendingReview(on: rig.manager), "the holds offered no review")
+        let batch = try #require(Self.pendingReview(on: rig.photos), "the holds offered no review")
         let unopened = MovedAuditLines.delivered {
-            _ = Self.answerReview(showing: [gone.id], keeping: [gone.id], in: batch.id, on: rig.manager)
+            _ = Self.answerReview(showing: [gone.id], keeping: [gone.id], in: batch.id, on: rig.photos)
         }
         #expect(Self.movedLines(unopened) == [
             Self.auditLine("mesh.heldPhotos.unreadableAtKeep", ["count": "1"]),
@@ -3235,14 +3239,14 @@ struct FernletFeatureGoldenTests {
         ], "the keep of bytes that do not open wrote \(unopened)")
         rig.keys.available = false
         let keyless = MovedAuditLines.delivered {
-            _ = Self.answerReview(showing: [locked.id], keeping: [locked.id], in: batch.id, on: rig.manager)
+            _ = Self.answerReview(showing: [locked.id], keeping: [locked.id], in: batch.id, on: rig.photos)
         }
         #expect(Self.movedLines(keyless) == [
             Self.auditLine("mesh.heldPhotos.keepNotLanded", ["count": "1", "unavailable": "1"]),
             Self.reviewAnswered(kept: 0, discarded: 0, unreadable: 0, notApplied: 1, stillPending: 1)
         ], "the keep with no key wrote \(keyless)")
         let unwritten = MovedAuditLines.delivered {
-            _ = Self.answerReview(showing: [locked.id], keeping: [], in: batch.id, on: rig.manager)
+            _ = Self.answerReview(showing: [locked.id], keeping: [], in: batch.id, on: rig.photos)
         }
         #expect(Self.movedLines(unwritten) == [
             Self.auditLine("mesh.heldPhotos.answerNotPersisted", ["count": "1"]),
@@ -3250,7 +3254,7 @@ struct FernletFeatureGoldenTests {
         ], "the discard with no key wrote \(unwritten)")
         rig.keys.available = true
         Self.pushDuressGate(on: rig.manager)
-        let duress = MovedAuditLines.delivered { _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-duress"), on: rig.manager) }
+        let duress = MovedAuditLines.delivered { _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-duress"), on: rig.photos) }
         #expect(Self.movedLines(duress) == [Self.auditLine("mesh.heldPhotos.holdRefused", ["reason": "duress"])],
                 "the hold under duress wrote \(duress)")
     }
@@ -3263,8 +3267,8 @@ struct FernletFeatureGoldenTests {
         let rig = try AuditMeshRig()
         defer { rig.tearDown() }
         let photo = Self.heldPhoto(origin: "ffgt-origin-kept")
-        try #require(Self.hold(photo, on: rig.manager) == .held, "the photo was not held")
-        var relaunch: MeshNetworkManager?
+        try #require(Self.hold(photo, on: rig.photos) == .held, "the photo was not held")
+        var relaunch: FernletMeshFeatures?
         let offered = MovedAuditLines.delivered { relaunch = rig.relaunched(keys: rig.keys) }
         #expect(Self.movedLines(offered) == [Self.auditLine("mesh.heldPhotos.offeredFromIndex", ["photos": "1"])],
                 "the relaunch under the same key wrote \(offered)")
@@ -3272,11 +3276,11 @@ struct FernletFeatureGoldenTests {
         let deferring = MovedAuditLines.delivered { relaunch = rig.relaunched(keys: rig.keys) }
         #expect(Self.movedLines(deferring).isEmpty, "the relaunch with no key wrote \(deferring)")
         let locked = try #require(relaunch)
-        let hold = MovedAuditLines.delivered { _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-late"), on: locked) }
+        let hold = MovedAuditLines.delivered { _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-late"), on: locked.photos) }
         #expect(Self.movedLines(hold) == [Self.auditLine("mesh.heldPhotos.holdRefused", ["reason": "pendingIndexDeferred"])],
                 "the hold over a deferred index wrote \(hold)")
-        Self.openRoutedGate(on: locked)
-        let answer = MovedAuditLines.delivered { _ = Self.applyPhotoAnswers(kept: [], discarded: [photo.id], on: locked) }
+        Self.openRoutedGate(on: locked.mesh)
+        let answer = MovedAuditLines.delivered { _ = Self.applyPhotoAnswers(kept: [], discarded: [photo.id], on: locked.photos) }
         #expect(Self.movedLines(answer) == [Self.auditLine("mesh.heldPhotos.answerRefused", ["reason": "pendingIndexDeferred"])],
                 "the answer over a deferred index wrote \(answer)")
         rig.keys.available = true
@@ -3293,16 +3297,16 @@ struct FernletFeatureGoldenTests {
         let rig = try AuditMeshRig()
         defer { rig.tearDown() }
         let photo = Self.heldPhoto(origin: "ffgt-origin-wall")
-        try #require(Self.hold(photo, on: rig.manager) == .held, "the photo was not held")
+        try #require(Self.hold(photo, on: rig.photos) == .held, "the photo was not held")
         let aside = try Self.makeWallUnreadable(rig.store)
         let relaunched = rig.relaunched(keys: rig.keys)
-        let offered = MovedAuditLines.delivered { Self.openRoutedGate(on: relaunched) }
+        let offered = MovedAuditLines.delivered { Self.openRoutedGate(on: relaunched.mesh) }
         #expect(Self.movedLines(offered) == [Self.auditLine("mesh.heldPhotos.offeredOverUnreadableWall"),
                                              Self.auditLine("mesh.heldPhotos.offeredFromIndex", ["photos": "1"])],
                 "the unlock over an unreadable wall wrote \(offered)")
-        let batch = try #require(Self.pendingReview(on: relaunched), "nothing was offered over the unreadable wall")
+        let batch = try #require(Self.pendingReview(on: relaunched.photos), "nothing was offered over the unreadable wall")
         let keep = MovedAuditLines.delivered {
-            _ = Self.answerReview(showing: [photo.id], keeping: [photo.id], in: batch.id, on: relaunched)
+            _ = Self.answerReview(showing: [photo.id], keeping: [photo.id], in: batch.id, on: relaunched.photos)
         }
         #expect(Self.movedLines(keep) == [
             Self.auditLine("mesh.heldPhotos.keepRefused", ["reason": "wallDeferred"]),
@@ -3310,7 +3314,7 @@ struct FernletFeatureGoldenTests {
         ], "the keep over an unreadable wall wrote \(keep)")
         try Self.restoreWall(rig.store, aside: aside)
         let recovered = MovedAuditLines.delivered {
-            _ = Self.answerReview(showing: [photo.id], keeping: [], in: batch.id, on: relaunched)
+            _ = Self.answerReview(showing: [photo.id], keeping: [], in: batch.id, on: relaunched.photos)
         }
         #expect(Self.movedLines(recovered) == [
             Self.auditLine("mesh.photoIndex.recoveredAfterDeferral", ["photos": "0"]),
@@ -3336,7 +3340,7 @@ struct FernletFeatureGoldenTests {
         let rig = try AuditMeshRig()
         defer { rig.tearDown() }
         let photo = Self.heldPhoto(origin: "ffgt-origin-twice")
-        try #require(Self.hold(photo, on: rig.manager) == .held, "the photo was not held")
+        try #require(Self.hold(photo, on: rig.photos) == .held, "the photo was not held")
         let kept = try Self.commitHeldPhotoToWall(photo.id, in: rig.store, keys: rig.keys)
         try #require(kept == [photo.id], "precondition: the held photo is on the wall too, kept \(kept)")
         let launch = MovedAuditLines.delivered { _ = rig.relaunched(keys: rig.keys) }
@@ -3350,10 +3354,10 @@ struct FernletFeatureGoldenTests {
         defer { rig.tearDown() }
         // R2: a hard constant ceiling, the corpus bound.
         for position in 0..<Self.heldPhotoBound {
-            let outcome = Self.hold(Self.heldPhoto(origin: "ffgt-origin-cap"), on: rig.manager)
+            let outcome = Self.hold(Self.heldPhoto(origin: "ffgt-origin-cap"), on: rig.photos)
             try #require(outcome == .held, "hold \(position) of \(Self.heldPhotoBound) was \(outcome)")
         }
-        let overflow = MovedAuditLines.delivered { _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-cap"), on: rig.manager) }
+        let overflow = MovedAuditLines.delivered { _ = Self.hold(Self.heldPhoto(origin: "ffgt-origin-cap"), on: rig.photos) }
         #expect(Self.movedLines(overflow) == [Self.auditLine("mesh.heldPhotos.holdRefused", ["reason": "full"])],
                 "the hold past the bound wrote \(overflow)")
     }
@@ -3408,12 +3412,13 @@ struct FernletFeatureGoldenTests {
         let rig = try Self.sessionRig(bobAdvertising: [])
         defer { Self.tearDown(rig) }
         let manager = rig.manager
+        let photos = rig.photos
         let shop = rig.features.clothingShop
         let hearts = rig.features.hearts
         try Self.armSessionToEnd(rig)
-        try #require(manager.sessionRoster.count == 1 && manager.sessionPhotos.count == 1
-                         && manager.pendingFriendReview == nil,
-                     "the roster holds \(manager.sessionRoster.count), the roll \(manager.sessionPhotos.count)")
+        try #require(manager.sessionRoster.count == 1 && photos.sessionPhotos.count == 1
+                         && photos.pendingFriendReview == nil,
+                     "the roster holds \(manager.sessionRoster.count), the roll \(photos.sessionPhotos.count)")
         try #require(shop.peerCatalogs.count == 1 && shop.window == nil,
                      "the shop holds \(shop.peerCatalogs.count) catalogs")
         let transcript = rig.features.chat.sessionMessages
@@ -3425,7 +3430,7 @@ struct FernletFeatureGoldenTests {
         Self.recordSessionEnd(of: rig, into: recorder)
         Self.endSession(manager)
         #expect(recorder.order == Self.sessionEndOrder, "the session ended in the order \(recorder.order)")
-        let review = manager.pendingFriendReview
+        let review = photos.pendingFriendReview
         #expect(review?.entries.map(\.fingerprint) == [Self.bobFingerprint] && review?.photos.count == 1,
                 "the review holds \(String(describing: review))")
         #expect(shop.window != nil && transcript.messages.isEmpty
@@ -3439,19 +3444,20 @@ struct FernletFeatureGoldenTests {
         let rig = try Self.sessionRig(bobAdvertising: [])
         defer { Self.tearDown(rig) }
         let manager = rig.manager
+        let photos = rig.photos
         defer { manager.leaveMesh() }
-        try #require(Self.holdLive(Self.sessionPhoto(1), on: manager) == .held, "the live photo was not held")
-        let old = try #require(manager.sessionPhotos.first?.session, "the live photo carries no session")
+        try #require(Self.holdLive(Self.sessionPhoto(1), on: photos) == .held, "the live photo was not held")
+        let old = try #require(photos.sessionPhotos.first?.session, "the live photo carries no session")
         let recorder = LifecycleRecorder()
         defer { recorder.uninstall() }
         recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview")
         Self.startNewSearch(on: manager)
         #expect(recorder.order == ["photoMove"], "the new search noted \(recorder.order)")
-        let moved = manager.pendingFriendReview?.photos.first?.session
+        let moved = photos.pendingFriendReview?.photos.first?.session
         #expect(moved?.id == old.id && moved?.startedAt == old.startedAt,
                 "the old roll moved stamped \(String(describing: moved)), not \(old)")
-        try #require(Self.holdLive(Self.sessionPhoto(2), on: manager) == .held, "the next live photo was not held")
-        let next = manager.sessionPhotos.first?.session?.id
+        try #require(Self.holdLive(Self.sessionPhoto(2), on: photos) == .held, "the next live photo was not held")
+        let next = photos.sessionPhotos.first?.session?.id
         #expect(next != nil && next != old.id, "the new session's photo carries \(String(describing: next))")
     }
 
@@ -3464,10 +3470,11 @@ struct FernletFeatureGoldenTests {
         let rig = try Self.sessionRig(bobAdvertising: [])
         defer { Self.tearDown(rig) }
         let manager = rig.manager
-        try #require(Self.holdLive(Self.sessionPhoto(1), on: manager) == .held, "the first photo was not held")
+        let photos = rig.photos
+        try #require(Self.holdLive(Self.sessionPhoto(1), on: photos) == .held, "the first photo was not held")
         Self.seatBob(in: rig)
-        try #require(Self.holdLive(Self.sessionPhoto(2), on: manager) == .held, "the second photo was not held")
-        let first = try #require(manager.sessionPhotos.last?.session, "the first photo carries no session")
+        try #require(Self.holdLive(Self.sessionPhoto(2), on: photos) == .held, "the second photo was not held")
+        let first = try #require(photos.sessionPhotos.last?.session, "the first photo carries no session")
         try #require(first.participants.map(\.fingerprint) == [Self.aliceFingerprint],
                      "the first photo names \(first.participants.map(\.fingerprint))")
         let recorder = LifecycleRecorder()
@@ -3475,12 +3482,12 @@ struct FernletFeatureGoldenTests {
         recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview")
         Self.endSession(manager)
         #expect(recorder.order == ["photoMove"], "the leave noted \(recorder.order)")
-        let moved = manager.pendingFriendReview?.photos.compactMap(\.session) ?? []
+        let moved = photos.pendingFriendReview?.photos.compactMap(\.session) ?? []
         let both = [Self.aliceFingerprint, Self.bobFingerprint]
         #expect(moved.count == 2 && moved.allSatisfy { $0.id == first.id && $0.participants.map(\.fingerprint) == both },
                 "the roll moved stamped \(moved)")
-        try #require(Self.holdLive(Self.sessionPhoto(3), on: manager) == .held, "the next photo was not held")
-        #expect(manager.sessionPhotos.first?.session?.id != first.id, "the next photo still carries the left session's id")
+        try #require(Self.holdLive(Self.sessionPhoto(3), on: photos) == .held, "the next photo was not held")
+        #expect(photos.sessionPhotos.first?.session?.id != first.id, "the next photo still carries the left session's id")
     }
 }
 
@@ -3583,11 +3590,11 @@ extension FernletFeatureGoldenTests {
     }
 
     /// The routed-type rows Fernlet's mesh registers: today the registry `MeshNetworkManager` builds once
-    /// in `init` and reads through `routedTypes`, its resident rows and the host's
-    /// (`increment1(_:hostEntries:)` with `ProximityHost.meshRoutedTypeEntries`, since plan step A0.5.9),
-    /// which for `.fernlet`'s routed types is the test target's `MeshRoutedTypeRegistry.increment1(_:)`
-    /// (the resident rows and `FernletRoutedTypes.entries`). The manager's own copy is private, so this
-    /// is the expression it is built from.
+    /// in `init` and reads through `routedTypes`, from the host's rows alone
+    /// (`MeshRoutedTypeRegistry(entries:)` over `ProximityHost.meshRoutedTypeEntries` since plan step
+    /// A0.5.11; resident rows beside them from A0.5.9), which for `.fernlet`'s routed types is the test
+    /// target's `MeshRoutedTypeRegistry.increment1(_:)` (`FernletRoutedTypes.entries`). The manager's own
+    /// copy is private, so this is the expression it is built from.
     static var fernletRoutedTypeRegistry: MeshRoutedTypeRegistry {
         MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
     }
@@ -3616,8 +3623,8 @@ extension FernletFeatureGoldenTests {
     }
 
     /// The photo row's payload bound: today `PrivateMediaStore.maxIncomingPhotoBytes`, the term the
-    /// photo row's cap starts from (`MeshRoutedTypeRegistry.increment1Rows(_:)` since plan step
-    /// A0.5.4). Its literal is `MeshRoutedTypeRegistryTests`' pin.
+    /// photo row's cap starts from (`FernletRoutedTypes`' photo row since plan step A0.5.11, the
+    /// engine's resident row from A0.5.4). Its literal is `MeshRoutedTypeRegistryTests`' pin.
     static var photoPayloadBound: Int {
         PrivateMediaStore.maxIncomingPhotoBytes
     }
@@ -3670,8 +3677,9 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Captures one photo at `node` through the photo sender: today `MeshFoundingRig.capturePhoto(at:)`,
-    /// which calls `MeshNetworkManager.addPhoto(_:)`, whose share originates the item under the photo
-    /// wall's token to the full roster.
+    /// which calls the node's composition's `MeshSessionPhotos.addPhoto(_:)` (the manager's until plan
+    /// step A0.5.11), whose share originates the item under the host's photo row's token to the full
+    /// roster.
     static func sendPhoto(at node: Int, in rig: MeshFoundingRig) {
         rig.capturePhoto(at: node)
     }
@@ -3910,45 +3918,35 @@ extension FernletFeatureGoldenTests {
         ProximityActivityManager(store: host, identity: identity, fileURL: fileURL, now: { clock })
     }
 
-    /// A mesh manager over `store` (held unowned: the caller keeps it alive) on an in-memory radio, with
-    /// `identity` as its device identity and `heldPhotoKeys` as the pending corpus's key, or nil, the
-    /// default, for the keychain row production reads: today the internal
-    /// `MeshNetworkManager(store:transport:identity:heldPhotoKeys:)`, a bare engine: the cells that read
-    /// it read the photo wall, still the engine's (the activity manager's cells read the composition's
-    /// since plan step A0.5.8, when it left the engine). Re-pointed at ``meshFeatures(over:identity:)``
-    /// when the photo wall leaves the engine (A0.5.11).
-    static func meshManager(over store: FernletStore, identity: IdentityService,
-                            heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil) -> MeshNetworkManager {
-        MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), identity: identity,
-                           heldPhotoKeys: heldPhotoKeys)
-    }
-
     /// Fernlet's mesh composition over `store` (held unowned: the caller keeps it alive) on an in-memory
     /// radio, with `identity` as the device identity it hands its mesh and its features and
     /// `heldPhotoKeys` as the pending corpus's key, or nil, the default, for the keychain row production
     /// reads: today `FernletMeshRig.features(store:transport:identity:heldPhotoKeys:)`, the app's
     /// composition over the manager's internal designated initializer (plan step A0.5.5). The caller
-    /// keeps the composition for as long as it uses it.
+    /// keeps the composition for as long as it uses it. The photo wall's cells read its session photos
+    /// since plan step A0.5.11, when the wall left the engine and a bare manager's accessor beside this
+    /// one, `meshManager(over:identity:heldPhotoKeys:)`, went with it.
     static func meshFeatures(over store: FernletStore, identity: IdentityService,
                              heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil) -> FernletMeshFeatures {
         FernletMeshRig.features(store: store, transport: FakeMeshTransportSession(), identity: identity,
                                 heldPhotoKeys: heldPhotoKeys)
     }
 
-    /// The wall preferences' entry count: today `photoWallPreferenceEntryCountForTesting`.
-    static func wallPreferenceEntryCount(_ manager: MeshNetworkManager) -> Int {
-        manager.photoWallPreferenceEntryCountForTesting
+    /// The wall preferences' entry count: today `photoWallPreferenceEntryCountForTesting`, the session
+    /// photos' since plan step A0.5.11.
+    static func wallPreferenceEntryCount(_ photos: MeshSessionPhotos) -> Int {
+        photos.photoWallPreferenceEntryCountForTesting
     }
 
     /// Holds `photo` for review, not live, keyed by its sender and id: today
-    /// `holdSessionPhoto(_:key:live:)`.
-    static func hold(_ photo: FriendPhotoPayload, on manager: MeshNetworkManager) -> PendingSessionPhotoStore.Hold {
-        manager.holdSessionPhoto(photo, key: MeshContentKey(senderFingerprint: photo.senderFingerprint ?? "", contentID: photo.id),
-                                 live: false)
+    /// `holdSessionPhoto(_:key:live:)`, the session photos' since plan step A0.5.11.
+    static func hold(_ photo: FriendPhotoPayload, on photos: MeshSessionPhotos) -> PendingSessionPhotoStore.Hold {
+        photos.holdSessionPhoto(photo, key: MeshContentKey(senderFingerprint: photo.senderFingerprint ?? "", contentID: photo.id),
+                                live: false)
     }
 
     /// A wall store over the index at `indexURL` on an in-memory key: today
-    /// `PrivateMediaStore(indexURL:keyProvider:)`, the type the mesh builds its wall from.
+    /// `PrivateMediaStore(indexURL:keyProvider:)`, the type the session photos build their wall from.
     static func wallStore(indexedAt indexURL: URL) -> PrivateMediaStore {
         PrivateMediaStore(indexURL: indexURL, keyProvider: SwitchableMediaKeyProvider())
     }
@@ -4185,19 +4183,20 @@ extension FernletFeatureGoldenTests {
     }
 
     /// The camera's hold-failure line as the camera resolves it: today
-    /// `ProximityUICopy.Camera.holdFailed`, which the manager publishes as `meshError` when a capture
-    /// cannot be held. Re-pointed at A0.5.11 to `FernletSocialCopy`.
+    /// `FernletSocialCopy.Camera.holdFailed`, which the session photos publish on the mesh's `meshError`
+    /// when a capture cannot be held (`ProximityUICopy`'s, published by the manager, until plan step
+    /// A0.5.11).
     static var cameraHoldFailedLine: String {
-        ProximityUICopy.Camera.holdFailed
+        FernletSocialCopy.Camera.holdFailed
     }
 
-    /// The file that declares the line: today ProximityKit's copy vault. Re-pointed at A0.5.11 to
-    /// `FernletSocialCopy`'s file.
-    static let cameraCopyVaultPath = "FernletKit/Sources/ProximityKit/UI/ProximityUICopy.swift"
+    /// The file that declares the line: today FernletSocial's copy vault (ProximityKit's until plan step
+    /// A0.5.11).
+    static let cameraCopyVaultPath = "FernletKit/Sources/FernletSocial/FernletSocialCopy.swift"
 
-    /// The catalog that files the line: today ProximityKit's, which `Scripts/sync-string-catalogs.sh`
-    /// syncs. Re-pointed at A0.5.11 to FernletSocial's.
-    static let cameraCopyCatalogPath = "FernletKit/Sources/ProximityKit/Localizable.xcstrings"
+    /// The catalog that files the line: today FernletSocial's, which `Scripts/sync-string-catalogs.sh`
+    /// syncs (ProximityKit's until plan step A0.5.11).
+    static let cameraCopyCatalogPath = "FernletKit/Sources/FernletSocial/Localizable.xcstrings"
 
     /// Hands `request` to `manager` as bob's, with bob's transport-verified fingerprint and keys: today
     /// `ProximityActivityManager.receiveJoinRequest(...)`, handed the verified fingerprint and both
@@ -4209,10 +4208,9 @@ extension FernletFeatureGoldenTests {
                                    verifiedKeyAgreementPublicKey: bobPub)
     }
 
-    /// Saves `state` through a JSON sidecar over `fileURL`: today ProximityKit's package
-    /// `JSONSidecarFile` (its `init(fileURL:)` and `save(_:)`), which plan step A0.5.11 moves whole to
-    /// FernletSocial, where those members become internal; re-pointed then only in its import, through
-    /// `@testable import FernletSocial`.
+    /// Saves `state` through a JSON sidecar over `fileURL`: today FernletSocial's `JSONSidecarFile` (its
+    /// internal `init(fileURL:)` and `save(_:)`), ProximityKit's package type until plan step A0.5.11
+    /// moved it whole; re-pointed only in its import, through `@testable import FernletSocial`.
     static func saveSidecar<State: Codable>(_ state: State, to fileURL: URL) {
         JSONSidecarFile<State>(fileURL: fileURL).save(state)
     }
@@ -4301,42 +4299,44 @@ extension FernletFeatureGoldenTests {
         [SessionMessageStore.Acceptance.appended, .alreadyHeld, .emptyAfterSanitizing].map(\.rawValue)
     }
 
-    /// Asks `manager` to delete a wall photo: today `deletePhoto(_:)`. Re-pointed at A0.5.11.
-    static func deleteWallPhoto(_ photoID: UUID, on manager: MeshNetworkManager) {
-        manager.deletePhoto(photoID)
+    /// Asks `photos` to delete a wall photo: today `deletePhoto(_:)`, the session photos' since
+    /// plan step A0.5.11.
+    static func deleteWallPhoto(_ photoID: UUID, on photos: MeshSessionPhotos) {
+        photos.deletePhoto(photoID)
     }
 
-    /// The batch of ended-session photos and candidates `manager` offers for review: today
-    /// `pendingFriendReview`. Re-pointed at A0.5.11.
-    static func pendingReview(on manager: MeshNetworkManager) -> MeshFriendReviewBatch? {
-        manager.pendingFriendReview
+    /// The batch of ended-session photos and candidates `photos` offer for review: today
+    /// `pendingFriendReview`, the session photos' since plan step A0.5.11.
+    static func pendingReview(on photos: MeshSessionPhotos) -> MeshFriendReviewBatch? {
+        photos.pendingFriendReview
     }
 
     /// The session-end review's answer for the photos it showed: today
-    /// `finishReviewedPhotos(_:keeping:in:)`. Re-pointed at A0.5.11.
+    /// `finishReviewedPhotos(_:keeping:in:)`, the session photos' since plan step A0.5.11.
     static func answerReview(showing reviewed: Set<UUID>, keeping kept: Set<UUID>, in batchID: UUID,
-                             on manager: MeshNetworkManager) -> SessionPhotoAnswer {
-        manager.finishReviewedPhotos(reviewed, keeping: kept, in: batchID)
+                             on photos: MeshSessionPhotos) -> SessionPhotoAnswer {
+        photos.finishReviewedPhotos(reviewed, keeping: kept, in: batchID)
     }
 
     /// The in-camera Develop review's answer for the photos it showed: today
-    /// `finishSessionPhotos(keeping:of:)`. Re-pointed at A0.5.11.
+    /// `finishSessionPhotos(keeping:of:)`, the session photos' since plan step A0.5.11.
     static func answerDevelop(showing reviewed: Set<UUID>, keeping kept: Set<UUID>,
-                              on manager: MeshNetworkManager) -> SessionPhotoAnswer {
-        manager.finishSessionPhotos(keeping: kept, of: reviewed)
+                              on photos: MeshSessionPhotos) -> SessionPhotoAnswer {
+        photos.finishSessionPhotos(keeping: kept, of: reviewed)
     }
 
     /// The one engine every photo answer runs through, asked directly so an answer can name a photo no
-    /// list shows: today the internal `applyPhotoAnswers(kept:discarded:now:)`. Re-pointed at A0.5.11.
+    /// list shows: today the internal `applyPhotoAnswers(kept:discarded:now:)`, the session photos'
+    /// since plan step A0.5.11.
     static func applyPhotoAnswers(kept: Set<UUID>, discarded: Set<UUID>,
-                                  on manager: MeshNetworkManager) -> SessionPhotoAnswer {
-        manager.applyPhotoAnswers(kept: kept, discarded: discarded, now: Date())
+                                  on photos: MeshSessionPhotos) -> SessionPhotoAnswer {
+        photos.applyPhotoAnswers(kept: kept, discarded: discarded, now: Date())
     }
 
-    /// Delete-all's leg for the photos nobody chose yet: today `purgeHeldSessionPhotosForDeleteAll()`.
-    /// Re-pointed at A0.5.11.
-    static func purgeHeldPhotos(on manager: MeshNetworkManager) -> Bool {
-        manager.purgeHeldSessionPhotosForDeleteAll()
+    /// Delete-all's leg for the photos nobody chose yet: today `purgeHeldSessionPhotosForDeleteAll()`,
+    /// the session photos' since plan step A0.5.11.
+    static func purgeHeldPhotos(on photos: MeshSessionPhotos) -> Bool {
+        photos.purgeHeldSessionPhotosForDeleteAll()
     }
 
     /// Pushes the open routed gate into `manager`: today `applyRoutedAccessGate(_:now:)` through the
@@ -4436,10 +4436,10 @@ extension FernletFeatureGoldenTests {
 
     /// Holds `photo` in the live session, stamped with the session's metadata and listed in the live
     /// roll, keyed by its sender and id: today `holdSessionPhoto(_:key:live:)` with `live` true:
-    /// ``hold(_:on:)`` for a live photo. Re-pointed at A0.5.11.
-    static func holdLive(_ photo: FriendPhotoPayload, on manager: MeshNetworkManager) -> PendingSessionPhotoStore.Hold {
+    /// ``hold(_:on:)`` for a live photo, the session photos' since plan step A0.5.11.
+    static func holdLive(_ photo: FriendPhotoPayload, on photos: MeshSessionPhotos) -> PendingSessionPhotoStore.Hold {
         let key = MeshContentKey(senderFingerprint: photo.senderFingerprint ?? "", contentID: photo.id)
-        return manager.holdSessionPhoto(photo, key: key, live: true)
+        return photos.holdSessionPhoto(photo, key: key, live: true)
     }
 
     /// Gives the rig's session one thing for each leg of its end to act on, each through today's seam:
@@ -4454,7 +4454,7 @@ extension FernletFeatureGoldenTests {
         let manager = rig.manager
         manager.recordSessionParticipant(displayName: "Bob", fingerprint: bobFingerprint, signingPublicKey: bobSigningPub,
                                          keyAgreementPublicKey: bobPub)
-        try #require(holdLive(sessionPhoto(1), on: manager) == .held, "the live photo was not held")
+        try #require(holdLive(sessionPhoto(1), on: rig.photos) == .held, "the live photo was not held")
         let catalog = Data(frozenCatalogJSON.utf8)
         let token = featureToken("catalog")
         let envelope = try FernletIdentityEnvelope.signed(
@@ -4470,11 +4470,12 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Notes each leg of a session end into `recorder` where it begins: the roster's first change (the
-    /// merge empties it), the photo move's audit line (`mesh.session.photosPendingReview`), and the first
-    /// changes of the shop window (the rig's composition's shop since plan step A0.5.6), the transcript
-    /// (its chat's since A0.5.9) and the heart state (its session hearts' since A0.5.10). Through
-    /// Observation (`withObservationTracking`, one
-    /// change each, as `MeshFavoriteObservationTests` observes the manager) and
+    /// mesh's drain empties it, ahead of the session photos' merge of what it drained, since plan step
+    /// A0.5.11; the merge emptied it until then), the photo move's audit line
+    /// (`mesh.session.photosPendingReview`), and the first changes of the shop window (the rig's
+    /// composition's shop since plan step A0.5.6), the transcript (its chat's since A0.5.9) and the heart
+    /// state (its session hearts' since A0.5.10). Through Observation (`withObservationTracking`, one
+    /// change each, as `MeshFavoriteObservationTests` observes the session photos) and
     /// `FernletAuditLog.addCaptureHandler`.
     /// Nothing the teardown runs before its legs writes any of the five. Re-pointed with each leg.
     static func recordSessionEnd(of rig: SessionRig, into recorder: LifecycleRecorder) {
@@ -4958,18 +4959,18 @@ extension FernletFeatureGoldenTests {
                                     covers: pairs("coverPhotoIDsBySession"), favorites: pairs("favoritePhotoIDsBySession"))
     }
 
-    /// Holds the wall `manager` built from the frozen index and the (clean or pruned) preferences to its
+    /// Holds the wall `photos` built from the frozen index and the (clean or pruned) preferences to its
     /// posts: S2's carousel P5 and P6 with P5 its cover, S1's P1 to P3 with its favorite P3 as cover,
     /// then P4 alone; S1's favorite P3 and no other; five entries.
-    static func expectWallPosts(of manager: MeshNetworkManager) {
-        let posts = manager.photoWallPosts
+    static func expectWallPosts(of photos: MeshSessionPhotos) {
+        let posts = photos.photoWallPosts
         let s1 = uuid("5E55100A-4A53-4F4E-8000-000000000021"), s2 = uuid("5E55100B-4A53-4F4E-8000-000000000022")
         let p = (1...6).map { uuid("F070000\($0)-4A53-4F4E-8000-00000000004\($0)") }
         #expect(posts.map(\.id) == [s2, s1, p[3]], "the wall's posts are \(posts.map(\.id))")
         #expect(posts.map(\.coverPhoto.id) == [p[4], p[2], p[3]], "the posts' covers are \(posts.map(\.coverPhoto.id))")
         #expect(posts.map { $0.photos.map(\.id) } == [[p[4], p[5]], [p[0], p[1], p[2]], [p[3]]])
-        #expect(posts.map { manager.favoritePhotoID(for: $0) } == [nil, p[2], nil] && manager.allFavoritePhotoIDs == [p[2]])
-        #expect(wallPreferenceEntryCount(manager) == 5, "the wall holds \(wallPreferenceEntryCount(manager)) preference entries")
+        #expect(posts.map { photos.favoritePhotoID(for: $0) } == [nil, p[2], nil] && photos.allFavoritePhotoIDs == [p[2]])
+        #expect(wallPreferenceEntryCount(photos) == 5, "the wall holds \(wallPreferenceEntryCount(photos)) preference entries")
     }
 
     /// DB's id, bob's own activity (groups 20 to 23's `4A53-4F4E` pattern).
@@ -5216,6 +5217,8 @@ extension FernletFeatureGoldenTests {
         let features: FernletMeshFeatures
         /// The mesh manager over alice: ``features``' mesh.
         var manager: MeshNetworkManager { features.mesh }
+        /// The session photos over alice: ``features``' photos (plan step A0.5.11).
+        var photos: MeshSessionPhotos { features.photos }
         /// The fabric bob's link lives on, held here because the link holds it weakly.
         let network: FakePeerNetwork
         /// bob's end of the fabric: the channel his slot sends on, and its handle.
@@ -5441,6 +5444,8 @@ extension FernletFeatureGoldenTests {
         let features: FernletMeshFeatures
         /// The first manager over the root: ``features``' mesh.
         let manager: MeshNetworkManager
+        /// The session photos over the root: ``features``' photos (plan step A0.5.11).
+        var photos: MeshSessionPhotos { features.photos }
 
         /// A rig over a fresh root and a freshly planted alice; a failed plant removes what it wrote.
         init() throws {
@@ -5466,10 +5471,11 @@ extension FernletFeatureGoldenTests {
             manager = features.mesh
         }
 
-        /// Another manager over the same root and identity, as a relaunch builds one, its pending corpus
-        /// under `keys`.
-        func relaunched(keys: SwitchableMediaKeyProvider) -> MeshNetworkManager {
-            FernletFeatureGoldenTests.meshManager(over: store, identity: alice, heldPhotoKeys: keys)
+        /// Another composition over the same root and identity, as a relaunch builds one, its pending
+        /// corpus under `keys`: its session photos load the wall and the corpus as they are built (a bare
+        /// manager until plan step A0.5.11, when the photos left it).
+        func relaunched(keys: SwitchableMediaKeyProvider) -> FernletMeshFeatures {
+            FernletFeatureGoldenTests.meshFeatures(over: store, identity: alice, heldPhotoKeys: keys)
         }
 
         /// Removes alice's rows and the root.
