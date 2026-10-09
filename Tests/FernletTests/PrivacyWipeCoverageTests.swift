@@ -109,8 +109,8 @@ struct PrivacyWipeCoverageTests {
         // Leg 4d (2026-09-30): the session photos nobody has chosen yet — the sealed pending corpus,
         // the whole review batch (candidates too) and the live roll and roster. The wall itself is
         // still a deliberate survivor; this is the separate corpus that holds photos BEFORE the choice.
-        // The session photos' since ProximityKit plan step A0.5.11 (`meshFeatures.photos`), the mesh
-        // manager's before it; the purge empties the mesh's live roster in the same step.
+        // The session photos' (`meshFeatures.photos`, FernletSocial's); the purge empties the mesh's
+        // live roster in the same step.
         "photos.purgeHeldSessionPhotosForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
@@ -130,11 +130,12 @@ struct PrivacyWipeCoverageTests {
         "purgeDataExports",
         // Social / proximity
         "clothingShop.clearAll",
-        // The live chat transcript, dropped in leg 0 through the MANAGER's one clear funnel rather
-        // than by `sessionMessages.clear()` on leg 7b. The funnel is what bumps
-        // `transcriptGeneration` and what switches the routed projection off for the rest of the
-        // wipe; the direct call did neither, so items whose ciphertext leg 11 was about to destroy
-        // could re-project into a still-live transcript (P6 item 4 fix review, finding P2-1).
+        // The live chat transcript, dropped in leg 0 through the mesh's privacy-wipe funnel rather
+        // than by `sessionMessages.clear()` on leg 7b. The funnel advances the session-content
+        // generation, switches the routed projection off for the rest of the wipe and tells the
+        // session observer, whose chat drops the transcript; the direct call did none of that, so
+        // items whose ciphertext leg 11 was about to destroy could re-project into a still-live
+        // transcript (P6 item 4 fix review, finding P2-1).
         "meshNetworkManager.beginPrivacyWipe",
         // Every proximity radio — the session, the search and both listeners — stands down at
         // leg 0 through the run policy (P7 item 3): raising `deleteAllInProgress` and re-running
@@ -233,10 +234,8 @@ struct PrivacyWipeCoverageTests {
         "invalidateEncryptionKeyCache",
         // The session photos' two at-rest key caches (the friend wall's and the pending corpus's),
         // dropped immediately after the mesh's identity wipe, inside the same `do` and before
-        // presence's, since ProximityKit plan step A0.5.11: the mesh manager dropped them inside its
-        // `wipeIdentityForDeleteAll()` until then, where this bounded scan never read them. The token
-        // above is satisfied by the meal-photo store's own call and pins nothing of the mesh's; this
-        // one pins the move.
+        // presence's (since ProximityKit plan step A0.5.11). The token above is satisfied by the
+        // meal-photo store's own call and pins nothing of the session photos'; this one pins theirs.
         "photos.invalidateEncryptionKeyCaches",
         // Away-hearts dead-drop state (Increment 3): prekeys, peer bundles, outbox, dedup + the
         // service's own identity cache. The remote purge is a SEPARATE row because it must run
@@ -262,7 +261,7 @@ struct PrivacyWipeCoverageTests {
     /// manifest: some deletions are bugs, and a green manifest says nothing about them.
     ///
     /// `deleteKeychainRowForWipe` deletes the ONE shared `com.fernlet.private-media` keychain row
-    /// that encrypts every `PrivateMediaStore` — including `MeshNetworkManager.photoCacheStore`,
+    /// that encrypts every `PrivateMediaStore` — including the session photos' `photoCacheStore`,
     /// the friend photo wall this funnel keeps BY DESIGN. Deleting it doesn't orphan a key, it
     /// shreds the wall: the next `mediaKey()` mints a fresh random key and every retained photo
     /// decrypts to garbage, permanently and with no failure signal. See the deliberate-exceptions

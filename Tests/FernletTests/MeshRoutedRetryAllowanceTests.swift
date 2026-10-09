@@ -239,7 +239,7 @@ struct MeshRoutedRetryPlanTests {
 
     /// **The planner is type-agnostic, and that is a wall rather than a claim** (item 5.2).
     ///
-    /// Item 6 supplies its heart predicate to `MeshNetworkManager.ackableNow(_:in:)`, the
+    /// Item 6 supplies its heart predicate to `MeshNetworkManager.ackableNow(_:in:judgement:)`, the
     /// filter-before-plan seam, and never here: a planner that could see a type token would be a
     /// second per-type source beside the registry, which `noShippingCodeBranchesOnARoutedTypeToken`
     /// exists to forbid. The needles are matched against CODE only, so the file's own doc comments
@@ -516,7 +516,7 @@ struct MeshRoutedRetryAllowanceTests {
     ///
     /// **Since P6 item 6 supplied `ackableNow`'s heart leg the hearts spend NO slot at all**, which
     /// is a strictly stronger statement than the retry share bounding them: this rig wires no heart
-    /// ledger, so `routedHeartJudgementReadiness()` is false, and the filter takes all sixteen off
+    /// ledger, so `routedHeartJudgementReadiness(_:)` is false, and the filter takes all sixteen off
     /// the list before the allowance is planned. `heartsPending` keeps its meaning — "heart-stage
     /// items this pass could not judge" — because the filter counts what it refused a slot to.
     @Test func aNewReceiptIsFiledOnItsFirstPassBehindAFullAllowanceOfHearts() async throws {

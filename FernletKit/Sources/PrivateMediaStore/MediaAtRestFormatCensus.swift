@@ -307,9 +307,9 @@ public struct MediaAtRestFormatCensusReport: Sendable, Equatable {
 ///   - `PrivateMediaStore.swift:82-87` — `MeshPhotos/` and `MeshPhotoThumbnails/` are created as
 ///     siblings of the index, and the sealed index is the index path with its extension replaced by
 ///     `sealed`.
-///   - `MeshNetworkManager.swift:376-386` — the one production caller passes
-///     `<proximitySupportDirectory>/MeshPhotoCache.json` as that index path, which makes the sealed
-///     index `MeshPhotoCache.sealed` in the same directory.
+///   - FernletSocial's `MeshSessionPhotos.swift`, in its initializer — the one production caller
+///     passes `<proximitySupportDirectory>/MeshPhotoCache.json` as that index path, which makes the
+///     sealed index `MeshPhotoCache.sealed` in the same directory.
 ///   A name that drifts on either side does not fail a build; it makes a wall census report a
 ///   confident zero for a corpus that is plainly full of photos. That is the first thing to check
 ///   if it ever does.

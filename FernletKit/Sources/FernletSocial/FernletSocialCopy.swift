@@ -4,10 +4,9 @@
 // This module's copy vault: a sibling of `FernletUICopy`, `FernletLockCopy`, `FernletProximityUICopy`
 // and `FernletConnectionsCopy`, for the same reason and in the same shape. It holds the one string
 // FernletSocial hands out already resolved: the in-person camera's hold-failure line, which the photo
-// object (`MeshSessionPhotos`) publishes on the mesh's `meshError` when a capture cannot be held. It
-// moved here byte for byte from ProximityKit's `ProximityUICopy` with the photos (ProximityKit plan step
-// A0.5.11, the A0.4.6 precedent), and its key keeps the `proximity.camera.` spelling: a key is a token,
-// and a renamed key strands every translation of it.
+// object (`MeshSessionPhotos`) publishes on the mesh's `meshError` when a capture cannot be held. Its
+// key keeps the `proximity.camera.` spelling it shipped under: a key is a token, and a renamed key
+// strands every translation of it.
 //
 // A `String(localized:)` inside an SPM module that omits `bundle: .module` resolves against
 // `Bundle.main` — the APP's bundle — which never consults this module's own catalog, so the

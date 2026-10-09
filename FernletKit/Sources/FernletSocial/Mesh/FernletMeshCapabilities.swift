@@ -6,8 +6,8 @@
 // the mesh engine through its capability-list provider, which advertises the list verbatim.
 //
 // The ORDER is a signed wire byte: the coordinator carries the array verbatim into the introduction and
-// its acknowledgement, so the composer below is the mesh manager's own `localCapabilities()` body,
-// moved with its nine appends in their order and its comments. The switches it reads are read where
+// its acknowledgement, so the composer below appends its nine tokens in one fixed order, the order
+// every device in the field already signs. The switches it reads are read where
 // they live: the clothing shop's sharing gate on the composition's shop, the chat age gate on the
 // composition's chat (since plan step A0.5.9), the friend-state opt-in on the composition's
 // friend-state exchange, the in-person hearts opt-in on the host, the away-hearts consent on this
@@ -120,8 +120,9 @@ public final class FernletMeshCapabilities {
         // device has opted in (`allowNearbyHearts`). The receiver enforces that same opt-out (plus the
         // trusted-friend requirement + block list) before recording anything, so advertising it while
         // opted out would make an opted-out device look heart-reachable: a sender would send, see a false
-        // "Sent … good vibes", and burn the 5-minute cooldown even though the receiver silently drops it
-        // (`receiveSessionHeart`). Gating the advertisement means opted-out peers never appear reachable,
+        // "Sent … good vibes", and burn the 5-minute cooldown on a heart the receiver does not record while
+        // it stays opted out (the session hearts' ledger judge reads the same setting as its readiness).
+        // Gating the advertisement means opted-out peers never appear reachable,
         // so the sender's button reflects the true unavailable state. Also lets a sender skip peers on an
         // older build (no `.friendHeart` mesh handler) and fall back to presence.
         //

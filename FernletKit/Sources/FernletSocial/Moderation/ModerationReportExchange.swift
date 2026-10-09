@@ -1,16 +1,16 @@
 // ModerationReportExchange.swift
 // FernletSocial/Moderation
 //
-// ProximityKit plan step A0.5.7: the moderation report relay's mesh wiring (Phase 3b), moved from the
-// mesh manager with no byte, golden or audit change: the `.itemReport` handler, registered through the
+// ProximityKit plan step A0.5.7: the moderation report relay's mesh wiring (Phase 3b): the
+// `.itemReport` handler, registered through the
 // mesh's payload token door, which keeps a vault-trusted, unblocked friend's own verified rows for the
 // app; and the commit-time send of this device's own signed reports to a vault-trusted friend, through
 // the mesh's captured-slot feature send, signed by the device identity the mesh was built with. The relay
-// itself (`ModerationReportRelay`) builds and verifies the payload, unchanged.
+// itself (`ModerationReportRelay`) builds and verifies the payload.
 //
 // The mesh calls none of it directly. The handler reaches it through the payload registry, and the
 // commit through FernletSocial's mesh composition (`FernletMeshFeatures`), whose session observer calls
-// the commit leg after the clothing shop's, in the order the mesh manager ran them.
+// the commit leg after the clothing shop's.
 
 import Foundation
 import FernletDomainModel

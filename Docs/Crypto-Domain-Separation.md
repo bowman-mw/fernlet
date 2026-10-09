@@ -111,10 +111,10 @@ on the reasoning.
 | `identityEnvelopeLegacyV1` | `fernlet.canonical.identity-envelope.v1` | `.absent` | `FernletIdentityEnvelope` |
 | `meshAdmissionTokenV2` | `fernlet.canonical.mesh-admission-token.v2` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshPayloads` |
 | `meshAdmissionTokenLegacyV1` | `fernlet.canonical.mesh-admission-token.v1` | `.absent` | `MeshPayloads` |
-| `activityDescriptorV2` | `fernlet.canonical.activity-descriptor.v2` | `.lengthPrefixed` | `CanonicalSignatureSerializer` |
-| `activityJoinTokenV2` | `fernlet.canonical.activity-join-token.v2` | `.lengthPrefixed` | `ActivityPayloads`, `CanonicalSignatureSerializer` |
-| `activityRosterSnapshotV2` | `fernlet.canonical.activity-roster-snapshot.v2` | `.lengthPrefixed` | `ActivityPayloads`, `CanonicalSignatureSerializer` |
-| `moderationReportV2` | `fernlet.canonical.moderation-report.v2` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `ModerationReportRelay` |
+| `activityDescriptorV2` | `fernlet.canonical.activity-descriptor.v2` | `.lengthPrefixed` | `FeatureCanonicalBytes` |
+| `activityJoinTokenV2` | `fernlet.canonical.activity-join-token.v2` | `.lengthPrefixed` | `ActivityPayloads`, `FeatureCanonicalBytes` |
+| `activityRosterSnapshotV2` | `fernlet.canonical.activity-roster-snapshot.v2` | `.lengthPrefixed` | `ActivityPayloads`, `FeatureCanonicalBytes` |
+| `moderationReportV2` | `fernlet.canonical.moderation-report.v2` | `.lengthPrefixed` | `FeatureCanonicalBytes`, `ModerationReportRelay` |
 | `meshProbeChannelIntroductionV1` | `fernlet.mesh.probe.channel-introduction.v1` | `.rawPrefix` | `NetworkMeshFeasibilityProbe` |
 | `proximityQRIdentityV1` | `fernlet.verify.qr.v1` | `.rawPrefix` | `ProximityVerification` |
 | `proximityQRResponseV1` | `fernlet.verify.response.v1` | `.rawPrefix` | `CoachVerificationCeremony`, `DuressRecoveryCoordinator`, `MeshNetworkManager`, `ProximityVerification` |
@@ -769,15 +769,17 @@ labels.
 - **Where Fernlet's thirteen feature labels are read.** The two pair-secret salts,
   `heartDropPairV1` and `presencePairV1`, are read from here by nobody: ProximityKit's pair-secret
   door derives under their `.fernlet` twins, the feature salts above, which `FernletSocial` passes.
-  `FernletSocial` names five entries here itself and hands them to CryptoKit: the heart dead-drop's
+  `FernletSocial` names nine entries here itself. It hands five to CryptoKit: the heart dead-drop's
   sealed-drop salt, day-tag prefix and sidecar authenticated data, presence's epoch-tag prefix, and
-  the ban store's evidence reporter tag. The app names the sealed-backup escrow's two
-  (`SealedBackupEscrowKey`, the provisioning participant of every identity the app builds), a prefix
-  pair no namespace can declare (§7's one exception). ProximityKit still reads four, the activities'
-  three and the moderation report's signature, on the code lines `ProximityNamespaceBoundaryTests`
-  allowlists file by file; they leave with the mesh manager's feature parts at plan step A0.5, when
-  that list reaches nothing. The app's duress and probe signatures still sign through ProximityKit's
-  `IdentityService` under their entries here, through its `CryptographicPurpose` overloads.
+  the ban store's evidence reporter tag. And its mesh features frame their canonical bytes under
+  four (`FeatureCanonicalBytes.swift`): the activities' three (the descriptor the params hash is
+  taken over, the join token and the roster snapshot) and the moderation report's, the last three
+  signed and verified through ProximityKit's `IdentityService` and its `CryptographicPurpose`
+  overloads. The app names the sealed-backup escrow's two (`SealedBackupEscrowKey`, the provisioning
+  participant of every identity the app builds), a prefix pair no namespace can declare (§7's one
+  exception). ProximityKit names none: `ProximityNamespaceBoundaryTests` fails any
+  `FernletCryptoPurpose` in its code. The app's duress and probe signatures sign through the same
+  `CryptographicPurpose` overloads, which stay until C1.
 
 Adding a ProximityKit protocol label is therefore a namespace change, not a registry change: a field
 in a `Namespace/` group (which fixes its role), the host's literal in `.fernlet`, and a golden row in

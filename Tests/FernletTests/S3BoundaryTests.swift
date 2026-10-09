@@ -220,11 +220,14 @@ struct S3BoundaryTests {
     ///   manager that recognizes kept friends nearby by rotating pairwise tags and delivers in-person
     ///   hearts, and the pair secret and the tags themselves), the heart dead-drop (its service, sealer,
     ///   prekey store, outbox, dedup store, peer-bundle cache and sealed sidecars, whose one CloudKit
-    ///   leg is the injected transport above), Fernlet's social records (moderation's ban store,
-    ///   ledger and content hash, the closeness ledger, the friend-state cache) and the parked chat
-    ///   payload, device-local by design, so a CloudKit call from inside it is how who is nearby, who
-    ///   reported whom, who feels close and a friend's shared state would follow the user into
-    ///   iCloud.
+    ///   leg is the injected transport above), the mesh features its `FernletMeshFeatures` composes
+    ///   over the engine (the session photos with their held corpus, wall and review, chat, the
+    ///   session hearts and the heart ledger, the clothing shop, activities, the moderation report
+    ///   relay and friend state's exchange), Fernlet's social records (moderation's ban store, ledger
+    ///   and content hash, the closeness ledger, the friend-state cache) and the parked chat payload,
+    ///   device-local by design, so a CloudKit call from inside it is how who is nearby, who reported
+    ///   whom, who feels close, a friend's shared state and a session's photos and messages would
+    ///   follow the user into iCloud.
     /// - CloudKitSync must not import ProximityKit. It is the walled sync module; reaching the identity
     ///   service or a wire payload type would let it sync something richer than the sealed blobs it is
     ///   allowed to carry, and would invert that injection seam. The same holds for

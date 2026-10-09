@@ -1,18 +1,18 @@
 // ClothingShopExchange.swift
 // FernletSocial/ClothingSharing
 //
-// ProximityKit plan step A0.5.6: the clothing shop's mesh wiring, moved from the mesh manager with no
-// byte, golden or audit change: the two inbound handlers (the catalog and the commit-symmetry request),
+// ProximityKit plan step A0.5.6: the clothing shop's mesh wiring: the two inbound handlers (the
+// catalog and the commit-symmetry request),
 // registered through the mesh's payload token door; the commit-time offer and catalog request and the
 // request answer, sent through the mesh's captured-slot feature send; the once-per-slot send tracking
 // and the request-answer rate limit, pruned when a slot leaves and cleared when the search stops; the
 // outbound capability gate; and the shop's two send test seams. The shop itself (`MeshClothingShop`)
-// keeps its receive, window and opt-out state, unchanged.
+// keeps its receive, window and opt-out state.
 //
 // The mesh calls none of it directly. The handlers reach it through the payload registry, and the
 // session's moments through FernletSocial's mesh composition (`FernletMeshFeatures`), whose session
-// observer calls the commit, slot-loss and search-stop legs below in the order the mesh manager ran
-// them, and opens the shop's window at the session's end.
+// observer calls the commit, slot-loss and search-stop legs below, and opens the shop's window at the
+// session's end.
 
 import Foundation
 import FernletDomainModel
@@ -154,7 +154,7 @@ final class ClothingShopExchange {
     /// Forgets every slot the catalog was sent to and every request answered: the search stopped, or a
     /// new session formed (spec: "'Next session start' = first slot COMMIT, not search start"), when
     /// the composition's session observer calls it right after the shop's `beginNewSession()` and the
-    /// chat transcript's drop, the order the mesh manager ran them in.
+    /// chat transcript's drop.
     func clearShopSendTracking() {
         sentShopCatalogSlotIDs.removeAll()
         shopCatalogRequestResponseAt.removeAll()

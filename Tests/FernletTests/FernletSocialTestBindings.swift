@@ -7,8 +7,8 @@
 // suites were written against, restored for them while the type was still ProximityKit's, follows
 // the type here, so `ProximityNamespaceTestBindings.swift` keeps ProximityKit's shapes alone and
 // never imports FernletSocial. A shape that builds from FernletSocial's declarations follows them
-// here too: since plan step A0.5.9 the routed type registry's rows come partly from the host
-// (FernletSocial's `FernletRoutedTypes`), so the registry's and the ack-stage table's shapes, and the
+// here too: the routed type registry's rows are the host's (FernletSocial's `FernletRoutedTypes`,
+// every row since plan step A0.5.11), so the registry's and the ack-stage table's shapes, and the
 // host doubles' answer for those rows, live in this file.
 //
 // THE RULE, the same one that file states. A binding restores a call SHAPE, never a value: it passes

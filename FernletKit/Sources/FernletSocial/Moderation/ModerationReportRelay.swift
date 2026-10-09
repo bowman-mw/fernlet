@@ -7,9 +7,8 @@
 // transitive relay and no merged global count — each device tallies over reports it verified itself,
 // which is the Sybil defense (2026-07-11 ban memo).
 //
-// Moved from ProximityKit unchanged in ProximityKit plan step A0.5.7, with the canonical bytes its rows
-// are signed over (`FeatureCanonicalBytes.swift`); its one audit line goes to `FernletAuditLog`, which
-// ProximityKit's audit bridge fed it to before.
+// The canonical bytes its rows are signed over are this module's too (`FeatureCanonicalBytes.swift`);
+// its one audit line goes to `FernletAuditLog`.
 
 import Foundation
 import FernletCrypto

@@ -1,9 +1,8 @@
 // ProximityHeartLedger.swift
 // FernletSocial/HeartSharing
 //
-// Moved from ProximityKit's `HeartSharing/` with the session hearts at ProximityKit plan step A0.5.10,
-// verbatim: its sidecar (ProximityKit's public `ProtectedSidecar`), its file name and its persisted
-// shape are unchanged.
+// Its sidecar is ProximityKit's public `ProtectedSidecar`; its file name and its persisted shapes are
+// frozen by `FernletFeatureGoldenTests`' heart-ledger rows.
 //
 // Device-local persistence for the hearts feature: received hearts (for the Home bubble and
 // the 24h health-bar glow) plus the per-friend rate limit, enforced in BOTH directions.

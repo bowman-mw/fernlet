@@ -1,8 +1,7 @@
 // ActivityPayloads.swift
 // FernletSocial/Wire
 //
-// The wire envelopes + signing/verification for Group Activities (Phase 6), moved from ProximityKit with
-// the activity manager in ProximityKit plan step A0.5.8, with no byte change. The pure value types
+// The wire envelopes + signing/verification for Group Activities (Phase 6). The pure value types
 // (`ActivityDescriptor`, `ActivityParticipant`, `ActivityRosterSnapshot`, `ActivityJoinToken`) live in
 // FernletDomainModel; the crypto lives HERE because it needs ProximityKit's `@MainActor IdentityService`
 // + CryptoKit, neither of which DomainModel may name. The bytes the token and the snapshot are signed

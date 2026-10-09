@@ -649,7 +649,7 @@ struct ProximityRunPolicyFunnelTests {
     }
 
     /// A store on the given proximity root — two stores on one root stand in for one device's
-    /// launches, since the manager's photo stores are files under it.
+    /// launches, since the session photos' stores are files under it.
     private func makeStore(_ name: String, proximity: URL) -> FernletStore {
         FernletStore(
             repository: LocalFernletRepository(

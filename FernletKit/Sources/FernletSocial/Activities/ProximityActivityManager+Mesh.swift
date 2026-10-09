@@ -1,8 +1,8 @@
 // ProximityActivityManager+Mesh.swift
 // FernletSocial/Activities
 //
-// ProximityKit plan step A0.5.8: the activity manager's mesh wiring (Phase 6), moved from the mesh
-// manager with no byte, golden or audit change: the five activity handlers, registered through the
+// ProximityKit plan step A0.5.8: the activity manager's mesh wiring (Phase 6): the five activity
+// handlers, registered through the
 // mesh's payload token door, each taking a frame only from a transport-verified, unblocked sender; the
 // fingerprint-addressed send, which looks the peer's committed slot up at send time and goes through
 // the mesh's feature send; and the committed-peer query, which reads the mesh's committed slots that
@@ -12,7 +12,7 @@
 // send and the query through the two closures `attach(to:meshHost:)` sets on it, and the commit through
 // FernletSocial's mesh composition (`FernletMeshFeatures`), which builds the manager first, attaches it
 // here before its session observer, and offers its activities at each slot commit, after the other
-// features' legs, in the order the mesh manager ran them.
+// features' legs.
 
 import Foundation
 import FernletDomainModel
@@ -24,8 +24,7 @@ extension ProximityActivityManager {
     /// activity handlers, then sets the two mesh seams the manager uses instead of touching a radio —
     /// a sealed or unsealed send to a verified fingerprint's committed slot (``send``), and the
     /// committed peers advertising `activities` (``committedActivityPeerFingerprints``). Both seams
-    /// hold `mesh` weakly, as the mesh manager's held itself, so a send or a query after the mesh is
-    /// gone does nothing.
+    /// hold `mesh` weakly, so a send or a query after the mesh is gone does nothing.
     ///
     /// - Parameters:
     ///   - mesh: The composition's mesh.

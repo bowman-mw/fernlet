@@ -3,10 +3,9 @@
 //
 // The shared best-effort JSON sidecar idiom used by FernletSocial's device-local stores: the activity
 // manager, the mesh photo-wall preferences (the photo object's), the moderation ledger, the closeness
-// ledger and the friend-state cache. One home for the load/save/remove plumbing those stores
-// previously repeated verbatim; each store keeps its own PersistedState shape and post-decode mapping.
-// Moved from ProximityKit by plan step A0.5.11 with the last of its users there, the photo-wall
-// preferences, so its doors are internal: no other module persists through it.
+// ledger and the friend-state cache. One home for the load/save/remove plumbing those stores share;
+// each store keeps its own PersistedState shape and post-decode mapping. Every store that persists
+// through it is this module's, so its doors are internal: no other module persists through it.
 
 import FernletFoundation
 import Foundation
@@ -17,10 +16,8 @@ import Foundation
 /// `ModerationLedger`, `ClosenessLedger` and `FriendStateCache`.
 ///
 /// Internal, with ``init(fileURL:)``, ``fileURL(in:name:)``, ``load()``, ``save(_:)`` and
-/// ``removeFile()``: every store that persists through it is FernletSocial's since plan step A0.5.11,
-/// when it left ProximityKit with the photo-wall preferences and its `package` doors (rule 5's last
-/// A0.5 row in `ProximityNamespaceBoundaryTests`) closed. Every failure it audits goes to
-/// `FernletAuditLog` under its `sidecar.*` name, whichever store it serves.
+/// ``removeFile()``: every store that persists through it is FernletSocial's. Every failure it
+/// audits goes to `FernletAuditLog` under its `sidecar.*` name, whichever store it serves.
 ///
 /// This is deliberately the *naive* idiom: no failure is recoverable here — writes and removals
 /// are best-effort (they audit-log and move on) and a read failure is indistinguishable from
@@ -29,12 +26,12 @@ import Foundation
 /// while the device is locked — returns `nil`, which callers treat as "no data"; the next
 /// `save(_:)` then overwrites the real file with that near-empty state (the documented clobber
 /// hazard). That trade-off is acceptable only for reconstructible convenience state. Anything
-/// that is data of record must load through ``ProtectedSidecar`` instead, which classifies read
-/// failures so a locked-device read can never be mistaken for "empty".
+/// that is data of record must load through ProximityKit's `ProtectedSidecar` instead, which
+/// classifies read failures so a locked-device read can never be mistaken for "empty".
 ///
 /// `save(_:)` preserves the stores' exact operation order — encode (bail + log on failure), create the
 /// parent directory, then an atomic `.completeFileProtection` write — and, unlike
-/// ``ProtectedSidecar``'s writer, does NOT exclude the file from backup.
+/// `ProtectedSidecar`'s writer, does NOT exclude the file from backup.
 struct JSONSidecarFile<State: Codable> {
     /// The on-disk location of the sidecar. Owners resolve it with `fileURL(in:name:)` against
     /// their host's ``ProximityHost/proximitySupportDirectory``; tests inject their own.

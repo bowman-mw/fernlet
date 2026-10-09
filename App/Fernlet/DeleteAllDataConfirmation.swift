@@ -202,7 +202,7 @@ enum DeleteAllDataConfirmation {
         // with them" — not the narrower "photos friends sent you" it used to say. The cache holds BOTH
         // (a photo the user shared is cached under their own fingerprint), so the old copy disclosed
         // half of what survives. By product decision the wall has no bulk clear — pictures come off it
-        // one at a time (`MeshNetworkManager.deletePhoto`) — so this funnel leaves the whole wall
+        // one at a time (`MeshSessionPhotos.deletePhoto`) — so this funnel leaves the whole wall
         // intact and the copy says how to remove them, rather than implying they are gone.
         //
         // The Fernlet identity is NOT in the kept list any more. It used to be, and it was true then;

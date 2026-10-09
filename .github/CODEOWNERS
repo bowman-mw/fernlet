@@ -85,28 +85,30 @@
 # design, and the ban evidence's reporter-tag hash domain
 /FernletKit/Sources/FernletSocial/Moderation/ModerationBanStore.swift   @bowman-mw
 
-# FernletSocial's moderation report relay and the canonical bytes its rows are signed over (both moved
-# from ProximityKit in plan step A0.5.7): the report's wire format, the one-hop rule and the
-# moderation-report signature domain — changing a byte here breaks every relayed report's signature
+# FernletSocial's moderation report relay and the canonical bytes its rows are signed over: the
+# report's wire format, the one-hop rule and the moderation-report signature domain — changing a byte
+# here breaks every relayed report's signature
 /FernletKit/Sources/FernletSocial/Moderation/ModerationReportRelay.swift @bowman-mw
 /FernletKit/Sources/FernletSocial/Wire/FeatureCanonicalBytes.swift      @bowman-mw
 
-# FernletSocial's Group Activities signing (both moved from ProximityKit in plan step A0.5.8, their
-# canonical bytes into FeatureCanonicalBytes.swift above): the join token's and the roster snapshot's
-# signing and verification, the activity payloads' wire formats, and the activity ledger's file —
-# changing a byte here breaks every grant, roster and ledger already signed or saved
+# FernletSocial's Group Activities signing (their canonical bytes in FeatureCanonicalBytes.swift above):
+# the join token's and the roster snapshot's signing and verification, the activity payloads' wire
+# formats, and the activity ledger's file — changing a byte here breaks every grant, roster and ledger
+# already signed or saved
 /FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift @bowman-mw
 /FernletKit/Sources/FernletSocial/Wire/ActivityPayloads.swift              @bowman-mw
 
-# FernletSocial's JSON sidecar (moved from ProximityKit in plan step A0.5.11, its `package` doors closed):
-# the on-disk JSON and `.completeFileProtection` of the activity ledger, the moderation, closeness and
+# FernletSocial's JSON sidecar (internal: no other module persists through it): the on-disk JSON and
+# `.completeFileProtection` of the activity ledger, the moderation, closeness and
 # friend-state ledgers and the photo wall's preferences — changing an encoder setting or the write here
 # changes every one of those files already saved
 /FernletKit/Sources/FernletSocial/Support/JSONSidecarFile.swift            @bowman-mw
 
-# FernletSocial's heart dead-drop: the drop's outer seal and the sidecars' at-rest seal, the prekey
-# store's keychain service and blob, the heart-drop pair secret and day tags, the storage scope and the
-# mesh stores' keychain services derived beside it — changing a byte here breaks every drop in flight
+# FernletSocial's heart sharing. The heart dead-drop: the drop's outer seal and the sidecars' at-rest
+# seal, the prekey store's keychain service and blob, the heart-drop pair secret and day tags, the
+# storage scope and the mesh stores' keychain services derived beside it — changing a byte here breaks
+# every drop in flight. Beside it, the heart ledger every heart path records into (its file and
+# persisted shapes), the routed heart body and the session hearts' ledger judge
 /FernletKit/Sources/FernletSocial/HeartSharing/                         @bowman-mw
 
 # FernletSocial's presence tags: the presence pair secret and the rotating epoch tag every friend pair

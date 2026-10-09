@@ -135,13 +135,14 @@ parks one whose token is outside `known`; its coordinator signs its introduction
 heartbeat under the session messages' tokens and titles, dispatches by them, and reads the wire2
 token, the legacy assumption and its receive bound (twice the capability count) off the capabilities,
 whose wire2 token the mesh's sealed sends read too and the mesh and presence managers advertise; its
-inventory digest tags every record with its family's record kind; its routed type registry builds its
-three rows from the routed types (the mesh manager hands it its namespace's); and its mesh manager
+inventory digest tags every record with its family's record kind; its namespace soundness rules hold
+the routed types, under which `FernletSocial`'s `FernletRoutedTypes` builds the three rows Fernlet's
+host hands the mesh manager's routed type registry; and its mesh manager
 names each of its own frames by role (`MeshPayloadRole`), signs it under the mesh messages' token
-for that role and resolves every token its payload door receives back to a role by them. Its mesh
-features' payload and capability tokens are still `PayloadType` and `ProximityCapability` cases until
-plan steps A0.5 and A0.7 move them: the manager sends a feature's payload under the case's token and
-keeps its feature handlers by token.
+for that role and resolves every token its payload door receives back to a role by them. The mesh
+features' payload and capability tokens are `PayloadType` and `ProximityCapability` cases, in
+`FernletSocial`'s features: each registers its handler on the mesh's payload door under its case's
+token and sends under it, and the manager keeps the handlers by token.
 
 `Radios.fernlet` carries the three presentation strings beside the radio values, and ProximityKit
 reads each of them off the namespace: `fernlet-mesh-`, the prefix the mesh and recipe-share radios'
@@ -159,26 +160,27 @@ or routed types are its own, drives the envelope, the coordinator and the mesh's
 drives a mesh manager's own sends and dispatch under a namespace whose mesh messages are its own,
 and holds the bounds ProximityKit's soundness rules apply to the bounds of the consumers they
 protect. `ProximityNamespace.fernlet` stays `.sound` under the vocabulary and presentation rules too.
-The test target's bindings file restores the routed suites' old call shapes (`MeshRoutedTypeToken`,
-the two `increment1` values, the mint without a registry) with `.fernlet`'s routed types, the
-membership verifier's, the adoption's and the digest's with `Family.fernlet`, and a peer's capability
-gate with `.fernlet`'s capabilities.
+The test target's bindings files restore the routed suites' old call shapes (`MeshRoutedTypeToken`,
+the mint without a registry and, in `FernletSocialTestBindings.swift`, the two `increment1` values)
+with `.fernlet`'s routed types, the membership verifier's, the adoption's and the digest's with
+`Family.fernlet`, and a peer's capability gate with `.fernlet`'s capabilities.
 
 **The peer-name policy.** `Installation.fernletApp` also carries
 `ProximityNamespace.PeerNames.fernlet`, how the Fernlet app shows a name a peer supplied: at most 24
 characters of it once sanitized (`ItemNameModeration.maxNameLength`, the cap Fernlet's item names
 share, read rather than respelled so the two keep one spelling), and "A friend" for a name with
 nothing displayable left. ProximityKit sanitizes a peer's name with its own copy of the generic
-sanitizer and applies the cap and the floor of the namespace each reader holds (the mesh, presence
-and recipe-share managers, the session message store, the envelope's two sender reads and the name
-display), and caps the recipe radio's advertised name at the same cap. Its soundness rules hold the
+sanitizer and applies the cap and the floor of the namespace each reader holds (its mesh and
+recipe-share managers, the envelope's two sender reads and the name display, and, through its
+public coercion, `FernletSocial`'s presence and mesh features), and caps the recipe radio's
+advertised name at the same cap. Its soundness rules hold the
 cap to at most 63 characters and at least a key fingerprint's 16 and the mesh instance-name prefix's
 length (13 for Fernlet's `fernlet-mesh-`), so the name display, which cuts a name to the cap before it
 looks, still hides both identifiers, and the floor to a non-empty name the sanitizer leaves unchanged;
 `ProximityVocabularyGoldenTests` pins both values to the literals ProximityKit shipped and holds
 ProximityKit's sanitizer to FernletDomainModel's byte for byte. The activities' titles, locations
-and joiners' names still go through `ItemNameModeration` (its fixed 24-character cap, with no floor)
-until activities leave ProximityKit with the mesh manager's feature parts (plan step A0.5). The test target's bindings file restores the
+and joiners' names go through `ItemNameModeration` instead (its fixed 24-character cap, with no
+floor), in `FernletSocial`'s activity manager. The test target's bindings file restores the
 old call shapes of the coercion, the envelope's sender reads, the advertised recipe name and the
 session message store's ingest with `.fernlet`'s policy.
 
@@ -281,10 +283,11 @@ ProximityKit:
   mints them (`trust`; `block` and `report`, with a stub for a key it has never seen), re-derives a
   legacy 8-character fingerprint from the signing key on every load and calls `onChange` after each write;
   the app's `FernletStore` owns it, seeds it from the snapshot and saves on `onChange`. It answers
-  ProximityKit's `ProximityTrustStore`, which the app's adapter hands over as `proximityTrustStore`
-  (every test double hands over its own vault), so the mesh's kept-friend gates and presence's heart
-  eligibility ask it whether a key is a remembered, unrevoked peer and whether it is blocked; the two
-  policies above wrap it.
+  ProximityKit's `ProximityTrustStore`, which the app's adapter hands `FernletSocial`'s features as
+  `FernletSocialHost.proximityTrustStore` (every test double hands over its own vault), so the
+  friend-state and moderation-report exchanges' kept-friend gates and the heart-eligibility check,
+  presence's and the session hearts', ask it whether a key is a remembered, unrevoked peer and
+  whether it is blocked; the two policies above wrap it.
 
 The protocols the policies and the vault answer (`ProximityTrustPolicy`, `ProximityTrustStore`), the
 audit type the coordinator reports in (`ProximitySessionAudit`), the roster entry and the coordinator
@@ -293,12 +296,11 @@ stay ProximityKit's.
 **What joins it later.** Nothing here stands in for the coordinator's display name or a per-mode
 service type: ProximityKit has neither, every caller passing the host's resolved name and the
 radios owning discovery on the namespace's service types. ProximityKit still names
-FernletDomainModel's vocabulary and records (`PayloadType`, `ProximityCapability`,
-`ItemNameModeration`, `ProximityTrustedPeerRecord`, `ProximityMode`) only on the lines
-`ProximityNamespaceBoundaryTests` allowlists: lines of its feature files and of the typed doors only
-those features go through, which leave with the mesh manager's feature parts (A0.5) or with the
-recipe profile (A0.7), and the coordinator's session-mode alias, which the connection profiles
-replace (A0.7, C5). The heart-drop and presence pair secrets derive through the door under the two
+FernletDomainModel's `PayloadType` and `ProximityMode` only on the lines
+`ProximityNamespaceBoundaryTests` allowlists: the typed doors only the recipe-share manager and
+Fernlet's features go through (the envelope's typed view of its token and the coordinator's typed
+send), which leave with the recipe profile (A0.7), and the coordinator's session-mode alias, which
+the connection profiles replace (A0.7, C5). The heart-drop and presence pair secrets derive through the door under the two
 salts declared here, from `FernletSocial`. C1
 adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
 connection profiles (friend mesh, presence, recipe, coach), app identities with per-app allow lists,

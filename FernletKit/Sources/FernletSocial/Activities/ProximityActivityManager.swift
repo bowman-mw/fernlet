@@ -2,9 +2,9 @@
 // FernletSocial/Activities
 //
 // The state + logic brain for Group Activities (Phase 6). Owned by FernletSocial's mesh composition
-// (`FernletMeshFeatures`, since ProximityKit plan step A0.5.8 moved it out of the mesh manager);
-// activities RIDE THE FRIEND MESH — no new radio, no new Bonjour service. The UWB dwell-commit that
-// forms a friend session IS the join ritual; every activity payload is exchanged only between
+// (`FernletMeshFeatures`); activities RIDE THE FRIEND MESH — no new radio, no new Bonjour service.
+// The UWB dwell-commit that forms a friend session IS the join ritual; every activity payload is
+// exchanged only between
 // committed, transport-verified peers.
 //
 // This type owns:

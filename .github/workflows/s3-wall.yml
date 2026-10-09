@@ -230,6 +230,25 @@ jobs:
         # come back under its old name. Each carries its matcher fixtured both ways, so the suite holds
         # 11 cells (7 before the step), and the line, MEASURED on a Mac on that tree (iPhone 17
         # simulator, iOS 26.5), ran 103 tests in 10 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.5 (2026-10-09) splits the routed mesh manager: the engine stays in
+        # ProximityKit and gains the public seams a host's features need (the payload token door,
+        # routed-type rows the host supplies, projection handlers and ledger judges registered by
+        # token, from whose committed answer the engine mints the ack evidence itself, one session
+        # observer, the capability-list provider and the vouch-list exchange), and Fernlet's mesh
+        # features move to FernletSocial under its `FernletMeshFeatures` composition (the capability
+        # list and the vouch list's content, the clothing shop, the moderation report relay and friend
+        # state, activities, chat, the session hearts with the heart ledger, and the session photos
+        # with their review). It leaves the ratchet at the step's end state, with no row of A0.5's
+        # and no A0.5 exit step: `FernletCryptoPurpose` named nowhere in ProximityKit code (rule 2's
+        # list went with its last row), 17 `fernlet` literals on 16 lines in 4 files, 5 domain-type
+        # lines in 2 files and `package` on 38 lines in 5 files, every row leaving with the recipe
+        # profile (A0.7), the session profile (A0.7 / C5) or the package (A1); rule 6 refuses 74 names
+        # (A0.5's 50 among them); and a twelfth cell (A0.5.10) holds ProximityKit's target to exactly
+        # FernletCrypto and FernletDomainModel, so neither edge the step dropped, FernletFoundation's
+        # or PrivateMediaStore's, comes back unseen. That cell is the line's one new test: 104 tests in
+        # 10 suites by declaration count (103 MEASURED + 1), which is the ARITHMETIC CHECK, never the
+        # number; no Mac has measured the line since, and its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -584,7 +603,9 @@ jobs:
         # state, two; the camera's line, one; the moved audit lines, seventeen; the session's order,
         # four. The floor stays 280, a true lower bound, until a Mac measures this eight-name list and
         # raises it to the count its result bundle reads: 280 + 58 = 338 is the ARITHMETIC CHECK, never
-        # the source.
+        # the source. A0.5.4 adds one more cell, a narrowed fixture registry that leaves the resident
+        # bound where the host's rows put it, so when plan step A0.5 ends 280 + 58 + 1 = 339 is the
+        # ARITHMETIC CHECK; no suite joined or left, and the floor stays 280 until that measurement.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh crypto-goldens 280 \
@@ -825,7 +846,11 @@ jobs:
         # after the strict build-for-testing and raises it to the count its result bundles read: 533
         # cells by declaration count over the 48 declarations (DeleteAllDataTests' two parameterized
         # cells counted once each) is the ARITHMETIC CHECK, never the number. RAISE it when a suite here
-        # gains a cell; never lower it in passing.
+        # gains a cell; never lower it in passing. The step's later commits add three cells to suites
+        # already here and no name: MeshNetworkManagerTests one (A0.5.1, a role-less token through the
+        # payload token door still meets the core switch first) and SessionMessageTests two (A0.5.9,
+        # the transcript generation's three moments and its one writer), so when plan step A0.5 ends
+        # 536 is the ARITHMETIC CHECK, and the floor stays 1 until that measurement.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-features 1 \
@@ -1380,7 +1405,15 @@ jobs:
         # left, so the NAME count stays 154 and CIGateSelectorBoundaryTests' entry is untouched. The cells
         # the rounds since 2026-09-24 added to suites already on this line have never been measured into
         # the floor, which stays 1353, a true lower bound (A0.4's runs of this list read 1367 tests in 154
-        # suites), until a Mac measures this exact list and raises it.
+        # suites), until a Mac measures this exact list and raises it. The step's later commits move four
+        # declarations on this list and no name: MeshSessionHeartTests +1 and
+        # MeshRoutedTypeRegistryConsumerTests +1 (A0.5.1: the heart gate is the engine's addressability
+        # query; the registered-type query agrees with the registry), MeshRoutedTypeRegistryTests -1
+        # (A0.5.2: the canonical-store column's raw-value pin went with the column) and
+        # MeshRoutedLockedDeviceTests +1 (A0.5.9: W2's FernletSocial half). So when plan step A0.5 ends
+        # 1367 + 2 = 1369 tests by declaration count, MeshRoutedTypeRegistryTests at 18 and
+        # MeshRoutedTypeRegistryConsumerTests at 11 (the dated rows above keep their counts), is the
+        # ARITHMETIC CHECK; the NAME count stays 154 and the floor 1353 until a Mac measures it.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1353 \

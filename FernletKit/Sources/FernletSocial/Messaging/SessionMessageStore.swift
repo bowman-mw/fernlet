@@ -9,8 +9,8 @@ import ProximityKit
 /// in-memory holder of that transcript, and it is deliberately **NOT Codable**: it is structurally
 /// impossible for a message to enter a `FernletSnapshot` (mirrors
 /// `MeshSessionRosterEntry`/`MeshFriendReviewBatch`, which are equally non-Codable memory-only
-/// state). Owned by FernletSocial's chat (`MeshSessionChat`; the mesh manager's until plan step
-/// A0.5.9), which drives the whole lifecycle with the mesh engine:
+/// state). Owned by FernletSocial's chat (`MeshSessionChat`), which drives the whole lifecycle
+/// with the mesh engine:
 ///  - **Outbound** — `MeshSessionChat.sendTempMessage(_:)` sanitizes, byte-bounds and frames the
 ///    text, mints a routed item for it through the engine's origination door, and appends the local
 ///    echo here **only once the mint staged**.
@@ -24,7 +24,7 @@ import ProximityKit
 ///  - **Clear** — the composition's session observer calls `clear()`, through the chat, at the three
 ///    moments the mesh advances its session-content generation, which is what the projection keys
 ///    on: EVERY session-end path, the next session formation and the start of a privacy wipe, each
-///    right after the engine's advance (plan step A0.5.9; the manager's one clear funnel before).
+///    right after the engine's advance (plan step A0.5.9).
 ///
 /// ## The transcript is a DERIVATION, not an append log (plan §10.3, §12)
 ///

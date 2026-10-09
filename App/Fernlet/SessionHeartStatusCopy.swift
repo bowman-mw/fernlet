@@ -2,8 +2,8 @@
 // Fernlet
 //
 // Network migration P6 item 6: the sentence an in-session heart's state shows.
-// `MeshSessionHearts.SessionHeartState` (FernletSocial's in-session hearts; the mesh manager's until
-// ProximityKit plan step A0.5.10) carries a frozen `SessionHeartFailure` token; this file, in
+// `MeshSessionHearts.SessionHeartState` (FernletSocial's in-session hearts) carries a frozen
+// `SessionHeartFailure` token; this file, in
 // the APP target, forks it into copy — the app bundle *is* `Bundle.main`, so a bare
 // `LocalizedStringKey` literal is the correct form and the catalog sync harvests it.
 //

@@ -1,8 +1,8 @@
 // FriendStateExchange.swift
 // FernletSocial/Mesh
 //
-// ProximityKit plan step A0.5.7: the fuzzy friend state's mesh wiring (Phase 4), moved from the mesh
-// manager with no byte, golden or audit change: the opt-in that gates the advertised `friendState`
+// ProximityKit plan step A0.5.7: the fuzzy friend state's mesh wiring (Phase 4): the opt-in that
+// gates the advertised `friendState`
 // capability; the `.friendState` handler, registered through the mesh's payload token door, which hands
 // a vault-trusted, unblocked friend's well-formed state to the app; and the commit-time send of this
 // device's own state to a vault-trusted friend, through the mesh's captured-slot feature send.
@@ -10,7 +10,7 @@
 // The mesh calls none of it directly. The handler reaches it through the payload registry, the opt-in
 // through the capability list the composition advertises (`FernletMeshCapabilities`), and the commit
 // through FernletSocial's mesh composition (`FernletMeshFeatures`), whose session observer calls the
-// commit leg after the moderation relay's, in the order the mesh manager ran them.
+// commit leg after the moderation relay's.
 
 import Foundation
 import FernletDomainModel

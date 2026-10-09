@@ -10,7 +10,7 @@ import FernletDomainModel
 /// `makeProximityIdentity()` and `meshRoutedTypeEntries` is already satisfied by existing store
 /// members (`isBlockedFingerprint`, `blockProximityPeer`). This extension also holds the two members
 /// the store's `FernletSocialHost` conformance (below) adds, `allowNearbyHearts` and
-/// `proximityTrustStore`, which were `ProximityHost` requirements until ProximityKit plan step A0.5.10.
+/// `proximityTrustStore`.
 /// Kept in the app target: this conformance is the one piece that cannot move into `ProximityKit`,
 /// since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
@@ -28,10 +28,10 @@ extension FernletStore: ProximityHost {
     /// value this composition root hands ProximityKit for the protocol labels, radio values, QR
     /// scheme, identity and mesh seal-key rows, storage names and log subsystem it reads (ProximityKit
     /// plan step A0.2.3; ProximityKit reads the radios' presentation strings off it too, and the
-    /// payload vocabulary it carries, its mesh engine's own frames' tokens included, while the mesh
-    /// features' tokens stay Fernlet's `PayloadType` cases until A0.5 and A0.7 and the activities'
-    /// and the moderation report's feature labels stay outside it until A0.5; the heart-drop and
-    /// moderation ban services are FernletSocial's, and the sealed-backup escrow's labels this app's).
+    /// payload vocabulary it carries, its mesh engine's own frames' tokens included; the mesh
+    /// features' tokens, Fernlet's `PayloadType` cases, the activities' and the moderation report's
+    /// feature labels and the heart-drop and moderation ban services are FernletSocial's, and the
+    /// sealed-backup escrow's labels this app's).
     /// The requirement has no default, so a host that left this out would not compile. The app's name
     /// surfaces hand `PeerNameDisplay` the same `.fernlet`.
     ///
@@ -69,12 +69,10 @@ extension FernletStore: ProximityHost {
     /// `KeyCustodyBoundaryTests` holds each of the store's three managers to an identity carrying the
     /// escrow key.
     func makeProximityIdentity() -> IdentityService { .fernletApp() }
-    /// Fernlet's routed-type rows beyond the mesh engine's resident ones: FernletSocial's
-    /// `FernletRoutedTypes.entries` over this store's namespace's routed types (ProximityKit plan step
-    /// A0.5.9) — the temporary-message and heart rows today, each spelled as the engine spelled it
-    /// before its feature left it, so the registry the mesh builds from its resident rows and these
-    /// holds the rows it built before. Read once, by the mesh's initializer. The requirement has no
-    /// default, so a host that left this out would not compile.
+    /// Fernlet's routed-type rows: FernletSocial's `FernletRoutedTypes.entries` over this store's
+    /// namespace's routed types (ProximityKit plan step A0.5.9) — the temporary-message, heart and
+    /// photo rows, every row the mesh's routed type registry holds. Read once, by the mesh's
+    /// initializer. The requirement has no default, so a host that left this out would not compile.
     var meshRoutedTypeEntries: [MeshRoutedTypeEntry] {
         FernletRoutedTypes.entries(proximityNamespace.family.vocabulary.routedTypes)
     }
