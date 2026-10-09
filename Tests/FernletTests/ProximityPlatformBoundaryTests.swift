@@ -30,12 +30,13 @@
 // deleted. Each transient row names the plan step that deletes it, and later steps only delete rows,
 // so the wall ends with its permanent rows: `ProtectedSidecar.swift`'s guarded UIKit import (the
 // protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's file once it
-// is guarded whole. Today's rows are 7 seams (6 transient: the coordinator's, the mesh manager's, the
-// recipe-share manager's and the local name's UIKit imports, the NearbyInteraction provider's
-// unguarded import and the Live Activity reaper's ActivityKit), 1 device-name row (the local name's
-// `UIDevice`), 1 directory row (the namespace's Application Support default) and 1 host-fact default
-// (the extension's storage root). Until ProximityKit builds for macOS on every push, this scan is the
-// only thing that sees a platform fact enter it.
+// is guarded whole. Today's rows are 4 seams (3 transient: the local name's UIKit import, the
+// NearbyInteraction provider's unguarded import and the Live Activity reaper's ActivityKit), 1
+// device-name row (the local name's `UIDevice`), 1 directory row (the namespace's Application Support
+// default) and 1 host-fact default (the extension's storage root); the coordinator's, the mesh
+// manager's and the recipe-share manager's vestigial UIKit imports left at plan step A0.6.1. Until
+// ProximityKit builds for macOS on every push, this scan is the only thing that sees a platform fact
+// enter it.
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -59,11 +60,9 @@ import Testing
 
     // MARK: The rows
 
-    /// The plan step that takes a platform fact out of ProximityKit.
+    /// The plan step that takes a platform fact out of ProximityKit. A step's case is deleted with its
+    /// last row, as A0.6.1's (the vestigial UIKit imports) was.
     enum ExitStep: String, Sendable {
-        /// The vestigial imports leave (A0.6.1): the coordinator's, the mesh manager's and the
-        /// recipe-share manager's `import UIKit`, which nothing in them uses.
-        case a061 = "A0.6.1"
         /// The fallback name comes from the host (A0.6.2): the local name's `UIDevice` read, and its
         /// file's `import UIKit` with it.
         case a062 = "A0.6.2"
@@ -151,17 +150,13 @@ import Testing
 
     /// Every platform module a ProximityKit file imports, exactly. Permanent: `ProtectedSidecar`'s
     /// protected-data retry, which observes UIKit's protected-data notification and compiles out without
-    /// it. Transient: the coordinator's, the mesh manager's and the recipe-share manager's vestigial
-    /// UIKit imports (A0.6.1); the local name's, which reads `UIDevice` (A0.6.2); the NearbyInteraction
+    /// it. Transient: the local name's UIKit, which reads `UIDevice` (A0.6.2); the NearbyInteraction
     /// provider's unguarded import, which becomes a whole-file seam under `#if os(iOS)` (A0.6.3); and the
-    /// Live Activity reaper's ActivityKit (A0.6.4).
+    /// Live Activity reaper's ActivityKit (A0.6.4). The coordinator's, the mesh manager's and the
+    /// recipe-share manager's UIKit imports, which nothing in them used, left at A0.6.1.
     static let seamRows: [SeamRow] = [
         SeamRow(path: "HeartSharing/ProtectedSidecar.swift", module: "UIKit",
                 guarded: .partial("canImport(UIKit)"), exit: nil),
-        SeamRow(path: "Engine/ProximityCoordinator.swift", module: "UIKit", guarded: .unguarded, exit: .a061),
-        SeamRow(path: "Mesh/MeshNetworkManager.swift", module: "UIKit", guarded: .unguarded, exit: .a061),
-        SeamRow(path: "RecipeSharing/ProximityRecipeShareManager.swift", module: "UIKit",
-                guarded: .unguarded, exit: .a061),
         SeamRow(path: "PeerDisplayNames.swift", module: "UIKit", guarded: .unguarded, exit: .a062),
         SeamRow(path: "Ranging/NIRangingSession.swift", module: "NearbyInteraction", guarded: .unguarded,
                 exit: .a063),
