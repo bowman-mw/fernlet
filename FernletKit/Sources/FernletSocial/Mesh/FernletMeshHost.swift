@@ -5,7 +5,8 @@
 // manager holds its own, and the one helper that pins it for a spawned task. Every feature object the
 // composition (`FernletMeshFeatures`) builds reads the host through this object, so FernletSocial's
 // mesh features hold the host in exactly one file, the one `MemoryLifecycleBoundaryTests`' ML4 audits
-// as a host holder; a file that holds this object instead is held by the same rule's second audit.
+// as a host holder; a file that holds this object, or takes it as a parameter, is held by the same
+// rule's second audit.
 // Since plan step A0.5.10 the host is the features' own refinement, `FernletSocialHost`, so a feature
 // reads the trust store, the trusted-peer records and the hearts opt-in through this object too.
 

@@ -604,7 +604,8 @@ jobs:
         # four. The floor stays 280, a true lower bound, until a Mac measures this eight-name list and
         # raises it to the count its result bundle reads: 280 + 58 = 338 is the ARITHMETIC CHECK, never
         # the source. A0.5.4 adds one more cell, a narrowed fixture registry that leaves the resident
-        # bound where the host's rows put it, so when plan step A0.5 ends 280 + 58 + 1 = 339 is the
+        # bound where the host's rows put it, and A0.5.13 one more, the App's own routed rows building
+        # the registry the cap cells read, so when plan step A0.5 ends 280 + 58 + 2 = 340 is the
         # ARITHMETIC CHECK; no suite joined or left, and the floor stays 280 until that measurement.
         run: |
           set -euo pipefail
@@ -642,7 +643,10 @@ jobs:
         # one cell each, a real store through the real `deleteAllData`, no sleep (the media-key
         # cell reads the host's own media-key rows, which the wipe must KEEP) — and its
         # VERIFY-BATCH NOTE says CI wiring must name all three, since `-only-testing:` would
-        # otherwise skip the two silently. So all three are named.
+        # otherwise skip the two silently. So all three are named. ProximityKit plan step A0.5.13
+        # (2026-10-09) adds one PrivacyWipeCoverageTests cell, the session photos' key caches dropped
+        # between the mesh's and presence's identity wipes, so the line holds 43 tests by declaration
+        # count, the ARITHMETIC CHECK, never the source; the floor stays 42 until a Mac measures it.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh privacy-wipe 42 \

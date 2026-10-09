@@ -235,7 +235,8 @@ struct PrivacyWipeCoverageTests {
         // The session photos' two at-rest key caches (the friend wall's and the pending corpus's),
         // dropped immediately after the mesh's identity wipe, inside the same `do` and before
         // presence's (since ProximityKit plan step A0.5.11). The token above is satisfied by the
-        // meal-photo store's own call and pins nothing of the session photos'; this one pins theirs.
+        // meal-photo store's own call and pins nothing of the session photos'; this one pins theirs,
+        // and `theSessionPhotoKeyCachesDropBetweenTheMeshAndPresenceIdentityWipes` pins where.
         "photos.invalidateEncryptionKeyCaches",
         // Away-hearts dead-drop state (Increment 3): prekeys, peer bundles, outbox, dedup + the
         // service's own identity cache. The remote purge is a SEPARATE row because it must run
@@ -794,6 +795,32 @@ struct PrivacyWipeCoverageTests {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
             #expect(source.contains("func wipeIdentityForDeleteAll"), "\(file) owns a live IdentityService but lost its wipe seam.")
         }
+    }
+
+    /// The session photos' two at-rest key caches drop inside the funnel's identity `do` (leg 11,
+    /// `rotateProximityIdentityAndPurgeDeadDrop(into:)`), after the mesh's identity wipe and before
+    /// presence's (ProximityKit plan step A0.5.13). Until plan step A0.5.11 the mesh manager's own wipe
+    /// dropped them right after its identity's, so a throwing mesh wipe skipped them and a throwing
+    /// presence or recipe-share wipe did not; the funnel keeps that only by where the call sits, and the
+    /// manifest's `photos.invalidateEncryptionKeyCaches` token says only that the call is in the funnel.
+    /// Comments and string bodies blanked, so neither prose nor a log line stands in for a call, and the
+    /// `do`'s braces matched, so a call moved past its `catch` is outside it.
+    @Test func theSessionPhotoKeyCachesDropBetweenTheMeshAndPresenceIdentityWipes() throws {
+        let store = try Self.fernletStoreSource()
+        let leg = Self.strippingCommentsAndStringLiteralBodies(
+            try Self.functionBody(matching: "func rotateProximityIdentityAndPurgeDeadDrop(", in: store))
+        let identity = try #require(MeshRoutedSourceScan.bracedBody(after: "do {", in: leg),
+                                    "the identity leg holds no braced `do`")
+        let mesh = try #require(identity.range(of: "meshNetworkManager.wipeIdentityForDeleteAll()"),
+                                "the mesh's identity wipe left the identity `do`")
+        let caches = try #require(identity.range(of: "photos.invalidateEncryptionKeyCaches()"),
+                                  "the session photos' key caches drop outside the identity `do`")
+        let presence = try #require(identity.range(of: "presenceManager.wipeIdentityForDeleteAll()"),
+                                    "presence's identity wipe left the identity `do`")
+        #expect(mesh.upperBound <= caches.lowerBound,
+                "the key caches drop before the mesh's identity wipe: a throwing mesh wipe no longer skips them")
+        #expect(caches.upperBound <= presence.lowerBound,
+                "the key caches drop after presence's identity wipe: a throwing presence wipe now skips them")
     }
 
     /// The rebuild hook is nil-tolerant in the funnel (an unwired TEST store must not report a

@@ -371,16 +371,17 @@ public final class FernletMeshFeatures {
             features.photos.dropRemovedMemberFromReview(fingerprint: fingerprint)
         }
 
-        /// The host pushed a changed routed access gate: the session photos mirror it, re-read their
-        /// indexes on a rising edge and recompute whether held photos can be shown, before the re-entry
-        /// pass the edge owes.
+        /// The host pushed a changed routed access gate: the session photos re-read their indexes on a
+        /// rising edge and recompute whether held photos can be shown, before the re-entry pass the
+        /// edge owes. They read the gate itself from the mesh, which stored it before this call, so the
+        /// value is not handed on.
         ///
         /// - Parameters:
-        ///   - gate: The gate as the host now knows it.
+        ///   - gate: The gate as the host now knows it, the mesh's stored value.
         ///   - isRising: Whether a ciphertext leg rose.
         ///   - now: The instant the host pushed it.
         func meshRoutedAccessGateDidChange(_ gate: MeshRoutedAccessGate, isRising: Bool, now: Date) {
-            features.photos.applyAccessGate(gate, isRising: isRising, now: now)
+            features.photos.applyAccessGate(isRising: isRising, now: now)
         }
     }
 }

@@ -101,7 +101,7 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// the session's end with the roster the mesh drained (``promoteEndedSessionIntoPendingReview(drainedRoster:)``),
 /// the session left (``forgetPhotoSession()``), the three scope changes (``noteScopeChange(_:)``), a
 /// removed member (``dropRemovedMemberFromReview(fingerprint:)``) and each change of the routed access
-/// gate (``applyAccessGate(_:isRising:now:)``).
+/// gate (``applyAccessGate(isRising:now:)``), whose value it reads from the mesh itself.
 ///
 /// `@MainActor` and `@Observable`, like the mesh manager, with its bookkeeping, stores and
 /// references `@ObservationIgnored`: views observe the wall, the live roll, the review batch,
@@ -247,12 +247,15 @@ public final class MeshSessionPhotos {
     /// this is reached only by an implausible number of peers.
     private static let maxSessionPhotos = 200
 
-    /// The routed access gate as the mesh last reported it (``applyAccessGate(_:isRising:now:)``, which
-    /// the composition's session observer calls at each change the host pushes), `.closed` until the
-    /// first: the mesh's own value, mirrored, never a second gate. Every held-photo decision reads it —
-    /// the decrypt seam (``reviewImageData(for:)``), the answers, a hold's duress refusal, the
-    /// persistent unreadable-wall offer and ``heldPhotosCanBeShown``.
-    @ObservationIgnored private var routedAccessGate: MeshRoutedAccessGate = .closed
+    /// The routed access gate, read from the mesh at each use (``MeshNetworkManager/routedAccessGate``,
+    /// which the host pushes through the mesh's `applyRoutedAccessGate(_:now:)`), and `.closed` while
+    /// there is no mesh: the mesh's own value, never a copy (plan step A0.5.13). The mesh stores a
+    /// changed gate before it writes `mesh.routedAccess.gateChanged` and before it tells the session
+    /// observer, so a read at any moment, inside either of those or not, sees the value the mesh holds,
+    /// as when this code was the mesh's own; before the host's first push both are `.closed`. Every
+    /// held-photo decision reads it: the decrypt seam (``reviewImageData(for:)``), the answers, a
+    /// hold's duress refusal, the persistent unreadable-wall offer and ``heldPhotosCanBeShown``.
+    private var routedAccessGate: MeshRoutedAccessGate { mesh?.routedAccessGate ?? .closed }
 
     /// The mesh the sender mints through and whose session facts the photos read. Weak: the composition
     /// owns the mesh, and the mesh retains this object's projection adapter, which holds this object.
@@ -422,19 +425,18 @@ public final class MeshSessionPhotos {
         }
     }
 
-    /// The host pushed a changed routed access gate, which the mesh stored and logged: this object's
-    /// mirror takes it, a rising ciphertext leg re-reads whichever photo index could not be read
-    /// (2026-09-30: a rising leg is also the moment a wall or pending index unreadable at a locked
-    /// launch becomes readable, and the mesh's re-entry pass that follows may project a routed photo
-    /// into the pending corpus, which must find its real index there), and whether the held photos can
-    /// be shown is recomputed — so an edge that owes the routed store nothing still re-reads them.
+    /// The host pushed a changed routed access gate, which the mesh stored and logged, and which
+    /// ``routedAccessGate`` reads from it: a rising ciphertext leg re-reads whichever photo index could
+    /// not be read (2026-09-30: a rising leg is also the moment a wall or pending index unreadable at a
+    /// locked launch becomes readable, and the mesh's re-entry pass that follows may project a routed
+    /// photo into the pending corpus, which must find its real index there), and whether the held
+    /// photos can be shown is recomputed — so an edge that owes the routed store nothing still re-reads
+    /// them.
     ///
     /// - Parameters:
-    ///   - gate: The gate as the host now knows it.
     ///   - isRising: Whether a ciphertext leg rose.
     ///   - now: The instant the host pushed it.
-    func applyAccessGate(_ gate: MeshRoutedAccessGate, isRising: Bool, now: Date) {
-        routedAccessGate = gate
+    func applyAccessGate(isRising: Bool, now: Date) {
         if isRising { retryDeferredPhotoIndexes(now: now) }
         refreshHeldPhotosCanBeShown()
     }
@@ -895,7 +897,7 @@ public final class MeshSessionPhotos {
     /// or both — and then runs the reconcile if both are now readable.
     ///
     /// Callers: a rising ciphertext leg of the routed access gate, as the mesh reports it
-    /// (``applyAccessGate(_:isRising:now:)``: the unlock or foreground that makes the
+    /// (``applyAccessGate(isRising:now:)``: the unlock or foreground that makes the
     /// `.completeFileProtection` files readable again), and the top of every hold and answer.
     /// Nothing re-read the wall before this existed: a wall deferred at a locked background launch
     /// was an empty album for the rest of the process.
