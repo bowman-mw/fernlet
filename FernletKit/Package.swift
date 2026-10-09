@@ -372,8 +372,8 @@ let package = Package(
         // host answers, NI ranging, the protocol namespace its host supplies, the routed mesh engine,
         // the presence radio and the ProximityHost seam protocol; and the Fernlet features still built
         // into it until plan steps A0.5 and A0.7 move them out (the mesh manager's feature parts, the
-        // heart ledger, the recipe-share manager, the clothing shop, activities, chat and the
-        // moderation report relay). The sealed-backup escrow beside its identity is the app's, through
+        // recipe-share manager, the clothing shop, activities, chat and the moderation report relay).
+        // The sealed-backup escrow beside its identity is the app's, through
         // the identity's provisioning participant. Fernlet's rules (its
         // namespace, trust vault and session policies) are FernletConnections', and the heart dead-drop,
         // presence's manager and tags, moderation's ban store and ledger, closeness, friend state and the
@@ -387,15 +387,16 @@ let package = Package(
         // `CryptographicPurpose` signing overloads the app's duress and probe signatures sign through
         // until C1) + FernletDomainModel (the features' models, and Fernlet's payload vocabulary,
         // trusted-peer record and session mode, which it names only on the lines
-        // ProximityNamespaceBoundaryTests allowlists) + FernletFoundation (the mesh manager's one
-        // FernletDate read, until A0.5). ProximityNamespaceBoundaryTests also refuses any type that
-        // left it for FernletSocial or the app, declared, extended or aliased here again. No FernletUI
+        // ProximityNamespaceBoundaryTests allowlists); no FernletFoundation edge since A0.5.10, when the
+        // mesh manager's one FernletDate read left with the session hearts. ProximityNamespaceBoundaryTests
+        // pins this list, and also refuses any type that left it for FernletSocial or the app, declared,
+        // extended or aliased here again. No FernletUI
         // edge and no SwiftUI view: the review sheets moved to FernletProximityUI (below). MainActor
         // default: the managers are @Observable @MainActor, and the wire values and pure crypto statics
         // are nonisolated within.
         .target(
             name: "ProximityKit",
-            dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel", "FernletFoundation"],
+            dependencies: ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
                 // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).

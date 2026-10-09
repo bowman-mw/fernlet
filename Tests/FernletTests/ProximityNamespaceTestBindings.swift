@@ -776,6 +776,19 @@ extension ProximityCoordinator.PeerIdentity {
     }
 }
 
+/// The seat's capability gate in the shape the suites were written against (plan step A0.5.10). It is
+/// main-actor, as the gate it restores is.
+extension PeerSlot {
+
+    /// `supports(capability.rawValue, in: host)`: the typed gate that left ProximityKit with its last
+    /// caller, the mesh manager's live heart-slot question (FernletSocial's session hearts ask it by the
+    /// capability's token since plan step A0.5.10), restored with its own body.
+    @MainActor
+    func supports(_ capability: ProximityCapability, in host: ProximityNamespace.Capabilities) -> Bool {
+        supports(capability.rawValue, in: host)
+    }
+}
+
 // MARK: - The typed feature registration (A0.5.8)
 //
 // ProximityKit registers a feature's payload handler by its token alone

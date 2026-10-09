@@ -364,7 +364,8 @@ struct MeshRoutedStoreIsolationTests {
     }
 
     /// `MeshHeartLedgerProof` can only be built inside the ledger's own file — the heart half of
-    /// durable-before-acknowledged, gated the same way.
+    /// durable-before-acknowledged, gated the same way. The ledger is FernletSocial's since plan step
+    /// A0.5.10, and the sweep reads both modules, so a construction in either is seen.
     @Test func theHeartLedgerProofCanOnlyBeMintedInTheLedgersOwnFile() throws {
         var constructionSites: [String] = []
         for (file, code) in try Self.proximitySources() where code.contains("MeshHeartLedgerProof(") {
@@ -378,7 +379,7 @@ struct MeshRoutedStoreIsolationTests {
             """
         )
         let ledger = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/HeartSharing/ProximityHeartLedger.swift")
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/HeartSharing/ProximityHeartLedger.swift")
         )
         #expect(ledger.contains("public nonisolated struct MeshHeartLedgerProof"))
         #expect(ledger.contains("fileprivate init(giftID:"))

@@ -2,10 +2,11 @@ import Foundation
 import FernletDomainModel
 import FernletFoundation
 import FernletScoring
-// `DerivedSignalRecord` (the mood trend) and `ReceivedHeartRecord` (the heart ledger's rows): the app
-// target builds with member-import visibility, so their members need their modules named here.
+// `DerivedSignalRecord` (the mood trend) and `ReceivedHeartRecord` (the heart ledger's rows, FernletSocial's
+// since ProximityKit plan step A0.5.10): the app target builds with member-import visibility, so their
+// members need their modules named here.
 import LocalPersistence
-import ProximityKit
+import FernletSocial
 
 /// The companion's emotion, assembled from what the store already holds (owner decision
 /// 2026-09-24).
@@ -15,7 +16,7 @@ import ProximityKit
 /// the Home companion's to add: the body-signal reading comes from the scene's `StressService`, the
 /// pet from Home's own tap, and a friend's heart from the heart ledger. The widget path never reads
 /// any of the three — ``widgetEmotionTimeline(defaults:)`` builds from the store-owned inputs alone,
-/// so the background refresh touches neither the ledger (a ProximityKit sidecar) nor HealthKit.
+/// so the background refresh touches neither the ledger (a FernletSocial sidecar) nor HealthKit.
 /// Nothing here is stored: every value is read fresh and handed to the pure `CompanionEmotionEngine`.
 extension FernletStore {
 

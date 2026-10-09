@@ -24,9 +24,10 @@ import FernletDomainModel
 
 /// The proximity host a presence rig hangs a manager off. Internal, not file-private: P9 item 9's
 /// `MeshP9PresenceSwapAcceptanceTests` builds the same rig, and a second copy of a host would be a
-/// second thing to keep in step with `ProximityHost`. Do not re-narrow it.
+/// second thing to keep in step with `FernletSocialHost` (presence's host since plan step A0.5.10). Do
+/// not re-narrow it.
 @MainActor
-final class MockPresenceQUICHost: ProximityHost {
+final class MockPresenceQUICHost: FernletSocialHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()

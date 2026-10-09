@@ -12,8 +12,9 @@
 //   * **Texts** — ``MeshMergedMessage``, union by `(author, message ID)`; the visible transcript is
 //     re-derived in total order `(claimedSentAt clamped to ±10 min of first-seen, senderFingerprint,
 //     messageID)` by ``SessionMessageStore``, this kind's one shipping holder.
-//   * **Hearts** — ProximityKit's public `MeshMergedHeart` for one commit, until the heart ledger and
-//     the heart commit join FernletSocial at plan step A0.5.10.
+//   * **Hearts** — ``MeshMergedHeart``, union by `(author, gift ID)`, in `HeartSharing/` beside the
+//     heart ledger and the heart commit (`MeshHeartCommit`), which joined this module with it at plan
+//     step A0.5.10.
 //
 // Moved verbatim. Nothing here is persisted and nothing here is wire: these are in-memory projections
 // built from payloads that already exist, and the gates that filter them are a view filter over an

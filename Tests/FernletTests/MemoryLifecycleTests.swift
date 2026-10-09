@@ -55,7 +55,7 @@ private final class LoopOwner {
 }
 
 @MainActor
-private final class MockLifecycleHost: ProximityHost {
+private final class MockLifecycleHost: FernletSocialHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()

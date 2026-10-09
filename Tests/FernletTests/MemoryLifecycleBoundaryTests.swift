@@ -18,7 +18,8 @@
 //  ML3  `withObservationTracking` re-arm loops live in exactly ONE place — `ObservationLoop` — whose
 //       owner-held-weakly-across-the-await contract ``ObservationLoopLifecycleTests`` covers. Any
 //       other use is a hand-rolled copy of the machinery that leaked before the extraction.
-//  ML4  A file holding an `unowned` `ProximityHost` may not contain an UNMARKED `Task` construction.
+//  ML4  A file holding an `unowned` `ProximityHost` (or, since ProximityKit plan step A0.5.10, its
+//       FernletSocial refinement `FernletSocialHost`) may not contain an UNMARKED `Task` construction.
 //       Those managers read a host they do not own, so a detached task that outlives the host reads
 //       destroyed memory and `swift_abortRetainUnowned` kills the whole process (P5 item 1a). Every
 //       such spawn goes through `spawnHostPinned(_:)`, which pins the host for the operation that
@@ -67,7 +68,8 @@ struct MemoryLifecycleBoundaryTests {
     static let minimumObserverFiles = 2
 
     /// Files holding an `unowned` `ProximityHost` — the four proximity managers, and since
-    /// ProximityKit plan step A0.5.5 the mesh features' `FernletMeshHost` beside them. A matcher that
+    /// ProximityKit plan step A0.5.5 the mesh features' `FernletMeshHost` beside them; presence and the
+    /// holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10. A matcher that
     /// finds fewer than the four managers has stopped looking; a new holder must be found and held to
     /// ML4, not silently skipped.
     static let minimumHostHoldingFiles = 4
@@ -270,10 +272,12 @@ struct MemoryLifecycleBoundaryTests {
     /// A block-based observer registration (`addObserver(forName:` possibly split across lines).
     static let blockObserverPattern = #"(?s)\.addObserver\(\s*forName:"#
 
-    /// A manager that holds its host `unowned`. Deliberately looser than the one spelling in the
-    /// tree today (`unowned let store: any ProximityHost`): a fifth manager written `unowned var`,
-    /// or holding a differently-named host, is SCANNED AND FAILED rather than silently skipped.
-    static let unownedHostPattern = #"unowned\s+(let|var)\s+\w+\s*:\s*any ProximityHost"#
+    /// A manager that holds its host `unowned`. Deliberately looser than the two spellings in the
+    /// tree today (`unowned let store: any ProximityHost`, and `any FernletSocialHost`, FernletSocial's
+    /// refinement, which presence and the mesh features' host holder take since ProximityKit plan step
+    /// A0.5.10): a fifth manager written `unowned var`, or holding a differently-named host, is
+    /// SCANNED AND FAILED rather than silently skipped.
+    static let unownedHostPattern = #"unowned\s+(let|var)\s+\w+\s*:\s*any (ProximityHost|FernletSocialHost)"#
 
     /// A file that holds the mesh features' host holder, FernletSocial's `FernletMeshHost`, which
     /// holds the host `unowned` for every feature object and declares their one `spawnHostPinned(_:)`
@@ -570,6 +574,12 @@ struct MemoryLifecycleBoundaryTests {
         #expect(Self.facts(for: "i.swift", source: host).holdsUnownedHost)
         #expect(Self.facts(for: "j.swift", source: "    private let store: any ProximityHost\n").holdsUnownedHost == false,
                 "a strongly held host is not ML4's subject")
+        let socialHost = "    private unowned let store: any FernletSocialHost\n"
+        let strongSocialHost = "    private let store: any FernletSocialHost\n"
+        #expect(Self.facts(for: "i2.swift", source: socialHost).holdsUnownedHost,
+                "FernletSocial's refinement of the host is ML4's subject as the host is")
+        #expect(Self.facts(for: "j2.swift", source: strongSocialHost).holdsUnownedHost == false,
+                "and a strongly held one is not")
         for spelling in ["Task {", "Task.detached {", "Task(priority: .background) {", "Task<Void, Never> {"] {
             let planted = Self.facts(for: "k.swift", source: host + "        \(spelling) await f() }\n")
             #expect(planted.hostPin.unmarkedSpawns == [2], "\(spelling) must trip ML4")
@@ -594,7 +604,7 @@ struct MemoryLifecycleBoundaryTests {
 
         let meshHostHolder = "    private let meshHost: FernletMeshHost\n"
         #expect(Self.holdsMeshHost(meshHostHolder), "a feature holding the composition's host holder is ML4's subject")
-        #expect(!Self.holdsMeshHost("final class FernletMeshHost {\n    unowned let host: any ProximityHost\n"),
+        #expect(!Self.holdsMeshHost("final class FernletMeshHost {\n    unowned let host: any FernletSocialHost\n"),
                 "the holder's own file holds the host, not a holder")
         #expect(!Self.holdsMeshHost("    let meshHost: FernletMeshHostSpy\n"), "a longer type name is not the holder")
         let plantedThere = Self.hostPinAudit(of: meshHostHolder + "        Task { await f() }\n")

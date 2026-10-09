@@ -3087,14 +3087,14 @@ struct FernletFeatureGoldenTests {
         let rows: [(reason: String, arrange: () -> Void)] = [
             ("heartsOff", { Self.allowNearbyHearts(false, in: rig.store) }),
             ("ledgerUnavailable", { Self.allowNearbyHearts(true, in: rig.store) }),
-            ("recipientLeft", { Self.wireHeartLedger(ledger, into: rig.manager) }),
-            ("alreadySending", { Self.claimSessionHeart(for: bob.fingerprint, on: rig.manager) }),
+            ("recipientLeft", { Self.wireHeartLedger(ledger, into: rig.features.hearts) }),
+            ("alreadySending", { Self.claimSessionHeart(for: bob.fingerprint, on: rig.features.hearts) }),
             ("cooldown", { ledger.recordHeartSent(to: bob.fingerprint) })
         ]
         // R2: bounded by the five causes.
         for row in rows {
             row.arrange()
-            let lines = MovedAuditLines.delivered { Self.sendSessionHeart(to: bob, from: rig.manager) }
+            let lines = MovedAuditLines.delivered { Self.sendSessionHeart(to: bob, from: rig.features.hearts) }
             #expect(Self.movedLines(lines) == [Self.auditLine("mesh.routedHeart.sendFailed", ["reason": row.reason])],
                     "the \(row.reason) refusal wrote \(lines)")
         }
@@ -3409,6 +3409,7 @@ struct FernletFeatureGoldenTests {
         defer { Self.tearDown(rig) }
         let manager = rig.manager
         let shop = rig.features.clothingShop
+        let hearts = rig.features.hearts
         try Self.armSessionToEnd(rig)
         try #require(manager.sessionRoster.count == 1 && manager.sessionPhotos.count == 1
                          && manager.pendingFriendReview == nil,
@@ -3416,8 +3417,8 @@ struct FernletFeatureGoldenTests {
         try #require(shop.peerCatalogs.count == 1 && shop.window == nil,
                      "the shop holds \(shop.peerCatalogs.count) catalogs")
         let transcript = rig.features.chat.sessionMessages
-        try #require(transcript.messages.count == 1 && manager.sessionHeartState != .idle,
-                     "the transcript holds \(transcript.messages.count), the heart \(manager.sessionHeartState)")
+        try #require(transcript.messages.count == 1 && hearts.sessionHeartState != .idle,
+                     "the transcript holds \(transcript.messages.count), the heart \(hearts.sessionHeartState)")
         try #require(!manager.isSessionLive, "the session is still live")
         let recorder = LifecycleRecorder()
         defer { recorder.uninstall() }
@@ -3428,7 +3429,7 @@ struct FernletFeatureGoldenTests {
         #expect(review?.entries.map(\.fingerprint) == [Self.bobFingerprint] && review?.photos.count == 1,
                 "the review holds \(String(describing: review))")
         #expect(shop.window != nil && transcript.messages.isEmpty
-                    && manager.sessionHeartState == .idle, "a leg left its state; the heart is \(manager.sessionHeartState)")
+                    && hearts.sessionHeartState == .idle, "a leg left its state; the heart is \(hearts.sessionHeartState)")
     }
 
     /// A new search holds what the last session left live before it mints the new session's ids: the
@@ -3521,14 +3522,17 @@ extension FernletFeatureGoldenTests {
     }
 
     /// The core's heart-eligibility predicate: today
-    /// `ProximityHost.isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`.
-    static func coreHeartEligibility(of signingKey: Data, fingerprint: String, in host: any ProximityHost) -> Bool {
+    /// `FernletSocialHost.isTrustedUnblockedPeer(signingPublicKey:fingerprint:)` (`ProximityHost`'s until
+    /// plan step A0.5.10, when this re-typed).
+    static func coreHeartEligibility(of signingKey: Data, fingerprint: String, in host: any FernletSocialHost) -> Bool {
         host.isTrustedUnblockedPeer(signingPublicKey: signingKey, fingerprint: fingerprint)
     }
 
     /// Presence's heart-eligibility gate: today
     /// `PresenceManager.isHeartEligible(signingPublicKey:fingerprint:in:)`.
-    static func presenceHeartEligibility(of signingKey: Data, fingerprint: String, in host: any ProximityHost) -> Bool {
+    static func presenceHeartEligibility(
+        of signingKey: Data, fingerprint: String, in host: any FernletSocialHost
+    ) -> Bool {
         PresenceManager.isHeartEligible(signingPublicKey: signingKey, fingerprint: fingerprint, in: host)
     }
 
@@ -3679,17 +3683,19 @@ extension FernletFeatureGoldenTests {
         rig.sendText(at: node, text)
     }
 
-    /// Readies `node` to send a heart: today a ledger on the manager (`heartLedger`), from
+    /// Readies `node` to send a heart: today a ledger on its composition's session hearts
+    /// (`heartLedger`; the manager's until plan step A0.5.10), from
     /// `MeshFoundingRig.isolatedHeartLedger(now:)`, and the hearts opt-in on its host
     /// (`FernletStore.setAllowNearbyHearts(_:)`), as the heart sender's gates read them.
     static func armHearts(at node: Int, in rig: MeshFoundingRig) {
-        rig.nodes[node].manager.heartLedger = rig.isolatedHeartLedger(now: Date())
+        rig.nodes[node].features.hearts.heartLedger = rig.isolatedHeartLedger(now: Date())
         rig.nodes[node].store.setAllowNearbyHearts(true)
     }
 
     /// Sends one heart from `node` to `friend` through the heart sender: today
-    /// `MeshFoundingRig.sendHeart(from:to:)`, which calls `MeshNetworkManager.sendSessionHeart(to:)`,
-    /// which originates the item under the heart ledger's token to `friend` alone.
+    /// `MeshFoundingRig.sendHeart(from:to:)`, which calls the node's composition's
+    /// `MeshSessionHearts.sendSessionHeart(to:)` (the manager's until plan step A0.5.10), which
+    /// originates the item under the host's heart row's token to `friend` alone.
     static func sendHeart(from node: Int, to friend: ProximityTrustedPeerRecord, in rig: MeshFoundingRig) {
         rig.sendHeart(from: node, to: friend)
     }
@@ -3847,7 +3853,8 @@ extension FernletFeatureGoldenTests {
     typealias HostedActivity = ProximityActivityManager.HostedActivity
     /// A joined activity, today `ProximityActivityManager.JoinedActivity`.
     typealias JoinedActivity = ProximityActivityManager.JoinedActivity
-    /// A received heart, today ProximityKit's `ReceivedHeartRecord`.
+    /// A received heart, today FernletSocial's `ReceivedHeartRecord` (ProximityKit's until plan step
+    /// A0.5.10, when it moved with the heart ledger).
     typealias HeartRecord = ReceivedHeartRecord
 
     /// The encoder the mesh writes every feature payload with: today a `JSONEncoder()` with no
@@ -3874,14 +3881,16 @@ extension FernletFeatureGoldenTests {
         ModerationReportRelay.verifiedRows(from: payload, senderSigningKey: sender, now: now)
     }
 
-    /// The heart ledger's file in `root`: today `ProximityHeartLedger.fileURL(in:)`.
+    /// The heart ledger's file in `root`: today `ProximityHeartLedger.fileURL(in:)`, FernletSocial's
+    /// since plan step A0.5.10.
     static func heartLedgerFile(in root: URL) -> URL {
         ProximityHeartLedger.fileURL(in: root)
     }
 
     /// A heart ledger over `fileURL` whose clock stands at `clock`, reading and writing through the
     /// closures given, or through the file system for nil, the default: today
-    /// `ProximityHeartLedger(fileURL:now:readData:writeData:)`. Re-pointed at A0.5.10.
+    /// `ProximityHeartLedger(fileURL:now:readData:writeData:)`, FernletSocial's since plan step A0.5.10,
+    /// where it moved whole with this initializer.
     static func heartLedger(fileURL: URL, clock: Date, reading: ((URL) throws -> Data)? = nil,
                             writing: ((Data, URL) throws -> Void)? = nil) -> ProximityHeartLedger {
         ProximityHeartLedger(fileURL: fileURL, now: { clock }, readData: reading, writeData: writing)
@@ -4044,8 +4053,8 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Makes `peer` a kept friend in `store`'s vault: today `ProximityTrustVault.trust(_:mode:)` on
-    /// `FernletStore.proximityTrustVault`, which the mesh's kept-friend gates read through
-    /// `proximityTrustStore` and its vouch list through `trustedProximityPeers`, as
+    /// `FernletStore.proximityTrustVault`, which the features' kept-friend gates read through
+    /// `FernletSocialHost.proximityTrustStore` and the vouch list through `trustedProximityPeers`, as
     /// `MeshRoutedHeartTests` seeds its friends.
     static func keep(_ peer: ProximityCoordinator.PeerIdentity, in store: FernletStore) {
         store.proximityTrustVault.trust(peer, mode: .friend)
@@ -4228,29 +4237,30 @@ extension FernletFeatureGoldenTests {
         manager.proximityCoordinator(coordinator, didReceive: frame, plaintext: frame.payload, from: nil)
     }
 
-    /// Sends one in-session heart to `friend` from `manager`: today `sendSessionHeart(to:)`. Re-pointed
-    /// at A0.5.10.
-    static func sendSessionHeart(to friend: ProximityTrustedPeerRecord, from manager: MeshNetworkManager) {
-        manager.sendSessionHeart(to: friend)
+    /// Sends one in-session heart to `friend` from `hearts`: today the composition's session hearts'
+    /// `sendSessionHeart(to:)` (FernletSocial's `MeshSessionHearts`; the manager's until plan step
+    /// A0.5.10, when this re-pointed).
+    static func sendSessionHeart(to friend: ProximityTrustedPeerRecord, from hearts: MeshSessionHearts) {
+        hearts.sendSessionHeart(to: friend)
     }
 
-    /// Sets the hearts opt-in the mesh reads off its host: today `FernletStore.setAllowNearbyHearts(_:)`,
-    /// read through `ProximityHost.allowNearbyHearts`. Re-pointed at A0.5.10, when the requirement moves
-    /// to `FernletSocialHost`.
+    /// Sets the hearts opt-in the session hearts read off their host: today
+    /// `FernletStore.setAllowNearbyHearts(_:)`, read through `FernletSocialHost.allowNearbyHearts` (a
+    /// `ProximityHost` requirement until plan step A0.5.10).
     static func allowNearbyHearts(_ allowed: Bool, in store: FernletStore) {
         store.setAllowNearbyHearts(allowed)
     }
 
-    /// Wires `ledger` as the one `manager`'s session hearts gate and record on: today `heartLedger`.
-    /// Re-pointed at A0.5.10.
-    static func wireHeartLedger(_ ledger: ProximityHeartLedger, into manager: MeshNetworkManager) {
-        manager.heartLedger = ledger
+    /// Wires `ledger` as the one `hearts` gate and record on: today their `heartLedger` (the manager's
+    /// until plan step A0.5.10, when this re-pointed).
+    static func wireHeartLedger(_ ledger: ProximityHeartLedger, into hearts: MeshSessionHearts) {
+        hearts.heartLedger = ledger
     }
 
-    /// Takes the in-flight heart claim for `fingerprint` and leaves it held: today
-    /// `claimSessionHeartForTesting(_:)`. Re-pointed at A0.5.10.
-    static func claimSessionHeart(for fingerprint: String, on manager: MeshNetworkManager) {
-        manager.claimSessionHeartForTesting(fingerprint)
+    /// Takes the in-flight heart claim for `fingerprint` and leaves it held: today the session hearts'
+    /// `claimSessionHeartForTesting(_:)` (the manager's until plan step A0.5.10, when this re-pointed).
+    static func claimSessionHeart(for fingerprint: String, on hearts: MeshSessionHearts) {
+        hearts.claimSessionHeartForTesting(fingerprint)
     }
 
     /// Opens the 13+ chat gate on `chat`: today the composition's chat's `chatAllowedProvider`
@@ -4437,7 +4447,8 @@ extension FernletFeatureGoldenTests {
     /// (``holdLive(_:on:)``); bob's catalog held by the opted-in shop (`MeshClothingShop.receiveCatalog`,
     /// over group 20's frozen catalog in an envelope bob signs); one message (the composition's chat's
     /// `SessionMessageStore.appendOutgoing` since A0.5.9); and a heart to bob refused with the hearts opt-in off
-    /// (`sendSessionHeart(to:)`), so the heart state is not idle. Re-pointed leg by leg at A0.5.6 (shop),
+    /// (the composition's hearts' `sendSessionHeart(to:)`), so the heart state is not idle. Re-pointed
+    /// leg by leg at A0.5.6 (shop),
     /// A0.5.9 (chat), A0.5.10 (hearts) and A0.5.11 (photos, review).
     static func armSessionToEnd(_ rig: SessionRig) throws {
         let manager = rig.manager
@@ -4455,13 +4466,14 @@ extension FernletFeatureGoldenTests {
             id: uuid("7E57A9E0-4841-4E44-8000-000000000031"), senderFingerprint: aliceFingerprint,
             senderDisplayName: "Alice", text: "frozen", sentAt: Date(timeIntervalSinceReferenceDate: 780_000_000))
         rig.store.settings.allowNearbyHearts = false
-        manager.sendSessionHeart(to: bobAsFriend)
+        rig.features.hearts.sendSessionHeart(to: bobAsFriend)
     }
 
     /// Notes each leg of a session end into `recorder` where it begins: the roster's first change (the
     /// merge empties it), the photo move's audit line (`mesh.session.photosPendingReview`), and the first
     /// changes of the shop window (the rig's composition's shop since plan step A0.5.6), the transcript
-    /// (its chat's since A0.5.9) and the heart state. Through Observation (`withObservationTracking`, one
+    /// (its chat's since A0.5.9) and the heart state (its session hearts' since A0.5.10). Through
+    /// Observation (`withObservationTracking`, one
     /// change each, as `MeshFavoriteObservationTests` observes the manager) and
     /// `FernletAuditLog.addCaptureHandler`.
     /// Nothing the teardown runs before its legs writes any of the five. Re-pointed with each leg.
@@ -4471,7 +4483,7 @@ extension FernletFeatureGoldenTests {
         recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview")
         withObservationTracking { _ = rig.features.clothingShop.window } onChange: { recorder.note("shopWindow") }
         withObservationTracking { _ = rig.features.chat.sessionMessages.messages } onChange: { recorder.note("transcriptClear") }
-        withObservationTracking { _ = manager.sessionHeartState } onChange: { recorder.note("heartReset") }
+        withObservationTracking { _ = rig.features.hearts.sessionHeartState } onChange: { recorder.note("heartReset") }
     }
 
     /// Ends the session on this device, telling nobody: today `leaveSession()`, which tears down through

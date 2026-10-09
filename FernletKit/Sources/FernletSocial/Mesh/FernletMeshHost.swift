@@ -6,11 +6,14 @@
 // composition (`FernletMeshFeatures`) builds reads the host through this object, so FernletSocial's
 // mesh features hold the host in exactly one file, the one `MemoryLifecycleBoundaryTests`' ML4 audits
 // as a host holder; a file that holds this object instead is held by the same rule's second audit.
+// Since plan step A0.5.10 the host is the features' own refinement, `FernletSocialHost`, so a feature
+// reads the trust store, the trusted-peer records and the hearts opt-in through this object too.
 
 import Foundation
 import ProximityKit
 
-/// The host Fernlet's mesh features read: the app's ``ProximityHost``, held `unowned`, its protocol
+/// The host Fernlet's mesh features read: the app's ``FernletSocialHost`` (ProximityKit's
+/// ``ProximityHost`` and the requirements only Fernlet's features read), held `unowned`, its protocol
 /// namespace, read once, and the one helper that pins the host for a spawned task.
 ///
 /// `unowned` because the host owns the composition that owns this object (FernletStore's `lazy var`
@@ -22,7 +25,7 @@ import ProximityKit
 final class FernletMeshHost {
 
     /// The app's host, which owns the composition this object belongs to.
-    unowned let host: any ProximityHost
+    unowned let host: any FernletSocialHost
 
     /// The host's protocol identity, read once from ``host`` at construction and kept as the
     /// features' own copy, so no later read reaches back to the host. `nonisolated`: inert
@@ -32,7 +35,7 @@ final class FernletMeshHost {
     /// Holds `host` and reads its namespace once.
     ///
     /// - Parameter host: The app's host; the caller keeps it alive.
-    init(host: any ProximityHost) {
+    init(host: any FernletSocialHost) {
         self.host = host
         self.namespace = host.proximityNamespace
     }

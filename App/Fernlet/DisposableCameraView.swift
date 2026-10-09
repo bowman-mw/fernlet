@@ -645,8 +645,8 @@ struct DisposableCameraView: View {
     private static let shutterCream = Color(red: 0.984, green: 0.969, blue: 0.933)
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
-    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels and the session chat
-    /// live there.
+    /// Fernlet's mesh features over ``manager``: the friend vouch list's labels, the session chat and
+    /// the in-session hearts live there.
     private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level session-end review (session photos U3): told when the Develop review is up, and
     /// around this view's answer.
@@ -1909,9 +1909,9 @@ struct DisposableCameraView: View {
         // **Three-way since P6 item 6, and the order matters** — it lives in
         // `sessionHeartTransport(meshLinked:presenceReachable:meshAddressable:)` below, which is
         // where its reasoning and its behavioural pin are. This body only reads the three seams.
-        let meshLinked = manager.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
+        let meshLinked = features.hearts.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
         let presenceReachable = store.presenceManager.isReachable(fingerprint: friend.fingerprint)
-        let meshAddressable = manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
+        let meshAddressable = features.hearts.canSendSessionHeart(toFingerprint: friend.fingerprint)
         let transport = Self.sessionHeartTransport(
             meshLinked: meshLinked, presenceReachable: presenceReachable,
             meshAddressable: meshAddressable
@@ -1929,7 +1929,7 @@ struct DisposableCameraView: View {
             // Haptic acknowledgement so the tap is never silent (TF b19 item 5 tier 1).
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             switch transport {
-            case .mesh: manager.sendSessionHeart(to: friend)
+            case .mesh: features.hearts.sendSessionHeart(to: friend)
             case .presence: store.presenceManager.sendHeart(to: friend)
             case .unavailable: break
             }
@@ -2008,7 +2008,7 @@ struct DisposableCameraView: View {
 
     /// The MESH path's status line, localized by construction (P6 item 6).
     private var sessionHeartStatusKey: LocalizedStringKey? {
-        SessionHeartStatusCopy.line(manager.sessionHeartState)
+        SessionHeartStatusCopy.line(features.hearts.sessionHeartState)
     }
 
     /// The PRESENCE fallback's status line, still a composed `String` — `PresenceManager`'s own
@@ -2036,8 +2036,8 @@ struct DisposableCameraView: View {
         guard store.settings.allowNearbyHearts, !store.settings.allowNearbyPresence else { return false }
         return manager.sessionParticipants.contains { participant in
             guard !participant.isLocal, let friend = trustedFriend(for: participant) else { return false }
-            return !manager.canSendSessionHeart(toFingerprint: friend.fingerprint)
-                && !manager.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
+            return !features.hearts.canSendSessionHeart(toFingerprint: friend.fingerprint)
+                && !features.hearts.hasLiveHeartSlot(forFingerprint: friend.fingerprint)
         }
     }
 

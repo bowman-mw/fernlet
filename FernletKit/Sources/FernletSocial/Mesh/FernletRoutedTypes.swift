@@ -10,9 +10,9 @@
 // photo row with photos (A0.5.11).
 //
 // The one FernletSocial file that reads a routed type off the namespace (the field-homes wall in
-// `MeshRoutedStoreIsolationTests`): the composition registers each feature's projection adapter, and
-// each sender mints, under its row's token from here, so a host with another namespace registers and
-// mints under its own spellings. The registry is token-keyed, so the order of these rows, and theirs
+// `MeshRoutedStoreIsolationTests`): the composition registers each feature's projection or ledger
+// adapter, and each sender mints, under its row's token from here, so a host with another namespace
+// registers and mints under its own spellings. The registry is token-keyed, so the order of these rows, and theirs
 // against the engine's, reaches no door and no byte.
 
 import Foundation
@@ -24,13 +24,18 @@ import ProximityKit
 /// A value: the mesh still admits, resolves and forwards by its own registry alone, built once from
 /// its resident rows and ``entries``, and asks that registry whether a row is registered before a
 /// sender mints under the row's token. The rows by name say which token is whose — the token the chat
-/// sends under and the composition registers its projection adapter under — and ``entries`` hands
+/// sends under and the composition registers its projection adapter under, and the token the session
+/// hearts send under and the composition registers their ledger judge under — and ``entries`` hands
 /// them all to the host's ``ProximityHost/meshRoutedTypeEntries``.
 public nonisolated struct FernletRoutedTypes: Equatable, Sendable {
 
     /// The temporary-message row: the live-session chat's routed type (P6 item 4), FernletSocial's
     /// since the chat left the engine (plan step A0.5.9).
     public let text: MeshRoutedTypeEntry
+
+    /// The heart row: the in-session hearts' routed type (P6 item 6), whose final ack is the ledger
+    /// judgement, FernletSocial's since the hearts left the engine (plan step A0.5.10).
+    public let heart: MeshRoutedTypeEntry
 
     /// Fernlet's rows over `routedTypes`, each row's token read off them: this file spells no routed
     /// type of its own.
@@ -54,10 +59,25 @@ public nonisolated struct FernletRoutedTypes: Equatable, Sendable {
             expiry: .meshHardDeadlinePlusGrace,
             contentScope: .session
         )
+        // The heart row's cap is the THIRD narrowed one (P6 item 6), and its formula has a **zero**
+        // payload term: a heart body is header-only, so the widest ciphertext it can measure is
+        // this family's framed header allowance plus the seal's overhead. `destinations` is
+        // `.singleRecipient` since item 6 — the one re-declaration the freezing rule (ProximityKit's
+        // `MeshRoutedTypeEntry`) allows a never-minted row, and it is spent.
+        self.heart = MeshRoutedTypeEntry(
+            token: routedTypes.heart,
+            maxItemByteCount: UInt64(MeshRoutedHeartBody.maxSealedBlobByteCount),
+            destinations: .singleRecipient,
+            relayRetention: .originRetainsUntilDeparture,
+            finalAck: .foregroundDecryptAndLedgerCommit,
+            expiry: .meshHardDeadlinePlusGrace,
+            contentScope: .persistent
+        )
     }
 
-    /// Every row, the host's half of the mesh's registry: today the temporary-message row.
-    public var entries: [MeshRoutedTypeEntry] { [text] }
+    /// Every row, the host's half of the mesh's registry: today the temporary-message row and the heart
+    /// row.
+    public var entries: [MeshRoutedTypeEntry] { [text, heart] }
 
     /// The rows a host answers ``ProximityHost/meshRoutedTypeEntries`` with:
     /// `FernletRoutedTypes(routedTypes).entries`.

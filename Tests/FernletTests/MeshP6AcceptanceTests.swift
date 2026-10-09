@@ -91,7 +91,7 @@ enum MeshP6Acceptance {
         let day = MeshRoutedFixtureClock.createdAt
         // R2: a fixed two-element list.
         for index in 0..<2 {
-            rig.nodes[index].manager.heartLedger = rig.isolatedHeartLedger(now: day)
+            rig.nodes[index].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
             rig.nodes[index].store.setAllowNearbyHearts(true)
         }
         rig.trustPeer(at: 1, asSeenFrom: 0)
@@ -209,9 +209,9 @@ struct MeshP6PairwiseIdentityAcceptanceTests {
         let toOne = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "One"))
         let toZero = try #require(rig.sendHeartReturningItemID(from: 1, to: 0, name: "Zero"))
         try await rig.settle()
-        #expect(rig.nodes[1].manager.heartLedger?.receivedHearts.map(\.id) == [toOne],
+        #expect(rig.nodes[1].features.hearts.heartLedger?.receivedHearts.map(\.id) == [toOne],
                 "node 1's ledger holds exactly the gift node 0 sent it")
-        #expect(rig.nodes[0].manager.heartLedger?.receivedHearts.map(\.id) == [toZero],
+        #expect(rig.nodes[0].features.hearts.heartLedger?.receivedHearts.map(\.id) == [toZero],
                 "and node 0's holds exactly the gift node 1 sent it")
     }
 
@@ -668,7 +668,7 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         let rig = try await MeshP6Acceptance.heartedPair("p6heart-defer")
         defer { rig.teardown() }
         var judged: [UUID] = []
-        rig.nodes[1].manager.onHeartJudgedForTesting = { judged.append($0.giftID) }
+        rig.nodes[1].features.hearts.onHeartJudgedForTesting = { judged.append($0.giftID) }
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             rig.nodes[1].manager.applySessionEvent(.backgrounded)
         }
@@ -680,7 +680,7 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         let gift = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "One"))
         try await rig.settle()
         #expect(judged.isEmpty, "a backgrounded recipient must judge nothing")
-        #expect(rig.nodes[1].manager.heartLedger?.receivedHearts.isEmpty == true,
+        #expect(rig.nodes[1].features.hearts.heartLedger?.receivedHearts.isEmpty == true,
                 "and no ledger row stands behind a judgement that never happened")
         let held = rig.routedIndex(1)?.items.first { $0.key.itemID == gift }
         #expect(held?.chunks.isEmpty == false, """
@@ -694,7 +694,7 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         rig.pushGateEdge(at: 1)
         try await rig.settle()
         #expect(judged == [gift], "the re-entry judges the held gift EXACTLY once, not twice")
-        #expect(rig.nodes[1].manager.heartLedger?.receivedHearts.map(\.id) == [gift],
+        #expect(rig.nodes[1].features.hearts.heartLedger?.receivedHearts.map(\.id) == [gift],
                 "and the ledger holds exactly one row for it")
     }
 }

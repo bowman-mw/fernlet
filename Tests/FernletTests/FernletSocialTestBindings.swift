@@ -71,8 +71,8 @@ extension MeshRoutedTypeRegistry {
 
     /// `increment1(_:hostEntries:)` over `routedTypes` with Fernlet's host rows over the same routed
     /// types, `FernletRoutedTypes.entries(routedTypes)`: the registry the engine's
-    /// `increment1(_:)` built before the temporary-message row left it. Distinct from
-    /// ProximityKit's function by its labels.
+    /// `increment1(_:)` built before the temporary-message row (plan step A0.5.9) and the heart row
+    /// (A0.5.10) left it. Distinct from ProximityKit's function by its labels.
     static func increment1(_ routedTypes: ProximityNamespace.RoutedTypes) -> MeshRoutedTypeRegistry {
         increment1(routedTypes, hostEntries: FernletRoutedTypes.entries(routedTypes))
     }
