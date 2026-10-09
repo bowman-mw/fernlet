@@ -3,18 +3,30 @@ import FernletConnections
 import FernletSocial
 import Foundation
 import FernletDomainModel
+import UIKit
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
-/// `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`,
-/// `makeProximityIdentity()` and `meshRoutedTypeEntries` is already satisfied by existing store
-/// members (`isBlockedFingerprint`, `blockProximityPeer`). This extension also holds the two members
-/// the store's `FernletSocialHost` conformance (below) adds, `allowNearbyHearts` and
-/// `proximityTrustStore`.
+/// `proximityFallbackDisplayName`, `proximityNamespace`, `proximityInstallBinding`,
+/// `makeProximityTrustPolicy()`, `makeProximityIdentity()` and `meshRoutedTypeEntries` is already
+/// satisfied by existing store members (`isBlockedFingerprint`, `blockProximityPeer`). This extension
+/// also holds the two members the store's `FernletSocialHost` conformance (below) adds,
+/// `allowNearbyHearts` and `proximityTrustStore`.
 /// Kept in the app target: this conformance is the one piece that cannot move into `ProximityKit`,
 /// since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
     var proximityDisplayName: String { settings.proximityDisplayName }
+    /// The name this device goes by on the radios when its user set none, which
+    /// `resolvedProximityDisplayName` falls back to: `UIDevice.current.name`, the expression
+    /// ProximityKit read itself until plan step A0.6.2, read at the same moments (on the main actor,
+    /// on every resolution, never cached, and only when the user's own name trims to nothing), so the
+    /// recipe radio's TXT `name`, the coordinator's disclosed name and every FernletSocial sender name
+    /// carry the bytes they did. iOS 16+ reports the generic model name without the
+    /// user-assigned-device-name entitlement, which Fernlet does not hold. The requirement has no
+    /// default, so a host that left this out would not compile; `FernletFeatureGoldenTests`' group 30
+    /// holds it to this device's name. `proximityDisplayName` above stays the raw setting: the
+    /// activities and the heart dead-drop send it as it is, so an unnamed user sends "" there.
+    var proximityFallbackDisplayName: String { UIDevice.current.name }
     /// The live hearts opt-in — `PresenceManager` gates both the outbound send and the inbound
     /// drop on this (mesh redesign Phase 4b), and the session hearts their send and their ledger
     /// judge's readiness. Witnesses `FernletSocialHost.allowNearbyHearts`, overriding its `true`

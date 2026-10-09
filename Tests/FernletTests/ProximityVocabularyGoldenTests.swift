@@ -70,9 +70,12 @@
 //     `hardwareUnsupported`), and a coordinator over one introducing itself as `rssi` with exactly the
 //     keys `capabilities` and `rangingMode`, no discovery token and no prekey bundle, and waiting at the
 //     manual-commit gate for an `rssi` peer and for a `uwb` peer that sends a token, its provider never
-//     started (plan step A0.6, before ProximityKit's doors ask their host for the provider). What a
-//     UWB iPhone sends instead, no simulator shows: the provider Fernlet's host hands its doors, and
-//     the local name's rule on Fernlet's host, are `FernletFeatureGoldenTests`' group 30.
+//     started (plan step A0.6, before ProximityKit's doors ask their host for the provider); and the
+//     local name over a host's own fallback (plan step A0.6.2, when the host began stating it): the
+//     setting trimmed of spaces and tabs and never of line breaks, or, when nothing is left, the host's
+//     fallback exactly as the host states it. What a UWB iPhone sends instead, no simulator shows: the
+//     provider Fernlet's host hands its doors is `FernletFeatureGoldenTests`' group 30, as is the
+//     fallback Fernlet's host states, this device's name.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -93,7 +96,9 @@
 // ISO-8601 to the second), which a probe over unrelated keys confirmed on the iOS 26.5 simulator.
 // The model was proved honest first by reproducing
 // `MeshMembershipEventGoldenTests.goldenRecordsHashHex`; nothing here was copied out of Swift's
-// output.
+// output. Group 14's local-name rows were confirmed the same way, by a Python predicate for
+// Foundation's `.whitespaces` (`c == "\t"` or Unicode category Zs; `str.strip()` is not that
+// predicate: it strips a line break).
 
 import Combine
 import FernletConnections
@@ -2425,6 +2430,40 @@ struct ProximityVocabularyGoldenTests {
         }
     }
 
+    /// The local name's rows over a host's own fallback: a `proximityDisplayName` setting, the fallback
+    /// its host states and the name it resolves to. Spaces and tabs (`CharacterSet.whitespaces`: Unicode
+    /// Zs, the no-break space among them, and U+0009) are trimmed from both ends of the setting and line
+    /// breaks are not; the fallback is taken only when nothing is left, and exactly as the host states
+    /// it, never trimmed. Written by hand, and confirmed by a Python predicate (`c == "\t"` or category
+    /// Zs), never by `str.strip()`, which strips a line break.
+    static let fallbackNameRows: [(setting: String, fallback: String, resolved: String)] = [
+        ("Ada", "Golden Device", "Ada"),
+        ("  Ada  ", "Golden Device", "Ada"),
+        ("\tAda\t", "Golden Device", "Ada"),
+        ("\u{00A0}Ada\u{00A0}", "Golden Device", "Ada"),
+        ("", "Golden Device", "Golden Device"),
+        ("   ", " Spaced ", " Spaced "),
+        ("\n", "Golden Device", "\n"),
+        ("\nAda\n", "Golden Device", "\nAda\n")
+    ]
+
+    /// `resolvedProximityDisplayName` over a host that states its own fallback (plan step A0.6.2): the
+    /// setting trimmed by ``fallbackNameRows``' rule, or, when that leaves nothing, the host's fallback,
+    /// untrimmed. ProximityKit's rule alone, on a host of `.fernlet` this cell builds per row; the
+    /// fallback Fernlet's host states, this device's name, is `FernletFeatureGoldenTests`' group 30.
+    @Test func theLocalNameIsThePreferenceTrimmedOrTheHostsFallback() {
+        // R2: bounded by the rows.
+        for row in Self.fallbackNameRows {
+            let host = PresentationNamespaceHost(namespace: .fernlet, displayName: row.setting,
+                                                 fallbackName: row.fallback)
+            let resolved = host.resolvedProximityDisplayName
+            #expect(resolved == row.resolved, """
+                \(row.setting.debugDescription) over the fallback \(row.fallback.debugDescription) \
+                resolved to \(resolved.debugDescription)
+                """)
+        }
+    }
+
     // MARK: Helpers
 
     /// Compares every row that has an accessor with its frozen literal, byte for byte, recording each
@@ -2653,9 +2692,10 @@ final class VocabularyCoordinatorRig {
 
 // MARK: - A host of one namespace
 
-/// A `FernletSocialHost` that supplies the namespace a cell hands it and the requirements with no
-/// default, so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
-/// presentation strings or peer-name policy are its own. Building one touches no disk and no keychain.
+/// A `FernletSocialHost` that supplies the namespace a cell hands it, the fallback name a cell may hand
+/// it and the requirements with no default, so a presence or recipe-share manager can be built over
+/// `.fernlet` or over a namespace whose presentation strings or peer-name policy are its own, and the
+/// local name read over a fallback of the cell's choosing. Building one touches no disk and no keychain.
 @MainActor
 private final class PresentationNamespaceHost: FernletSocialHost {
     let proximityNamespace: ProximityNamespace
@@ -2663,13 +2703,15 @@ private final class PresentationNamespaceHost: FernletSocialHost {
     let proximityTrustVault = ProximityTrustVault()
     var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityDisplayName: String
+    let proximityFallbackDisplayName: String
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
     /// A host of `namespace` whose user goes by `displayName`, or by the coordinator rig's name when a
-    /// cell hands it none.
-    init(namespace: ProximityNamespace, displayName: String? = nil) {
+    /// cell hands it none, and which, when that name trims to nothing, goes by `fallbackName`.
+    init(namespace: ProximityNamespace, displayName: String? = nil, fallbackName: String = "Golden Device") {
         proximityNamespace = namespace
         proximityDisplayName = displayName ?? VocabularyCoordinatorRig.displayName
+        proximityFallbackDisplayName = fallbackName
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }

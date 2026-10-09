@@ -4698,11 +4698,11 @@ extension FernletFeatureGoldenTests {
         manager.startJoin()
     }
 
-    /// The name `store` falls back to when its user set none: today `UIDevice.current.name`, which
-    /// ProximityKit reads itself in `resolvedProximityDisplayName` (`PeerDisplayNames.swift`).
-    /// Re-pointed at plan step A0.6.2, when the host states it (`proximityFallbackDisplayName`).
+    /// The name `store` falls back to when its user set none: since plan step A0.6.2 its host's
+    /// `proximityFallbackDisplayName` (`ProximityHostAdapter.swift`), which `resolvedProximityDisplayName`
+    /// reads; until then `UIDevice.current.name`, which ProximityKit read itself.
     static func fallbackName(of store: FernletStore) -> String {
-        UIDevice.current.name
+        store.proximityFallbackDisplayName
     }
 
     /// The ranging provider Fernlet's host builds one connection's coordinator over: today the

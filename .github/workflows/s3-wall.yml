@@ -407,7 +407,9 @@ jobs:
         # before plan step A0.6 hands ProximityKit's platform facts to its host, it also holds the
         # ranging seam a host without UWB is left with: a provider without UWB observed call by call,
         # and a coordinator over one introducing itself as `rssi` with no discovery token and waiting
-        # at the manual commit.
+        # at the manual commit. Since A0.6.2, which has the host state the name an unnamed device goes
+        # by, it also holds the local name over a host's own fallback: the setting trimmed of spaces
+        # and tabs and never of line breaks, or, when nothing is left, the fallback, untrimmed.
         #
         # `ProximityNamespaceGateTests` joins them at ProximityKit plan step A0.3's runtime gate
         # (2026-10-02): ProximityKit's run-time refusal of an unsound namespace, door by door — the
@@ -657,9 +659,17 @@ jobs:
         # coordinator over one, and the feature golden's four group 30 cells, the local name, the
         # proximity root, the reaper's attributes and Fernlet's ranging provider) = 346 is the
         # ARITHMETIC CHECK, never the source.
+        # RAISED 346 -> 347 at A0.6.2, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "347 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 53
+        # + 17 + 92), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 347:
+        # passed. Run once more at 347 without ProximityVocabularyGoldenTests: 294 ran and the floor
+        # refused it. 346 + 1 (the vocabulary golden's cell holding the local name over a host's own
+        # fallback, the setting trimmed of spaces and tabs or the fallback untrimmed) = 347 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 346 \
+          Scripts/run-gated-suites.sh crypto-goldens 347 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

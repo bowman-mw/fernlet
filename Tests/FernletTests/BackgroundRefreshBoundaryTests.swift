@@ -95,7 +95,8 @@ import Testing
 /// which runs nothing until a coordinator consults it), `makeProximityIdentity` (a fresh identity over
 /// the store's rows, which provisions nothing until asked), `meshRoutedTypeEntries` (ProximityKit plan
 /// step A0.5.9: FernletSocial's routed-type rows, constant values the mesh reads once at
-/// construction), `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// construction), `proximityDisplayName`, `proximityFallbackDisplayName` (ProximityKit plan step
+/// A0.6.2: an inert string, the device's generic name), `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,
