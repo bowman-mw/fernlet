@@ -14,7 +14,7 @@
 // a moved consumer no cell drives yet gains a cell. A behavioural cell needs no re-pointing at all:
 // it pins the consumer along with the value, and it reads its expectations off the frozen column.
 //
-// Thirteen groups:
+// Fourteen groups:
 //
 // 1. **Payload tokens.** All 55 `PayloadType` tokens, and a table that is exactly the type's cases.
 // 2. **The sealing rule, by behaviour.** The 17 tokens an envelope must carry sealed; every one of
@@ -64,6 +64,15 @@
 //     the mesh role of its `PayloadType` case's name), its token sets and lists are the frozen tables
 //     whole, reflection finds no field left unpinned, and the bounds the namespace's soundness rules
 //     apply are those of the consumers they protect.
+// 14. **The ranging seam and the local name.** A ranging provider without UWB, observed call by call
+//     (its state from construction through a start, which does not throw, and a stop; a distance
+//     stream that never sends and never completes; a discovery token refused as
+//     `hardwareUnsupported`), and a coordinator over one introducing itself as `rssi` with exactly the
+//     keys `capabilities` and `rangingMode`, no discovery token and no prekey bundle, and waiting at the
+//     manual-commit gate for an `rssi` peer and for a `uwb` peer that sends a token, its provider never
+//     started (plan step A0.6, before ProximityKit's doors ask their host for the provider). What a
+//     UWB iPhone sends instead, no simulator shows: the provider Fernlet's host hands its doors, and
+//     the local name's rule on Fernlet's host, are `FernletFeatureGoldenTests`' group 30.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -86,6 +95,7 @@
 // `MeshMembershipEventGoldenTests.goldenRecordsHashHex`; nothing here was copied out of Swift's
 // output.
 
+import Combine
 import FernletConnections
 import FernletDomainModel
 import FernletFoundation
@@ -2316,6 +2326,105 @@ struct ProximityVocabularyGoldenTests {
         return pending.isEmpty ? leaves : []
     }
 
+    // MARK: Group 14 — the ranging seam and the local name
+
+    /// One provider row: what the provider is, for failure messages, and how to build a fresh one.
+    typealias ProviderRow = (name: String, make: @MainActor () -> any RangingProvider)
+
+    /// The ranging providers this group observes without UWB, each built fresh by its row: today
+    /// `NIRangingSession` told it has none, which reads no capability and creates no `NISession`.
+    static func noHardwareProviders() -> [ProviderRow] {
+        let session: ProviderRow = ("NIRangingSession(isHardwareSupported: false)",
+                                    { NIRangingSession(isHardwareSupported: false) })
+        return [session]
+    }
+
+    /// The providers without UWB a coordinator is built over: the test target's `MockRangingProvider`
+    /// told it has none, first, then ``noHardwareProviders()``.
+    static func coordinatorProviders() -> [ProviderRow] {
+        let mock: ProviderRow = ("MockRangingProvider(isHardwareSupported: false)",
+                                 { MockRangingProvider(isHardwareSupported: false) })
+        return [mock] + noHardwareProviders()
+    }
+
+    /// Whether `error` is a provider's refusal for want of ranging hardware: today
+    /// `NIRangingSession.RangingError.hardwareUnsupported`, which the mock throws too.
+    static func isHardwareUnsupported(_ error: any Error) -> Bool {
+        (error as? NIRangingSession.RangingError) == .hardwareUnsupported
+    }
+
+    /// A ranging provider without UWB, observed call by call: it says it has none; its state reads the
+    /// manual-commit fallback, `fallback(rssiOnly: true)`, from construction and again when it is
+    /// started (a start that does not throw), then `idle` when it is stopped; its distance stream never
+    /// sends a value and never completes; and it refuses a discovery token as `hardwareUnsupported`.
+    /// What a coordinator degrades to the manual commit on, and what an iPad and the simulator run.
+    @Test func aProviderWithoutUWBReportsTheFallbackAndOffersNoToken() async throws {
+        // R2: bounded by the providers.
+        for provider in Self.noHardwareProviders() {
+            let ranging = provider.make()
+            #expect(!ranging.isHardwareSupported, "\(provider.name) claims UWB")
+            var states: [RangingState] = []
+            var distances = 0
+            var completions = 0
+            let stateSink = ranging.state.sink { states.append($0) }
+            let distanceSink = ranging.distance.sink(receiveCompletion: { _ in completions += 1 },
+                                                     receiveValue: { _ in distances += 1 })
+            try await ranging.start(with: Data([1, 2, 3]))
+            await ranging.stop()
+            #expect(states == [.fallback(rssiOnly: true), .fallback(rssiOnly: true), .idle],
+                    "\(provider.name)'s state read \(states)")
+            #expect(distances == 0 && completions == 0,
+                    "\(provider.name)'s distance stream sent \(distances) values and \(completions) completions")
+            do {
+                _ = try await ranging.myDiscoveryToken()
+                Issue.record("\(provider.name) offered a discovery token")
+            } catch {
+                #expect(Self.isHardwareUnsupported(error), "\(provider.name) refused the token with \(error)")
+            }
+            stateSink.cancel()
+            distanceSink.cancel()
+        }
+    }
+
+    /// A coordinator over a provider without UWB introduces itself as `rssi` with exactly the keys
+    /// `capabilities` and `rangingMode`, the list empty, with no discovery token and no prekey bundle,
+    /// and waits at the manual-commit gate whether its peer introduced itself as `rssi` or as `uwb`
+    /// with a token; a provider without hardware is never started. Driven over the rig, as every
+    /// session message here is.
+    @Test func aCoordinatorWithoutUWBIntroducesItselfAsRSSIWithNoToken() async throws {
+        let peers = [
+            VocabularyCoordinatorRig.IntroductionBody(rangingMode: "rssi", capabilities: nil),
+            VocabularyCoordinatorRig.IntroductionBody(rangingMode: "uwb", capabilities: nil,
+                                                      discoveryToken: Data(repeating: 0xAB, count: 32))
+        ]
+        // R2: bounded by the providers × the two peers.
+        for provider in Self.coordinatorProviders() {
+            for body in peers {
+                let ranging = provider.make()
+                let rig = try VocabularyCoordinatorRig(namespace: .fernlet, ranging: ranging)
+                defer { rig.forgetKeychainRows() }
+                let peer = try await rig.handshake(payload: JSONEncoder().encode(body))
+                let sent = try rig.sentEnvelopes()
+                await rig.coordinator.cancel()
+                let over = "over \(provider.name), with a \(body.rangingMode) peer"
+                #expect(peer != nil, "\(over), the coordinator never reached the manual-commit gate")
+                let introduction = try #require(sent.first, "\(over), the coordinator sent nothing")
+                #expect(introduction.payloadTypeToken == Self.frozen("payloadType.identityIntroduction"),
+                        "\(over), the first frame was \(introduction.payloadTypeToken)")
+                let fields = try #require(
+                    try JSONSerialization.jsonObject(with: introduction.payload) as? [String: Any],
+                    "\(over), the introduction's body is no JSON object")
+                #expect(Set(fields.keys) == ["capabilities", "rangingMode"], "\(over), it carries \(fields.keys.sorted())")
+                #expect(fields["rangingMode"] as? String == Self.frozen("rangingMode.rssi"),
+                        "\(over), it introduced itself as \(String(describing: fields["rangingMode"]))")
+                #expect(fields["capabilities"] as? [String] == [], "\(over), it advertised \(String(describing: fields["capabilities"]))")
+                if let mock = ranging as? MockRangingProvider {
+                    #expect(!mock.startCalled, "\(over), a provider without hardware was started")
+                }
+            }
+        }
+    }
+
     // MARK: Helpers
 
     /// Compares every row that has an accessor with its frozen literal, byte for byte, recording each
@@ -2390,10 +2499,11 @@ struct ProximityVocabularyGoldenTests {
 /// virtual clock, and every frame the coordinator sends is read back off its endpoint.
 ///
 /// The coordinator is built with ``displayName``, the rig's own (the engine has no default name),
-/// and on a ranging provider with no UWB, so a verified introduction lands it at the manual-commit
-/// gate. Both identities are of the namespace the cell hands the rig (`.fernlet` for the
-/// argument-less initializer), and the peer sends its introduction and its ping under that
-/// namespace's session messages, as a peer of its family does.
+/// and on a ranging provider with no UWB (a `MockRangingProvider` told it has none, or the provider
+/// without UWB a cell hands it), so a verified introduction lands it at the manual-commit gate. Both
+/// identities are of the namespace the cell hands the rig (`.fernlet` for the argument-less
+/// initializer), and the peer sends its introduction and its ping under that namespace's session
+/// messages, as a peer of its family does.
 @MainActor
 final class VocabularyCoordinatorRig {
 
@@ -2401,13 +2511,17 @@ final class VocabularyCoordinatorRig {
     /// deleted spelling can never pass for it.
     static let displayName = "Golden Rig"
 
-    /// The body of an identity introduction as a peer sends it: its ranging mode, and its capability
-    /// list or none at all — an older peer's introduction carries no `capabilities` key.
+    /// The body of an identity introduction as a peer sends it: its ranging mode, its capability list
+    /// or none at all — an older peer's introduction carries no `capabilities` key — and the discovery
+    /// token a UWB peer sends, or none. The synthesized encoder omits a nil key, so a body without a
+    /// token is the bytes it was before group 14 added the key.
     struct IntroductionBody: Encodable {
         /// The sender's ranging mode token.
         let rangingMode: String
         /// The advertised capability tokens, or nil for no key at all.
         let capabilities: [String]?
+        /// The sender's discovery token, or nil for no key at all.
+        var discoveryToken: Data? = nil
     }
 
     /// The body of a session heartbeat ping as a peer sends it.
@@ -2447,8 +2561,9 @@ final class VocabularyCoordinatorRig {
     }
 
     /// Two provisioned identities of `namespace` on throwaway services, the fabric, and the
-    /// coordinator.
-    init(namespace: ProximityNamespace) throws {
+    /// coordinator, ranging over `ranging`, or over a `MockRangingProvider` with no UWB when a cell hands
+    /// none (resolved here: a main-actor value cannot be a default argument).
+    init(namespace: ProximityNamespace, ranging: (any RangingProvider)? = nil) throws {
         let localService = ProximityVocabularyGoldenTests.isolatedIdentityService()
         let remoteService = ProximityVocabularyGoldenTests.isolatedIdentityService()
         let localIdentity = IdentityService(namespace: namespace, keychainService: localService)
@@ -2468,7 +2583,8 @@ final class VocabularyCoordinatorRig {
         remote = far.transport
         remoteHandle = far.handle
         coordinator = ProximityCoordinator(
-            identity: localIdentity, transport: near.transport, ranging: MockRangingProvider(isHardwareSupported: false),
+            identity: localIdentity, transport: near.transport,
+            ranging: ranging ?? MockRangingProvider(isHardwareSupported: false),
             replayCache: ReplayCache(), displayName: Self.displayName, timeoutSeconds: 0)
     }
 

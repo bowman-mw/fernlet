@@ -235,8 +235,16 @@ import Testing
     /// demands them: this entry, and that step's floor once a Mac has measured it, are what notice one
     /// leaving. Its two walls with no compiler half are pinned by name in ``wallLines`` too. Counted off
     /// the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A0.6.0 (2026-10-09): `s3-grep` 10 → 11, for
+    /// `ProximityPlatformBoundaryTests` — the ratchet that keeps ProximityKit free of platform policy
+    /// while plan step A0.6 hands every platform fact to its host: the modules ProximityKit imports
+    /// (a neutral baseline, and each platform seam an exact row with its guard and exit step), no
+    /// device-name source, no platform directory and no default for a fact only the host may state.
+    /// Each thing it refuses compiles clean on iOS. The step's floor stays the shared `1`. Pinned by
+    /// name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 10,
+        "s3-grep": 11,
         "no-tracking": 1,
         "power-of-10": 1,
         "localization": 1,
@@ -263,7 +271,7 @@ import Testing
     /// line leaving, or it leaving its line, must red rather than go quiet.
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
-                    "ProximityNamespaceBoundaryTests"],
+                    "ProximityNamespaceBoundaryTests", "ProximityPlatformBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],

@@ -8,11 +8,14 @@
 // step A0.5 did the same for the features the routed mesh manager carried (the advertised
 // capabilities, the routed rows, bodies and senders, activities, the clothing shop, the moderation
 // relay, friend state, the vouch list and the session's photos, chat and hearts), splitting them out
-// of the engine into FernletSocial (§4 A0.5). This suite holds each such byte to the value Fernlet
-// ships: by a hand-written literal, and wherever a production consumer can be reached without a new
-// seam, by driving that consumer and reading what it emits or opens; and it holds the order a
-// session's commit and end run their legs in, by observing it. Moving a feature moves no byte and
-// reorders no leg; this file is how that claim is checked rather than asserted.
+// of the engine into FernletSocial (§4 A0.5). Plan step A0.6 hands ProximityKit's platform facts to
+// its host, Fernlet's among them: the name an unnamed device advertises, the ranging provider each
+// connection's coordinator ranges with, the Live Activity reaper and the proximity root (§4 A0.6).
+// This suite holds each such byte to the value Fernlet ships: by a hand-written literal, and wherever
+// a production consumer can be reached without a new seam, by driving that consumer and reading what
+// it emits or opens; and it holds the order a session's commit and end run their legs in, by
+// observing it. Moving a feature moves no byte and reorders no leg; this file is how that claim is
+// checked rather than asserted.
 //
 // THE RULE. Every literal is FROZEN: a red cell is a wire, keychain or at-rest decision, never
 // re-pinned from Swift's output. A cell reaches production only through today's production spellings:
@@ -20,7 +23,7 @@
 // "Accessors" at the foot of the suite. When a value or its reader moves, only its accessor is
 // re-pointed at the path production then reads, and a moved consumer no cell drives yet gains a cell.
 //
-// Twenty-nine groups:
+// Thirty groups:
 //
 // 1. **The seven feature labels** of the heart dead-drop, presence and the ban store: the heart pair
 //    salt, the sealed drop's salt, the day-tag prefix, the sidecar's authenticated data, the presence
@@ -111,6 +114,14 @@
 //     request, the item report, the friend state and the activity offer; the review's roster half, its
 //     photo half, the shop window, the transcript and the heart state; and the photo-session ids a new
 //     search and a leave keep until the session's photos are moved.
+// 30. **The bytes Mac readiness moves**: the local name an unnamed device advertises (on Fernlet's
+//     host the device's name; the preference trimmed of spaces and tabs and never of line breaks; the
+//     store's raw setting, which the activities and the heart dead-drop send as it is); Fernlet's
+//     proximity root, `Application Support/Fernlet`, and its four spellings; the Live Activity
+//     reaper's attributes, their unqualified name and stored shape, and the ending it gives a stranded
+//     activity; and the ranging provider Fernlet's host builds each connection's coordinator over, an
+//     `NIRangingSession` fresh per call, which decides the introduction's `rangingMode` and
+//     `discoveryToken` on a UWB iPhone.
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -169,6 +180,16 @@
 // heart that is not sent names (`MeshSessionHeartTests.everyHeartFailureCauseIsAFrozenToken`) and a
 // refused share's (`RoutedShareRefusalCopyTests.everyCauseHasLocalizedCopy`).
 //
+// Group 30 cites the same way: `ProximityRangingMode`'s raw values both ways and the session log's
+// copies of them (`ProximityVocabularyGoldenTests.everySessionEnumIsItsFrozenSpellingBothWays` and
+// `theSessionLogsOwnRoleAndRangingModeSpellTheFrozenValues`), a provider without UWB and a coordinator
+// over one, which no host's value is needed to observe (that suite's group 14), the storage names and
+// the namespace's own root under Application Support
+// (`ProximityNamespaceGoldenTests.everyStorageNameIsItsFrozenBytes`), the production heart-drop scope's
+// folder and service (group 9, whose folder rows now hold the proximity root too), and the reaper's one
+// home and the retirement of every request (`MeshContinuationTaskHostWallTests`'
+// `theOneToOneForegroundAnchorsAreRetired`).
+//
 // Fixed inputs: alice's key-agreement private key is the bytes 0x01…0x20 and her signing key
 // 0x21…0x40; bob's are 0x41…0x60 and 0x61…0x80; the reporter-tag salt is 0x80…0x9f, the sidecar key
 // 0xa0…0xbf and a third key-agreement key, the escrow fixture's, 0xc0…0xdf; group 14's stranger and
@@ -195,7 +216,9 @@
 // to 29's read `XXXXXXXX-4841-4E44-8000-0000000000NN` (`4841 4E44` is "HAND"); and every photo groups
 // 23, 24 and 29 hold is the routed suites' tiny JPEG (`MeshRoutedPhotoFixtures.tinyJPEG()`). Group
 // 28's origins are labels (`ffgt-origin-…`), its forged report row carries 64 zero bytes as a
-// signature, and its clocks stand at 780 000 000 s after the reference date.
+// signature, and its clocks stand at 780 000 000 s after the reference date. Group 30 claims none
+// either: its Live Activity attributes name the peer `Golden`, started 700 000 000 s after the
+// reference date, and its content state counts 1 byte sent and 2 received, `Ended`.
 //
 // Every vector of groups 1 to 14 was confirmed by two independent computations before it was frozen:
 // a Python re-implementation over OpenSSL (`cryptography`), proved honest first by reproducing
@@ -224,7 +247,18 @@
 // reading of the same code, and the one derived figure, 15 500 bytes for 500 Characters of `e` and
 // fifteen U+0301, was computed in Python and recounted by hand. Nothing in groups 15 to 29 was copied
 // out of Swift's output either.
+//
+// Group 30's literals were confirmed by a second, independent computation too, in Python: the trim
+// rows by the predicate `c == "\t"` or Unicode category Zs, which is Foundation's `.whitespaces`
+// (`str.strip()` is not: it strips a line break, which `.whitespaces` keeps), and the two activity
+// JSON objects built by hand from the attributes' declaration (synthesized keys are the property
+// names, and `JSONEncoder`'s default `.deferredToDate` writes a date as its seconds since the
+// reference date), compared to the frozen texts as objects. Two values are read rather than frozen,
+// because they are the device's: the device's name, of which the cell freezes the rule and that it is
+// not empty, and the type and freshness of the ranging provider, which no simulator can tell from a
+// provider without UWB by its behaviour. Nothing in group 30 was copied out of Swift's output either.
 
+import ActivityKit
 import CryptoKit
 import FernletConnections
 import FernletCrypto
@@ -235,6 +269,7 @@ import Observation
 import os
 import Security
 import Testing
+import UIKit
 @testable import Fernlet
 @testable import FernletSocial
 @testable import PrivateMediaStore
@@ -309,9 +344,10 @@ struct FeatureGoldenTranscriptLabelRow: Sendable {
 
 // MARK: - The suite
 
-/// Every byte the features plan steps A0.4 and A0.5 move or re-derive put on the wire, in the keychain
-/// or on disk, pinned by literal and by behaviour, and the order a session's commit and end run their
-/// legs in: the gate each of those moves passes unchanged, and every later one must.
+/// Every byte the features plan steps A0.4 and A0.5 move or re-derive, and the platform facts plan
+/// step A0.6 hands to the host, put on the wire, in the keychain or on disk, pinned by literal and by
+/// behaviour, and the order a session's commit and end run their legs in: the gate each of those moves
+/// passes unchanged, and every later one must.
 ///
 /// **The rule for every commit: re-point an accessor, never a literal.** A frozen literal was written
 /// by hand and confirmed by two independent computations, or read off today's code; a failing one is a
@@ -780,16 +816,18 @@ struct FernletFeatureGoldenTests {
         ]
     }
 
-    /// The production heart-drop scope's folder, read where production reads it.
+    /// The production heart-drop scope's folder and Fernlet's proximity root (``productionProximityRoot``,
+    /// plan step A0.6.0), each read where production reads it.
     static var productionFolders: [(field: String, today: URL)] {
         [
-            ("heartDropStorageScope.production.directory", HeartDropStorageScope.production.directory)
+            ("heartDropStorageScope.production.directory", HeartDropStorageScope.production.directory),
+            ("proximityRoot.production", Self.productionProximityRoot)
         ]
     }
 
     /// Each store's file is its frozen name directly inside the root it is handed; the production
-    /// heart-drop scope is `Application Support/Fernlet`, and its service is the heart-drop service.
-    /// Nothing shipped is migrated by a move that keeps them.
+    /// heart-drop scope and Fernlet's proximity root are `Application Support/Fernlet`, and the scope's
+    /// service is the heart-drop service. Nothing shipped is migrated by a move that keeps them.
     @Test func theStoresFileNamesAndTheProductionHeartDropScopeAreFrozen() {
         let root = Self.scratchDirectory()
         #expect(Self.expectFrozen(Self.fileNameRows(in: root)) == 5)
@@ -3506,6 +3544,139 @@ struct FernletFeatureGoldenTests {
         try #require(Self.holdLive(Self.sessionPhoto(3), on: photos) == .held, "the next photo was not held")
         #expect(photos.sessionPhotos.first?.session?.id != first.id, "the next photo still carries the left session's id")
     }
+
+    // MARK: Group 30 — the bytes Mac readiness moves
+
+    /// The trim rule's rows: a raw `proximityDisplayName` setting and the local name it resolves to, nil
+    /// meaning the device's own name. Spaces and tabs (`CharacterSet.whitespaces`: Unicode Zs and
+    /// U+0009) are trimmed from both ends and line breaks are not; the device's name is taken only when
+    /// nothing is left. Written by hand, and confirmed by a Python predicate (`c == "\t"` or category
+    /// Zs), never by `str.strip()`, which strips a line break.
+    static let localNameRows: [(raw: String, resolved: String?)] = [
+        ("", nil), ("   ", nil), ("\t \t", nil), ("\u{00A0}", nil),
+        ("\tAda ", "Ada"), ("\u{00A0}Ada\u{00A0}", "Ada"),
+        ("\n", "\n"), ("\nAda\n", "\nAda\n"),
+        ("Ada Lovelace", "Ada Lovelace")
+    ]
+
+    /// The local name an unnamed device advertises, where the recipe radio, the coordinator and every
+    /// FernletSocial sender read it (`resolvedProximityDisplayName`): on a `FernletStore` host the
+    /// fallback is this device's name, never empty; the preference is trimmed by ``localNameRows``' rule,
+    /// written into the settings directly because the setter trims too; and the store's own
+    /// `proximityDisplayName` stays the raw setting, which the activity manager's two sends and the heart
+    /// dead-drop's name read as it is (source pins, comments dropped). Resolving the fallback inside that
+    /// raw name would start sending the device's name where an unnamed user sends "" today. The device's
+    /// name is read in the cell: the value is the device's, and the rule is what is frozen.
+    @Test func theLocalNameIsThePreferenceTrimmedOrThisDevicesName() throws {
+        let store = makeTestStore()
+        let device = UIDevice.current.name
+        #expect(!device.isEmpty, "this device has no name")
+        #expect(Self.fallbackName(of: store) == device, "the fallback is \(Self.fallbackName(of: store)), not \(device)")
+        // R2: bounded by the rows.
+        for row in Self.localNameRows {
+            store.settings.proximityDisplayName = row.raw
+            let resolved = store.resolvedProximityDisplayName
+            #expect(resolved == (row.resolved ?? device), "\(row.raw.debugDescription) resolved to \(resolved.debugDescription)")
+            #expect(store.proximityDisplayName == row.raw, "the store's own name is not the raw \(row.raw.debugDescription)")
+        }
+        let activities = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(Self.activityManagerPath))
+        let sent = Self.occurrences(of: "ItemNameModeration.sanitizedName(store.proximityDisplayName)", in: activities)
+        #expect(sent == 2, "the activity manager sends the raw local name \(sent) times")
+        let storeCode = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
+        let dropped = Self.occurrences(of: #"displayName: { [weak self] in self?.proximityDisplayName ?? "" }"#, in: storeCode)
+        #expect(dropped == 1, "the heart dead-drop reads the raw local name \(dropped) times")
+    }
+
+    /// Fernlet's proximity root is `Application Support/Fernlet`, a directory URL, and every site that
+    /// names it spells the one accessor (``productionRootSpelling``): the store's two initializers, the
+    /// crypto-format census and FernletSocial's production heart-drop scope, each counted as a whole line
+    /// with comments dropped, so a respelling that only appends to the accessor moves the root and fails
+    /// here. The census's production inputs are never built: they open the sealed store.
+    @Test func theProximityRootIsApplicationSupportFernletThroughOneAccessor() throws {
+        let literal = URL.applicationSupportDirectory.appendingPathComponent("Fernlet", isDirectory: true)
+        let root = Self.productionProximityRoot
+        #expect(root == literal, "the proximity root is \(root.path), not \(literal.path)")
+        #expect(root.hasDirectoryPath, "the proximity root is not a directory URL: \(root)")
+        #expect(root.absoluteString == literal.absoluteString, "the proximity root spells \(root.absoluteString)")
+        #expect(root.lastPathComponent == "Fernlet", "the proximity root's folder is \(root.lastPathComponent)")
+        let spelling = Self.productionRootSpelling
+        let sites = [
+            ("App/Fernlet/FernletStore.swift", "self.proximitySupportRoot = proximitySupportDirectory ?? " + spelling),
+            ("App/Fernlet/FernletStore.swift", "self.proximitySupportRoot = " + spelling),
+            ("App/Fernlet/CryptoFormatCensus.swift", "friendWallSupportDirectory: " + spelling + ","),
+            ("FernletKit/Sources/FernletSocial/HeartSharing/HeartDropStorageScope.swift", "directory: " + spelling + ",")
+        ]
+        // R2: bounded by the four sites.
+        for (path, line) in sites {
+            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
+            let count = code.components(separatedBy: "\n").filter { $0.trimmingCharacters(in: .whitespaces) == line }.count
+            #expect(count == 1, "\(path) holds the whole line `\(line)` \(count) times")
+        }
+    }
+
+    /// The proximity Live Activity's frozen attributes, as ActivityKit decodes a stranded activity.
+    static let frozenActivityAttributesJSON = #"{"peerName":"Golden","startedAt":700000000}"#
+
+    /// Its frozen content state: the two byte counters and the status word.
+    static let frozenActivityStateJSON = #"{"bytesReceived":2,"bytesSent":1,"status":"Ended"}"#
+
+    /// What the reaper's body ends every stranded activity with: the ended content, no stale date, the
+    /// enumeration of the proximity kind alone and immediate dismissal.
+    static let reaperSpellings = [
+        #"ContentState(bytesSent: 0, bytesReceived: 0, status: "Ended")"#, "staleDate: nil",
+        "Activity<ProximityConnectionActivityAttributes>.activities", "dismissalPolicy: .immediate"
+    ]
+
+    /// The reaper's attributes keep their unqualified type name, which ActivityKit matches a stranded
+    /// activity by (`String(reflecting:)` is module-qualified and not pinned), and their stored shape:
+    /// `JSONEncoder` writes the frozen attributes and content state for them, compared as JSON objects,
+    /// and the frozen texts decode back to the same fields. And the reaper still ends every stranded
+    /// proximity activity with ``reaperSpellings`` inside its own body while nothing requests one
+    /// (``reaperPath``, comments dropped).
+    @Test func theReapersAttributesKeepTheirNameShapeAndEnding() throws {
+        let name = String(describing: ProximityConnectionActivityAttributes.self)
+        #expect(name == "ProximityConnectionActivityAttributes", "the attributes' unqualified name is \(name)")
+        let startedAt = Date(timeIntervalSinceReferenceDate: 700_000_000)
+        let attributes = ProximityConnectionActivityAttributes(peerName: "Golden", startedAt: startedAt)
+        let state = ProximityConnectionActivityAttributes.ContentState(bytesSent: 1, bytesReceived: 2, status: "Ended")
+        let writtenAttributes = try JSONEncoder().encode(attributes)
+        let writtenState = try JSONEncoder().encode(state)
+        #expect(try Self.jsonObjectsEqual(writtenAttributes, Data(Self.frozenActivityAttributesJSON.utf8)),
+                "the attributes are written as \(String(decoding: writtenAttributes, as: UTF8.self))")
+        #expect(try Self.jsonObjectsEqual(writtenState, Data(Self.frozenActivityStateJSON.utf8)),
+                "the content state is written as \(String(decoding: writtenState, as: UTF8.self))")
+        let readAttributes = try JSONDecoder().decode(ProximityConnectionActivityAttributes.self,
+                                                      from: Data(Self.frozenActivityAttributesJSON.utf8))
+        #expect(readAttributes.peerName == "Golden" && readAttributes.startedAt == startedAt,
+                "the frozen attributes read as \(readAttributes.peerName) at \(readAttributes.startedAt)")
+        let readState = try JSONDecoder().decode(ProximityConnectionActivityAttributes.ContentState.self,
+                                                 from: Data(Self.frozenActivityStateJSON.utf8))
+        #expect(readState == state, "the frozen content state reads as \(readState)")
+        let anchor = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(Self.reaperPath))
+        #expect(!anchor.contains("Activity.request"), "a proximity Live Activity is requested again")
+        let reaper = try #require(MeshRoutedSourceScan.bracedBody(after: "static func endOrphans() async {", in: anchor),
+                                  "the reaper's body is gone from \(Self.reaperPath)")
+        // R2: bounded by the four spellings.
+        for spelling in Self.reaperSpellings {
+            #expect(reaper.contains(spelling), "the reaper's body no longer holds `\(spelling)`")
+        }
+    }
+
+    /// Fernlet's host ranges with NearbyInteraction, a fresh provider per connection: the provider its
+    /// channel-ready doors build each coordinator over is an `NIRangingSession`, so a UWB iPhone keeps
+    /// introducing itself as `uwb` with its discovery token, and two calls never hand out one instance,
+    /// so one session's `stop()` can never invalidate another's `NISession`. Only providers are built,
+    /// never a coordinator over one: construction reads one capability flag and creates no `NISession`.
+    /// No simulator behaviour tells this provider from one without UWB, so the type and the freshness are
+    /// what is pinned.
+    @Test func fernletsHostRangesWithNearbyInteractionFreshPerConnection() {
+        let store = makeTestStore()
+        let first = Self.rangingProvider(of: store)
+        let second = Self.rangingProvider(of: store)
+        #expect(first is NIRangingSession, "Fernlet's host ranges with \(type(of: first))")
+        #expect(second is NIRangingSession, "Fernlet's host ranges with \(type(of: second))")
+        #expect(first !== second, "two connections were handed one ranging provider")
+    }
 }
 
 // MARK: - Accessors
@@ -4526,6 +4697,38 @@ extension FernletFeatureGoldenTests {
     static func startNewSearch(on manager: MeshNetworkManager) {
         manager.startJoin()
     }
+
+    /// The name `store` falls back to when its user set none: today `UIDevice.current.name`, which
+    /// ProximityKit reads itself in `resolvedProximityDisplayName` (`PeerDisplayNames.swift`).
+    /// Re-pointed at plan step A0.6.2, when the host states it (`proximityFallbackDisplayName`).
+    static func fallbackName(of store: FernletStore) -> String {
+        UIDevice.current.name
+    }
+
+    /// The ranging provider Fernlet's host builds one connection's coordinator over: today the
+    /// channel-ready doors' own `NIRangingSession()` (the mesh's and the recipe radio's in ProximityKit,
+    /// presence's heart door in FernletSocial). Re-pointed at plan step A0.6.3, when each door asks its
+    /// host (`makeProximityRangingProvider()`).
+    static func rangingProvider(of store: FernletStore) -> any RangingProvider {
+        NIRangingSession()
+    }
+
+    /// How Fernlet's proximity root is spelled at each site that names it: today ProximityKit's
+    /// namespace default. Re-pointed at plan step A0.6.6, with ``productionProximityRoot``.
+    static let productionRootSpelling = "ProximityNamespace.fernlet.installation.storage.defaultDirectory"
+
+    /// Fernlet's proximity root, read where production reads it: today ``productionRootSpelling``.
+    /// Re-pointed at plan step A0.6.6, when the module computes no directory.
+    static var productionProximityRoot: URL {
+        ProximityNamespace.fernlet.installation.storage.defaultDirectory
+    }
+
+    /// The file holding the proximity Live Activity's attributes and reaper: today ProximityKit's
+    /// foreground anchor. Re-pointed at plan step A0.6.4, when the reaper is the app's.
+    static let reaperPath = "FernletKit/Sources/ProximityKit/ForegroundAnchor/ProximityForegroundAnchor.swift"
+
+    /// The activity manager, whose two sends carry the raw local name: today FernletSocial's.
+    static let activityManagerPath = "FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift"
 }
 
 // MARK: - Fixtures
@@ -5259,6 +5462,11 @@ extension FernletFeatureGoldenTests {
     /// declaration that spans lines is matched as one.
     static func collapsingWhitespace(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    /// How many times `needle` occurs in `haystack`, without overlap.
+    static func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
     }
 
     /// The comment and the English value a string catalog files under `key`, read off the repository's

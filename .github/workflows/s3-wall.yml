@@ -249,13 +249,28 @@ jobs:
         # or PrivateMediaStore's, comes back unseen. That cell is the line's one new test, and the line,
         # MEASURED on a Mac at A0.5.10 and again at A0.5.12 (iPhone 17 simulator, iOS 26.5), ran 104
         # tests in 10 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6.0 (2026-10-09) adds `ProximityPlatformBoundaryTests`, the ratchet
+        # that keeps ProximityKit free of platform policy while plan step A0.6 hands every platform
+        # fact to its host. A pure SOURCE scan of FernletKit/Sources/ProximityKit through the namespace
+        # wall's one walker, with no compiler half on iOS, where each thing it refuses compiles clean: a
+        # module imported or tested for with `canImport` that is neither a neutral baseline module nor
+        # an exact seam row (a file, a module, its guard and the step that deletes the row: 7 rows,
+        # `ProtectedSidecar.swift`'s guarded UIKit the one permanent), a device-name source beyond one
+        # row, a platform directory beyond one row, and a default for a host fact in a `ProximityHost`
+        # extension beyond one row. Each rule is exact both ways, and each transient row names the
+        # commit of plan step A0.6 that deletes it. Four cells, its readers fixtured both ways in the
+        # fourth: 108 tests in 11 suites by declaration count (104 + 4), the ARITHMETIC CHECK, and the
+        # line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 108 tests in 11
+        # suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
             AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
             CompanionRefreshSchedulingTests CompanionRefreshPipelineTests \
             WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests \
-            ProximityAuditBridgeTests ProximityNamespaceBoundaryTests
+            ProximityAuditBridgeTests ProximityNamespaceBoundaryTests \
+            ProximityPlatformBoundaryTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
@@ -388,7 +403,11 @@ jobs:
         # ProximityKit's spellings, case for case. Since A0.3.10, which has the coordinator record its
         # audit in ProximityKit's own `ProximitySessionAudit` and Fernlet convert it into the persisted
         # `TrainerAuditEvent`, it also holds a converted audit to the frozen audit row's bytes and
-        # each of the eight kinds to the token its row persists under.
+        # each of the eight kinds to the token its row persists under. Since A0.6.0 (2026-10-09), cut
+        # before plan step A0.6 hands ProximityKit's platform facts to its host, it also holds the
+        # ranging seam a host without UWB is left with: a provider without UWB observed call by call,
+        # and a coordinator over one introducing itself as `rssi` with no discovery token and waiting
+        # at the manual commit.
         #
         # `ProximityNamespaceGateTests` joins them at ProximityKit plan step A0.3's runtime gate
         # (2026-10-02): ProximityKit's run-time refusal of an unsound namespace, door by door — the
@@ -430,6 +449,12 @@ jobs:
         # sealed to a kept friend at a commit; the camera's hold-failure line; the audit lines the moved
         # code writes; and the order a session's commit and end run their legs in. Those vectors were
         # computed twice in Python and never by Swift, so this line's run is their third computation.
+        # Since A0.6.0 (2026-10-09), cut before plan step A0.6 hands ProximityKit's platform facts to
+        # its host, it also pins what that step moves on Fernlet's host: the local name an unnamed
+        # device advertises and the raw name the activities and the heart dead-drop send, Fernlet's
+        # proximity root and its four spellings, the Live Activity reaper's attributes and ending, and
+        # the ranging provider Fernlet's host builds each connection over, an `NIRangingSession` fresh
+        # per call.
         #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
@@ -623,9 +648,18 @@ jobs:
         # refused it. 339 + 1 (the feature golden's cell holding the registry the app's own routed rows
         # build, `FernletStore.meshRoutedTypeEntries`, to the one the cap cells read) = 340 is the
         # ARITHMETIC CHECK, never the source.
+        # RAISED 340 -> 346 at A0.6.0, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "346 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 52
+        # + 17 + 92), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 346:
+        # passed. Run once more at 346 without FernletFeatureGoldenTests: 254 ran and the floor refused
+        # it. 340 + 6 (the vocabulary golden's two ranging-seam cells, a provider without UWB and a
+        # coordinator over one, and the feature golden's four group 30 cells, the local name, the
+        # proximity root, the reaper's attributes and Fernlet's ranging provider) = 346 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 340 \
+          Scripts/run-gated-suites.sh crypto-goldens 346 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

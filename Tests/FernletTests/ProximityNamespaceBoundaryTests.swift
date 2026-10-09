@@ -1217,7 +1217,10 @@ private extension UInt8 {
     // MARK: The sweep
 
     /// ProximityKit's Swift files, each by its path under the module root and lexed, sorted by path.
-    private static func proximitySources() throws -> [(path: String, lexed: SwiftSourceLexer.Lexed)] {
+    ///
+    /// Shared with `ProximityPlatformBoundaryTests` (plan step A0.6): one ProximityKit walker, so the
+    /// namespace wall and the platform wall can never read two different trees.
+    static func proximitySources() throws -> [(path: String, lexed: SwiftSourceLexer.Lexed)] {
         let root = RepoRoot.url(moduleRoot)
         let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
         let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
@@ -1232,8 +1235,9 @@ private extension UInt8 {
 
     /// `file`'s path under the module root, read off the path's own `FernletKit/Sources/ProximityKit/`
     /// component so a symlinked checkout (`/tmp` and `/private/tmp`) resolves alike; the full path if
-    /// the file is somehow outside it, which then matches no allowlist row and fails loudly.
-    private static func relativePath(of file: URL) -> String {
+    /// the file is somehow outside it, which then matches no allowlist row and fails loudly. Shared
+    /// with `ProximityPlatformBoundaryTests`, whose rows name files by the same path.
+    static func relativePath(of file: URL) -> String {
         let path = file.path
         guard let range = path.range(of: "/" + moduleRoot + "/", options: .backwards) else { return path }
         return String(path[range.upperBound...])
