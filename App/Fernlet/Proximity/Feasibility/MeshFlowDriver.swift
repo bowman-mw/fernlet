@@ -197,8 +197,9 @@ struct MeshFlowRunState {
 /// never reaches inside the manager, never forges a slot, and never touches the transport: the code
 /// under observation is the shipping code, exactly as in ``MeshRejectionMatrixHarness``.
 ///
-/// Two seams it does set, and why. ``MeshNetworkManager/chatAllowedProvider`` stands in for a
-/// completed age determination, which a fresh Simulator has no way to reach and which no
+/// Two seams it does set, and why. The chat's `chatAllowedProvider` (FernletSocial's
+/// `MeshSessionChat`, the store's `meshFeatures.chat`) stands in for a completed age determination,
+/// which a fresh Simulator has no way to reach and which no
 /// self-attestation can open (`AgeGate.chat.allowsSelfAttestation` is false) — and setting it
 /// *closed* is how the 13+ gate's enforcement point is observed rather than assumed. The clothing
 /// shop's two providers stand in for the `allowNearbyClothingShares` setting and a designed
@@ -255,7 +256,7 @@ enum MeshFlowDriver {
         // Fail closed on purpose: a run that asks for both gets the gated behaviour.
         let chatAllowed = flows.contains(.chat) && !flows.contains(.chatAgeGated)
         if flows.contains(.chat) || flows.contains(.chatAgeGated) {
-            manager.chatAllowedProvider = { chatAllowed }
+            store.meshFeatures.chat.chatAllowedProvider = { chatAllowed }
             echo("ageGate chatAllowed=\(chatAllowed)")
         }
         guard flows.contains(.shop) else { return }
@@ -486,10 +487,10 @@ enum MeshFlowDriver {
         case .commit, .firstMeetingOnly, .capabilities, .shop:
             echo("armed \(verb.rawValue)")
         case .chat, .chatAgeGated:
-            echo("sending chat isChatAllowed=\(manager.isChatAllowed)")
+            echo("sending chat isChatAllowed=\(store.meshFeatures.chat.isChatAllowed)")
             // Since P6 item 4 this is a ROUTED flow: the send mints an item and answers what it
             // did, so the lane log carries the outcome instead of inferring it from silence.
-            let outcome = manager.sendTempMessage("\(chatText)-\(MeshMatrixDebugOptions.label)")
+            let outcome = store.meshFeatures.chat.sendTempMessage("\(chatText)-\(MeshMatrixDebugOptions.label)")
             echo("chat outcome=\(outcome)")
         case .photo:
             guard let data = noiseJPEG(side: noiseImageSide) else {
@@ -570,11 +571,12 @@ enum MeshFlowDriver {
     private static func reportPayloads(
         manager: MeshNetworkManager, store: FernletStore, state: inout MeshFlowRunState
     ) {
-        let messages = manager.sessionMessages.messages
+        let chat = store.meshFeatures.chat
+        let messages = chat.sessionMessages.messages
         let incoming = messages.filter { !$0.isOutgoing }.count
         let outgoing = messages.count - incoming
         if incoming != state.messagesIn || outgoing != state.messagesOut {
-            echo("chat received=\(incoming) sent=\(outgoing) isChatAllowed=\(manager.isChatAllowed)")
+            echo("chat received=\(incoming) sent=\(outgoing) isChatAllowed=\(chat.isChatAllowed)")
             state.messagesIn = incoming
             state.messagesOut = outgoing
         }

@@ -992,9 +992,9 @@ private extension UInt8 {
     /// Fernlet's social features left ProximityKit with their bytes unchanged: the heart dead-drop,
     /// presence, moderation's ban store, ledger and content hash, closeness, friend state, the parked
     /// chat payload, the clothing shop with its catalog payloads, the moderation report relay with its
-    /// payload and the activity manager with its payloads and the signing its two domain types carry,
-    /// for FernletSocial, and the sealed-backup escrow for the app, and the support layout that named
-    /// their folder was deleted.
+    /// payload, the activity manager with its payloads and the signing its two domain types carry, and
+    /// the live-session chat with the first half of the content layer, for FernletSocial, and the
+    /// sealed-backup escrow for the app, and the support layout that named their folder was deleted.
     /// Rules 2 to 4 cannot see one come back: a feature re-declared here under its old name, with no
     /// Fernlet string, no registry label and no domain type of its own, compiles clean and passes them
     /// and every other test, and two declarations of one name in two modules the app imports compile
@@ -1109,9 +1109,12 @@ private extension UInt8 {
     /// report relay's (the relay, its payload and a signed row, plan step A0.5.7) and the activity
     /// manager's (the manager and its four nested shapes, the params hash, the five wire payloads, and
     /// FernletDomainModel's join token and roster snapshot, which its signing and verification extend,
-    /// plan step A0.5.8), all FernletSocial's now; the support layout that named their folder, deleted;
-    /// and the sealed-backup escrow's (the escrow key, its reconcile outcome, its candidate and its
-    /// legacy-account name), the app's.
+    /// plan step A0.5.8) and the live-session chat's (the transcript store, the send outcome, the
+    /// routed text header and body, and the content layer's first half — the merged photo and message
+    /// kinds, the content ledger, the ingestion gates, the photo reassembly and the heart receipt —
+    /// plan step A0.5.9), all FernletSocial's now; the support layout that named their folder,
+    /// deleted; and the sealed-backup escrow's (the escrow key, its reconcile outcome, its candidate
+    /// and its legacy-account name), the app's.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -1123,7 +1126,10 @@ private extension UInt8 {
         "ModerationReportRelay", "ModerationReportPayload", "SignedModerationReport",
         "ProximityActivityManager", "HostedActivity", "JoinedActivity", "OfferedActivity", "PendingActivityJoin",
         "ActivityParamsHash", "ActivityOfferPayload", "ActivityJoinRequestPayload", "ActivityJoinGrantPayload",
-        "ActivityRosterSnapshotPayload", "ActivitySyncPayload", "ActivityJoinToken", "ActivityRosterSnapshot"
+        "ActivityRosterSnapshotPayload", "ActivitySyncPayload", "ActivityJoinToken", "ActivityRosterSnapshot",
+        "SessionMessageStore", "MeshTextSendOutcome", "MeshRoutedTextHeader", "MeshRoutedTextBody",
+        "MeshMergedPhoto", "MeshMergedMessage", "MeshContentLedger", "MeshContentGates", "MeshPhotoReassembly",
+        "MeshHeartReceipt"
     ]
 
     /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must

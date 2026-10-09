@@ -121,14 +121,6 @@ final class ClothingShopExchange {
             && peerIdentity.supports(ProximityCapability.shop.rawValue, in: meshHost.namespace.family.vocabulary.capabilities)
     }
 
-    /// Session formation (spec: "'Next session start' = first slot COMMIT, not search start"): the
-    /// previous post-session window closes and its catalogs drop, and the send tracking starts over.
-    /// Called once per formation, on the mesh's formation fact.
-    func beginNewSession() {
-        shop.beginNewSession()
-        clearShopSendTracking()
-    }
-
     /// The catalog offer at a slot commit — send our catalog once per slot, pairwise sealed (the same
     /// sealed send photos use; `slot.verifiedKeyAgreementPublicKey` was set just before the commit),
     /// capability-gated, nil provider (sharing off) sends nothing — PLUS a `clothingCatalogRequest`
@@ -160,7 +152,9 @@ final class ClothingShopExchange {
     }
 
     /// Forgets every slot the catalog was sent to and every request answered: the search stopped, or a
-    /// new session formed.
+    /// new session formed (spec: "'Next session start' = first slot COMMIT, not search start"), when
+    /// the composition's session observer calls it right after the shop's `beginNewSession()` and the
+    /// chat transcript's drop, the order the mesh manager ran them in.
     func clearShopSendTracking() {
         sentShopCatalogSlotIDs.removeAll()
         shopCatalogRequestResponseAt.removeAll()

@@ -35,6 +35,7 @@ import Foundation
 import FernletDomainModel
 import FernletFoundation
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - Fixtures

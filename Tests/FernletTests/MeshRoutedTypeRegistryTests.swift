@@ -34,6 +34,7 @@ import Testing
 import FernletDomainModel
 import FernletFoundation
 import PrivateMediaStore
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -390,12 +391,12 @@ struct MeshRoutedTypeRegistryTests {
     /// one drain answer carries up to `MeshRoutedDrainBounds.increment1.maxItems` items and a
     /// burst-5 bucket would flood-drop the rest of a single legitimate backlog.
     @Test func theProjectionQuotasAreBoundedOnBothAxes() {
-        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession == 200)
+        #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession == 200)
         #expect(MeshNetworkManager.maxPhotosPerSenderPerSession == 10)
-        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession
                     > MeshRoutedDrainBounds.increment1.maxItems,
                 "a quota below one drain answer's item allowance would refuse a legitimate backlog")
-        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession
                     <= SessionMessageStore.maxSeenIDs,
                 "and it stays inside the dedup set, so a spent quota is never reached via a forgotten id")
         #expect(MeshRoutedStoreFormat.maxItems == 1024,

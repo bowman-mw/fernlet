@@ -1,9 +1,12 @@
 // MeshContentIngest.swift
-// ProximityKit/Mesh
+// FernletSocial/Mesh
 //
 // P4 item 7, second half (plan §10.3 + §21.3's decision): **what happens to merged content at the
-// receiving member.** `MeshContentMerge.swift` owns the union; this file owns the three things that
-// run around it.
+// receiving member.** ProximityKit's `MeshContentMerge.swift` owns the generic union and this module's
+// `MeshContentLedger.swift` the content kinds it holds; this file owns the three things that run
+// around it. Moved from ProximityKit with chat at plan step A0.5.9; the heart receipt's commit through
+// the ledger (`MeshHeartCommit`) stayed behind in ProximityKit's `MeshHeartCommit.swift` for one
+// commit, with the merged heart, and joins FernletSocial with the heart ledger at plan step A0.5.10.
 //
 //   1. **Hash validation at reassembly** (``MeshPhotoReassembly``). A manifest whose reassembled
 //      bytes do not match its digest is *rejected at reassembly* — structurally, because the only
@@ -15,9 +18,10 @@
 //      as a **view filter over an unmutated union** — the item still merges, it simply does not
 //      render where the gate refuses it. Same shape as termination-derived-at-read, and for the
 //      same reason: a merge that mutated the record would break the union laws.
-//   3. **The heart receipt** (``MeshHeartCommit``). §10.3 keeps the final receipt at the foreground
+//   3. **The heart receipt** (``MeshHeartReceipt``; the commit through the ledger is ProximityKit's
+//      `MeshHeartCommit` until plan step A0.5.10). §10.3 keeps the final receipt at the foreground
 //      decrypt + ledger commit, so the union produces *pending* hearts and the existing
-//      ``ProximityHeartLedger`` — its id-dedup and its 5-minute per-sender cooldown, not a second
+//      `ProximityHeartLedger` — its id-dedup and its 5-minute per-sender cooldown, not a second
 //      copy of them — arbitrates. A duplicate that crossed the split is collapsed by the union
 //      *before* the ledger sees it, so the cooldown is judged once, not twice.
 //
@@ -34,6 +38,7 @@
 
 import Foundation
 import CryptoKit
+import ProximityKit
 
 // MARK: - MeshPhotoReassembly
 
@@ -90,7 +95,7 @@ nonisolated enum MeshPhotoReassembly {
 ///
 /// A value rather than a pair of closures so the filter stays pure and comparable: the live
 /// predicates are folded into it once, at the call site, from the seams that already enforce them —
-/// `MeshNetworkManager.isChatAllowed` for the 13+ chat gate, and `ProximityHost.isBlockedFingerprint`
+/// `MeshSessionChat.isChatAllowed` for the 13+ chat gate, and `ProximityHost.isBlockedFingerprint`
 /// plus `ModerationBanStore.isPeerBanned` for the local block/ban. Nothing here re-implements either
 /// rule; it only carries their answers into the merge.
 ///
@@ -122,7 +127,7 @@ nonisolated struct MeshContentGates: Equatable, Sendable {
     /// never disagree with the seam it came from.
     ///
     /// - Parameters:
-    ///   - chatAllowed: `MeshNetworkManager.isChatAllowed` at this member.
+    ///   - chatAllowed: `MeshSessionChat.isChatAllowed` at this member.
     ///   - senders: the authors present in the merged ledger (``MeshContentLedger/senders``).
     ///   - isRefused: `ProximityHost.isBlockedFingerprint` ∪ `ModerationBanStore.isPeerBanned`.
     static func folding(
@@ -182,8 +187,8 @@ extension MeshContentLedger {
     /// Whether a merged heart has become a receipt at this member.
     ///
     /// The union alone answers ``MeshHeartReceipt/pending`` for everything: only the foreground
-    /// decrypt + ``ProximityHeartLedger`` commit (``MeshHeartCommit/commit(_:into:)``) can move it,
-    /// and `committed` is that commit's own answer.
+    /// decrypt + `ProximityHeartLedger` commit (ProximityKit's `MeshHeartCommit.commit(_:into:)`) can
+    /// move it, and `committed` is that commit's own answer.
     func heartReceipt(_ giftID: UUID, committed: Set<UUID>) -> MeshHeartReceipt {
         committed.contains(giftID) ? .received : .pending
     }
@@ -195,65 +200,6 @@ extension MeshContentLedger {
 nonisolated enum MeshHeartReceipt: String, Equatable, Sendable {
     /// Merged, not yet through the foreground decrypt + ledger commit. The state a union produces.
     case pending
-    /// The local ``ProximityHeartLedger`` committed a record for it.
+    /// The local `ProximityHeartLedger` committed a record for it.
     case received
-}
-
-// MARK: - MeshHeartCommit
-
-/// What the local heart ledger made of a merged batch of hearts.
-///
-/// `judgements` is the load-bearing field: it is the number of times the ledger was *asked*, which
-/// is one per distinct gift id. A duplicate that crossed the split is collapsed by the union before
-/// this runs, so the 5-minute cooldown is judged once rather than twice.
-nonisolated struct MeshHeartCommitOutcome: Equatable, Sendable {
-
-    /// Gift ids the ledger committed a receipt for, in the order they were offered.
-    let receivedGiftIDs: [UUID]
-    /// Gift ids the ledger refused — already recorded, inside the cooldown, or the ledger is
-    /// unloaded and failing closed.
-    let refusedGiftIDs: [UUID]
-    /// How many times the ledger was asked to judge.
-    let judgements: Int
-
-    /// Builds an outcome.
-    init(receivedGiftIDs: [UUID], refusedGiftIDs: [UUID], judgements: Int) {
-        self.receivedGiftIDs = receivedGiftIDs
-        self.refusedGiftIDs = refusedGiftIDs
-        self.judgements = judgements
-    }
-
-    /// The gift ids that became receipts, as the set ``MeshContentLedger/heartReceipt(_:committed:)``
-    /// reads.
-    var committed: Set<UUID> { Set(receivedGiftIDs) }
-}
-
-/// Drives merged hearts through the **existing** ``ProximityHeartLedger`` — its id-dedup, its
-/// 5-minute per-sender cooldown, its retention cap — rather than a second copy of those rules.
-///
-/// This is the "final receipt only at foreground decrypt + ledger commit" step of plan §10.3: the
-/// merge hands over pending hearts, and what the ledger answers is the receipt.
-enum MeshHeartCommit {
-
-    /// Offers each merged heart to the ledger exactly once, oldest-first.
-    static func commit(
-        _ hearts: [MeshMergedHeart],
-        into ledger: ProximityHeartLedger
-    ) -> MeshHeartCommitOutcome {
-        var received: [UUID] = []
-        var refused: [UUID] = []
-        for heart in hearts.prefix(MeshMergedHeart.setCapacity) {
-            let accepted = ledger.recordReceivedHeart(
-                id: heart.giftID,
-                senderDisplayName: heart.senderDisplayName,
-                senderFingerprint: heart.senderFingerprint
-            )
-            if accepted { received.append(heart.giftID) } else { refused.append(heart.giftID) }
-        }
-        return MeshHeartCommitOutcome(
-            receivedGiftIDs: received,
-            refusedGiftIDs: refused,
-            judgements: received.count + refused.count
-        )
-    }
 }

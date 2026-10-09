@@ -38,6 +38,7 @@
 import Foundation
 import Testing
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - MeshContentFixtures

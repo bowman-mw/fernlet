@@ -93,7 +93,9 @@ import Testing
 /// protocol identity, a constant value), `proximityInstallBinding` (a stateless adapter over the
 /// install's binding row), `makeProximityTrustPolicy` (a fresh session trust policy over the vault,
 /// which runs nothing until a coordinator consults it), `makeProximityIdentity` (a fresh identity over
-/// the store's rows, which provisions nothing until asked), `proximityDisplayName`, `presenceEnablePromptRequested`,
+/// the store's rows, which provisions nothing until asked), `meshRoutedTypeEntries` (ProximityKit plan
+/// step A0.5.9: FernletSocial's routed-type rows, constant values the mesh reads once at
+/// construction), `proximityDisplayName`, `presenceEnablePromptRequested`,
 /// `proximityRunVerdict` (the funnel's OUTPUT, never its input), `setProximityDisplayName`,
 /// `setShowProximityDebugTools`; the trust and moderation roster (`trustedProximityPeers`,
 /// `trustedProximityPeer`, `trustProximityPeer`, `keepProximityFriends`,

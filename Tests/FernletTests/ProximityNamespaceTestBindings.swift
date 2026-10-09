@@ -707,11 +707,13 @@ extension PeerNameDisplay {
 //
 // ProximityKit spells no routed type: the routed type registry builds its rows from the routed types
 // it is handed, its ack-stage projection likewise, and the manifest mint takes its registry with no
-// default. The routed-type constants, the two `increment1` values and the mint's old shape come back
-// here with `.fernlet`'s `family.vocabulary.routedTypes`, read off the value, never respelled. A cell
-// whose subject is a token's spelling, or a registry's tokens, names `.fernlet` explicitly instead.
-// (The membership record kinds need no binding of their own: the verifier, the adoption and the
-// digest above take Fernlet's family, record kinds included.)
+// default. The routed-type constants and the mint's old shape come back here with `.fernlet`'s
+// `family.vocabulary.routedTypes`, read off the value, never respelled. The two `increment1` shapes
+// the mint reads followed the host's routed rows to `FernletSocialTestBindings.swift` at plan step
+// A0.5.9, because they build from FernletSocial's `FernletRoutedTypes`. A cell whose subject is a
+// token's spelling, or a registry's tokens, names `.fernlet` explicitly instead. (The membership
+// record kinds need no binding of their own: the verifier, the adoption and the digest above take
+// Fernlet's family, record kinds included.)
 
 /// The routed-type tokens the suites were written against, each read off `.fernlet`'s
 /// `family.vocabulary.routedTypes` (plan step A0.3.3), never respelled here.
@@ -726,31 +728,12 @@ enum MeshRoutedTypeToken {
     static let control = ProximityNamespace.fernlet.family.vocabulary.routedTypes.control
 }
 
-/// The shipping registry in the shape the suites were written against (plan step A0.3.3).
-extension MeshRoutedTypeRegistry {
-
-    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the registry the retired
-    /// `increment1` value held.
-    static var increment1: MeshRoutedTypeRegistry {
-        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
-    }
-}
-
-/// The ack-stage projection in the shape the suites were written against (plan step A0.3.3).
-extension MeshRoutedAckStageTable {
-
-    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the table the retired
-    /// `increment1` value held.
-    static var increment1: MeshRoutedAckStageTable {
-        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
-    }
-}
-
 /// The manifest mint in the shape the suites were written against, with the registry its retired
 /// `types:` default named (plan step A0.3.3). It inherits the mint's main-actor isolation.
 extension MeshRoutedManifest {
 
-    /// `signed(...types:)` with `.fernlet`'s registry, `increment1(_:)` over its routed types.
+    /// `signed(...types:)` with `.fernlet`'s registry, the test target's `increment1(_:)` over its
+    /// routed types (the resident rows and Fernlet's host rows, `FernletSocialTestBindings.swift`).
     @MainActor
     static func signed(
         meshID: UUID, target: MeshDeliveryTarget, typeToken: String, contentHash: Data, size: UInt64,
@@ -818,8 +801,10 @@ extension MeshNetworkManager {
 // `ProximityDisplayName.peerDisplayName(_:in:)` rather than an extension of FernletDomainModel's
 // `ItemNameModeration`, the envelope's two sender reads are functions taking the namespace, and the
 // advertised recipe name and the session message store's ingest take it last. Each old shape comes
-// back here with `.fernlet`'s peer-name policy, never a cap or a floor of its own. A cell whose subject
-// is the cap or the floor names `.fernlet` explicitly instead.
+// back here with `.fernlet`'s peer-name policy, never a cap or a floor of its own, but the session
+// message store's, which followed the store to FernletSocial at plan step A0.5.9 and is in
+// `FernletSocialTestBindings.swift`. A cell whose subject is the cap or the floor names `.fernlet`
+// explicitly instead.
 
 /// ProximityKit's peer-name coercion in the shape the suites were written against (plan step
 /// A0.3.12), on the type that used to carry it.
@@ -848,20 +833,6 @@ extension RecipeShareAdvertisedName {
     /// `publishable(_:in: .fernlet)`.
     static func publishable(_ raw: String) -> String {
         publishable(raw, in: .fernlet)
-    }
-}
-
-/// The session message store's ingest in the shape the suites were written against (plan step
-/// A0.3.12). It inherits the store's main-actor isolation, as the function it restores has.
-extension SessionMessageStore {
-
-    /// `receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:in: .fernlet)`.
-    func receiveIncoming(
-        id: UUID, senderFingerprint: String, senderDisplayName: String, text rawText: String,
-        sentAt: Date, seenAt: Date
-    ) -> Acceptance {
-        receiveIncoming(id: id, senderFingerprint: senderFingerprint, senderDisplayName: senderDisplayName,
-                        text: rawText, sentAt: sentAt, seenAt: seenAt, in: .fernlet)
     }
 }
 
