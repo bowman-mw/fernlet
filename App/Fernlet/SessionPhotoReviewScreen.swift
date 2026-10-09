@@ -7,6 +7,7 @@
 
 import SwiftUI
 import ProximityKit
+import FernletSocial
 import FernletUI
 import FernletProximityUI
 
@@ -19,7 +20,7 @@ import FernletProximityUI
 /// ContentView). While it is not `.active` the sheet draws its opaque cover instead of the grid, so
 /// the app-switcher snapshot never holds a photo nobody chose.
 ///
-/// Tiles load through the manager's gated seam (`reviewThumbnailData(for:)`), which answers nothing
+/// Tiles load through the session photos' gated seam (`reviewThumbnailData(for:)`), which answers nothing
 /// under duress or while the device is locked; they reload when that seam reopens. The root is
 /// modal to VoiceOver, and VoiceOver's escape gesture is "Not now" (the sheet wires it).
 struct SessionPhotoReviewScreen: View {
@@ -39,11 +40,11 @@ struct SessionPhotoReviewScreen: View {
                 workingMessage: coordinator.workingMessage,
                 answerFailure: coordinator.answerFailure,
                 unreadableCount: coordinator.unreadableCount,
-                tileReloadToken: coordinator.manager.heldPhotosCanBeShown ? 1 : 0,
+                tileReloadToken: coordinator.sessionPhotos.heldPhotosCanBeShown ? 1 : 0,
                 keepSelected: { await coordinator.keepSelected() },
                 discardAll: { await coordinator.discardAll() },
                 notNow: { Task { await coordinator.notNow() } },
-                loadImageData: { coordinator.manager.reviewThumbnailData(for: $0) }
+                loadImageData: { coordinator.sessionPhotos.reviewThumbnailData(for: $0) }
             )
             .environment(\.scenePhase, coordinator.scenePhase)
             .photoSaveFailureAlert("Couldn't Save Photos", failure: $coordinator.photoSaveError)

@@ -99,7 +99,9 @@ struct SessionRosterTests {
     /// pinned "roster survives leaveSession untouched"; the spec moved consumption from
     /// view-events to the promoted batch, so the pinned semantics changed with it.)
     @Test func roster_promotesToPendingReviewOnLeaveSession() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Alice", fingerprint: "aabbccdd11223344",
             signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]))
@@ -108,7 +110,7 @@ struct SessionRosterTests {
 
         #expect(manager.sessionRoster.isEmpty,
                 "Teardown moves the roster into the pending review batch")
-        #expect(manager.pendingFriendReview?.entries.map(\.fingerprint) == ["aabbccdd11223344"],
+        #expect(photos.pendingFriendReview?.entries.map(\.fingerprint) == ["aabbccdd11223344"],
                 "leaveSession must promote the roster — the keep-as-friend prompt consumes the batch post-teardown")
     }
 
@@ -127,16 +129,18 @@ struct SessionRosterTests {
     }
 
     @Test func newSessionReset_neverTouchesPendingFriendReview() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Alice", fingerprint: "aabbccdd11223344",
             signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]))
         manager.leaveSession()   // promotes into the batch
-        let batchID = manager.pendingFriendReview?.id
+        let batchID = photos.pendingFriendReview?.id
 
         manager.resetSessionRosterForNewSession()
 
-        #expect(manager.pendingFriendReview?.id == batchID,
+        #expect(photos.pendingFriendReview?.id == batchID,
                 "An unreviewed batch survives into the next search cycle")
     }
 
@@ -176,12 +180,14 @@ struct FriendReviewBatchTests {
     let store = makeTestStore()
 
     @Test func promotion_mergesIntoUnconsumedBatchByFingerprint() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Alice", fingerprint: "aabbccdd11223344",
             signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]))
         manager.leaveSession()
-        let firstBatchID = manager.pendingFriendReview?.id
+        let firstBatchID = photos.pendingFriendReview?.id
 
         // Next session: Alice re-commits (new display name) and Bob commits; batch unconsumed.
         manager.resetSessionRosterForNewSession()
@@ -193,7 +199,7 @@ struct FriendReviewBatchTests {
             signingPublicKey: Data([3]), keyAgreementPublicKey: Data([4]))
         manager.leaveSession()
 
-        let batch = manager.pendingFriendReview
+        let batch = photos.pendingFriendReview
         #expect(batch?.id == firstBatchID, "Merges into the existing unconsumed batch, never a new one")
         #expect(batch?.entries.map(\.fingerprint) == ["aabbccdd11223344", "eeff001122334455"],
                 "Candidates are never dropped by a merge")
@@ -202,38 +208,44 @@ struct FriendReviewBatchTests {
     }
 
     @Test func completeFriendReview_clearsOnlyTheMatchingBatch() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Alice", fingerprint: "aabbccdd11223344",
             signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]))
         manager.leaveSession()
-        let batchID = manager.pendingFriendReview!.id
+        let batchID = photos.pendingFriendReview!.id
 
-        manager.completeFriendReview(UUID())
-        #expect(manager.pendingFriendReview != nil, "A stale/foreign id must not consume the batch")
+        photos.completeFriendReview(UUID())
+        #expect(photos.pendingFriendReview != nil, "A stale/foreign id must not consume the batch")
 
-        manager.completeFriendReview(batchID)
-        #expect(manager.pendingFriendReview == nil)
+        photos.completeFriendReview(batchID)
+        #expect(photos.pendingFriendReview == nil)
     }
 
     @Test func promotion_isIdempotentAcrossRepeatedTeardownPaths() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Alice", fingerprint: "aabbccdd11223344",
             signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]))
 
         manager.leaveSession()
-        let batchID = manager.pendingFriendReview?.id
+        let batchID = photos.pendingFriendReview?.id
         manager.leaveSession()   // second teardown: roster already empty — nothing changes
 
-        #expect(manager.pendingFriendReview?.id == batchID)
-        #expect(manager.pendingFriendReview?.entries.count == 1)
+        #expect(photos.pendingFriendReview?.id == batchID)
+        #expect(photos.pendingFriendReview?.entries.count == 1)
     }
 
     /// Finding 5: a peer removed by the session vote must never be offered by the keep prompt —
     /// purged from the live roster, refused on re-record, absent from the promoted batch.
     @Test func votedOutPeerIsAbsentFromThePromotedBatch() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Bob", fingerprint: "bob-fp-0011223344",
             signingPublicKey: Data([3]), keyAgreementPublicKey: Data([4]))
@@ -263,7 +275,7 @@ struct FriendReviewBatchTests {
         #expect(manager.sessionRoster.count == 1)
 
         manager.leaveSession()
-        #expect(manager.pendingFriendReview?.entries.map(\.fingerprint) == ["cara-fp-99887766"],
+        #expect(photos.pendingFriendReview?.entries.map(\.fingerprint) == ["cara-fp-99887766"],
                 "The promoted batch never offers a voted-out peer")
     }
 
@@ -275,7 +287,9 @@ struct FriendReviewBatchTests {
     /// partner's side), so the session ends one hop after the call rather than inside it. The roster
     /// is pruned synchronously, before that hop, which is what keeps the peer out of the batch.
     @Test func pairwiseAskToRemoveYieldsNoKeepPromptForThatPeer() async {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Bob", fingerprint: "bob-fp-0011223344",
             signingPublicKey: Data([3]), keyAgreementPublicKey: Data([4]))
@@ -303,7 +317,7 @@ struct FriendReviewBatchTests {
         await waitForTeardown { manager.currentMesh == nil }
         #expect(manager.currentMesh == nil, "The shortcut ends the session")
         #expect(manager.sessionRoster.isEmpty)
-        #expect(manager.pendingFriendReview == nil,
+        #expect(photos.pendingFriendReview == nil,
                 "No batch promotes — the only roster entry was the peer being removed")
     }
 

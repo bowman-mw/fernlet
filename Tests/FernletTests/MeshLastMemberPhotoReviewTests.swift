@@ -60,18 +60,19 @@ enum LastMemberReviewFixtures {
         return Set(photos.map(\.id))
     }
 
-    /// Takes `count` photos on `manager` through the real `addPhoto`, under the pinned install.
-    static func capture(_ count: Int, on manager: MeshNetworkManager) {
+    /// Takes `count` photos on `photos` through the real `addPhoto`, under the pinned install.
+    static func capture(_ count: Int, on photos: MeshSessionPhotos) {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             // R2: bounded by the caller's count.
-            for _ in 0..<count { manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
+            for _ in 0..<count { photos.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
         }
     }
 
     /// Fernlet's mesh composition over a manager on a recording fake radio with a founded,
     /// single-member mesh — enough for `addPhoto` to route captures into the session list and for the
     /// machine to take an ending. The caller keeps the composition for as long as it uses the
-    /// manager, its `mesh`.
+    /// manager, its `mesh`, or its session photos, which hear each ending through the composition's
+    /// session observer (since plan step A0.5.11).
     static func foundedFeatures(store: FernletStore, createdAt: Date = Date()) -> FernletMeshFeatures {
         let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
         let manager = features.mesh
@@ -107,8 +108,9 @@ struct MeshLastMemberPhotoReviewTests {
         try #require(rig.roster(1).count == 2, "precondition: a founded pair whose signed roster is two")
         let leaver = rig.nodes[0].manager
         let lastMember = rig.nodes[1].manager
-        LastMemberReviewFixtures.capture(2, on: lastMember)
-        let captured = lastMember.sessionPhotos.map(\.id)
+        let lastMemberPhotos = rig.nodes[1].features.photos
+        LastMemberReviewFixtures.capture(2, on: lastMemberPhotos)
+        let captured = lastMemberPhotos.sessionPhotos.map(\.id)
         try #require(captured.count == 2, "precondition: the last member took two photos")
 
         await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -130,8 +132,8 @@ struct MeshLastMemberPhotoReviewTests {
     @Test func theLastMemberThatReadsTheTerminationAtAMergeIsOfferedEveryPhoto() async throws {
         let pair = try MeshTerminationPairScenario.build(label: "last-member-merge-")
         defer { pair.teardown() }
-        LastMemberReviewFixtures.capture(2, on: pair.nodeB.manager)
-        let captured = pair.nodeB.manager.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(2, on: pair.nodeB.features.photos)
+        let captured = pair.nodeB.features.photos.sessionPhotos.map(\.id)
         try #require(captured.count == 2, "precondition: the last member took two photos")
 
         try Self.readTheTermination(in: pair)
@@ -149,21 +151,22 @@ struct MeshLastMemberPhotoReviewTests {
         let pair = try MeshTerminationPairScenario.build(label: "last-member-door3-")
         defer { pair.teardown() }
         let manager = pair.nodeB.manager
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let captured = manager.sessionPhotos.map(\.id)
+        let photos = pair.nodeB.features.photos
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let captured = photos.sessionPhotos.map(\.id)
         try #require(captured.count == 2)
 
         manager.endSessionAfterDiscoveryTimeout()
         #expect(!manager.isSessionLive, "door 3 ended the session")
         #expect(manager.currentMesh != nil, "with the mesh held for the review's own leave")
-        let presented = try #require(manager.pendingFriendReview, "door 3 promoted a batch")
+        let presented = try #require(photos.pendingFriendReview, "door 3 promoted a batch")
         #expect(Set(presented.photos.map(\.id)) == Set(captured), "with the photos in it")
 
         try Self.readTheTermination(in: pair)
 
         #expect(manager.sessionState == .terminated)
-        #expect(manager.pendingFriendReview?.id == presented.id, "the sheet's batch is still the batch")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(captured),
+        #expect(photos.pendingFriendReview?.id == presented.id, "the sheet's batch is still the batch")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == Set(captured),
                 "and the photos it is offering were not taken out from under it")
     }
 
@@ -185,21 +188,21 @@ struct MeshLastMemberPhotoReviewTests {
     /// memory or in the persisted index — before the user was asked, while every photo is held in
     /// the sealed pending corpus (2026-09-30: inverted from "nothing left the wall").
     private static func assertOffered(_ captured: [UUID], on node: MeshDepartureNode) throws {
-        let manager = node.manager
-        let batch = try #require(manager.pendingFriendReview, "the ending produced a review batch")
+        let photos = node.features.photos
+        let batch = try #require(photos.pendingFriendReview, "the ending produced a review batch")
         #expect(Set(batch.photos.map(\.id)) == Set(captured),
                 "carrying every photo the last member took, for the user to choose between")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(captured), "all still offerable")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == Set(captured), "all still offerable")
         #expect(batch.photos.allSatisfy { $0.imageData == nil }, "metadata only, as the live list held them")
-        #expect(manager.sessionPhotos.isEmpty, "moved into the batch, not copied")
-        #expect(Set(captured).isDisjoint(with: Set(manager.meshPhotos.map(\.id))),
+        #expect(photos.sessionPhotos.isEmpty, "moved into the batch, not copied")
+        #expect(Set(captured).isDisjoint(with: Set(photos.meshPhotos.map(\.id))),
                 "nothing is on the wall before the choice")
         let persisted = LastMemberReviewFixtures.persistedWallIDs(node.store) ?? []
         #expect(Set(captured).isDisjoint(with: persisted), "nor in the persisted, sealed wall index")
         let held = try #require(HeldPhotos.persistedIndex(node.store), "the pending index reads back")
         #expect(Set(captured).isSubset(of: held.heldLocalIDs), "every photo is held in the sealed pending corpus")
         #expect(FriendMintingReview.sessionEndReview(
-            hasPhotos: !manager.pendingReviewPhotos.isEmpty, eligibleCandidateCount: 0) == .photoReview,
+            hasPhotos: !photos.pendingReviewPhotos.isEmpty, eligibleCandidateCount: 0) == .photoReview,
                 "so the presenter's decision is the PHOTO review, not the keep-friends prompt or nothing")
     }
 
@@ -210,21 +213,22 @@ struct MeshLastMemberPhotoReviewTests {
         _ captured: [UUID], on node: MeshDepartureNode
     ) throws {
         let manager = node.manager
-        let batch = try #require(manager.pendingFriendReview)
+        let photos = node.features.photos
+        let batch = try #require(photos.pendingFriendReview)
         let kept = captured[0]
         let discarded = captured[1]
         HeldPhotos.openGate(on: manager)
-        let answer = manager.finishReviewedPhotos(Set(captured), keeping: [kept], in: batch.id)
+        let answer = photos.finishReviewedPhotos(Set(captured), keeping: [kept], in: batch.id)
         #expect(answer.keptOnWall == [kept] && answer.discarded == [discarded] && answer.notApplied.isEmpty)
-        #expect(manager.meshPhotos.contains { $0.id == kept }, "the kept photo reaches the wall")
-        #expect(!manager.meshPhotos.contains { $0.id == discarded }, "the discarded one never does")
+        #expect(photos.meshPhotos.contains { $0.id == kept }, "the kept photo reaches the wall")
+        #expect(!photos.meshPhotos.contains { $0.id == discarded }, "the discarded one never does")
         let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(node.store))
         #expect(persisted.contains(kept) && !persisted.contains(discarded), "and the sealed index agrees")
         let held = try #require(HeldPhotos.persistedIndex(node.store))
         #expect(held.heldLocalIDs.isDisjoint(with: captured), "neither is held any more")
-        #expect(manager.pendingFriendReview?.photos.isEmpty ?? true, "the photo half is answered")
-        if let id = manager.pendingFriendReview?.id { manager.completeFriendReview(id) }
-        #expect(manager.pendingFriendReview == nil, "and with the candidate half answered, the batch is gone")
+        #expect(photos.pendingFriendReview?.photos.isEmpty ?? true, "the photo half is answered")
+        if let id = photos.pendingFriendReview?.id { photos.completeFriendReview(id) }
+        #expect(photos.pendingFriendReview == nil, "and with the candidate half answered, the batch is gone")
     }
 }
 
@@ -241,20 +245,21 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
     @Test func leaveSessionPromotesTheSessionPhotosAndDropsNone() throws {
         let features = LastMemberReviewFixtures.foundedFeatures(store: store)
         let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        LastMemberReviewFixtures.capture(3, on: manager)
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(3, on: photos)
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == 3)
 
         manager.leaveSession()
 
-        #expect(Set(manager.pendingFriendReview?.photos.map(\.id) ?? []) == captured)
-        #expect(manager.pendingFriendReview?.entries.isEmpty == true, "a photos-only batch is legal")
-        #expect(manager.sessionPhotos.isEmpty)
-        #expect(captured.isDisjoint(with: Set(manager.meshPhotos.map(\.id))), "nothing kept unasked")
+        #expect(Set(photos.pendingFriendReview?.photos.map(\.id) ?? []) == captured)
+        #expect(photos.pendingFriendReview?.entries.isEmpty == true, "a photos-only batch is legal")
+        #expect(photos.sessionPhotos.isEmpty)
+        #expect(captured.isDisjoint(with: Set(photos.meshPhotos.map(\.id))), "nothing kept unasked")
         #expect(captured.isSubset(of: HeldPhotos.persistedIndex(store)?.heldLocalIDs ?? []),
                 "and nothing discarded unasked: every photo is still held")
-        #expect(manager.pendingFriendReview?.photos.allSatisfy { $0.session?.meshName == "Acceptance Meadow" } == true,
+        #expect(photos.pendingFriendReview?.photos.allSatisfy { $0.session?.meshName == "Acceptance Meadow" } == true,
                 "the ended session's metadata was stamped before its ids were cleared")
     }
 
@@ -264,12 +269,13 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
         let created = Date()
         let features = LastMemberReviewFixtures.foundedFeatures(store: store, createdAt: created)
         let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         manager.startSessionCeiling(
             hardDeadline: created.addingTimeInterval(MeshSessionCeiling.ceilingSeconds), startedAt: created
         )
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == 2)
 
         await DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
@@ -277,8 +283,8 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
         }
 
         #expect(manager.sessionState == .expired, "precondition: the ceiling ended the session")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured)
-        #expect(captured.isDisjoint(with: Set(manager.meshPhotos.map(\.id))), "held, never on the wall")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == captured)
+        #expect(captured.isDisjoint(with: Set(photos.meshPhotos.map(\.id))), "held, never on the wall")
     }
 
     /// A new search is a new session, and it must not silently keep what the last one left in the
@@ -286,16 +292,17 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
     @Test func aNewSearchMovesLeftoverPhotosIntoTheReviewRatherThanDroppingThem() throws {
         let features = LastMemberReviewFixtures.foundedFeatures(store: store)
         let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        LastMemberReviewFixtures.capture(1, on: manager)
-        let leftover = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(1, on: photos)
+        let leftover = Set(photos.sessionPhotos.map(\.id))
         try #require(leftover.count == 1)
         manager.currentMesh = nil   // the ended session's mesh is gone; its photo is still listed
 
         manager.startJoin()
 
-        #expect(manager.sessionPhotos.isEmpty, "the new session starts with an empty roll")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == leftover, "and the old roll awaits its answer")
+        #expect(photos.sessionPhotos.isEmpty, "the new session starts with an empty roll")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == leftover, "and the old roll awaits its answer")
     }
 
     /// Door 3 — five minutes with nobody — promotes the photos while holding the mesh.
@@ -305,19 +312,20 @@ struct MeshInvoluntaryEndingPhotoReviewTests {
         rig.link(0, 1)
         rig.commit(0, 1)
         let manager = rig.nodes[0].manager
+        let photos = rig.nodes[0].features.photos
         rig.capturePhoto(at: 0)
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == 1)
         let slot = try #require(manager.slots.first)
         manager.evictSlotForTesting(peerID: slot.id)
-        #expect(manager.pendingFriendReview == nil, "a blip promotes nothing")
-        #expect(manager.sessionPhotos.count == 1, "and keeps the roll live")
+        #expect(photos.pendingFriendReview == nil, "a blip promotes nothing")
+        #expect(photos.sessionPhotos.count == 1, "and keeps the roll live")
 
         manager.endSessionAfterDiscoveryTimeout()
 
         #expect(manager.currentMesh != nil, "the mesh is held for the review's own leave")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured)
-        #expect(manager.sessionPhotos.isEmpty)
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == captured)
+        #expect(photos.sessionPhotos.isEmpty)
     }
 }
 
@@ -340,9 +348,10 @@ struct MeshDevelopReviewUnderGiveUpTests {
         rig.link(0, 1)
         rig.commit(0, 1)
         let manager = rig.nodes[0].manager
+        let photos = rig.nodes[0].features.photos
         // R2: bounded by the caller's count.
         for _ in 0..<captureCount { rig.capturePhoto(at: 0) }
-        let snapshot = manager.sessionPhotos.map(\.id)   // beginDevelop()'s snapshot
+        let snapshot = photos.sessionPhotos.map(\.id)   // beginDevelop()'s snapshot
         try #require(snapshot.count == captureCount)
         let slot = try #require(manager.slots.first)
         manager.evictSlotForTesting(peerID: slot.id)
@@ -350,7 +359,7 @@ struct MeshDevelopReviewUnderGiveUpTests {
         try #require(!manager.isSessionLive && manager.currentMesh != nil,
                      "precondition: door 3 ended the session and holds the mesh, so the camera stays up")
         try #require(manager.isInSession, "precondition: the Friends surface keeps the camera and its review")
-        try #require(manager.sessionPhotos.isEmpty, "precondition: the ending moved the roll out from under it")
+        try #require(photos.sessionPhotos.isEmpty, "precondition: the ending moved the roll out from under it")
         return (manager, snapshot)
     }
 
@@ -361,22 +370,23 @@ struct MeshDevelopReviewUnderGiveUpTests {
         let rig = try MeshFoundingRig.build(2, label: "develop-door3")
         defer { rig.teardown() }
         let (manager, snapshot) = try Self.developThenGiveUp(rig, captureCount: 3)
+        let photos = rig.nodes[0].features.photos
 
-        #expect(manager.photosAwaitingAnswer(among: Set(snapshot)).map(\.id) == snapshot,
+        #expect(photos.photosAwaitingAnswer(among: Set(snapshot)).map(\.id) == snapshot,
                 "the grid the person is looking at still holds every photo it offered, in order")
 
         HeldPhotos.openGate(on: manager)
-        let answer = manager.finishSessionPhotos(keeping: [snapshot[0]], of: Set(snapshot))
+        let answer = photos.finishSessionPhotos(keeping: [snapshot[0]], of: Set(snapshot))
 
         #expect(answer.keptOnWall == [snapshot[0]] && answer.discarded == Set(snapshot.dropFirst()))
-        let wall = Set(manager.meshPhotos.map(\.id))
+        let wall = Set(photos.meshPhotos.map(\.id))
         #expect(wall.contains(snapshot[0]), "the ticked photo is kept")
         #expect(!wall.contains(snapshot[1]) && !wall.contains(snapshot[2]), "the unticked ones never reach the wall")
         let persisted = try #require(LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store))
         #expect(persisted.contains(snapshot[0]) && persisted.isDisjoint(with: snapshot.dropFirst()),
                 "and the sealed index agrees")
-        #expect(manager.pendingReviewPhotos.isEmpty, "answered once: FriendsView has nothing to re-ask")
-        #expect(manager.pendingFriendReview?.photos.isEmpty ?? true)
+        #expect(photos.pendingReviewPhotos.isEmpty, "answered once: FriendsView has nothing to re-ask")
+        #expect(photos.pendingFriendReview?.photos.isEmpty ?? true)
     }
 
     /// The reviewer's exact failure: "Delete all" confirmed in the camera after the give-up.
@@ -384,17 +394,18 @@ struct MeshDevelopReviewUnderGiveUpTests {
         let rig = try MeshFoundingRig.build(2, label: "develop-door3-delete")
         defer { rig.teardown() }
         let (manager, snapshot) = try Self.developThenGiveUp(rig, captureCount: 2)
+        let photos = rig.nodes[0].features.photos
 
         HeldPhotos.openGate(on: manager)
-        let answer = manager.finishSessionPhotos(keeping: [], of: Set(snapshot))
+        let answer = photos.finishSessionPhotos(keeping: [], of: Set(snapshot))
 
         #expect(answer.discarded == Set(snapshot))
-        #expect(Set(manager.meshPhotos.map(\.id)).isDisjoint(with: snapshot), "no photo reached the wall")
+        #expect(Set(photos.meshPhotos.map(\.id)).isDisjoint(with: snapshot), "no photo reached the wall")
         let persisted = LastMemberReviewFixtures.persistedWallIDs(rig.nodes[0].store) ?? []
         #expect(persisted.isDisjoint(with: snapshot), "nor the sealed index")
         let held = try #require(HeldPhotos.persistedIndex(rig.nodes[0].store))
         #expect(held.heldLocalIDs.isDisjoint(with: snapshot), "and the pending corpus let every one go")
-        #expect(manager.photosAwaitingAnswer(among: Set(snapshot)).isEmpty, "nothing left to offer")
+        #expect(photos.photosAwaitingAnswer(among: Set(snapshot)).isEmpty, "nothing left to offer")
     }
 }
 
@@ -407,73 +418,82 @@ struct MeshDevelopReviewUnderGiveUpTests {
 struct PendingPhotoReviewScopingTests {
     let store = makeTestStore()
 
-    /// A batch whose photos are pending, promoted with one candidate.
-    private func endedSessionWithPhotos(_ count: Int) throws -> (MeshNetworkManager, [UUID]) {
+    /// A batch whose photos are pending, promoted with one candidate. Returns the composition, which
+    /// the cell keeps: its session photos hear the gate and a removal through the composition's
+    /// session observer (since plan step A0.5.11).
+    private func endedSessionWithPhotos(_ count: Int) throws -> (FernletMeshFeatures, [UUID]) {
         let features = LastMemberReviewFixtures.foundedFeatures(store: store)
         let manager = features.mesh
+        let photos = features.photos
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
         )
-        LastMemberReviewFixtures.capture(count, on: manager)
-        let captured = manager.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(count, on: photos)
+        let captured = photos.sessionPhotos.map(\.id)
         try #require(captured.count == count)
         manager.leaveSession()
-        try #require(manager.pendingFriendReview?.entries.count == 1)
-        return (manager, captured)
+        try #require(photos.pendingFriendReview?.entries.count == 1)
+        return (features, captured)
     }
 
     /// The keep-friends answer consumes the candidates and never the photo choice.
     @Test func completingTheFriendHalfLeavesThePhotoChoicePending() throws {
-        let (manager, captured) = try endedSessionWithPhotos(2)
+        let (features, captured) = try endedSessionWithPhotos(2)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        let batch = try #require(manager.pendingFriendReview)
+        let batch = try #require(photos.pendingFriendReview)
 
-        manager.completeFriendReview(batch.id)
+        photos.completeFriendReview(batch.id)
 
-        #expect(manager.pendingFriendReview?.id == batch.id, "the batch stays up")
-        #expect(manager.pendingFriendReview?.entries.isEmpty == true, "with the candidates answered")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(captured), "and every photo still pending")
+        #expect(photos.pendingFriendReview?.id == batch.id, "the batch stays up")
+        #expect(photos.pendingFriendReview?.entries.isEmpty == true, "with the candidates answered")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == Set(captured), "and every photo still pending")
     }
 
     /// The answer is scoped to what the sheet SHOWED: a photo promoted after presentation is
     /// neither discarded nor treated as kept, and a stale batch id changes nothing.
     @Test func finishingThePhotoHalfPrunesOnlyTheReviewedUnkeptPhotos() throws {
-        let (manager, captured) = try endedSessionWithPhotos(3)
+        let (features, captured) = try endedSessionWithPhotos(3)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        let batch = try #require(manager.pendingFriendReview)
+        let batch = try #require(photos.pendingFriendReview)
         let shown = Set(captured.prefix(2))
         let unseen = captured[2]
         HeldPhotos.openGate(on: manager)
 
-        #expect(manager.finishReviewedPhotos(shown, keeping: [], in: UUID()) == .nothing, "a stale id answers nothing")
-        #expect(HeldPhotos.ids(manager).isSuperset(of: Set(captured)), "and discards nothing")
+        #expect(photos.finishReviewedPhotos(shown, keeping: [], in: UUID()) == .nothing, "a stale id answers nothing")
+        #expect(HeldPhotos.ids(photos).isSuperset(of: Set(captured)), "and discards nothing")
 
-        let answer = manager.finishReviewedPhotos(shown, keeping: [captured[0]], in: batch.id)
+        let answer = photos.finishReviewedPhotos(shown, keeping: [captured[0]], in: batch.id)
 
         #expect(answer.keptOnWall == [captured[0]] && answer.discarded == [captured[1]])
-        let wall = Set(manager.meshPhotos.map(\.id))
+        let wall = Set(photos.meshPhotos.map(\.id))
         #expect(wall.contains(captured[0]), "kept")
-        #expect(!wall.contains(captured[1]) && !HeldPhotos.ids(manager).contains(captured[1]),
+        #expect(!wall.contains(captured[1]) && !HeldPhotos.ids(photos).contains(captured[1]),
                 "shown and unticked: deleted, never on the wall")
-        #expect(!wall.contains(unseen) && HeldPhotos.ids(manager).contains(unseen), "never shown: still held")
-        #expect(manager.pendingReviewPhotos.map(\.id) == [unseen], "and still awaiting its own answer")
-        #expect(manager.pendingFriendReview?.entries.count == 1, "the candidate half is untouched")
+        #expect(!wall.contains(unseen) && HeldPhotos.ids(photos).contains(unseen), "never shown: still held")
+        #expect(photos.pendingReviewPhotos.map(\.id) == [unseen], "and still awaiting its own answer")
+        #expect(photos.pendingFriendReview?.entries.count == 1, "the candidate half is untouched")
     }
 
     /// The camera's answer ignores an id someone already answered: the post-session review kept it,
     /// so a later "Delete all" from a review that also showed it must not discard it.
     @Test func aDevelopAnswerIgnoresPhotosAlreadyAnswered() throws {
-        let (manager, captured) = try endedSessionWithPhotos(2)
+        let (features, captured) = try endedSessionWithPhotos(2)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        let batch = try #require(manager.pendingFriendReview)
+        let batch = try #require(photos.pendingFriendReview)
         HeldPhotos.openGate(on: manager)
-        #expect(manager.finishReviewedPhotos(Set(captured), keeping: Set(captured), in: batch.id).keptOnWall == Set(captured))
+        #expect(photos.finishReviewedPhotos(Set(captured), keeping: Set(captured), in: batch.id).keptOnWall == Set(captured))
 
-        let late = manager.finishSessionPhotos(keeping: [], of: Set(captured))
+        let late = photos.finishSessionPhotos(keeping: [], of: Set(captured))
 
         #expect(late == .nothing, "no longer held, so nothing to answer")
-        #expect(Set(manager.meshPhotos.map(\.id)).isSuperset(of: Set(captured)), "the first answer stands")
+        #expect(Set(photos.meshPhotos.map(\.id)).isSuperset(of: Set(captured)), "the first answer stands")
     }
 
     /// A photo that arrived after the Develop snapshot was never shown, so the camera's answer
@@ -481,18 +501,19 @@ struct PendingPhotoReviewScopingTests {
     @Test func aDevelopAnswerLeavesAPhotoItNeverShowedForThePostSessionReview() throws {
         let features = LastMemberReviewFixtures.foundedFeatures(store: store)
         let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let snapshot = Set(manager.sessionPhotos.map(\.id))
-        LastMemberReviewFixtures.capture(1, on: manager)   // lands while the sheet is up
-        let late = try #require(manager.sessionPhotos.first { !snapshot.contains($0.id) }?.id)
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let snapshot = Set(photos.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(1, on: photos)   // lands while the sheet is up
+        let late = try #require(photos.sessionPhotos.first { !snapshot.contains($0.id) }?.id)
         HeldPhotos.openGate(on: manager)
 
-        #expect(manager.finishSessionPhotos(keeping: [], of: snapshot).discarded == snapshot)
-        #expect(manager.sessionPhotos.map(\.id) == [late], "only what the sheet showed was answered")
+        #expect(photos.finishSessionPhotos(keeping: [], of: snapshot).discarded == snapshot)
+        #expect(photos.sessionPhotos.map(\.id) == [late], "only what the sheet showed was answered")
         manager.leaveSession()
 
-        #expect(manager.pendingReviewPhotos.map(\.id) == [late], "and the late one awaits its own answer")
+        #expect(photos.pendingReviewPhotos.map(\.id) == [late], "and the late one awaits its own answer")
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [late], "still held, not discarded unseen")
     }
 
@@ -500,21 +521,25 @@ struct PendingPhotoReviewScopingTests {
     /// refused, so the batch keeps offering it and the pending corpus keeps holding it — a delete
     /// that dropped it from memory while the index kept it would bring it back at the next launch.
     @Test func deletingAHeldPhotoIsRefusedAndTheBatchKeepsIt() throws {
-        let (manager, captured) = try endedSessionWithPhotos(1)
+        let (features, captured) = try endedSessionWithPhotos(1)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        let batch = try #require(manager.pendingFriendReview)
-        manager.completeFriendReview(batch.id)
-        #expect(manager.pendingFriendReview != nil, "precondition: only the photo is pending")
+        let batch = try #require(photos.pendingFriendReview)
+        photos.completeFriendReview(batch.id)
+        #expect(photos.pendingFriendReview != nil, "precondition: only the photo is pending")
 
-        manager.deletePhoto(captured[0])
+        photos.deletePhoto(captured[0])
 
-        #expect(manager.pendingReviewPhotos.map(\.id) == captured, "still offered")
+        #expect(photos.pendingReviewPhotos.map(\.id) == captured, "still offered")
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == Set(captured), "and still held on disk")
     }
 
     /// The vote purge drops the voted-out candidate; it must not take the photo choice with it.
     @Test func aRemovalPurgeKeepsAPhotosOnlyBatch() throws {
-        let (manager, captured) = try endedSessionWithPhotos(1)
+        let (features, captured) = try endedSessionWithPhotos(1)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         let proposal = MeshRemovalProposalPayload(
             id: UUID(), targetFingerprint: "bea-fp-0011223344", targetDisplayName: "Bea",
@@ -524,8 +549,8 @@ struct PendingPhotoReviewScopingTests {
 
         manager.secondRemoval(proposal)
 
-        #expect(manager.pendingFriendReview?.entries.isEmpty == true, "the voted-out candidate is purged")
-        #expect(manager.pendingReviewPhotos.map(\.id) == captured, "and the photo choice survives the purge")
+        #expect(photos.pendingFriendReview?.entries.isEmpty == true, "the voted-out candidate is purged")
+        #expect(photos.pendingReviewPhotos.map(\.id) == captured, "and the photo choice survives the purge")
     }
 }
 
@@ -580,19 +605,20 @@ struct FriendsViewLastMemberReviewPresentationTests {
         }
     }
 
-    /// Takes `colors.count` photos on the store's manager inside a mesh, then ends the session with
-    /// a teardown nobody reviewed (`leaveSession()`, which a verified termination runs).
+    /// Takes `colors.count` photos on the store's session photos inside a mesh, then ends the session
+    /// with a teardown nobody reviewed (`leaveSession()`, which a verified termination runs).
     private func endWithPhotos(_ colors: [UIColor]) throws -> Set<UUID> {
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         HeldPhotos.openGate(on: manager)   // the review presents held photos only where its seam is open
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            for color in colors { manager.addPhoto(Self.swatch(color)) }
+            for color in colors { photos.addPhoto(Self.swatch(color)) }
         }
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == colors.count)
         manager.leaveSession()
-        try #require(!manager.isSessionLive && Set(manager.pendingReviewPhotos.map(\.id)) == captured)
+        try #require(!manager.isSessionLive && Set(photos.pendingReviewPhotos.map(\.id)) == captured)
         return captured
     }
 
@@ -617,7 +643,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
         #expect(Self.overlayShows(on: scene) && coordinator.isShowing, "the review is up, in its own window")
         #expect(Set(coordinator.photos.map(\.id)) == captured, "offering every photo")
         #expect(hosting.presentedViewController == nil, "and the Friends surface presents no photo sheet of its own")
-        #expect(Set(store.meshNetworkManager.pendingReviewPhotos.map(\.id)) == captured,
+        #expect(Set(store.meshFeatures.photos.pendingReviewPhotos.map(\.id)) == captured,
                 "nothing was consumed or kept on the way: the choice is still the person's")
         if let overlay = scene.windows.first(where: { $0.accessibilityIdentifier == SessionPhotoReviewOverlayPresenter.windowIdentifier }) {
             Self.writeEvidence(of: overlay)
@@ -642,7 +668,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
 
         #expect(Self.overlayShows(on: scene), "the review is up")
         #expect(holdsForeignCover(hosting.presentedViewController), "above the other sheet, which is still presented")
-        #expect(Set(store.meshNetworkManager.pendingReviewPhotos.map(\.id)) == captured, "and nothing was answered")
+        #expect(Set(store.meshFeatures.photos.pendingReviewPhotos.map(\.id)) == captured, "and nothing was answered")
     }
 
     /// The camera's teardown shape (finding C-F2): the view that OWNS a presented sheet leaves the
@@ -654,12 +680,13 @@ struct FriendsViewLastMemberReviewPresentationTests {
         let (window, hosting) = OverlayTestSupport.window(on: scene, root: ForeignCoverHost(store: store, cover: cover))
         defer { OverlayTestSupport.close(window, hosting) }
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         HeldPhotos.openGate(on: manager)
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            for color in [UIColor.systemTeal, .systemOrange] { manager.addPhoto(Self.swatch(color)) }
+            for color in [UIColor.systemTeal, .systemOrange] { photos.addPhoto(Self.swatch(color)) }
         }
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == 2)
         cover.childMounted = true
         try await Task.sleep(for: .milliseconds(200))
@@ -675,7 +702,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
         coordinator.evaluateNow()
 
         #expect(Self.overlayShows(on: scene), "the review landed as the owner and its sheet went")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "and nothing was answered on the way")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == captured, "and nothing was answered on the way")
     }
 
     /// REWRITTEN for the overlay (design §6 Unit 3). This cell used to pin that the Friends
@@ -702,7 +729,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
         await coordinator.discardAll()
         #expect(!Self.overlayShows(on: scene) && !coordinator.isShowing, "the answer takes the overlay down")
         #expect(holdsForeignCover(hosting.presentedViewController), "and the journal entry is exactly where it was")
-        #expect(store.meshNetworkManager.pendingReviewPhotos.isEmpty, "the answer applied")
+        #expect(store.meshFeatures.photos.pendingReviewPhotos.isEmpty, "the answer applied")
     }
 
     /// Fix round 1, U2-L-U2-R1, carried to the overlay: a photo review owed under a duress decoy does
@@ -713,13 +740,14 @@ struct FriendsViewLastMemberReviewPresentationTests {
         let scene = try OverlayTestSupport.scene()
         let captured = try endWithPhotos([.systemTeal, .systemOrange])
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         Self.enterDuress(on: manager, store: store)
         let coordinator = armedCoordinator(on: scene)
         defer { Self.disarm(coordinator) }
 
         coordinator.evaluateNow()
         #expect(!Self.overlayShows(on: scene), "no photo review under the decoy")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "and nothing answered or deleted")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == captured, "and nothing answered or deleted")
 
         store.duressSessionActive = false
         HeldPhotos.openGate(on: manager)
@@ -729,7 +757,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
         Self.enterDuress(on: manager, store: store)
         coordinator.scheduleEvaluation()
         #expect(!Self.overlayShows(on: scene), "a duress session starting withdraws the review at once")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "unanswered: every photo still held")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == captured, "unanswered: every photo still held")
         store.duressSessionActive = false
     }
 
@@ -739,13 +767,14 @@ struct FriendsViewLastMemberReviewPresentationTests {
     @Test func aKeepFriendsPromptUpIsWithdrawnUnansweredWhenTheOverlayShows() async throws {
         let scene = try OverlayTestSupport.scene()
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         HeldPhotos.openGate(on: manager)
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
         )
         manager.leaveSession()
-        try #require(manager.pendingFriendReview?.entries.count == 1 && !manager.hasOutstandingPhotoReview)
+        try #require(photos.pendingFriendReview?.entries.count == 1 && !photos.hasOutstandingPhotoReview)
         let (window, hosting) = OverlayTestSupport.window(on: scene, root: FriendsView(
             store: store, activeSheet: .constant(nil), isTabBarCompact: .constant(false), tabResetToken: .constant(0)
         ))
@@ -756,7 +785,7 @@ struct FriendsViewLastMemberReviewPresentationTests {
         defer { Self.disarm(coordinator) }
 
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            manager.addPhoto(Self.swatch(.systemTeal))   // a late photo: held awaiting, into the same batch
+            photos.addPhoto(Self.swatch(.systemTeal))   // a late photo: held awaiting, into the same batch
         }
         coordinator.evaluateNow()
         try await OverlayTestSupport.waitUntil { hosting.presentedViewController == nil }
@@ -765,13 +794,13 @@ struct FriendsViewLastMemberReviewPresentationTests {
         #expect(hosting.presentedViewController == nil, "and the prompt under it is withdrawn")
         let bea = Data([7])
         #expect(!store.trustedProximityPeers.contains { $0.signingPublicKey == bea }, "with nothing minted")
-        #expect(manager.pendingFriendReview?.entries.count == 1, "and nothing consumed")
+        #expect(photos.pendingFriendReview?.entries.count == 1, "and nothing consumed")
         #expect(coordinator.candidates.map(\.fingerprint) == ["bea-fp-0011223344"], "the overlay offers the candidate")
 
         coordinator.keptFriendFingerprints = ["bea-fp-0011223344"]
         await coordinator.keepSelected()
         #expect(store.trustedProximityPeers.filter { $0.signingPublicKey == bea }.count == 1, "minted once, by the overlay")
-        #expect(manager.pendingFriendReview == nil, "and the batch is answered, both halves")
+        #expect(photos.pendingFriendReview == nil, "and the batch is answered, both halves")
         try await Task.sleep(for: .milliseconds(1_200))
         #expect(hosting.presentedViewController == nil, "the prompt does not come back for an answered batch")
     }
@@ -871,14 +900,20 @@ func holdsForeignCover(_ controller: UIViewController?) -> Bool {
 // MARK: - Source walls
 
 /// The defect lived in two places a behavioral cell cannot reach at once — the manager's teardown
-/// and the SwiftUI presenter — so both are pinned by reading the shipping source.
+/// and the SwiftUI presenter — so both are pinned by reading the shipping source. Since plan step
+/// A0.5.11 the live list, its answers, the promotion and the purge are the session photos'
+/// (`MeshSessionPhotos.swift`), told each moment by the mesh's session observer; the teardown and
+/// the start stay the manager's.
 @Suite
 struct LastMemberPhotoReviewSourceWallTests {
 
     /// Only the user's answer, the promotion and delete-all may empty the live photo list.
     @Test func theLivePhotoListIsEmptiedOnlyByAnAnswerOrThePromotion() throws {
-        let source = MeshRoutedSourceScan.codeOnly(
+        let manager = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
+        )
+        let source = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshSessionPhotos.swift")
         )
         #expect(source.components(separatedBy: "sessionPhotos.removeAll()").count - 1 == 1,
                 "exactly one bulk move: the promotion's (the answers remove what they answered)")
@@ -908,23 +943,25 @@ struct LastMemberPhotoReviewSourceWallTests {
         #expect(promotion.contains("pendingFriendReview = batch"), "the promotion moves, never drops")
         #expect(!promotion.contains("heldPhotoStore") && !promotion.contains("photoCacheStore"),
                 "and writes nothing (I6): both lists are memory projections of the pending index")
-        let leave = try #require(MeshRoutedSourceScan.bracedBody(after: "public func leaveSession()", in: source))
+        let leave = try #require(MeshRoutedSourceScan.bracedBody(after: "public func leaveSession()", in: manager))
         #expect(!leave.contains("sessionPhotos"), "leaveSession decides nothing about the photos")
-        let join = try #require(MeshRoutedSourceScan.bracedBody(after: "public func startJoin()", in: source))
-        #expect(join.contains("movePhotosIntoPendingReview()"), "a new search promotes leftovers too")
+        let join = try #require(MeshRoutedSourceScan.bracedBody(after: "public func startJoin()", in: manager))
+        #expect(join.contains("meshSessionWillBegin("), "a new search tells the session observer a session begins")
+        let begin = try #require(MeshRoutedSourceScan.bracedBody(after: "func beginNewPhotoSession()", in: source))
+        #expect(begin.contains("movePhotosIntoPendingReview()"), "a new search promotes leftovers too")
     }
 
     /// The presenter reads the batch, never the live list, and its answers are scoped to the batch.
     /// Since session photos U3 the presenter is `SessionPhotoReviewCoordinator`, not `FriendsView`.
     @Test func theFriendsReviewReadsTheBatchAndAnswersIt() throws {
         let friends = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/ConnectView.swift"))
-        #expect(!friends.contains("manager.sessionPhotos"),
+        #expect(!friends.contains("photos.sessionPhotos"),
                 "FriendsView must never read the live list: the ending empties it before any presenter runs")
         #expect(!friends.contains("finishReviewedPhotos(") && !friends.contains("FriendPhotoReviewSheet("),
                 "and it no longer presents or answers the photo review at all — the overlay does (U3)")
         let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewCoordinator.swift"))
         let present = try #require(MeshRoutedSourceScan.bracedBody(after: "private func present()", in: source))
-        #expect(present.contains("manager.pendingReviewPhotos"), "the photos come from the batch")
+        #expect(present.contains("sessionPhotos.pendingReviewPhotos"), "the photos come from the batch")
         let show = try #require(present.range(of: "presenter.show(self)"))
         let leave = try #require(present.range(of: "leaveEndedMeshIfHeld()"), "an ended held mesh is left AT PRESENT (I21)")
         #expect(show.lowerBound < leave.lowerBound, "once the review is up")
@@ -994,7 +1031,7 @@ struct LastMemberPhotoReviewSourceWallTests {
             after: "private func presentDisconnectReviewIfNeeded()", in: source))
         #expect(present.contains("guard activeSheet == nil, !cameraPresentsOwnSheet else { return }"),
                 "no request over the root sheet or the camera's own sheets")
-        #expect(present.contains("guard !manager.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,"),
+        #expect(present.contains("guard !features.photos.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,"),
                 "photos first: never while photos wait or the overlay is up (I17)")
         #expect(present.contains("sessionEndReview(hasPhotos: false"), "the photo half is never decided here")
         #expect(present.components(separatedBy: "noteSessionEndSheetRequested()").count - 1 == 1,
@@ -1036,7 +1073,7 @@ struct LastMemberPhotoReviewSourceWallTests {
             let body = try #require(MeshRoutedSourceScan.bracedBody(after: action, in: camera), "\(action) is gone")
             let raised = try #require(body.range(of: "reviewCoordinator.beginAnswer()"))
             let deferred = try #require(body.range(of: "defer { reviewCoordinator.endAnswer() }"))
-            let answered = try #require(body.range(of: "manager.finishSessionPhotos("))
+            let answered = try #require(body.range(of: "features.photos.finishSessionPhotos("))
             #expect(raised.lowerBound < answered.lowerBound && deferred.lowerBound < answered.lowerBound,
                     "\(action) raises the answer leg before the manager, lowered by `defer` after its leave")
         }
@@ -1056,13 +1093,13 @@ struct LastMemberPhotoReviewSourceWallTests {
         #expect(sheet.contains("photos: developReviewPhotos"), "the grid renders the snapshot wherever it is held")
         let discard = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func discardAllSessionPhotos() async", in: source))
-        #expect(discard.contains("manager.finishSessionPhotos(keeping: [], of: developReviewIDs)"),
+        #expect(discard.contains("features.photos.finishSessionPhotos(keeping: [], of: developReviewIDs)"),
                 "Delete all answers the snapshot")
         let keep = try #require(MeshRoutedSourceScan.bracedBody(
             after: "private func keepSelectedSessionPhotos() async", in: source))
-        #expect(keep.contains("manager.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)"),
+        #expect(keep.contains("features.photos.finishSessionPhotos(keeping: selectedForSave, of: developReviewIDs)"),
                 "Keep selected answers the snapshot")
         #expect(!source.contains("deleteAllSessionPhotos()"), "no answer scoped to the live list alone")
-        #expect(source.contains("manager.photosAwaitingAnswer(among: developReviewIDs)"))
+        #expect(source.contains("features.photos.photosAwaitingAnswer(among: developReviewIDs)"))
     }
 }

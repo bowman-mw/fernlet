@@ -54,12 +54,13 @@ public struct PrivateMediaStore {
     /// because a tiny, highly-compressed image can still decode to a multi-gigabyte bitmap.
     ///
     /// `public` since P6 item 3 so the routed mesh path can **derive** its per-type ciphertext cap
-    /// from this one number instead of restating it: `ProximityKit` owns this store as its
-    /// photowall cache and already depends on the module, and the S3 wall it sits behind is about
-    /// which targets may import `PrivateMediaStore` at all (the AI providers may not) — never about
-    /// the visibility of a byte bound inside it. Two restatements of "10 MB" that could drift is the
-    /// larger risk; see the routed photo row in `MeshRoutedTypeRegistry.increment1Rows(_:)`, which
-    /// holds the formula since ProximityKit plan step A0.5.4.
+    /// from this one number instead of restating it: `FernletSocial` owns this store as its
+    /// photowall cache (its `MeshSessionPhotos`, since ProximityKit plan step A0.5.11) and depends on
+    /// the module, and the S3 wall it sits behind is about which targets may import
+    /// `PrivateMediaStore` at all (the AI providers may not) — never about the visibility of a byte
+    /// bound inside it. Two restatements of "10 MB" that could drift is the larger risk; see the
+    /// routed photo row in FernletSocial's `FernletRoutedTypes`, which holds the formula since plan
+    /// step A0.5.11 (ProximityKit's registry held it from A0.5.4).
     public static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
     // A small, highly-compressed JPEG can decode to a multi-gigabyte bitmap, so the byte cap
     // above is not sufficient. Reject by pixel dimensions/area before the full-resolution bytes

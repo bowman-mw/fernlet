@@ -769,13 +769,14 @@ struct ProximityRunPolicyFunnelTests {
         let before = makeStore("run-policy-funnel-review-seed", proximity: proximity)
         let seedingFeatures = LastMemberReviewFixtures.foundedFeatures(store: before)
         let seeding = seedingFeatures.mesh
-        LastMemberReviewFixtures.capture(2, on: seeding)
+        LastMemberReviewFixtures.capture(2, on: seedingFeatures.photos)
         seeding.leaveSession()
         let aside = try HeldPhotoFixtures.makeWallUnreadable(before)   // the next launch is a locked one
         let store = makeStore("run-policy-funnel-review", proximity: proximity)
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         defer { if manager.isSearching { manager.stopJoin() } }
-        try #require(!manager.hasOutstandingPhotoReview && !store.sessionPhotoReviewCoordinator.blocksDiscovery,
+        try #require(!photos.hasOutstandingPhotoReview && !store.sessionPhotoReviewCoordinator.blocksDiscovery,
                      "precondition: over a wall that could not be read at launch nothing is offered yet")
         try HeldPhotoFixtures.restoreWall(store, aside: aside)   // the unlock makes it readable
         store.selectedTab = .social
@@ -784,7 +785,7 @@ struct ProximityRunPolicyFunnelTests {
             scenePhase: .active, protectedDataAvailable: true, duressSessionActive: false, now: Self.epoch
         )
 
-        #expect(manager.hasOutstandingPhotoReview && store.sessionPhotoReviewCoordinator.blocksDiscovery,
+        #expect(photos.hasOutstandingPhotoReview && store.sessionPhotoReviewCoordinator.blocksDiscovery,
                 "the unlock edge's own gate pass re-read the index and offered the held photos")
         #expect(verdict.discovery == .stop, "and the radio half saw that review: discovery stays down")
         #expect(!manager.isSearching, "so no search started under a review that blocks it")

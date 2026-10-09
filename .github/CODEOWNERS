@@ -98,6 +98,12 @@
 /FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift @bowman-mw
 /FernletKit/Sources/FernletSocial/Wire/ActivityPayloads.swift              @bowman-mw
 
+# FernletSocial's JSON sidecar (moved from ProximityKit in plan step A0.5.11, its `package` doors closed):
+# the on-disk JSON and `.completeFileProtection` of the activity ledger, the moderation, closeness and
+# friend-state ledgers and the photo wall's preferences — changing an encoder setting or the write here
+# changes every one of those files already saved
+/FernletKit/Sources/FernletSocial/Support/JSONSidecarFile.swift            @bowman-mw
+
 # FernletSocial's heart dead-drop: the drop's outer seal and the sidecars' at-rest seal, the prekey
 # store's keychain service and blob, the heart-drop pair secret and day tags, the storage scope and the
 # mesh stores' keychain services derived beside it — changing a byte here breaks every drop in flight

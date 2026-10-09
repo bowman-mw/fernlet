@@ -16,6 +16,7 @@
 import Foundation
 import UIKit
 import FernletDomainModel
+import FernletSocial
 import ProximityKit
 
 /// Central reader for the UX-appearance-test launch flags.
@@ -147,15 +148,15 @@ enum UITestSupport {
         return min(max(count, 1), 10)
     }
 
-    /// Holds ``seededHeldSessionPhotoCount`` generated JPEGs through the manager's own capture door
+    /// Holds ``seededHeldSessionPhotoCount`` generated JPEGs through the session photos' own capture door
     /// with no session live — so each is held AWAITING in the sealed pending corpus exactly as a
     /// real ended session's photo is, never on the wall — unless a review is already outstanding
     /// (a relaunch in the same test must not pile more on). Consumed by `ContentView`'s launch
     /// sequence before the review's first evaluation.
     ///
-    /// - Parameter manager: The store's mesh manager.
-    static func seedHeldSessionPhotosIfRequested(on manager: MeshNetworkManager) {
-        guard let count = seededHeldSessionPhotoCount, !manager.hasOutstandingPhotoReview else { return }
+    /// - Parameter photos: The store's session photos (its mesh features' `photos`).
+    static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {
+        guard let count = seededHeldSessionPhotoCount, !photos.hasOutstandingPhotoReview else { return }
         let colors: [UIColor] = [.systemTeal, .systemOrange, .systemPink, .systemIndigo, .systemGreen]
         let side = CGSize(width: 240, height: 240)
         // R2: bounded by the clamped count.
@@ -166,7 +167,7 @@ enum UITestSupport {
                 context.fill(CGRect(origin: .zero, size: side))
             }
             guard let data = image.jpegData(compressionQuality: 0.8) else { continue }
-            manager.addPhoto(data)
+            photos.addPhoto(data)
         }
     }
 
@@ -205,7 +206,7 @@ enum UITestSupport {
     static var shouldSeedStudioCanvas: Bool { false }
     static var seededMeshContinuationCard: MeshContinuationCardKind? { nil }
     static var seededHeldSessionPhotoCount: Int? { nil }
-    static func seedHeldSessionPhotosIfRequested(on manager: MeshNetworkManager) {}
+    static func seedHeldSessionPhotosIfRequested(on photos: MeshSessionPhotos) {}
     static var isTestHarnessActive: Bool { false }
     #endif
 }

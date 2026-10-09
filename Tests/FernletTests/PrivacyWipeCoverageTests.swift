@@ -109,7 +109,9 @@ struct PrivacyWipeCoverageTests {
         // Leg 4d (2026-09-30): the session photos nobody has chosen yet — the sealed pending corpus,
         // the whole review batch (candidates too) and the live roll and roster. The wall itself is
         // still a deliberate survivor; this is the separate corpus that holds photos BEFORE the choice.
-        "meshNetworkManager.purgeHeldSessionPhotosForDeleteAll",
+        // The session photos' since ProximityKit plan step A0.5.11 (`meshFeatures.photos`), the mesh
+        // manager's before it; the purge empties the mesh's live roster in the same step.
+        "photos.purgeHeldSessionPhotosForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
         // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in
@@ -229,6 +231,13 @@ struct PrivacyWipeCoverageTests {
         "deviceJournalKey",
         "deviceWorryKey",
         "invalidateEncryptionKeyCache",
+        // The session photos' two at-rest key caches (the friend wall's and the pending corpus's),
+        // dropped immediately after the mesh's identity wipe, inside the same `do` and before
+        // presence's, since ProximityKit plan step A0.5.11: the mesh manager dropped them inside its
+        // `wipeIdentityForDeleteAll()` until then, where this bounded scan never read them. The token
+        // above is satisfied by the meal-photo store's own call and pins nothing of the mesh's; this
+        // one pins the move.
+        "photos.invalidateEncryptionKeyCaches",
         // Away-hearts dead-drop state (Increment 3): prekeys, peer bundles, outbox, dedup + the
         // service's own identity cache. The remote purge is a SEPARATE row because it must run
         // first — it needs the record names the local wipe destroys.

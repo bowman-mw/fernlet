@@ -684,7 +684,7 @@ struct ContentView: View {
         // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
         if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
         // Session photos U3: an ended session's photos held for review before the first evaluation.
-        UITestSupport.seedHeldSessionPhotosIfRequested(on: store.meshNetworkManager)
+        UITestSupport.seedHeldSessionPhotosIfRequested(on: store.meshFeatures.photos)
         #endif
         // A notification tapped during a cold launch stored its deep-link before this
         // view finished preparing — open it now (live taps arrive via the onReceive handlers).

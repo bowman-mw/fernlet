@@ -3,7 +3,8 @@
 //
 // ProximityKit plan step A0.5.5: the one way the test target builds Fernlet's mesh as the app does —
 // FernletSocial's composition (`FernletMeshFeatures`) over a mesh the manager's internal designated
-// initializer builds, with the radio, the identity and the pending corpus's key the rigs inject.
+// initializer builds, with the radio and the identity the rigs inject, and the pending photo corpus's
+// key, which the composition hands to its session photos (since plan step A0.5.11).
 //
 // THE RULE. A rig node keeps the composition for its whole lifetime, and the rig returns the
 // composition, never a bare mesh: the composition owns the feature objects, so a node that kept only
@@ -27,9 +28,9 @@ enum FernletMeshRig {
     /// The app's composition over `store`, its mesh built by the manager's internal designated
     /// initializer with the rig's seams, and every installation the composition owes its mesh checked.
     ///
-    /// `heldPhotoKeys` reaches only the manager's designated initializer, inside the composition's
-    /// mesh factory, until the photo object leaves the manager (plan step A0.5.11), when it moves to the
-    /// composition's own initializer; this signature does not change then.
+    /// `heldPhotoKeys` goes to the composition's own initializer, which hands it to the session photos:
+    /// the seam left the manager's designated initializer with the photos at plan step A0.5.11, when it
+    /// stopped reaching the manager inside the mesh factory. This signature did not change.
     ///
     /// - Parameters:
     ///   - store: The host, as the composition takes it since plan step A0.5.10 (FernletSocial's
@@ -44,8 +45,8 @@ enum FernletMeshRig {
         identity: IdentityService? = nil,
         heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil
     ) -> FernletMeshFeatures {
-        let features = FernletMeshFeatures(host: store, identity: identity) { id in
-            MeshNetworkManager(store: store, transport: transport, identity: id, heldPhotoKeys: heldPhotoKeys)
+        let features = FernletMeshFeatures(host: store, identity: identity, heldPhotoKeys: heldPhotoKeys) { id in
+            MeshNetworkManager(store: store, transport: transport, identity: id)
         }
         expectEveryInstallationHeld(by: features)
         return features
@@ -56,9 +57,9 @@ enum FernletMeshRig {
     /// step A0.5.6), the payload handlers (``featurePayloadTokens``: the shop's two since A0.5.6, the
     /// moderation report's and the friend state's since A0.5.7, the activity manager's five since
     /// A0.5.8), each read off the mesh's registry, the activity manager's two mesh seams (A0.5.8), and
-    /// every routed registration's answer held to `true` (A0.5.9 on: the chat's projection handler, and
-    /// from A0.5.10 the hearts' ledger judge, whose refusals the composition records and logs rather than
-    /// drops). Each later feature step adds its own here.
+    /// every routed registration's answer held to `true` (A0.5.9 on: the chat's projection handler,
+    /// from A0.5.10 the hearts' ledger judge and from A0.5.11 the session photos' projection handler,
+    /// whose refusals the composition records and logs rather than drops).
     ///
     /// - Parameter features: The composition just built.
     private static func expectEveryInstallationHeld(by features: FernletMeshFeatures) {

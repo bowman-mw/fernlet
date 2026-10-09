@@ -29,18 +29,21 @@
 //      session profile (A0.7 / C5): 5 lines in 2 files (the mesh manager's last rows left with the
 //      session hearts, plan step A0.5.10);
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
-//      later step reshapes or closes, each row with that step (44 lines in 6 files);
-//   6. no type that left ProximityKit for FernletSocial or the app (64 names: the heart dead-drop's,
+//      later step reshapes or closes, each row with that step (38 lines in 5 files);
+//   6. no type that left ProximityKit for FernletSocial or the app (74 names: the heart dead-drop's,
 //      presence's, moderation's (the report relay's among them), closeness's and friend state's types,
 //      the parked chat payload, the clothing shop's, the activity manager's with its payloads and the
 //      two domain types its signing extends, the live-session chat's with the content layer's first
 //      half, the session hearts' with the heart ledger, its proof, the ack, the merged heart, the
-//      commit and the body, the deleted support layout and the sealed-backup escrow's) is declared,
-//      extended or aliased in ProximityKit code again.
+//      commit and the body, the session photos' with the wall's post and preferences, the review batch
+//      and its answer, the routed photo body, the JSON sidecar and the camera's copy vault, the deleted
+//      support layout and the sealed-backup escrow's) is declared, extended or aliased in ProximityKit
+//      code again.
 //
-// And ProximityKit's target in `FernletKit/Package.swift` depends on exactly FernletCrypto,
-// PrivateMediaStore and FernletDomainModel (since plan step A0.5.10, when FernletFoundation left with
-// the session heart send's one read of it), so an edge A0.5 drops cannot come back unseen.
+// And ProximityKit's target in `FernletKit/Package.swift` depends on exactly FernletCrypto and
+// FernletDomainModel (since plan step A0.5.11, when PrivateMediaStore left with the photos;
+// FernletFoundation left at A0.5.10 with the session heart send's one read of it), so an edge A0.5
+// drops cannot come back unseen.
 //
 // Rules 2 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
 // lowered or deleted. So rules 2 to 4 only shrink, to nothing, as A0.5, A0.7, A0.7 / C5 and A1
@@ -61,9 +64,9 @@
 // a later step reshapes what is behind them: the presence radio's seam, its QUIC conformer, the peer
 // channel the seam names, the epoch posture and the TXT vocabulary, which FernletSocial's presence
 // manager drives (until A1); the coordinator's typed send and manual commit, which presence's heart
-// delivery and the recipe-share manager call (until A0.7); and the naive JSON sidecar FernletSocial's
-// moderation, closeness and friend-state ledgers and its activity manager persist through, which the
-// mesh's photo-wall preferences still use here (until A0.5).
+// delivery and the recipe-share manager call (until A0.7). The naive JSON sidecar FernletSocial's
+// ledgers, its activity manager and its photo-wall preferences persist through left with the photos
+// at plan step A0.5.11, so its doors closed: it is FernletSocial's own, internal there.
 
 import Foundation
 import Testing
@@ -836,9 +839,10 @@ private extension UInt8 {
     /// wherever it is used. So the list is exact both ways, like rules 2 to 4: a new `package` line
     /// fails until a row names why it is there and its exit, and a line that goes away fails until
     /// its row is lowered or deleted, so no door outlives its step unnoticed. ProximityKit declares
-    /// `package` on 44 code lines in 6 files: the presence radio's doors (36 lines in 4 files, until
-    /// A1), the coordinator's two (until A0.7) and the JSON sidecar's six (until A0.5). Every code
-    /// line on which `package` is an access modifier counts, once, however its declaration goes on
+    /// `package` on 38 code lines in 5 files: the presence radio's doors (36 lines in 4 files, until
+    /// A1) and the coordinator's two (until A0.7); the JSON sidecar's six closed at plan step A0.5.11,
+    /// when it left for FernletSocial with the photos, its last user here. Every code line on which
+    /// `package` is an access modifier counts, once, however its declaration goes on
     /// (``packageDeclarationPattern``), a setter's `package(set)` included; comments and literals may
     /// say `package` freely, and code may use it as a name.
     @Test func packageIsDeclaredOnlyOnTheListedLines() throws {
@@ -975,13 +979,12 @@ private extension UInt8 {
 
     /// Every file whose code declares `package`, by path under the module root, each row with the
     /// step that closes its doors: the presence radio's seam, its QUIC conformer, the peer channel the
-    /// seam names, the epoch posture and the TXT vocabulary (A1), the coordinator's typed send and
-    /// manual commit (A0.7), and the JSON sidecar FernletSocial's ledgers persist through (A0.5).
+    /// seam names, the epoch posture and the TXT vocabulary (A1), and the coordinator's typed send and
+    /// manual commit (A0.7). The JSON sidecar's row (A0.5) went at plan step A0.5.11.
     static let packageDeclarationLines: [String: PackageLines] = [
         "Engine/ProximityCoordinator.swift": PackageLines(lines: 2, reason: .coordinatorDoors),
         "Presence/PresenceAdvertisement.swift": PackageLines(lines: 4, reason: .presenceRadioSeam),
         "Presence/PresenceEpochPosture.swift": PackageLines(lines: 5, reason: .presenceRadioSeam),
-        "Support/JSONSidecarFile.swift": PackageLines(lines: 6, reason: .sidecarFileShare),
         "Transport/NetworkMeshSession.swift": PackageLines(lines: 12, reason: .presenceRadioSeam),
         "Transport/NetworkPresenceSession.swift": PackageLines(lines: 15, reason: .presenceRadioSeam)
     ]
@@ -995,9 +998,10 @@ private extension UInt8 {
     /// presence, moderation's ban store, ledger and content hash, closeness, friend state, the parked
     /// chat payload, the clothing shop with its catalog payloads, the moderation report relay with its
     /// payload, the activity manager with its payloads and the signing its two domain types carry, the
-    /// live-session chat with the first half of the content layer, and the session hearts with the heart
-    /// ledger and everything its routed judgement builds, for FernletSocial, and the sealed-backup escrow
-    /// for the app, and the support layout that named their folder was deleted.
+    /// live-session chat with the first half of the content layer, the session hearts with the heart
+    /// ledger and everything its routed judgement builds, and the session photos with the session review,
+    /// the routed photo body, the JSON sidecar and the camera's copy vault, for FernletSocial, and the
+    /// sealed-backup escrow for the app, and the support layout that named their folder was deleted.
     /// Rules 2 to 4 cannot see one come back: a feature re-declared here under its old name, with no
     /// Fernlet string, no registry label and no domain type of its own, compiles clean and passes them
     /// and every other test, and two declarations of one name in two modules the app imports compile
@@ -1118,9 +1122,13 @@ private extension UInt8 {
     /// plan step A0.5.9) and the session hearts' (the heart ledger, its received-heart record and its
     /// durability proof, the routed heart's ack, the merged heart, the heart commit and its outcome, the
     /// routed heart header and body, and the hearts' failure and state vocabulary, nested in
-    /// `MeshSessionHearts` — plan step A0.5.10), all FernletSocial's now; the support layout that named
-    /// their folder, deleted; and the sealed-backup escrow's (the escrow key, its reconcile outcome, its
-    /// candidate and its legacy-account name), the app's.
+    /// `MeshSessionHearts` — plan step A0.5.10) and the session photos' (the wall's post and its
+    /// preferences, the keep's outcome nested in `MeshSessionPhotos`, the session-end review batch, its
+    /// answer and the answer's failure, the routed photo header and body, the JSON sidecar and the
+    /// camera's copy vault, `ProximityUICopy`, deleted with its one line — plan step A0.5.11), all
+    /// FernletSocial's now; the support layout that named their folder, deleted; and the sealed-backup
+    /// escrow's (the escrow key, its reconcile outcome, its candidate and its legacy-account name), the
+    /// app's.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -1138,7 +1146,10 @@ private extension UInt8 {
         "MeshHeartReceipt",
         "ProximityHeartLedger", "ReceivedHeartRecord", "MeshHeartLedgerProof", "MeshMergedHeart", "MeshHeartCommit",
         "MeshHeartCommitOutcome", "MeshRoutedHeartAck", "MeshRoutedHeartHeader", "MeshRoutedHeartBody",
-        "SessionHeartFailure", "SessionHeartState"
+        "SessionHeartFailure", "SessionHeartState",
+        "FriendPhotoWallPost", "FriendPhotoWallPreferences", "MeshFriendReviewBatch", "SessionPhotoAnswer",
+        "SessionPhotoAnswerFailure", "MeshRoutedPhotoHeader", "MeshRoutedPhotoBody", "HeldKeepOutcome",
+        "JSONSidecarFile", "ProximityUICopy"
     ]
 
     /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must
@@ -1170,10 +1181,10 @@ private extension UInt8 {
     /// Each edge A0.5 drops leaves with the last code that reads its module, and none may come back
     /// unseen, not even for one commit: an edge restored in the manifest compiles clean, and so does
     /// every file that then imports the module again. `FernletFoundation` left at A0.5.10 with its one
-    /// read, the session heart send's `FernletDate.dayKey`; `PrivateMediaStore` leaves with the photos
-    /// at A0.5.11, which narrows the list. The manifest is read as text: the `dependencies:` array of
-    /// the one target declared `name: "ProximityKit"`, each quoted name in it. A manifest whose
-    /// ProximityKit target the reader cannot find fails rather than passing on an empty list.
+    /// read, the session heart send's `FernletDate.dayKey`; `PrivateMediaStore` left with the photos
+    /// at A0.5.11, which narrowed the list to two. The manifest is read as text: the `dependencies:`
+    /// array of the one target declared `name: "ProximityKit"`, each quoted name in it. A manifest
+    /// whose ProximityKit target the reader cannot find fails rather than passing on an empty list.
     @Test func proximityKitDependsOnExactlyItsListedTargets() throws {
         let manifest = try RepoRoot.source("FernletKit/Package.swift")
         let target = try NSRegularExpression(pattern: #"name:\s*"ProximityKit"\s*,\s*dependencies:\s*\[([^\]]*)\]"#)
@@ -1193,9 +1204,9 @@ private extension UInt8 {
             """)
     }
 
-    /// ProximityKit's target dependencies, exactly: FernletCrypto, PrivateMediaStore and
-    /// FernletDomainModel since plan step A0.5.10; PrivateMediaStore leaves at A0.5.11.
-    static let proximityKitDependencies = ["FernletCrypto", "PrivateMediaStore", "FernletDomainModel"]
+    /// ProximityKit's target dependencies, exactly: FernletCrypto and FernletDomainModel since plan
+    /// step A0.5.11 (PrivateMediaStore left with the photos; FernletFoundation at A0.5.10).
+    static let proximityKitDependencies = ["FernletCrypto", "FernletDomainModel"]
 
     // MARK: The lexer, fixtured
 

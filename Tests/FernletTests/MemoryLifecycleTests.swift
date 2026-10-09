@@ -535,27 +535,28 @@ struct PhotoWallPreferencePruneTests {
 
     /// A favorite whose photo has left the cache must not survive in the install-lifetime sidecar:
     /// once the photos are gone, the next shrink site prunes every entry that pointed at them, and
-    /// a fresh manager over the same store loads none back.
+    /// fresh session photos over the same store load none back.
     @Test func preferencesForEvictedPhotosArePrunedAndNotReloaded() {
         let session = FriendPhotoSessionMetadata(id: UUID(), meshID: nil, meshName: nil, startedAt: Date(), participants: [])
         let first = makeSessionPhoto(session: session)
         let second = makeSessionPhoto(session: session)
         do {
-            let manager = MeshNetworkManager(store: store)
-            manager.meshPhotos = [first, second]
+            let features = FernletMeshRig.features(store: store)
+            let photos = features.photos
+            photos.meshPhotos = [first, second]
             let post = FriendPhotoWallPost(id: session.id, session: session, photos: [first, second], coverPhoto: first)
-            manager.toggleFavorite(photoID: second.id, in: post)
-            #expect(manager.photoWallPreferenceEntryCountForTesting == 1)
+            photos.toggleFavorite(photoID: second.id, in: post)
+            #expect(photos.photoWallPreferenceEntryCountForTesting == 1)
 
             // Both photos leave the cache (session discard / FIFO / delete): the entry must go.
-            manager.deletePhoto(first.id)
-            #expect(manager.photoWallPreferenceEntryCountForTesting == 1, "the session still has a live photo")
-            manager.deletePhoto(second.id)
-            #expect(manager.photoWallPreferenceEntryCountForTesting == 0,
+            photos.deletePhoto(first.id)
+            #expect(photos.photoWallPreferenceEntryCountForTesting == 1, "the session still has a live photo")
+            photos.deletePhoto(second.id)
+            #expect(photos.photoWallPreferenceEntryCountForTesting == 0,
                     "no photo of the session remains, so its preference entries must be pruned")
         }
-        let reloaded = MeshNetworkManager(store: store)
-        #expect(reloaded.photoWallPreferenceEntryCountForTesting == 0,
+        let reloaded = FernletMeshRig.features(store: store)
+        #expect(reloaded.photos.photoWallPreferenceEntryCountForTesting == 0,
                 "the pruned sidecar must not resurrect entries on the next launch")
     }
 }

@@ -85,7 +85,7 @@ TARGETS=(
     "FernletDomainModel:FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
     "FernletLockUI:FernletKit/Sources/FernletLockUI/Localizable.xcstrings"
     "FernletUI:FernletKit/Sources/FernletUI/Localizable.xcstrings"
-    "ProximityKit:FernletKit/Sources/ProximityKit/Localizable.xcstrings"
+    "FernletSocial:FernletKit/Sources/FernletSocial/Localizable.xcstrings"
     "FernletProximityUI:FernletKit/Sources/FernletProximityUI/Localizable.xcstrings"
     "FernletConnections:FernletKit/Sources/FernletConnections/Localizable.xcstrings"
     "AppServices:FernletKit/Sources/AppServices/Localizable.xcstrings"

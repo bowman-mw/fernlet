@@ -171,15 +171,16 @@ enum OverlayTestSupport {
 struct SessionPhotoReviewOverlayTests {
     let store = makeTestStore()
 
-    /// An ended session with `photos` held on a founded manager over this cell's store, with the mesh
-    /// composition that owns it; the caller keeps the composition for as long as it uses the manager.
+    /// An ended session with `photos` held by the session photos of a founded mesh over this cell's
+    /// store, with the mesh composition that owns both; the caller keeps the composition for as long
+    /// as it uses the manager or the photos.
     private func endedFeatures(photos: Int) throws -> FernletMeshFeatures {
         let features = LastMemberReviewFixtures.foundedFeatures(store: store)
         let manager = features.mesh
-        LastMemberReviewFixtures.capture(photos, on: manager)
+        LastMemberReviewFixtures.capture(photos, on: features.photos)
         manager.leaveSession()
         HeldPhotos.openGate(on: manager)
-        try #require(manager.pendingReviewPhotos.count == photos)
+        try #require(features.photos.pendingReviewPhotos.count == photos)
         return features
     }
 
@@ -198,7 +199,8 @@ struct SessionPhotoReviewOverlayTests {
         defer { manager.leaveMesh() }
         let presenter = SessionPhotoReviewOverlayPresenter(appearance: { _ in .dark })
         let coordinator = SessionPhotoReviewCoordinator(
-            manager: manager, host: store, presenter: presenter, saveKeptPhotosToLibrary: { _ in }
+            manager: manager, sessionPhotos: features.photos, host: store, presenter: presenter,
+            saveKeptPhotosToLibrary: { _ in }
         )
         defer { presenter.hide() }
         presenter.attach(to: scene)
@@ -264,12 +266,13 @@ struct SessionPhotoReviewOverlayTests {
         let manager = features.mesh
         defer { manager.leaveMesh() }
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            for _ in 0..<2 { manager.addPhoto(OverlayTestSupport.magentaJPEG()) }
+            for _ in 0..<2 { features.photos.addPhoto(OverlayTestSupport.magentaJPEG()) }
         }
         manager.leaveSession()
         HeldPhotos.openGate(on: manager)
         let coordinator = SessionPhotoReviewCoordinator(
-            manager: manager, host: store, presenter: RecordingReviewPresenter(), saveKeptPhotosToLibrary: { _ in }
+            manager: manager, sessionPhotos: features.photos, host: store, presenter: RecordingReviewPresenter(),
+            saveKeptPhotosToLibrary: { _ in }
         )
         coordinator.launchComplete = true
         coordinator.scenePhase = .active

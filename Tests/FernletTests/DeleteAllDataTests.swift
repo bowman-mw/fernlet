@@ -406,21 +406,22 @@ struct DeleteAllDataTests {
     @Test func deleteAllRemovesUnchosenSessionPhotosAndKeepsTheChosenWall() async throws {
         let store = makeStore("delete-all-held-photos")
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
         HeldPhotos.openGate(on: manager)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             // R2: a hard constant bound.
-            for _ in 0..<3 { manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
+            for _ in 0..<3 { photos.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
         }
-        let ids = manager.sessionPhotos.map(\.id)
+        let ids = photos.sessionPhotos.map(\.id)
         try #require(ids.count == 3)
-        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
+        #expect(photos.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
         )
         manager.leaveSession()
-        try #require(manager.pendingFriendReview?.entries.count == 1 && manager.pendingReviewPhotos.count == 2,
+        try #require(photos.pendingFriendReview?.entries.count == 1 && photos.pendingReviewPhotos.count == 2,
                      "precondition: two unchosen photos and one candidate are waiting")
         let pendingDirectory = store.proximitySupportDirectory
             .appendingPathComponent(PendingSessionPhotoStore.directoryName, isDirectory: true)
@@ -428,9 +429,9 @@ struct DeleteAllDataTests {
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!FileManager.default.fileExists(atPath: pendingDirectory.path), "the pending corpus is gone")
-        #expect(manager.pendingFriendReview == nil, "and the whole batch, candidates included")
-        #expect(manager.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
-        #expect(manager.meshPhotos.map(\.id) == [ids[0]], "the chosen wall is kept")
+        #expect(photos.pendingFriendReview == nil, "and the whole batch, candidates included")
+        #expect(photos.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
+        #expect(photos.meshPhotos.map(\.id) == [ids[0]], "the chosen wall is kept")
         #expect(HeldPhotos.persistedWallIDs(store) == [ids[0]], "on disk too")
     }
 

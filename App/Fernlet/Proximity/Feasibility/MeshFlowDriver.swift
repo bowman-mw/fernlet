@@ -324,12 +324,12 @@ enum MeshFlowDriver {
     /// count it asked for.
     private static func autoKeepFriendsIfDue(manager: MeshNetworkManager, store: FernletStore) {
         guard MeshMatrixDebugOptions.autoKeepsFriends,
-              let batch = manager.pendingFriendReview else { return }
+              let batch = store.meshFeatures.photos.pendingFriendReview else { return }
         let kept = Set(batch.entries.map(\.fingerprint))
-        let photoIDs = Set(manager.pendingReviewPhotos.map(\.id))
-        let answer = manager.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
+        let photoIDs = Set(store.meshFeatures.photos.pendingReviewPhotos.map(\.id))
+        let answer = store.meshFeatures.photos.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
         store.keepProximityFriends(from: batch.entries, keptFingerprints: kept)
-        manager.completeFriendReview(batch.id)
+        store.meshFeatures.photos.completeFriendReview(batch.id)
         echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count) reviewedPhotos=\(photoIDs.count) "
              + "keptOnWall=\(answer.keptOnWall.count) notApplied=\(answer.notApplied.count)")
     }
@@ -498,7 +498,7 @@ enum MeshFlowDriver {
                 return
             }
             echo("sending photo jpegBytes=\(data.count)")
-            manager.addPhoto(data)
+            store.meshFeatures.photos.addPhoto(data)
         }
     }
 
@@ -583,10 +583,11 @@ enum MeshFlowDriver {
         }
         // Received photos are HELD for the review until answered (2026-09-30), so "received" counts
         // the held ones (live roll + awaiting batch) and the wall together; `held` and `wall` split them.
-        let held = manager.sessionPhotos + manager.pendingReviewPhotos
-        let photosIn = (held + manager.meshPhotos).filter { $0.senderFingerprint != manager.localFingerprint }.count
+        let photos = store.meshFeatures.photos
+        let held = photos.sessionPhotos + photos.pendingReviewPhotos
+        let photosIn = (held + photos.meshPhotos).filter { $0.senderFingerprint != manager.localFingerprint }.count
         if photosIn != state.photosIn {
-            echo("photos received=\(photosIn) held=\(held.count) wall=\(manager.meshPhotos.count)")
+            echo("photos received=\(photosIn) held=\(held.count) wall=\(photos.meshPhotos.count)")
             state.photosIn = photosIn
         }
         let catalogs = store.meshFeatures.clothingShop.peerCatalogs.count

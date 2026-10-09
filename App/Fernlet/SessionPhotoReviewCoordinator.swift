@@ -13,7 +13,7 @@
 //     without answering / wait, exhaustively tested like `ProximityRunPolicy`.
 //   * `SessionPhotoReviewCoordinator` — owned by `FernletStore`; snapshots the batch at present,
 //     draws it through a `SessionPhotoReviewPresenting` (the overlay window in the app, a recorder in
-//     tests), answers it through `MeshNetworkManager.finishReviewedPhotos`, exports to Photos only
+//     tests), answers it through `MeshSessionPhotos.finishReviewedPhotos`, exports to Photos only
 //     after the answer and only over what the answer reports landed, and holds the discovery block
 //     (`blocksDiscovery`) the run policy reads so no second session forms before the choice.
 //   * `SessionPhotoReviewTriggers` — the ContentView modifier that feeds the coordinator its facts
@@ -24,6 +24,7 @@ import UIKit
 import FernletDomainModel
 import FernletFoundation
 import ProximityKit
+import FernletSocial
 import FernletProximityUI
 import FernletConnections
 
@@ -55,11 +56,11 @@ nonisolated enum SessionPhotoReviewGate {
     ///
     /// Concurrency: an immutable `Sendable` value.
     nonisolated struct Input: Equatable, Hashable, Sendable {
-        /// `MeshNetworkManager.pendingReviewPhotos.count` — the ended session's photos still held.
+        /// `MeshSessionPhotos.pendingReviewPhotos.count` — the ended session's photos still held.
         let outstandingPhotoCount: Int
         /// `MeshNetworkManager.isSessionLive`: the review never draws over a live session.
         let sessionIsLive: Bool
-        /// `MeshNetworkManager.heldPhotosCanBeShown`: the decrypt seam is open, the pending index is
+        /// `MeshSessionPhotos.heldPhotosCanBeShown`: the decrypt seam is open, the pending index is
         /// loaded and the launch reconcile has run (so no photo already kept can be offered again).
         let heldPhotosCanBeShown: Bool
         /// The scene is `.active` (fed from ContentView; the overlay window has no scene phase of
@@ -301,8 +302,12 @@ final class SessionPhotoReviewCoordinator {
 
     // MARK: Collaborators
 
-    /// The mesh manager whose batch this presents and answers.
+    /// The mesh whose session this review follows — its liveness, the camera's mount, the ended mesh
+    /// it leaves.
     @ObservationIgnored let manager: MeshNetworkManager
+    /// The session photos whose batch this presents and answers (the composition's `photos`, which
+    /// hold the review since ProximityKit plan step A0.5.11).
+    @ObservationIgnored let sessionPhotos: MeshSessionPhotos
     /// Where the review draws.
     @ObservationIgnored let presenter: any SessionPhotoReviewPresenting
     /// The store, held weakly (it owns this coordinator).
@@ -337,18 +342,21 @@ final class SessionPhotoReviewCoordinator {
     ///
     /// - Parameters:
     ///   - manager: The mesh manager.
+    ///   - sessionPhotos: The session photos over that mesh (the same composition's).
     ///   - host: The store (held weakly).
     ///   - presenter: Where the review draws.
     ///   - saveKeptPhotosToLibrary: The Photos-library export for kept, wall-hydrated photos.
     ///   - leaveEndedMesh: How an ended mesh is left; defaults to the signed departure/termination.
     init(
         manager: MeshNetworkManager,
+        sessionPhotos: MeshSessionPhotos,
         host: (any SessionPhotoReviewHost)?,
         presenter: any SessionPhotoReviewPresenting,
         saveKeptPhotosToLibrary: @escaping @MainActor ([FriendPhotoPayload]) async throws -> Void,
         leaveEndedMesh: @escaping @MainActor (MeshNetworkManager) async -> Void = { await $0.leaveSessionAfterNotifyingPeers() }
     ) {
         self.manager = manager
+        self.sessionPhotos = sessionPhotos
         self.host = host
         self.presenter = presenter
         self.saveKeptPhotosToLibrary = saveKeptPhotosToLibrary
@@ -377,15 +385,15 @@ final class SessionPhotoReviewCoordinator {
     /// camera's Develop answer (which raises ``beginAnswer()`` whatever the liveness) runs.
     var blocksDiscovery: Bool {
         guard !manager.isSessionLive else { return false }
-        return manager.hasOutstandingPhotoReview || answerInFlight || leaveInFlight
+        return sessionPhotos.hasOutstandingPhotoReview || answerInFlight || leaveInFlight
     }
 
     /// The facts the gate reads right now.
     var gateInput: SessionPhotoReviewGate.Input {
         SessionPhotoReviewGate.Input(
-            outstandingPhotoCount: manager.pendingReviewPhotos.count,
+            outstandingPhotoCount: sessionPhotos.pendingReviewPhotos.count,
             sessionIsLive: manager.isSessionLive,
-            heldPhotosCanBeShown: manager.heldPhotosCanBeShown,
+            heldPhotosCanBeShown: sessionPhotos.heldPhotosCanBeShown,
             sceneIsActive: scenePhase == .active,
             launchComplete: launchComplete,
             // Fail closed without a host: no store means no decoy fact, so assume the decoy.
@@ -434,7 +442,7 @@ final class SessionPhotoReviewCoordinator {
     /// Reads the gate and acts on its verdict at once (tests call this directly; the app goes
     /// through ``scheduleEvaluation()``).
     func evaluateNow() {
-        if isShowing { canKeep = manager.wallCanTakeKeeps }
+        if isShowing { canKeep = sessionPhotos.wallCanTakeKeeps }
         switch SessionPhotoReviewGate.verdict(for: gateInput) {
         case .present:
             present()
@@ -483,8 +491,8 @@ final class SessionPhotoReviewCoordinator {
 
     /// Takes the snapshot and draws it; then leaves an ended mesh still held.
     private func present() {
-        guard let batch = manager.pendingFriendReview else { return }
-        let shown = manager.pendingReviewPhotos
+        guard let batch = sessionPhotos.pendingFriendReview else { return }
+        let shown = sessionPhotos.pendingReviewPhotos
         guard !shown.isEmpty else { return }
         batchID = batch.id
         photos = shown
@@ -494,7 +502,7 @@ final class SessionPhotoReviewCoordinator {
         selectedIDs = Set(shown.map(\.id))
         keptFriendFingerprints = []
         alsoSaveToPhotos = false
-        canKeep = manager.wallCanTakeKeeps
+        canKeep = sessionPhotos.wallCanTakeKeeps
         workingMessage = nil
         answerFailure = nil
         unreadableCount = 0
@@ -611,7 +619,7 @@ final class SessionPhotoReviewCoordinator {
         guard isShowing, let batchID, !ownAnswerInFlight else { return }
         ownAnswerInFlight = true
         beginAnswer()
-        let answer = manager.finishReviewedPhotos(Set(photos.map(\.id)), keeping: selectedIDs, in: batchID)
+        let answer = sessionPhotos.finishReviewedPhotos(Set(photos.map(\.id)), keeping: selectedIDs, in: batchID)
         answerFriendHalf(of: batchID)
         await exportKeptPhotosIfAsked(answer)
         if photoSaveError != nil { await saveFailureAcknowledgement.wait() }
@@ -626,7 +634,7 @@ final class SessionPhotoReviewCoordinator {
         guard isShowing, let batchID, !ownAnswerInFlight else { return }
         ownAnswerInFlight = true
         beginAnswer()
-        let answer = manager.finishReviewedPhotos(Set(photos.map(\.id)), keeping: [], in: batchID)
+        let answer = sessionPhotos.finishReviewedPhotos(Set(photos.map(\.id)), keeping: [], in: batchID)
         answerFriendHalf(of: batchID)
         await finish(after: answer)
         ownAnswerInFlight = false
@@ -638,7 +646,7 @@ final class SessionPhotoReviewCoordinator {
     /// twice.
     private func answerFriendHalf(of batchID: UUID) {
         host?.keepProximityFriends(from: candidates, keptFingerprints: keptFriendFingerprints)
-        manager.completeFriendReview(batchID)
+        sessionPhotos.completeFriendReview(batchID)
         candidates = []
         keptFriendFingerprints = []
     }
@@ -652,7 +660,7 @@ final class SessionPhotoReviewCoordinator {
     /// - Parameter answer: What the keep just did.
     private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async {
         guard alsoSaveToPhotos, !answer.keptOnWall.isEmpty else { return }
-        let toSave = manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
+        let toSave = sessionPhotos.hydratedPhotos(sessionPhotos.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
         // If no bytes could be loaded/decrypted, don't report a false success.
         guard !toSave.isEmpty else {
             photoSaveError = .generic
@@ -720,6 +728,9 @@ struct SessionPhotoReviewTriggers: ViewModifier {
 
     private var coordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
     private var manager: MeshNetworkManager { store.meshNetworkManager }
+    /// The session photos the review's batch and decrypt seam are observed on (the composition's
+    /// `photos`): observed there, or the review stops re-evaluating when they change.
+    private var sessionPhotos: MeshSessionPhotos { store.meshFeatures.photos }
 
     func body(content: Content) -> some View {
         content
@@ -729,9 +740,9 @@ struct SessionPhotoReviewTriggers: ViewModifier {
             .onChange(of: SessionPhotoReviewGate.isCrisisSurface(activeSheet), initial: true) { _, up in
                 coordinator.crisisSurfaceUp = up
             }
-            .onChange(of: manager.pendingFriendReview) { _, _ in coordinator.scheduleEvaluation() }
+            .onChange(of: sessionPhotos.pendingFriendReview) { _, _ in coordinator.scheduleEvaluation() }
             .onChange(of: manager.isSessionLive) { _, _ in coordinator.scheduleEvaluation() }
-            .onChange(of: manager.heldPhotosCanBeShown) { _, _ in coordinator.scheduleEvaluation() }
+            .onChange(of: sessionPhotos.heldPhotosCanBeShown) { _, _ in coordinator.scheduleEvaluation() }
             .onChange(of: manager.isInSession) { _, _ in coordinator.scheduleEvaluation() }
             .onChange(of: store.duressSessionActive) { _, _ in coordinator.scheduleEvaluation() }
             .onChange(of: store.deleteAllInProgress) { _, _ in coordinator.scheduleEvaluation() }

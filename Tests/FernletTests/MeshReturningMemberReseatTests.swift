@@ -569,7 +569,7 @@ struct MeshReturningMemberReseatTests {
 
         await waitUntil { leaver.manager.currentMesh == nil }
         #expect(leaver.manager.currentMesh == nil, "precondition: the leave ran")
-        #expect(!(leaver.manager.pendingFriendReview?.entries ?? []).contains { $0.fingerprint == partner.fingerprint },
+        #expect(!(leaver.features.photos.pendingFriendReview?.entries ?? []).contains { $0.fingerprint == partner.fingerprint },
                 "and the teardown offers nobody the user asked to remove")
     }
 

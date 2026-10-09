@@ -58,23 +58,26 @@ extension SessionMessageStore {
 
 // MARK: - Record kinds and routed types (A0.3.3; the host's rows since A0.5.9)
 //
-// ProximityKit's registry builds its resident rows from the routed types it is handed and takes the
-// host's rows beside them (`increment1(_:hostEntries:)`, with no default, since plan step A0.5.9), and
-// its ack-stage projection is the registry's. The two `increment1` shapes the suites were written
-// against come back here over `.fernlet`'s `family.vocabulary.routedTypes` and Fernlet's host rows,
-// `FernletRoutedTypes.entries`, read off the same routed types, so every spelling keeps its three
-// rows. The manifest mint's old shape stays in `ProximityNamespaceTestBindings.swift` and reaches the
+// ProximityKit's registry is built from the host's rows alone since plan step A0.5.11
+// (`init(entries:)`; from A0.5.9 it took them beside resident rows built from the routed types it
+// was handed, `increment1(_:hostEntries:)`, until the photo row, the last resident one, left it),
+// and its ack-stage projection is the registry's. The two `increment1` shapes the suites were
+// written against come back here over Fernlet's host rows, `FernletRoutedTypes.entries`, read off
+// `.fernlet`'s `family.vocabulary.routedTypes`, so every spelling keeps its three rows. The
+// manifest mint's old shape stays in `ProximityNamespaceTestBindings.swift` and reaches the
 // registry shape here within the test module.
 
-/// The shipping registry in the shapes the suites were written against (plan steps A0.3.3, A0.5.9).
+/// The shipping registry in the shapes the suites were written against (plan steps A0.3.3, A0.5.9,
+/// A0.5.11).
 extension MeshRoutedTypeRegistry {
 
-    /// `increment1(_:hostEntries:)` over `routedTypes` with Fernlet's host rows over the same routed
-    /// types, `FernletRoutedTypes.entries(routedTypes)`: the registry the engine's
-    /// `increment1(_:)` built before the temporary-message row (plan step A0.5.9) and the heart row
-    /// (A0.5.10) left it. Distinct from ProximityKit's function by its labels.
+    /// `init(entries:)` over Fernlet's host rows read off `routedTypes`,
+    /// `FernletRoutedTypes.entries(routedTypes)`: the registry the engine's `increment1(_:)` built
+    /// before the temporary-message row (plan step A0.5.9), the heart row (A0.5.10) and the photo
+    /// row (A0.5.11) left it, the engine building `MeshRoutedTypeRegistry(entries:)` over its host's
+    /// rows since (S16).
     static func increment1(_ routedTypes: ProximityNamespace.RoutedTypes) -> MeshRoutedTypeRegistry {
-        increment1(routedTypes, hostEntries: FernletRoutedTypes.entries(routedTypes))
+        MeshRoutedTypeRegistry(entries: FernletRoutedTypes.entries(routedTypes))
     }
 
     /// ``increment1(_:)`` over `.fernlet`'s `family.vocabulary.routedTypes`: the registry the retired

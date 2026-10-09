@@ -350,7 +350,7 @@ struct MeshRoutedTypeRegistryTests {
             MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.photo)
         )
         let formula = PrivateMediaStore.maxIncomingPhotoBytes
-            + MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
+            + MeshRoutedPhotoBody.maxFramedHeaderByteCount
             + MeshRoutedItemSealFormat.overheadByteCount
         #expect(photo.maxItemByteCount == UInt64(formula),
                 "the row is not the payload bound plus the framing it rides under")
@@ -392,7 +392,7 @@ struct MeshRoutedTypeRegistryTests {
     /// burst-5 bucket would flood-drop the rest of a single legitimate backlog.
     @Test func theProjectionQuotasAreBoundedOnBothAxes() {
         #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession == 200)
-        #expect(MeshNetworkManager.maxPhotosPerSenderPerSession == 10)
+        #expect(MeshSessionPhotos.maxPhotosPerSenderPerSession == 10)
         #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession
                     > MeshRoutedDrainBounds.increment1.maxItems,
                 "a quota below one drain answer's item allowance would refuse a legitimate backlog")
@@ -413,11 +413,11 @@ struct MeshRoutedTypeRegistryTests {
     @Test func theHeaderAllowanceCoversAMaximalHeader() throws {
         let json = try MeshRoutedItemBodyFormat.headerEncoder()
             .encode(MeshRoutedTypeRegistryFixtures.maximalPhotoHeader())
-        #expect(json.count <= MeshRoutedItemBodyFormat.maxHeaderJSONByteCount / 8,
+        #expect(json.count <= MeshRoutedPhotoBody.maxHeaderJSONByteCount / 8,
                 "the widest header leaves under the documented 8×: \(json.count) bytes")
-        #expect(MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
+        #expect(MeshRoutedPhotoBody.maxFramedHeaderByteCount
                 == MeshRoutedItemBodyFormat.headerLengthPrefixByteCount
-                + MeshRoutedItemBodyFormat.maxHeaderJSONByteCount)
+                + MeshRoutedPhotoBody.maxHeaderJSONByteCount)
     }
 
     /// The formula, end to end: a maximal photo body — the photo wall's entire plaintext bound under
@@ -448,7 +448,7 @@ struct MeshRoutedTypeRegistryTests {
         #expect(UInt64(blob.count) <= photo.maxItemByteCount,
                 "a photo the wall would accept cannot be minted under its own row")
         #expect(photo.maxItemByteCount - UInt64(blob.count)
-                == UInt64(MeshRoutedItemBodyFormat.maxHeaderJSONByteCount - json.count),
+                == UInt64(MeshRoutedPhotoBody.maxHeaderJSONByteCount - json.count),
                 "the gap to the cap is not the header allowance this header did not spend")
 
         let padding = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount)

@@ -1,4 +1,4 @@
-import ProximityKit
+import FernletSocial
 import Foundation
 import AIContext
 import AIProviders
@@ -310,13 +310,13 @@ final class LaunchPreparationService {
         let defaults = ["morning", "meal", "movement", "moment"]
         let captions = Array((categories + defaults).prefix(4))
         let selectedPhotoIDs = photowallPhotoSelector.selectPhotoIDs(
-            from: store.meshNetworkManager.meshPhotos,
+            from: store.meshFeatures.photos.meshPhotos,
             count: 4,
             context: PhotowallSelectionContext(
                 selectedAt: Date(),
                 derivedSignals: store.derivedSignals,
                 recentActivityNames: store.day.workouts.map(\.name),
-                favoriteIDs: store.meshNetworkManager.allFavoritePhotoIDs
+                favoriteIDs: store.meshFeatures.photos.allFavoritePhotoIDs
             )
         )
 

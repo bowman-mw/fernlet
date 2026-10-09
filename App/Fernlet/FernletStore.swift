@@ -282,7 +282,7 @@ final class FernletStore {
             self?.closenessLedger.recordSession(fingerprint: fingerprint)
         }
         // A photo exchanged with a friend this session feeds the closeness photo signal.
-        manager.onFriendPhotoSession = { [weak self] fingerprint in
+        features.photos.onFriendPhotoSession = { [weak self] fingerprint in
             self?.closenessLedger.recordPhotoSession(fingerprint: fingerprint)
         }
         // TF b19 item 5: in-session hearts ride the live mesh session (reliable) instead of the fragile
@@ -314,6 +314,7 @@ final class FernletStore {
     /// so the coordinator's only route to the camera roll is its post-answer export.
     @ObservationIgnored private(set) lazy var sessionPhotoReviewCoordinator = SessionPhotoReviewCoordinator(
         manager: meshNetworkManager,
+        sessionPhotos: meshFeatures.photos,
         host: self,
         presenter: SessionPhotoReviewOverlayPresenter(),
         saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }
@@ -5970,7 +5971,7 @@ final class FernletStore {
     /// - the shared-photo wall (`PrivateMediaStore` via `meshNetworkManager`) — BOTH the photos friends
     ///   sent you and the ones you shared with them (a photo you shared is cached under your own
     ///   fingerprint, so it is not "someone else's gift" — it is still kept). By product decision the wall
-    ///   is curated one photo at a time (`MeshNetworkManager.deletePhoto`, which purges the sealed bytes);
+    ///   is curated one photo at a time (`MeshSessionPhotos.deletePhoto`, which purges the sealed bytes);
     ///   there is deliberately NO "delete all photos", so this funnel must not add a bulk purge here.
     ///   What the wall holds is only what the person CHOSE (2026-09-30). Session photos nobody has
     ///   chosen yet are a different corpus — `PendingSessionPhotos/`, sealed under its own
@@ -6302,7 +6303,7 @@ final class FernletStore {
         // after leg 0's hard stop has already moved any live roll into the batch. The wall is NOT
         // touched (see the survivors list above), and the pending key row survives like the
         // own-photo row: an emptied store's key protects nothing.
-        if !meshNetworkManager.purgeHeldSessionPhotosForDeleteAll() {
+        if !meshFeatures.photos.purgeHeldSessionPhotosForDeleteAll() {
             outcome.incompleteStores.append("session photos you hadn't chosen yet")
         }
     }
@@ -6430,6 +6431,11 @@ final class FernletStore {
         // matches the keychain until relaunch.
         do {
             try meshNetworkManager.wipeIdentityForDeleteAll()
+            // The session photos' two at-rest key caches (the wall's and the pending corpus's), dropped
+            // so a post-wipe write can't use an orphaned key: immediately after the mesh's identity wipe,
+            // where the mesh manager dropped them until ProximityKit plan step A0.5.11, so a throwing
+            // identity wipe still skips them and a throwing presence or recipe-share wipe still does not.
+            meshFeatures.photos.invalidateEncryptionKeyCaches()
             try presenceManager.wipeIdentityForDeleteAll()
             try recipeShareManager.wipeIdentityForDeleteAll()
         } catch {
