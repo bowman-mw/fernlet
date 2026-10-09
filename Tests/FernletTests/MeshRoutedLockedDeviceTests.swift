@@ -981,13 +981,15 @@ extension MeshRoutedLockedDeviceTests {
     private static let featureArmHomes: [String: Int] = ["MeshSessionChat.swift": 2, "MeshSessionPhotos.swift": 2]
 
     /// The FernletSocial files that name the routed access gate's type, each with its pinned count of
-    /// `MeshRoutedAccessGate`: the session photos, whose held-photo decisions read
-    /// the gate value the mesh reports — the mirror they keep and the moment that sets it — and the
-    /// composition, whose session observer's `meshRoutedAccessGateDidChange(_:isRising:now:)` witness
-    /// must spell the type once to hand the value on. W3(b) confines the gate's vocabulary under
-    /// ProximityKit's `Mesh/`; this confines its value in FernletSocial to the one feature that decides
-    /// with it, and the lower-case vocabulary (`routedAccessGate`) to that feature's file alone.
-    private static let accessGateHomes: [String: Int] = ["MeshSessionPhotos.swift": 2, "FernletMeshFeatures.swift": 1]
+    /// `MeshRoutedAccessGate`: the session photos, whose held-photo decisions read the mesh's own gate
+    /// through the one property that reads it (`mesh?.routedAccessGate`, plan step A0.5.13; until then
+    /// a mirror the observer's moment wrote, one audit line after the mesh), and the composition, whose
+    /// session observer's `meshRoutedAccessGateDidChange(_:isRising:now:)` witness must spell the type
+    /// once to answer the requirement. W3(b) confines the gate's vocabulary under ProximityKit's
+    /// `Mesh/`; this confines its value in FernletSocial to the one feature that decides with it, the
+    /// lower-case vocabulary (`routedAccessGate`) to that feature's file alone, and that file to
+    /// reading the mesh's gate, never keeping a copy.
+    private static let accessGateHomes: [String: Int] = ["MeshSessionPhotos.swift": 1, "FernletMeshFeatures.swift": 1]
 
     /// The FernletSocial files that construct the routed heart's ack, each with its pinned count of
     /// `MeshRoutedHeartAck(`: the one construction, the heart judge's proof gate (the session
@@ -1011,8 +1013,9 @@ extension MeshRoutedLockedDeviceTests {
     /// is held the same way (``heartAckHomes``): once, in the session hearts' file, inside the braced
     /// body of its judge's `func judgeRoutedItem(`, which the engine calls behind its ceremony and
     /// whose `.committed` answer is all the engine mints its evidence from. And the routed access
-    /// gate's value is confined (``accessGateHomes``): the gate reaches the session photos through the
-    /// composition's session observer, and no other feature names it.
+    /// gate's value is confined (``accessGateHomes``): the session photos read it from the mesh, in one
+    /// property and with no copy of their own, the composition's session observer tells them when it
+    /// changes, and no other feature names it.
     @Test func fernletSocialNamesNoEngineSeamAndCallsItsArmsOnlyFromItsHandlersWrite() throws {
         let sources = try Self.codeSources(under: "FernletKit/Sources/FernletSocial")
         #expect(sources.count >= 15, "the FernletSocial source sweep found too few files")
@@ -1057,6 +1060,11 @@ extension MeshRoutedLockedDeviceTests {
             #expect(source.code.contains("routedAccessGate") == (source.name == "MeshSessionPhotos.swift"),
                     "the gate's vocabulary spread beyond the session photos: \(source.name)")
         }
+        let photos = try #require(sources.first { $0.name == "MeshSessionPhotos.swift" }, "the session photos are gone")
+        #expect(Self.occurrences(of: "mesh?.routedAccessGate", in: photos.code) == 1,
+                "the session photos read the mesh's own gate other than through their one property")
+        #expect(!photos.code.contains("routedAccessGate = "),
+                "the session photos write a gate of their own: a copy lags the mesh's by its audit line")
     }
 
     /// **W3.** Custody's authority stays the store's five states.

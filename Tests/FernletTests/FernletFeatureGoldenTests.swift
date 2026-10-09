@@ -62,7 +62,8 @@
 // 16. **The routed caps and their bounds**: the numbers the photo, text and heart rows' caps are built
 //     from, each row's cap as its terms, and the widest row's cap as the bound the item seal, its open
 //     and the delivery projection's resident guard read, held at the seal's two edges, and held by the
-//     manager where no fixture registry handed to it afterwards moves it.
+//     manager where no fixture registry handed to it afterwards moves it; and the rows the app's store
+//     hands the mesh building the very registry those cells read.
 // 17. **The tokens the senders mint**: one photo, one message and one heart from a founded pair, each
 //     staged under its sender's frozen token.
 // 18. **The routed item bodies**: the routed heart body for an item, a day and a name, and again for a
@@ -1384,6 +1385,19 @@ struct FernletFeatureGoldenTests {
         let after = Self.heldResidentBlobBound(of: store)
         #expect(after == bound, "the fixture registry moved the bound to \(after)")
         withExtendedLifetime(store) {}
+    }
+
+    /// The registry the cap cells above read is the one the app's rows build: a fresh store's own
+    /// `meshRoutedTypeEntries` (`FernletStore`'s, `ProximityHostAdapter.swift`, which the mesh's `init`
+    /// reads once to build its one registry) give ``fernletRoutedTypeRegistry`` row for row. So a row
+    /// the app answers with another cap or column, or a row it drops or adds, fails here rather than
+    /// leaving those cells green over the test target's own spelling of Fernlet's rows (plan step
+    /// A0.5.13). On the concrete store its own member answers; the test target's `ProximityHost`
+    /// extension answers only for the host doubles.
+    @Test func theAppsRowsBuildTheRegistryTheCapCellsRead() {
+        let registry = MeshRoutedTypeRegistry(entries: makeTestStore().meshRoutedTypeEntries)
+        #expect(registry == Self.fernletRoutedTypeRegistry,
+                "the app's routed-type rows build a registry other than the one the cap cells read")
     }
 
     // MARK: Group 17 — the tokens the senders mint
@@ -3376,9 +3390,9 @@ struct FernletFeatureGoldenTests {
     static let commitHookMoments = ["closeness@0", "catalogSend@0", "catalogRequestSent@2"]
 
     /// The legs of one session end, in order, written from the teardown funnel, the promotion (the roster
-    /// half, which empties the roster, before the photo half, which logs its move) and the transcript's
-    /// clear (the transcript before the heart state), and checked against an independent reading of the
-    /// same code.
+    /// half, which merges the roster the session ended with into the review, before the photo half,
+    /// which logs its move) and the transcript's clear (the transcript before the heart state), and
+    /// checked against an independent reading of the same code.
     static let sessionEndOrder = ["reviewMerge", "photoMove", "shopWindow", "transcriptClear", "heartReset"]
 
     /// One commit with bob advertising every capability, alice's shop opted in, her own reports and
@@ -3405,9 +3419,12 @@ struct FernletFeatureGoldenTests {
 
     /// One session end, over a session holding something for each leg (bob in the live roster, one live
     /// photo, bob's catalog, one message, a refused heart): the legs run in ``sessionEndOrder``. Observed
-    /// where each begins: the roster's first change, the photo move's audit line, and the shop window's,
-    /// the transcript's and the heart state's first changes. Observation calls each handler inline in the
-    /// property's `willSet`, on the main actor that changes it, so the order noted is the order run.
+    /// at the photo move's audit line, which notes the review merge first only when the review batch the
+    /// move wrote already holds the roster the session ended with (the merge and the move write the one
+    /// batch, and that line is where the two are told apart), then the move; and at the shop window's,
+    /// the transcript's and the heart state's first changes. The audit log calls its capture inline in
+    /// the line and Observation each handler inline in the property's `willSet`, on the main actor that
+    /// runs the leg, so the order noted is the order run.
     @Test func oneSessionEndRunsItsReviewPhotoShopTranscriptAndHeartLegsInOrder() throws {
         let rig = try Self.sessionRig(bobAdvertising: [])
         defer { Self.tearDown(rig) }
@@ -3592,9 +3609,11 @@ extension FernletFeatureGoldenTests {
     /// The routed-type rows Fernlet's mesh registers: today the registry `MeshNetworkManager` builds once
     /// in `init` and reads through `routedTypes`, from the host's rows alone
     /// (`MeshRoutedTypeRegistry(entries:)` over `ProximityHost.meshRoutedTypeEntries` since plan step
-    /// A0.5.11; resident rows beside them from A0.5.9), which for `.fernlet`'s routed types is the test
-    /// target's `MeshRoutedTypeRegistry.increment1(_:)` (`FernletRoutedTypes.entries`). The manager's own
-    /// copy is private, so this is the expression it is built from.
+    /// A0.5.11; resident rows beside them from A0.5.9), spelled here as the test target's
+    /// `MeshRoutedTypeRegistry.increment1(_:)` over `.fernlet`'s routed types (`FernletRoutedTypes.entries`).
+    /// The manager's own copy is private, and this spelling never calls the app's store, so
+    /// ``theAppsRowsBuildTheRegistryTheCapCellsRead()`` holds it equal to the registry the app's own rows
+    /// (`FernletStore.meshRoutedTypeEntries`) build (plan step A0.5.13).
     static var fernletRoutedTypeRegistry: MeshRoutedTypeRegistry {
         MeshRoutedTypeRegistry.increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
     }
@@ -4469,19 +4488,28 @@ extension FernletFeatureGoldenTests {
         rig.features.hearts.sendSessionHeart(to: bobAsFriend)
     }
 
-    /// Notes each leg of a session end into `recorder` where it begins: the roster's first change (the
-    /// mesh's drain empties it, ahead of the session photos' merge of what it drained, since plan step
-    /// A0.5.11; the merge emptied it until then), the photo move's audit line
-    /// (`mesh.session.photosPendingReview`), and the first changes of the shop window (the rig's
-    /// composition's shop since plan step A0.5.6), the transcript (its chat's since A0.5.9) and the heart
-    /// state (its session hearts' since A0.5.10). Through Observation (`withObservationTracking`, one
-    /// change each, as `MeshFavoriteObservationTests` observes the session photos) and
-    /// `FernletAuditLog.addCaptureHandler`.
-    /// Nothing the teardown runs before its legs writes any of the five. Re-pointed with each leg.
+    /// Notes each leg of a session end into `recorder` where it can be told apart: the review merge and
+    /// the photo move at the move's audit line (`mesh.session.photosPendingReview`), `reviewMerge` only
+    /// when the session photos' review batch, which the move has just written, already lists the roster
+    /// the session ended with, peer for peer (read here, before the end, over a session with no batch),
+    /// so a merge run after the move, or not at all, notes none; and the first changes of the shop
+    /// window (the rig's composition's shop since plan step A0.5.6), the transcript (its chat's since
+    /// A0.5.9) and the heart state (its session hearts' since A0.5.10). Through
+    /// `FernletAuditLog.addCaptureHandler`, which runs inline in the line, and Observation
+    /// (`withObservationTracking`, one change each, as `MeshFavoriteObservationTests` observes the
+    /// session photos). Plan step A0.5.13: the merge was noted at the roster's first change until the
+    /// mesh's drain (plan step A0.5.11) emptied the roster ahead of every leg, so that change became the
+    /// drain's and a merge moved past the photo move still noted in order. Nothing the teardown runs
+    /// before its legs writes the batch, the window, the transcript or the heart state, or logs the
+    /// line. Re-pointed with each leg.
     static func recordSessionEnd(of rig: SessionRig, into recorder: LifecycleRecorder) {
-        let manager = rig.manager
-        withObservationTracking { _ = manager.sessionRoster } onChange: { recorder.note("reviewMerge") }
-        recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview")
+        let photos = rig.photos
+        let roster = rig.manager.sessionRoster.map(\.fingerprint)
+        let merged: @MainActor () -> Bool = {
+            !roster.isEmpty && photos.pendingFriendReview?.entries.map(\.fingerprint) == roster
+        }
+        recorder.install(noting: "photoMove", whenLogged: "mesh.session.photosPendingReview",
+                         firstNoting: "reviewMerge", when: merged)
         withObservationTracking { _ = rig.features.clothingShop.window } onChange: { recorder.note("shopWindow") }
         withObservationTracking { _ = rig.features.chat.sessionMessages.messages } onChange: { recorder.note("transcriptClear") }
         withObservationTracking { _ = rig.features.hearts.sessionHeartState } onChange: { recorder.note("heartReset") }
@@ -5524,6 +5552,19 @@ extension FernletFeatureGoldenTests {
             token = FernletAuditLog.addCaptureHandler { [weak self] logged, _ in
                 guard logged == event else { return }
                 self?.note(moment)
+            }
+        }
+
+        /// Notes `moment` each time the audit log carries `event`, until ``uninstall()``, and first
+        /// `earlier` there when, and only when, `holds` answers true at that line: asked inline in the
+        /// line, on the main actor whose code writes it, so it reads the state the line was written
+        /// over.
+        func install(noting moment: String, whenLogged event: String,
+                     firstNoting earlier: String, when holds: @escaping @MainActor () -> Bool) {
+            token = FernletAuditLog.addCaptureHandler { [weak self] logged, _ in
+                guard logged == event, let self else { return }
+                if MainActor.assumeIsolated({ holds() }) { self.note(earlier) }
+                self.note(moment)
             }
         }
 

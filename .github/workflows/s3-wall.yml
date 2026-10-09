@@ -615,9 +615,17 @@ jobs:
         # refused it. 338 + 1 (the feature golden's cell holding the manager's resident bound at
         # 10 551 337 bytes, where its host's rows put it, after a fixture registry without the photo row
         # is handed to it) = 339 is the ARITHMETIC CHECK, never the source.
+        # RAISED 339 -> 340 at A0.5.13, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "340 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 17 + 88), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 340:
+        # passed. Run once more at 340 without CryptographicPurposeBoundaryTests: 334 ran and the floor
+        # refused it. 339 + 1 (the feature golden's cell holding the registry the app's own routed rows
+        # build, `FernletStore.meshRoutedTypeEntries`, to the one the cap cells read) = 340 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 339 \
+          Scripts/run-gated-suites.sh crypto-goldens 340 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
@@ -652,9 +660,17 @@ jobs:
         # cell reads the host's own media-key rows, which the wipe must KEEP) — and its
         # VERIFY-BATCH NOTE says CI wiring must name all three, since `-only-testing:` would
         # otherwise skip the two silently. So all three are named.
+        # RAISED 42 -> 43 at A0.5.13, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact four-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "43 tests in 4 suites" (18 + 1 + 1 + 23), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 43: passed. Run once more at
+        # 43 without PrivacyWipeMediaKeySurvivalTests: 42 ran and the floor refused it. 42 + 1 (the
+        # coverage suite's cell holding the session photos' key-cache drop between the mesh's and
+        # presence's identity wipes, inside the identity leg's one `do`) = 43 is the ARITHMETIC CHECK,
+        # never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh privacy-wipe 42 \
+          Scripts/run-gated-suites.sh privacy-wipe 43 \
             PrivacyWipeCoverageTests \
             PrivacyWipeMediaKeySurvivalTests \
             PrivacyWipeAttemptMemoryRemovalTests \

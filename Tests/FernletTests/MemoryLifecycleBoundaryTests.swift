@@ -28,9 +28,13 @@
 //       manager STORES, which must never be pinned: that pin is a permanent cycle, HP2) or
 //       `exempt — <reason>` (a spawn touching neither `self` nor the host). The scoped pin taken
 //       inside an async callee is marked `scoped — <reason>` and sits on no `Task` line. Since
-//       ProximityKit plan step A0.5.5 a file that holds FernletSocial's `FernletMeshHost` (the mesh
-//       features' one `unowned` host holder) is audited the same way, with no helper of its own: the
-//       one helper is the holder's, so a spawn that moves out of the mesh manager never leaves the scan.
+//       ProximityKit plan step A0.5.5 a second audit reads, the same way, every file that spells
+//       FernletSocial's `FernletMeshHost` (the mesh features' one `unowned` host holder) as the type
+//       of a name: a stored property, or since plan step A0.5.13 a parameter, which is how the
+//       activity manager's mesh wiring reads the host. Such a file declares no helper of its own: the
+//       one helper is the holder's. Every file the mesh manager's host-reading code moved to holds the
+//       host (the first audit) or holds or takes a holder (the second), so its spawns stay scanned; a
+//       file that reached the host by any other spelling would not be.
 //  ML5  In the test tree, a proximity manager may not be constructed over a host expression that is
 //       itself a call: `MeshNetworkManager(store: makeTestStore(), …)` gives the manager a host that
 //       dies at the end of the expression (invariant HP0), which is a dangling `unowned` from birth.
@@ -67,17 +71,21 @@ struct MemoryLifecycleBoundaryTests {
     /// Files with a block-based observer today; a wall that finds fewer has stopped looking.
     static let minimumObserverFiles = 2
 
-    /// Files holding an `unowned` `ProximityHost` — the four proximity managers, and since
-    /// ProximityKit plan step A0.5.5 the mesh features' `FernletMeshHost` beside them; presence and the
-    /// holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10. A matcher that
-    /// finds fewer than the four managers has stopped looking; a new holder must be found and held to
-    /// ML4, not silently skipped.
-    static let minimumHostHoldingFiles = 4
+    /// Files holding an `unowned` `ProximityHost` today, five: the four proximity managers (the mesh
+    /// and recipe-share managers in ProximityKit, presence and the activity manager in FernletSocial)
+    /// and, since ProximityKit plan step A0.5.5, the mesh features' `FernletMeshHost`; presence and the
+    /// holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10. Pinned at today's
+    /// count (plan step A0.5.13): a matcher that finds fewer has stopped looking, or a holder has left
+    /// the scan, and either fails here; a new holder raises the count, and is found and held to ML4.
+    static let minimumHostHoldingFiles = 5
 
-    /// Files holding a `FernletMeshHost` today — the mesh composition and its capability and vouch-list
-    /// objects (ProximityKit plan step A0.5.5). ML4's second audit; a matcher that finds fewer has
-    /// stopped looking.
-    static let minimumMeshHostHoldingFiles = 3
+    /// Files that hold or take a `FernletMeshHost` today, ten (ML4's second audit, plan step A0.5.5):
+    /// the mesh composition, its capability and vouch-list objects, the clothing shop's, moderation's
+    /// and friend state's exchanges, the chat, the session hearts and the session photos, each through
+    /// a stored property, and the activity manager's mesh wiring (`ProximityActivityManager+Mesh.swift`)
+    /// through its parameters (plan step A0.5.13). Pinned at today's count: a matcher that finds fewer
+    /// has stopped looking, or a holder has left the scan, and either fails here.
+    static let minimumMeshHostHoldingFiles = 10
 
     /// The test root ML5 scans (308 files at the time of writing).
     static let testRoot = "Tests/FernletTests"
@@ -205,18 +213,18 @@ struct MemoryLifecycleBoundaryTests {
 
     static let sharedTestTreeScan: TestTreeScan = scanTestTree(repoRoot: RepoRoot.url)
 
-    /// One shipping file that holds a `FernletMeshHost`, with its ML4 audit.
+    /// One shipping file that holds or takes a `FernletMeshHost`, with its ML4 audit.
     struct MeshHostHolder: Hashable, Sendable {
         let path: String
         let hostPin: HostPinAudit
     }
 
-    /// ML4's second audit's inputs: every shipping file that holds a `FernletMeshHost`
+    /// ML4's second audit's inputs: every shipping file that holds or takes a `FernletMeshHost`
     /// (``meshHostHolderPattern``), read once from the files the shipping scan found.
     static let sharedMeshHostScan: [MeshHostHolder] = meshHostHolders(in: sharedScan, repoRoot: RepoRoot.url)
 
-    /// Every file of `scan` that holds a `FernletMeshHost`, with its host-pin audit. An unreadable file
-    /// is the shipping scan's to report.
+    /// Every file of `scan` that holds or takes a `FernletMeshHost`, with its host-pin audit. An
+    /// unreadable file is the shipping scan's to report.
     static func meshHostHolders(in scan: TreeScan, repoRoot: URL) -> [MeshHostHolder] {
         var holders: [MeshHostHolder] = []
         for file in scan.files {
@@ -279,11 +287,15 @@ struct MemoryLifecycleBoundaryTests {
     /// SCANNED AND FAILED rather than silently skipped.
     static let unownedHostPattern = #"unowned\s+(let|var)\s+\w+\s*:\s*any (ProximityHost|FernletSocialHost)"#
 
-    /// A file that holds the mesh features' host holder, FernletSocial's `FernletMeshHost`, which
-    /// holds the host `unowned` for every feature object and declares their one `spawnHostPinned(_:)`
-    /// (ProximityKit plan step A0.5.5). Its own file holds the host, not a holder, and is matched by
-    /// ``unownedHostPattern`` instead.
-    static let meshHostHolderPattern = #"(let|var)\s+\w+\s*:\s*FernletMeshHost\b"#
+    /// A file that holds or takes the mesh features' host holder, FernletSocial's `FernletMeshHost`,
+    /// which holds the host `unowned` for every feature object and declares their one
+    /// `spawnHostPinned(_:)` (ProximityKit plan step A0.5.5): any `name: FernletMeshHost` in the file,
+    /// so a stored property (`private let meshHost: FernletMeshHost`) and, since plan step A0.5.13, a
+    /// parameter (`meshHost: FernletMeshHost`) both count, and code that reads the host through a
+    /// holder it was handed is scanned like code that keeps one. A longer type name does not match. The
+    /// holder's own file (`final class FernletMeshHost`) matches nothing here: it holds the host, not a
+    /// holder, and ``unownedHostPattern`` reads it instead.
+    static let meshHostHolderPattern = #"\w+\s*:\s*FernletMeshHost\b"#
 
     /// A `Task` CONSTRUCTION in any of its spellings — `Task {`, `Task.detached {`,
     /// `Task(priority: .background) {`, `Task<Void, Never> {`. All four spawn the same detached,
@@ -385,8 +397,8 @@ struct MemoryLifecycleBoundaryTests {
         )
     }
 
-    /// Whether `source` holds a `FernletMeshHost` (``meshHostHolderPattern``): ML4's second audit's
-    /// matcher, shared by the scan and its fixture.
+    /// Whether `source` holds or takes a `FernletMeshHost` (``meshHostHolderPattern``): ML4's second
+    /// audit's matcher, shared by the scan and its fixture.
     static func holdsMeshHost(_ source: String) -> Bool {
         matches(meshHostHolderPattern, in: source)
     }
@@ -474,7 +486,7 @@ struct MemoryLifecycleBoundaryTests {
     @Test func ml4HostHoldingFilesPinOrMarkEveryTaskConstruction() {
         let holders = Self.sharedScan.files.filter(\.holdsUnownedHost)
         #expect(holders.count >= Self.minimumHostHoldingFiles,
-                "Found only \(holders.count) files holding an unowned ProximityHost (floor \(Self.minimumHostHoldingFiles)) — the matcher has stopped matching")
+                "Found only \(holders.count) files holding an unowned ProximityHost (floor \(Self.minimumHostHoldingFiles)) — the matcher has stopped matching, or a holder has left the scan")
         let unmarked = holders.flatMap { file in file.hostPin.unmarkedSpawns.map { "\(file.path):\($0)" } }
         #expect(unmarked.isEmpty, """
             ML4: these Task constructions live in a file that reads an unowned ProximityHost, so a task \
@@ -494,16 +506,17 @@ struct MemoryLifecycleBoundaryTests {
         #expect(helperCounts.isEmpty, "ML4: each host-holding file declares exactly one spawnHostPinned helper: \(helperCounts)")
         let silent = holders.filter { $0.hostPin.spawns == 0 }.map(\.path)
         #expect(silent.isEmpty, "ML4: a host-holding file with no Task construction at all has lost its helper: \(silent)")
-        // The second audit (ProximityKit plan step A0.5.5): a file that holds a `FernletMeshHost`
-        // reads the host through it, so every Task it constructs carries a marker as above, and it
-        // declares no helper of its own — the one helper is `FernletMeshHost`'s.
+        // The second audit (ProximityKit plan step A0.5.5): a file that holds or takes a
+        // `FernletMeshHost` (a parameter too, since plan step A0.5.13) reads the host through it, so
+        // every Task it constructs carries a marker as above, and it declares no helper of its own —
+        // the one helper is `FernletMeshHost`'s.
         let meshHolders = Self.sharedMeshHostScan
         #expect(meshHolders.count >= Self.minimumMeshHostHoldingFiles,
-                "Found only \(meshHolders.count) files holding a FernletMeshHost (floor \(Self.minimumMeshHostHoldingFiles)) — the matcher has stopped matching")
+                "Found only \(meshHolders.count) files holding or taking a FernletMeshHost (floor \(Self.minimumMeshHostHoldingFiles)) — the matcher has stopped matching, or a holder has left the scan")
         let unmarkedThere = meshHolders.flatMap { file in file.hostPin.unmarkedSpawns.map { "\(file.path):\($0)" } }
         #expect(unmarkedThere.isEmpty, """
-            ML4: these Task constructions live in a file that holds a FernletMeshHost, which reads an \
-            unowned ProximityHost. Route them through the holder's spawnHostPinned(_:), or mark them \
+            ML4: these Task constructions live in a file that holds or takes a FernletMeshHost, which \
+            reads an unowned ProximityHost. Route them through the holder's spawnHostPinned(_:), or mark them \
             `// host-pin: timer — <reason>` / `// host-pin: exempt — <reason>`:
             \(unmarkedThere.joined(separator: "\n"))
             """)
@@ -604,6 +617,8 @@ struct MemoryLifecycleBoundaryTests {
 
         let meshHostHolder = "    private let meshHost: FernletMeshHost\n"
         #expect(Self.holdsMeshHost(meshHostHolder), "a feature holding the composition's host holder is ML4's subject")
+        #expect(Self.holdsMeshHost("    func attach(to mesh: MeshNetworkManager, meshHost: FernletMeshHost) {\n"),
+                "a file taking the host holder as a parameter reads the host through it, and is ML4's subject too")
         #expect(!Self.holdsMeshHost("final class FernletMeshHost {\n    unowned let host: any FernletSocialHost\n"),
                 "the holder's own file holds the host, not a holder")
         #expect(!Self.holdsMeshHost("    let meshHost: FernletMeshHostSpy\n"), "a longer type name is not the holder")

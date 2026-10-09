@@ -39,8 +39,9 @@ enum HeldPhotos {
     )
 
     /// Pushes ``openGate`` into `manager` under the pinned install binding (the re-entry pass the
-    /// rising edge runs may touch the sealed session context). The mesh's session observer hands the
-    /// gate to its composition's session photos, so `manager` must be a composition's mesh.
+    /// rising edge runs may touch the sealed session context). A composition's session photos read the
+    /// gate from its mesh, which its session observer tells them changed, so `manager` must be the mesh
+    /// of the composition whose photos the cell reads.
     static func openGate(on manager: MeshNetworkManager, now: Date = Date()) {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             _ = manager.applyRoutedAccessGate(openGate, now: now)

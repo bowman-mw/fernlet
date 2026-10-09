@@ -943,8 +943,21 @@ struct LastMemberPhotoReviewSourceWallTests {
         #expect(promotion.contains("pendingFriendReview = batch"), "the promotion moves, never drops")
         #expect(!promotion.contains("heldPhotoStore") && !promotion.contains("photoCacheStore"),
                 "and writes nothing (I6): both lists are memory projections of the pending index")
+        // The leave (plan step A0.5.13): the mesh's `leaveSession()` tears down, which runs the ending
+        // and its promotion, and only then tells the observer, whose one photo leg forgets the photo
+        // session's ids and decides nothing about the photos (the ending stamped them with those ids).
         let leave = try #require(MeshRoutedSourceScan.bracedBody(after: "public func leaveSession()", in: manager))
-        #expect(!leave.contains("sessionPhotos"), "leaveSession decides nothing about the photos")
+        let teardown = try #require(leave.range(of: "leaveMesh("), "leaveSession no longer tears the session down")
+        let told = try #require(leave.range(of: "meshSessionDidLeave("), "leaveSession no longer tells the observer")
+        #expect(teardown.upperBound <= told.lowerBound, "the observer hears the leave before the teardown's ending")
+        let composition = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/FernletMeshFeatures.swift")
+        )
+        let witness = try #require(MeshRoutedSourceScan.bracedBody(after: "func meshSessionDidLeave()", in: composition))
+        #expect(witness.contains("photos.forgetPhotoSession()"), "the leave's photo leg is gone from the observer")
+        let forgetting = try #require(MeshRoutedSourceScan.bracedBody(after: "func forgetPhotoSession()", in: source))
+        #expect(!forgetting.contains("sessionPhotos") && !forgetting.contains("pendingFriendReview"),
+                "the leave decides nothing about the photos")
         let join = try #require(MeshRoutedSourceScan.bracedBody(after: "public func startJoin()", in: manager))
         #expect(join.contains("meshSessionWillBegin("), "a new search tells the session observer a session begins")
         let begin = try #require(MeshRoutedSourceScan.bracedBody(after: "func beginNewPhotoSession()", in: source))
