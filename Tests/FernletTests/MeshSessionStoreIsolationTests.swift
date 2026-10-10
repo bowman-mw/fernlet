@@ -12,8 +12,8 @@
 // both by service and by path. The family must not gain a member.
 //
 // Source-scanning is the only way to catch the omission:
-// `MeshSessionStore(scope: .production(for: namespace, installBinding: binding))` compiles, passes in
-// isolation every time, and lands its damage in somebody else's suite.
+// `MeshSessionStore(scope: .production(for: namespace, directory: root, installBinding: binding))`
+// compiles, passes in isolation every time, and lands its damage in somebody else's suite.
 //
 // The wall has two halves, because this store's isolation has two:
 //   • the STORE half — every construction in the test tree names a scope, and never the production
@@ -66,15 +66,18 @@ struct MeshSessionStoreIsolationTests {
     /// The directory half alone is not enough and neither is the key half: files on a private root
     /// sealed by a shared key survive somebody else's wipe as ciphertext nothing can open, which is
     /// strictly worse than losing them outright. So both spellings that resolve to production —
-    /// `MeshSessionStorageScope.production(for:installBinding:)` and a hand-built scope naming
-    /// `ProximitySupportLayout.defaultDirectory` or the production service literal, or (since
+    /// `MeshSessionStorageScope.production(for:directory:installBinding:)` and a hand-built scope
+    /// naming `ProximitySupportLayout.defaultDirectory` or the production service literal, or (since
     /// ProximityKit plan step A0.2.8, when the production scope began reading the namespace) a
-    /// namespace's `installation.storage.defaultDirectory` or
-    /// `installation.keychain.meshSessionSealKey.service` — are banned in the test tree. Since step
-    /// A0.2.12 so are the two spellings the substring needle never saw: the shorthand
-    /// `.production(for:installBinding:)` wherever a scope is expected
+    /// namespace's production directory or `installation.keychain.meshSessionSealKey.service` — are
+    /// banned in the test tree. Since step A0.6.6, when ProximityKit stopped computing a directory,
+    /// that directory is spelled `FernletProximityStorage.productionDirectory` or through
+    /// `applicationSupportDirectory`, and both are banned. Since step A0.2.12 so are the two
+    /// spellings the substring needle never saw: the shorthand
+    /// `.production(for:directory:installBinding:)` wherever a scope is expected
     /// (`MeshSessionStore(scope: .production(…))`), and the type-prefixed one broken before its `.`.
-    /// See ``shorthandProductionScopes(in:)`` and ``typePrefixedProductionScopes(of:in:)``.
+    /// See ``shorthandProductionScopes(in:)`` and ``typePrefixedProductionScopes(of:in:)``. A double
+    /// that spells no scope at all is the routed twin's scratch-root needle's.
     @Test func noTestReachesTheProductionScope() throws {
         var scanned = 0
         for (file, source) in try Self.testSources() {
@@ -91,7 +94,7 @@ struct MeshSessionStoreIsolationTests {
                 """
                 \(file) reaches a PRODUCTION storage scope through \(reads) — it shares the real file \
                 and the real keychain row with every concurrent suite. A shorthand \
-                `.production(for:installBinding:)` does not say which scope it builds (only the \
+                `.production(for:directory:installBinding:)` does not say which scope it builds (only the \
                 mesh-session and routed scopes declare it), so this wall and its routed twin both \
                 refuse it.
                 """
@@ -106,8 +109,12 @@ struct MeshSessionStoreIsolationTests {
                     "\(file) builds a mesh-session scope on the production keychain service: \(arguments)"
                 )
                 #expect(
-                    !arguments.contains("installation.storage.defaultDirectory"),
-                    "\(file) builds a mesh-session scope on a namespace's production directory: \(arguments)"
+                    !arguments.contains("FernletProximityStorage.productionDirectory"),
+                    "\(file) builds a mesh-session scope on Fernlet's production directory: \(arguments)"
+                )
+                #expect(
+                    !arguments.contains("applicationSupportDirectory"),
+                    "\(file) builds a mesh-session scope under the process's Application Support: \(arguments)"
                 )
                 #expect(
                     !arguments.contains("installation.keychain.meshSessionSealKey.service"),
@@ -152,8 +159,10 @@ struct MeshSessionStoreIsolationTests {
     /// The behavioural half of the scan above — a derivation that returned the production service
     /// for an isolated input would pass the source scan and isolate nothing. Since ProximityKit plan
     /// step A0.2.8 the derivation and the production scope read the host's namespace, so this pins
-    /// them under `.fernlet`: its seal-key service, its default directory, and the namespace itself
-    /// carried on the scope — and since step A0.2.9, the install binding it is handed.
+    /// them under `.fernlet`: its seal-key service, and the namespace itself carried on the scope —
+    /// since step A0.2.9 the install binding it is handed, and since step A0.6.6, when the production
+    /// scope began taking its root from its host, Fernlet's production root,
+    /// `FernletProximityStorage.productionDirectory`, handed to it and carried.
     @Test func theDerivedKeychainServiceTracksItsHeartDropInput() {
         let namespace = ProximityNamespace.fernlet
         let productionService = namespace.installation.keychain.meshSessionSealKey.service
@@ -162,10 +171,11 @@ struct MeshSessionStoreIsolationTests {
         )
         #expect(production == productionService)
         let productionScope = MeshSessionStorageScope.production(
-            for: namespace, installBinding: FernletDeviceBindingAdapter()
+            for: namespace, directory: FernletProximityStorage.productionDirectory,
+            installBinding: FernletDeviceBindingAdapter()
         )
         #expect(productionScope.keychainService == production)
-        #expect(productionScope.directory == namespace.installation.storage.defaultDirectory)
+        #expect(productionScope.directory == FernletProximityStorage.productionDirectory)
         #expect(productionScope.namespace == namespace)
         #expect(productionScope.installBinding is FernletDeviceBindingAdapter)
 
@@ -183,24 +193,24 @@ struct MeshSessionStoreIsolationTests {
 
     /// The two production-scope scanners, fixtured both ways, because the matcher is the wall.
     ///
-    /// The shorthand scanner sees `.production(for:installBinding:)` in every place a scope goes: an
-    /// argument, a typed binding wrapped across lines, a host's computed property, a `return`. The
-    /// type-prefixed scanner sees its own type's spelling on one line and broken before the `.`, and
-    /// not its twin's, which is what keeps each wall's derivation cell green under the other wall's
-    /// sweep. Neither reads another type's `.production`, nor a production read through a value.
+    /// The shorthand scanner sees `.production(for:directory:installBinding:)` in every place a scope
+    /// goes: an argument, a typed binding wrapped across lines, a host's computed property, a `return`.
+    /// The type-prefixed scanner sees its own type's spelling on one line and broken before the `.`,
+    /// and not its twin's, which is what keeps each wall's derivation cell green under the other
+    /// wall's sweep. Neither reads another type's `.production`, nor a production read through a value.
     @Test func theProductionScopeScannersSeeEverySpellingAndOnlyThose() {
         let shorthand = [
-            "MeshSessionStore(scope: .production(for: namespace, installBinding: binding))",
-            "let scope: MeshSessionStorageScope = .production(\n    for: .fernlet, installBinding: binding\n)",
-            "var meshSessionStorage: MeshSessionStorageScope { .production(for: ns, installBinding: b) }",
-            "var meshSessionStorage: MeshSessionStorageScope { return .production(for: ns, installBinding: b) }"
+            "MeshSessionStore(scope: .production(for: namespace, directory: root, installBinding: binding))",
+            "let scope: MeshSessionStorageScope = .production(\n    for: .fernlet, directory: root, installBinding: binding\n)",
+            "var meshSessionStorage: MeshSessionStorageScope { .production(for: ns, directory: d, installBinding: b) }",
+            "var meshSessionStorage: MeshSessionStorageScope { return .production(for: ns, directory: d, installBinding: b) }"
         ]
         for source in shorthand {
             #expect(Self.shorthandProductionScopes(in: source).count == 1, "the shorthand scanner missed: \(source)")
         }
         let typePrefixed = [
-            "MeshSessionStorageScope.production(\n    for: namespace, installBinding: FernletDeviceBindingAdapter()\n)",
-            "MeshSessionStorageScope\n    .production(for: namespace, installBinding: binding)"
+            "MeshSessionStorageScope.production(\n    for: namespace, directory: root, installBinding: FernletDeviceBindingAdapter()\n)",
+            "MeshSessionStorageScope\n    .production(for: namespace, directory: root, installBinding: binding)"
         ]
         for source in typePrefixed {
             #expect(Self.shorthandProductionScopes(in: source).isEmpty, "read as shorthand: \(source)")
@@ -212,7 +222,7 @@ struct MeshSessionStoreIsolationTests {
         let neither = [
             "index: index, at: now, capacity: .production, directoryFileCount: 0",
             "let inputs = CryptoFormatCensus.Inputs.production(for: store)",
-            "let scope = host?.production(for: namespace, installBinding: binding)"
+            "let scope = host?.production(for: namespace, directory: root, installBinding: binding)"
         ]
         for source in neither {
             #expect(Self.shorthandProductionScopes(in: source).isEmpty
@@ -253,13 +263,13 @@ struct MeshSessionStoreIsolationTests {
 
     /// Every implicit-member `.production(…)` in `code` whose arguments name `installBinding:`, with
     /// its argument text: the shorthand that builds a production storage scope wherever a scope is
-    /// expected (`MeshSessionStore(scope: .production(for: namespace, installBinding: binding))`, a
-    /// host's `var meshSessionStorage: MeshSessionStorageScope { .production(…) }`), which no
-    /// type-prefixed needle can see. Only the mesh-session and routed scopes declare
-    /// `production(for:installBinding:)`, so this finds both and cannot tell them apart. A member
-    /// access is not shorthand: `MeshSessionStorageScope.production(`, the same broken across lines,
-    /// `scope?.production(`. Pass lexed code (`SwiftSourceLexer.lex(_:).code`), so prose about the
-    /// shorthand, and a fixture string spelling it, are not read as using it.
+    /// expected (`MeshSessionStore(scope: .production(for: namespace, directory: root,
+    /// installBinding: binding))`, a host's `var meshSessionStorage: MeshSessionStorageScope {
+    /// .production(…) }`), which no type-prefixed needle can see. Only the mesh-session and routed
+    /// scopes declare `production(for:directory:installBinding:)`, so this finds both and cannot tell
+    /// them apart. A member access is not shorthand: `MeshSessionStorageScope.production(`, the same
+    /// broken across lines, `scope?.production(`. Pass lexed code (`SwiftSourceLexer.lex(_:).code`), so
+    /// prose about the shorthand, and a fixture string spelling it, are not read as using it.
     static func shorthandProductionScopes(in code: String) -> [String] {
         var found: [String] = []
         var searchStart = code.startIndex

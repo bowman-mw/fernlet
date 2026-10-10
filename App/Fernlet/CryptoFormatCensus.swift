@@ -267,7 +267,7 @@ nonisolated enum CryptoFormatCensus {
             Inputs(
                 sealedStore: .shared,
                 ownPhotoDocumentsDirectory: FernletStore.defaultPhotoDocumentsDirectory,
-                friendWallSupportDirectory: ProximityNamespace.fernlet.installation.storage.defaultDirectory,
+                friendWallSupportDirectory: FernletProximityStorage.productionDirectory,
                 narrativeScope: .production,
                 lockKeychainService: KeychainItem.productionService,
                 heartDropDirectory: HeartDropStorageScope.production.directory

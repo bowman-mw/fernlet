@@ -13,10 +13,12 @@
 // QR scheme, since A0.2.6 the routed hash and id domains, the five AEAD labels, the three HKDF
 // salts and the epoch id's domain, since A0.2.7 the three radios' service types, ALPNs, the mesh
 // heartbeat, the TLS exporter label and the log subsystem, since A0.2.8 the storage names, the two
-// seal-key rows, the identity's four accounts and the default sidecar root, which the app's two
-// storage scopes carry and its proximity root resolves, and since A0.2.9 the two column seals, the last
-// of the 39 labels, which the two mesh stores seal under through ProximityKit's copy of the column seal
-// (and under the install binding `FernletDeviceBindingAdapter` reads from `DeviceBindingID`).
+// seal-key rows and the identity's four accounts, which the app's two storage scopes carry, and the
+// folder its proximity root is named for (since A0.6.6, when ProximityKit stopped computing a root,
+// FernletProximityStorage.swift builds that root from this installation's folder), and since A0.2.9
+// the two column seals, the last of the 39 labels, which the two mesh stores seal under through
+// ProximityKit's copy of the column seal (and under the install binding `FernletDeviceBindingAdapter`
+// reads from `DeviceBindingID`).
 //
 // The family also carries the payload vocabulary (`Vocabulary.fernlet`, in
 // FernletPayloadVocabulary.swift), every group of which ProximityKit reads off the namespace (the

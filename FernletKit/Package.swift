@@ -24,14 +24,24 @@ import PackageDescription
 let package = Package(
     name: "FernletKit",
     defaultLocalization: "en",
+    // macOS 26 is declared package-wide, which is how SwiftPM declares a platform. Only ProximityKit's
+    // closure (ProximityKit, FernletCrypto, FernletDomainModel, FernletFoundation) builds for it, and
+    // Scripts/macos-build-check.sh builds exactly that on every push (plan step A0.6). Every other
+    // target is iOS-only until a plan step says otherwise (FernletUI: workstream B).
     platforms: [
         .iOS(.v26),
+        .macOS(.v26),
     ],
     products: [
         // The app and its tests link the umbrella product. An extension that needs only a portable
         // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
         .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
+        // ProximityKit on its own: the only scheme xcodebuild offers that builds exactly ProximityKit's
+        // closure, which Scripts/macos-build-check.sh builds for macOS. No app target links it; the app
+        // links the umbrella. It is the product the package exports from its own repository at plan
+        // step A1.
+        .library(name: "ProximityKit", targets: ["ProximityKit"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -369,7 +379,8 @@ let package = Package(
         // Layer 6 — the Proximity peer-to-peer subsystem ([S]): the radios (Network.framework/QUIC
         // over Bonjour; MultipeerConnectivity until 2026-09-22), identity, the signed envelope, sealing
         // and replay (CryptoKit Ed25519/X25519), the session coordinator and the trust protocols its
-        // host answers, NI ranging, the protocol namespace its host supplies, the routed mesh engine
+        // host answers, the ranging seam (NearbyInteraction on iOS), the protocol namespace its host
+        // supplies, the routed mesh engine
         // (whose routed-type rows and the features that ride them its host registers through the
         // engine's public seams), the presence radio and the ProximityHost seam protocol; and the one
         // Fernlet feature still built into it, the recipe-share manager, until plan step A0.7 moves it
@@ -391,7 +402,13 @@ let package = Package(
         // pins this list, and also refuses any type that left it for FernletSocial or the app, declared,
         // extended or aliased here again. No FernletUI edge and no SwiftUI view: the review sheets
         // moved to FernletProximityUI (below). MainActor default: the managers are @Observable
-        // @MainActor, and the wire values and pure crypto statics are nonisolated within.
+        // @MainActor, and the wire values and pure crypto statics are nonisolated within. It builds
+        // for iOS 26 and native macOS 26 (plan step A0.6): its two platform seams compile only where
+        // their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's
+        // protected-data retry under `#if canImport(UIKit)`), and Scripts/macos-build-check.sh builds
+        // its closure for macOS on every push, the compiler half; ProximityPlatformBoundaryTests, which
+        // holds its imports, device-name reads, directories and host defaults to exact rows, is the
+        // source half.
         .target(
             name: "ProximityKit",
             dependencies: ["FernletCrypto", "FernletDomainModel"],
@@ -405,17 +422,22 @@ let package = Package(
                 // follow-up then dropped `.v5` by reworking the `nonisolated` delegate callbacks
                 // that captured non-Sendable framework objects into their `Task { @MainActor … }`
                 // hops — those captures are the Swift-6 `sending` data races `.v5` had hidden:
-                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` and
-                //     `session(_:didInvalidateWith:)` now extract the Sendable values
-                //     (distance/direction; `ObjectIdentifier(session)`) BEFORE the hop.
+                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` extracts the
+                //     Sendable values (distance/direction) BEFORE the hop, and
+                //     `session(_:didInvalidateWith:)` transfers the invalidated session itself via
+                //     a `nonisolated(unsafe)` local and compares it by identity after the hop (an
+                //     `ObjectIdentifier` would admit address reuse).
                 //   • Transport/MeshMultipeerSession.swift (deleted 2026-09-22 with the
                 //     MultipeerConnectivity radio) — its MCSession / advertiser / browser callbacks
                 //     transferred the non-Sendable `MCPeerID` (and the single-shot
                 //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
                 //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
-                //     ActivityKit `Activity` (a class) is passed to its `nonisolated async` `end`
-                //     via a `nonisolated(unsafe)` local. (P9 item 5 retired the requester, so the
-                //     orphan reaper is the one remaining site; the `update` half went with it.)
+                //     ActivityKit `Activity` (a class) was passed to its `nonisolated async` `end`
+                //     via a `nonisolated(unsafe)` local. (P9 item 5 retired the requester, leaving
+                //     the orphan reaper as the one site; the `update` half went with it.) The
+                //     reaper and its one `end` call are the app's since plan step A0.6
+                //     (App/Fernlet/ProximityLiveActivityReaper.swift), whose target compiles the
+                //     call with no transfer local, so this module holds no ActivityKit code.
                 // All rewrites are behavior-preserving — the UWB/MC/ActivityKit objects keep their
                 // exact runtime semantics — so the target builds clean in Swift 6 mode. (An earlier
                 // estimate of "exactly two errors, both in NIRangingSession" was incomplete: the

@@ -307,8 +307,9 @@ sign their canonical bytes under FernletCrypto's four feature labels, the mesh f
 `PayloadType` and `ProximityCapability` cases and mint under ``FernletRoutedTypes``' rows over
 `.fernlet`'s routed types, and presence checks the heart payload's `fernlet.proximity.heart` format on
 receipt and advertises Fernlet's hearts capability beside the namespace's wire2 token. The
-production heart-drop scope, ``HeartDropStorageScope/production``, is
-`ProximityNamespace.fernlet`'s sidecar root with `com.fernlet.heartdrop`, the paths and service the
+production heart-drop scope, ``HeartDropStorageScope/production``, is Fernlet's proximity root,
+`FernletConnections`' `FernletProximityStorage.productionDirectory` (`.fernlet`'s folder under
+Application Support), with `com.fernlet.heartdrop`, the paths and service the
 stores have always used; ``HeartDropService`` defaults to it, and its outbox, dedup store and
 peer-bundle cache fall back to that scope's directory when no file is stated. What a host must isolate
 comes from the caller: the app hands the service its own scope (its per-store proximity sidecar root
@@ -348,13 +349,13 @@ contracts (`MeshRoutedProjectionHandler`, `MeshRoutedLedgerJudge`, `MeshRoutedBo
 (`MeshVouchListExchange`) and the identity-taking initializer; the routed row and its public column
 types (`MeshRoutedTypeEntry`), the body framing (`MeshRoutedItemBodyFormat`, `CanonicalByteWriter`,
 `MeshRoutedItemSealFormat.overheadByteCount`) and the generic content union (`MeshContentSet`); and
-for presence the host seam (`ProximityHost`: its namespace, the per-connection trust policy, the
-resolved display name, the identity presence builds when it is handed none,
-`makeProximityIdentity()`, which it checks against its namespace as an injected one, and the
-fingerprint block list), the session coordinator it builds a heart connection over
-(`ProximityCoordinator`, with `ProximityPayloadHandling`, `NIRangingSession`, `ReplayCache`,
-`PeerHandle` and the coordinator's prekey-bundle hooks), the `ObservationLoop` it watches its
-coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name coercion
+for presence the host seam (`ProximityHost`: its namespace, the per-connection trust policy and
+ranging provider, `makeProximityRangingProvider()`, the resolved display name, the identity presence
+builds when it is handed none, `makeProximityIdentity()`, which it checks against its namespace as an
+injected one, and the fingerprint block list), the session coordinator it builds a heart connection
+over (`ProximityCoordinator`, with `ProximityPayloadHandling`, the host's ranging provider,
+`ReplayCache`, `PeerHandle` and the coordinator's prekey-bundle hooks), the `ObservationLoop` it
+watches its coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name coercion
 `ProximityDisplayName.peerDisplayName(_:in:)`, which every feature here re-moderates a peer's name
 through, the name display `PeerNameDisplay` (its identifier filter, which `FernletConnections`'
 `firstName` runs first) and the recipe-share diagnostics types its connection log rides. Two groups
@@ -373,8 +374,9 @@ it, until A0.7, when it joins this module.
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the
 declared salts the heart-drop and presence pair secrets derive under,
-`ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory and
-whose routed types ``FernletRoutedTypes`` reads, and the name placeholders,
+`FernletProximityStorage.productionDirectory`, Fernlet's proximity root, which is the production
+heart-drop scope's directory, `ProximityNamespace.fernlet`, whose routed types ``FernletRoutedTypes``
+reads, and the name placeholders,
 `PeerNameDisplay.firstName` among them, which presence's `PresenceManager.firstName(of:in:)`
 delegates to; on `FernletCrypto`, for the dead-drop's, presence's and the ban store's registry labels
 and the activities' and the moderation report's four signing labels; on `FernletDomainModel`, for the
@@ -386,6 +388,9 @@ photo-session and friend-state values the mesh features carry; on `FernletFounda
 session heart carries; and on `PrivateMediaStore`, for the session photos' friend wall and sealed
 pending corpus, their keychain key providers and the capture's resize. It imports nothing else but
 Foundation, Observation, Security, CryptoKit and UIKit, whose `UIImage` the capture's resize reads.
+So it builds for iOS alone: the native macOS build plan step A0.6 added covers ProximityKit's closure,
+not this module, whose photo path (and `PrivateMediaStore`'s encoders under it) would need a UIKit-free
+twin, with goldens of its own, before a Mac host could link it.
 Its `PrivateMediaStore` edge puts it on the protected side of the S3 wall, as ProximityKit is: the walled
 `AIProviders` and `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's pair of

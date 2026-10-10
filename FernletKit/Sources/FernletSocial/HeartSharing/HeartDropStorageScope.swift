@@ -51,11 +51,13 @@ public nonisolated struct HeartDropStorageScope: Sendable, Equatable {
 
     /// The shipped scope: `Application Support/Fernlet` + `com.fernlet.heartdrop`, i.e. exactly the
     /// paths and service the heart-drop stores have always used. The directory is
-    /// `ProximityNamespace.fernlet`'s `installation.storage.defaultDirectory`, the root Fernlet's
-    /// proximity sidecars share. Nothing installed is migrated by the seam that made this injectable.
+    /// `FernletConnections`' `FernletProximityStorage.productionDirectory`, the root Fernlet's
+    /// proximity sidecars share (`.fernlet`'s folder under Application Support, built as ProximityKit
+    /// built it until plan step A0.6.6, when it stopped computing a directory). Nothing installed is
+    /// migrated by the seam that made this injectable.
     public static var production: HeartDropStorageScope {
         HeartDropStorageScope(
-            directory: ProximityNamespace.fernlet.installation.storage.defaultDirectory,
+            directory: FernletProximityStorage.productionDirectory,
             keychainService: HeartPrekeyStore.keychainService
         )
     }
