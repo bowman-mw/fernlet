@@ -917,6 +917,17 @@ extension ProximityHost {
 //   range, since NearbyInteraction reports precise-distance support on the iOS 26.5 simulator. The
 //   coordinator tests build theirs through the managers' test seams with a provider of their own,
 //   and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
+// - `proximitySupportDirectory` (A0.6.6) is the double's namespace's folder under Application Support,
+//   `proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)`: the
+//   production-shaped folder the doubles always shared, the very path ProximityKit's root default
+//   built for them before, so no double's files move; stable per instance, as the composition and the
+//   session photos need (both read the root at init, and the default scopes derive from it). On it the
+//   default scopes are the namespace's production rows, exactly what they were there before. A double
+//   on a root of its own that opens a store states both scopes on test services
+//   (`MeshRoutedStoreIsolationTests`' scratch-root needle holds every one to that), and the doubles get
+//   scratch roots and test services of their own before any of them runs on a Mac (plan step A0.8),
+//   where this folder would be the developer's own. The cells that pin Fernlet's root run on
+//   `FernletStore`, which answers its own.
 
 /// The host's platform facts for the test target's host doubles that state none (plan step A0.6). It
 /// inherits the protocol's main-actor isolation, as the requirements it answers have.
@@ -929,4 +940,10 @@ extension ProximityHost {
     /// A fresh `NoopRangingProvider()` per call: a double's connections range nothing, as a host
     /// without ranging's do (plan step A0.6.3).
     func makeProximityRangingProvider() -> any RangingProvider { NoopRangingProvider() }
+
+    /// The double's namespace's folder under Application Support, the folder the doubles always used
+    /// (plan step A0.6.6).
+    var proximitySupportDirectory: URL {
+        proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)
+    }
 }

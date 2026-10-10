@@ -511,9 +511,10 @@ final class FernletStore {
     /// Note this is the OTHER side of the Phase-5 media-key split — the wall stays on the
     /// backup-restorable `friendWall` key — so it deliberately gets its own root rather than hanging
     /// off the own-photo one. Production always resolves to `Application Support/Fernlet`, the path
-    /// the cache has always used — `ProximityNamespace.fernlet`'s `installation.storage.defaultDirectory`
-    /// since ProximityKit plan step A0.2.8, which builds it exactly as before; nothing shipped is
-    /// migrated.
+    /// the cache has always used — `FernletConnections`' `FernletProximityStorage.productionDirectory`
+    /// since ProximityKit plan step A0.6.6, when ProximityKit stopped computing a directory for any
+    /// host (from plan step A0.2.8 until then, `ProximityNamespace.fernlet`'s default directory), which
+    /// builds it exactly as before; nothing shipped is migrated.
     @ObservationIgnored nonisolated let proximitySupportRoot: URL
     /// Keychain service for THIS store's heart-drop material — the prekey private halves and the key
     /// that seals the three heart-drop sidecars, which live under one service by design so a
@@ -560,9 +561,9 @@ final class FernletStore {
     /// isolated for mesh-session state for free, and one that is NOT already fails
     /// `PhotoDirectoryIsolationTests` (whose `deleteAllData` trigger covers both lists). A fourth
     /// injectable seam would add a fourth way to forget one. Production resolves to
-    /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged from
-    /// `MeshSessionStorageScope.production(for: proximityNamespace, installBinding:
-    /// proximityInstallBinding)`. The scope carries
+    /// `Application Support/Fernlet` + `com.fernlet.mesh-session`, unchanged, the scope
+    /// `MeshSessionStorageScope.production(for: proximityNamespace, directory: proximitySupportRoot,
+    /// installBinding: proximityInstallBinding)` would build there. The scope carries
     /// ``proximityNamespace``, which names the file and the seal key's account (plan step A0.2.8), and
     /// ``proximityInstallBinding``, Fernlet's `DeviceBindingID` adapter, which the file is sealed and
     /// opened under (plan step A0.2.9).
@@ -588,8 +589,9 @@ final class FernletStore {
     /// and the heart-drop sidecars is isolated for routed custody for free, and one that is NOT
     /// already fails `PhotoDirectoryIsolationTests`. A fourth injectable seam would add a fourth way
     /// to forget one. Production resolves to `Application Support/Fernlet` +
-    /// `com.fernlet.mesh-routed`, unchanged from `MeshRoutedStorageScope.production(for:
-    /// proximityNamespace, installBinding: proximityInstallBinding)`. The scope carries
+    /// `com.fernlet.mesh-routed`, unchanged, the scope `MeshRoutedStorageScope.production(for:
+    /// proximityNamespace, directory: proximitySupportRoot, installBinding: proximityInstallBinding)`
+    /// would build there. The scope carries
     /// ``proximityNamespace``, which names the files and the seal key's account and holds the labels
     /// the store measures under (plan step A0.2.8), and ``proximityInstallBinding``, Fernlet's
     /// `DeviceBindingID` adapter, which the files are sealed and opened under (plan step A0.2.9).
@@ -859,7 +861,7 @@ final class FernletStore {
         // Nil = a fresh IN-MEMORY cache, not production (see the property): this initializer is the
         // tests' and previews' path; the launch path hands in the production file.
         self.deviceHealthResidueStore = deviceHealthResidueStore ?? InMemoryDeviceHealthResidueStore()
-        self.proximitySupportRoot = proximitySupportDirectory ?? ProximityNamespace.fernlet.installation.storage.defaultDirectory
+        self.proximitySupportRoot = proximitySupportDirectory ?? FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = heartDropKeychainService ?? HeartDropStorageScope.production.keychainService
         self.appGroupDirectory = appGroupDirectory
         self.messagesCatalogDirectory = messagesCatalogDirectory
@@ -1008,7 +1010,7 @@ final class FernletStore {
         self.photoDocumentsDirectory = Self.defaultPhotoDocumentsDirectory
         // `FernletStore.load` passes the production file unless a test hands one in.
         self.deviceHealthResidueStore = deviceHealthResidueStore
-        self.proximitySupportRoot = ProximityNamespace.fernlet.installation.storage.defaultDirectory
+        self.proximitySupportRoot = FernletProximityStorage.productionDirectory
         self.heartDropKeychainService = HeartDropStorageScope.production.keychainService
         // nil / `.standard` = the REAL app-group container and the real defaults. Never a unique
         // value here: the widget extension is a separate process with no seam, so an app that

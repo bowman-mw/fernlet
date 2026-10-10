@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletProximityStorage``, where the app keeps its proximity files, `Application Support/Fernlet`; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
 
 ## Overview
 
@@ -53,7 +53,7 @@ the store's `makeProximityIdentity()`; that identity and every other `IdentitySe
 heart-drop service's) come from the app's one factory, `IdentityService.fernletApp(keychainService:)`,
 which builds under `.fernlet` with the app's sealed-backup escrow key as the identity's provisioning
 participant; and the app hands `.fernlet` to both storage scopes and resolves its proximity root from
-it.
+its installation's folder, through ``FernletProximityStorage`` (below).
 
 ProximityKit reads every protocol label of `Purposes.fernlet` and every value of `Radios.fernlet`, the
 QR scheme and `Installation.fernletApp` off the namespace its reader holds, so every signature, seal,
@@ -77,7 +77,18 @@ Fernlet always shipped:
   `Installation.fernletApp`'s log subsystem;
 - the at-rest names and rows: the identity's keychain service, `com.fernlet.identity`, and its four
   accounts, the mesh stores' file names, chunk directory and seal-key accounts, the production
-  seal-key services and the default sidecar root.
+  seal-key services and the folder the app's proximity root is named for.
+
+**The proximity root.** ProximityKit computes no directory (plan step A0.6.6): every host states the
+root of its proximity files, `ProximityHost.proximitySupportDirectory`, which has no default.
+``FernletProximityStorage`` (`FernletProximityStorage.swift`) is Fernlet's:
+``FernletProximityStorage/productionDirectory`` is `.fernlet`'s installation folder under the app
+container's Application Support, `Application Support/Fernlet`, built by
+`installation.storage.directory(under:)` exactly as ProximityKit built every host's default root
+before, so no path moved. The app's store resolves its root from it when a test hands it none, the
+crypto-format census reads it, and `FernletSocial`'s production heart-drop scope files under it, which
+is why it lives here rather than in the app: `FernletSocial` cannot see the app.
+`FernletFeatureGoldenTests` holds the path, and each of those sites, to it.
 
 Twelve of the test target's seventeen `ProximityHost` doubles supply the same value (the other five,
 `ProximityNamespaceGoldenTests`' three hosts and `ProximityVocabularyGoldenTests`' two, take theirs
@@ -341,7 +352,9 @@ serializers, verifiers and stores; the binding adapter is a stateless `Sendable`
 seal calls synchronously from inside those stores. ``FernletAuditBridge`` is a `nonisolated` struct
 for the same reason: ProximityKit's `nonisolated` stores call it synchronously, which a main-actor
 conformance would not allow. ``FriendMintingReview``, ``TrainerExportPayload`` and
-``CoachSessionContract`` are `nonisolated` pure values. The name placeholders' extension is
+``CoachSessionContract`` are `nonisolated` pure values, and ``FernletProximityStorage`` a
+`nonisolated` caseless namespace over a location, read by the store's initializers and by
+`FernletSocial`'s nonisolated heart-drop scope. The name placeholders' extension is
 `nonisolated`, as the `PeerNameDisplay` it extends is (its `Placeholder` with it), and so is the
 `FernletConnectionsCopy.Peer` group it reads: a resolved display string has no actor to protect,
 and `Bundle.module` is itself nonisolated. ``FriendSessionTrustPolicy`` and

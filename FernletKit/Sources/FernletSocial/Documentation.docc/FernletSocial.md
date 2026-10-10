@@ -307,8 +307,9 @@ sign their canonical bytes under FernletCrypto's four feature labels, the mesh f
 `PayloadType` and `ProximityCapability` cases and mint under ``FernletRoutedTypes``' rows over
 `.fernlet`'s routed types, and presence checks the heart payload's `fernlet.proximity.heart` format on
 receipt and advertises Fernlet's hearts capability beside the namespace's wire2 token. The
-production heart-drop scope, ``HeartDropStorageScope/production``, is
-`ProximityNamespace.fernlet`'s sidecar root with `com.fernlet.heartdrop`, the paths and service the
+production heart-drop scope, ``HeartDropStorageScope/production``, is Fernlet's proximity root,
+`FernletConnections`' `FernletProximityStorage.productionDirectory` (`.fernlet`'s folder under
+Application Support), with `com.fernlet.heartdrop`, the paths and service the
 stores have always used; ``HeartDropService`` defaults to it, and its outbox, dedup store and
 peer-bundle cache fall back to that scope's directory when no file is stated. What a host must isolate
 comes from the caller: the app hands the service its own scope (its per-store proximity sidecar root
@@ -373,8 +374,9 @@ it, until A0.7, when it joins this module.
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the
 declared salts the heart-drop and presence pair secrets derive under,
-`ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory and
-whose routed types ``FernletRoutedTypes`` reads, and the name placeholders,
+`FernletProximityStorage.productionDirectory`, Fernlet's proximity root, which is the production
+heart-drop scope's directory, `ProximityNamespace.fernlet`, whose routed types ``FernletRoutedTypes``
+reads, and the name placeholders,
 `PeerNameDisplay.firstName` among them, which presence's `PresenceManager.firstName(of:in:)`
 delegates to; on `FernletCrypto`, for the dead-drop's, presence's and the ban store's registry labels
 and the activities' and the moderation report's four signing labels; on `FernletDomainModel`, for the

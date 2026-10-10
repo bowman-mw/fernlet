@@ -43,17 +43,17 @@
 // delete rows, so the wall ends with its permanent rows: `ProtectedSidecar.swift`'s guarded UIKit
 // import (the protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's
 // file, guarded whole by `#if os(iOS)` since plan step A0.6.3. Today's rows are those 2 permanent
-// seams, no device-name row, 1 directory row (the namespace's Application Support default) and 1
-// host-fact default (the extension's storage root). The coordinator's, the mesh manager's and the
-// recipe-share manager's vestigial UIKit imports left at plan step A0.6.1, and the local name's UIKit
-// import and its `UIDevice` read at A0.6.2, when the host began stating the fallback name; at A0.6.3,
-// when the doors began asking their host for each connection's ranging provider, the NearbyInteraction
-// provider's file was guarded whole; and at A0.6.4 the Live Activity reaper's ActivityKit import left
-// with the reaper, which is the app's. Since A0.6.5 ProximityKit's closure builds for native macOS on
-// every push, the compiler half, which refuses any symbol native macOS lacks wherever it stands outside
-// its guard; this scan is the source half, which also sees a platform fact that compiles on both
-// platforms (a directory, a device-name read, a host default), and its fifth rule keeps the compiler
-// half running.
+// seams and nothing else: no device-name row, no directory row and no host-fact default. The
+// coordinator's, the mesh manager's and the recipe-share manager's vestigial UIKit imports left at plan
+// step A0.6.1, and the local name's UIKit import and its `UIDevice` read at A0.6.2, when the host began
+// stating the fallback name; at A0.6.3, when the doors began asking their host for each connection's
+// ranging provider, the NearbyInteraction provider's file was guarded whole; at A0.6.4 the Live Activity
+// reaper's ActivityKit import left with the reaper, which is the app's; and at A0.6.6, when the host
+// began stating the storage root, the namespace's Application Support default and the extension's
+// default root left. Since A0.6.5 ProximityKit's closure builds for native macOS on every push, the
+// compiler half, which refuses any symbol native macOS lacks wherever it stands outside its guard; this
+// scan is the source half, which also sees a platform fact that compiles on both platforms (a
+// directory, a device-name read, a host default), and its fifth rule keeps the compiler half running.
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -81,13 +81,16 @@ import Testing
     /// The plan step that takes a platform fact out of ProximityKit. A step's case is deleted with its
     /// last row, as A0.6.1's (the vestigial UIKit imports), A0.6.2's (the local name's `UIDevice` read
     /// and its file's `import UIKit`), A0.6.3's (the NearbyInteraction provider's unguarded import,
-    /// whose row became the permanent whole-file seam) and A0.6.4's (the Live Activity reaper's
-    /// ActivityKit import, which left with the reaper for the app) were.
-    enum ExitStep: String, Sendable {
-        /// The storage root always comes from the host (A0.6.6): the namespace's Application Support
-        /// default and the host extension's default root.
-        case a066 = "A0.6.6"
-    }
+    /// whose row became the permanent whole-file seam), A0.6.4's (the Live Activity reaper's
+    /// ActivityKit import, which left with the reaper for the app) and A0.6.6's (the namespace's
+    /// Application Support default and the host extension's default root, when the host began stating
+    /// the root) were.
+    ///
+    /// No case is left, so no row carries an exit and the enum is uninhabited: a row's `exit` is nil,
+    /// a permanent row. The field stays so that a later step can add a transient row: that step adds
+    /// its case with its step's name as a `String` raw value, the raw type with it, and
+    /// ``exitText(_:)``'s arm naming it, which the compiler then requires.
+    enum ExitStep: Sendable {}
 
     /// How a seam module's imports sit in their file.
     enum SeamGuard: Sendable, Equatable {
@@ -207,28 +210,26 @@ import Testing
         .call("urls", label: "for"), .call("url", label: "for")
     ]
 
-    /// Every platform directory ProximityKit names, exactly: the namespace's default root under
-    /// Application Support, which plan step A0.6.6 replaces with a folder under a base its host states.
-    static let directoryRows: [TokenRow] = [
-        TokenRow(path: "Namespace/ProximityNamespace+Installation.swift", token: "applicationSupportDirectory",
-                 exit: .a066)
-    ]
+    /// Every platform directory ProximityKit names, exactly: none since plan step A0.6.6, when the
+    /// namespace's default root under Application Support became `directory(under:)`, its folder under
+    /// a base its host picks.
+    static let directoryRows: [TokenRow] = []
 
     /// The facts only a host may state, which no `ProximityHost` extension in ProximityKit may default:
     /// the requirements `ProximityHost.swift` says are never defaulted (the namespace, the install
-    /// binding, the trust policy, the identity, the routed rows and, since plan steps A0.6.2 and A0.6.3,
-    /// the fallback name and the ranging provider), then the storage root.
+    /// binding, the trust policy, the identity, the routed rows and, since plan steps A0.6.2, A0.6.3 and
+    /// A0.6.6, the fallback name, the ranging provider and the storage root).
     static let hostFacts: Set<String> = [
         "proximityNamespace", "proximityInstallBinding", "makeProximityTrustPolicy", "makeProximityIdentity",
         "meshRoutedTypeEntries", "proximityFallbackDisplayName", "makeProximityRangingProvider",
         "proximitySupportDirectory"
     ]
 
-    /// Every host fact ProximityKit still defaults, exactly: the storage root the host extension
-    /// computes from the namespace, which plan step A0.6.6 deletes.
-    static let hostFactDefaultRows: [TokenRow] = [
-        TokenRow(path: "ProximityHost.swift", token: "proximitySupportDirectory", exit: .a066)
-    ]
+    /// Every host fact ProximityKit still defaults, exactly: none since plan step A0.6.6, when the
+    /// host extension's default storage root, computed from the namespace, was deleted. The extension
+    /// still defaults the two storage scopes, which are no host fact: they are built on the root the
+    /// host states.
+    static let hostFactDefaultRows: [TokenRow] = []
 
     // MARK: W1: the imports
 
@@ -851,9 +852,14 @@ import Testing
         path + " names " + token
     }
 
-    /// A row's exit, as a failure message says it.
+    /// A row's exit, as a failure message says it: every row is permanent since plan step A0.6.6, when
+    /// ``ExitStep``'s last case left with its rows. A step that adds a transient row adds the arm that
+    /// names its step ("a row plan step <step> deletes").
     static func exitText(_ exit: ExitStep?) -> String {
-        exit.map { "a row plan step \($0.rawValue) deletes" } ?? "a permanent row"
+        switch exit {
+        case .none:
+            return "a permanent row"
+        }
     }
 
     // MARK: The build readers (W6)

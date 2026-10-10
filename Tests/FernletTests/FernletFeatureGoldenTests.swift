@@ -117,7 +117,9 @@
 // 30. **The bytes Mac readiness moves**: the local name an unnamed device advertises (on Fernlet's
 //     host the device's name; the preference trimmed of spaces and tabs and never of line breaks; the
 //     store's raw setting, which the activities and the heart dead-drop send as it is); Fernlet's
-//     proximity root, `Application Support/Fernlet`, and its four spellings; the Live Activity
+//     proximity root, `Application Support/Fernlet`, and its four spellings (since plan step A0.6.6
+//     `FernletConnections`' `FernletProximityStorage.productionDirectory`, once ProximityKit stopped
+//     computing a directory, read where production reads it); the Live Activity
 //     reaper's attributes, their unqualified name and stored shape, and the ending it gives a stranded
 //     activity (since plan step A0.6.4 the app's own reaper, read where it now lives); and the ranging
 //     provider Fernlet's host builds each connection's coordinator over, an `NIRangingSession` fresh
@@ -185,7 +187,7 @@
 // copies of them (`ProximityVocabularyGoldenTests.everySessionEnumIsItsFrozenSpellingBothWays` and
 // `theSessionLogsOwnRoleAndRangingModeSpellTheFrozenValues`), a provider without UWB and a coordinator
 // over one, which no host's value is needed to observe (that suite's group 14), the storage names and
-// the namespace's own root under Application Support
+// the namespace's own folder under Application Support
 // (`ProximityNamespaceGoldenTests.everyStorageNameIsItsFrozenBytes`), the production heart-drop scope's
 // folder and service (group 9, whose folder rows now hold the proximity root too), and the reaper's one
 // home and the retirement of every request (`MeshContinuationTaskHostWallTests`'
@@ -4730,14 +4732,16 @@ extension FernletFeatureGoldenTests {
         store.makeProximityRangingProvider()
     }
 
-    /// How Fernlet's proximity root is spelled at each site that names it: today ProximityKit's
-    /// namespace default. Re-pointed at plan step A0.6.6, with ``productionProximityRoot``.
-    static let productionRootSpelling = "ProximityNamespace.fernlet.installation.storage.defaultDirectory"
+    /// How Fernlet's proximity root is spelled at each site that names it: since plan step A0.6.6,
+    /// `FernletConnections`' `FernletProximityStorage.productionDirectory`; until then ProximityKit's
+    /// namespace default, `ProximityNamespace.fernlet.installation.storage.defaultDirectory`.
+    static let productionRootSpelling = "FernletProximityStorage.productionDirectory"
 
-    /// Fernlet's proximity root, read where production reads it: today ``productionRootSpelling``.
-    /// Re-pointed at plan step A0.6.6, when the module computes no directory.
+    /// Fernlet's proximity root, read where production reads it, through ``productionRootSpelling``:
+    /// since plan step A0.6.6, when ProximityKit stopped computing a directory, `FernletConnections`'
+    /// own; until then ProximityKit's namespace default.
     static var productionProximityRoot: URL {
-        ProximityNamespace.fernlet.installation.storage.defaultDirectory
+        FernletProximityStorage.productionDirectory
     }
 
     /// The file holding the proximity Live Activity's attributes and reaper: since plan step A0.6.4

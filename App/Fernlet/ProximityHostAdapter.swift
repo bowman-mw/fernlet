@@ -7,11 +7,12 @@ import UIKit
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
-/// `proximityFallbackDisplayName`, `proximityNamespace`, `proximityInstallBinding`,
-/// `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`, `makeProximityIdentity()` and
-/// `meshRoutedTypeEntries` is already satisfied by existing store members (`isBlockedFingerprint`,
-/// `blockProximityPeer`). This extension also holds the two members the store's `FernletSocialHost`
-/// conformance (below) adds, `allowNearbyHearts` and `proximityTrustStore`.
+/// `proximityFallbackDisplayName`, `proximitySupportDirectory`, `proximityNamespace`,
+/// `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`,
+/// `makeProximityIdentity()` and `meshRoutedTypeEntries` is already satisfied by existing store
+/// members (`isBlockedFingerprint`, `blockProximityPeer`, and the two storage scopes,
+/// `meshSessionStorage` and `meshRoutedStorage`). This extension also holds the two members the
+/// store's `FernletSocialHost` conformance (below) adds, `allowNearbyHearts` and `proximityTrustStore`.
 /// Kept in the app target: this conformance is the one piece that cannot move into `ProximityKit`,
 /// since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
@@ -34,7 +35,10 @@ extension FernletStore: ProximityHost {
     var allowNearbyHearts: Bool { settings.allowNearbyHearts }
     /// This store's own proximity-sidecar root, so the friend photo wall is isolated per store the
     /// same way the own-photo corpora are. Production resolves to the unchanged
-    /// `Application Support/Fernlet`; only tests redirect it. Overrides the protocol's default.
+    /// `Application Support/Fernlet` (`FernletProximityStorage.productionDirectory`, from
+    /// `FernletConnections`); only tests redirect it. The requirement has no default since
+    /// ProximityKit plan step A0.6.6 (where an installation keeps its files is its host's fact), so
+    /// a host that left this out would not compile.
     var proximitySupportDirectory: URL { proximitySupportRoot }
     /// Fernlet's protocol identity, `ProximityNamespace.fernlet` from `FernletConnections`: the one
     /// value this composition root hands ProximityKit for the protocol labels, radio values, QR

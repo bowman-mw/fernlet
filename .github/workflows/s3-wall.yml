@@ -418,7 +418,8 @@ jobs:
         # A0.2.8, which moves the mesh stores' file names and seal-key accounts, the production
         # seal-key services, the hosts' default sidecar root and the identity's four accounts, it holds
         # those readers too: the two stores write and read under the names the namespace their scope
-        # carries gives, a host's default root and scopes are built from its namespace, and an identity
+        # carries gives, a host's default scopes are built from its namespace (on the root the host
+        # states since A0.6.6, which took the default root out of ProximityKit), and an identity
         # keeps, and names, the four rows its namespace names. Since A0.2.9, which copies
         # `ColumnCrypto` into ProximityKit (`ProximityColumnCrypto`) and injects the install binding,
         # it holds the copy to the original: the A0.2.0 column vectors run through it, it and
@@ -511,7 +512,8 @@ jobs:
         # Since A0.6.0 (2026-10-09), cut before plan step A0.6 hands ProximityKit's platform facts to
         # its host, it also pins what that step moves on Fernlet's host: the local name an unnamed
         # device advertises and the raw name the activities and the heart dead-drop send, Fernlet's
-        # proximity root and its four spellings, the Live Activity reaper's attributes and ending (the
+        # proximity root and its four spellings (`FernletConnections`' own since A0.6.6, read where
+        # production reads it), the Live Activity reaper's attributes and ending (the
         # app's own reaper since A0.6.4, read where it lives), and the ranging provider Fernlet's host
         # builds each connection over, an `NIRangingSession` fresh per call, whose answer, since A0.6.3
         # the app host's own, it also reads as source.

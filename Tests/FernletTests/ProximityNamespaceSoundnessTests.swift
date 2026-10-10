@@ -966,13 +966,21 @@ import Testing
 
     // MARK: - Storage
 
-    /// The root a host gets when it passes none: its named folder in Application Support.
-    @Test func theDefaultDirectoryIsTheNamedFolderInApplicationSupport() {
-        let directory = AlphaApp.installation().storage.defaultDirectory
-        #expect(directory.lastPathComponent == "Alpha")
-        #expect(directory.hasDirectoryPath)
-        #expect(directory.deletingLastPathComponent().standardizedFileURL
-                == URL.applicationSupportDirectory.standardizedFileURL)
+    /// An installation's folder is its name, as a directory, directly under whatever base its host
+    /// picks (plan step A0.6.6: the module computes no directory of its own): under Application
+    /// Support, where an iOS host keeps its files, and under a scratch base, as an unsandboxed Mac host
+    /// would pick one no other app shares. Pure: nothing is read or created on disk.
+    @Test func anInstallationsFolderIsItsNameUnderTheBaseItsHostPicks() {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProximityNamespaceSoundness-\(UUID().uuidString)", isDirectory: true)
+        // R2: bounded by the two bases.
+        for base in [URL.applicationSupportDirectory, scratch] {
+            let directory = AlphaApp.installation().storage.directory(under: base)
+            #expect(directory.lastPathComponent == "Alpha", "the folder under \(base.path) is \(directory.lastPathComponent)")
+            #expect(directory.hasDirectoryPath, "the folder under \(base.path) is not a directory URL")
+            #expect(directory.deletingLastPathComponent().standardizedFileURL == base.standardizedFileURL,
+                    "the folder's parent is not \(base.path)")
+        }
     }
 
     // MARK: - Helpers
