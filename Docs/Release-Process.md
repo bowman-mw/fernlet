@@ -25,7 +25,12 @@ On `main`, enable branch protection with:
    `AccessibilityBoundaryTests`, `MemoryLifecycleBoundaryTests`, `MessagesExtensionBoundaryTests`
    and `CodeOwnersResolutionTests` — the mesh line carries the newest mesh security suites, and
    every `…GoldenTests` wire-vector suite in the tree is on a line (`CIGateSelectorBoundaryTests`
-   demands it). **Every test step runs through `Scripts/run-gated-suites.sh`**,
+   demands it). Since 2026-10-09 (ProximityKit plan step A0.6.5) it also builds ProximityKit's
+   closure for native macOS 26 with warnings as errors, through `Scripts/macos-build-selftest.sh`,
+   which first proves the check is a native macOS build (an `import UIKit` it plants in ProximityKit
+   must fail it), so an iOS-only API reaching ProximityKit cannot merge green either; the two macOS
+   scripts are code-owned like the S3 ones.
+   **Every test step runs through `Scripts/run-gated-suites.sh`**,
    which reads the step's result bundle and refuses a green run that executed fewer tests than the
    step's floor: `-only-testing:` matches suite names exactly, matches nothing on a misspelling or a
    deleted suite, and would otherwise print `TEST EXECUTE SUCCEEDED` over zero tests.
@@ -45,7 +50,9 @@ On `main`, enable branch protection with:
    force pushes to `main`.
 
 Local complement: every clone runs `Scripts/install-git-hooks.sh` once, so the committed
-`pre-push` hook runs `Scripts/spm-wall-check.sh` before wall-touching pushes.
+`pre-push` hook runs `Scripts/spm-wall-check.sh` before wall-touching pushes, and
+`Scripts/macos-build-check.sh` before pushes that touch ProximityKit's macOS closure, the package
+manifest or the macOS scripts.
 
 ## 2. Per-release checklist
 

@@ -2,13 +2,12 @@ import Foundation
 import Observation
 import FernletDomainModel
 import HealthKitGateway
-import ProximityKit
 
 /// The observable launch state machine that loads ``FernletStore`` off the first frame.
 ///
 /// Owned by ``FernletApp`` and driven from the scene's `.task`: `startIfNeeded()` first reaps any
-/// proximity Live Activity a killed previous process stranded (`ProximityLiveActivityReaper` —
-/// this is the once-per-process seam, before any manager can exist), then runs
+/// proximity Live Activity a killed previous process stranded (``ProximityLiveActivityReaper``, the
+/// app's own — this is the once-per-process seam, before any manager can exist), then runs
 /// `FernletStore.load` (async Core Data snapshot + per-row service loads) exactly once per
 /// process, streaming human-readable progress into `statusMessage` for `LaunchScreen`, then opens
 /// the bundled food catalog and kicks the detached best-effort sealed-backup restore before

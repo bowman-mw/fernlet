@@ -253,7 +253,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `clearSessionRoster()` | Drops the whole live roster: the host's delete-all leg for the photos nobody chose yet empties the roster with its review in one synchronous step (FernletSocial's `purgeHeldSessionPhotosForDeleteAll()`), and a test seam. A session's ending drains the roster into the observer instead (`MeshSessionEnd.drainedRoster`). |
 | `block(_:)` | Finds a participant's signing key and blocks it in the store/vault. |
 | `sendVouchList(to:)` / `vouchListExchange` | Sends a just-committed slot the vouch list its host's `vouchListExchange` (`MeshVouchListExchange`) builds for it, under the vouch token, or nothing when there is no exchange or it answers nil; the vouch arm hands every list decoded from a committed slot to the same exchange. The frame is the engine's (the vouch role and token, the committed-slot gate and its `mesh.vouchList.droppedUncommittedSlot` line, the decode and both commit-time sends); the content is the host's (Fernlet's `FernletVouchList`, in FernletSocial, which also composes the "Friend of" labels). |
-| `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`): the proximity display-name setting, trimmed, falling back to the device name. |
+| `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`): the proximity display-name setting, trimmed of spaces and tabs, falling back to the host's `proximityFallbackDisplayName` (Fernlet's device name). |
 | `activeSlots` | Filters slots to active slot kind. |
 | `setupMeshSession()` | Installs discovery, channel-ready, disconnect/retry, and invite-acceptance callbacks. |
 | `startSearching()` | Starts mesh advertising/browsing and observation, refusing first, with `mesh.identity.namespaceMismatch` (at `start`), when the manager holds an identity of another namespace (`ProximityNamespaceGate.mayStart`), so no path starts the radio under two namespaces (`startNewMesh(name:)` refuses such a manager itself, before it founds). **The one re-arm funnel** — `startJoin()`, `startNewMesh(name:)` and `resumeSearchingForPartitionedMesh()` all end here — so it is also where `holdCommittedLinks()`'s door is reopened (`isAdmittingNewPeers = true`, audited `mesh.session.linksResumed` only when a hold is actually being undone) and where a paused radio comes back: `startRadios(discoveryInfo:)` resumes a running QUIC radio rather than no-op'ing on its `!isRunning` guard. |
@@ -262,7 +262,7 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 | `updateDiscoveryInfo()` | Restarts advertiser with current discovery metadata. |
 | `hasCommittedSlot(for:)` | **P8 item 3 (findings F-2/F-4)**: whether `peer` holds a slot whose handshake has COMMITTED (`fingerprint != nil`), matched by endpoint through `slot(for:)`. Distinct from `hasSlot(for:)` on purpose — it is the ONLY excuse doors 2 and 3 make while `holdCommittedLinks()` is holding, and answering it with "holds a seat" re-admits the uncommitted candidate the hold has just disconnected. |
 | `handlePeerDiscovered(_:)` | Auto-invites peers during proximity join or into an open mesh when capacity/overflow rules allow. Door 1 of the hold: `isAdmittingNewPeers` is read as its FIRST line, above the `isProximityJoin` branch, and again in the detached re-invite retry `handlePeerDisconnected` schedules (finding F-6). |
-| `handleChannelReady(_:)` | Creates a `ProximityCoordinator` and slot for a ready peer channel, then starts friend-mode handshake. |
+| `handleChannelReady(_:)` | Creates a `ProximityCoordinator` and slot for a ready peer channel, over the ranging provider its host builds for that connection (`store.makeProximityRangingProvider()`, since plan step A0.6.3), then starts friend-mode handshake. |
 | `removeSlot(_:)` | Cancels a slot coordinator, removes the slot/trust policy, and reranks. |
 | `disconnectSlot(_:)` | Sends goodbye, cancels coordinator, removes slot/trust policy, and reranks. Reused by `disconnectUncommittedSlotsForHold()`, so a slot the hold drops dies exactly as any other eviction does. |
 | `disconnectUncommittedSlotsForHold()` | **P8 item 3 (review finding F-2)**: the hold's sweep. Disconnects every slot with no fingerprint — this codebase's one spelling of "not committed" — through `disconnectSlot(_:)`, so `holdCommittedLinks()` leaves exactly the links it is named for. Runs AFTER `isAdmittingNewPeers` is lowered, so the `armSessionGiveUpClock(now:)` each disconnect ends with is refused instead of lighting the fuse the hold is putting out. Bounded by `slots` (R2), which the loop walks as a value copy. |
@@ -975,7 +975,7 @@ P5 item 3: where one device's sealed routed custody lives, and the key row that 
 
 | Type / Function | What It Does |
 | --- | --- |
-| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:installBinding:)` is the namespace's `defaultDirectory` and its `meshRoutedSealKey.service` — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
+| `MeshRoutedStorageScope` | Directory **and** keychain service in one value, because isolating one without the other isolates nothing — and, since ProximityKit plan step A0.2.8, the host's `namespace`, and since A0.2.9 its `installBinding` (`init(namespace:directory:keychainService:installBinding:)`), which name the index, the chunk directory and the seal key's account and holds the labels the store measures under. `production(for:directory:installBinding:)` is the namespace's `meshRoutedSealKey.service` on the root its host states (plan step A0.6: this module computes no directory) — for Fernlet `com.fernlet.mesh-routed`, its **own** service, not a lodger under the mesh-session one: one fate per service is the only arrangement a service-wide delete can express honestly. |
 | `MeshRoutedSealKey.forOpen(service:account:)` / `forSeal(service:account:)` | Three-way outcomes. `forOpen` never mints (a fresh key opens nothing); `forSeal` mints only on a **definitive** absence, and read-back-verifies, because sealing against an unverified key writes ciphertext nothing can ever open. Accessibility `AfterFirstUnlockThisDeviceOnly`, `synchronizable: false`. The row's account is the scope namespace's `meshRoutedSealKey.account` since A0.2.8 (the static `keychainAccount` is gone). |
 | `MeshRoutedSealKey.wipe(service:)` | Deletes every row under the service. The file half is `MeshRoutedStore.wipeForDeleteAll(scope:)`; both halves always go together. |
 
@@ -1476,32 +1476,63 @@ drives it through; the production conformer is this file.
 | Function | What It Does |
 | --- | --- |
 | `RangingDistance.==` | Equates unknown distances or exact meter/direction tuples. |
-| Protocol methods | Define async start/stop and local discovery token retrieval for ranging providers. |
+| `RangingError` | What every provider throws, the same three cases (plan step A0.6.3 moved it here from `NIRangingSession`, so no host or test names an iOS-only type to catch one): `hardwareUnsupported` from `myDiscoveryToken()` with no ranging hardware, `tokenUnavailable` when the local discovery token never populated, `invalidPeerToken` when a peer's token bytes did not decode. `nonisolated`, `Equatable`, `Sendable`; a provider without hardware never throws from `start(with:)`, it reports `.fallback(rssiOnly: true)`. Its text reaches only a coordinator's inspector. |
+| Protocol methods | Define async start/stop and local discovery token retrieval for ranging providers. Each connection's provider is its host's `ProximityHost.makeProximityRangingProvider()`, which the three channel-ready doors call once per connection; the coordinator owns and stops it. |
 
 ### `NIRangingSession.swift`
+
+Compiled on iOS only: the whole file is `#if os(iOS)` (plan step A0.6.3), because NearbyInteraction's
+module ships in the macOS SDK with every type it declares unavailable there. A host on iOS hands it
+out from `makeProximityRangingProvider()` (Fernlet's does, a new one per connection).
 
 | Function | What It Does |
 | --- | --- |
 | `init(isHardwareSupported:)` | Detects or overrides NearbyInteraction support and publishes RSSI fallback when unsupported. |
-| `myDiscoveryToken()` | Returns archived local `NIDiscoveryToken`, waiting briefly for token availability. |
+| `myDiscoveryToken()` | Returns archived local `NIDiscoveryToken`, waiting briefly for token availability; throws `RangingError.hardwareUnsupported` without UWB. |
 | `start(with:)` | Unarchives peer token, starts `NISession`, and publishes running state. |
 | `stop()` | Invalidates session, clears it, and publishes idle state. |
 | `getOrCreateSession()` | Reuses or creates an `NISession` and assigns delegate. |
 | `session(_:didUpdate:)` | Publishes distance/direction samples or unknown distance. |
 | `session(_:didInvalidateWith:)` | Clears invalidated session and publishes invalidated reason. |
-| Suspension delegate methods | Present but currently no-op. |
+| `sessionWasSuspended(_:)` / `sessionSuspensionEnded(_:)` | Not no-ops: a suspension publishes `.fallback(rssiOnly: false)`, and its end re-runs the last peer configuration on the live session and publishes `.running` (nothing when there is no configuration or no session). |
+
+### `NoopRangingProvider.swift`
+
+The provider for a device or a host without ranging (plan step A0.6.3): a host on macOS, where
+NearbyInteraction's types are unavailable, or one that wants no ranging, answers it from
+`makeProximityRangingProvider()`, and every session over it commits by hand or by the QR ceremony.
+Observably identical to `NIRangingSession` on hardware without UWB, call for call; it touches no
+framework and no radio.
+
+| Function | What It Does |
+| --- | --- |
+| `init()` | A provider for one connection; reads and starts nothing. `isHardwareSupported` is `false`, and `state` holds `.fallback(rssiOnly: true)` from construction. |
+| `myDiscoveryToken()` | Always throws `RangingError.hardwareUnsupported`. |
+| `start(with:)` | Publishes `.fallback(rssiOnly: true)` again and returns without throwing (a coordinator never starts a provider without hardware). |
+| `stop()` | Publishes `.idle`. |
+| `distance` | A subject the provider keeps and never sends to: no value and no completion, never an `Empty`, which would complete at once. |
 
 ### `ProximityForegroundAnchor.swift`
 
 P9 item 5 retired the ActivityKit conformer; `NoopProximityForegroundAnchor` is the only anchor in
-shipping code and `ProximityCoordinator`'s unconditional default.
+shipping code and `ProximityCoordinator`'s unconditional default. The Live Activity reaper and its
+attributes type are the app's since plan step A0.6.4 (below), so the file imports no ActivityKit.
 
 | Function | What It Does |
 | --- | --- |
 | `NoopProximityForegroundAnchor.start(peerName:startedAt:)` | Marks foreground anchoring active. Shows nothing — the app raises no proximity Live Activity. |
 | `NoopProximityForegroundAnchor.update(bytesSent:bytesReceived:)` | No-op byte update. |
 | `NoopProximityForegroundAnchor.stop()` | Marks foreground anchoring inactive. |
-| `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded. Called once per launch from `FernletStoreLoader.startIfNeeded()`; the only remaining reader of the proximity attributes type. |
+
+### `App/Fernlet/ProximityLiveActivityReaper.swift` (the app)
+
+Moved from ProximityKit's foreground anchor at plan step A0.6.4, unchanged in behaviour; app target
+only, outside the widget's dual-membership set.
+
+| Function | What It Does |
+| --- | --- |
+| `ProximityLiveActivityReaper.endOrphans()` | Ends every proximity Live Activity a killed previous process stranded, with the content `Ended`, no stale date and `.immediate` dismissal. Called once per launch from `FernletStoreLoader.startIfNeeded()`, before any proximity manager can exist; the only remaining reader of the proximity attributes type. Its `end` call takes no transfer local in the app target. |
+| `ProximityConnectionActivityAttributes` | The proximity Live Activity's attributes (`peerName`, `startedAt`; a `ContentState` of `bytesSent`, `bytesReceived` and `status`), kept only for the reaper's enumeration. ActivityKit matches a stranded activity to it by unqualified type name and decodes it against this stored shape, so neither may change. |
 
 ## Protocol Namespace
 
@@ -1592,7 +1623,7 @@ its payload door, through `MeshPayloadRole`). The mesh features' tokens are thei
 | --- | --- |
 | `Installation.init(keychain:storage:logSubsystem:peerNames:)` | Assembles what belongs to one app on one device: its keychain rows, storage names, log subsystem and peer-name policy. |
 | `PeerNames.init(maxLength:floor:)` | The app's peer-name policy: the most characters (`Character`s) a peer's sanitized name keeps, and the floor a name that sanitizes to nothing is shown and recorded as. Presentation, so the installation's and not the family's; ProximityKit applies it wherever a peer's name enters it (an envelope's sender, a roster row, the name display), and its public coercion `ProximityDisplayName.peerDisplayName(_:in:)` applies it for the host's features (for Fernlet, FernletSocial's vouch list, chat, session hearts and photos, and presence; its activity manager keeps `ItemNameModeration`'s fixed 24-character cap for its joiners' names, with no floor); it caps the advertised recipe name with it too. |
-| `Storage.defaultDirectory` | `URL.applicationSupportDirectory/<directoryName>`, built the way Fernlet's proximity sidecar root has always been built; FernletSocial's production heart-drop scope reads `.fernlet`'s. |
+| `Storage.directory(under:)` | This installation's folder under a base its host picks, `base/<directoryName>/`, a directory URL (plan step A0.6: this module computes no directory of its own). Pure: it reads no file system and no platform location. Under `URL.applicationSupportDirectory`, `.fernlet`'s is `Application Support/Fernlet`, built exactly as Fernlet's proximity sidecar root has always been: `FernletConnections`' `FernletProximityStorage.productionDirectory` builds it there, and FernletSocial's production heart-drop scope reads that. |
 
 ### `Namespace/ProximityNamespace+Soundness.swift`
 
@@ -1678,7 +1709,7 @@ overloads of `sign` and `verify`.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, `proximityTrustStore` and `makeProximityTrustPolicy()`, one of the five requirements the protocol extension **never defaults** (`makeProximityIdentity()` is the fifth), so a host that supplies none fails to compile instead of running under another app's identity. |
+| `ProximityHost.proximityNamespace` | The host's protocol identity: like `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`, `makeProximityIdentity()`, `meshRoutedTypeEntries`, `proximityFallbackDisplayName` and `proximitySupportDirectory`, a requirement the protocol extension **never defaults** (`ProximityHost.swift`'s header names them), so a host that supplies none fails to compile instead of running under another app's identity. |
 | `FernletStore.proximityNamespace` (`App/Fernlet/ProximityHostAdapter.swift`) | `nonisolated`, answering `ProximityNamespace.fernlet` (`FernletConnections`): inert value data the store's nonisolated scope properties can read. |
 | `MeshNetworkManager.namespace` / `PresenceManager.namespace` / `ProximityRecipeShareManager.namespace` | `@ObservationIgnored nonisolated let`, read once from the host in `init`; each builds its radio from it, and the identity each holds by default is its host's `makeProximityIdentity()`, checked against it. |
 | `IdentityService.init(namespace:keychainService:provisioningParticipant:)` | The identity's namespace, keychain service and provisioning participant — see `IdentityService.swift` below. Every shipping construction is the app's factory `IdentityService.fernletApp(keychainService:)` (`App/Fernlet/SealedBackupEscrowKey.swift`): ProximityKit builds none, its host door having no default; every app construction uses the factory (`HeartDropService`'s identity has no default, and `FernletStore` passes the factory's), and the store's `makeProximityIdentity()` answers it for the three managers. `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` holds every construction to that file, and `theStoresManagersHoldIdentitiesCarryingTheEscrowKey` the managers' identities to its escrow key. |
@@ -1742,20 +1773,22 @@ holds each radio to the namespace it is built from (group 12).
 ### At rest: names, rows and scopes
 
 The two storage scopes carry the host's namespace and install binding, and the stores, the seal-key
-helpers, the host's defaults and the identity read their names and rows off the namespace: the mesh
-stores' file names, chunk directory and seal-key accounts, the production seal-key services, the
-default sidecar root and the identity's four accounts. The routed store measures under its scope's
-labels. `ProximityNamespaceGoldenTests` holds each reader to the namespace it is handed (group 13).
+helpers, the host's default scopes and the identity read their names and rows off the namespace: the
+mesh stores' file names, chunk directory and seal-key accounts, the production seal-key services and
+the identity's four accounts. Since plan step A0.6.6 the root is the host's to state, with no
+default; the namespace names only the folder (`installation.storage.directory(under:)`). The routed
+store measures under its scope's labels. `ProximityNamespaceGoldenTests` holds each reader to the
+namespace it is handed (group 13).
 
 | Function | What It Does |
 | --- | --- |
-| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `namespace`, `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:installBinding:)` | The scopes with the host's namespace and binding; `production(for:installBinding:)` is the namespace's `defaultDirectory` and seal-key service (FernletSocial's `keychainService(besideHeartDrop:in:)` extensions map the production heart-drop service to it). No longer `Equatable`, since a capability has no equality. The two isolation walls refuse every production spelling in tests, the shorthand `.production(for:installBinding:)` included. |
+| `MeshSessionStorageScope` / `MeshRoutedStorageScope` `namespace`, `installBinding`, `init(namespace:directory:keychainService:installBinding:)`, `production(for:directory:installBinding:)` | The scopes with the host's namespace and binding; `production(for:directory:installBinding:)` is the namespace's seal-key service on the root its host states (since plan step A0.6, which took the root out of the namespace), the one-line answer for a host with one installation (FernletSocial's `keychainService(besideHeartDrop:in:)` extensions map the production heart-drop service to its service). No longer `Equatable`, since a capability has no equality. The two isolation walls refuse every production spelling in tests, the shorthand `.production(for:directory:installBinding:)` included. |
 | `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account. |
 | `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace. |
 | `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`: a store holds one source of its labels. |
-| `ProximityHost.proximitySupportDirectory` / `meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from `proximityNamespace` and `proximityInstallBinding`: the root is `installation.storage.defaultDirectory`; on it the scopes are the namespace's production scopes, on any other root their services are named after it. |
+| `ProximityHost.meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from the root the host states (`proximitySupportDirectory`, a requirement with no default since plan step A0.6.6), `proximityNamespace` and `proximityInstallBinding`: the namespace's production scopes on that root, whatever it is (the service named after a host's own root, and the default root itself, left at A0.6.6). A host that keeps more than one installation's files in one process, or a test double on a root of its own that opens a store, states both scopes itself; `MeshRoutedStoreIsolationTests`' scratch-root needle holds every test double that states its root to that. |
 | `IdentityService.accounts` / `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` | The four device rows' accounts, the namespace's `installation.keychain.identity`, under the identity's `keychainService`. |
-| `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement; both scopes pass `namespace: proximityNamespace`, `installBinding: proximityInstallBinding` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `.fernlet`'s `defaultDirectory`, as does `CryptoFormatCensus.Inputs.production`. |
+| `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement; both scopes pass `namespace: proximityNamespace`, `installBinding: proximityInstallBinding` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `FernletConnections`' `FernletProximityStorage.productionDirectory`, `.fernlet`'s folder under Application Support (the path it has always used), as does `CryptoFormatCensus.Inputs.production`. |
 
 ### The column seal and the install binding
 
@@ -1814,8 +1847,9 @@ The call shapes A0.2 to A0.4 took out of ProximityKit, restored for the suites b
 where it takes the family, which the golden pins equal to `ProximityNamespace.fernlet`'s, `.fernlet`'s
 `family.radios` values where a door takes a presentation string, its `family.vocabulary.routedTypes`
 where the routed registry takes its routed types, and its `family.vocabulary.capabilities` where a
-capability gate takes the host's). A binding restores a call shape, never a value; a test that pins a
-value names `.fernlet` explicitly.
+capability gate takes the host's). A binding restores a call shape, never a value, but for two stated
+exceptions: the host doubles' identity door, and the host's platform facts (plan step A0.6), values the
+file chooses for the doubles that state none; a test that pins a value names `.fernlet` explicitly.
 
 | Function | What It Does |
 | --- | --- |
@@ -1833,6 +1867,7 @@ value names `.fernlet` explicitly.
 | `ItemNameModeration.moderatedPeerDisplayName(_:)`, `FernletIdentityEnvelope.sanitizedSenderDisplayName` / `disclosedSenderDisplayName` as properties, `RecipeShareAdvertisedName.publishable(_:)` | The peer-name coercion, the envelope's two sender reads and the advertised recipe name under `.fernlet`'s peer-name policy. |
 | `IdentityService.heartDropStaticAgreement(withEphemeralPublicKey:)` | The static key agreement under the spelling the suites were written against: a pure rename of `staticKeyAgreement(withEphemeralPublicKey:)`, which takes no namespace. |
 | `ProximityHost.makeProximityIdentity()` (a test-only extension) | The host doubles' identity door, which the requirement does not default: `IdentityService(namespace: proximityNamespace)`, the participant-less identity under the double's own namespace (not `.fernlet` for the golden suites' five), the shape the doubles were written against. Only conformances in the test target see it; the app's `FernletStore` answers for itself, and `ForeignIdentityHost` keeps its own answer. |
+| `ProximityHost.proximityFallbackDisplayName` (plan step A0.6.2) / `makeProximityRangingProvider()` (plan step A0.6.3) / `proximitySupportDirectory` (plan step A0.6.6), a test-only extension | The host's platform facts for the doubles that state none, which the requirements do not default, chosen here under the rule's second stated exception: the fallback name `"Test device"`, a generic word naming no device (every double states a non-empty name of its own, so only a cell that empties one reads it); a fresh `NoopRangingProvider()` per connection, which builds no `NISession` (no test fires a channel-ready door; the coordinator tests take a provider of their own through the managers' test seams); and the root, `proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)`, the production-shaped folder the doubles always shared, the very path the module's default built for them, on which the default scopes are the namespace's production rows as before (a double on a root of its own that opens a store states both scopes; scratch roots for every double are plan step A0.8's, before any runs on a Mac). Only conformances in the test target see it; the app's `FernletStore` answers `UIDevice.current.name`, `NIRangingSession()` and its own root for itself, and `ProximityVocabularyGoldenTests`' `PresentationNamespaceHost` takes its fallback from the cell that builds it. |
 
 ### The test target's FernletSocial bindings (`Tests/FernletTests/FernletSocialTestBindings.swift`)
 
@@ -2287,7 +2322,7 @@ frame.
 | `displayName` | Delegates to the shared `ProximityHost.resolvedProximityDisplayName` (`PeerDisplayNames.swift`), like the mesh and presence managers. |
 | `handlePeerDiscovered(_:)` | Filters self/blocked peers and updates sorted nearby recipients. |
 | `handlePeerLost(_:)` | Removes lost peer and records diagnostics. |
-| `handleChannelReady(_:)` | Creates a coordinator-backed recipe-share connection and starts friend handshake. |
+| `handleChannelReady(_:)` | Creates a coordinator-backed recipe-share connection, over the ranging provider its host builds for that pairing (`store.makeProximityRangingProvider()`, since plan step A0.6.3), and starts friend handshake. |
 | `startObserving()` | Observes connection coordinator states through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls `checkCoordinatorStates()` after each observed change. |
 | `checkCoordinatorStates()` | Captures verified fingerprints/KA keys, ensures recipients, sends pending payloads, and drops stale connections. |
 | `ensureRecipient(for:identity:)` | Adds/updates a recipient from verified identity. |
@@ -2750,7 +2785,7 @@ peer-bundle sidecar hold its JSON.
 | Function | What It Does |
 | --- | --- |
 | `HeartDropStorageScope(directory:keychainService:)` | One device's heart-drop storage identity. Both halves together because `HeartDropService.wipeForDeleteAll()` destroys both — files on a private root sealed by a shared key survive another store's wipe as ciphertext nothing can open. |
-| `HeartDropStorageScope.production` | `Application Support/Fernlet` + `com.fernlet.heartdrop`, the paths and service the stores have always used: the directory is `ProximityNamespace.fernlet`'s `installation.storage.defaultDirectory`. Only tests redirect it, and never by unsealing — a scoped store still seals through the real key path. |
+| `HeartDropStorageScope.production` | `Application Support/Fernlet` + `com.fernlet.heartdrop`, the paths and service the stores have always used: the directory is `FernletConnections`' `FernletProximityStorage.productionDirectory`, `.fernlet`'s folder under Application Support. Only tests redirect it, and never by unsealing — a scoped store still seals through the real key path. |
 | `HeartDropOutbox.fileURL(in:)` / `HeartDropDedupStore.fileURL(in:)` / `HeartDropPeerBundleCache.fileURL(in:)` / `ProximityHeartLedger.fileURL(in:)` | One definition per sidecar of its file name inside a root, so the production default and a scoped root can never disagree. |
 | `ModerationLedger.fileURL(in:)` / `FriendStateCache.fileURL(in:)` / `ClosenessLedger.fileURL(in:)` / `ProximityActivityManager.fileURL(in:)` | The same seam for the four `JSONSidecarFile` stores, all FernletSocial's and all cleared by `FernletStore.resetAll` (and `FriendStateCache` also by turning fuzzy-state sharing off). Unsealed, so a root is the whole fix — no keychain half. |
 | `JSONSidecarFile.fileURL(in:name:)` | The one definition of the sidecar layout. There is deliberately no argument-less `defaultFileURL(name:)`: every owner states its root, or the omission silently rejoins the process-wide race. |
@@ -3060,12 +3095,12 @@ FernletSocial's, so the type and its doors are internal.
 > states its root, the same way every heart-drop caller states FernletSocial's `HeartDropStorageScope`. The
 > in-source comment where `defaultFileURL(name:)` used to be says so; do not re-add it.
 >
-> The production root is `Application Support/Fernlet`, the host namespace's
-> `installation.storage.defaultDirectory` (`.fernlet` names the folder `Fernlet`), reached through
-> `ProximityHost.proximitySupportDirectory` (the protocol extension supplies it as the default for
-> hosts that do not redirect it; the app's `FernletStore` overrides it with a per-instance root that
-> defaults to the same folder). FernletSocial's production heart-drop scope reads the same folder off
-> `.fernlet`.
+> The production root is `Application Support/Fernlet`, `.fernlet`'s folder under Application Support
+> (`.fernlet` names the folder `Fernlet`), `FernletConnections`' `FernletProximityStorage.productionDirectory`
+> since ProximityKit plan step A0.6.6, reached through `ProximityHost.proximitySupportDirectory`, a
+> requirement with no default since that step (the app's `FernletStore` answers a per-instance root that
+> defaults to that folder). FernletSocial's production heart-drop scope reads the same folder through
+> `FernletProximityStorage`.
 > The `App/Fernlet/` that appeared here was a repo-restructure artefact: `9fb86a9` collapsed the
 > seven `Fernlet*` roots into `App/`, `Tests/` and `FernletKit/`, and the mechanical path rewrite
 > caught this *runtime* path as if it were a *source* path. No shipped install has ever used it.
@@ -3170,20 +3205,22 @@ whose phrases are Fernlet's display policy, beside `PeerNames.fernlet`.
 
 | Type Or Member | What It Does |
 | --- | --- |
-| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. Five of its requirements the extension never defaults, because each is the host's identity, custody or rule rather than the mechanism's: `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityIdentity()` and `meshRoutedTypeEntries`. The requirements only Fernlet's features read — the trusted peers, the trust store and the nearby-hearts opt-in — are FernletSocial's `FernletSocialHost` refinement's, which the app's store conforms to as well. |
-| `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `proximitySupportDirectory`, `meshSessionStorage` and `meshRoutedStorage` defaults are built from it. |
+| `ProximityHost` | The narrow seam the subsystem uses to reach app-level state, so the mesh / recipe-share / presence managers depend on this protocol instead of the concrete `FernletStore`. Removing that App→Proximity type coupling is what let `Proximity/` become a standalone `ProximityKit` module. The app conforms `FernletStore` to it in `ProximityHostAdapter.swift`. The requirements the extension never defaults, because each is the host's identity, custody, rule or platform fact rather than the mechanism's, are `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`, `makeProximityRangingProvider()`, `makeProximityIdentity()`, `meshRoutedTypeEntries`, `proximityFallbackDisplayName` and `proximitySupportDirectory` (the file's header names them). The requirements only Fernlet's features read — the trusted peers, the trust store and the nearby-hearts opt-in — are FernletSocial's `FernletSocialHost` refinement's, which the app's store conforms to as well. |
+| `proximityNamespace` | The host's protocol identity (plan step A0.2.3), with **no default** in the extension: a host that supplies none fails to compile. The three radio managers read it once at construction; Fernlet's adapter answers `ProximityNamespace.fernlet`. Since A0.2.8 the extension's `meshSessionStorage` and `meshRoutedStorage` defaults are built from it (on the root the host states, since A0.6.6, when the extension's root default left). |
 | `proximityInstallBinding` | The host's install binding (plan step A0.2.9), also with **no default**: the two default storage scopes carry it to the stores' column seal. Fernlet's adapter answers `FernletDeviceBindingAdapter()`, delegating to `DeviceBindingID`. |
 | `makeProximityTrustPolicy()` | A fresh `ProximityTrustPolicy` for one connection, again with **no default**: the session's trust rules are the host's. The mesh (per slot), presence (per heart connection) and recipe-share (per pairing) managers call it, test seams included, and retain the result beside the connection, because the coordinator holds its policy `weak`. Fernlet's adapter answers `FriendSessionTrustPolicy(vault: proximityTrustVault)` (`FernletConnections`), as every test double does. |
+| `makeProximityRangingProvider()` | A fresh `RangingProvider` for one connection (plan step A0.6.3), with **no default**: whether a connection ranges is the host's product and platform decision. The mesh's, the recipe radio's and presence's heart channel-ready doors each call it once per connection and build that connection's coordinator over it, which owns and stops it (the managers' coordinator test seams take a provider of their own). A new value per call, starting nothing: one instance handed to two connections would let one session's `stop()` end the other's ranging. On iOS a host answers `NIRangingSession()`, which needs `NSNearbyInteractionUsageDescription`; a host on macOS, or one that wants no ranging, answers `NoopRangingProvider()`. Fernlet's adapter answers `NIRangingSession()` (`FernletFeatureGoldenTests`' group 30 pins its body); the test target's doubles that state none answer `NoopRangingProvider()` through one test-only extension. |
 | `makeProximityIdentity()` | The identity a manager builds when handed none: the mesh, presence and recipe-share managers call it once each, at construction, and check it against their namespace (`ProximityNamespaceGate.checkIdentity`), so an identity of another namespace starts no radio. **No default**: an identity's custody is the host's, so ProximityKit never guesses one and a host that answers nothing fails to compile. Fernlet's adapter answers its factory's identity, `IdentityService.fernletApp()`, which carries the sealed-backup escrow key (`KeyCustodyBoundaryTests` holds each of the store's three managers to it); sixteen of the test target's seventeen doubles answer `IdentityService(namespace: proximityNamespace)`, with no provisioning participant, through one test-only extension the app's conformance cannot see, and `ProximityNamespaceGateTests`' `ForeignIdentityHost` answers an identity of another namespace, so each manager's check can be seen refusing. |
 | `meshRoutedTypeEntries` | The routed-type rows the host's features carry, with **no default** (plan step A0.5.9, S16): the mesh manager builds its routed type registry from them alone, once, at `init`, and its widest row is the resident bound. Fernlet's adapter answers FernletSocial's `FernletRoutedTypes.entries(_:)` over its namespace's routed types (the text, heart and photo rows); the test target's doubles answer the same through one test-only extension. |
 | `proximityDisplayName`, `isBlockedFingerprint(_:)`, `blockProximityPeer(signingPublicKey:)` | The name this device advertises and the block surface the managers consume: the fingerprint block list the routed author resolution and the slot gates ask, and the block a session's "Block" action writes. |
-| `proximitySupportDirectory` | Root for the subsystem's on-disk files: ProximityKit's two sealed mesh stores, through the default `meshSessionStorage` and `meshRoutedStorage` built from it, and the files the host's features keep on the same root — for Fernlet, FernletSocial's session photos' wall index, its preferences and the pending session-photo corpus, the activity ledger, `HeartLedger.json` and the three sealed heart-drop sidecars named by its `HeartDropStorageScope`. It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every manager and composition built over a store inherits its isolation for free. |
+| `proximityFallbackDisplayName` | The name this device goes by on the radios when its user set none (plan step A0.6.2), which `resolvedProximityDisplayName` falls back to, with **no default**: what a device is called is a platform fact, and ProximityKit reads none. It goes on the air before any identity is verified (the recipe radio's TXT `name`), so it must never identify the person: on a Mac every system source of the device's name is the user's own Computer Name, so a Mac host answers a generic word. Read on every resolution, never cached; a token, never localized. Fernlet's adapter answers `UIDevice.current.name`, the generic model name without the user-assigned-device-name entitlement (`FernletFeatureGoldenTests`' group 30 holds it there); the test target's doubles that state none answer `"Test device"` through one test-only extension. |
+| `proximitySupportDirectory` | Root for the subsystem's on-disk files: ProximityKit's two sealed mesh stores, through the default `meshSessionStorage` and `meshRoutedStorage` built from it, and the files the host's features keep on the same root — for Fernlet, FernletSocial's session photos' wall index, its preferences and the pending session-photo corpus, the activity ledger, `HeartLedger.json` and the three sealed heart-drop sidecars named by its `HeartDropStorageScope`. It comes through the HOST rather than being a constant because it is shared *mutable* on-disk state: deletes re-save the whole index and every manager loads that file at init, so with one process-wide path a manager built in one test reads and overwrites another's wall — a live cross-suite race under the test runner, where XCTest and Swift Testing suites share one process. Routing it through the host means every manager and composition built over a store inherits its isolation for free. **No default** since plan step A0.6.6: where an installation keeps its files is a platform fact, so ProximityKit computes no directory and a host that states none fails to compile; on an unsandboxed Mac a host answers a folder no other app shares, and `installation.storage.directory(under:)` puts the namespace's folder under the base it picks. Read whenever a manager, a composition or a default scope builds its stores, so it must answer the same root for the host's lifetime. Fernlet's adapter answers the store's own root (`FernletProximityStorage.productionDirectory` in production); the test target's doubles that state none answer their namespace's folder under Application Support through one test-only extension. |
 
 ### `PeerDisplayNames.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityHost.resolvedProximityDisplayName` | The local display name a proximity radio advertises: the host's `proximityDisplayName` trimmed, falling back to the device name. One home for the previously identical private `displayName` vars in `MeshNetworkManager`, `ProximityRecipeShareManager`, and `PresenceManager`. |
+| `ProximityHost.resolvedProximityDisplayName` | The local display name a proximity radio advertises: the host's `proximityDisplayName` trimmed of spaces and tabs (never a line break), or, when that leaves nothing, the host's `proximityFallbackDisplayName`, untrimmed (Fernlet's device name; plan step A0.6.2 moved that read to the host). Public, so a host's UI can say the resolved name. One home for the previously identical private `displayName` vars in `MeshNetworkManager`, `ProximityRecipeShareManager`, and `PresenceManager`; `ProximityVocabularyGoldenTests` holds the rule over a host's own fallback. |
 | `ProximityDisplayName.sanitized(_:maxLength:)` | The generic name sanitizer: invisible (zero-width and bidi) scalars dropped, whitespace and newlines to a space, other control scalars dropped, runs collapsed and trimmed, then the cap in `Character`s; the order is load-bearing. FernletDomainModel's `ItemNameModeration.sanitizedName` copied scalar for scalar (`ProximityVocabularyGoldenTests` holds the two equal), except that a cap below one keeps nothing where the original traps. The namespace's soundness rules judge the peer-name floor by it. |
 | `ProximityDisplayName.peerDisplayName(_:in:)` (public, with the type; `sanitized` stays internal) | Wire-boundary coercion for a peer-supplied name before it is shown or persisted: `sanitized` under the namespace's `installation.peerNames.maxLength`, or its `floor` when nothing displayable remains. The one home of the sanitize-or-floor idiom in the heart-receive paths, the vouch-list cache, the session chat store, the keep-as-friend rows, the descriptor and incoming-photo coercions and the envelope's sender reads; each caller passes the namespace it holds. |
 

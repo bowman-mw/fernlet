@@ -78,8 +78,9 @@
 //     and channel-binding consumers take those values from the radio, whole.
 // 13. **The at-rest names and rows read the namespace.** The two stores write and read their files
 //     and seal keys under the names the namespace their scope carries gives, Fernlet's or another
-//     app's; a host with no sidecar root or scope of its own gets them built from its namespace; and
-//     an identity provisions, and its provisioning rule names, the four rows its namespace names.
+//     app's; a host with no storage scope of its own gets both built from its namespace on the root it
+//     states; and an identity provisions, and its provisioning rule names, the four rows its namespace
+//     names.
 // 14. **The column seal and the install binding.** ProximityKit's copy, `ProximityColumnCrypto`,
 //     derives group 2's known column keys from `.fernlet`'s fields and opens group 2's known blobs;
 //     it and FernletCrypto's `ColumnCrypto` open each other's blobs, for both labels, both ways; it
@@ -376,9 +377,9 @@ struct ProximityNamespaceGoldenTests {
     /// taking it from the host's namespace (``theIdentityKeychainServiceIsReadOffTheNamespace()``
     /// pins that read). Since step A0.2.8 the four accounts and both seal-key rows are read off
     /// `.fernlet` too, as the identity and the stores read them off the namespace they hold: a
-    /// production scope's service is the namespace's (`production(for:installBinding:)` reads it), and
-    /// that is what the two service rows read, never a production scope, whose spellings are banned by
-    /// substring in every other test file. The app's derivation of those services beside its
+    /// production scope's service is the namespace's (`production(for:directory:installBinding:)` reads
+    /// it), and that is what the two service rows read, never a production scope, whose spellings are
+    /// banned by substring in every other test file. The app's derivation of those services beside its
     /// heart-drop service is FernletSocial's, which this suite never imports: the isolation walls and
     /// `FernletFeatureGoldenTests` pin it.
     private static var keychainRows: [NamespaceGoldenRow] {
@@ -411,15 +412,17 @@ struct ProximityNamespaceGoldenTests {
     /// The storage directory and the three names the two sealed mesh stores write under it.
     ///
     /// Read off `.fernlet` since step A0.2.8, when the stores began taking their names from their
-    /// scope's namespace and the host's default root became the namespace's `defaultDirectory` (read
-    /// here through it, as the app and the host default read it). Group 2's store cells and group 13
-    /// pin those reads.
+    /// scope's namespace. The directory's name is read through Fernlet's proximity root, as the app
+    /// reads it: since step A0.6.6, when ProximityKit stopped computing a directory, that root is
+    /// `FernletConnections`' `FernletProximityStorage.productionDirectory` (`.fernlet`'s folder under
+    /// Application Support), and from A0.2.8 until then it was the namespace's default directory.
+    /// Group 2's store cells and group 13 pin those reads.
     private static var storageRows: [NamespaceGoldenRow] {
         let storage = "installation.storage."
         let fernlet = ProximityNamespace.fernlet.installation.storage
         return [
             NamespaceGoldenRow(.storage, storage + "directoryName", frozen: "Fernlet",
-                               today: .text(fernlet.defaultDirectory.lastPathComponent)),
+                               today: .text(FernletProximityStorage.productionDirectory.lastPathComponent)),
             NamespaceGoldenRow(.storage, storage + "meshSessionContextFileName", frozen: "MeshSessionContext.sealed",
                                today: .text(fernlet.meshSessionContextFileName)),
             NamespaceGoldenRow(.storage, storage + "meshRoutedIndexFileName", frozen: "MeshRoutedIndex.sealed",
@@ -505,15 +508,19 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// The directory and the three on-disk names, byte for byte — and the directory resolves under
-    /// Application Support, the root the design's `Storage.defaultDirectory` names: `.fernlet`'s, the
-    /// one sidecar root, which the app, the host default and FernletSocial's production heart-drop
-    /// scope resolve (`FernletFeatureGoldenTests` pins that scope's folder).
+    /// Application Support: Fernlet's proximity root, `FernletProximityStorage.productionDirectory`,
+    /// the one sidecar root, which the app and FernletSocial's production heart-drop scope resolve
+    /// (`FernletFeatureGoldenTests` pins each site and that scope's folder), is `.fernlet`'s folder
+    /// under Application Support, the folder `installation.storage.directory(under:)` names there.
     @Test func everyStorageNameIsItsFrozenBytes() {
         #expect(Self.expectFrozen(.storage) >= 4)
         let expected = URL.applicationSupportDirectory
             .appendingPathComponent(Self.frozen("installation.storage.directoryName"), isDirectory: true)
-        let namespaceRoot = ProximityNamespace.fernlet.installation.storage.defaultDirectory
-        #expect(namespaceRoot == expected, "the namespace's sidecar root is \(namespaceRoot.path), not \(expected.path)")
+        let productionRoot = FernletProximityStorage.productionDirectory
+        #expect(productionRoot == expected, "Fernlet's proximity root is \(productionRoot.path), not \(expected.path)")
+        let namespaceFolder = ProximityNamespace.fernlet.installation.storage.directory(under: .applicationSupportDirectory)
+        #expect(namespaceFolder == expected,
+                "the namespace's folder under Application Support is \(namespaceFolder.path), not \(expected.path)")
     }
 
     /// The four identity accounts, by what a real provision writes: `IdentityKeychainKey` is private,
@@ -2526,34 +2533,34 @@ struct ProximityNamespaceGoldenTests {
         }
     }
 
-    /// A host that carries no sidecar root or scope of its own gets them built from its namespace:
-    /// the root is the namespace's `installation.storage.defaultDirectory`, and on it both scopes carry
-    /// the namespace and its production seal-key services; a host on another root keeps the namespace
-    /// and gets services named after that root. Under `.fernlet` that is `Application Support/Fernlet`
-    /// with Fernlet's frozen services; under another app's namespace, that app's. Building a host or a
-    /// scope touches no disk and no keychain.
-    @Test func aHostsDefaultRootAndScopesAreBuiltFromItsNamespace() {
+    /// A host that carries no storage scope of its own gets both built from its namespace on the root
+    /// it states: each carries the namespace, that root and the namespace's production seal-key
+    /// service, whatever the root is, since plan step A0.6.6, when ProximityKit stopped defaulting the
+    /// root and stopped naming a service after a host's own. ``NamespaceDefaultsHost``'s root is the one
+    /// the test target's bindings state (its namespace's folder under Application Support) and
+    /// ``RootedNamespaceDefaultsHost``'s a scratch root; under `.fernlet` the services are Fernlet's
+    /// frozen ones, under another app's namespace that app's. Fields are compared, never a production
+    /// scope's spelling, which both isolation walls refuse here. Neither host opens a store, and
+    /// building a host or a scope touches no disk and no keychain.
+    @Test func aHostsDefaultScopesAreItsNamespacesRowsOnTheRootItStates() {
         // R2: bounded by the two namespaces.
         for namespace in [ProximityNamespace.fernlet, ForeignAppNamespace.namespace()] {
             let keychain = namespace.installation.keychain
-            let host = NamespaceDefaultsHost(namespace: namespace)
-            let root = namespace.installation.storage.defaultDirectory
-            #expect(host.proximitySupportDirectory == root, "the default root is \(host.proximitySupportDirectory.path)")
-            let (session, routed) = (host.meshSessionStorage, host.meshRoutedStorage)
-            #expect(session.namespace == namespace && session.directory == root
-                        && session.keychainService == keychain.meshSessionSealKey.service,
-                    "the default session scope on the namespace's root is \(session.keychainService)")
-            #expect(routed.namespace == namespace && routed.directory == root
-                        && routed.keychainService == keychain.meshRoutedSealKey.service,
-                    "the default routed scope on the namespace's root is \(routed.keychainService)")
-            let rooted = RootedNamespaceDefaultsHost(namespace: namespace, root: Self.scratchDirectory())
-            let suffix = ".host." + rooted.proximitySupportDirectory.lastPathComponent
-            #expect(rooted.meshSessionStorage.namespace == namespace
-                        && rooted.meshSessionStorage.keychainService == keychain.meshSessionSealKey.service + suffix,
-                    "a host on its own root shares the session seal-key row: \(rooted.meshSessionStorage.keychainService)")
-            #expect(rooted.meshRoutedStorage.namespace == namespace
-                        && rooted.meshRoutedStorage.keychainService == keychain.meshRoutedSealKey.service + suffix,
-                    "a host on its own root shares the routed seal-key row: \(rooted.meshRoutedStorage.keychainService)")
+            let hosts: [any ProximityHost] = [
+                NamespaceDefaultsHost(namespace: namespace),
+                RootedNamespaceDefaultsHost(namespace: namespace, root: Self.scratchDirectory())
+            ]
+            // R2: bounded by the two hosts.
+            for host in hosts {
+                let root = host.proximitySupportDirectory
+                let (session, routed) = (host.meshSessionStorage, host.meshRoutedStorage)
+                #expect(session.namespace == namespace && session.directory == root
+                            && session.keychainService == keychain.meshSessionSealKey.service,
+                        "the default session scope on \(root.path) is \(session.keychainService)")
+                #expect(routed.namespace == namespace && routed.directory == root
+                            && routed.keychainService == keychain.meshRoutedSealKey.service,
+                        "the default routed scope on \(root.path) is \(routed.keychainService)")
+            }
         }
         let fernlet = NamespaceDefaultsHost(namespace: .fernlet)
         #expect(fernlet.meshSessionStorage.keychainService == Self.frozen("installation.keychain.meshSessionSealKey.service")
@@ -2788,9 +2795,9 @@ struct ProximityNamespaceGoldenTests {
                 "the adapter kept an answer DeviceBindingID changed: \(reads)")
     }
 
-    /// A host's default storage scopes carry the install binding the host supplies, on the namespace's
-    /// root and on a root of its own, so the stores a manager builds over them seal under the host's
-    /// binding. Building a host or a scope reads no binding.
+    /// A host's default storage scopes carry the install binding the host supplies, on the root the
+    /// test target's bindings state and on a root of its own, so the stores a manager builds over them
+    /// seal under the host's binding. Building a host or a scope reads no binding.
     @Test func aHostsDefaultScopesCarryTheInstallBindingItSupplies() throws {
         let supplied = PinnedInstallBinding(bytes: Self.otherInstallBinding)
         let host = NamespaceDefaultsHost(namespace: .fernlet, installBinding: supplied)
@@ -3787,9 +3794,11 @@ private final class ForeignNamespaceHost: ProximityHost {
 
 // MARK: - Hosts of the extension defaults
 
-/// A `ProximityHost` that supplies only its namespace and the requirements with no default, so its
-/// sidecar root and both storage scopes are `ProximityHost`'s extension defaults, built from that
-/// namespace (plan step A0.2.8's cell) and its install binding (plan step A0.2.9). Building one
+/// A `ProximityHost` that supplies only its namespace, its install binding and the requirements no
+/// binding answers, so its root is the one the test target's bindings state for a double that states
+/// none (its namespace's folder under Application Support, plan step A0.6.6) and both storage scopes
+/// are `ProximityHost`'s extension defaults, built on that root from that namespace (plan step
+/// A0.2.8's cell) and its install binding (plan step A0.2.9). It never opens a store. Building one
 /// touches no disk and no keychain.
 @MainActor
 private final class NamespaceDefaultsHost: ProximityHost {
@@ -3800,8 +3809,8 @@ private final class NamespaceDefaultsHost: ProximityHost {
     var proximityDisplayName: String { "Golden" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
-    /// A host of `namespace` on the extension's default root, supplying `installBinding` (Fernlet's
-    /// adapter unless a cell hands it one of its own).
+    /// A host of `namespace` on the root the test target's bindings state, supplying `installBinding`
+    /// (Fernlet's adapter unless a cell hands it one of its own).
     init(namespace: ProximityNamespace, installBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()) {
         proximityNamespace = namespace
         proximityInstallBinding = installBinding
@@ -3813,7 +3822,13 @@ private final class NamespaceDefaultsHost: ProximityHost {
 }
 
 /// ``NamespaceDefaultsHost`` on a sidecar root of its own: only its two storage scopes are the
-/// extension defaults.
+/// extension defaults, which on that root are its namespace's production rows (plan step A0.6.6).
+///
+/// It never opens a store: its cells only read its scopes. That is why it states a root and no
+/// scope, the one test double that may, and why `MeshRoutedStoreIsolationTests`' scratch-root needle
+/// exempts it by name: a double on a root of its own that opened a store over the default scopes
+/// would seal its scratch files under the namespace's production keys, which any wipe in the process
+/// deletes.
 @MainActor
 private final class RootedNamespaceDefaultsHost: ProximityHost {
     let proximityNamespace: ProximityNamespace

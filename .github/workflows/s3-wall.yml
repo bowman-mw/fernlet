@@ -27,7 +27,10 @@
 # GCC_TREAT_WARNINGS_AS_ERRORS=YES, so every warning — including the package warnings Xcode hides
 # behind -suppress-warnings for local packages — fails the build. The Swift grep-wall port of the
 # Power-of-10 mechanical checks (PowerOfTenBoundaryTests) runs below next to the other grep-walls;
-# the Python scanner itself runs in power-of-10.yml on a cheap runner.
+# the Python scanner itself runs in power-of-10.yml on a cheap runner. Since 2026-10-09 (ProximityKit
+# plan step A0.6.5) a second strict build runs too: Scripts/macos-build-selftest.sh builds
+# ProximityKit's closure for native macOS 26 through Scripts/macos-build-check.sh, with the same
+# overrides, after proving that a planted `import UIKit` fails it.
 #
 # Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
 # refuses a green run that executed fewer tests than the step's floor: `-only-testing:` matches
@@ -149,6 +152,24 @@ jobs:
           Scripts/spm-wall-selftest.sh
           Scripts/run-gated-suites-selftest.sh
 
+      - name: ProximityKit on native macOS (Scripts/macos-build-selftest.sh)
+        # ProximityKit builds for iOS 26 and native macOS 26 (plan step A0.6). This step builds the
+        # ProximityKit product's closure (ProximityKit, FernletCrypto, FernletDomainModel,
+        # FernletFoundation) for generic/platform=macOS, arm64 and x86_64, with warnings as errors, after
+        # proving the check is a macOS build: a planted `import UIKit` must fail it with "unable to
+        # resolve module dependency: 'UIKit'", the explicit-module scanner's wording for a module the
+        # platform lacks (xcodebuild never prints the CLI compiler's "no such module"). xcodebuild, not
+        # `swift build`: the SwiftPM CLI leaves the closure's string catalogs unprocessed. The Xcode
+        # floor above (iOS 26.5 SDK) brings a macOS 26 SDK. generic/platform=macOS also matches the Mac
+        # Catalyst variant ("Using the first of multiple matching destinations"), so the check requires
+        # native macOS products after its build. A build, not a test: it names no suite and no floor,
+        # so CIGateSelectorBoundaryTests does not parse it, and ProximityPlatformBoundaryTests pins that
+        # this step's body runs the self-test and that no `if:` or `continue-on-error:` sits on this
+        # step or on its job (plan step A0.6.8).
+        run: |
+          set -euo pipefail
+          Scripts/macos-build-selftest.sh
+
       - name: Grep-wall (S3BoundaryTests) + the companion-refresh seam
         # `AuditRatchetBoundaryTests` joins the two at P9 item 9's fix review (2026-09-20). It is a
         # pure SOURCE scan — every frozen `UXScreenProbe.auditBaselines` entry still names a probed
@@ -249,13 +270,72 @@ jobs:
         # or PrivateMediaStore's, comes back unseen. That cell is the line's one new test, and the line,
         # MEASURED on a Mac at A0.5.10 and again at A0.5.12 (iPhone 17 simulator, iOS 26.5), ran 104
         # tests in 10 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6.0 (2026-10-09) adds `ProximityPlatformBoundaryTests`, the ratchet
+        # that keeps ProximityKit free of platform policy while plan step A0.6 hands every platform
+        # fact to its host. A pure SOURCE scan of FernletKit/Sources/ProximityKit through the namespace
+        # wall's one walker, with no compiler half on iOS, where each thing it refuses compiles clean: a
+        # module imported or tested for with `canImport` that is neither a neutral baseline module nor
+        # an exact seam row (a file, a module, its guard and the step that deletes the row: 7 rows,
+        # `ProtectedSidecar.swift`'s guarded UIKit the one permanent), a device-name source beyond one
+        # row, a platform directory beyond one row, and a default for a host fact in a `ProximityHost`
+        # extension beyond one row. Each rule is exact both ways, and each transient row names the
+        # commit of plan step A0.6 that deletes it. Four cells, its readers fixtured both ways in the
+        # fourth: 108 tests in 11 suites by declaration count (104 + 4), the ARITHMETIC CHECK, and the
+        # line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 108 tests in 11
+        # suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6.3 (2026-10-09) has every channel-ready door ask its host for each
+        # connection's ranging provider and guards the NearbyInteraction provider's whole file by
+        # `#if os(iOS)`, so that file's seam row is permanent and its exit step is gone. It gives the
+        # suite a fifth cell, W5: the mesh's and the recipe radio's doors in ProximityKit and presence's
+        # heart door in FernletSocial each pass `store.makeProximityRangingProvider()` exactly once and
+        # name no provider of their own, and `NIRangingSession` is named in ProximityKit code only in
+        # its own file. 109 tests in 11 suites by declaration count (108 + 1), the ARITHMETIC CHECK,
+        # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 109 tests
+        # in 11 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6.5 (2026-10-09) makes ProximityKit's macOS build a compiled fact on
+        # every push: the manifest declares macOS 26 and a `ProximityKit` product, the step above this
+        # one builds that product's closure for native macOS through Scripts/macos-build-selftest.sh,
+        # and the pre-push hook runs Scripts/macos-build-check.sh when a push touches the closure. It
+        # gives the suite a sixth cell, W6, which reads each of those from what runs, never from a
+        # step's title, an `echo` or a comment: the manifest's two platforms and the product line; this
+        # workflow's macOS step, declared once, running the self-test in its body; the self-test's probe,
+        # its capture and grep in the negative leg and its positive leg; the check's one `xcodebuild
+        # build` command, joined across its continuations, with its scheme, destination, derived data
+        # and dependency flag; and the hook's invocation line, with its readers fixtured both ways in
+        # the cell. 110 tests in 11 suites by declaration count (109 + 1), the ARITHMETIC CHECK, and the
+        # line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 110 tests in 11
+        # suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6 (2026-10-09), Mac readiness, leaves ProximityKit holding no
+        # platform policy: it builds for iOS 26 and native macOS 26, every fact whose right answer
+        # differs by platform or by app is its host's, as a `ProximityHost` requirement with no default
+        # (the name an unnamed device goes by, each connection's ranging provider and the root of an
+        # installation's files), the module keeps two mechanism seams, each compiled only where its
+        # framework is usable, and the Live Activity reaper is the app's. It leaves
+        # `ProximityPlatformBoundaryTests` at the step's end state, with no transient row and no exit
+        # step: 2 permanent seams (`ProtectedSidecar.swift`'s UIKit under `#if canImport(UIKit)` and
+        # `NIRangingSession.swift`'s NearbyInteraction, the whole file under `#if os(iOS)`), no
+        # device-name read, no platform directory and no host-fact default, every channel-ready door
+        # asking its host for each connection's ranging provider, and the macOS build pinned to run.
+        # That suite is the source half; the "ProximityKit on native macOS" step above is the compiler
+        # half, building ProximityKit's closure for native macOS on every push through
+        # Scripts/macos-build-selftest.sh after proving a planted `import UIKit` fails it. The step's
+        # other two lines: power-of-10 holds the macOS check's rule-10 pin, 34 tests in 1 suite on its
+        # shared floor `1`, and crypto-goldens holds the step's goldens (the feature golden's group 30
+        # and the vocabulary golden's group 14), MEASURED at 347 tests in 8 suites, its floor 347. This
+        # line, MEASURED on a Mac at A0.6.5 and again at A0.6.7 (iPhone 17 simulator, iOS 26.5), ran
+        # 110 tests in 11 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
             AuditRatchetBoundaryTests BackgroundRefreshBoundaryTests \
             CompanionRefreshSchedulingTests CompanionRefreshPipelineTests \
             WidgetSnapshotContentEqualityTests CompanionEmotionPrivacyTests \
-            ProximityAuditBridgeTests ProximityNamespaceBoundaryTests
+            ProximityAuditBridgeTests ProximityNamespaceBoundaryTests \
+            ProximityPlatformBoundaryTests
 
       - name: No-tracking wall (NoTrackingBoundaryTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
@@ -270,6 +350,15 @@ jobs:
         # length, force unwraps / traps, swallowed `try?`, unbounded loops, mutable globals, `#if`
         # policy, unsafe seams, the assertion-density floor, and the rule-10 build-setting pins.
         # Reads the same allowlist as the scanner, so the two cannot disagree about an exemption.
+        #
+        # ProximityKit plan step A0.6.5 (2026-10-09) gives the suite the rule-10 pin of the second
+        # strict build, `r10MacOSBuildCheckScriptBuildsStrict`: Scripts/macos-build-check.sh holds
+        # exactly one `xcodebuild build` command, read joined across its continuations, and that command
+        # carries SUPPRESS_WARNINGS=NO, SWIFT_TREAT_WARNINGS_AS_ERRORS=YES and
+        # GCC_TREAT_WARNINGS_AS_ERRORS=YES (an `echo` of the flags is not the command). 34 tests in 1
+        # suite by declaration count (33 + 1), the ARITHMETIC CHECK, and the line, MEASURED on a Mac on
+        # that tree (iPhone 17 simulator, iOS 26.5), ran 34 tests in 1 suite; its floor stays the shared
+        # `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh power-of-10 1 PowerOfTenBoundaryTests
@@ -350,7 +439,8 @@ jobs:
         # A0.2.8, which moves the mesh stores' file names and seal-key accounts, the production
         # seal-key services, the hosts' default sidecar root and the identity's four accounts, it holds
         # those readers too: the two stores write and read under the names the namespace their scope
-        # carries gives, a host's default root and scopes are built from its namespace, and an identity
+        # carries gives, a host's default scopes are built from its namespace (on the root the host
+        # states since A0.6.6, which took the default root out of ProximityKit), and an identity
         # keeps, and names, the four rows its namespace names. Since A0.2.9, which copies
         # `ColumnCrypto` into ProximityKit (`ProximityColumnCrypto`) and injects the install binding,
         # it holds the copy to the original: the A0.2.0 column vectors run through it, it and
@@ -388,7 +478,17 @@ jobs:
         # ProximityKit's spellings, case for case. Since A0.3.10, which has the coordinator record its
         # audit in ProximityKit's own `ProximitySessionAudit` and Fernlet convert it into the persisted
         # `TrainerAuditEvent`, it also holds a converted audit to the frozen audit row's bytes and
-        # each of the eight kinds to the token its row persists under.
+        # each of the eight kinds to the token its row persists under. Since A0.6.0 (2026-10-09), cut
+        # before plan step A0.6 hands ProximityKit's platform facts to its host, it also holds the
+        # ranging seam a host without UWB is left with: a provider without UWB observed call by call,
+        # and a coordinator over one introducing itself as `rssi` with no discovery token and waiting
+        # at the manual commit. Since A0.6.2, which has the host state the name an unnamed device goes
+        # by, it also holds the local name over a host's own fallback: the setting trimmed of spaces
+        # and tabs and never of line breaks, or, when nothing is left, the fallback, untrimmed. Since
+        # A0.6.3, which has the host build each connection's ranging provider, it observes
+        # ProximityKit's `NoopRangingProvider`, the provider a host without ranging answers, beside
+        # `NIRangingSession` told it has none, both refusing a token as the protocol-level
+        # `RangingError`.
         #
         # `ProximityNamespaceGateTests` joins them at ProximityKit plan step A0.3's runtime gate
         # (2026-10-02): ProximityKit's run-time refusal of an unsound namespace, door by door — the
@@ -430,6 +530,14 @@ jobs:
         # sealed to a kept friend at a commit; the camera's hold-failure line; the audit lines the moved
         # code writes; and the order a session's commit and end run their legs in. Those vectors were
         # computed twice in Python and never by Swift, so this line's run is their third computation.
+        # Since A0.6.0 (2026-10-09), cut before plan step A0.6 hands ProximityKit's platform facts to
+        # its host, it also pins what that step moves on Fernlet's host: the local name an unnamed
+        # device advertises and the raw name the activities and the heart dead-drop send, Fernlet's
+        # proximity root and its four spellings (`FernletConnections`' own since A0.6.6, read where
+        # production reads it), the Live Activity reaper's attributes and ending (the
+        # app's own reaper since A0.6.4, read where it lives), and the ranging provider Fernlet's host
+        # builds each connection over, an `NIRangingSession` fresh per call, whose answer, since A0.6.3
+        # the app host's own, it also reads as source.
         #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
@@ -623,9 +731,26 @@ jobs:
         # refused it. 339 + 1 (the feature golden's cell holding the registry the app's own routed rows
         # build, `FernletStore.meshRoutedTypeEntries`, to the one the cap cells read) = 340 is the
         # ARITHMETIC CHECK, never the source.
+        # RAISED 340 -> 346 at A0.6.0, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "346 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 52
+        # + 17 + 92), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 346:
+        # passed. Run once more at 346 without FernletFeatureGoldenTests: 254 ran and the floor refused
+        # it. 340 + 6 (the vocabulary golden's two ranging-seam cells, a provider without UWB and a
+        # coordinator over one, and the feature golden's four group 30 cells, the local name, the
+        # proximity root, the reaper's attributes and Fernlet's ranging provider) = 346 is the
+        # ARITHMETIC CHECK, never the source.
+        # RAISED 346 -> 347 at A0.6.2, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "347 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 53
+        # + 17 + 92), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 347:
+        # passed. Run once more at 347 without ProximityVocabularyGoldenTests: 294 ran and the floor
+        # refused it. 346 + 1 (the vocabulary golden's cell holding the local name over a host's own
+        # fallback, the setting trimmed of spaces and tabs or the fallback untrimmed) = 347 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 340 \
+          Scripts/run-gated-suites.sh crypto-goldens 347 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

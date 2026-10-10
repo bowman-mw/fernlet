@@ -14,8 +14,8 @@
 // destroys every one of them by service and by path. The family must not gain a member.
 //
 // Source-scanning is the only way to catch the omission:
-// `MeshRoutedStore(scope: .production(for: namespace, installBinding: binding))` compiles, passes in
-// isolation every time, and lands its damage in somebody else's suite.
+// `MeshRoutedStore(scope: .production(for: namespace, directory: root, installBinding: binding))`
+// compiles, passes in isolation every time, and lands its damage in somebody else's suite.
 //
 // The witness wall is a different kind of claim and lives here because it is the same tool. The
 // compile-time gate on `MeshCustodyDurabilityWitness` is `fileprivate`, which is FILE scope — so it
@@ -131,15 +131,29 @@ struct MeshRoutedStoreIsolationTests {
     /// sealed by a shared key survive somebody else's wipe as ciphertext nothing can open, which is
     /// strictly worse than losing them outright. Since ProximityKit plan step A0.2.8, when the
     /// production scope began reading the namespace, a hand-built scope naming a namespace's
-    /// `installation.storage.defaultDirectory` or `installation.keychain.meshRoutedSealKey.service`
-    /// is banned beside the two older spellings. Since step A0.2.12 so are the two the substring
-    /// needle never saw: the shorthand `.production(for:installBinding:)` wherever a scope is
-    /// expected (`MeshRoutedStore(scope: .production(…))`), and the type-prefixed one broken before
-    /// its `.`, read by the session twin's two scanners
+    /// production directory or `installation.keychain.meshRoutedSealKey.service` is banned beside the
+    /// two older spellings; since step A0.6.6, when ProximityKit stopped computing a directory, that
+    /// directory is spelled `FernletProximityStorage.productionDirectory` or through
+    /// `applicationSupportDirectory`, and both are banned. Since step A0.2.12 so are the two the
+    /// substring needle never saw: the shorthand `.production(for:directory:installBinding:)` wherever
+    /// a scope is expected (`MeshRoutedStore(scope: .production(…))`), and the type-prefixed one broken
+    /// before its `.`, read by the session twin's two scanners
     /// (`MeshSessionStoreIsolationTests.shorthandProductionScopes(in:)` and
     /// `typePrefixedProductionScopes(of:in:)`, fixtured there).
+    ///
+    /// **The scratch-root needle** (plan step A0.6.6). A host double that spells no scope at all
+    /// takes `ProximityHost`'s default scopes, which are the namespace's production rows on whatever
+    /// root the host states: a double on a scratch root of its own would seal its files under the
+    /// production keys, which any wipe in the process deletes, and spell neither a scope construction
+    /// nor a `.production`, so no needle above sees it. So every file-scope test class conforming to
+    /// `ProximityHost` or `FernletSocialHost` that declares `proximitySupportDirectory` at the top level
+    /// of its body declares both `meshSessionStorage` and `meshRoutedStorage` there too, but
+    /// ``scratchRootExemption``, which never opens a store and must still exist; at least
+    /// ``minimumHostDoubles`` doubles must be read, so a broken reader cannot pass on an empty read.
+    /// The reader and the rule are fixtured both ways in ``expectTheScratchRootReaderFixtured()``.
     @Test func noTestReachesTheProductionScope() throws {
         var scanned = 0
+        var doubles: [HostDouble] = []
         for (file, source) in try Self.testSources() {
             scanned += 1
             #expect(
@@ -147,6 +161,7 @@ struct MeshRoutedStoreIsolationTests {
                 "\(file) uses the PRODUCTION routed scope — it shares the real index, the real chunk directory and the real keychain row with every concurrent suite."
             )
             let code = SwiftSourceLexer.lex(source).code
+            doubles += try Self.hostDoubles(in: code)
             let reads = MeshSessionStoreIsolationTests.typePrefixedProductionScopes(
                 of: "MeshRoutedStorageScope", in: code
             ) + MeshSessionStoreIsolationTests.shorthandProductionScopes(in: code)
@@ -155,7 +170,7 @@ struct MeshRoutedStoreIsolationTests {
                 """
                 \(file) reaches a PRODUCTION storage scope through \(reads) — it shares the real index, \
                 the real chunk directory and the real keychain row with every concurrent suite. A \
-                shorthand `.production(for:installBinding:)` does not say which scope it builds (only \
+                shorthand `.production(for:directory:installBinding:)` does not say which scope it builds (only \
                 the routed and mesh-session scopes declare it), so this wall and its session twin both \
                 refuse it.
                 """
@@ -172,8 +187,12 @@ struct MeshRoutedStoreIsolationTests {
                     "\(file) builds a routed scope on the production keychain service: \(arguments)"
                 )
                 #expect(
-                    !arguments.contains("installation.storage.defaultDirectory"),
-                    "\(file) builds a routed scope on a namespace's production directory: \(arguments)"
+                    !arguments.contains("FernletProximityStorage.productionDirectory"),
+                    "\(file) builds a routed scope on Fernlet's production directory: \(arguments)"
+                )
+                #expect(
+                    !arguments.contains("applicationSupportDirectory"),
+                    "\(file) builds a routed scope under the process's Application Support: \(arguments)"
                 )
                 #expect(
                     !arguments.contains("installation.keychain.meshRoutedSealKey.service"),
@@ -182,6 +201,8 @@ struct MeshRoutedStoreIsolationTests {
             }
         }
         #expect(scanned > 100, "the test-source sweep found only \(scanned) files — the test root moved?")
+        Self.expectEveryDoubleOnItsOwnRootStatesBothScopes(doubles)
+        try Self.expectTheScratchRootReaderFixtured()
     }
 
     // MARK: - The app half
@@ -214,9 +235,10 @@ struct MeshRoutedStoreIsolationTests {
     /// The derivation itself: production in, production out; anything else in, something else out.
     ///
     /// Since ProximityKit plan step A0.2.8 the derivation and the production scope read the host's
-    /// namespace, so this pins them under `.fernlet`: its seal-key service, its default directory, and
-    /// the namespace itself carried on the scope — and since step A0.2.9, the install binding it is
-    /// handed.
+    /// namespace, so this pins them under `.fernlet`: its seal-key service, and the namespace itself
+    /// carried on the scope — since step A0.2.9 the install binding it is handed, and since step
+    /// A0.6.6, when the production scope began taking its root from its host, Fernlet's production
+    /// root, `FernletProximityStorage.productionDirectory`, handed to it and carried.
     @Test func theDerivedKeychainServiceTracksItsHeartDropInput() {
         let namespace = ProximityNamespace.fernlet
         let keychain = namespace.installation.keychain
@@ -225,10 +247,11 @@ struct MeshRoutedStoreIsolationTests {
         )
         #expect(production == keychain.meshRoutedSealKey.service)
         let productionScope = MeshRoutedStorageScope.production(
-            for: namespace, installBinding: FernletDeviceBindingAdapter()
+            for: namespace, directory: FernletProximityStorage.productionDirectory,
+            installBinding: FernletDeviceBindingAdapter()
         )
         #expect(productionScope.keychainService == production)
-        #expect(productionScope.directory == namespace.installation.storage.defaultDirectory)
+        #expect(productionScope.directory == FernletProximityStorage.productionDirectory)
         #expect(productionScope.namespace == namespace)
         #expect(productionScope.installBinding is FernletDeviceBindingAdapter)
 
@@ -249,6 +272,146 @@ struct MeshRoutedStoreIsolationTests {
         // substring.)
         #expect(production != keychain.meshSessionSealKey.service)
         #expect(keychain.meshRoutedSealKey.account != keychain.meshSessionSealKey.account)
+    }
+
+    // MARK: - The scratch-root needle (plan step A0.6.6)
+
+    /// One `ProximityHost` or `FernletSocialHost` class the test tree declares at file scope: its name,
+    /// and what the top level of its body declares.
+    struct HostDouble: Equatable, Sendable {
+        /// The class's name.
+        let name: String
+        /// Whether its body declares `proximitySupportDirectory` (a `var` or a `let`) at its top level.
+        let statesRoot: Bool
+        /// Whether its body declares both `meshSessionStorage` and `meshRoutedStorage` at its top level.
+        let statesBothScopes: Bool
+    }
+
+    /// The one double that may state a root and no scope: `ProximityNamespaceGoldenTests`'
+    /// `RootedNamespaceDefaultsHost`, whose cells only read its default scopes and never open a store.
+    static let scratchRootExemption = "RootedNamespaceDefaultsHost"
+
+    /// Fewer host doubles than this and the reader is broken, not the tree clean: the test target
+    /// declares seventeen at plan step A0.6.6.
+    static let minimumHostDoubles = 17
+
+    /// The scratch-root needle over every double the sweep read: enough were read, the exempt one is
+    /// among them, and every other one that states its root states both scopes.
+    static func expectEveryDoubleOnItsOwnRootStatesBothScopes(_ doubles: [HostDouble]) {
+        #expect(doubles.count >= minimumHostDoubles, "read only \(doubles.count) host doubles — scanner broken?")
+        let exemptFound = doubles.contains(where: { $0.name == scratchRootExemption })
+        #expect(exemptFound, "\(scratchRootExemption), the one exempt double, is gone: delete its exemption with it")
+        let unscoped = unscopedRootedDoubles(doubles)
+        #expect(unscoped.isEmpty, """
+            \(unscoped) state a sidecar root of their own but not both storage scopes, so the manager a \
+            test builds over one seals its files on that root under the namespace's PRODUCTION seal keys \
+            (`ProximityHost`'s default scopes since ProximityKit plan step A0.6.6), which any \
+            concurrently-running wipe deletes. State `meshSessionStorage` and `meshRoutedStorage` on that \
+            root with `.test.` services of the double's own, as ScratchNamespaceHost does.
+            """)
+    }
+
+    /// The doubles that state a root of their own without both scopes, but the exempt one.
+    static func unscopedRootedDoubles(_ doubles: [HostDouble]) -> [String] {
+        doubles.filter { $0.statesRoot && !$0.statesBothScopes && $0.name != scratchRootExemption }.map(\.name)
+    }
+
+    /// Every class declared at file scope in `code` (lexed: comments dropped, literals emptied) whose
+    /// inheritance clause names `ProximityHost` or `FernletSocialHost`, with what the top level of its
+    /// body declares. A class nested in another declaration is not read, and neither is a declaration
+    /// inside a member: a local in `init` states nothing about the double.
+    static func hostDoubles(in code: String) throws -> [HostDouble] {
+        let opener = try NSRegularExpression(
+            pattern: #"(?<![A-Za-z0-9_])class\s+([A-Za-z_]\w*)\s*:([^{]*)\{"#)
+        let conformance = try NSRegularExpression(
+            pattern: #"(?<![A-Za-z0-9_])(?:ProximityHost|FernletSocialHost)(?![A-Za-z0-9_])"#)
+        var doubles: [HostDouble] = []
+        // R2: bounded by the class declarations in one file.
+        for match in opener.matches(in: code, range: NSRange(code.startIndex..., in: code)) {
+            guard let whole = Range(match.range, in: code), let name = Range(match.range(at: 1), in: code),
+                  let inherited = Range(match.range(at: 2), in: code) else { continue }
+            let clause = String(code[inherited])
+            let conforms = conformance.firstMatch(in: clause, range: NSRange(clause.startIndex..., in: clause)) != nil
+            guard conforms, braceDepth(before: whole.lowerBound, in: code) == 0 else { continue }
+            let body = topLevelBody(openingAt: code.index(before: whole.upperBound), in: code)
+            let root = try declares("proximitySupportDirectory", in: body)
+            let session = try declares("meshSessionStorage", in: body)
+            let routed = try declares("meshRoutedStorage", in: body)
+            doubles.append(HostDouble(name: String(code[name]), statesRoot: root, statesBothScopes: session && routed))
+        }
+        return doubles
+    }
+
+    /// How many braces are open at `index` in `code`: 0 at file scope.
+    static func braceDepth(before index: String.Index, in code: String) -> Int {
+        code[..<index].reduce(0) { depth, character in
+            character == "{" ? depth + 1 : (character == "}" ? depth - 1 : depth)
+        }
+    }
+
+    /// The text directly inside the brace pair that opens at `open` in `code`, every nested pair's
+    /// contents left out; whatever was read when the pair never closes.
+    static func topLevelBody(openingAt open: String.Index, in code: String) -> String {
+        var depth = 0
+        var text = ""
+        var index = open
+        // R2: bounded by the remaining characters of a finite string.
+        while index < code.endIndex {
+            let character = code[index]
+            if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 { return text }
+            } else if depth == 1 {
+                text.append(character)
+            }
+            index = code.index(after: index)
+        }
+        return text
+    }
+
+    /// Whether `body` declares `name` with `var` or `let`, as a whole identifier.
+    static func declares(_ name: String, in body: String) throws -> Bool {
+        let declaration = try NSRegularExpression(
+            pattern: #"(?<![A-Za-z0-9_])(?:var|let)\s+"# + name + #"(?![A-Za-z0-9_])"#)
+        return declaration.firstMatch(in: body, range: NSRange(body.startIndex..., in: body)) != nil
+    }
+
+    /// The scratch-root needle's reader and rule, fixtured both ways: a double stating a root and both
+    /// scopes passes, and one stating a root alone is refused, its scopes declared only as locals in a
+    /// member; a double stating no root is read and not refused; a class that is no host, a class
+    /// nested in another declaration, and one in a comment or a string literal are not read; and the
+    /// exempt double is never refused.
+    static func expectTheScratchRootReaderFixtured() throws {
+        let read = try hostDoubles(in: SwiftSourceLexer.lex("""
+            private final class Scoped: FernletSocialHost {
+                let proximitySupportDirectory: URL
+                let meshSessionStorage: MeshSessionStorageScope
+                var meshRoutedStorage: MeshRoutedStorageScope { routed }
+            }
+            final class Bare: ProximityHost {
+                let proximitySupportDirectory = uniqueProximityDirectory()
+                init() { let meshSessionStorage = 1; let meshRoutedStorage = 2 }
+            }
+            final class Unrooted: ProximityHost {
+                var proximityDisplayName: String { "Golden" }
+            }
+            final class NotAHost: NSObject { let proximitySupportDirectory = root }
+            struct Outer {
+                final class Nested: ProximityHost { let proximitySupportDirectory = root }
+            }
+            // final class Commented: ProximityHost { let proximitySupportDirectory = root }
+            let quoted = "final class Quoted: ProximityHost { let proximitySupportDirectory = root }"
+            """).code)
+        #expect(read == [
+            HostDouble(name: "Scoped", statesRoot: true, statesBothScopes: true),
+            HostDouble(name: "Bare", statesRoot: true, statesBothScopes: false),
+            HostDouble(name: "Unrooted", statesRoot: false, statesBothScopes: false)
+        ], "read the host doubles as \(read)")
+        #expect(unscopedRootedDoubles(read) == ["Bare"], "the rule refused \(unscopedRootedDoubles(read))")
+        let exempt = [HostDouble(name: scratchRootExemption, statesRoot: true, statesBothScopes: false)]
+        #expect(unscopedRootedDoubles(exempt).isEmpty, "the exempt double was refused")
     }
 
     // MARK: - The durability gate

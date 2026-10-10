@@ -14,7 +14,7 @@
 // a moved consumer no cell drives yet gains a cell. A behavioural cell needs no re-pointing at all:
 // it pins the consumer along with the value, and it reads its expectations off the frozen column.
 //
-// Thirteen groups:
+// Fourteen groups:
 //
 // 1. **Payload tokens.** All 55 `PayloadType` tokens, and a table that is exactly the type's cases.
 // 2. **The sealing rule, by behaviour.** The 17 tokens an envelope must carry sealed; every one of
@@ -64,6 +64,21 @@
 //     the mesh role of its `PayloadType` case's name), its token sets and lists are the frozen tables
 //     whole, reflection finds no field left unpinned, and the bounds the namespace's soundness rules
 //     apply are those of the consumers they protect.
+// 14. **The ranging seam and the local name.** A ranging provider without UWB, `NIRangingSession` told
+//     it has none and, since plan step A0.6.3, ProximityKit's `NoopRangingProvider`, the provider a
+//     host without ranging answers, each observed call by call (its state from construction through a
+//     start, which does not throw, and a stop; a distance stream that never sends and never completes;
+//     a discovery token refused as the protocol-level `RangingError.hardwareUnsupported`), and a
+//     coordinator over each, and over the test target's mock without UWB, introducing itself as `rssi`
+//     with exactly the keys `capabilities` and `rangingMode`, no discovery token and no prekey bundle,
+//     and waiting at the manual-commit gate for an `rssi` peer and for a `uwb` peer that sends a token,
+//     its provider never started (cut at plan step A0.6.0, before ProximityKit's doors asked their host
+//     for the provider); and the local name over a host's own fallback (plan step A0.6.2, when the host
+//     began stating it): the setting trimmed of spaces and tabs and never of line breaks, or, when
+//     nothing is left, the host's fallback exactly as the host states it. Which provider a host hands
+//     its doors, and so whether a UWB iPhone introduces itself as `uwb` with its token, is the host's:
+//     Fernlet's, an `NIRangingSession` fresh per connection, is `FernletFeatureGoldenTests`' group 30,
+//     as is the fallback Fernlet's host states, this device's name.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -84,8 +99,11 @@
 // ISO-8601 to the second), which a probe over unrelated keys confirmed on the iOS 26.5 simulator.
 // The model was proved honest first by reproducing
 // `MeshMembershipEventGoldenTests.goldenRecordsHashHex`; nothing here was copied out of Swift's
-// output.
+// output. Group 14's local-name rows were confirmed the same way, by a Python predicate for
+// Foundation's `.whitespaces` (`c == "\t"` or Unicode category Zs; `str.strip()` is not that
+// predicate: it strips a line break).
 
+import Combine
 import FernletConnections
 import FernletDomainModel
 import FernletFoundation
@@ -2316,6 +2334,144 @@ struct ProximityVocabularyGoldenTests {
         return pending.isEmpty ? leaves : []
     }
 
+    // MARK: Group 14 — the ranging seam and the local name
+
+    /// One provider row: what the provider is, for failure messages, and how to build a fresh one.
+    typealias ProviderRow = (name: String, make: @MainActor () -> any RangingProvider)
+
+    /// The ranging providers this group observes without UWB, each built fresh by its row:
+    /// `NIRangingSession` told it has none, which reads no capability and creates no `NISession`, and,
+    /// since plan step A0.6.3, ProximityKit's `NoopRangingProvider`, the provider a host without
+    /// ranging answers, which touches no framework.
+    static func noHardwareProviders() -> [ProviderRow] {
+        let session: ProviderRow = ("NIRangingSession(isHardwareSupported: false)",
+                                    { NIRangingSession(isHardwareSupported: false) })
+        let noop: ProviderRow = ("NoopRangingProvider()", { NoopRangingProvider() })
+        return [session, noop]
+    }
+
+    /// The providers without UWB a coordinator is built over: the test target's `MockRangingProvider`
+    /// told it has none, first, then ``noHardwareProviders()``.
+    static func coordinatorProviders() -> [ProviderRow] {
+        let mock: ProviderRow = ("MockRangingProvider(isHardwareSupported: false)",
+                                 { MockRangingProvider(isHardwareSupported: false) })
+        return [mock] + noHardwareProviders()
+    }
+
+    /// Whether `error` is a provider's refusal for want of ranging hardware: since plan step A0.6.3 the
+    /// protocol-level `RangingError.hardwareUnsupported`, which `NIRangingSession`,
+    /// `NoopRangingProvider` and the mock all throw; until then `NIRangingSession.RangingError`.
+    static func isHardwareUnsupported(_ error: any Error) -> Bool {
+        (error as? RangingError) == .hardwareUnsupported
+    }
+
+    /// A ranging provider without UWB, observed call by call: it says it has none; its state reads the
+    /// manual-commit fallback, `fallback(rssiOnly: true)`, from construction and again when it is
+    /// started (a start that does not throw), then `idle` when it is stopped; its distance stream never
+    /// sends a value and never completes; and it refuses a discovery token as `hardwareUnsupported`.
+    /// What a coordinator degrades to the manual commit on: what an iPad runs, and what a host without
+    /// ranging answers.
+    @Test func aProviderWithoutUWBReportsTheFallbackAndOffersNoToken() async throws {
+        // R2: bounded by the providers.
+        for provider in Self.noHardwareProviders() {
+            let ranging = provider.make()
+            #expect(!ranging.isHardwareSupported, "\(provider.name) claims UWB")
+            var states: [RangingState] = []
+            var distances = 0
+            var completions = 0
+            let stateSink = ranging.state.sink { states.append($0) }
+            let distanceSink = ranging.distance.sink(receiveCompletion: { _ in completions += 1 },
+                                                     receiveValue: { _ in distances += 1 })
+            try await ranging.start(with: Data([1, 2, 3]))
+            await ranging.stop()
+            #expect(states == [.fallback(rssiOnly: true), .fallback(rssiOnly: true), .idle],
+                    "\(provider.name)'s state read \(states)")
+            #expect(distances == 0 && completions == 0,
+                    "\(provider.name)'s distance stream sent \(distances) values and \(completions) completions")
+            do {
+                _ = try await ranging.myDiscoveryToken()
+                Issue.record("\(provider.name) offered a discovery token")
+            } catch {
+                #expect(Self.isHardwareUnsupported(error), "\(provider.name) refused the token with \(error)")
+            }
+            stateSink.cancel()
+            distanceSink.cancel()
+        }
+    }
+
+    /// A coordinator over a provider without UWB introduces itself as `rssi` with exactly the keys
+    /// `capabilities` and `rangingMode`, the list empty, with no discovery token and no prekey bundle,
+    /// and waits at the manual-commit gate whether its peer introduced itself as `rssi` or as `uwb`
+    /// with a token; a provider without hardware is never started. Driven over the rig, as every
+    /// session message here is.
+    @Test func aCoordinatorWithoutUWBIntroducesItselfAsRSSIWithNoToken() async throws {
+        let peers = [
+            VocabularyCoordinatorRig.IntroductionBody(rangingMode: "rssi", capabilities: nil),
+            VocabularyCoordinatorRig.IntroductionBody(rangingMode: "uwb", capabilities: nil,
+                                                      discoveryToken: Data(repeating: 0xAB, count: 32))
+        ]
+        // R2: bounded by the providers × the two peers.
+        for provider in Self.coordinatorProviders() {
+            for body in peers {
+                let ranging = provider.make()
+                let rig = try VocabularyCoordinatorRig(namespace: .fernlet, ranging: ranging)
+                defer { rig.forgetKeychainRows() }
+                let peer = try await rig.handshake(payload: JSONEncoder().encode(body))
+                let sent = try rig.sentEnvelopes()
+                await rig.coordinator.cancel()
+                let over = "over \(provider.name), with a \(body.rangingMode) peer"
+                #expect(peer != nil, "\(over), the coordinator never reached the manual-commit gate")
+                let introduction = try #require(sent.first, "\(over), the coordinator sent nothing")
+                #expect(introduction.payloadTypeToken == Self.frozen("payloadType.identityIntroduction"),
+                        "\(over), the first frame was \(introduction.payloadTypeToken)")
+                let fields = try #require(
+                    try JSONSerialization.jsonObject(with: introduction.payload) as? [String: Any],
+                    "\(over), the introduction's body is no JSON object")
+                #expect(Set(fields.keys) == ["capabilities", "rangingMode"], "\(over), it carries \(fields.keys.sorted())")
+                #expect(fields["rangingMode"] as? String == Self.frozen("rangingMode.rssi"),
+                        "\(over), it introduced itself as \(String(describing: fields["rangingMode"]))")
+                #expect(fields["capabilities"] as? [String] == [], "\(over), it advertised \(String(describing: fields["capabilities"]))")
+                if let mock = ranging as? MockRangingProvider {
+                    #expect(!mock.startCalled, "\(over), a provider without hardware was started")
+                }
+            }
+        }
+    }
+
+    /// The local name's rows over a host's own fallback: a `proximityDisplayName` setting, the fallback
+    /// its host states and the name it resolves to. Spaces and tabs (`CharacterSet.whitespaces`: Unicode
+    /// Zs, the no-break space among them, and U+0009) are trimmed from both ends of the setting and line
+    /// breaks are not; the fallback is taken only when nothing is left, and exactly as the host states
+    /// it, never trimmed. Written by hand, and confirmed by a Python predicate (`c == "\t"` or category
+    /// Zs), never by `str.strip()`, which strips a line break.
+    static let fallbackNameRows: [(setting: String, fallback: String, resolved: String)] = [
+        ("Ada", "Golden Device", "Ada"),
+        ("  Ada  ", "Golden Device", "Ada"),
+        ("\tAda\t", "Golden Device", "Ada"),
+        ("\u{00A0}Ada\u{00A0}", "Golden Device", "Ada"),
+        ("", "Golden Device", "Golden Device"),
+        ("   ", " Spaced ", " Spaced "),
+        ("\n", "Golden Device", "\n"),
+        ("\nAda\n", "Golden Device", "\nAda\n")
+    ]
+
+    /// `resolvedProximityDisplayName` over a host that states its own fallback (plan step A0.6.2): the
+    /// setting trimmed by ``fallbackNameRows``' rule, or, when that leaves nothing, the host's fallback,
+    /// untrimmed. ProximityKit's rule alone, on a host of `.fernlet` this cell builds per row; the
+    /// fallback Fernlet's host states, this device's name, is `FernletFeatureGoldenTests`' group 30.
+    @Test func theLocalNameIsThePreferenceTrimmedOrTheHostsFallback() {
+        // R2: bounded by the rows.
+        for row in Self.fallbackNameRows {
+            let host = PresentationNamespaceHost(namespace: .fernlet, displayName: row.setting,
+                                                 fallbackName: row.fallback)
+            let resolved = host.resolvedProximityDisplayName
+            #expect(resolved == row.resolved, """
+                \(row.setting.debugDescription) over the fallback \(row.fallback.debugDescription) \
+                resolved to \(resolved.debugDescription)
+                """)
+        }
+    }
+
     // MARK: Helpers
 
     /// Compares every row that has an accessor with its frozen literal, byte for byte, recording each
@@ -2390,10 +2546,11 @@ struct ProximityVocabularyGoldenTests {
 /// virtual clock, and every frame the coordinator sends is read back off its endpoint.
 ///
 /// The coordinator is built with ``displayName``, the rig's own (the engine has no default name),
-/// and on a ranging provider with no UWB, so a verified introduction lands it at the manual-commit
-/// gate. Both identities are of the namespace the cell hands the rig (`.fernlet` for the
-/// argument-less initializer), and the peer sends its introduction and its ping under that
-/// namespace's session messages, as a peer of its family does.
+/// and on a ranging provider with no UWB (a `MockRangingProvider` told it has none, or the provider
+/// without UWB a cell hands it), so a verified introduction lands it at the manual-commit gate. Both
+/// identities are of the namespace the cell hands the rig (`.fernlet` for the argument-less
+/// initializer), and the peer sends its introduction and its ping under that namespace's session
+/// messages, as a peer of its family does.
 @MainActor
 final class VocabularyCoordinatorRig {
 
@@ -2401,13 +2558,17 @@ final class VocabularyCoordinatorRig {
     /// deleted spelling can never pass for it.
     static let displayName = "Golden Rig"
 
-    /// The body of an identity introduction as a peer sends it: its ranging mode, and its capability
-    /// list or none at all — an older peer's introduction carries no `capabilities` key.
+    /// The body of an identity introduction as a peer sends it: its ranging mode, its capability list
+    /// or none at all — an older peer's introduction carries no `capabilities` key — and the discovery
+    /// token a UWB peer sends, or none. The synthesized encoder omits a nil key, so a body without a
+    /// token is the bytes it was before group 14 added the key.
     struct IntroductionBody: Encodable {
         /// The sender's ranging mode token.
         let rangingMode: String
         /// The advertised capability tokens, or nil for no key at all.
         let capabilities: [String]?
+        /// The sender's discovery token, or nil for no key at all.
+        var discoveryToken: Data? = nil
     }
 
     /// The body of a session heartbeat ping as a peer sends it.
@@ -2447,8 +2608,9 @@ final class VocabularyCoordinatorRig {
     }
 
     /// Two provisioned identities of `namespace` on throwaway services, the fabric, and the
-    /// coordinator.
-    init(namespace: ProximityNamespace) throws {
+    /// coordinator, ranging over `ranging`, or over a `MockRangingProvider` with no UWB when a cell hands
+    /// none (resolved here: a main-actor value cannot be a default argument).
+    init(namespace: ProximityNamespace, ranging: (any RangingProvider)? = nil) throws {
         let localService = ProximityVocabularyGoldenTests.isolatedIdentityService()
         let remoteService = ProximityVocabularyGoldenTests.isolatedIdentityService()
         let localIdentity = IdentityService(namespace: namespace, keychainService: localService)
@@ -2468,7 +2630,8 @@ final class VocabularyCoordinatorRig {
         remote = far.transport
         remoteHandle = far.handle
         coordinator = ProximityCoordinator(
-            identity: localIdentity, transport: near.transport, ranging: MockRangingProvider(isHardwareSupported: false),
+            identity: localIdentity, transport: near.transport,
+            ranging: ranging ?? MockRangingProvider(isHardwareSupported: false),
             replayCache: ReplayCache(), displayName: Self.displayName, timeoutSeconds: 0)
     }
 
@@ -2537,9 +2700,10 @@ final class VocabularyCoordinatorRig {
 
 // MARK: - A host of one namespace
 
-/// A `FernletSocialHost` that supplies the namespace a cell hands it and the requirements with no
-/// default, so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
-/// presentation strings or peer-name policy are its own. Building one touches no disk and no keychain.
+/// A `FernletSocialHost` that supplies the namespace a cell hands it, the fallback name a cell may hand
+/// it and the requirements with no default, so a presence or recipe-share manager can be built over
+/// `.fernlet` or over a namespace whose presentation strings or peer-name policy are its own, and the
+/// local name read over a fallback of the cell's choosing. Building one touches no disk and no keychain.
 @MainActor
 private final class PresentationNamespaceHost: FernletSocialHost {
     let proximityNamespace: ProximityNamespace
@@ -2547,13 +2711,15 @@ private final class PresentationNamespaceHost: FernletSocialHost {
     let proximityTrustVault = ProximityTrustVault()
     var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     let proximityDisplayName: String
+    let proximityFallbackDisplayName: String
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
 
     /// A host of `namespace` whose user goes by `displayName`, or by the coordinator rig's name when a
-    /// cell hands it none.
-    init(namespace: ProximityNamespace, displayName: String? = nil) {
+    /// cell hands it none, and which, when that name trims to nothing, goes by `fallbackName`.
+    init(namespace: ProximityNamespace, displayName: String? = nil, fallbackName: String = "Golden Device") {
         proximityNamespace = namespace
         proximityDisplayName = displayName ?? VocabularyCoordinatorRig.displayName
+        proximityFallbackDisplayName = fallbackName
     }
 
     func isBlockedFingerprint(_ fingerprint: String) -> Bool { proximityTrustVault.isBlockedFingerprint(fingerprint) }

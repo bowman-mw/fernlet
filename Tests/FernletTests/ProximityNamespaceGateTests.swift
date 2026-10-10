@@ -42,8 +42,9 @@
 // namespace is Fernlet's: a manager is only ever built over a host, and that is the host whose
 // identity seam the mismatch guards. The one exception is the cell for the host's own identity door,
 // whose host is a double private to this suite (`ForeignIdentityHost`): Fernlet's namespace, binding
-// and trust rules on a scratch sidecar root, whose `makeProximityIdentity()` answers an identity of the
-// gate app's namespace, which no Fernlet host builds. Audit lines are captured the way
+// and trust rules on a scratch sidecar root with storage scopes on test services of its own, whose
+// `makeProximityIdentity()` answers an identity of the gate app's namespace, which no Fernlet host
+// builds. Audit lines are captured the way
 // `ProximityAuditBridgeTests` captures them, through `FernletAuditLog`'s capture registry, scoped to
 // the cell's own calls by a task-local mark, so no line from a suite running beside this one is
 // counted.
@@ -789,6 +790,13 @@ private enum GateAuditLines {
 /// `makeProximityIdentity()` answers an identity of the gate app's namespace on the cell's throwaway
 /// service: the identity no Fernlet host builds, so each manager's check of its host's door can be
 /// seen refusing.
+///
+/// It states both mesh storage scopes on that root, each on a `.test.gate.` service of its own: the
+/// extension's default scopes are the namespace's production rows on whatever root a host states
+/// (since plan step A0.6.6, when the default root and the service named after a host's own root left
+/// ProximityKit), so its manager's stores would otherwise seal on a scratch root under Fernlet's
+/// production keys, which any wipe in the process deletes. `MeshRoutedStoreIsolationTests` holds every
+/// test double that states its root to stating both scopes.
 @MainActor
 private final class ForeignIdentityHost: FernletSocialHost {
     /// The throwaway keychain service the identities ``makeProximityIdentity()`` builds keep their rows under.
@@ -798,11 +806,24 @@ private final class ForeignIdentityHost: FernletSocialHost {
     let proximityTrustVault = ProximityTrustVault()
     let proximityNamespace = ProximityNamespace.fernlet
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
-    let proximitySupportDirectory = uniqueProximityDirectory()
+    let proximitySupportDirectory: URL
+    let meshSessionStorage: MeshSessionStorageScope
+    let meshRoutedStorage: MeshRoutedStorageScope
 
-    /// A host whose identities live under `identityService`.
+    /// A host whose identities live under `identityService`, on a fresh scratch root and fresh
+    /// `.test.gate.` seal-key services.
     init(identityService: String) {
+        let root = uniqueProximityDirectory()
         self.identityService = identityService
+        proximitySupportDirectory = root
+        meshSessionStorage = MeshSessionStorageScope(
+            namespace: .fernlet, directory: root,
+            keychainService: "com.fernlet.mesh-session.test.gate.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter())
+        meshRoutedStorage = MeshRoutedStorageScope(
+            namespace: .fernlet, directory: root,
+            keychainService: "com.fernlet.mesh-routed.test.gate.\(UUID().uuidString)",
+            installBinding: FernletDeviceBindingAdapter())
     }
 
     var proximityDisplayName: String { "Gate" }

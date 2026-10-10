@@ -3,10 +3,10 @@
 //
 // The keychain services of ProximityKit's two sealed mesh stores, derived beside a store's heart-drop
 // keychain service. ProximityKit's scopes name their production service off the host's namespace
-// (`production(for:installBinding:)`) and take any other service a host hands them; Fernlet's app
-// isolates a test store's mesh keys by deriving each service from the heart-drop service the store
-// already isolates, and that derivation compares against the dead-drop's production service, which
-// is this module's (`HeartPrekeyStore.keychainService`), so it lives here, beside it.
+// (`production(for:directory:installBinding:)`) and take any other service a host hands them;
+// Fernlet's app isolates a test store's mesh keys by deriving each service from the heart-drop service
+// the store already isolates, and that derivation compares against the dead-drop's production
+// service, which is this module's (`HeartPrekeyStore.keychainService`), so it lives here, beside it.
 // `MeshSessionStoreIsolationTests` and `MeshRoutedStoreIsolationTests` pin the app's use of it and
 // its behaviour, and `FernletFeatureGoldenTests` its known answers.
 

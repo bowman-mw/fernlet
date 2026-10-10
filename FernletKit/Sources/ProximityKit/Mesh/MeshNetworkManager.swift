@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import UIKit
 import CryptoKit
 import FernletDomainModel
 
@@ -10738,9 +10737,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///   * `advertisedFingerprint` reads `discoveryInfo["fp"]`, but `currentDiscoveryInfo()` has
     ///     never published an `"fp"` key on this radio — so it is always nil and the fallback to
     ///     `displayName` always ran;
-    ///   * `displayName` is `UIDevice.current.name`, which iOS 16+ reports as the generic
-    ///     "iPhone" unless the app holds `com.apple.developer.device-information.
-    ///     user-assigned-device-name` (Fernlet.entitlements does not request it);
+    ///   * `displayName` is the host's fallback name, Fernlet's `UIDevice.current.name`, which
+    ///     iOS 16+ reports as the generic "iPhone" unless the app holds
+    ///     `com.apple.developer.device-information.user-assigned-device-name` (Fernlet.entitlements
+    ///     does not request it);
     ///   * `localFingerprint` is 16 lowercase hex chars, so its first character is at most "f" —
     ///     always less than "i". `localFingerprint > "iPhone"` was therefore false on BOTH sides,
     ///     every time, and the transport's `invite` was unreachable from either call site.
@@ -10841,8 +10841,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// What ``handleChannelReady`` does with a freshly connected channel.
     ///
     /// Extracted from the guard chain so the seat decision is reachable from a unit test: what
-    /// follows it in production is a live `ProximityCoordinator` over a real `NIRangingSession`,
-    /// which a unit test must not build, and the decision is the half that has been wrong.
+    /// follows it in production is a live `ProximityCoordinator` over the ranging provider its host
+    /// builds (`NIRangingSession` on Fernlet's iOS host), which a unit test must not build, and the
+    /// decision is the half that has been wrong.
     enum ChannelAdmission: Equatable {
         /// Seat the peer: build the coordinator and append a slot.
         case seat
@@ -10892,7 +10893,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         let coordinator = ProximityCoordinator(
             identity: identity,
             transport: channel,
-            ranging: NIRangingSession(),
+            ranging: store.makeProximityRangingProvider(),
             payloadHandler: self,
             trustPolicy: trustPolicy,
             replayCache: replayCache,
@@ -10906,19 +10907,19 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             // `maxTotalSlots` coordinators, each with its own anchor — so the mesh path was
             // ATTEMPTING one `Activity.request` per committed slot for a single session.
             // **None of those requests could render** (item 6's fix round, F1): the proximity
-            // activity's attributes type is internal to this module and no widget in
-            // `App/FernletWidgets` declares an `ActivityConfiguration` for it, so each call either
-            // threw — audited, by a token P9 item 5 removed with its emitter — or made an activity nothing
-            // draws while counting against the per-app ceiling a later workout or cooking activity
-            // needs. What this line removes is therefore the doomed requests, not a card: a person
-            // sees no change on a phone.
+            // activity's attributes type was internal to this module (the app's since plan step
+            // A0.6) and no widget in `App/FernletWidgets` declares an `ActivityConfiguration` for
+            // it, so each call either threw — audited, by a token P9 item 5 removed with its
+            // emitter — or made an activity nothing draws while counting against the per-app
+            // ceiling a later workout or cooking activity needs. What this line removes is
+            // therefore the doomed requests, not a card: a person sees no change on a phone.
             //
             // P9 item 5 ANSWERED the question this comment used to leave open ("ship the widget or
             // retire the anchor", for the 1:1 recipe-share and presence paths): retire. The
             // coordinator's default anchor is now the no-op on every platform, so this argument is
             // redundant — it is kept because the wall cell asserts this exact text at this door,
             // and because being explicit at the door is what made the mesh's behaviour legible in
-            // the first place. The once-per-launch orphan reaper still runs.
+            // the first place. The app's once-per-launch orphan reaper still runs.
             foregroundAnchor: NoopProximityForegroundAnchor(),
             displayName: displayName,
             capabilities: localCapabilities(),

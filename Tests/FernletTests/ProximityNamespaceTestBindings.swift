@@ -11,16 +11,20 @@
 // FernletSocial; and the identity's two initializers, which carry Fernlet's custody (the app's
 // sealed-backup escrow key, the identity's provisioning participant), are in
 // `FernletAppTestBindings.swift`, so it never imports the app either. The host doubles' identity door,
-// which carries no custody at all, is here, at the foot of the file.
+// which carries no custody at all, is here, near the foot of the file, and after it the host's platform
+// facts (plan step A0.6): the values ProximityKit stopped choosing for every host, answered for the
+// doubles that state none.
 //
 // THE RULE. A binding restores a call SHAPE, never a value: it passes `ProximityNamespace.fernlet`,
 // exactly the value FernletConnections ships and the app hands ProximityKit, so a suite that goes
-// through one sees the bytes it always saw, and nothing here may pass anything else (but the host
-// doubles' identity door, which passes the double's own namespace, as the shape it restores did) or
-// compute a label, a row or a name of its own. A test that PINS a value does not lean on a binding:
-// it names `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so what it pins is
-// visibly Fernlet's and still reads correctly once a binding is retired. Each plan-step commit adds
-// its bindings to this file, beside the API it restores.
+// through one sees the bytes it always saw, and nothing here may pass anything else or compute a
+// label, a row or a name of its own, with two stated exceptions: the host doubles' identity door,
+// which passes the double's own namespace, as the shape it restores did; and the host's platform
+// facts (plan step A0.6), which ProximityKit stopped choosing for every host, answered here for the
+// doubles that state none, each with the value its section justifies. A test that PINS a value does
+// not lean on a binding: it names `.fernlet` explicitly (`IdentityService(namespace: .fernlet)`), so
+// what it pins is visibly Fernlet's and still reads correctly once a binding is retired. Each
+// plan-step commit adds its bindings to this file, beside the API it restores.
 //
 // Where an API takes the namespace's labels rather than the whole namespace (step A0.2.4 on), the
 // binding passes `.fernlet` for a `ProximityNamespace.Purposes`: FernletConnections'
@@ -888,5 +892,58 @@ extension ProximityHost {
     /// `IdentityService(namespace: proximityNamespace)`: no participant, the host's namespace.
     func makeProximityIdentity() -> IdentityService {
         IdentityService(namespace: proximityNamespace)
+    }
+}
+
+// MARK: - The host's platform facts (plan step A0.6)
+//
+// Plan step A0.6 (Mac readiness) takes every fact whose right answer differs by platform or by app out
+// of ProximityKit and makes it a `ProximityHost` requirement with no default. The app's store answers
+// each for itself in `ProximityHostAdapter.swift`, and so does every double that states a value of its
+// own (`ProximityVocabularyGoldenTests`' `PresentationNamespaceHost` takes its fallback name from the
+// cell that builds it). For every other double in this target the answer is here, once, under THE
+// RULE's second stated exception: a value this file chooses, each saying why it is the value it is. A
+// protocol extension supplies a requirement only to the conformances its module can see, so the app
+// module never sees these: `FernletStore`'s conformance must answer for itself, and does.
+//
+// - `proximityFallbackDisplayName` (A0.6.2) is `"Test device"`: a generic word, as every host's
+//   fallback must be, never the device's own name, which is what ProximityKit read for the doubles
+//   before. Every double states a non-empty name of its own, so only a cell that empties one reads it;
+//   the cells that pin Fernlet's fallback run on `FernletStore`, which answers `UIDevice.current.name`.
+// - `makeProximityRangingProvider()` (A0.6.3) is a fresh `NoopRangingProvider()`: a provider without
+//   ranging, which builds no `NISession`, reads no capability and names no iOS-only type. No test
+//   fires a channel-ready door (no cell starts a radio), so no cell's behaviour moves; a later test
+//   that reaches one ranges nothing, where the doors' own `NIRangingSession()` would have tried to
+//   range, since NearbyInteraction reports precise-distance support on the iOS 26.5 simulator. The
+//   coordinator tests build theirs through the managers' test seams with a provider of their own,
+//   and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
+// - `proximitySupportDirectory` (A0.6.6) is the double's namespace's folder under Application Support,
+//   `proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)`: the
+//   production-shaped folder the doubles always shared, the very path ProximityKit's root default
+//   built for them before, so no double's files move; stable per instance, as the composition and the
+//   session photos need (both read the root at init, and the default scopes derive from it). On it the
+//   default scopes are the namespace's production rows, exactly what they were there before. A double
+//   on a root of its own that opens a store states both scopes on test services
+//   (`MeshRoutedStoreIsolationTests`' scratch-root needle holds every one to that), and the doubles get
+//   scratch roots and test services of their own before any of them runs on a Mac (plan step A0.8),
+//   where this folder would be the developer's own. The cells that pin Fernlet's root run on
+//   `FernletStore`, which answers its own.
+
+/// The host's platform facts for the test target's host doubles that state none (plan step A0.6). It
+/// inherits the protocol's main-actor isolation, as the requirements it answers have.
+extension ProximityHost {
+
+    /// `"Test device"`: the name a double goes by when its user set none, a generic word that names no
+    /// device (plan step A0.6.2).
+    var proximityFallbackDisplayName: String { "Test device" }
+
+    /// A fresh `NoopRangingProvider()` per call: a double's connections range nothing, as a host
+    /// without ranging's do (plan step A0.6.3).
+    func makeProximityRangingProvider() -> any RangingProvider { NoopRangingProvider() }
+
+    /// The double's namespace's folder under Application Support, the folder the doubles always used
+    /// (plan step A0.6.6).
+    var proximitySupportDirectory: URL {
+        proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)
     }
 }
