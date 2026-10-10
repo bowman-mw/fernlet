@@ -1,9 +1,10 @@
 import Foundation
 import FernletDomainModel
 
-// WI-9: wire recipe-share payloads marked `nonisolated, Sendable` — see the note in MeshPayloads.swift.
-// ProximityKit's `.defaultIsolation(MainActor.self)` would otherwise MainActor-isolate these value
-// types and their synthesized `Codable` conformances, blocking off-main decode under Swift 6.
+// WI-9: wire recipe-share payloads marked `nonisolated, Sendable` — see the note in ProximityKit's
+// MeshPayloads.swift. FernletSocial's `.defaultIsolation(MainActor.self)`, like ProximityKit's, would
+// otherwise MainActor-isolate these value types and their synthesized `Codable` conformances, blocking
+// off-main decode under Swift 6.
 /// The `.recipeShare` wire body: format/version markers plus one ``ProximitySharedRecipe``.
 ///
 /// Built by the app's share sheet, sent sealed by ``ProximityRecipeShareManager``, and received
@@ -331,21 +332,5 @@ public struct PendingProximityRecipeShare: Identifiable, Equatable {
         self.senderFingerprint = senderFingerprint
         self.receivedAt = receivedAt
         self.payload = payload
-    }
-}
-
-/// A nearby Fernlet the user can send a recipe to, as shown in the share sheet's recipient list.
-///
-/// `id` is the discovered peer's UUID; `fingerprint` stays nil until the identity introduction
-/// verifies, after which the row upgrades to the verified display name.
-public struct ProximityRecipeShareRecipient: Identifiable, Equatable {
-    public var id: UUID
-    public var displayName: String
-    public var fingerprint: String?  // nil until identity introduction completes
-
-    public init(id: UUID, displayName: String, fingerprint: String?) {
-        self.id = id
-        self.displayName = displayName
-        self.fingerprint = fingerprint
     }
 }

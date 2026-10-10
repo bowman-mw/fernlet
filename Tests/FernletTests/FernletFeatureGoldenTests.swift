@@ -23,7 +23,7 @@
 // "Accessors" at the foot of the suite. When a value or its reader moves, only its accessor is
 // re-pointed at the path production then reads, and a moved consumer no cell drives yet gains a cell.
 //
-// Thirty groups:
+// Thirty-one groups:
 //
 // 1. **The seven feature labels** of the heart dead-drop, presence and the ban store: the heart pair
 //    salt, the sealed drop's salt, the day-tag prefix, the sidecar's authenticated data, the presence
@@ -125,6 +125,13 @@
 //     provider Fernlet's host builds each connection's coordinator over, an `NIRangingSession` fresh
 //     per call, which decides the introduction's `rangingMode` and `discoveryToken` on a UWB iPhone
 //     (since plan step A0.6.3 the host's own answer, its body read as source too).
+// 31. **The recipe profile's bytes**: the recipe payload's JSON, saved and local; the frames a
+//     recipe pairing sends through the production channel-ready door (the introduction, with and
+//     without UWB, and the sealed share, its summary, seal framing, recipient, sender and expiry),
+//     and the inbound share that door's payload handler queues; its persisted session-audit rows;
+//     its status sentences and diagnostics, path by path and on the success path in order; its copy
+//     templates in their home, and every status and diagnostic case rendered with distinct
+//     arguments; its constants; and the heart delivery's send spelling.
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -192,6 +199,16 @@
 // folder and service (group 9, whose folder rows now hold the proximity root too), and the reaper's one
 // home and the retirement of every request (`MeshContinuationTaskHostWallTests`'
 // `theOneToOneForegroundAnchorsAreRetired`).
+//
+// Group 31 cites the same way: the recipe radio's TXT record, its key spellings and a recipe
+// envelope's canonical bytes (`ProximityVocabularyGoldenTests`' group 15), the dial hello's JSON
+// (`RecipeShareOverQUICTests`), the payload and summary tokens (`ProximityVocabularyGoldenTests`'
+// payload rows and `theEncryptionAndSummaryEncodeToTheirFrozenJSON`), the introduction's token, title
+// and keys without UWB (that suite's groups 7 and 14), the persisted audit row's JSON and every audit
+// kind's token (that suite's group 11), the local recipe body's own bytes
+// (`RecipeMultipartFixtures.saladPayloadGoldenJSON`, which the messages-envelope suites pin), and the
+// recipe battery's cap, pause and outcome cells (`ProximityRecipeShareCapTests`,
+// `RecipeShareTransferTests`, `RecipeShareOverQUICTests`, `MeshP9AcceptanceTests`).
 //
 // Fixed inputs: alice's key-agreement private key is the bytes 0x01…0x20 and her signing key
 // 0x21…0x40; bob's are 0x41…0x60 and 0x61…0x80; the reporter-tag salt is 0x80…0x9f, the sidecar key
@@ -264,6 +281,26 @@
 // source, so since plan step A0.6.3 the app host's body is frozen as text, `{NIRangingSession()}`
 // with whitespace removed, the spelling each door built before it asked its host. Nothing in group 30
 // was copied out of Swift's output either.
+//
+// Group 31 claims no fixed key bytes: its two identities are minted fresh on throwaway services
+// (`com.fernlet.test.ffgt.<UUID>`, swept in a `defer`), so signatures, ephemeral keys, nonces, ids
+// and dates are pinned by structure, length or a decrypt, never by value. Its recipe is `Shared Oats`
+// (`0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E`, sent 780 000 000.5 s after the reference date, its step
+// `00000000-0000-0000-0000-0000000000D1`, its picture the six bytes `FF D8 FF E0 FB FF`), the inbound
+// share's the same recipe under `0B0B0B0B-1C1C-4D4D-8E8E-3F3F3F3F3F3F`; its host is
+// `RecipeTransferTestHost` (named `Tester`), its radio the recipe battery's in-memory
+// `FakeRecipeShareRadioSession`, and its peers advertise as `Blair` and `Casey`. Its literals were
+// confirmed by two independent Python computations: the payload's JSON by a `struct`/`json` model and
+// by a hand-written sorted writer (458 bytes, both), the local twin composed around the pinned inner
+// literal read out of `RecipeMultipartFixtures.swift`, the audit rows by hand from
+// `ProximityCoordinator`'s transitions and by a Python reading of its `debugLabel` table and message
+// formats, the sentences by formatting the copy census's templates (a Swift lexer in Python over the
+// recipe-share manager) with the cells' names, and the source rows by a Python count over today's
+// files. 31e's render row, added when the manager's status and diagnostics became typed, was computed
+// twice in Python too: once from the design's tables of cases and templates, formatted with the
+// sentinels, and once from each case's site in the manager's source before that change, its literal
+// lexed with its interpolated expressions and each expression replaced by the sentinel of the case
+// argument that carries it. Nothing in group 31 was copied out of Swift's output either.
 
 import ActivityKit
 import CryptoKit
@@ -351,10 +388,11 @@ struct FeatureGoldenTranscriptLabelRow: Sendable {
 
 // MARK: - The suite
 
-/// Every byte the features plan steps A0.4 and A0.5 move or re-derive, and the platform facts plan
-/// step A0.6 hands to the host, put on the wire, in the keychain or on disk, pinned by literal and by
-/// behaviour, and the order a session's commit and end run their legs in: the gate each of those moves
-/// passes unchanged, and every later one must.
+/// Every byte the features plan steps A0.4 and A0.5 move or re-derive, the platform facts plan step
+/// A0.6 hands to the host, and the recipe profile's bytes plan step A0.7 moves into a pair session, put
+/// on the wire, in the keychain or on disk, pinned by literal and by behaviour, and the order a
+/// session's commit and end run their legs in: the gate each of those moves passes unchanged, and every
+/// later one must.
 ///
 /// **The rule for every commit: re-point an accessor, never a literal.** A frozen literal was written
 /// by hand and confirmed by two independent computations, or read off today's code; a failing one is a
@@ -3641,7 +3679,8 @@ struct FernletFeatureGoldenTests {
     /// proximity activity with ``reaperSpellings`` inside its own body (``reaperPath``, comments dropped)
     /// while its file requests none: its code names none of
     /// `MeshContinuationTaskHostWallTests.reaperRequestSpellings` (ActivityKit's `request`, however the
-    /// call is spelled, and the app's generic starter).
+    /// call is spelled, the app's generic starter, and a `typealias`, through which another file could
+    /// request one without naming the attributes).
     @Test func theReapersAttributesKeepTheirNameShapeAndEnding() throws {
         let name = String(describing: ProximityConnectionActivityAttributes.self)
         #expect(name == "ProximityConnectionActivityAttributes", "the attributes' unqualified name is \(name)")
@@ -3699,6 +3738,722 @@ struct FernletFeatureGoldenTests {
                                   "the app's host no longer answers `\(signature)`")
         let spelled = answer.filter { !$0.isWhitespace }
         #expect(spelled == Self.frozenRangingAnswerBody, "the app's host answers \(spelled)")
+    }
+
+    // MARK: Group 31 — the recipe profile's bytes
+
+    /// The recipe's id in 31a and in the share the pairing sends.
+    static let recipeFixtureID = "0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E"
+
+    /// The id of the share the peer sends back in 31b's inbound tail: the same recipe under its own id.
+    static let recipeInboundID = "0B0B0B0B-1C1C-4D4D-8E8E-3F3F3F3F3F3F"
+
+    /// 31a's frozen text: `JSONEncoder` with `.sortedKeys` over ``recipeOatsPayload(id:)`` for
+    /// ``recipeFixtureID``, 458 bytes. Every key the synthesized encoder writes, a `nil` one omitted,
+    /// the date as seconds since the reference date, the picture as base64, `/` escaped.
+    static let frozenRecipePayloadJSON = [
+        #"{"format":"fernlet.proximity.recipe","id":"0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E","#,
+        #""imageJPEGData":"\/9j\/4Pv\/","recipe":{"kind":"saved","saved":{"carbs":20,"fat":3,"#,
+        #""ingredients":["1 cup oats","1\/2 cup milk"],"micronutrients":{"fiber":4},"name":"Shared Oats","#,
+        #""protein":10,"servings":2,"sourceURLString":"https:\/\/example.com\/oats","#,
+        #""steps":[{"id":"00000000-0000-0000-0000-0000000000D1","text":"Stir."}],"summary":"Quick."}},"#,
+        #""sentAt":780000000.5,"version":1}"#
+    ].joined()
+
+    /// SHA-256 over ``frozenRecipePayloadJSON``'s UTF-8 bytes.
+    static let frozenRecipePayloadSHA256 = "de4ac12641987cf6e82ae95763f87358c81c52c828ffb7130798b0c0ba3691ba"
+
+    /// The local twin's frozen object before the pinned inner literal
+    /// (`RecipeMultipartFixtures.saladPayloadGoldenJSON`), and after it.
+    static let frozenRecipeLocalPrefix =
+        #"{"format":"fernlet.proximity.recipe","id":"0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E","recipe":{"kind":"local","local":"#
+
+    /// The local twin's frozen object after the pinned inner literal.
+    static let frozenRecipeLocalSuffix = #"},"sentAt":780000000.5,"version":1}"#
+
+    /// The summary a share of two ingredients signs, as its canonical bytes write it: the title
+    /// `Recipe share`, no subtitle, two items, no date range, no details.
+    static let frozenRecipeSummarySegment = "000000000000000c526563697065207368617265000000000000000002000000000000000000"
+
+    /// The body of the introduction a pairing without UWB sends: an empty capability list, `rssi`.
+    static let frozenRecipeIntroductionBody = #"{"capabilities":[],"rangingMode":"rssi"}"#
+
+    /// The body of the introduction a pairing over a UWB provider sends: the mock's 32 bytes of `0xAB`
+    /// as its discovery token.
+    static let frozenRecipeUWBIntroductionBody =
+        #"{"capabilities":[],"discoveryToken":"q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s=","rangingMode":"uwb"}"#
+
+    /// The TXT record the recipe pairing's peer advertises.
+    static let recipePeerTXT = ["v": "1", "mode": "recipe", "name": "Blair", "sid": "friend-sid"]
+
+    /// **31a.** The recipe payload is its frozen JSON: `.sortedKeys` writes ``frozenRecipePayloadJSON``
+    /// exactly, 458 bytes under ``frozenRecipePayloadSHA256``; the encoder the send path builds, a
+    /// default `JSONEncoder()`, writes the same object in as many bytes; the frozen text decodes to the
+    /// fixture; the wire bounds and the format and version are theirs; and the local twin, the multipart
+    /// salad under the same id and date with no picture, writes the outer object around the pinned
+    /// inner literal.
+    @Test func theRecipePayloadIsItsFrozenJSON() throws {
+        let fixture = Self.recipeOatsPayload(id: Self.uuid(Self.recipeFixtureID))
+        let sorted = JSONEncoder()
+        sorted.outputFormatting = [.sortedKeys]
+        let written = try sorted.encode(fixture)
+        #expect(written == Data(Self.frozenRecipePayloadJSON.utf8), "written as \(String(decoding: written, as: UTF8.self))")
+        let digest = Self.hex(Data(SHA256.hash(data: written)))
+        #expect(written.count == 458 && digest == Self.frozenRecipePayloadSHA256, "\(written.count) bytes, SHA-256 \(digest)")
+        let production = try JSONEncoder().encode(fixture)
+        #expect(production.count == 458, "the send path's encoder writes \(production.count) bytes")
+        #expect(try Self.jsonObjectsEqual(production, written), "the send path's encoder writes another object")
+        let read = try JSONDecoder().decode(type(of: fixture), from: Data(Self.frozenRecipePayloadJSON.utf8))
+        #expect(read == fixture, "the frozen text decodes to \(read)")
+        let bounds = Self.recipePayloadBounds
+        #expect(bounds.image == 524_288 && bounds.wire == 1_048_576, "the wire bounds are \(bounds)")
+        #expect(fixture.format == "fernlet.proximity.recipe" && fixture.version == 1, "\(fixture.format) v\(fixture.version)")
+        let twin = try JSONEncoder().encode(Self.recipeLocalPayload(id: Self.uuid(Self.recipeFixtureID)))
+        let frozenTwin = Self.frozenRecipeLocalPrefix + RecipeMultipartFixtures.saladPayloadGoldenJSON + Self.frozenRecipeLocalSuffix
+        #expect(try Self.jsonObjectsEqual(twin, Data(frozenTwin.utf8)), "the local twin is written as \(String(decoding: twin, as: UTF8.self))")
+    }
+
+    /// **31b.** A recipe pairing sends its frozen frames through the production door. The send dials
+    /// once, naming this radio's own `sid`; the channel-ready door's coordinator introduces itself with
+    /// the frozen token and title, no name, no recipient, ``frozenRecipeIntroductionBody`` and a 300 s
+    /// expiry; the share is the recipe token under the summary `Recipe share` with the recipe's two
+    /// ingredients (``frozenRecipeSummarySegment`` in its canonical bytes), sealed in the legacy framing
+    /// to the peer's key (`FPT2`, 64 bytes over the plaintext, which is 31a's object), to the peer's
+    /// fingerprint, from `Tester`, schema 2, a 300 s expiry, and the peer verifies it; the outcome is
+    /// `sent` for `Shared Oats` with the status line `sent` to Blair, read in the outcome's turn; the
+    /// success path's nine diagnostics are their frozen sentences in order; a share the peer sends back
+    /// reaches the door's payload handler; and over a UWB provider the introduction carries its token.
+    @Test func theRecipePairingSendsItsFrozenFramesThroughTheProductionDoor() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        let run = try await Self.runRecipePairing(on: rig) {
+            #expect(rig.manager.lastShareOutcome?.result == .sent, "the share ended \(String(describing: rig.manager.lastShareOutcome))")
+            let subject = rig.manager.lastShareOutcome.map(Self.outcomeSubject)
+            #expect(subject == "Shared Oats", "the outcome names \(subject ?? "nothing")")
+            #expect(rig.manager.sendState == .sent(recipientName: "Blair"), "the status line reads \(rig.manager.sendState)")
+        }
+        Self.expectRecipeDial(rig: rig, run: run)
+        let frames = Self.sentFrames(of: rig.radio)
+        try Self.expectRecipeIntroductionFrame(in: frames)
+        try Self.expectRecipeShareFrame(in: frames, rig: rig)
+        Self.expectRecipeSuccessDiagnostics(run.diagnostics, peerFingerprint: rig.peerIdentity.localFingerprint)
+        try await Self.expectRecipeInboundShare(over: run, rig: rig)
+        try await Self.expectRecipeUWBIntroduction()
+    }
+
+    /// 31b's dial: exactly one, to the peer, its hello naming the `sid` this radio advertises.
+    static func expectRecipeDial(rig: RecipePairingRig, run: RecipePairingRun) {
+        let dials = rig.radio.dials
+        #expect(dials.count == 1, "the share dialed \(dials.count) times")
+        #expect(dials.first?.peer.id == run.peer.id, "the share dialed a peer it was not sent to")
+        #expect(dials.first?.helloSID == rig.radio.advertisedSessionID, "the hello named \(dials.first?.helloSID ?? "nothing")")
+    }
+
+    /// 31b's introduction: the frozen token and title, no name, no recipient, a 300 s expiry (the
+    /// coordinator's own expression), and ``frozenRecipeIntroductionBody`` as its body's object.
+    static func expectRecipeIntroductionFrame(in frames: [FernletIdentityEnvelope]) throws {
+        let introduction = try #require(frames.first { $0.payloadTypeToken == "fernlet.identity.intro.v1" },
+                                        "no introduction was sent: \(frames.map(\.payloadTypeToken))")
+        #expect(introduction.payloadSummary.title == "Hello", "the introduction is titled \(introduction.payloadSummary.title)")
+        #expect(introduction.senderDisplayName.isEmpty, "the introduction discloses \(introduction.senderDisplayName)")
+        #expect(introduction.recipientFingerprint == nil, "the introduction names a recipient")
+        #expect(introduction.expiresAt == introduction.createdAt.addingTimeInterval(300), "the introduction's expiry moved")
+        #expect(try Self.jsonObjectsEqual(introduction.payload, Data(Self.frozenRecipeIntroductionBody.utf8)),
+                "the introduction carries \(String(decoding: introduction.payload, as: UTF8.self))")
+    }
+
+    /// 31b's share: the recipe token and summary, the summary's segment in its canonical bytes, sealed
+    /// in the legacy framing to the peer's key and opened by the peer to 31a's object, addressed to the
+    /// peer from `Tester`, schema 2, expiring 300 s after it was made, and verified by the peer.
+    static func expectRecipeShareFrame(in frames: [FernletIdentityEnvelope], rig: RecipePairingRig) throws {
+        let share = try #require(frames.first { $0.payloadTypeToken == "fernlet.recipe.share.v1" },
+                                 "no recipe share was sent: \(frames.map(\.payloadTypeToken))")
+        #expect(share.payloadSummary == PayloadSummary(title: "Recipe share", itemCount: 2), "the share's summary is \(share.payloadSummary)")
+        let canonical = canonicalBytes(for: share, in: .fernlet)
+        #expect(canonical.range(of: Self.bytes(fromHex: Self.frozenRecipeSummarySegment)) != nil,
+                "the share's canonical bytes hold no frozen summary: \(Self.hex(canonical))")
+        let peerKey = rig.peerIdentity.localKeyAgreementPublicKey
+        #expect(share.payloadEncryption == .sealedTo(recipientKeyAgreementPublicKey: peerKey), "the share is \(share.payloadEncryption)")
+        let plaintext = try rig.peerIdentity.open(share.payload, from: share.senderKeyAgreementPublicKey, format: .legacy)
+        #expect(share.payload.prefix(4) == Data("FPT2".utf8), "the sealed share opens \(Self.hex(share.payload.prefix(4)))")
+        #expect(share.payload.count == plaintext.count + 64, "\(share.payload.count) sealed bytes over \(plaintext.count)")
+        #expect(try Self.jsonObjectsEqual(plaintext, Data(Self.frozenRecipePayloadJSON.utf8)),
+                "the share carries \(String(decoding: plaintext, as: UTF8.self))")
+        #expect(share.recipientFingerprint == rig.peerIdentity.localFingerprint, "the share is addressed to \(share.recipientFingerprint ?? "nobody")")
+        #expect(share.senderDisplayName == "Tester", "the share is from \(share.senderDisplayName)")
+        #expect(share.expiresAt == share.createdAt.addingTimeInterval(300), "the share's expiry moved")
+        #expect(share.schemaVersion == 2, "the share is schema \(share.schemaVersion)")
+        let verified = try share.verify(identityService: rig.peerIdentity, replayCache: ReplayCache(), sealedPayloadFormat: .legacy)
+        #expect(verified == plaintext, "the peer's verify opened another body")
+    }
+
+    /// 31b's success path: the diagnostics' nine frozen sentences in order, the confirming line counted
+    /// once (the coordinator-state check may record it again before the commit lands), the verified
+    /// line naming the peer's fingerprint, since its introduction discloses no name.
+    static func expectRecipeSuccessDiagnostics(_ diagnostics: [String], peerFingerprint: String) {
+        let confirming = "Recipe share recipient verified; confirming selected recipient."
+        var lines: [String] = []
+        // R2: bounded by the diagnostics.
+        for line in diagnostics where !(line == confirming && lines.last == confirming) {
+            lines.append(line)
+        }
+        let expected = [
+            "Discovered Blair.", "Recipe share discovery started.", "Connecting to Blair.",
+            "Secure recipe-share channel opened with Blair.", "Recipe sharing closed to others while paired with Blair.",
+            confirming, "Verified \(peerFingerprint).", "Sending Shared Oats to Blair.", "Sent Shared Oats to Blair."
+        ]
+        #expect(lines == expected, "the success path recorded \(lines)")
+    }
+
+    /// 31b's inbound tail: a share the peer seals to this device in the legacy framing, signs as Blair
+    /// and sends on the pairing's channel reaches the door's payload handler and is queued once, from the
+    /// peer's fingerprint, as Blair, the recipe unchanged, with its frozen diagnostic last.
+    static func expectRecipeInboundShare(over run: RecipePairingRun, rig: RecipePairingRig) async throws {
+        let inbound = Self.recipeOatsPayload(id: Self.uuid(Self.recipeInboundID))
+        let ownKey = rig.identity.localKeyAgreementPublicKey
+        let sealed = try rig.peerIdentity.seal(try JSONEncoder().encode(inbound), to: ownKey, format: .legacy)
+        let envelope = try FernletIdentityEnvelope.signed(
+            identityService: rig.peerIdentity, senderDisplayName: "Blair", recipientFingerprint: rig.identity.localFingerprint,
+            payloadTypeToken: "fernlet.recipe.share.v1", payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: ownKey),
+            payloadSummary: PayloadSummary(title: "Recipe share", subtitle: nil, itemCount: 2), payload: sealed)
+        run.channel.receive(try JSONEncoder().encode(envelope), at: Date())
+        await VocabularyCoordinatorRig.settle { !rig.manager.pendingRecipeShares.isEmpty }
+        let pending = rig.manager.pendingRecipeShares
+        #expect(pending.count == 1, "the inbound share was queued \(pending.count) times")
+        #expect(pending.first?.senderFingerprint == rig.peerIdentity.localFingerprint, "queued from another fingerprint")
+        #expect(pending.first?.senderDisplayName == "Blair", "queued from \(pending.first?.senderDisplayName ?? "nobody")")
+        #expect(pending.first?.payload == inbound, "the queued recipe changed: \(String(describing: pending.first?.payload))")
+        #expect(rig.messages.last == "Received recipe share from Blair.", "the last diagnostic is \(rig.messages.last ?? "nothing")")
+    }
+
+    /// 31b's UWB twin: a pairing built through the manager's coordinator seam over a provider with UWB
+    /// (the test target's mock, whose token is 32 bytes of `0xAB`) introduces itself with
+    /// ``frozenRecipeUWBIntroductionBody``.
+    static func expectRecipeUWBIntroduction() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        let peer = PeerHandle(id: UUID(), displayHint: "", discoveryInfo: Self.recipePeerTXT,
+                              advertisedFingerprint: nil, endpoint: PeerEndpointKey())
+        let channel = rig.radio.channel(for: peer)
+        let coordinator = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: peer, transport: channel, ranging: MockRangingProvider(isHardwareSupported: true))
+        await coordinator.begin(role: .browser, mode: .friend)
+        channel.notifyConnected()
+        await VocabularyCoordinatorRig.settle { Self.sentFrames(of: rig.radio).contains { $0.payloadTypeToken == "fernlet.identity.intro.v1" } }
+        let introduction = try #require(Self.sentFrames(of: rig.radio).first { $0.payloadTypeToken == "fernlet.identity.intro.v1" },
+                                        "the UWB pairing sent no introduction")
+        #expect(try Self.jsonObjectsEqual(introduction.payload, Data(Self.frozenRecipeUWBIntroductionBody.utf8)),
+                "the UWB introduction carries \(String(decoding: introduction.payload, as: UTF8.self))")
+        await coordinator.cancel()
+    }
+
+    /// 31c's frozen rows: the recipe pairing's persisted session audit, oldest first, from the pairing's
+    /// start through its share.
+    static let frozenRecipeAuditRows = [
+        RecipeAuditRow(kind: "pairingStarted", payloadType: nil, message: "Pairing started as browser in friend mode"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "starting"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "discovering"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "awaitingIdentityIntroduction"),
+        RecipeAuditRow(kind: "envelopeReceived", payloadType: "fernlet.identity.intro.v1",
+                       message: "Received fernlet.identity.intro.v1"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "awaitingManualCommit"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "connected"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "transferring"),
+        RecipeAuditRow(kind: "envelopeSent", payloadType: "fernlet.recipe.share.v1", message: "Sent fernlet.recipe.share.v1"),
+        RecipeAuditRow(kind: "stateTransition", payloadType: nil, message: "connected")
+    ]
+
+    /// **31c.** The recipe pairing persists its frozen session-audit rows: the host's trust vault holds
+    /// ``frozenRecipeAuditRows`` (the pairing's start as a friend-mode browser, each state the
+    /// coordinator passed, the introduction received and the share sent; heartbeats and the
+    /// introduction and acknowledgement it sends write none), and a stop adds exactly one session end,
+    /// `userCancelled`.
+    @Test func theRecipePairingPersistsItsFrozenSessionAuditRows() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        let run = try await Self.runRecipePairing(on: rig)
+        let vault = rig.host.proximityTrustVault
+        let rows = vault.auditEvents.reversed().map(Self.recipeAuditRow)
+        #expect(rows == Self.frozenRecipeAuditRows, "the pairing with \(run.peer.id) persisted \(rows)")
+        rig.manager.stop()
+        await VocabularyCoordinatorRig.settle { vault.auditEvents.contains { $0.kind == .sessionEnded } }
+        let ended = vault.auditEvents.filter { $0.kind == .sessionEnded }.map(\.message)
+        #expect(ended == ["userCancelled"], "the stop persisted the session ends \(ended)")
+    }
+
+    /// **31d.** The recipe status lines and diagnostics are their frozen sentences, path by path, each
+    /// on a fresh rig, its final status line and the diagnostics it appended in order: a recipient that
+    /// was never discovered, another connection in flight, a pairing held with another device (and a
+    /// search refreshed under it), a search refreshed with no pairing, a peer that never answers, a
+    /// pairing lost before the send, a third device turned away at the channel-ready door, a pairing
+    /// parked past the sweep's budget, a radio failure while idle and a radio that cannot start, each on
+    /// a rig marked running but the last; and, each after a recipe pairing through the production door,
+    /// a send whose payload cannot be encoded, a send whose record has already begun, and a send that
+    /// completes after a newer one began.
+    @Test func theRecipeStatusLinesAndDiagnosticsAreTheirFrozenSentences() async throws {
+        try Self.expectRecipeRefusalPaths()
+        try Self.expectRecipePairedWithAnotherPath()
+        try Self.expectRecipeRefreshWhilePairedPath()
+        try Self.expectRecipeRefreshWhileIdlePath()
+        try await Self.expectRecipeNoAnswerPath()
+        try Self.expectRecipeLostPairingPath()
+        try Self.expectRecipeTurnedAwayPath()
+        try Self.expectRecipeParkedSweepPath()
+        try Self.expectRecipeRadioFailurePaths()
+        try await Self.expectRecipeSendFailedPath()
+        try await Self.expectRecipeDuplicateSendPath()
+        try await Self.expectRecipeCompletionNotCountedPath()
+    }
+
+    /// 31d's two refusals before a dial: a recipient the radio never discovered, and Blair while a
+    /// connection to Casey is in flight.
+    static func expectRecipeRefusalPaths() throws {
+        let gone = try RecipePairingRig(running: true)
+        defer { gone.tearDown() }
+        gone.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: Self.recipientRow(id: UUID(), name: "Blair"))
+        #expect(gone.manager.sendState == .failed(message: "That nearby Fernlet is no longer available."),
+                "a recipient never discovered leaves \(gone.manager.sendState)")
+        #expect(gone.messages == ["Connecting to Blair.", "Recipe share failed: Blair is no longer available."],
+                "a recipient never discovered recorded \(gone.messages)")
+        let busy = try RecipePairingRig(running: true)
+        defer { busy.tearDown() }
+        busy.radio.connectingPeers = [Self.recipePeer(named: "Casey")]
+        busy.radio.onPeerDiscovered?(Self.recipePeer(named: "Blair"))
+        let row = try #require(busy.manager.nearbyRecipients.first, "Blair was never listed")
+        let before = busy.messages.count
+        busy.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        #expect(busy.manager.sendState == .failed(
+            message: "Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."),
+                "a connection in flight leaves \(busy.manager.sendState)")
+        let tail = Array(busy.messages.dropFirst(before))
+        #expect(tail == ["Connecting to Blair.", "Refused share to Blair: another connection attempt is in flight."],
+                "a connection in flight recorded \(tail)")
+    }
+
+    /// 31d's outbound cap: a share to Blair while a pairing with Casey is held is refused, naming Casey.
+    static func expectRecipePairedWithAnotherPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let casey = Self.recipePeer(named: "Casey")
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: casey, transport: rig.radio.channel(for: casey), ranging: NoopRangingProvider())
+        rig.radio.onPeerDiscovered?(Self.recipePeer(named: "Blair"))
+        let blair = try #require(rig.manager.nearbyRecipients.first { $0.displayName == "Blair" }, "Blair was never listed")
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: blair)
+        #expect(rig.manager.sendState == .failed(message: "Still sharing with Casey — recipe sharing links two Fernlets at a time."),
+                "a share while paired with Casey leaves \(rig.manager.sendState)")
+        #expect(rig.messages.last == "Refused share to Blair: already paired with Casey.", "the refusal recorded \(rig.messages.last ?? "nothing")")
+        #expect(rig.manager.lastShareOutcome?.result == .notSent(.pairedWithAnother), "the refusal ended \(String(describing: rig.manager.lastShareOutcome))")
+        #expect(rig.manager.lastShareOutcome?.otherPeerName == "Casey", "the refusal names \(rig.manager.lastShareOutcome?.otherPeerName ?? "nobody")")
+    }
+
+    /// 31d's refused search: a refresh while a pairing with Casey is held keeps it and says so.
+    static func expectRecipeRefreshWhilePairedPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let casey = Self.recipePeer(named: "Casey")
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: casey, transport: rig.radio.channel(for: casey), ranging: NoopRangingProvider())
+        rig.manager.refreshDiscovery()
+        #expect(rig.manager.sendState == .failed(message: "Connected to Casey — recipe sharing links two Fernlets at a time."),
+                "a refresh while paired with Casey leaves \(rig.manager.sendState)")
+        #expect(rig.messages.last == "Search skipped — already paired with Casey.", "the refresh recorded \(rig.messages.last ?? "nothing")")
+    }
+
+    /// 31d's refreshed search: with no pairing held, a refresh drops Blair's row and restarts the search.
+    static func expectRecipeRefreshWhileIdlePath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        rig.radio.onPeerDiscovered?(Self.recipePeer(named: "Blair"))
+        let before = rig.messages.count
+        rig.manager.refreshDiscovery()
+        #expect(rig.manager.sendState == .idle, "a refresh with no pairing leaves \(rig.manager.sendState)")
+        #expect(rig.manager.nearbyRecipients.isEmpty, "a refresh kept \(rig.manager.nearbyRecipients.count) rows")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Recipe share discovery refreshed.", "Recipe share discovery started."],
+                "a refresh with no pairing recorded \(tail)")
+    }
+
+    /// 31d's connect timeout, over a real 50 ms timer: the waiter gives up only past a deadline AND a
+    /// poll floor, and the status line is read in the turn the outcome is first seen, before its 2.5 s
+    /// clear.
+    static func expectRecipeNoAnswerPath() async throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        rig.manager.connectTimeoutSeconds = 0.05
+        rig.radio.onPeerDiscovered?(Self.recipePeer(named: "Blair"))
+        let row = try #require(rig.manager.nearbyRecipients.first, "Blair was never listed")
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        await Self.waitUntil(timeout: .seconds(5), minimumPolls: 400) { rig.manager.lastShareOutcome != nil }
+        let state = rig.manager.sendState
+        let last = rig.messages.last
+        #expect(state == .failed(message: "No answer from Blair — that Fernlet may be busy sharing with someone else."),
+                "a peer that never answered leaves \(state)")
+        #expect(last == "Connect timeout: Blair did not answer.", "the timeout recorded \(last ?? "nothing")")
+    }
+
+    /// 31d's lost pairing: Blair's pairing comes up and her device disconnects before the send.
+    static func expectRecipeLostPairingPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let blair = Self.recipePeer(named: "Blair")
+        rig.radio.onPeerDiscovered?(blair)
+        let row = try #require(rig.manager.nearbyRecipients.first, "Blair was never listed")
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: blair, transport: rig.radio.channel(for: blair), ranging: NoopRangingProvider())
+        let before = rig.messages.count
+        rig.radio.onPeerDisconnected?(blair, "x")
+        #expect(rig.manager.sendState == .failed(message: "Could not connect securely to Blair."),
+                "a pairing lost before the send leaves \(rig.manager.sendState)")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Blair is no longer nearby.",
+                         "Recipe share to Blair ended before sending: the connection closed during setup.",
+                         "Recipe sharing reopened to nearby Fernlets.", "Blair disconnected."],
+                "a pairing lost before the send recorded \(tail)")
+    }
+
+    /// 31d's door under the cap: with a pairing held with Casey, the channel Dana's device opens is turned
+    /// away at the channel-ready door, her tunnel ended and Casey's pairing kept.
+    static func expectRecipeTurnedAwayPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let casey = Self.recipePeer(named: "Casey")
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: casey, transport: rig.radio.channel(for: casey), ranging: NoopRangingProvider())
+        let dana = Self.recipePeer(named: "Dana")
+        let before = rig.messages.count
+        rig.radio.onPeerChannelReady?(rig.radio.channel(for: dana))
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Turned away Dana — recipe sharing links two Fernlets at a time."], "a third device's channel recorded \(tail)")
+        #expect(rig.radio.endedTunnels.map(\.id) == [dana.id], "the door ended \(rig.radio.endedTunnels.count) tunnels, not Dana's alone")
+        #expect(rig.manager.connectionCountForTesting == 1, "the door left \(rig.manager.connectionCountForTesting) pairings")
+        #expect(rig.manager.sendState == .idle, "a third device's channel leaves \(rig.manager.sendState)")
+    }
+
+    /// 31d's parked sweep: Casey's pairing, parked before verification for the sweep's 30 s budget, is
+    /// dropped and the search reopens.
+    static func expectRecipeParkedSweepPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let casey = Self.recipePeer(named: "Casey")
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: casey, transport: rig.radio.channel(for: casey), ranging: NoopRangingProvider())
+        let parked = Date(timeIntervalSinceReferenceDate: 780_000_000)
+        rig.manager.sweepParkedConnections(now: parked)
+        let before = rig.messages.count
+        rig.manager.sweepParkedConnections(now: parked.addingTimeInterval(30))
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Dropped stalled connection to Casey.", "Recipe sharing reopened to nearby Fernlets."],
+                "a pairing parked past the sweep's budget recorded \(tail)")
+        #expect(rig.manager.connectionCountForTesting == 0, "the sweep left \(rig.manager.connectionCountForTesting) pairings")
+        #expect(rig.manager.sendState == .idle, "a swept pairing leaves \(rig.manager.sendState)")
+    }
+
+    /// 31d's two radio failures: a failure the radio reports while the manager is idle, which stands it
+    /// down, and a start that throws.
+    static func expectRecipeRadioFailurePaths() throws {
+        let failed = try RecipePairingRig(running: true)
+        defer { failed.tearDown() }
+        failed.radio.onTransportError?("X")
+        #expect(failed.manager.sendState == .idle, "a radio failure while idle leaves \(failed.manager.sendState)")
+        #expect(failed.messages == ["X", "Recipe share discovery stopped.",
+                                    "Recipe share radio failed to start — listening will retry on the next app event."],
+                "a radio failure while idle recorded \(failed.messages)")
+        #expect(failed.manager.isListening == false, "a radio failure while idle left the listener up")
+        let refused = try RecipePairingRig()
+        defer { refused.tearDown() }
+        refused.radio.startError = RecipeListenerRefused()
+        refused.manager.start()
+        #expect(refused.manager.sendState == .idle, "a refused start leaves \(refused.manager.sendState)")
+        #expect(refused.messages == ["Recipe share discovery started.", "The recipe share radio could not start: listener refused",
+                                     "Recipe share discovery stopped.",
+                                     "Recipe share radio failed to start — listening will retry on the next app event."],
+                "a refused start recorded \(refused.messages)")
+    }
+
+    /// 31d's failed send: the pairing verifies, and the payload cannot be encoded (its date is not a
+    /// number, which `JSONEncoder` refuses), so the share fails while sending, nothing handed over; the
+    /// status line read in the outcome's turn.
+    static func expectRecipeSendFailedPath() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        var unencodable = Self.recipeOatsPayload(id: UUID())
+        unencodable.sentAt = Date(timeIntervalSinceReferenceDate: .nan)
+        var state: ProximityRecipeShareManager.SendState?
+        let run = try await Self.runRecipePairing(on: rig, sending: unencodable) { state = rig.manager.sendState }
+        #expect(state == .failed(message: "Could not send that recipe."), "a send that threw leaves \(String(describing: state))")
+        #expect(rig.manager.lastShareOutcome?.result == .notSent(.interrupted), "the send ended \(String(describing: rig.manager.lastShareOutcome))")
+        let tail = Array(run.diagnostics.suffix(2))
+        #expect(tail == ["Sending Shared Oats to Blair.", "Recipe share failed while sending to Blair."], "a send that threw recorded \(tail)")
+        #expect(!Self.sentFrames(of: rig.radio).contains { $0.payloadTypeToken == "fernlet.recipe.share.v1" }, "a share that could not be encoded was sent")
+    }
+
+    /// 31d's refused second start: after the pairing's share is sent the user sends again, and that share's
+    /// record has already begun when its send runs (moved there through the transfer seam), so the
+    /// exchange's once-only start refuses it, and no outcome is published for it.
+    static func expectRecipeDuplicateSendPath() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        _ = try await Self.runRecipePairing(on: rig)
+        let row = try #require(rig.manager.nearbyRecipients.first, "Blair's row is gone")
+        let before = rig.messages.count
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        rig.manager.applyTransferForTesting(.sendBegan(wireByteCount: 1))
+        let refused = "Could not send that recipe."
+        let settled = await VocabularyCoordinatorRig.settle { rig.manager.sendState == .failed(message: refused) }
+        #expect(settled, "a send whose record had begun leaves \(rig.manager.sendState)")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Connecting to Blair.", "Sending Shared Oats to Blair.", "Refused a second send of Shared Oats."],
+                "a send whose record had begun recorded \(tail)")
+        #expect(rig.manager.lastShareOutcome == nil, "the refused start published \(String(describing: rig.manager.lastShareOutcome))")
+    }
+
+    /// 31d's uncounted completion: after the pairing's share is sent the user sends again, and while that
+    /// send is on the wire sends `Later Oats`, so the earlier send completes against the newer record and
+    /// is not counted, and `Later Oats` is sent.
+    static func expectRecipeCompletionNotCountedPath() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        _ = try await Self.runRecipePairing(on: rig)
+        let row = try #require(rig.manager.nearbyRecipients.first, "Blair's row is gone")
+        var renamed = Self.recipeOatsPayload(id: UUID())
+        renamed.recipe.saved?.name = "Later Oats"
+        let later = renamed
+        rig.radio.onSend = { _, _ in
+            guard Self.sentFrames(of: rig.radio).filter({ $0.payloadTypeToken == "fernlet.recipe.share.v1" }).count == 2 else { return }
+            rig.radio.onSend = nil
+            rig.manager.sendRecipeShare(later, to: row)
+        }
+        let before = rig.messages.count
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        let published = await VocabularyCoordinatorRig.settle { rig.manager.lastShareOutcome != nil }
+        #expect(published, "no outcome was published")
+        let subject = rig.manager.lastShareOutcome.map(Self.outcomeSubject)
+        #expect(subject == "Later Oats", "the outcome names \(subject ?? "nothing")")
+        #expect(rig.manager.sendState == .sent(recipientName: "Blair"), "the status line reads \(rig.manager.sendState)")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Connecting to Blair.", "Sending Shared Oats to Blair.", "Connecting to Blair.",
+                         "A send completed against a newer share record — completion not counted.",
+                         "Sending Later Oats to Blair.", "Sent Later Oats to Blair."],
+                "a send that completed after a newer one began recorded \(tail)")
+    }
+
+    /// 31f's recipe profile: the audit area `recipeShare`, the recipe radio's row
+    /// (`_fernlet-recipe2._udp`, `fernlet-recipe-v1`) and the TXT mode `recipe`, the values the recipe
+    /// radio and its manager spelled before the profile existed.
+    static let frozenRecipeProfile = ProximityPairProfile(
+        auditArea: "recipeShare",
+        radio: ProximityNamespace.Radio(serviceType: "_fernlet-recipe2._udp", alpn: "fernlet-recipe-v1"),
+        advertisementMode: "recipe")
+
+    /// 31e's frozen templates: every code literal in the recipe share's copy holding a space, each
+    /// interpolation read as `\(…)`, the forty the copy census finds there.
+    static let frozenRecipeCopyTemplates = [
+        #"A send completed against a newer share record — completion not counted."#,
+        #"A share outcome arrived for a superseded share — not shown."#,
+        #"Connect timeout: \(…) did not answer."#,
+        #"Connected to \(…) — recipe sharing links two Fernlets at a time."#,
+        #"Connecting to \(…)."#,
+        #"Could not connect securely to \(…)."#,
+        #"Could not send that recipe."#,
+        #"Discovered \(…)."#,
+        #"Dropped an oversized recipe share from \(…)."#,
+        #"Dropped recipe share from \(…): queue full."#,
+        #"Dropped stalled connection to \(…)."#,
+        #"No answer from \(…) — that Fernlet may be busy sharing with someone else."#,
+        #"Rate-limited recipe share from \(…)."#,
+        #"Received recipe share from \(…)."#,
+        #"Recipe share"#,
+        #"Recipe share discovery refreshed."#,
+        #"Recipe share discovery started."#,
+        #"Recipe share discovery stopped."#,
+        #"Recipe share failed while sending to \(…)."#,
+        #"Recipe share failed: \(…) is no longer available."#,
+        #"Recipe share radio failed to start — listening will retry on the next app event."#,
+        #"Recipe share recipient verified; confirming selected recipient."#,
+        #"Recipe share to \(…) ended before sending: the connection closed during setup."#,
+        #"Recipe sharing closed to others while paired with \(…)."#,
+        #"Recipe sharing reopened to nearby Fernlets."#,
+        #"Refused a second send of \(…)."#,
+        #"Refused share to \(…): already paired with \(…)."#,
+        #"Refused share to \(…): another connection attempt is in flight."#,
+        #"Search skipped — already paired with \(…)."#,
+        #"Secure recipe-share channel opened with \(…)."#,
+        #"Sending \(…) to \(…)."#,
+        #"Sent \(…) to \(…)."#,
+        #"Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."#,
+        #"Still sharing with \(…) — recipe sharing links two Fernlets at a time."#,
+        #"That nearby Fernlet is no longer available."#,
+        #"The recipe share radio could not start: \(…)"#,
+        #"Turned away \(…) — recipe sharing links two Fernlets at a time."#,
+        #"Verified \(…)."#,
+        #"\(…) disconnected."#,
+        #"\(…) is no longer nearby."#
+    ]
+
+    /// 31e's render row for the diagnostics: every event, its arguments the distinct sentinels
+    /// (`recipientName` R1, `pairedWith` P2, `subject` S3, `name` N4, `error` E5, `message` M6), and the
+    /// line it renders to, its frozen template formatted with them.
+    static let frozenRecipeEventRenderings: [(event: RecipeEvent, line: String)] = [
+        (.discoveryStarted, "Recipe share discovery started."),
+        (.discoveryStopped, "Recipe share discovery stopped."),
+        (.discoveryRefreshed, "Recipe share discovery refreshed."),
+        (.listeningWillRetry, "Recipe share radio failed to start — listening will retry on the next app event."),
+        (.radioDidNotStart(error: "E5"), "The recipe share radio could not start: E5"),
+        (.radioFailed(message: "M6"), "M6"),
+        (.searchSkippedWhilePaired(pairedWith: "P2"), "Search skipped — already paired with P2."),
+        (.connecting(recipientName: "R1"), "Connecting to R1."),
+        (.recipientUnavailable(recipientName: "R1"), "Recipe share failed: R1 is no longer available."),
+        (.connectingToAnother(recipientName: "R1"), "Refused share to R1: another connection attempt is in flight."),
+        (.sendRefusedWhilePaired(recipientName: "R1", pairedWith: "P2"), "Refused share to R1: already paired with P2."),
+        (.noAnswer(recipientName: "R1"), "Connect timeout: R1 did not answer."),
+        (.couldNotConnect(recipientName: "R1"), "Recipe share to R1 ended before sending: the connection closed during setup."),
+        (.sending(subject: "S3", recipientName: "R1"), "Sending S3 to R1."),
+        (.duplicateSendRefused(subject: "S3"), "Refused a second send of S3."),
+        (.completionNotCounted, "A send completed against a newer share record — completion not counted."),
+        (.sent(subject: "S3", recipientName: "R1"), "Sent S3 to R1."),
+        (.sendFailed(recipientName: "R1"), "Recipe share failed while sending to R1."),
+        (.outcomeSuperseded, "A share outcome arrived for a superseded share — not shown."),
+        (.discovered(name: "N4"), "Discovered N4."),
+        (.lost(name: "N4"), "N4 is no longer nearby."),
+        (.disconnected(name: "N4"), "N4 disconnected."),
+        (.turnedAway(name: "N4"), "Turned away N4 — recipe sharing links two Fernlets at a time."),
+        (.channelOpened(name: "N4"), "Secure recipe-share channel opened with N4."),
+        (.closedToOthers(pairedWith: "P2"), "Recipe sharing closed to others while paired with P2."),
+        (.confirming, "Recipe share recipient verified; confirming selected recipient."),
+        (.verified(name: "N4"), "Verified N4."),
+        (.reopened, "Recipe sharing reopened to nearby Fernlets."),
+        (.droppedStalled(name: "N4"), "Dropped stalled connection to N4.")
+    ]
+
+    /// 31e's render row for the status line: every failure, with the same sentinels, and the sentence
+    /// it renders to.
+    static let frozenRecipeFailureRenderings: [(failure: RecipeStatus.Failure, message: String)] = [
+        (.searchRefusedWhilePaired(pairedWith: "P2"), "Connected to P2 — recipe sharing links two Fernlets at a time."),
+        (.recipientUnavailable, "That nearby Fernlet is no longer available."),
+        (.connectingToAnother, "Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."),
+        (.pairedWithAnother(pairedWith: "P2"), "Still sharing with P2 — recipe sharing links two Fernlets at a time."),
+        (.noAnswer(recipientName: "R1"), "No answer from R1 — that Fernlet may be busy sharing with someone else."),
+        (.couldNotConnect(recipientName: "R1"), "Could not connect securely to R1."),
+        (.duplicateSend, "Could not send that recipe."),
+        (.sendFailed, "Could not send that recipe.")
+    ]
+
+    /// **31e.** The recipe copy is its frozen templates in its home: the code literals of
+    /// ``recipeCopyHomes`` that hold a space (lexed as Swift reads them, comments out), each
+    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct; and no
+    /// ProximityKit file holds one of the forty as a literal, so none comes back to the pair session.
+    /// And the render row: every event and every status failure, each argument a distinct sentinel,
+    /// renders to its frozen sentence, and every status maps to the status line that names the same
+    /// case, a failure to its sentence, so two arguments swapped inside one template, or two cases'
+    /// sentences exchanged, fail here though the set of templates is unchanged.
+    @Test func theRecipeCopyIsItsFrozenTemplatesInItsHome() throws {
+        var found: Set<String> = []
+        // R2: bounded by the homes.
+        for path in Self.recipeCopyHomes {
+            let literals = SwiftSourceLexer.lex(try RepoRoot.source(path)).literals
+            found.formUnion(literals.map { Self.normalizingInterpolations($0.text) }.filter { $0.contains(" ") })
+        }
+        let frozen = Set(Self.frozenRecipeCopyTemplates)
+        #expect(Self.frozenRecipeCopyTemplates.count == 40 && frozen.count == 40, "the frozen list holds \(frozen.count) templates")
+        #expect(found == frozen, """
+            the copy's templates moved: missing \(frozen.subtracting(found).sorted()), \
+            unexpected \(found.subtracting(frozen).sorted())
+            """)
+        var strays: [String] = []
+        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        // R2: bounded by ProximityKit's file list.
+        for source in sources {
+            let held = Set(source.lexed.literals.map { Self.normalizingInterpolations($0.text) }).intersection(frozen)
+            strays += held.sorted().map { "\(source.path): \($0)" }
+        }
+        #expect(sources.count >= 50, "the ProximityKit walk read only \(sources.count) Swift files")
+        #expect(strays.isEmpty, "the recipe copy is back in ProximityKit: \(strays)")
+        Self.expectRecipeRenderings()
+    }
+
+    /// 31e's render row: ``frozenRecipeEventRenderings`` (29 events, 29 distinct cases and lines) and
+    /// ``frozenRecipeFailureRenderings`` (8 failures) through the renderer accessors, and every status
+    /// through ``renderSendState(_:)``.
+    static func expectRecipeRenderings() {
+        let events = frozenRecipeEventRenderings
+        let cases = Set(events.map { String(String(describing: $0.event).prefix { $0 != "(" }) })
+        #expect(events.count == 29 && cases.count == 29 && Set(events.map(\.line)).count == 29,
+                "the render row holds \(events.count) events, \(cases.count) distinct cases")
+        // R2: bounded by the 29 rows.
+        for row in events {
+            let line = renderDiagnostic(row.event)
+            #expect(line == row.line, "\(row.event) renders \"\(line)\", not \"\(row.line)\"")
+        }
+        let failures = frozenRecipeFailureRenderings
+        #expect(failures.count == 8 && Set(failures.map { "\($0.failure)" }).count == 8, "the render row holds \(failures.count) failures")
+        // R2: bounded by the 8 rows.
+        for row in failures {
+            let message = renderStatusMessage(row.failure)
+            #expect(message == row.message, "\(row.failure) renders \"\(message)\", not \"\(row.message)\"")
+            let shown = renderSendState(.failed(row.failure))
+            #expect(shown == .failed(message: row.message), "the failed status \(row.failure) shows \(shown)")
+        }
+        #expect(renderSendState(.idle) == .idle, "the idle status shows \(renderSendState(.idle))")
+        let connecting = renderSendState(.connecting(recipientName: "R1"))
+        #expect(connecting == .connecting(recipientName: "R1"), "the connecting status shows \(connecting)")
+        let sending = renderSendState(.sending(recipientName: "R1"))
+        #expect(sending == .sending(recipientName: "R1"), "the sending status shows \(sending)")
+        let sent = renderSendState(.sent(recipientName: "R1"))
+        #expect(sent == .sent(recipientName: "R1"), "the sent status shows \(sent)")
+    }
+
+    /// `text` with each interpolation's contents read as an ellipsis, `\(…)`: a balanced-parenthesis
+    /// pass from each unescaped `\(` to its matching `)`. A literal's text is read as written, so an
+    /// escaped backslash opens nothing.
+    static func normalizingInterpolations(_ text: String) -> String {
+        var result = ""
+        var depth = 0
+        var escaping = false
+        // R2: bounded by the literal's characters.
+        for character in text {
+            if depth > 0 {
+                if character == "(" { depth += 1 }
+                if character == ")" { depth -= 1 }
+                if depth == 0 { result += "\u{2026})" }
+                continue
+            }
+            if escaping, character == "(" { depth = 1 }
+            escaping = !escaping && character == "\\"
+            result.append(character)
+        }
+        return result
+    }
+
+    /// **31f.** The recipe and heart sends keep their constants and spellings: the 12 s connect timeout,
+    /// Fernlet's recipe profile (``frozenRecipeProfile``: the recipe radio's row, the TXT mode and the
+    /// audit area), the radio's one tunnel and two pending inbound connections, and
+    /// ``recipeConstantsPaths``' rows, each needle counted exactly in its file or its brace-matched body
+    /// (comments dropped): the door's 25 s handshake, its friend-mode browser start, its retained trust
+    /// policy and its default capabilities and plain introduction; the parked timeout and sweep, the
+    /// status clear and the identity checks' audit events, spelled in full under the profile's area;
+    /// the inbound cap and rate limit, the summary's title and the payload's encoder; and the heart
+    /// delivery's token, title and seal.
+    @Test func theRecipeAndHeartSendsKeepTheirConstantsAndSpellings() throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        let connectTimeout = Self.recipeConnectTimeoutSeconds(rig.manager)
+        #expect(connectTimeout == 12, "the connect timeout is \(connectTimeout) s")
+        #expect(Self.recipeProfile(in: .fernlet) == Self.frozenRecipeProfile,
+                "Fernlet's recipe profile is \(Self.recipeProfile(in: .fernlet))")
+        #expect(NetworkRecipeShareSession.maxTunnels == 1, "the recipe radio holds \(NetworkRecipeShareSession.maxTunnels) tunnels")
+        #expect(NetworkRecipeShareSession.maxPendingInbound == 2,
+                "the recipe radio holds \(NetworkRecipeShareSession.maxPendingInbound) pending inbound connections")
+        // R2: bounded by the rows.
+        for row in Self.recipeConstantsPaths {
+            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(row.path))
+            let scope = try row.body.map { signature in
+                try #require(MeshRoutedSourceScan.bracedBody(after: signature, in: code), "\(row.path) no longer declares `\(signature)`")
+            } ?? code
+            let count = Self.occurrences(of: row.needle, in: scope)
+            #expect(count == row.count, "\(row.path) holds `\(row.needle)` \(count) times, not \(row.count)")
+        }
     }
 }
 
@@ -4730,7 +5485,7 @@ extension FernletFeatureGoldenTests {
 
     /// The ranging provider Fernlet's host builds one connection's coordinator over: since plan step
     /// A0.6.3 its host's `makeProximityRangingProvider()` (`ProximityHostAdapter.swift`), which the
-    /// mesh's and the recipe radio's channel-ready doors in ProximityKit and presence's heart door in
+    /// mesh's and the pair session's channel-ready doors in ProximityKit and presence's heart door in
     /// FernletSocial each call once per connection; until then each door's own `NIRangingSession()`.
     static func rangingProvider(of store: FernletStore) -> any RangingProvider {
         store.makeProximityRangingProvider()
@@ -4754,6 +5509,158 @@ extension FernletFeatureGoldenTests {
 
     /// The activity manager, whose two sends carry the raw local name: today FernletSocial's.
     static let activityManagerPath = "FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift"
+
+    /// A recipe-share manager over `host`, driving `radio` and holding `identity`: since plan step
+    /// A0.7.3 FernletSocial's manager over a `ProximityPairSession` built explicitly, under Fernlet's
+    /// recipe profile on `.fernlet` (FernletConnections' `recipeShare(in:)`), with the session's radio
+    /// and identity seam (`init(host:profile:makeRadio:identity:)`); until then the manager's own test
+    /// seam, `ProximityRecipeShareManager(store:makeSession:identity:)`.
+    static func recipeManager(
+        host: any ProximityHost, radio: FakeRecipeShareRadioSession, identity: IdentityService
+    ) -> ProximityRecipeShareManager {
+        ProximityRecipeShareManager(pairSession: ProximityPairSession(
+            host: host, profile: .recipeShare(in: .fernlet), makeRadio: { radio }, identity: identity))
+    }
+
+    /// The pre-connect timeout a recipe-share manager's pairing waits: since plan step A0.7.3 its pair
+    /// session's `connectTimeoutSeconds`, read on the session; until then the manager's own.
+    static func recipeConnectTimeoutSeconds(_ manager: ProximityRecipeShareManager) -> TimeInterval {
+        manager.pairSession.connectTimeoutSeconds
+    }
+
+    /// Fernlet's recipe profile under `namespace`: since plan step A0.7.3 FernletConnections'
+    /// `ProximityPairProfile.recipeShare(in:)`; before it, the radio read its row off the namespace and
+    /// the advertisement and the manager spelled the mode and the audit area themselves.
+    static func recipeProfile(in namespace: ProximityNamespace) -> ProximityPairProfile {
+        .recipeShare(in: namespace)
+    }
+
+    /// The recipe title a share's outcome names: since plan step A0.7.2
+    /// `ProximityPairSendOutcome.subject`; until then `RecipeShareOutcome.recipeTitle`.
+    static func outcomeSubject(_ outcome: ProximityPairSendOutcome) -> String {
+        outcome.subject
+    }
+
+    /// A picker row for a device the radio never discovered: since plan step A0.7.2
+    /// `ProximityPairPeer(id:displayName:fingerprint:)`, with no fingerprint; until then
+    /// `ProximityRecipeShareRecipient`.
+    static func recipientRow(id: UUID, name: String) -> ProximityPairPeer {
+        ProximityPairPeer(id: id, displayName: name, fingerprint: nil)
+    }
+
+    /// The recipe share's diagnostic event, the typed value 31e's render row renders: since plan step
+    /// A0.7.3 the pair session's `ProximityPairSession.Event`; until then the recipe-share manager's.
+    typealias RecipeEvent = ProximityPairSession.Event
+
+    /// The recipe share's typed status line, whose failures 31e's render row renders: since plan step
+    /// A0.7.3 the pair session's `ProximityPairSession.Status`; until then the recipe-share manager's.
+    typealias RecipeStatus = ProximityPairSession.Status
+
+    /// The diagnostics line the recipe share shows for `event`: the recipe-share manager's renderer,
+    /// `ProximityRecipeShareManager.diagnostic(for:)`, FernletSocial's since plan step A0.7.3.
+    static func renderDiagnostic(_ event: RecipeEvent) -> String {
+        ProximityRecipeShareManager.diagnostic(for: event)
+    }
+
+    /// The status line's sentence for `failure`: `ProximityRecipeShareManager.statusMessage(for:)`,
+    /// FernletSocial's since plan step A0.7.3.
+    static func renderStatusMessage(_ failure: RecipeStatus.Failure) -> String {
+        ProximityRecipeShareManager.statusMessage(for: failure)
+    }
+
+    /// The status line the share sheet shows for `status`: `ProximityRecipeShareManager.sendState(for:)`,
+    /// FernletSocial's since plan step A0.7.3.
+    static func renderSendState(_ status: RecipeStatus) -> ProximityRecipeShareManager.SendState {
+        ProximityRecipeShareManager.sendState(for: status)
+    }
+
+    /// 31a's saved recipe, `Shared Oats`, under `id`: a `ProximityRecipeSharePayload` (FernletSocial's
+    /// since plan step A0.7.3) over a saved
+    /// `ProximitySharedRecipe` (two servings, 10 g protein, 20 g carbohydrate, 3 g fat, 4 g fibre, two
+    /// ingredients, one step), sent 780 000 000.5 s after the reference date, with a six-byte picture.
+    static func recipeOatsPayload(id: UUID) -> ProximityRecipeSharePayload {
+        let saved = SharedSavedRecipePayload(
+            name: "Shared Oats", sourceURLString: "https://example.com/oats",
+            ingredients: ["1 cup oats", "1/2 cup milk"], summary: "Quick.", servings: 2, protein: 10, carbs: 20, fat: 3,
+            micronutrients: Micronutrients(fiber: 4),
+            steps: [RecipeStep(id: uuid("00000000-0000-0000-0000-0000000000D1"), text: "Stir.")])
+        return ProximityRecipeSharePayload(
+            id: id, sentAt: Date(timeIntervalSinceReferenceDate: 780_000_000.5),
+            recipe: ProximitySharedRecipe(kind: .saved, saved: saved),
+            imageJPEGData: Data([0xFF, 0xD8, 0xFF, 0xE0, 0xFB, 0xFF]))
+    }
+
+    /// 31a's local twin under `id`: today a `ProximityRecipeSharePayload` over a local
+    /// `ProximitySharedRecipe` holding `RecipeMultipartFixtures.saladPayload()`, sent at 31a's date, with
+    /// no picture.
+    static func recipeLocalPayload(id: UUID) -> ProximityRecipeSharePayload {
+        ProximityRecipeSharePayload(
+            id: id, sentAt: Date(timeIntervalSinceReferenceDate: 780_000_000.5),
+            recipe: ProximitySharedRecipe(kind: .local, local: RecipeMultipartFixtures.saladPayload()))
+    }
+
+    /// The recipe payload's two wire bounds, its picture's and its whole plaintext's: today
+    /// `ProximityRecipeSharePayload.maxImageBytes` and `.maxWireBytes`.
+    static var recipePayloadBounds: (image: Int, wire: Int) {
+        (ProximityRecipeSharePayload.maxImageBytes, ProximityRecipeSharePayload.maxWireBytes)
+    }
+
+    /// Waits until `condition` holds, giving up only once `timeout` has passed AND `minimumPolls`
+    /// observations have been made, sleeping 5 ms between them: `ProximityRecipeShareCapTests`' waiter
+    /// (its own is private), for a path that waits on a real timer, where a run of yields can finish
+    /// before the timer fires. A cancelled sleep ends the wait.
+    static func waitUntil(
+        timeout: Duration = .seconds(5), minimumPolls: Int = 400, condition: @escaping @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        // R2: bounded by 100 000 polls, each sleeping, far past any deadline a cell passes.
+        for poll in 1...100_000 {
+            if condition() { return }
+            if poll >= minimumPolls, clock.now >= deadline { return }
+            do { try await Task.sleep(for: .milliseconds(5)) } catch { return }
+        }
+    }
+
+    /// The files that hold the recipe share's copy: since plan step A0.7.3 the recipe-share manager in
+    /// FernletSocial, which renders the pair session's typed status and events; until then the manager
+    /// in ProximityKit.
+    static let recipeCopyHomes = ["FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"]
+
+    /// The file that holds the recipe pairing's channel-ready door and the pair session's constants:
+    /// since plan step A0.7.3 ProximityKit's pair session; until then the recipe-share manager there.
+    static let recipeDoorPath = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
+
+    /// The file that holds the recipe share's own constants (the inbound queue and rate limit, the
+    /// signed summary and the payload's encoder): since plan step A0.7.3 FernletSocial's recipe-share
+    /// manager; until then the manager's file in ProximityKit, which also held the door.
+    static let recipeFeaturePath = "FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"
+
+    /// The file that holds the heart delivery, presence's send through the coordinator's payload door.
+    static let heartDeliveryPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
+
+    /// 31f's source rows: a file, the declaration whose brace-matched body is read (nil for the whole
+    /// file), a needle, and how many times the needle occurs there, comments dropped. A commit that
+    /// moves a row's text re-points its file or its body, never its needle's count.
+    static let recipeConstantsPaths: [(path: String, body: String?, needle: String, count: Int)] = [
+        (recipeDoorPath, "private func handleChannelReady(", "timeoutSeconds: 25", 1),
+        (recipeDoorPath, "private func handleChannelReady(", "begin(role: .browser, mode: .friend)", 1),
+        (recipeDoorPath, "private func handleChannelReady(", "capabilities:", 0),
+        (recipeDoorPath, "private func handleChannelReady(", "sealedIntroductionPeerKeyAgreementKey:", 0),
+        (recipeDoorPath, "private func handleChannelReady(", "let trustPolicy = store.makeProximityTrustPolicy()", 1),
+        (recipeDoorPath, nil, "parkedConnectionTimeoutSeconds: TimeInterval = 30", 1),
+        (recipeDoorPath, nil, "parkedSweepIntervalSeconds: TimeInterval = 5", 1),
+        (recipeDoorPath, nil, ".seconds(2.5)", 1),
+        (recipeFeaturePath, nil, "maxPendingShares = 8", 1),
+        (recipeFeaturePath, nil, "perSenderRateLimitSeconds: TimeInterval = 3", 1),
+        (recipeFeaturePath, "public func sendRecipeShare(", #"title: "Recipe share""#, 1),
+        (recipeFeaturePath, "public func sendRecipeShare(", "JSONEncoder().encode(", 1),
+        (recipeDoorPath, nil, #""\(profile.auditArea).identity.namespaceMismatch""#, 2),
+        (recipeDoorPath, nil, #""\(profile.auditArea).identity.provisionFailed""#, 1),
+        (heartDeliveryPath, "private func deliverHeart(via connection:", "payloadTypeToken: PayloadType.friendHeart.rawValue", 1),
+        (heartDeliveryPath, "private func deliverHeart(via connection:", #"PayloadSummary(title: "Good vibes")"#, 1),
+        (heartDeliveryPath, "private func deliverHeart(via connection:", "sealed: true", 1)
+    ]
 }
 
 // MARK: - Fixtures
@@ -5807,5 +6714,144 @@ extension FernletFeatureGoldenTests {
             FernletAuditLog.removeCaptureHandler(token)
             self.token = nil
         }
+    }
+}
+
+// MARK: - The recipe pairing's rig (group 31)
+
+extension FernletFeatureGoldenTests {
+
+    /// One recipe pairing's rig: a recipe-share manager (``recipeManager(host:radio:identity:)``) over
+    /// `RecipeTransferTestHost`, driving the recipe battery's in-memory `FakeRecipeShareRadioSession`, with
+    /// this device's identity and the peer's each minted on a throwaway service. The rig holds the host,
+    /// which the manager holds unowned; ``tearDown()`` stops the manager, ending every pairing's
+    /// coordinator, and sweeps both services.
+    @MainActor
+    final class RecipePairingRig {
+        /// The host, whose trust vault keeps every pairing's session-audit rows.
+        let host: RecipeTransferTestHost
+        /// The in-memory radio the manager drives: what it was asked to dial and send.
+        let radio: FakeRecipeShareRadioSession
+        /// This device's identity.
+        let identity: IdentityService
+        /// The peer's identity, which signs and seals what the peer sends and opens what it is sent.
+        let peerIdentity: IdentityService
+        /// The manager under test.
+        let manager: ProximityRecipeShareManager
+        /// The two throwaway keychain services, swept by ``tearDown()``.
+        private let services: [String]
+
+        /// A fresh rig, its manager marked running (without starting its radio) when `running` is set; a
+        /// failed provisioning sweeps what it wrote.
+        init(running: Bool = false) throws {
+            let services = [FernletFeatureGoldenTests.throwawayService(), FernletFeatureGoldenTests.throwawayService()]
+            let identity = IdentityService(namespace: .fernlet, keychainService: services[0])
+            let peerIdentity = IdentityService(namespace: .fernlet, keychainService: services[1])
+            do {
+                try identity.ensureProvisioned()
+                try peerIdentity.ensureProvisioned()
+            } catch {
+                FernletFeatureGoldenTests.sweep(services)
+                throw error
+            }
+            let host = RecipeTransferTestHost()
+            let radio = FakeRecipeShareRadioSession()
+            self.services = services
+            self.identity = identity
+            self.peerIdentity = peerIdentity
+            self.host = host
+            self.radio = radio
+            manager = FernletFeatureGoldenTests.recipeManager(host: host, radio: radio, identity: identity)
+            if running { manager.markRunningForTesting() }
+        }
+
+        /// The manager's diagnostics, their messages in order.
+        var messages: [String] { manager.diagnosticEvents.map(\.message) }
+
+        /// Stops the manager, ending every pairing's coordinator, and sweeps both services.
+        func tearDown() {
+            manager.stop()
+            FernletFeatureGoldenTests.sweep(services)
+        }
+    }
+
+    /// What one recipe pairing through the production door left: the peer it shared with, the channel
+    /// the radio handed the door (the peer's frames arrive on it), and the diagnostics' messages as they
+    /// stood in the turn the share's outcome was published.
+    struct RecipePairingRun {
+        /// The browsed peer the share went to.
+        let peer: PeerHandle
+        /// The channel the door was handed.
+        let channel: NetworkPeerChannel
+        /// The diagnostics' messages at the outcome, in order.
+        let diagnostics: [String]
+    }
+
+    /// One persisted session-audit row as 31c compares it: its kind's token, its payload type's token
+    /// (nil for none) and its message.
+    struct RecipeAuditRow: Equatable, Sendable {
+        /// The row's kind, as its persisted token.
+        let kind: String
+        /// The row's payload type, as its token, or nil.
+        let payloadType: String?
+        /// The row's message.
+        let message: String
+    }
+
+    /// The error 31d's refused start makes the radio throw: its description, which the manager's
+    /// diagnostic interpolates, is `listener refused`.
+    struct RecipeListenerRefused: Error, CustomStringConvertible {
+        /// `listener refused`.
+        var description: String { "listener refused" }
+    }
+
+    /// `event` as 31c compares it.
+    static func recipeAuditRow(_ event: TrainerAuditEvent) -> RecipeAuditRow {
+        RecipeAuditRow(kind: event.kind.rawValue, payloadType: event.payloadType?.rawValue, message: event.message)
+    }
+
+    /// A browsed recipe peer advertising `name`, as the radio hands one up: no transport hint, and the
+    /// record's `v`, `mode`, `name` and a `sid` of its own.
+    static func recipePeer(named name: String) -> PeerHandle {
+        PeerHandle(id: UUID(), displayHint: "",
+                   discoveryInfo: ["v": "1", "mode": "recipe", "name": name, "sid": UUID().uuidString],
+                   advertisedFingerprint: nil, endpoint: PeerEndpointKey())
+    }
+
+    /// Every frame `radio` was handed to send, decoded as the envelope it is (the in-memory radio sits
+    /// below the length header, so a frame is one envelope's JSON), in order.
+    static func sentFrames(of radio: FakeRecipeShareRadioSession) -> [FernletIdentityEnvelope] {
+        radio.sent.compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+    }
+
+    /// Runs one recipe pairing through the production door over `rig`: Blair (``recipePeerTXT``) is
+    /// discovered, the user sends `payload` (``recipeOatsPayload(id:)`` for ``recipeFixtureID`` when nil)
+    /// to her row (which starts the manager), the radio hands the channel-ready door her channel, and once
+    /// the door's coordinator has introduced itself Blair introduces herself (`rssi`, no capabilities, no
+    /// name) on that channel. Waits until the share's outcome is published and, in that turn, runs
+    /// `atOutcome` and reads the diagnostics. Every wait is a bounded run of yields: the whole flow stays
+    /// on the main actor's queue.
+    static func runRecipePairing(
+        on rig: RecipePairingRig, sending payload: ProximityRecipeSharePayload? = nil, atOutcome: () -> Void = {}
+    ) async throws -> RecipePairingRun {
+        let peer = PeerHandle(id: UUID(), displayHint: "", discoveryInfo: recipePeerTXT,
+                              advertisedFingerprint: nil, endpoint: PeerEndpointKey())
+        rig.radio.onPeerDiscovered?(peer)
+        let row = try #require(rig.manager.nearbyRecipients.first, "the discovered peer was never listed")
+        rig.manager.sendRecipeShare(payload ?? recipeOatsPayload(id: uuid(recipeFixtureID)), to: row)
+        let channel = rig.radio.channel(for: peer)
+        rig.radio.onPeerChannelReady?(channel)
+        let introduced = await VocabularyCoordinatorRig.settle {
+            sentFrames(of: rig.radio).contains { $0.payloadTypeToken == "fernlet.identity.intro.v1" }
+        }
+        #expect(introduced, "the door's coordinator never introduced itself")
+        let introduction = try FernletIdentityEnvelope.signed(
+            identityService: rig.peerIdentity, senderDisplayName: "", payloadTypeToken: "fernlet.identity.intro.v1",
+            payloadSummary: PayloadSummary(title: "Hello"), payload: Data(#"{"rangingMode":"rssi","capabilities":[]}"#.utf8))
+        channel.receive(try JSONEncoder().encode(introduction), at: Date())
+        let published = await VocabularyCoordinatorRig.settle { rig.manager.lastShareOutcome != nil }
+        #expect(published, "the share's outcome was never published")
+        atOutcome()
+        return RecipePairingRun(peer: peer, channel: channel, diagnostics: rig.messages)
     }
 }

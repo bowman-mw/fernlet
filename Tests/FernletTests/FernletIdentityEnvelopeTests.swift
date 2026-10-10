@@ -10,6 +10,7 @@ import FernletCrypto
 import FernletFoundation
 import Testing
 import FernletDomainModel
+import FernletConnections
 @testable import Fernlet
 
 @MainActor

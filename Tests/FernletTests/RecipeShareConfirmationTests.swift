@@ -7,8 +7,8 @@
 //
 // Three pure pieces, pinned here without a radio:
 //
-//  * `RecipeShareConfirmation` — the mapping from ProximityKit's frozen `RecipeShareOutcome` to the
-//    panel's words. The cells resolve every sentence (the keys are not in the catalog until the
+//  * `RecipeShareConfirmation` — the mapping from ProximityKit's frozen `ProximityPairSendOutcome` to
+//    the panel's words. The cells resolve every sentence (the keys are not in the catalog until the
 //    integration sync, so `String(localized:)` answers the English default) and pin the HONESTY of
 //    the copy: the sender can only ever know "sent" (handed to the transport; there is no receipt),
 //    so no success sentence may say delivered / received / accepted / saved, nor say what the other
@@ -37,14 +37,14 @@ struct RecipeShareConfirmationTests {
 
     /// An outcome for the fixture row: "Banana bread" to "Blair".
     private func outcome(
-        _ result: RecipeShareOutcome.Result,
+        _ result: ProximityPairSendOutcome.Result,
         recipientID: UUID = rowID,
         otherPeerName: String? = nil
-    ) -> RecipeShareOutcome {
-        RecipeShareOutcome(
+    ) -> ProximityPairSendOutcome {
+        ProximityPairSendOutcome(
             recipientID: recipientID,
             recipientName: "Blair",
-            recipeTitle: "Banana bread",
+            subject: "Banana bread",
             otherPeerName: otherPeerName,
             result: result
         )
@@ -63,8 +63,8 @@ struct RecipeShareConfirmationTests {
     // MARK: - Mapping
 
     @Test func everyFailureIsARetryableErrorWithASentenceOfItsOwn() {
-        var details: [RecipeShareFailure: String] = [:]
-        for failure in RecipeShareFailure.allCases {
+        var details: [ProximityPairSendFailure: String] = [:]
+        for failure in ProximityPairSendFailure.allCases {
             let confirmation = RecipeShareConfirmation(outcome(.notSent(failure)))
             #expect(confirmation.tone == .notSent, "\(failure)")
             #expect(confirmation.offersRetry, "\(failure) must offer Try again")
@@ -73,7 +73,7 @@ struct RecipeShareConfirmationTests {
             #expect(!detail.isEmpty, "\(failure) has no sentence")
             details[failure] = detail
         }
-        #expect(Set(details.values).count == RecipeShareFailure.allCases.count,
+        #expect(Set(details.values).count == ProximityPairSendFailure.allCases.count,
                 "two causes share one sentence, so the panel cannot tell the user which happened")
     }
 
@@ -83,7 +83,7 @@ struct RecipeShareConfirmationTests {
         #expect(sent.tone == .sent)
         #expect(!sent.offersRetry)
         #expect(sent.announcementKind == .success)
-        let failureHeadlines = RecipeShareFailure.allCases.map {
+        let failureHeadlines = ProximityPairSendFailure.allCases.map {
             words(RecipeShareConfirmation(outcome(.notSent($0))).headline)
         }
         #expect(!failureHeadlines.contains(words(sent.headline)))
@@ -124,7 +124,7 @@ struct RecipeShareConfirmationTests {
     /// "They may have it" and "nothing was sent" are different facts, and a single "didn't send"
     /// would tell someone whose recipe DID go out that it did not.
     @Test func mayHaveItIsNeverMergedWithNothingWasSent() {
-        for failure in RecipeShareFailure.allCases {
+        for failure in ProximityPairSendFailure.allCases {
             let detail = words(RecipeShareConfirmation(outcome(.notSent(failure))).detail).lowercased()
             if failure.mayHaveReachedRecipient {
                 #expect(detail.contains("may not have it"), "\(failure): \(detail)")
@@ -133,12 +133,12 @@ struct RecipeShareConfirmationTests {
                 #expect(detail.contains("nothing"), "\(failure) must say nothing was sent: \(detail)")
             }
         }
-        #expect(RecipeShareFailure.allCases.filter(\.mayHaveReachedRecipient) == [.sendIncomplete])
+        #expect(ProximityPairSendFailure.allCases.filter(\.mayHaveReachedRecipient) == [.sendIncomplete])
     }
 
     /// Every failure names both halves somewhere the user reads or hears it: the recipe and the person.
     @Test func everyFailureNamesTheRecipeAndThePerson() {
-        for failure in RecipeShareFailure.allCases {
+        for failure in ProximityPairSendFailure.allCases {
             let confirmation = RecipeShareConfirmation(outcome(.notSent(failure)))
             let spoken = words(confirmation.announcement)
             #expect(spoken.contains("Banana bread") && spoken.contains("Blair"), "\(failure): \(spoken)")

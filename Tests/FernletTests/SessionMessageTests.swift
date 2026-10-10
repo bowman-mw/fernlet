@@ -20,6 +20,7 @@ import Testing
 import FernletFoundation
 @testable import FernletSocial
 import FernletDomainModel
+import FernletConnections
 import FernletPersistence
 import CloudKitSync
 @testable import Fernlet

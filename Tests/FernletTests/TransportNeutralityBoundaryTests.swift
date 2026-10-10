@@ -69,7 +69,7 @@ struct TransportNeutralityBoundaryTests {
         "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift",
         "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
         "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
+        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift",
         "FernletKit/Sources/ProximityKit/Transport/PeerTransport.swift",
         "FernletKit/Sources/ProximityKit/Transport/PeerHandle.swift"
     ]

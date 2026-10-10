@@ -60,9 +60,10 @@ nonisolated extension ProximityNamespace {
     /// them, and the two feature salts ProximityKit's pair-secret door derives under. ProximityKit
     /// reads the presentation strings and every vocabulary group off it, the mesh engine's own
     /// messages included; the mesh features' payload and capability tokens are `PayloadType` and
-    /// `ProximityCapability` cases, in FernletSocial's features, and what ProximityKit still spells
-    /// itself waits for the recipe-share manager to leave (plan step A0.7) and its DEBUG test-hook
-    /// names to settle (A1). Its installation also carries the Fernlet app's peer-name policy, which
+    /// `ProximityCapability` cases, in FernletSocial's features; the recipe share's pair-session
+    /// profile reads its radio row off it (`ProximityPairProfile.recipeShare(in:)`), and what
+    /// ProximityKit still spells itself is its DEBUG test-hook names, which settle at A1. Its
+    /// installation also carries the Fernlet app's peer-name policy, which
     /// ProximityKit shows a peer's name under wherever one enters it.
     ///
     /// Sound by construction (`ProximityNamespaceGoldenTests` pins ``ProximityNamespace/soundness``

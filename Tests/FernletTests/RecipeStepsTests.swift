@@ -5,6 +5,7 @@ import FernletDomainModel
 import CloudKitSync
 import AIProviders
 import ProximityKit
+import FernletSocial
 import DiaryStore
 @testable import Fernlet
 

@@ -165,7 +165,8 @@ jobs:
         # native macOS products after its build. A build, not a test: it names no suite and no floor,
         # so CIGateSelectorBoundaryTests does not parse it, and ProximityPlatformBoundaryTests pins that
         # this step's body runs the self-test and that no `if:` or `continue-on-error:` sits on this
-        # step or on its job (plan step A0.6.8).
+        # step or on its job (plan step A0.6.8), and that nothing but `run: |` and `set -euo pipefail`
+        # precedes its run line (plan step A0.7.5).
         run: |
           set -euo pipefail
           Scripts/macos-build-selftest.sh
@@ -328,6 +329,20 @@ jobs:
         # and the vocabulary golden's group 14), MEASURED at 347 tests in 8 suites, its floor 347. This
         # line, MEASURED on a Mac at A0.6.5 and again at A0.6.7 (iPhone 17 simulator, iOS 26.5), ran
         # 110 tests in 11 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.7 (2026-10-10), the one-to-one radio as a profile-driven pair
+        # session, leaves ProximityKit holding the one-to-one mechanism as `ProximityPairSession` over
+        # a host-supplied `ProximityPairProfile`, which it checks against its namespace, with the
+        # coordinator's token send and manual commit public as its per-connection API; Fernlet's recipe
+        # feature, its wire types and its English are FernletSocial's, and its recipe profile and the
+        # envelope's typed view of its payload token FernletConnections'. `ProximityNamespaceBoundaryTests`
+        # ends the step at 7 `fernlet` literals on 6 lines in 2 files (A1), 1 domain-type line in 1
+        # file (the session mode, C5), 36 `package` lines in 4 files (A1) and 87 moved names, with no
+        # row of A0.7's and no A0.7 exit step. No suite joined or left a line across the step, and no
+        # cell was added to this one. This line, MEASURED on a Mac at A0.7.4 (iPhone 17 simulator,
+        # iOS 26.5), ran 110 tests in 11 suites; its floor stays the shared `1`. crypto-goldens holds
+        # the step's goldens at 355 and mesh-batteries the recipe-share manager's observation cell at
+        # 1370, both raised at A0.7.0.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -748,9 +763,19 @@ jobs:
         # refused it. 346 + 1 (the vocabulary golden's cell holding the local name over a host's own
         # fallback, the setting trimmed of spaces and tabs or the fallback untrimmed) = 347 is the
         # ARITHMETIC CHECK, never the source.
+        # RAISED 347 -> 355 at A0.7.0, MEASURED on a Mac, 2026-10-10 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "355 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 55
+        # + 17 + 98), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 355:
+        # passed. Run once more at 355 without FernletFeatureGoldenTests: 257 ran and the floor refused
+        # it. 347 + 8 (the vocabulary golden's group 15, two cells: the recipe radio's advertisement and
+        # a recipe envelope's canonical bytes; the feature golden's group 31, six cells: the recipe
+        # payload's JSON, the pairing's frames through the production door, its persisted audit rows,
+        # its status sentences by path, its copy templates, and its constants and spellings) = 355 is
+        # the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 347 \
+          Scripts/run-gated-suites.sh crypto-goldens 355 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
@@ -1628,9 +1653,19 @@ jobs:
         # half: no FernletSocial file spells an engine-only seam or a gating predicate, and a feature's
         # arm stands only in its pinned home, called once from inside its handler's write) = 1369 is the
         # ARITHMETIC CHECK, never the source.
+        # At A0.7.0 no suite joined or left, so the NAME count stays 154; one suite here gained a cell:
+        # RAISED 1369 -> 1370 at A0.7.0, MEASURED on a Mac, 2026-10-10 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "Test run with 1370 tests in 154 suites passed after
+        # 169.676 seconds" (ProximityRecipeShareCapTests 45 -> 46, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 1370: passed. Run once more at
+        # 1370 without ProximityRecipeShareCapTests: 1324 ran and the floor refused it. 1369 + 1
+        # (ProximityRecipeShareCapTests' cell holding the recipe-share manager's observables to the
+        # notifications SwiftUI reads, before plan step A0.7.3 makes them its pair session's) = 1370 is
+        # the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1369 \
+          Scripts/run-gated-suites.sh mesh-batteries 1370 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

@@ -67,7 +67,7 @@ import ProximityKit
 /// for it (`ProximityHost.makeProximityTrustPolicy()`)
 /// for the connection's lifetime so the coordinator's `weak` trustPolicy stays alive (the
 /// revoked/blocked-key envelope rejection + audit calls silently no-op otherwise) — mirrors the
-/// recipe manager's `RecipeShareConnection`.
+/// pair session's `PairConnection` (ProximityKit's `ProximityPairSession.swift`).
 private struct PresenceHeartConnection: Identifiable {
     let id: UUID
     let peer: PeerHandle
@@ -410,7 +410,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// Local Network permission prompt guarantees on a fresh install's very first start.
     ///
     /// Stands the radio down (P8 item 0, device finding (b)), mirroring
-    /// `ProximityRecipeShareManager`'s handler: with `isRunning` left true the idempotent
+    /// `ProximityPairSession`'s handler: with `isRunning` left true the idempotent
     /// `start()` no-ops forever over a dead radio, and the app's run-policy seam — which
     /// re-applies a running verdict to a listener whose ``isListening`` says it is down — would
     /// have nothing to see. `didNotStart*` only fires from start attempts, but guard on no heart
@@ -1280,7 +1280,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             // Sealed to the coordinator's verified peer — the same identity the fingerprint match
             // pinned to `friend`, so a heart can never land on a different device.
             try await connection.coordinator.sendPayload(
-                type: .friendHeart,
+                payloadTypeToken: PayloadType.friendHeart.rawValue,
                 // DO NOT LOCALIZE "Good vibes". It reads like the friendliest possible display
                 // string, and it is — on the RECIPIENT's Connection Inspector, not the sender's.
                 // It is also folded into the Ed25519 canonical bytes. The user-facing copy for this

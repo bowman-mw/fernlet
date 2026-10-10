@@ -2409,11 +2409,13 @@ struct ProximityNamespaceGoldenTests {
     /// and the mesh radio the frozen heartbeat and TLS exporter label, and `.fernlet`'s labels as the
     /// copy its channel introductions are framed and checked under. Built from another app's
     /// namespace, each holds that app's values, so every read is the namespace's field and not a
-    /// literal that happens to match Fernlet's. Building a radio starts nothing.
+    /// literal that happens to match Fernlet's. The recipe radio is built explicitly under Fernlet's
+    /// recipe profile on the namespace it is built from (FernletConnections' `recipeShare(in:)`), as
+    /// its pair session builds it, never through a test binding. Building a radio starts nothing.
     @Test func theRadiosReadTheirValuesOffTheNamespace() {
         let mesh = NetworkMeshSession(namespace: .fernlet)
         let presence = NetworkPresenceSession(namespace: .fernlet)
-        let recipe = NetworkRecipeShareSession(namespace: .fernlet)
+        let recipe = NetworkRecipeShareSession(namespace: .fernlet, profile: .recipeShare(in: .fernlet))
         let read: [(field: String, bytes: Data)] = [
             ("family.radios.mesh.serviceType", Data(mesh.serviceType.utf8)),
             ("family.radios.mesh.alpn", Data(mesh.alpn.utf8)),
@@ -2437,7 +2439,7 @@ struct ProximityNamespaceGoldenTests {
         let radios = foreign.family.radios
         let foreignMesh = NetworkMeshSession(namespace: foreign)
         let foreignPresence = NetworkPresenceSession(namespace: foreign)
-        let foreignRecipe = NetworkRecipeShareSession(namespace: foreign)
+        let foreignRecipe = NetworkRecipeShareSession(namespace: foreign, profile: .recipeShare(in: foreign))
         #expect([foreignMesh.serviceType, foreignPresence.serviceType, foreignRecipe.serviceType]
                 == [radios.mesh.serviceType, radios.presence.serviceType, radios.recipeShare.serviceType],
                 "a radio built from another app's namespace advertises a service type of its own")

@@ -382,21 +382,22 @@ let package = Package(
         // host answers, the ranging seam (NearbyInteraction on iOS), the protocol namespace its host
         // supplies, the routed mesh engine
         // (whose routed-type rows and the features that ride them its host registers through the
-        // engine's public seams), the presence radio and the ProximityHost seam protocol; and the one
-        // Fernlet feature still built into it, the recipe-share manager, until plan step A0.7 moves it
-        // out. The sealed-backup escrow beside its identity is the app's, through
+        // engine's public seams), the presence radio and the ProximityHost seam protocol; and the
+        // one-to-one pair session a host's profile drives (Fernlet's recipe share runs over it). The
+        // sealed-backup escrow beside its identity is the app's, through
         // the identity's provisioning participant. Fernlet's rules (its
-        // namespace, trust vault and session policies) are FernletConnections', and Fernlet's social
-        // features are FernletSocial's (the mesh features and their composition, presence, the heart
-        // dead-drop, moderation, closeness and friend state): both below, both depending on this module,
+        // namespace, trust vault, session policies and recipe pair profile) are FernletConnections', and
+        // Fernlet's social features are FernletSocial's (the mesh features and their composition, presence,
+        // the heart dead-drop, moderation, closeness, friend state and recipe sharing): both below, both
+        // depending on this module,
         // never the reverse. "Outward edges only": the files with backward edges to the app
         // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
         // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
         // FernletCrypto (the `CryptographicPurpose` signing overloads its identity keeps, which
         // FernletSocial's feature labels and the app's duress and probe signatures sign through until
-        // C1; it names no FernletCryptoPurpose) + FernletDomainModel (the recipe-share payload's
-        // models, and Fernlet's payload vocabulary and session mode, which it names only on the lines
-        // ProximityNamespaceBoundaryTests allowlists, until A0.7 and A0.7 / C5); no FernletFoundation
+        // C1; it names no FernletCryptoPurpose) + FernletDomainModel (Fernlet's session mode, which it
+        // names only on the one line ProximityNamespaceBoundaryTests allowlists, until C5; Fernlet's
+        // typed view of the envelope's payload token is FernletConnections'); no FernletFoundation
         // and no PrivateMediaStore edge: the session hearts' day key and the session photos' wall and
         // pending corpus are FernletSocial's. ProximityNamespaceBoundaryTests
         // pins this list, and also refuses any type that left it for FernletSocial or the app, declared,
@@ -482,17 +483,23 @@ let package = Package(
         // (`Placeholder`, `shown`, `firstName`, `text(for:)`, over the identifier filter that stays
         // ProximityKit's), whose two phrases resolve against this module's own Localizable.xcstrings
         // (FernletConnectionsCopy, `bundle: .module`). ProximityKit can never name it: the edge runs
-        // FernletConnections → ProximityKit, never the reverse. The coach profile and link purposes
-        // join it at C1. Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
+        // FernletConnections → ProximityKit, never the reverse. It also holds Fernlet's connection
+        // profiles for ProximityKit's pair session: the recipe profile, `ProximityPairProfile.recipeShare(in:)`
+        // (FernletPairProfiles); the coach profile and link purposes join it at C1 and C5. And it holds
+        // Fernlet's typed view of the signed envelope's payload token (FernletIdentityEnvelope+PayloadType:
+        // `payloadType`, `isUnknownPayloadType`, the typed initializer and `signed`), which Fernlet's
+        // features read and sign through over ProximityKit's raw token.
+        // Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
         // FernletFoundation (FernletAuditLog, behind the bridge) + FernletDomainModel (PayloadType and
-        // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling;
-        // ItemNameModeration, whose name cap the peer-name policy reads; and TrainerAuditEvent and
-        // ProximityTrustedPeerRecord with its ProximityMode, the persisted records the vault builds and
+        // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling,
+        // PayloadType also the envelope's typed view's cases; ItemNameModeration, whose name cap the
+        // peer-name policy reads; and TrainerAuditEvent and ProximityTrustedPeerRecord with its
+        // ProximityMode, the persisted records the vault builds and
         // keeps and the policies and the review read). MainActor default: the vault and the two trust
         // policies are main-actor classes, like the main-actor protocols, coordinator, managers and
         // store they serve, beside nonisolated value data and stateless seams (the namespace and its
-        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion and
-        // the name placeholders).
+        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion, the
+        // envelope's typed view and the name placeholders).
         .target(
             name: "FernletConnections",
             dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
@@ -513,8 +520,9 @@ let package = Package(
         // ProximityKit's presence radio and delivers in-person hearts, and the identity's presence pair
         // secret and epoch tag), moderation's ban store, ledger and content hash, the closeness ledger,
         // the friend-state cache and the parked live-session chat payload, none of which ProximityKit
-        // holds (ProximityNamespaceBoundaryTests refuses any of their types there again); the
-        // recipe-share manager joins them at A0.7. The edge runs FernletSocial → ProximityKit, never the
+        // holds (ProximityNamespaceBoundaryTests refuses any of their types there again); and recipe
+        // sharing (its manager over ProximityKit's pair session, its diagnostics ring, which presence
+        // shares, and its wire types). The edge runs FernletSocial → ProximityKit, never the
         // reverse. Deps:
         // ProximityKit (`IdentityService` with its fingerprint, pair-secret door, static key agreement,
         // `CryptographicPurpose` signing overloads and presence epoch clock, the envelope, the protected
@@ -522,15 +530,18 @@ let package = Package(
         // and its seams — the payload token door, the captured-slot feature send, the origination door,
         // the projection-handler and ledger-judge registrations, the session observer, the capability-list
         // provider and the vouch-list exchange — with the routed rows' column types, the body framing and
-        // the generic content union; for presence the host seam, the session coordinator, ranging, the
-        // namespace gate, the observation loop and the peer-name coercion; and `package` doors: the
-        // coordinator's typed send and manual commit until A0.7, and the presence radio's seam, QUIC
-        // conformer, peer channel, epoch posture and TXT vocabulary until A1; `JSONSidecarFile`, the
+        // the generic content union; for presence the host seam, the session coordinator with its public
+        // token send and manual commit, ranging, the namespace gate, the observation loop and the
+        // peer-name coercion; for recipe sharing the pair session with its profile, status, events,
+        // peer row and send outcome; and `package` doors: the presence radio's seam, QUIC conformer, peer
+        // channel, epoch posture and TXT vocabulary until A1; `JSONSidecarFile`, the
         // ledgers' sidecar, is this module's own) + FernletConnections (`FernletFeaturePurposes`' two
         // declared salts, which the heart-drop and presence pair secrets derive under,
         // `ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory
-        // and whose routed types FernletRoutedTypes reads, and the name placeholders,
-        // `PeerNameDisplay.firstName` among them, which presence's hearts copy reads) + FernletCrypto
+        // and whose routed types FernletRoutedTypes reads, the name placeholders,
+        // `PeerNameDisplay.firstName` among them, which presence's hearts copy reads, and the envelope's
+        // typed view, which the heart dead-drop signs and reads through and presence, the clothing shop
+        // and recipe sharing read through) + FernletCrypto
         // (`FernletCryptoPurpose`: the ban-evidence reporter-tag domain the ban store hashes under, the
         // sealed drop's salt, the day-tag prefix and the sidecar's authenticated data the heart dead-drop
         // hands CryptoKit, the presence epoch-tag prefix, and the activities' and the moderation report's

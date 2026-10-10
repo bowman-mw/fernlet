@@ -528,10 +528,26 @@ extension NetworkPresenceSession {
 /// The recipe-share radio's argument-less initializer, restored as ``NetworkMeshSession``'s is.
 extension NetworkRecipeShareSession {
 
-    /// `NetworkRecipeShareSession(namespace: .fernlet)`: the recipe-share radio on Fernlet's wire, the
-    /// radio the retired `init()` built.
+    /// `NetworkRecipeShareSession(namespace: .fernlet, profile: .recipeShare(in: .fernlet))`: the
+    /// recipe-share radio on Fernlet's wire under Fernlet's recipe profile (FernletConnections'), the
+    /// radio the retired `init()` built. No `init(namespace:)` comes back: it would read a row off the
+    /// caller's namespace, so the cells that pass one construct the radio explicitly.
     convenience init() {
-        self.init(namespace: .fernlet)
+        self.init(namespace: .fernlet, profile: .recipeShare(in: .fernlet))
+    }
+}
+
+/// The recipe advertisement's mode and session-id read in the shapes the suites were written
+/// against (plan step A0.7.3), when the advertisement spelled the recipe mode for itself.
+extension RecipeShareAdvertisement {
+
+    /// The mode Fernlet's recipe profile advertises, read off `ProximityPairProfile.recipeShare(in:
+    /// .fernlet)`: the value the retired `mode` constant held.
+    static var mode: String { ProximityPairProfile.recipeShare(in: .fernlet).advertisementMode }
+
+    /// `sessionID(from:mode:)` under ``mode``.
+    static func sessionID(from fields: [String: String]?) -> String? {
+        sessionID(from: fields, mode: mode)
     }
 }
 
@@ -911,12 +927,13 @@ extension ProximityHost {
 //   before. Every double states a non-empty name of its own, so only a cell that empties one reads it;
 //   the cells that pin Fernlet's fallback run on `FernletStore`, which answers `UIDevice.current.name`.
 // - `makeProximityRangingProvider()` (A0.6.3) is a fresh `NoopRangingProvider()`: a provider without
-//   ranging, which builds no `NISession`, reads no capability and names no iOS-only type. No test
-//   fires a channel-ready door (no cell starts a radio), so no cell's behaviour moves; a later test
-//   that reaches one ranges nothing, where the doors' own `NIRangingSession()` would have tried to
-//   range, since NearbyInteraction reports precise-distance support on the iOS 26.5 simulator. The
-//   coordinator tests build theirs through the managers' test seams with a provider of their own,
-//   and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
+//   ranging, which builds no `NISession`, reads no capability and names no iOS-only type. No cell
+//   starts a radio. The three cells that fire a channel-ready door, `FernletFeatureGoldenTests`' 31b,
+//   31c and 31d (through group 31's recipe pairing, and 31d through a third device's channel too), fire
+//   it through the recipe radio's in-memory double, and their connections range nothing, as a host
+//   without ranging's do, where the door's own `NIRangingSession()` would have tried to range, since
+//   NearbyInteraction reports precise-distance support on the iOS 26.5 simulator. The coordinator tests build theirs through the managers' test seams with a provider of
+//   their own, and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
 // - `proximitySupportDirectory` (A0.6.6) is the double's namespace's folder under Application Support,
 //   `proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)`: the
 //   production-shaped folder the doubles always shared, the very path ProximityKit's root default

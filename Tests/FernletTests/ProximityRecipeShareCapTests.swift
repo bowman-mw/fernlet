@@ -20,10 +20,18 @@
 // would leave the radio paused forever with no connection (the deadlock class the redesign
 // closes). All three removal paths are covered: onPeerDisconnected, the stale-coordinator sweep
 // (.ended/.failed), and the parked pre-verification sweep (.idle/.starting/.discovering).
+//
+// The observation cell (`theManagersObservablesFollowItsPairSession`) holds the four values the share
+// sheet observes (the recipient rows, the status line, the outcome and the engaged row) to the
+// notifications SwiftUI redraws on, each through an observation of the manager that reads it alone: a
+// discovery notifies the rows' and a failed share the other three's, whether the manager stores those
+// values itself or forwards them from a session it drives.
 
 @testable import ProximityKit
+import FernletSocial
 import FernletConnections
 import Foundation
+import Observation
 import Testing
 import FernletDomainModel
 import AIProviders
@@ -236,7 +244,7 @@ struct ProximityRecipeShareCapTests {
         let paired = makePeer(named: "Alex")
         registerConnection(on: manager, peer: paired)
 
-        let other = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+        let other = ProximityPairPeer(id: UUID(), displayName: "Blair", fingerprint: nil)
         manager.sendRecipeShare(makePayload(), to: other)
 
         guard case .failed(let message) = manager.sendState else {
@@ -809,7 +817,7 @@ struct ProximityRecipeShareCapTests {
                 "and the live pairing is neither doubled nor dropped")
 
         // Control: a genuinely different device is still refused while the pairing is held.
-        manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+        manager.sendRecipeShare(makePayload(), to: ProximityPairPeer(
             id: UUID(), displayName: "Blair", fingerprint: nil))
         guard case .failed(let message) = manager.sendState else {
             Issue.record("Expected the outbound cap to refuse a third device, got \(manager.sendState)")
@@ -867,7 +875,7 @@ struct ProximityRecipeShareCapTests {
         manager: ProximityRecipeShareManager,
         radio: FakeRecipeShareRadioSession,
         blair: PeerHandle,
-        row: ProximityRecipeShareRecipient
+        row: ProximityPairPeer
     ) {
         let radio = FakeRecipeShareRadioSession()
         let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
@@ -882,7 +890,7 @@ struct ProximityRecipeShareCapTests {
         let host = RecipeCapTestHost()
         let manager = ProximityRecipeShareManager(store: host)
         registerConnection(on: manager, peer: makePeer(named: "Alex"))
-        let blair = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+        let blair = ProximityPairPeer(id: UUID(), displayName: "Blair", fingerprint: nil)
 
         manager.sendRecipeShare(makePayload(), to: blair)
 
@@ -891,7 +899,7 @@ struct ProximityRecipeShareCapTests {
         #expect(outcome.otherPeerName == "Alex")
         #expect(outcome.recipientName == "Blair")
         #expect(outcome.recipientID == blair.id)
-        #expect(outcome.recipeTitle == "Cap Test Bowl")
+        #expect(outcome.subject == "Cap Test Bowl")
         #expect(manager.transferForTesting == nil, "refused before any share was minted")
     }
 
@@ -913,7 +921,7 @@ struct ProximityRecipeShareCapTests {
         let radio = FakeRecipeShareRadioSession()
         let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
-        let gone = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+        let gone = ProximityPairPeer(id: UUID(), displayName: "Blair", fingerprint: nil)
 
         manager.sendRecipeShare(makePayload(), to: gone)
 
@@ -938,7 +946,7 @@ struct ProximityRecipeShareCapTests {
 
     /// The three ways a registered pairing can die before the send, and each must end the share as
     /// `couldNotConnect`: status line failed, the row released, the record terminal.
-    private func expectLostPairingFailed(_ manager: ProximityRecipeShareManager, row: ProximityRecipeShareRecipient) {
+    private func expectLostPairingFailed(_ manager: ProximityRecipeShareManager, row: ProximityPairPeer) {
         #expect(manager.lastShareOutcome?.result == .notSent(.couldNotConnect),
                 "got \(String(describing: manager.lastShareOutcome?.result))")
         #expect(manager.lastShareOutcome?.recipientID == row.id)
@@ -1041,7 +1049,7 @@ struct ProximityRecipeShareCapTests {
 
         let againHost = RecipeCapTestHost()
         let again = try managerWithBlair(host: againHost)
-        again.manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+        again.manager.sendRecipeShare(makePayload(), to: ProximityPairPeer(
             id: UUID(), displayName: "Gone", fingerprint: nil))
         let terminal = try #require(again.manager.lastShareOutcome)
         again.manager.stop()
@@ -1077,7 +1085,7 @@ struct ProximityRecipeShareCapTests {
 
         fixture.manager.finishShareForTesting(.sent, token: token)
         #expect(fixture.manager.lastShareOutcome?.result == .sent)
-        #expect(fixture.manager.lastShareOutcome?.recipeTitle == "Cap Test Bowl")
+        #expect(fixture.manager.lastShareOutcome?.subject == "Cap Test Bowl")
 
         fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
         let second = try #require(fixture.manager.transferForTesting?.token)
@@ -1097,7 +1105,7 @@ struct ProximityRecipeShareCapTests {
             makeSession: { radio },
             identity: IdentityService(keychainService: "test.recipe.outcome.\(UUID().uuidString)"))
         manager.markRunningForTesting()
-        manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+        manager.sendRecipeShare(makePayload(), to: ProximityPairPeer(
             id: UUID(), displayName: "Gone", fingerprint: nil))
         #expect(manager.lastShareOutcome != nil)
 
@@ -1105,4 +1113,70 @@ struct ProximityRecipeShareCapTests {
 
         #expect(manager.lastShareOutcome == nil)
     }
+
+    // MARK: - Observation
+
+    /// The four observables the share sheet reads (the recipient rows, the status line, the outcome and
+    /// the engaged row) each notify an observer that reads it alone, on the changes SwiftUI redraws the
+    /// sheet on: a discovery notifies the rows' observer and no other, and a failed share (which engages
+    /// the picked row and releases it) the status line's, the outcome's and the engaged row's, and not
+    /// the rows'. One observation per value, because `withObservationTracking` fires once per
+    /// registration, on the first change to anything it read: one registration over all four would hear
+    /// the status line and say nothing of the other three. Whatever holds those values, the manager's
+    /// stored properties or a session it forwards them from, an observer of the manager must hear each.
+    @Test func theManagersObservablesFollowItsPairSession() {
+        let host = RecipeCapTestHost()
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
+        let discovery = Self.observeSheetObservables(of: manager)
+        radio.onPeerDiscovered?(makePeer(named: "Blair"))
+        #expect(discovery.changes == ["rows": 1, "status": 0, "outcome": 0, "engaged": 0],
+                "a discovery notified the sheet's observers \(discovery.changes)")
+        #expect(manager.nearbyRecipients.count == 1, "the discovery listed \(manager.nearbyRecipients.count) rows")
+
+        let failure = Self.observeSheetObservables(of: manager)
+        let gone = ProximityPairPeer(id: UUID(), displayName: "Gone", fingerprint: nil)
+        manager.sendRecipeShare(makePayload(), to: gone)
+        #expect(failure.changes == ["rows": 0, "status": 1, "outcome": 1, "engaged": 1],
+                "a failed share notified the sheet's observers \(failure.changes)")
+        #expect(manager.sendState == .failed(message: "That nearby Fernlet is no longer available."),
+                "the status line reads \(manager.sendState)")
+        #expect(manager.lastShareOutcome?.result == .notSent(.recipientUnavailable),
+                "the share ended \(String(describing: manager.lastShareOutcome?.result))")
+        #expect(manager.engagedRecipientID == nil, "the failed share left \(String(describing: manager.engagedRecipientID)) engaged")
+    }
+
+    /// Registers one observation for each of the four observables the share sheet reads, each reading
+    /// that value alone, and returns the recorder their notifications land in, keyed `rows`, `status`,
+    /// `outcome` and `engaged`.
+    private static func observeSheetObservables(of manager: ProximityRecipeShareManager) -> RecipeShareObservationRecorder {
+        let recorder = RecipeShareObservationRecorder()
+        let reads: [(key: String, read: () -> Void)] = [
+            ("rows", { _ = manager.nearbyRecipients }),
+            ("status", { _ = manager.sendState }),
+            ("outcome", { _ = manager.lastShareOutcome }),
+            ("engaged", { _ = manager.engagedRecipientID })
+        ]
+        // R2: bounded by the four observables.
+        for entry in reads {
+            withObservationTracking {
+                entry.read()
+            } onChange: {
+                MainActor.assumeIsolated { recorder.recordChange(entry.key) }
+            }
+        }
+        return recorder
+    }
+}
+
+/// Counts the notifications each of several observations delivered, by the key of the value it read:
+/// `withObservationTracking` fires its handler once per registration, so 1 is that registration's
+/// change and 0 is none.
+private final class RecipeShareObservationRecorder {
+    /// How many notifications arrived for each key, every key registered at zero.
+    private(set) var changes: [String: Int] = ["rows": 0, "status": 0, "outcome": 0, "engaged": 0]
+
+    /// Notes one notification for `key`.
+    func recordChange(_ key: String) { changes[key, default: 0] += 1 }
 }

@@ -118,6 +118,12 @@
 # advertises and matches by — changing a byte here makes every pair of friends invisible to each other
 /FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
 
+# FernletSocial's recipe share: the recipe payload's wire format (its JSON, format token and version)
+# and the summary signed into every recipe envelope, over ProximityKit's pair session — changing a byte
+# here breaks every recipe share between devices on different builds
+/FernletKit/Sources/FernletSocial/Wire/RecipeSharePayloads.swift          @bowman-mw
+/FernletKit/Sources/FernletSocial/RecipeSharing/                        @bowman-mw
+
 # The sealed-backup escrow: the app's escrow key (its content-addressed iCloud Keychain rows, the one
 # synchronizable key, its HKDF derivations, and the order it promotes a previous build's key before a
 # mint overwrites the row) and the identity's provisioning participant seam it rides — a mistake here

@@ -1,6 +1,7 @@
 import ProximityKit
 import Foundation
 import FernletDomainModel
+import FernletSocial
 import FernletExchange
 import FernletFoundation
 #if canImport(UIKit)
