@@ -307,6 +307,26 @@ jobs:
         # the cell. 110 tests in 11 suites by declaration count (109 + 1), the ARITHMETIC CHECK, and the
         # line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 110 tests in 11
         # suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6 (2026-10-09), Mac readiness, leaves ProximityKit holding no
+        # platform policy: it builds for iOS 26 and native macOS 26, every fact whose right answer
+        # differs by platform or by app is its host's, as a `ProximityHost` requirement with no default
+        # (the name an unnamed device goes by, each connection's ranging provider and the root of an
+        # installation's files), the module keeps two mechanism seams, each compiled only where its
+        # framework is usable, and the Live Activity reaper is the app's. It leaves
+        # `ProximityPlatformBoundaryTests` at the step's end state, with no transient row and no exit
+        # step: 2 permanent seams (`ProtectedSidecar.swift`'s UIKit under `#if canImport(UIKit)` and
+        # `NIRangingSession.swift`'s NearbyInteraction, the whole file under `#if os(iOS)`), no
+        # device-name read, no platform directory and no host-fact default, every channel-ready door
+        # asking its host for each connection's ranging provider, and the macOS build pinned to run.
+        # That suite is the source half; the "ProximityKit on native macOS" step above is the compiler
+        # half, building ProximityKit's closure for native macOS on every push through
+        # Scripts/macos-build-selftest.sh after proving a planted `import UIKit` fails it. The step's
+        # other two lines: power-of-10 holds the macOS check's rule-10 pin, 34 tests in 1 suite on its
+        # shared floor `1`, and crypto-goldens holds the step's goldens (the feature golden's group 30
+        # and the vocabulary golden's group 14), MEASURED at 347 tests in 8 suites, its floor 347. This
+        # line, MEASURED on a Mac at A0.6.5 and again at A0.6.7 (iPhone 17 simulator, iOS 26.5), ran
+        # 110 tests in 11 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

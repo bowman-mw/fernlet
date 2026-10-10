@@ -2,23 +2,28 @@
 // FernletTests
 //
 // The wall that keeps ProximityKit free of platform policy (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md
-// §4 A0.6, Mac readiness). ProximityKit is to build for iOS 26 and native macOS 26 and to compute no
-// value whose right answer differs by platform or by app: what an unnamed device is called, whether a
-// connection ranges and where an installation keeps its files are its host's to state, and the module
-// keeps only the mechanism seams a platform needs, each compiled only where its framework is usable.
-// The iOS compiler does not keep it that way: a UIKit, NearbyInteraction or ActivityKit import, a read
-// of the device's name, a platform directory and a default for a fact only the host may state all
-// compile clean on iOS and pass every other test. So this suite reads ProximityKit's source through
-// `ProximityNamespaceBoundaryTests`' one walker (lexed: comments dropped, literals emptied) and holds
-// four rules, its readers fixtured both ways in a cell of their own, and, since plan step A0.6.5, a
-// fifth that keeps the compiler half running:
+// §4 A0.6, Mac readiness). ProximityKit holds no platform policy: it builds for iOS 26 and native
+// macOS 26 and computes no value whose right answer differs by platform or by app. What an unnamed
+// device is called, whether a connection ranges and where an installation keeps its files are its
+// host's to state, each a `ProximityHost` requirement with no default, and the module keeps only the
+// two mechanism seams a platform needs, each compiled only where its framework is usable. Two halves
+// hold it there. The compiler half is `Scripts/macos-build-selftest.sh`, on every push: it builds
+// ProximityKit's closure for native macOS, which refuses any symbol native macOS lacks wherever it
+// stands outside its guard, after proving that build fails on a planted `import UIKit`. This suite is
+// the source half, because the iOS compiler sees none of it and the macOS compiler not all of it: a
+// UIKit, NearbyInteraction or ActivityKit import, a read of the device's name, a platform directory
+// and a default for a fact only the host may state all compile clean on iOS and pass every other
+// test, and a directory, a device-name read or a host default compiles on macOS too. So it reads
+// ProximityKit's source through `ProximityNamespaceBoundaryTests`' one walker (lexed: comments
+// dropped, literals emptied) and holds five rules, its readers fixtured both ways in a cell of their
+// own, the fifth keeping the compiler half running:
 //
 //   1. every module a file imports (`import M`, `@preconcurrency import M`, `import struct M.X`) or
 //      tests for with `canImport(M)` is a neutral baseline module, available on both platforms, or an
-//      exact seam row: a file, a module, how its imports are guarded and the plan step that deletes
-//      the row. A guarded seam's every import sits in its `#if` branch, never in its `#else`; a
-//      whole-file seam's file opens with its `#if` and closes with its `#endif`, and holds no other
-//      `#if`;
+//      exact seam row: a file, a module, how its imports are guarded and, for a transient row, the
+//      plan step that deletes it. A guarded seam's every import sits in its `#if` branch, never in
+//      its `#else`; a whole-file seam's file opens with its `#if` and closes with its `#endif`, and
+//      holds no other `#if`;
 //   2. no file names a source of the device's name (`UIDevice`, `Host.current`, `NSHost`, `hostName`,
 //      the SystemConfiguration, CoreServices and BSD calls, `localizedName`), but on the rows listed;
 //   3. no file names a platform directory (Application Support, Documents, Caches, Library, the
@@ -38,22 +43,21 @@
 //      native macOS, and the pre-push hook runs it; each read from what runs, never from a step's
 //      title, an `echo` or a comment, its readers fixtured both ways in the same cell.
 //
-// The first three rules are ratchets both ways. A new use fails; a use that goes away fails too, until
-// its row is deleted. Each transient row names the plan step that deletes it, and later steps only
-// delete rows, so the wall ends with its permanent rows: `ProtectedSidecar.swift`'s guarded UIKit
-// import (the protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's
-// file, guarded whole by `#if os(iOS)` since plan step A0.6.3. Today's rows are those 2 permanent
-// seams and nothing else: no device-name row, no directory row and no host-fact default. The
-// coordinator's, the mesh manager's and the recipe-share manager's vestigial UIKit imports left at plan
-// step A0.6.1, and the local name's UIKit import and its `UIDevice` read at A0.6.2, when the host began
-// stating the fallback name; at A0.6.3, when the doors began asking their host for each connection's
-// ranging provider, the NearbyInteraction provider's file was guarded whole; at A0.6.4 the Live Activity
-// reaper's ActivityKit import left with the reaper, which is the app's; and at A0.6.6, when the host
-// began stating the storage root, the namespace's Application Support default and the extension's
-// default root left. Since A0.6.5 ProximityKit's closure builds for native macOS on every push, the
-// compiler half, which refuses any symbol native macOS lacks wherever it stands outside its guard; this
-// scan is the source half, which also sees a platform fact that compiles on both platforms (a
-// directory, a device-name read, a host default), and its fifth rule keeps the compiler half running.
+// The first three rules are exact both ways: a new use fails, and a use that goes away fails too,
+// until its row is deleted. Every row is permanent: `ProtectedSidecar.swift`'s guarded UIKit import
+// (the protected-data retry, compiled only where UIKit is) and the NearbyInteraction provider's file,
+// guarded whole by `#if os(iOS)`. There is no device-name row, no directory row and no host-fact
+// default. The wall landed at plan step A0.6.0 as a ratchet over the tree before anything moved, with
+// seven seam rows, a device-name row, a directory row and a host-fact default, and each transient row
+// named the commit of plan step A0.6 that deleted it as its fact went to the host: the coordinator's,
+// the mesh manager's and the recipe-share manager's vestigial UIKit imports at A0.6.1; the local name's
+// UIKit import and its `UIDevice` read at A0.6.2, when the host began stating the fallback name; the
+// NearbyInteraction provider's unguarded import at A0.6.3, when the doors began asking their host for
+// each connection's ranging provider and the file was guarded whole, its row becoming the permanent
+// seam; the Live Activity reaper's ActivityKit import at A0.6.4, with the reaper, which is the app's;
+// and the namespace's Application Support default and the host extension's default root at A0.6.6,
+// when the host began stating the storage root. A row's exit step stays a field, so that a later step
+// can add a transient row with the step that deletes it, but no row carries one.
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -64,16 +68,16 @@ import Testing
 /// ProximityKit imports only neutral modules and its declared platform seams, reads no device name,
 /// computes no platform directory and defaults no fact only its host may state, every channel-ready
 /// door asks its host for each connection's ranging provider, and its native macOS build runs on every
-/// push: six cells, the first three rules ratchets whose transient rows name the plan step that deletes
-/// them, and their readers fixtured both ways.
+/// push: six cells, the first three rules exact both ways over rows that are all permanent, and their
+/// readers fixtured both ways.
 @Suite struct ProximityPlatformBoundaryTests {
 
     /// One ProximityKit file: its path under the module root and its lexed source, as
     /// `ProximityNamespaceBoundaryTests.proximitySources()` yields it.
     typealias Source = (path: String, lexed: SwiftSourceLexer.Lexed)
 
-    /// Fewer files than this and the walk is broken, not the module clean: ProximityKit holds 134 Swift
-    /// files at plan step A0.6.0.
+    /// Fewer files than this and the walk is broken, not the module clean: ProximityKit holds 135 Swift
+    /// files at the end of plan step A0.6 (134 at A0.6.0, before A0.6.3 added the no-op provider).
     static let minimumFilesWalked = 120
 
     // MARK: The rows
@@ -156,8 +160,8 @@ import Testing
         }
     }
 
-    /// The modules any ProximityKit file may import or test for: today's exact set outside the seams,
-    /// each one available on iOS and macOS alike. `FernletCrypto` and `FernletDomainModel` are the
+    /// The modules any ProximityKit file may import or test for: exactly the set it imports outside the
+    /// seams, each one available on iOS and macOS alike. `FernletCrypto` and `FernletDomainModel` are the
     /// target's two package dependencies (`ProximityNamespaceBoundaryTests.proximityKitDependencies`).
     static let baselineModules: Set<String> = [
         "Foundation", "Combine", "Observation", "CryptoKit", "Security", "Network", "os", "Synchronization",
@@ -237,7 +241,7 @@ import Testing
     /// module or an exact seam row, and every seam row's file still imports its module; a guarded row's
     /// imports sit in its `#if` branch and never its `#else`, and a whole-file row's file is that one
     /// `#if` from its first code line to its last. A platform framework enters ProximityKit only as a
-    /// row with its guard and the step that removes it.
+    /// row with its guard and, unless it is a permanent mechanism seam, the step that removes it.
     @Test func proximityKitImportsOnlyNeutralModulesAndItsDeclaredSeams() throws {
         let sources = try ProximityNamespaceBoundaryTests.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")

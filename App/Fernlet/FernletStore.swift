@@ -511,10 +511,9 @@ final class FernletStore {
     /// Note this is the OTHER side of the Phase-5 media-key split — the wall stays on the
     /// backup-restorable `friendWall` key — so it deliberately gets its own root rather than hanging
     /// off the own-photo one. Production always resolves to `Application Support/Fernlet`, the path
-    /// the cache has always used — `FernletConnections`' `FernletProximityStorage.productionDirectory`
-    /// since ProximityKit plan step A0.6.6, when ProximityKit stopped computing a directory for any
-    /// host (from plan step A0.2.8 until then, `ProximityNamespace.fernlet`'s default directory), which
-    /// builds it exactly as before; nothing shipped is migrated.
+    /// the cache has always used: `FernletConnections`' `FernletProximityStorage.productionDirectory`,
+    /// since ProximityKit computes no directory for any host (plan step A0.6); nothing shipped is
+    /// migrated.
     @ObservationIgnored nonisolated let proximitySupportRoot: URL
     /// Keychain service for THIS store's heart-drop material — the prekey private halves and the key
     /// that seals the three heart-drop sidecars, which live under one service by design so a

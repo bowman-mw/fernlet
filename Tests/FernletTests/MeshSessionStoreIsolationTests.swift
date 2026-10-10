@@ -94,7 +94,7 @@ struct MeshSessionStoreIsolationTests {
                 """
                 \(file) reaches a PRODUCTION storage scope through \(reads) — it shares the real file \
                 and the real keychain row with every concurrent suite. A shorthand \
-                `.production(for:installBinding:)` does not say which scope it builds (only the \
+                `.production(for:directory:installBinding:)` does not say which scope it builds (only the \
                 mesh-session and routed scopes declare it), so this wall and its routed twin both \
                 refuse it.
                 """

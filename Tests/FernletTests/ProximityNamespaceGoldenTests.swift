@@ -377,9 +377,9 @@ struct ProximityNamespaceGoldenTests {
     /// taking it from the host's namespace (``theIdentityKeychainServiceIsReadOffTheNamespace()``
     /// pins that read). Since step A0.2.8 the four accounts and both seal-key rows are read off
     /// `.fernlet` too, as the identity and the stores read them off the namespace they hold: a
-    /// production scope's service is the namespace's (`production(for:installBinding:)` reads it), and
-    /// that is what the two service rows read, never a production scope, whose spellings are banned by
-    /// substring in every other test file. The app's derivation of those services beside its
+    /// production scope's service is the namespace's (`production(for:directory:installBinding:)` reads
+    /// it), and that is what the two service rows read, never a production scope, whose spellings are
+    /// banned by substring in every other test file. The app's derivation of those services beside its
     /// heart-drop service is FernletSocial's, which this suite never imports: the isolation walls and
     /// `FernletFeatureGoldenTests` pin it.
     private static var keychainRows: [NamespaceGoldenRow] {

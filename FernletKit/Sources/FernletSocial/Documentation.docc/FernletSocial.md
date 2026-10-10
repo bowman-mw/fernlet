@@ -388,6 +388,9 @@ photo-session and friend-state values the mesh features carry; on `FernletFounda
 session heart carries; and on `PrivateMediaStore`, for the session photos' friend wall and sealed
 pending corpus, their keychain key providers and the capture's resize. It imports nothing else but
 Foundation, Observation, Security, CryptoKit and UIKit, whose `UIImage` the capture's resize reads.
+So it builds for iOS alone: the native macOS build plan step A0.6 added covers ProximityKit's closure,
+not this module, whose photo path (and `PrivateMediaStore`'s encoders under it) would need a UIKit-free
+twin, with goldens of its own, before a Mac host could link it.
 Its `PrivateMediaStore` edge puts it on the protected side of the S3 wall, as ProximityKit is: the walled
 `AIProviders` and `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's pair of

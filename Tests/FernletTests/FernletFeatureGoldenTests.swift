@@ -8,7 +8,7 @@
 // step A0.5 did the same for the features the routed mesh manager carried (the advertised
 // capabilities, the routed rows, bodies and senders, activities, the clothing shop, the moderation
 // relay, friend state, the vouch list and the session's photos, chat and hearts), splitting them out
-// of the engine into FernletSocial (§4 A0.5). Plan step A0.6 hands ProximityKit's platform facts to
+// of the engine into FernletSocial (§4 A0.5). Plan step A0.6 handed ProximityKit's platform facts to
 // its host, Fernlet's among them: the name an unnamed device advertises, the ranging provider each
 // connection's coordinator ranges with, the Live Activity reaper and the proximity root (§4 A0.6).
 // This suite holds each such byte to the value Fernlet ships: by a hand-written literal, and wherever

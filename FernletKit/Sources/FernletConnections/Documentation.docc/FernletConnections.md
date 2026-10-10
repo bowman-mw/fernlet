@@ -79,18 +79,7 @@ Fernlet always shipped:
   accounts, the mesh stores' file names, chunk directory and seal-key accounts, the production
   seal-key services and the folder the app's proximity root is named for.
 
-**The proximity root.** ProximityKit computes no directory (plan step A0.6.6): every host states the
-root of its proximity files, `ProximityHost.proximitySupportDirectory`, which has no default.
-``FernletProximityStorage`` (`FernletProximityStorage.swift`) is Fernlet's:
-``FernletProximityStorage/productionDirectory`` is `.fernlet`'s installation folder under the app
-container's Application Support, `Application Support/Fernlet`, built by
-`installation.storage.directory(under:)` exactly as ProximityKit built every host's default root
-before, so no path moved. The app's store resolves its root from it when a test hands it none, the
-crypto-format census reads it, and `FernletSocial`'s production heart-drop scope files under it, which
-is why it lives here rather than in the app: `FernletSocial` cannot see the app.
-`FernletFeatureGoldenTests` holds the path, and each of those sites, to it.
-
-Twelve of the test target's seventeen `ProximityHost` doubles supply the same value (the other five,
+Twelve of the test target's seventeen `ProximityHost` doubles supply the same namespace (the other five,
 `ProximityNamespaceGoldenTests`' three hosts and `ProximityVocabularyGoldenTests`' two, take theirs
 from the cell that builds them: another app's, or Fernlet's with some of its groups replaced, in the
 cells that test one). The test target's `ProximityNamespaceTestBindings.swift` restores, by passing
@@ -99,6 +88,17 @@ shapes, the routed and QR shapes, the radios' argument-less initializers, the se
 identity-row classifier. The identity's argument-less and keychain-service initializers are
 `FernletAppTestBindings.swift`'s, which builds them under `.fernlet` with the app's sealed-backup
 escrow key, what every identity the app builds carries.
+
+**The proximity root.** ProximityKit computes no directory (plan step A0.6): every host states the
+root of its proximity files, `ProximityHost.proximitySupportDirectory`, which has no default.
+``FernletProximityStorage`` (`FernletProximityStorage.swift`) is Fernlet's:
+``FernletProximityStorage/productionDirectory`` is `.fernlet`'s installation folder under the app
+container's Application Support, `Application Support/Fernlet`, built by
+`installation.storage.directory(under:)`: the path Fernlet's proximity files have always used. The
+app's store resolves its root from it unless a test hands it one of its own, the crypto-format census
+reads it, and `FernletSocial`'s production heart-drop scope files under it, which is why it lives here
+rather than in the app: `FernletSocial` cannot see the app. `FernletFeatureGoldenTests` holds the
+path, and each of those sites, to it.
 
 **The feature salts.** `FernletFeaturePurposes.swift` holds ``FernletFeaturePurposes``, Fernlet's
 feature labels that a ProximityKit door consumes: `heartDropPairV1` (`fernlet.heartdrop.v1`) and
