@@ -3982,17 +3982,27 @@ struct FernletFeatureGoldenTests {
     }
 
     /// **31d.** The recipe status lines and diagnostics are their frozen sentences, path by path, each
-    /// on a fresh rig marked running, its final status line and the diagnostics it appended in order:
-    /// a recipient that was never discovered, another connection in flight, a pairing held with another
-    /// device (and a search refreshed under it), a peer that never answers, a pairing lost before the
-    /// send, a radio failure while idle and a radio that cannot start.
+    /// on a fresh rig, its final status line and the diagnostics it appended in order: a recipient that
+    /// was never discovered, another connection in flight, a pairing held with another device (and a
+    /// search refreshed under it), a search refreshed with no pairing, a peer that never answers, a
+    /// pairing lost before the send, a third device turned away at the channel-ready door, a pairing
+    /// parked past the sweep's budget, a radio failure while idle and a radio that cannot start, each on
+    /// a rig marked running but the last; and, each after a recipe pairing through the production door,
+    /// a send whose payload cannot be encoded, a send whose record has already begun, and a send that
+    /// completes after a newer one began.
     @Test func theRecipeStatusLinesAndDiagnosticsAreTheirFrozenSentences() async throws {
         try Self.expectRecipeRefusalPaths()
         try Self.expectRecipePairedWithAnotherPath()
         try Self.expectRecipeRefreshWhilePairedPath()
+        try Self.expectRecipeRefreshWhileIdlePath()
         try await Self.expectRecipeNoAnswerPath()
         try Self.expectRecipeLostPairingPath()
+        try Self.expectRecipeTurnedAwayPath()
+        try Self.expectRecipeParkedSweepPath()
         try Self.expectRecipeRadioFailurePaths()
+        try await Self.expectRecipeSendFailedPath()
+        try await Self.expectRecipeDuplicateSendPath()
+        try await Self.expectRecipeCompletionNotCountedPath()
     }
 
     /// 31d's two refusals before a dial: a recipient the radio never discovered, and Blair while a
@@ -4050,6 +4060,20 @@ struct FernletFeatureGoldenTests {
         #expect(rig.messages.last == "Search skipped — already paired with Casey.", "the refresh recorded \(rig.messages.last ?? "nothing")")
     }
 
+    /// 31d's refreshed search: with no pairing held, a refresh drops Blair's row and restarts the search.
+    static func expectRecipeRefreshWhileIdlePath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        rig.radio.onPeerDiscovered?(Self.recipePeer(named: "Blair"))
+        let before = rig.messages.count
+        rig.manager.refreshDiscovery()
+        #expect(rig.manager.sendState == .idle, "a refresh with no pairing leaves \(rig.manager.sendState)")
+        #expect(rig.manager.nearbyRecipients.isEmpty, "a refresh kept \(rig.manager.nearbyRecipients.count) rows")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Recipe share discovery refreshed.", "Recipe share discovery started."],
+                "a refresh with no pairing recorded \(tail)")
+    }
+
     /// 31d's connect timeout, over a real 50 ms timer: the waiter gives up only past a deadline AND a
     /// poll floor, and the status line is read in the turn the outcome is first seen, before its 2.5 s
     /// clear.
@@ -4089,6 +4113,43 @@ struct FernletFeatureGoldenTests {
                 "a pairing lost before the send recorded \(tail)")
     }
 
+    /// 31d's door under the cap: with a pairing held with Casey, the channel Dana's device opens is turned
+    /// away at the channel-ready door, her tunnel ended and Casey's pairing kept.
+    static func expectRecipeTurnedAwayPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let casey = Self.recipePeer(named: "Casey")
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: casey, transport: rig.radio.channel(for: casey), ranging: NoopRangingProvider())
+        let dana = Self.recipePeer(named: "Dana")
+        let before = rig.messages.count
+        rig.radio.onPeerChannelReady?(rig.radio.channel(for: dana))
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Turned away Dana — recipe sharing links two Fernlets at a time."], "a third device's channel recorded \(tail)")
+        #expect(rig.radio.endedTunnels.map(\.id) == [dana.id], "the door ended \(rig.radio.endedTunnels.count) tunnels, not Dana's alone")
+        #expect(rig.manager.connectionCountForTesting == 1, "the door left \(rig.manager.connectionCountForTesting) pairings")
+        #expect(rig.manager.sendState == .idle, "a third device's channel leaves \(rig.manager.sendState)")
+    }
+
+    /// 31d's parked sweep: Casey's pairing, parked before verification for the sweep's 30 s budget, is
+    /// dropped and the search reopens.
+    static func expectRecipeParkedSweepPath() throws {
+        let rig = try RecipePairingRig(running: true)
+        defer { rig.tearDown() }
+        let casey = Self.recipePeer(named: "Casey")
+        _ = rig.manager.makeRetainedConnectionCoordinatorForTesting(
+            peer: casey, transport: rig.radio.channel(for: casey), ranging: NoopRangingProvider())
+        let parked = Date(timeIntervalSinceReferenceDate: 780_000_000)
+        rig.manager.sweepParkedConnections(now: parked)
+        let before = rig.messages.count
+        rig.manager.sweepParkedConnections(now: parked.addingTimeInterval(30))
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Dropped stalled connection to Casey.", "Recipe sharing reopened to nearby Fernlets."],
+                "a pairing parked past the sweep's budget recorded \(tail)")
+        #expect(rig.manager.connectionCountForTesting == 0, "the sweep left \(rig.manager.connectionCountForTesting) pairings")
+        #expect(rig.manager.sendState == .idle, "a swept pairing leaves \(rig.manager.sendState)")
+    }
+
     /// 31d's two radio failures: a failure the radio reports while the manager is idle, which stands it
     /// down, and a start that throws.
     static func expectRecipeRadioFailurePaths() throws {
@@ -4109,6 +4170,73 @@ struct FernletFeatureGoldenTests {
                                      "Recipe share discovery stopped.",
                                      "Recipe share radio failed to start — listening will retry on the next app event."],
                 "a refused start recorded \(refused.messages)")
+    }
+
+    /// 31d's failed send: the pairing verifies, and the payload cannot be encoded (its date is not a
+    /// number, which `JSONEncoder` refuses), so the share fails while sending, nothing handed over; the
+    /// status line read in the outcome's turn.
+    static func expectRecipeSendFailedPath() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        var unencodable = Self.recipeOatsPayload(id: UUID())
+        unencodable.sentAt = Date(timeIntervalSinceReferenceDate: .nan)
+        var state: ProximityRecipeShareManager.SendState?
+        let run = try await Self.runRecipePairing(on: rig, sending: unencodable) { state = rig.manager.sendState }
+        #expect(state == .failed(message: "Could not send that recipe."), "a send that threw leaves \(String(describing: state))")
+        #expect(rig.manager.lastShareOutcome?.result == .notSent(.interrupted), "the send ended \(String(describing: rig.manager.lastShareOutcome))")
+        let tail = Array(run.diagnostics.suffix(2))
+        #expect(tail == ["Sending Shared Oats to Blair.", "Recipe share failed while sending to Blair."], "a send that threw recorded \(tail)")
+        #expect(!Self.sentFrames(of: rig.radio).contains { $0.payloadTypeToken == "fernlet.recipe.share.v1" }, "a share that could not be encoded was sent")
+    }
+
+    /// 31d's refused second start: after the pairing's share is sent the user sends again, and that share's
+    /// record has already begun when its send runs (moved there through the transfer seam), so the
+    /// exchange's once-only start refuses it, and no outcome is published for it.
+    static func expectRecipeDuplicateSendPath() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        _ = try await Self.runRecipePairing(on: rig)
+        let row = try #require(rig.manager.nearbyRecipients.first, "Blair's row is gone")
+        let before = rig.messages.count
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        rig.manager.applyTransferForTesting(.sendBegan(wireByteCount: 1))
+        let refused = "Could not send that recipe."
+        let settled = await VocabularyCoordinatorRig.settle { rig.manager.sendState == .failed(message: refused) }
+        #expect(settled, "a send whose record had begun leaves \(rig.manager.sendState)")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Connecting to Blair.", "Sending Shared Oats to Blair.", "Refused a second send of Shared Oats."],
+                "a send whose record had begun recorded \(tail)")
+        #expect(rig.manager.lastShareOutcome == nil, "the refused start published \(String(describing: rig.manager.lastShareOutcome))")
+    }
+
+    /// 31d's uncounted completion: after the pairing's share is sent the user sends again, and while that
+    /// send is on the wire sends `Later Oats`, so the earlier send completes against the newer record and
+    /// is not counted, and `Later Oats` is sent.
+    static func expectRecipeCompletionNotCountedPath() async throws {
+        let rig = try RecipePairingRig()
+        defer { rig.tearDown() }
+        _ = try await Self.runRecipePairing(on: rig)
+        let row = try #require(rig.manager.nearbyRecipients.first, "Blair's row is gone")
+        var renamed = Self.recipeOatsPayload(id: UUID())
+        renamed.recipe.saved?.name = "Later Oats"
+        let later = renamed
+        rig.radio.onSend = { _, _ in
+            guard Self.sentFrames(of: rig.radio).filter({ $0.payloadTypeToken == "fernlet.recipe.share.v1" }).count == 2 else { return }
+            rig.radio.onSend = nil
+            rig.manager.sendRecipeShare(later, to: row)
+        }
+        let before = rig.messages.count
+        rig.manager.sendRecipeShare(Self.recipeOatsPayload(id: UUID()), to: row)
+        let published = await VocabularyCoordinatorRig.settle { rig.manager.lastShareOutcome != nil }
+        #expect(published, "no outcome was published")
+        let subject = rig.manager.lastShareOutcome.map(Self.outcomeSubject)
+        #expect(subject == "Later Oats", "the outcome names \(subject ?? "nothing")")
+        #expect(rig.manager.sendState == .sent(recipientName: "Blair"), "the status line reads \(rig.manager.sendState)")
+        let tail = Array(rig.messages.dropFirst(before))
+        #expect(tail == ["Connecting to Blair.", "Sending Shared Oats to Blair.", "Connecting to Blair.",
+                         "A send completed against a newer share record — completion not counted.",
+                         "Sending Later Oats to Blair.", "Sent Later Oats to Blair."],
+                "a send that completed after a newer one began recorded \(tail)")
     }
 
     /// 31f's recipe profile: the audit area `recipeShare`, the recipe radio's row
@@ -6697,19 +6825,20 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Runs one recipe pairing through the production door over `rig`: Blair (``recipePeerTXT``) is
-    /// discovered, the user sends ``recipeOatsPayload(id:)`` to her row (which starts the manager), the
-    /// radio hands the channel-ready door her channel, and once the door's coordinator has introduced
-    /// itself Blair introduces herself (`rssi`, no capabilities, no name) on that channel. Waits until the
-    /// share's outcome is published and, in that turn, runs `atOutcome` and reads the diagnostics. Every
-    /// wait is a bounded run of yields: the whole flow stays on the main actor's queue.
+    /// discovered, the user sends `payload` (``recipeOatsPayload(id:)`` for ``recipeFixtureID`` when nil)
+    /// to her row (which starts the manager), the radio hands the channel-ready door her channel, and once
+    /// the door's coordinator has introduced itself Blair introduces herself (`rssi`, no capabilities, no
+    /// name) on that channel. Waits until the share's outcome is published and, in that turn, runs
+    /// `atOutcome` and reads the diagnostics. Every wait is a bounded run of yields: the whole flow stays
+    /// on the main actor's queue.
     static func runRecipePairing(
-        on rig: RecipePairingRig, atOutcome: () -> Void = {}
+        on rig: RecipePairingRig, sending payload: ProximityRecipeSharePayload? = nil, atOutcome: () -> Void = {}
     ) async throws -> RecipePairingRun {
         let peer = PeerHandle(id: UUID(), displayHint: "", discoveryInfo: recipePeerTXT,
                               advertisedFingerprint: nil, endpoint: PeerEndpointKey())
         rig.radio.onPeerDiscovered?(peer)
         let row = try #require(rig.manager.nearbyRecipients.first, "the discovered peer was never listed")
-        rig.manager.sendRecipeShare(recipeOatsPayload(id: uuid(recipeFixtureID)), to: row)
+        rig.manager.sendRecipeShare(payload ?? recipeOatsPayload(id: uuid(recipeFixtureID)), to: row)
         let channel = rig.radio.channel(for: peer)
         rig.radio.onPeerChannelReady?(channel)
         let introduced = await VocabularyCoordinatorRig.settle {

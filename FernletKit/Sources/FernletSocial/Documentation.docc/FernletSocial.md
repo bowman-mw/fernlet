@@ -376,10 +376,11 @@ under FernletConnections' recipe profile on its host's own namespace
 area `recipeShare`). The mechanism is the session's: discovery, the hard two-device cap, the identity
 handshake and commit, the status line with its 2.5 s clear, and the send outcome, each published to
 the share sheet through this manager's computed reads (`nearbyRecipients`, `sendState`,
-`lastShareOutcome`, `engagedRecipientID`, `isListening`), so a view observing the manager re-renders
-on the session's writes. What is the recipe's is here: the payload (``ProximityRecipeSharePayload``,
-`Wire/RecipeSharePayloads.swift`) and the summary `Recipe share` over its ingredient count, signed into
-every recipe envelope and never localized; the inbound rules (it is the session's payload handler: a
+`lastShareOutcome`, `engagedRecipientID`), so a view observing the manager re-renders on the session's
+writes. `isListening`, the radio's own account of whether it is up, is read through too but not
+observed: the app's run-policy seam reads it on each run. What is the recipe's is here: the payload
+(``ProximityRecipeSharePayload``, `Wire/RecipeSharePayloads.swift`) and the summary `Recipe share`
+over its ingredient count, signed into every recipe envelope and never localized; the inbound rules (it is the session's payload handler: a
 1 MiB size gate before decoding, the format and version check, the 512 KiB image drop, the review
 clamps, a 3 s per-sender rate limit and an eight-share queue, ``PendingProximityRecipeShare``); and the
 English the share sheet shows, rendered from the session's typed status and events by one renderer
@@ -405,11 +406,13 @@ declared salts the heart-drop and presence pair secrets derive under, the recipe
 profile, `ProximityPairProfile.recipeShare(in:)`,
 `FernletProximityStorage.productionDirectory`, Fernlet's proximity root, which is the production
 heart-drop scope's directory, `ProximityNamespace.fernlet`, whose routed types ``FernletRoutedTypes``
-reads, and the name placeholders,
+reads, the name placeholders,
 `PeerNameDisplay.firstName` among them, which presence's `PresenceManager.firstName(of:in:)`
-delegates to; on `FernletCrypto`, for the dead-drop's, presence's and the ban store's registry labels
-and the activities' and the moderation report's four signing labels; on `FernletDomainModel`, for the
-heart, moderation, closeness, friend-state and companion value types the stores keep, the friend
+delegates to, and the signed envelope's typed view (`payloadType`, the typed initializer and the typed
+`signed`), which the heart dead-drop signs and reads through and presence, the clothing shop and
+recipe sharing read through; on `FernletCrypto`, for the dead-drop's, presence's and the ban store's
+registry labels and the activities' and the moderation report's four signing labels; on
+`FernletDomainModel`, for the heart, moderation, closeness, friend-state and companion value types the stores keep, the friend
 records the dead-drop, presence and the session hearts read, the dead-drop's transport seam, the
 payload types and capabilities the features register, send and check, the activity, clothing,
 photo-session and friend-state values the mesh features carry, and the recipe payload's models

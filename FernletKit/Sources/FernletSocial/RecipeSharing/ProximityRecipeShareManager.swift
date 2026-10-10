@@ -287,14 +287,17 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
 
 // MARK: - The English the share sheet shows
 
-/// The renderer: the one place the recipe share's status line and diagnostics become English.
+/// The renderer: where the pair session's typed status and events become English, the status line and
+/// every diagnostic the session's events add; the receive handler's four diagnostics are its own
+/// literals, written where it decides.
 ///
-/// Every sentence is a frozen literal the share sheet renders verbatim (`Text(verbatim:)`) and the
-/// recipe battery asserts by substring, so each is byte for byte the sentence the mechanism once
-/// composed at its site. The switches are exhaustive with no `default`: a new
-/// ``ProximityPairSession/Status/Failure`` or ``ProximityPairSession/Event`` case is a build error
-/// here until it has its sentence. `FernletFeatureGoldenTests` 31e renders every case with distinct
-/// arguments against its frozen sentence.
+/// Every sentence is a frozen literal the share sheet renders as written (the status line through
+/// `Text(verbatim:)`, each diagnostic as its own string) and the recipe battery asserts by substring,
+/// so each is byte for byte the sentence the mechanism once composed at its site. The switches are
+/// exhaustive with no `default`: a new ``ProximityPairSession/Status/Failure`` or
+/// ``ProximityPairSession/Event`` case is a build error here until it has its sentence.
+/// `FernletFeatureGoldenTests` 31e renders every case with distinct arguments against its frozen
+/// sentence.
 extension ProximityRecipeShareManager {
 
     /// The status line the share sheet shows for `status`: the same case with the same name, and a

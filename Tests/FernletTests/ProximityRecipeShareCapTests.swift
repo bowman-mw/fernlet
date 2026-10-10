@@ -23,8 +23,9 @@
 //
 // The observation cell (`theManagersObservablesFollowItsPairSession`) holds the four values the share
 // sheet observes (the recipient rows, the status line, the outcome and the engaged row) to the
-// notifications SwiftUI redraws on, a discovery and a failed share each notifying an observer of the
-// manager, whether the manager stores those values itself or forwards them from a session it drives.
+// notifications SwiftUI redraws on, each through an observation of the manager that reads it alone: a
+// discovery notifies the rows' and a failed share the other three's, whether the manager stores those
+// values itself or forwards them from a session it drives.
 
 @testable import ProximityKit
 import FernletSocial
@@ -1116,54 +1117,66 @@ struct ProximityRecipeShareCapTests {
     // MARK: - Observation
 
     /// The four observables the share sheet reads (the recipient rows, the status line, the outcome and
-    /// the engaged row) notify an observer when the radio discovers a peer and when a share fails, the
-    /// changes SwiftUI redraws the sheet on. Whatever holds those values, the manager's stored
-    /// properties or a session it forwards them from, an observer of the manager must hear both.
+    /// the engaged row) each notify an observer that reads it alone, on the changes SwiftUI redraws the
+    /// sheet on: a discovery notifies the rows' observer and no other, and a failed share (which engages
+    /// the picked row and releases it) the status line's, the outcome's and the engaged row's, and not
+    /// the rows'. One observation per value, because `withObservationTracking` fires once per
+    /// registration, on the first change to anything it read: one registration over all four would hear
+    /// the status line and say nothing of the other three. Whatever holds those values, the manager's
+    /// stored properties or a session it forwards them from, an observer of the manager must hear each.
     @Test func theManagersObservablesFollowItsPairSession() {
         let host = RecipeCapTestHost()
         let radio = FakeRecipeShareRadioSession()
         let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
-        let discovery = RecipeShareObservationRecorder()
-        withObservationTracking {
-            Self.readSheetObservables(of: manager)
-        } onChange: {
-            MainActor.assumeIsolated { discovery.recordChange() }
-        }
+        let discovery = Self.observeSheetObservables(of: manager)
         radio.onPeerDiscovered?(makePeer(named: "Blair"))
-        #expect(discovery.changes == 1, "a discovery notified the sheet \(discovery.changes) times")
+        #expect(discovery.changes == ["rows": 1, "status": 0, "outcome": 0, "engaged": 0],
+                "a discovery notified the sheet's observers \(discovery.changes)")
         #expect(manager.nearbyRecipients.count == 1, "the discovery listed \(manager.nearbyRecipients.count) rows")
 
-        let failure = RecipeShareObservationRecorder()
-        withObservationTracking {
-            Self.readSheetObservables(of: manager)
-        } onChange: {
-            MainActor.assumeIsolated { failure.recordChange() }
-        }
+        let failure = Self.observeSheetObservables(of: manager)
         let gone = ProximityPairPeer(id: UUID(), displayName: "Gone", fingerprint: nil)
         manager.sendRecipeShare(makePayload(), to: gone)
-        #expect(failure.changes == 1, "a failed share notified the sheet \(failure.changes) times")
+        #expect(failure.changes == ["rows": 0, "status": 1, "outcome": 1, "engaged": 1],
+                "a failed share notified the sheet's observers \(failure.changes)")
         #expect(manager.sendState == .failed(message: "That nearby Fernlet is no longer available."),
                 "the status line reads \(manager.sendState)")
         #expect(manager.lastShareOutcome?.result == .notSent(.recipientUnavailable),
                 "the share ended \(String(describing: manager.lastShareOutcome?.result))")
+        #expect(manager.engagedRecipientID == nil, "the failed share left \(String(describing: manager.engagedRecipientID)) engaged")
     }
 
-    /// Reads the four observables the share sheet reads, so an observation tracks them.
-    private static func readSheetObservables(of manager: ProximityRecipeShareManager) {
-        _ = manager.nearbyRecipients
-        _ = manager.sendState
-        _ = manager.lastShareOutcome
-        _ = manager.engagedRecipientID
+    /// Registers one observation for each of the four observables the share sheet reads, each reading
+    /// that value alone, and returns the recorder their notifications land in, keyed `rows`, `status`,
+    /// `outcome` and `engaged`.
+    private static func observeSheetObservables(of manager: ProximityRecipeShareManager) -> RecipeShareObservationRecorder {
+        let recorder = RecipeShareObservationRecorder()
+        let reads: [(key: String, read: () -> Void)] = [
+            ("rows", { _ = manager.nearbyRecipients }),
+            ("status", { _ = manager.sendState }),
+            ("outcome", { _ = manager.lastShareOutcome }),
+            ("engaged", { _ = manager.engagedRecipientID })
+        ]
+        // R2: bounded by the four observables.
+        for entry in reads {
+            withObservationTracking {
+                entry.read()
+            } onChange: {
+                MainActor.assumeIsolated { recorder.recordChange(entry.key) }
+            }
+        }
+        return recorder
     }
 }
 
-/// Counts the notifications one observation delivered: `withObservationTracking` fires its handler once
-/// per registration, so a count above zero is that registration's change, and zero is none.
+/// Counts the notifications each of several observations delivered, by the key of the value it read:
+/// `withObservationTracking` fires its handler once per registration, so 1 is that registration's
+/// change and 0 is none.
 private final class RecipeShareObservationRecorder {
-    /// How many notifications arrived.
-    private(set) var changes = 0
+    /// How many notifications arrived for each key, every key registered at zero.
+    private(set) var changes: [String: Int] = ["rows": 0, "status": 0, "outcome": 0, "engaged": 0]
 
-    /// Notes one notification.
-    func recordChange() { changes += 1 }
+    /// Notes one notification for `key`.
+    func recordChange(_ key: String) { changes[key, default: 0] += 1 }
 }

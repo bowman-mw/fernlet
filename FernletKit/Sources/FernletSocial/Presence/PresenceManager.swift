@@ -67,7 +67,7 @@ import ProximityKit
 /// for it (`ProximityHost.makeProximityTrustPolicy()`)
 /// for the connection's lifetime so the coordinator's `weak` trustPolicy stays alive (the
 /// revoked/blocked-key envelope rejection + audit calls silently no-op otherwise) — mirrors the
-/// recipe manager's `RecipeShareConnection`.
+/// pair session's `PairConnection` (ProximityKit's `ProximityPairSession.swift`).
 private struct PresenceHeartConnection: Identifiable {
     let id: UUID
     let peer: PeerHandle

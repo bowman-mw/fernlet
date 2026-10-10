@@ -72,6 +72,10 @@ final class FakeRecipeShareRadioSession: RecipeShareRadioSession, NetworkChannel
 
     var connectedPeers: [PeerHandle] = []
 
+    /// Called with each frame `send` is handed, after it is recorded and before the send returns: a
+    /// cell's way to act while a send is still in flight.
+    var onSend: ((PeerHandle, Data) -> Void)?
+
     func start(advertisement: [String: String]) throws {
         if let startError { throw startError }
         advertised.append(advertisement)
@@ -117,6 +121,7 @@ final class FakeRecipeShareRadioSession: RecipeShareRadioSession, NetworkChannel
 
     func send(_ data: Data, to peer: PeerHandle, mode: PeerDeliveryMode) async throws {
         sent.append((peer, data))
+        onSend?(peer, data)
     }
 
     func openTransferCount(for peer: PeerHandle) -> Int { 0 }

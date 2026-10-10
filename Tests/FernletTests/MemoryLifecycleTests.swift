@@ -8,7 +8,8 @@
 //  - ObservationLoop must not PIN its owner across the suspension (the "loop ends on owner
 //    dealloc" header was void: a `guard let owner` above the await held the owner, and every slot,
 //    coordinator and transport it owns, until a change that could no longer come).
-//  - The three proximity managers must deallocate when released, with or without `stop()`.
+//  - The three proximity managers must deallocate when released, with or without `stop()`, and so
+//    must the pair session the recipe-share manager drives, which holds its radio and its tasks.
 //  - MeshNetworkManager must free the transport link (the MC link then, the QUIC tunnel now) of every slot it evicts (a zombie link ate one of
 //    MC's 8 peer slots and made re-forming a slot with that peer impossible for the search).
 //  - PresenceManager must release a discovered peer whose match a re-evaluation dropped, and must
@@ -232,15 +233,21 @@ struct ProximityManagerDeallocationTests {
         #expect(weakManager == nil, "PresenceManager must deallocate even when stop() was skipped")
     }
 
+    /// The recipe-share manager and the pair session it drives, which holds the radio, the observation
+    /// loop and the timers, both deallocate when released without `stop()`: the session holds the
+    /// manager only weakly, so the manager's release alone says nothing of the session's.
     @Test func recipeShareManagerDeallocatesWithoutStop() async {
         weak var weakManager: ProximityRecipeShareManager?
+        weak var weakSession: ProximityPairSession?
         do {
             let manager = ProximityRecipeShareManager(store: store)
             weakManager = manager
+            weakSession = manager.pairSession
             manager.markRunningForTesting()
         }
-        await waitUntil { weakManager == nil }
+        await waitUntil { weakManager == nil && weakSession == nil }
         #expect(weakManager == nil, "ProximityRecipeShareManager must deallocate even when stop() was skipped")
+        #expect(weakSession == nil, "the ProximityPairSession it drives must deallocate with it")
     }
 
     /// CONTROL for the cell below, in the PRODUCTION ownership shape the three cells above cannot
