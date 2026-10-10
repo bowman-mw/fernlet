@@ -502,7 +502,7 @@ struct SealedIntroductionTests {
         // Heart delivered end-to-end over the verified sealed connection.
         let heart = HeartPayload(sentAtDayKey: "2026-07-11")
         try await coordA.sendPayload(
-            type: .friendHeart,
+            payloadTypeToken: PayloadType.friendHeart.rawValue,
             summary: PayloadSummary(title: "Good vibes"),
             payload: try JSONEncoder().encode(heart),
             sealed: true)

@@ -5364,7 +5364,7 @@ extension FernletFeatureGoldenTests {
         (recipeDoorPath, nil, "JSONEncoder().encode(", 1),
         (recipeDoorPath, nil, #""recipeShare.identity.namespaceMismatch""#, 2),
         (recipeDoorPath, nil, #""recipeShare.identity.provisionFailed""#, 1),
-        (heartDeliveryPath, "private func deliverHeart(via connection:", "type: .friendHeart", 1),
+        (heartDeliveryPath, "private func deliverHeart(via connection:", "payloadTypeToken: PayloadType.friendHeart.rawValue", 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", #"PayloadSummary(title: "Good vibes")"#, 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", "sealed: true", 1)
     ]

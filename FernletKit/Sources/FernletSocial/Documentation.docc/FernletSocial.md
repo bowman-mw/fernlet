@@ -358,13 +358,15 @@ over (`ProximityCoordinator`, with `ProximityPayloadHandling`, the host's rangin
 watches its coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name coercion
 `ProximityDisplayName.peerDisplayName(_:in:)`, which every feature here re-moderates a peer's name
 through, the name display `PeerNameDisplay` (its identifier filter, which `FernletConnections`'
-`firstName` runs first) and the recipe-share diagnostics types its connection log rides. Two groups
-of `package` doors, each of which `ProximityNamespaceBoundaryTests` lists with its exit: the presence
-radio's seam (`PresenceRadioSession`), its QUIC conformer (`NetworkPresenceSession`), the peer
-channel a heart connection runs over (`NetworkPeerChannel`), the epoch posture
-(`PresenceEpochPosture`) and the TXT vocabulary (`PresenceAdvertisement`), until A1, when the seam is
-published as mechanism or wrapped by a presence engine; and the coordinator's typed send and manual
-commit, which presence's heart delivery calls, until A0.7.
+`firstName` runs first) and the recipe-share diagnostics types its connection log rides. A heart
+connection sends and commits through the coordinator's public per-connection API: its token send,
+`sendPayload(payloadTypeToken:summary:payload:sealed:)`, under `PayloadType.friendHeart`'s raw value,
+and its manual commit, `commitManualProximity()`. The `package` doors, each of which
+`ProximityNamespaceBoundaryTests` lists with its exit: the presence radio's seam
+(`PresenceRadioSession`), its QUIC conformer (`NetworkPresenceSession`), the peer channel a heart
+connection runs over (`NetworkPeerChannel`), the epoch posture (`PresenceEpochPosture`) and the TXT
+vocabulary (`PresenceAdvertisement`), until A1, when the seam is published as mechanism or wrapped by
+a presence engine.
 
 **What is still in ProximityKit.** The presence radio itself (its seam and QUIC conformer, its epoch
 posture and TXT vocabulary), the mechanism presence drives, and the routed mesh engine the mesh

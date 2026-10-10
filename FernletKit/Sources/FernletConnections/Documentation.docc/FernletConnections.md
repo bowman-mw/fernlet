@@ -309,8 +309,9 @@ service type: ProximityKit has neither, every caller passing the host's resolved
 radios owning discovery on the namespace's service types. ProximityKit still names
 FernletDomainModel's `PayloadType` and `ProximityMode` only on the lines
 `ProximityNamespaceBoundaryTests` allowlists: the typed doors only the recipe-share manager and
-Fernlet's features go through (the envelope's typed view of its token and the coordinator's typed
-send), which leave with the recipe profile (A0.7), and the coordinator's session-mode alias, which
+Fernlet's features go through (the envelope's typed view of its token, and the coordinator's typed
+send, a forwarder to its public token send that only the recipe-share manager still calls), which
+leave with the recipe profile (A0.7), and the coordinator's session-mode alias, which
 the connection profiles replace (A0.7, C5). The heart-drop and presence pair secrets derive through the door under the two
 salts declared here, from `FernletSocial`. C1
 adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the

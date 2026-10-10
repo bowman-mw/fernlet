@@ -30,8 +30,9 @@
 //      per-file, per-type allowlist of the lines that leave with the recipe profile (A0.7) or with the
 //      session profile (A0.7 / C5): 5 lines in 2 files;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
-//      later step reshapes or closes, each row with that step (38 lines in 5 files: the presence
-//      radio's, until A1, and the coordinator's two, until A0.7);
+//      later step reshapes or closes, each row with that step (37 lines in 5 files: the presence
+//      radio's, until A1, and the coordinator's typed send, a forwarder the recipe-share manager calls,
+//      until A0.7);
 //   6. no type that left ProximityKit for FernletSocial or the app (76 names: the heart dead-drop's,
 //      presence's, moderation's (the report relay's among them), closeness's and friend state's types,
 //      the parked chat payload, the clothing shop's, the activity manager's with its payloads and the
@@ -67,7 +68,7 @@
 // doors ProximityKit opens to Fernlet's own modules while a later step reshapes what is behind them:
 // the presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch posture
 // and the TXT vocabulary, which FernletSocial's presence manager drives (until A1); the coordinator's
-// typed send and manual commit, which presence's heart delivery and the recipe-share manager call
+// typed send, a forwarder to its public token send that only the recipe-share manager still calls
 // (until A0.7).
 
 import Foundation
@@ -818,8 +819,8 @@ private extension UInt8 {
     /// is used. So the list is exact both ways, like rules 3 and 4: a new `package` line fails until a
     /// row names why it is there and its exit, and a line that goes away fails until its row is
     /// lowered or deleted, so no door outlives its step unnoticed. ProximityKit declares `package` on
-    /// 38 code lines in 5 files: the presence radio's doors (36 lines in 4 files, until A1) and the
-    /// coordinator's two (until A0.7). Every code line on which
+    /// 37 code lines in 5 files: the presence radio's doors (36 lines in 4 files, until A1) and the
+    /// coordinator's typed send (until A0.7). Every code line on which
     /// `package` is an access modifier counts, once, however its declaration goes on
     /// (``packageDeclarationPattern``), a setter's `package(set)` included; comments and literals may
     /// say `package` freely, and code may use it as a name.
@@ -957,10 +958,10 @@ private extension UInt8 {
 
     /// Every file whose code declares `package`, by path under the module root, each row with the
     /// step that closes its doors: the presence radio's seam, its QUIC conformer, the peer channel the
-    /// seam names, the epoch posture and the TXT vocabulary (A1), and the coordinator's typed send and
-    /// manual commit (A0.7).
+    /// seam names, the epoch posture and the TXT vocabulary (A1), and the coordinator's typed send
+    /// (A0.7).
     static let packageDeclarationLines: [String: PackageLines] = [
-        "Engine/ProximityCoordinator.swift": PackageLines(lines: 2, reason: .coordinatorDoors),
+        "Engine/ProximityCoordinator.swift": PackageLines(lines: 1, reason: .coordinatorDoors),
         "Presence/PresenceAdvertisement.swift": PackageLines(lines: 4, reason: .presenceRadioSeam),
         "Presence/PresenceEpochPosture.swift": PackageLines(lines: 5, reason: .presenceRadioSeam),
         "Transport/NetworkMeshSession.swift": PackageLines(lines: 12, reason: .presenceRadioSeam),
@@ -1278,9 +1279,9 @@ private extension UInt8 {
     enum ExitStep: String, Sendable {
         /// The one-to-one radio becomes a profile-driven pair session (A0.7): the recipe-share
         /// manager, its wire types and the doors only it and its radio still go through leave with
-        /// the recipe profile, and so do the coordinator's two `package` doors (rule 5), the typed
-        /// send and the manual commit that presence's heart delivery and the recipe-share manager
-        /// call, which the pair session's send and commit replace.
+        /// the recipe profile, and so does the coordinator's last `package` door (rule 5), the typed
+        /// send, a forwarder the recipe-share manager calls, whose token send and manual commit are
+        /// public.
         case a07 = "A0.7"
         /// The pair session's coach profile arrives (A0.7 / C5): the connection profiles that
         /// Fernlet's session mode generalizes into. Only the session mode leaves here.
@@ -1337,18 +1338,17 @@ extension ProximityNamespaceBoundaryTests.Reason {
 
     /// The coordinator's typed send.
     static let coordinatorTypedSend = Self(exit: .a07, why: """
-        the coordinator's typed send (`sendPayload(type:summary:payload:sealed:)`), whose shipping \
-        callers are the recipe-share manager's send and presence's heart delivery (the test target's \
-        too); it leaves when the profile-driven pair session replaces the recipe radio's send, and the \
-        coordinator's own messages are signed under the namespace's tokens
+        the coordinator's typed send (`sendPayload(type:summary:payload:sealed:)`), a forwarder to its \
+        public token send whose one caller is the recipe-share manager's send; it leaves when the \
+        profile-driven pair session replaces the recipe radio's send, and the coordinator's own \
+        messages are signed under the namespace's tokens
         """)
     /// The envelope's typed view of its token.
     static let envelopeTypedView = Self(exit: .a07, why: """
         Fernlet's typed view of the envelope's raw token (the `payloadType` read, the typed initializer \
         and the typed signing factory): `verify` and the engine's own messages read and sign the raw \
-        token, and only Fernlet's features read or sign through the view; its last readers in \
-        ProximityKit are the recipe-share manager and the coordinator's typed send, so it leaves with \
-        the recipe profile
+        token, and only Fernlet's features read or sign through the view; its last reader in \
+        ProximityKit is the recipe-share manager, so it leaves with the recipe profile
         """)
 
     // Rule 4: the session profile (A0.7 / C5).
@@ -1370,9 +1370,9 @@ extension ProximityNamespaceBoundaryTests.Reason {
         ProximityKit leaves FernletKit, so by then the seam is published as mechanism or wrapped by a \
         presence engine
         """)
-    /// The coordinator's doors.
+    /// The coordinator's typed send, its last `package` door.
     static let coordinatorDoors = Self(exit: .a07, why: """
-        the coordinator's typed send and manual commit, which presence's heart delivery and the \
-        recipe-share manager call; the pair session's API replaces them
+        the coordinator's typed send, a forwarder to its public token send that only the recipe-share \
+        manager still calls; the pair session sends through the token send
         """)
 }

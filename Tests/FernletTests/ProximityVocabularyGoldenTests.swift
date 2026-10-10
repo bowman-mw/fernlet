@@ -626,7 +626,8 @@ struct ProximityVocabularyGoldenTests {
         _ = try #require(peer, "the handshake reached the manual-commit gate")
         await rig.coordinator.commitManualProximity()
         try await rig.coordinator.sendPayload(
-            type: .recipeShare, summary: PayloadSummary(title: "Recipe share"), payload: body, sealed: true)
+            payloadTypeToken: PayloadType.recipeShare.rawValue, summary: PayloadSummary(title: "Recipe share"),
+            payload: body, sealed: true)
         let envelopes = try rig.sentEnvelopes()
         await rig.coordinator.cancel()
         let sent = try #require(envelopes.last(where: { $0.payloadType == .recipeShare }), "the body was never sent")
