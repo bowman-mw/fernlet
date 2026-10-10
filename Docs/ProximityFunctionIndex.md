@@ -1560,12 +1560,12 @@ the bytes of Fernlet's features over ProximityKit, in `FernletSocial`, in the ap
 `Namespace/`, `FernletCryptoPurpose` out of ProximityKit's code altogether, every remaining `fernlet`
 literal to an allowlist naming its exit step (the DEBUG test-hook names, until A1), Fernlet's domain
 vocabulary and records (`PayloadType`, `ProximityCapability`, `ProximityMode`, `ItemNameModeration` and
-the persisted proximity records) to the lines that leave with the envelope's typed view (A0.7) or the
-session profile (A0.7 / C5), `package` to the doors its list names (the presence radio's seam, its QUIC
+the persisted proximity records) to the one line that leaves with the session mode (C5; Fernlet's
+typed view of the envelope's token is FernletConnections'), `package` to the doors its list names (the presence radio's seam, its QUIC
 conformer, the peer channel, the epoch posture and the TXT vocabulary until A1), and every
 type that left ProximityKit for `FernletSocial` or the app out of it (the recipe share's among them),
 with the recipe share's three public values it renamed for the one-to-one send: none is declared, extended or aliased there again. It holds ProximityKit's target to exactly two dependencies too: FernletCrypto (the
-`CryptographicPurpose` signing overloads, until C1) and FernletDomainModel (until A0.7 and A0.7 / C5).
+`CryptographicPurpose` signing overloads, until C1) and FernletDomainModel (the session mode, until C5).
 The exact per-file lists in `ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
@@ -1950,8 +1950,8 @@ same rule, so the core bindings file never imports the app.
 | --- | --- |
 | `canonicalBytes(for envelope:in:)` | Deterministically encodes an envelope with empty signature for signing/verification, its domain the identity's namespace's `purposes.signature.identityEnvelopeV2` (A0.2.4). |
 | `verify(identityService:replayCache:)` | Validates schema, expiry, signature, recipient, required sealing, replay status, and decrypts payload if sealed. The signature is checked under `identityService.purposes` (A0.2.4): `identityEnvelopeV2`, or for a schema-v1 envelope the verify-only `legacyV1.identityEnvelopeV1`, which a family that refuses legacy peers lacks — there a schema-v1 envelope is `signatureInvalid`. The sealing gate and the park read the same namespace's `family.vocabulary.payloads` (A0.3): an unsealed envelope whose token is in `sealingRequired` is refused, one whose token is outside `known` is parked (replay-recorded, empty bytes back). |
-| `signed(...payloadType:...)` / `signed(...payloadTypeToken:...)` | Build and sign a schema-v2 envelope under the identity's namespace label: the token form for a token the host's vocabulary names (the coordinator's session messages), the `PayloadType` form for Fernlet's typed payloads, which delegates to it. |
-| `payloadType` / `isUnknownPayloadType` | Fernlet's typed view of `payloadTypeToken`; feature code and tests read it, while `verify` parks by the namespace. |
+| `signed(...payloadTypeToken:...)` | Build and sign a schema-v2 envelope under the identity's namespace label, for a token the host's vocabulary names: the coordinator's session messages and per-connection send, and a host's typed view (Fernlet's, under "FernletConnections/FernletIdentityEnvelope+PayloadType.swift" below, delegates to it). |
+| `init(schemaVersion:envelopeID:...payloadTypeToken:...signature:)` | The field-by-field initializer under a raw token: what `signed` mints through, what a host's typed initializer delegates to, and the re-signing and tamper fixtures' escape hatch. |
 | `sanitizedSenderDisplayName(in:)` | The sender's name under the reader's namespace's peer-name policy: sanitized, cut to the cap, the floor when nothing displayable is left. A function, not a property: a decoded envelope carries no namespace. The raw field stays signature-covered and untouched. |
 | `disclosedSenderDisplayName(in:)` | The sender's sanitized name, or `nil` when it withheld one (empty field) — unlike `sanitizedSenderDisplayName(in:)`, whose floor ("A friend" for Fernlet) cannot tell withheld from blank (Option 1b, 2026-09-22). The coordinator's name adoption and its audit names read it under its identity's namespace. |
 
@@ -2013,6 +2013,19 @@ each coordinator audit in it, converted into a `TrainerAuditEvent`.
 | Function | What It Does |
 | --- | --- |
 | `ProximityPairProfile.recipeShare(in:)` | Fernlet's recipe profile under a namespace: its recipe-share radio row (`_fernlet-recipe2._udp` / `fernlet-recipe-v1` under `.fernlet`), the TXT mode `recipe` and the audit area `recipeShare`, read off the host's own namespace. `FernletFeatureGoldenTests` 31f pins it. |
+
+### `FernletConnections/FernletIdentityEnvelope+PayloadType.swift`
+
+Fernlet's typed view of the signed envelope's raw payload token (plan step A0.7.4), a `nonisolated`
+extension of ProximityKit's `FernletIdentityEnvelope`: ProximityKit's `verify` parks by the namespace and
+its engine reads and signs the raw token; Fernlet's features (the heart dead-drop, presence, the clothing
+shop and recipe sharing) and the tests read and sign through this view, with every byte the raw form's.
+
+| Function | What It Does |
+| --- | --- |
+| `payloadType` / `isUnknownPayloadType` | The `PayloadType` case `payloadTypeToken` spells, or `nil`, and whether it is `nil`; feature dispatch gates on a case, while `verify` parks by the namespace's `payloads.known`, which for Fernlet holds exactly these cases' tokens. |
+| `init(schemaVersion:envelopeID:...payloadType:...signature:)` | The typed initializer: the raw initializer with `payloadType.rawValue` as the token. |
+| `signed(...payloadType:...)` | `@MainActor`: the raw `signed` with `payloadType.rawValue` as the token, every parameter and default the raw factory's. `ProximityVocabularyGoldenTests`' group 2 signs an envelope for every token through it. |
 
 ### `FernletConnections/FriendSessionTrustPolicy.swift`
 

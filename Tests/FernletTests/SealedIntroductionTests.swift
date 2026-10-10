@@ -27,6 +27,7 @@ import Testing
 import CryptoKit
 import FernletFoundation
 import FernletDomainModel
+import FernletConnections
 @testable import Fernlet
 
 @MainActor

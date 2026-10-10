@@ -2,6 +2,7 @@
 import Testing
 import UIKit
 import FernletDomainModel
+import FernletConnections
 import PrivateMediaStore
 @testable import FernletSocial
 import ProximityKit

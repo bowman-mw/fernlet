@@ -395,9 +395,9 @@ let package = Package(
         // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
         // FernletCrypto (the `CryptographicPurpose` signing overloads its identity keeps, which
         // FernletSocial's feature labels and the app's duress and probe signatures sign through until
-        // C1; it names no FernletCryptoPurpose) + FernletDomainModel (Fernlet's payload vocabulary and
-        // session mode, which it names only on the lines ProximityNamespaceBoundaryTests allowlists,
-        // until A0.7 and A0.7 / C5); no FernletFoundation
+        // C1; it names no FernletCryptoPurpose) + FernletDomainModel (Fernlet's session mode, which it
+        // names only on the one line ProximityNamespaceBoundaryTests allowlists, until C5; Fernlet's
+        // typed view of the envelope's payload token is FernletConnections'); no FernletFoundation
         // and no PrivateMediaStore edge: the session hearts' day key and the session photos' wall and
         // pending corpus are FernletSocial's. ProximityNamespaceBoundaryTests
         // pins this list, and also refuses any type that left it for FernletSocial or the app, declared,
@@ -485,16 +485,21 @@ let package = Package(
         // (FernletConnectionsCopy, `bundle: .module`). ProximityKit can never name it: the edge runs
         // FernletConnections → ProximityKit, never the reverse. It also holds Fernlet's connection
         // profiles for ProximityKit's pair session: the recipe profile, `ProximityPairProfile.recipeShare(in:)`
-        // (FernletPairProfiles); the coach profile and link purposes join it at C1 and C5. Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
+        // (FernletPairProfiles); the coach profile and link purposes join it at C1 and C5. And it holds
+        // Fernlet's typed view of the signed envelope's payload token (FernletIdentityEnvelope+PayloadType:
+        // `payloadType`, `isUnknownPayloadType`, the typed initializer and `signed`), which Fernlet's
+        // features read and sign through over ProximityKit's raw token.
+        // Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
         // FernletFoundation (FernletAuditLog, behind the bridge) + FernletDomainModel (PayloadType and
-        // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling;
-        // ItemNameModeration, whose name cap the peer-name policy reads; and TrainerAuditEvent and
-        // ProximityTrustedPeerRecord with its ProximityMode, the persisted records the vault builds and
+        // ProximityCapability, whose raw values the vocabulary reads, so each token keeps one spelling,
+        // PayloadType also the envelope's typed view's cases; ItemNameModeration, whose name cap the
+        // peer-name policy reads; and TrainerAuditEvent and ProximityTrustedPeerRecord with its
+        // ProximityMode, the persisted records the vault builds and
         // keeps and the policies and the review read). MainActor default: the vault and the two trust
         // policies are main-actor classes, like the main-actor protocols, coordinator, managers and
         // store they serve, beside nonisolated value data and stateless seams (the namespace and its
-        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion and
-        // the name placeholders).
+        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion, the
+        // envelope's typed view and the name placeholders).
         .target(
             name: "FernletConnections",
             dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
@@ -533,8 +538,10 @@ let package = Package(
         // ledgers' sidecar, is this module's own) + FernletConnections (`FernletFeaturePurposes`' two
         // declared salts, which the heart-drop and presence pair secrets derive under,
         // `ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory
-        // and whose routed types FernletRoutedTypes reads, and the name placeholders,
-        // `PeerNameDisplay.firstName` among them, which presence's hearts copy reads) + FernletCrypto
+        // and whose routed types FernletRoutedTypes reads, the name placeholders,
+        // `PeerNameDisplay.firstName` among them, which presence's hearts copy reads, and the envelope's
+        // typed view, which the heart dead-drop signs and reads through and presence, the clothing shop
+        // and recipe sharing read through) + FernletCrypto
         // (`FernletCryptoPurpose`: the ban-evidence reporter-tag domain the ban store hashes under, the
         // sealed drop's salt, the day-tag prefix and the sidecar's authenticated data the heart dead-drop
         // hands CryptoKit, the presence epoch-tag prefix, and the activities' and the moderation report's

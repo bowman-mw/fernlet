@@ -26,8 +26,8 @@
 //   4. Fernlet's domain vocabulary and records, FernletDomainModel's `PayloadType`,
 //      `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
 //      `TrainerAuditEvent` and `ConnectionSessionLog`, are named in ProximityKit code only on an exact
-//      per-file, per-type allowlist of the lines that leave with the envelope's typed view (A0.7) or
-//      with the session profile (A0.7 / C5): 4 lines in 2 files;
+//      per-file, per-type allowlist of the lines that leave with the session mode (C5): 1 line in 1
+//      file;
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step (36 lines in 4 files: the presence
 //      radio's, until A1);
@@ -46,19 +46,18 @@
 //
 // And ProximityKit's target in `FernletKit/Package.swift` depends on exactly FernletCrypto (the
 // `CryptographicPurpose` signing overloads FernletSocial's feature labels and the app's duress and
-// probe signatures go through, until C1) and FernletDomainModel (the payload vocabulary and session
-// mode on rule 4's lines, until A0.7 and A0.7 / C5), so an edge
+// probe signatures go through, until C1) and FernletDomainModel (the session mode on rule 4's one
+// line, until C5), so an edge
 // only Fernlet's features needed, FernletFoundation's or PrivateMediaStore's, cannot come back unseen.
 //
 // Rules 3 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// lowered or deleted. So rules 3 and 4 only shrink, to nothing, as A0.7, A0.7 / C5 and A1 land, and a
+// lowered or deleted. So rules 3 and 4 only shrink, to nothing, as C5 and A1 land, and a
 // `package` door's row lives exactly as long as the door. Rule 2 lists nothing: any use fails.
 // Rule 6 only grows: a feature that came back under its old name with no Fernlet string, no registry
 // label and no domain type of its own would pass rules 2 to 4, so each step that moves features out
 // adds the types it took, and a step that renames a public value for its generic use adds the old
 // name. Between them they hold what ProximityKit still takes from Fernlet rather
-// than from its host: the envelope's typed view of its token, the typed door only Fernlet's features
-// go through (until A0.7); the session mode (until A0.7 / C5); and the DEBUG test-hook names (until
+// than from its host: the session mode (until C5) and the DEBUG test-hook names (until
 // A1). No row names a presentation string, a membership record kind, a routed-type token
 // or a coach-channel format, and no rule lists a line of a feature that left (the heart dead-drop,
 // presence, moderation's ban store and report relay, closeness, friend state, the parked chat payload,
@@ -294,7 +293,7 @@ private extension UInt8 {
 
 /// ProximityKit builds no namespace of its own, names none of FernletCrypto's purposes, spells
 /// `fernlet` only in the literals its allowlist names, names Fernlet's domain vocabulary and records
-/// only on the lines that leave with the envelope's typed view and the session profile, declares
+/// only on the line that leaves with the session mode, declares
 /// `package` only on the doors its list names, declares, extends or aliases none of the types that
 /// left it, and depends on exactly the targets its list names.
 @Suite struct ProximityNamespaceBoundaryTests {
@@ -615,17 +614,16 @@ private extension UInt8 {
     /// values and sanitizes a peer's name with its own copy of the sanitizer, under the namespace's
     /// peer-name policy; Fernlet's mesh features, which send its payload types, gate on its
     /// capabilities, cap names by its item-name rules and read its trusted-peer records, are
-    /// FernletSocial's, over the engine's token doors. What is left names a type on the typed doors
-    /// only Fernlet's features go through (the envelope's typed view of its token), which moves to
-    /// FernletConnections (A0.7), and on the session mode's alias, which generalizes with the
-    /// connection profiles (A0.7 / C5): 4 code
-    /// lines in 2 files. A new line fails, and so does a type named in a file whose rows name only
+    /// FernletSocial's, over the engine's token doors, and the envelope's typed view of its token,
+    /// which they read and sign through, is FernletConnections'. What is left names a type on one
+    /// line: the session mode's alias, which generalizes when the coach profile arrives (C5): 1 code
+    /// line in 1 file. A new line fails, and so does a type named in a file whose rows name only
     /// others; a line that goes away fails until its row is lowered or deleted, so the list only
-    /// shrinks. A type no row names (`ProximityCapability`, `ItemNameModeration`,
+    /// shrinks. A type no row names (`PayloadType`, `ProximityCapability`, `ItemNameModeration`,
     /// `ProximityTrustedPeerRecord`, `TrainerAuditEvent`, `ConnectionSessionLog`) fails on its first
     /// line. Only code lines count: comments and literals may name the types, and an implicit member
-    /// (`.recipeShare`) names none, so it is held at the typed door it passes through, which is on the
-    /// list.
+    /// (`.friend`) names none, so it is held at the alias its parameter is spelled through, which is
+    /// on the list.
     @Test func fernletDomainTypesAreNamedOnlyOnTheLinesThatLeave() throws {
         let needles = try Self.domainTypeNeedles()
         let sources = try Self.proximitySources()
@@ -663,11 +661,11 @@ private extension UInt8 {
     /// member access, a module-qualified name, a nested type, an alias, an extension, a name on a
     /// line of its own), counts a line once per type however often it names it and once for each
     /// type it names, and sees none of today's nearest code that names no domain type: the
-    /// envelope's raw token and its parked flag, the soundness rule's token fields, the mesh's roles,
-    /// the namespace's payload rules and capabilities, the coordinator's own role, ranging mode and
-    /// mode alias, the host's trust store and trusted-peer list, the session audit, the name
-    /// coercion, the generic summary and encryption types, and a comment and a literal that spell
-    /// the types. Every sample is lexed first, as the module's files are.
+    /// envelope's raw token and a typed view's parked flag, the soundness rule's token fields, the
+    /// mesh's roles, the namespace's payload rules and capabilities, the coordinator's own role,
+    /// ranging mode and mode alias, the host's trust store and trusted-peer list, the session audit,
+    /// the name coercion, the generic summary and encryption types, and a comment and a literal that
+    /// spell the types. Every sample is lexed first, as the module's files are.
     @Test func theDomainTypeMatcherSeesEveryFormAndNoNeighbour() throws {
         let needles = try Self.domainTypeNeedles()
         let samples: [(source: String, expected: [String: [Int]])] = [
@@ -773,8 +771,7 @@ private extension UInt8 {
 
     /// Every file and type whose code lines still name one of Fernlet's domain types.
     static let domainTypeLines: [DomainTypeLines] = [
-        DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityMode", 1, .sessionMode),
-        DomainTypeLines("Wire/FernletIdentityEnvelope.swift", "PayloadType", 3, .envelopeTypedView)
+        DomainTypeLines("Engine/ProximityCoordinator.swift", "ProximityMode", 1, .sessionMode)
     ]
 
     /// `file`'s rule-4 rows with their counts and exit steps, for a failure message.
@@ -1174,8 +1171,8 @@ private extension UInt8 {
     }
 
     /// ProximityKit's target dependencies, exactly: FernletCrypto, for the `CryptographicPurpose`
-    /// signing overloads (until C1), and FernletDomainModel, for the payload vocabulary and session mode
-    /// on rule 4's lines (until A0.7 and A0.7 / C5).
+    /// signing overloads (until C1), and FernletDomainModel, for the session mode on rule 4's one line
+    /// (until C5).
     static let proximityKitDependencies = ["FernletCrypto", "FernletDomainModel"]
 
     // MARK: The lexer, fixtured
@@ -1265,13 +1262,11 @@ private extension UInt8 {
 
     /// The plan step that takes a value out of ProximityKit.
     enum ExitStep: String, Sendable {
-        /// The one-to-one radio becomes a profile-driven pair session (A0.7): the envelope's typed
-        /// view of its token, whose last ProximityKit reader left with the recipe-share manager, moves
-        /// to FernletConnections.
-        case a07 = "A0.7"
-        /// The pair session's coach profile arrives (A0.7 / C5): the connection profiles that
-        /// Fernlet's session mode generalizes into. Only the session mode leaves here.
-        case a07c5 = "A0.7 / C5"
+        /// The coach profile joins the pair session (C5): the session mode generalizes then, the coach
+        /// profile being the first session policy other than friend. Decided at plan step A0.7, whose
+        /// one profile, the recipe's, has one session policy, so a policy type designed then would have
+        /// had one value.
+        case c5 = "C5"
         /// The package leaves Fernlet's tree (A1): the DEBUG test-hook names are settled then, and so
         /// are the presence radio's `package` doors (rule 5): its seam, its QUIC conformer, the peer
         /// channel the seam names, the epoch posture and the TXT vocabulary, published as mechanism
@@ -1306,20 +1301,10 @@ extension ProximityNamespaceBoundaryTests.Reason {
         tree
         """)
 
-    // Rule 4: the envelope's typed view (A0.7).
-
-    /// The envelope's typed view of its token.
-    static let envelopeTypedView = Self(exit: .a07, why: """
-        Fernlet's typed view of the envelope's raw token (the `payloadType` read, the typed initializer \
-        and the typed signing factory): `verify` and the engine's own messages read and sign the raw \
-        token, and only Fernlet's features read or sign through the view; its last ProximityKit reader \
-        left with the recipe-share manager; it moves to FernletConnections
-        """)
-
-    // Rule 4: the session profile (A0.7 / C5).
+    // Rule 4: the session mode (C5).
 
     /// The coordinator's session mode.
-    static let sessionMode = Self(exit: .a07c5, why: """
+    static let sessionMode = Self(exit: .c5, why: """
         the coordinator's `Mode` alias for Fernlet's session mode (trainer or friend): not a token but \
         a session profile, which selects the commit gate, remembered-trust auto-confirm and the \
         trainer size gate, so it generalizes with the connection profiles

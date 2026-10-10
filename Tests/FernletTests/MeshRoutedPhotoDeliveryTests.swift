@@ -23,6 +23,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+import FernletConnections
 import FernletFoundation
 import PrivateMediaStore
 #if canImport(UIKit)

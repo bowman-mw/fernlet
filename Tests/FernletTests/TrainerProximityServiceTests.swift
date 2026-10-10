@@ -3,6 +3,7 @@ import Testing
 import FernletFoundation
 import Foundation
 import FernletDomainModel
+import FernletConnections
 @testable import Fernlet
 
 @Suite(.serialized) @MainActor

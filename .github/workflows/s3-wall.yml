@@ -328,6 +328,20 @@ jobs:
         # and the vocabulary golden's group 14), MEASURED at 347 tests in 8 suites, its floor 347. This
         # line, MEASURED on a Mac at A0.6.5 and again at A0.6.7 (iPhone 17 simulator, iOS 26.5), ran
         # 110 tests in 11 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.7 (2026-10-10), the one-to-one radio as a profile-driven pair
+        # session, leaves ProximityKit holding the one-to-one mechanism as `ProximityPairSession` over
+        # a host-supplied `ProximityPairProfile`, which it checks against its namespace, with the
+        # coordinator's token send and manual commit public as its per-connection API; Fernlet's recipe
+        # feature, its wire types and its English are FernletSocial's, and its recipe profile and the
+        # envelope's typed view of its payload token FernletConnections'. `ProximityNamespaceBoundaryTests`
+        # ends the step at 7 `fernlet` literals on 6 lines in 2 files (A1), 1 domain-type line in 1
+        # file (the session mode, C5), 36 `package` lines in 4 files (A1) and 87 moved names, with no
+        # row of A0.7's and no A0.7 exit step. No suite joined or left a line across the step, and no
+        # cell was added to this one. This line, MEASURED on a Mac at A0.7.4 (iPhone 17 simulator,
+        # iOS 26.5), ran 110 tests in 11 suites; its floor stays the shared `1`. crypto-goldens holds
+        # the step's goldens at 355 and mesh-batteries the recipe-share manager's observation cell at
+        # 1370, both raised at A0.7.0.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

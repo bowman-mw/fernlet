@@ -24,6 +24,7 @@ import Security
 import ProximityKit
 import FernletFoundation
 import FernletDomainModel
+import FernletConnections
 import FernletSocial
 import CloudKit
 @testable import CloudKitSync
