@@ -418,7 +418,7 @@ enum RecipeShareLaneHarness {
     /// tick happens to notice it first.
     private static func dialDue(
         store: FernletStore, role: RecipeShareLaneRole, state: RecipeShareLaneRunState
-    ) -> ProximityRecipeShareRecipient? {
+    ) -> ProximityPairPeer? {
         guard role == .dial, !state.dialed,
               RecipeShareLaneOptions.dialAt.timeIntervalSinceNow <= pollIntervalSeconds else { return nil }
         return store.recipeShareManager.nearbyRecipients.first
@@ -426,7 +426,7 @@ enum RecipeShareLaneHarness {
 
     /// Hands one share to the manager through the share sheet's own door.
     private static func send(
-        store: FernletStore, to recipient: ProximityRecipeShareRecipient, sequence: Int, idleSeconds: Int?
+        store: FernletStore, to recipient: ProximityPairPeer, sequence: Int, idleSeconds: Int?
     ) {
         let payload = lanePayload(sequence: sequence)
         echo("sending seq=\(sequence) at \(Date().timeIntervalSince1970) "

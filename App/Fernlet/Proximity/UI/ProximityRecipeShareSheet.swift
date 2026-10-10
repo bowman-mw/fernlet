@@ -229,7 +229,7 @@ struct ProximityRecipeShareSheet: View {
     }
 
     /// One tappable recipient row; tapping sends the payload to that device.
-    private func recipientRow(_ recipient: ProximityRecipeShareRecipient, isLockedOut: Bool) -> some View {
+    private func recipientRow(_ recipient: ProximityPairPeer, isLockedOut: Bool) -> some View {
         Button {
             send(to: recipient)
         } label: {
@@ -306,14 +306,14 @@ struct ProximityRecipeShareSheet: View {
     }
 
     /// Begins a share to `recipient`, telling the latch first so its outcome becomes a panel.
-    private func send(to recipient: ProximityRecipeShareRecipient) {
+    private func send(to recipient: ProximityPairPeer) {
         latch.beganShare(to: recipient.id)
         manager.sendRecipeShare(outgoingPayload, to: recipient)
     }
 
     /// A share ended: latch it (only if this sheet began it), cross-fade to the panel, speak it,
     /// and, after a success, schedule the radio hand back.
-    private func receive(_ outcome: RecipeShareOutcome?) {
+    private func receive(_ outcome: ProximityPairSendOutcome?) {
         guard let outcome else { return }
         var next = latch
         guard let confirmation = next.receive(outcome) else { return }

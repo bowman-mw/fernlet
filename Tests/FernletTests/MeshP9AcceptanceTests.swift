@@ -869,8 +869,9 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(mints == 1, "the exchange record is constructed in \(mints) places; the helper is the one")
 
         let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/RecipeSharing")
-        // Four since 2026-09-29: `RecipeShareOutcome.swift` (the share's frozen outcome tokens) was
-        // added and read against the needle walk below, which it passes — it names no radio at all.
+        // Four since 2026-09-29: `ProximityPairSendOutcome.swift` (the send's frozen outcome tokens,
+        // added as `RecipeShareOutcome.swift`) was read against the needle walk below, which it
+        // passes — it names no radio at all.
         #expect(subtree.count == 4, """
             the RecipeSharing subtree holds \(subtree.count) files, not the four it held when this \
             was measured (the manager, the advertisement, the transfer record and the share \

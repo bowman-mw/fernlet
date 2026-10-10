@@ -6,7 +6,7 @@ import SwiftUI
 // MARK: - RecipeShareConfirmation
 
 /// What the recipe share sheet says about one finished share: a pure mapping from the manager's
-/// frozen ``RecipeShareOutcome`` to localized copy.
+/// frozen ``ProximityPairSendOutcome`` to localized copy.
 ///
 /// ## Honest by construction
 ///
@@ -19,12 +19,12 @@ import SwiftUI
 /// sentence and pins both halves of that.
 ///
 /// The failure copy keeps two facts apart that a single "didn't send" would merge:
-/// ``RecipeShareFailure/sendIncomplete`` means the other person **may** have it, and every other
-/// cause means nothing left this device.
+/// ``ProximityPairSendFailure/sendIncomplete`` means the other person **may** have it, and every
+/// other cause means nothing left this device.
 ///
 /// Every sentence is a `LocalizedStringResource`, so the catalog sync harvests it, the view renders
 /// it with `Text(_:)`, and the announcer's app overload speaks it. The switches are exhaustive, so a
-/// new ``RecipeShareFailure`` case is a build error here until it has its own sentence.
+/// new ``ProximityPairSendFailure`` case is a build error here until it has its own sentence.
 struct RecipeShareConfirmation: Equatable, Identifiable {
 
     /// Which of the two panels this is.
@@ -65,7 +65,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
     }
 
     /// The confirmation for `outcome`.
-    init(_ outcome: RecipeShareOutcome) {
+    init(_ outcome: ProximityPairSendOutcome) {
         switch outcome.result {
         case .sent:
             self = Self.sent(outcome)
@@ -76,7 +76,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
 
     /// The memberwise form the two builders below share.
     private init(
-        outcome: RecipeShareOutcome,
+        outcome: ProximityPairSendOutcome,
         tone: Tone,
         headline: LocalizedStringResource,
         detail: LocalizedStringResource,
@@ -97,9 +97,9 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
     /// share without a word back (a different app version, eight shares already waiting for review,
     /// a second share inside its per-sender rate limit), so "they can look it over" would be a
     /// delivery claim in everything but the word.
-    private static func sent(_ outcome: RecipeShareOutcome) -> RecipeShareConfirmation {
+    private static func sent(_ outcome: ProximityPairSendOutcome) -> RecipeShareConfirmation {
         let name = shownName(outcome)
-        let title = outcome.recipeTitle
+        let title = outcome.subject
         return RecipeShareConfirmation(
             outcome: outcome,
             tone: .sent,
@@ -117,11 +117,11 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
 
     /// A failure panel: a heading naming the recipe and one sentence for the cause.
     private static func notSent(
-        _ outcome: RecipeShareOutcome,
-        failure: RecipeShareFailure
+        _ outcome: ProximityPairSendOutcome,
+        failure: ProximityPairSendFailure
     ) -> RecipeShareConfirmation {
         let name = shownName(outcome)
-        let title = outcome.recipeTitle
+        let title = outcome.subject
         guard !failure.mayHaveReachedRecipient else {
             return RecipeShareConfirmation(
                 outcome: outcome,
@@ -150,8 +150,8 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
 
     /// The one sentence that says why, per cause. Exhaustive on purpose.
     private static func detail(
-        for failure: RecipeShareFailure,
-        outcome: RecipeShareOutcome
+        for failure: ProximityPairSendFailure,
+        outcome: ProximityPairSendOutcome
     ) -> LocalizedStringResource {
         let name = shownName(outcome)
         switch failure {
@@ -189,12 +189,12 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
     /// The outcome carries the manager's name slot, which files the fingerprint as the name for a
     /// peer this radio never discovered. `PeerNameDisplay` is the one rule that keeps an identifier
     /// off this path (owner decision 2026-09-29), so every sentence below reads the name through it.
-    private static func shownName(_ outcome: RecipeShareOutcome) -> String {
+    private static func shownName(_ outcome: ProximityPairSendOutcome) -> String {
         PeerNameDisplay.shown(outcome.recipientName, fingerprint: nil, in: .fernlet)
     }
 
     /// The cap refusal's sentence, naming the Fernlet that holds the link when it is known.
-    private static func pairedWithAnotherDetail(_ outcome: RecipeShareOutcome) -> LocalizedStringResource {
+    private static func pairedWithAnotherDetail(_ outcome: ProximityPairSendOutcome) -> LocalizedStringResource {
         let name = shownName(outcome)
         guard let other = outcome.otherPeerName.flatMap({ PeerNameDisplay.personName($0, fingerprint: nil, in: .fernlet) }) else {
             return LocalizedStringResource(
@@ -210,7 +210,7 @@ struct RecipeShareConfirmation: Equatable, Identifiable {
 // MARK: - RecipeShareOutcomeLatch
 
 /// Which share outcome the sheet is waiting for, and the confirmation it latched: the rule that
-/// decides whether a published ``RecipeShareOutcome`` becomes a panel at all.
+/// decides whether a published ``ProximityPairSendOutcome`` becomes a panel at all.
 ///
 /// The manager publishes an outcome for EVERY share that ends, including the `interrupted` a sheet's
 /// own teardown causes when it stops the radio on the way out. So the sheet must never derive its
@@ -236,7 +236,7 @@ struct RecipeShareOutcomeLatch: Equatable {
 
     /// Latches `outcome` if it is the one being waited for, returning the new confirmation; nil
     /// (and no change) for an outcome nobody began here, for a different row, or after one latched.
-    mutating func receive(_ outcome: RecipeShareOutcome) -> RecipeShareConfirmation? {
+    mutating func receive(_ outcome: ProximityPairSendOutcome) -> RecipeShareConfirmation? {
         guard confirmation == nil,
               let awaited = awaitingRecipientID,
               awaited == outcome.recipientID else { return nil }

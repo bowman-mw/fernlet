@@ -242,7 +242,7 @@ struct ProximityRecipeShareCapTests {
         let paired = makePeer(named: "Alex")
         registerConnection(on: manager, peer: paired)
 
-        let other = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+        let other = ProximityPairPeer(id: UUID(), displayName: "Blair", fingerprint: nil)
         manager.sendRecipeShare(makePayload(), to: other)
 
         guard case .failed(let message) = manager.sendState else {
@@ -815,7 +815,7 @@ struct ProximityRecipeShareCapTests {
                 "and the live pairing is neither doubled nor dropped")
 
         // Control: a genuinely different device is still refused while the pairing is held.
-        manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+        manager.sendRecipeShare(makePayload(), to: ProximityPairPeer(
             id: UUID(), displayName: "Blair", fingerprint: nil))
         guard case .failed(let message) = manager.sendState else {
             Issue.record("Expected the outbound cap to refuse a third device, got \(manager.sendState)")
@@ -873,7 +873,7 @@ struct ProximityRecipeShareCapTests {
         manager: ProximityRecipeShareManager,
         radio: FakeRecipeShareRadioSession,
         blair: PeerHandle,
-        row: ProximityRecipeShareRecipient
+        row: ProximityPairPeer
     ) {
         let radio = FakeRecipeShareRadioSession()
         let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
@@ -888,7 +888,7 @@ struct ProximityRecipeShareCapTests {
         let host = RecipeCapTestHost()
         let manager = ProximityRecipeShareManager(store: host)
         registerConnection(on: manager, peer: makePeer(named: "Alex"))
-        let blair = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+        let blair = ProximityPairPeer(id: UUID(), displayName: "Blair", fingerprint: nil)
 
         manager.sendRecipeShare(makePayload(), to: blair)
 
@@ -897,7 +897,7 @@ struct ProximityRecipeShareCapTests {
         #expect(outcome.otherPeerName == "Alex")
         #expect(outcome.recipientName == "Blair")
         #expect(outcome.recipientID == blair.id)
-        #expect(outcome.recipeTitle == "Cap Test Bowl")
+        #expect(outcome.subject == "Cap Test Bowl")
         #expect(manager.transferForTesting == nil, "refused before any share was minted")
     }
 
@@ -919,7 +919,7 @@ struct ProximityRecipeShareCapTests {
         let radio = FakeRecipeShareRadioSession()
         let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
-        let gone = ProximityRecipeShareRecipient(id: UUID(), displayName: "Blair", fingerprint: nil)
+        let gone = ProximityPairPeer(id: UUID(), displayName: "Blair", fingerprint: nil)
 
         manager.sendRecipeShare(makePayload(), to: gone)
 
@@ -944,7 +944,7 @@ struct ProximityRecipeShareCapTests {
 
     /// The three ways a registered pairing can die before the send, and each must end the share as
     /// `couldNotConnect`: status line failed, the row released, the record terminal.
-    private func expectLostPairingFailed(_ manager: ProximityRecipeShareManager, row: ProximityRecipeShareRecipient) {
+    private func expectLostPairingFailed(_ manager: ProximityRecipeShareManager, row: ProximityPairPeer) {
         #expect(manager.lastShareOutcome?.result == .notSent(.couldNotConnect),
                 "got \(String(describing: manager.lastShareOutcome?.result))")
         #expect(manager.lastShareOutcome?.recipientID == row.id)
@@ -1047,7 +1047,7 @@ struct ProximityRecipeShareCapTests {
 
         let againHost = RecipeCapTestHost()
         let again = try managerWithBlair(host: againHost)
-        again.manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+        again.manager.sendRecipeShare(makePayload(), to: ProximityPairPeer(
             id: UUID(), displayName: "Gone", fingerprint: nil))
         let terminal = try #require(again.manager.lastShareOutcome)
         again.manager.stop()
@@ -1083,7 +1083,7 @@ struct ProximityRecipeShareCapTests {
 
         fixture.manager.finishShareForTesting(.sent, token: token)
         #expect(fixture.manager.lastShareOutcome?.result == .sent)
-        #expect(fixture.manager.lastShareOutcome?.recipeTitle == "Cap Test Bowl")
+        #expect(fixture.manager.lastShareOutcome?.subject == "Cap Test Bowl")
 
         fixture.manager.sendRecipeShare(makePayload(), to: fixture.row)
         let second = try #require(fixture.manager.transferForTesting?.token)
@@ -1103,7 +1103,7 @@ struct ProximityRecipeShareCapTests {
             makeSession: { radio },
             identity: IdentityService(keychainService: "test.recipe.outcome.\(UUID().uuidString)"))
         manager.markRunningForTesting()
-        manager.sendRecipeShare(makePayload(), to: ProximityRecipeShareRecipient(
+        manager.sendRecipeShare(makePayload(), to: ProximityPairPeer(
             id: UUID(), displayName: "Gone", fingerprint: nil))
         #expect(manager.lastShareOutcome != nil)
 
@@ -1139,7 +1139,7 @@ struct ProximityRecipeShareCapTests {
         } onChange: {
             MainActor.assumeIsolated { failure.recordChange() }
         }
-        let gone = ProximityRecipeShareRecipient(id: UUID(), displayName: "Gone", fingerprint: nil)
+        let gone = ProximityPairPeer(id: UUID(), displayName: "Gone", fingerprint: nil)
         manager.sendRecipeShare(makePayload(), to: gone)
         #expect(failure.changes == 1, "a failed share notified the sheet \(failure.changes) times")
         #expect(manager.sendState == .failed(message: "That nearby Fernlet is no longer available."),

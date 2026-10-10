@@ -130,7 +130,8 @@
 //     without UWB, and the sealed share, its summary, seal framing, recipient, sender and expiry),
 //     and the inbound share that door's payload handler queues; its persisted session-audit rows;
 //     its status sentences and diagnostics, path by path and on the success path in order; its copy
-//     templates in their home; its constants; and the heart delivery's send spelling.
+//     templates in their home, and every status and diagnostic case rendered with distinct
+//     arguments; its constants; and the heart delivery's send spelling.
 //
 // What another suite already pins is cited, not repeated: the four activity and moderation-report
 // signature labels (`CryptographicPurposeBoundaryTests.framingHeldInThisFile` and
@@ -295,7 +296,11 @@
 // `ProximityCoordinator`'s transitions and by a Python reading of its `debugLabel` table and message
 // formats, the sentences by formatting the copy census's templates (a Swift lexer in Python over the
 // recipe-share manager) with the cells' names, and the source rows by a Python count over today's
-// files. Nothing in group 31 was copied out of Swift's output either.
+// files. 31e's render row, added when the manager's status and diagnostics became typed, was computed
+// twice in Python too: once from the design's tables of cases and templates, formatted with the
+// sentinels, and once from each case's site in the manager's source before that change, its literal
+// lexed with its interpolated expressions and each expression replaced by the sentinel of the case
+// argument that carries it. Nothing in group 31 was copied out of Swift's output either.
 
 import ActivityKit
 import CryptoKit
@@ -4151,9 +4156,61 @@ struct FernletFeatureGoldenTests {
         #"\(…) is no longer nearby."#
     ]
 
+    /// 31e's render row for the diagnostics: every event, its arguments the distinct sentinels
+    /// (`recipientName` R1, `pairedWith` P2, `subject` S3, `name` N4, `error` E5, `message` M6), and the
+    /// line it renders to, its frozen template formatted with them.
+    static let frozenRecipeEventRenderings: [(event: RecipeEvent, line: String)] = [
+        (.discoveryStarted, "Recipe share discovery started."),
+        (.discoveryStopped, "Recipe share discovery stopped."),
+        (.discoveryRefreshed, "Recipe share discovery refreshed."),
+        (.listeningWillRetry, "Recipe share radio failed to start — listening will retry on the next app event."),
+        (.radioDidNotStart(error: "E5"), "The recipe share radio could not start: E5"),
+        (.radioFailed(message: "M6"), "M6"),
+        (.searchSkippedWhilePaired(pairedWith: "P2"), "Search skipped — already paired with P2."),
+        (.connecting(recipientName: "R1"), "Connecting to R1."),
+        (.recipientUnavailable(recipientName: "R1"), "Recipe share failed: R1 is no longer available."),
+        (.connectingToAnother(recipientName: "R1"), "Refused share to R1: another connection attempt is in flight."),
+        (.sendRefusedWhilePaired(recipientName: "R1", pairedWith: "P2"), "Refused share to R1: already paired with P2."),
+        (.noAnswer(recipientName: "R1"), "Connect timeout: R1 did not answer."),
+        (.couldNotConnect(recipientName: "R1"), "Recipe share to R1 ended before sending: the connection closed during setup."),
+        (.sending(subject: "S3", recipientName: "R1"), "Sending S3 to R1."),
+        (.duplicateSendRefused(subject: "S3"), "Refused a second send of S3."),
+        (.completionNotCounted, "A send completed against a newer share record — completion not counted."),
+        (.sent(subject: "S3", recipientName: "R1"), "Sent S3 to R1."),
+        (.sendFailed(recipientName: "R1"), "Recipe share failed while sending to R1."),
+        (.outcomeSuperseded, "A share outcome arrived for a superseded share — not shown."),
+        (.discovered(name: "N4"), "Discovered N4."),
+        (.lost(name: "N4"), "N4 is no longer nearby."),
+        (.disconnected(name: "N4"), "N4 disconnected."),
+        (.turnedAway(name: "N4"), "Turned away N4 — recipe sharing links two Fernlets at a time."),
+        (.channelOpened(name: "N4"), "Secure recipe-share channel opened with N4."),
+        (.closedToOthers(pairedWith: "P2"), "Recipe sharing closed to others while paired with P2."),
+        (.confirming, "Recipe share recipient verified; confirming selected recipient."),
+        (.verified(name: "N4"), "Verified N4."),
+        (.reopened, "Recipe sharing reopened to nearby Fernlets."),
+        (.droppedStalled(name: "N4"), "Dropped stalled connection to N4.")
+    ]
+
+    /// 31e's render row for the status line: every failure, with the same sentinels, and the sentence
+    /// it renders to.
+    static let frozenRecipeFailureRenderings: [(failure: RecipeStatus.Failure, message: String)] = [
+        (.searchRefusedWhilePaired(pairedWith: "P2"), "Connected to P2 — recipe sharing links two Fernlets at a time."),
+        (.recipientUnavailable, "That nearby Fernlet is no longer available."),
+        (.connectingToAnother, "Still connecting to another Fernlet — recipe sharing links two Fernlets at a time."),
+        (.pairedWithAnother(pairedWith: "P2"), "Still sharing with P2 — recipe sharing links two Fernlets at a time."),
+        (.noAnswer(recipientName: "R1"), "No answer from R1 — that Fernlet may be busy sharing with someone else."),
+        (.couldNotConnect(recipientName: "R1"), "Could not connect securely to R1."),
+        (.duplicateSend, "Could not send that recipe."),
+        (.sendFailed, "Could not send that recipe.")
+    ]
+
     /// **31e.** The recipe copy is its frozen templates in its home: the code literals of
     /// ``recipeCopyHomes`` that hold a space (lexed as Swift reads them, comments out), each
-    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct.
+    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct. And
+    /// the render row: every event and every status failure, each argument a distinct sentinel,
+    /// renders to its frozen sentence, and every status maps to the status line that names the same
+    /// case, a failure to its sentence, so two arguments swapped inside one template, or two cases'
+    /// sentences exchanged, fail here though the set of templates is unchanged.
     @Test func theRecipeCopyIsItsFrozenTemplatesInItsHome() throws {
         var found: Set<String> = []
         // R2: bounded by the homes.
@@ -4167,6 +4224,38 @@ struct FernletFeatureGoldenTests {
             the copy's templates moved: missing \(frozen.subtracting(found).sorted()), \
             unexpected \(found.subtracting(frozen).sorted())
             """)
+        Self.expectRecipeRenderings()
+    }
+
+    /// 31e's render row: ``frozenRecipeEventRenderings`` (29 events, 29 distinct cases and lines) and
+    /// ``frozenRecipeFailureRenderings`` (8 failures) through the renderer accessors, and every status
+    /// through ``renderSendState(_:)``.
+    static func expectRecipeRenderings() {
+        let events = frozenRecipeEventRenderings
+        let cases = Set(events.map { String(String(describing: $0.event).prefix { $0 != "(" }) })
+        #expect(events.count == 29 && cases.count == 29 && Set(events.map(\.line)).count == 29,
+                "the render row holds \(events.count) events, \(cases.count) distinct cases")
+        // R2: bounded by the 29 rows.
+        for row in events {
+            let line = renderDiagnostic(row.event)
+            #expect(line == row.line, "\(row.event) renders \"\(line)\", not \"\(row.line)\"")
+        }
+        let failures = frozenRecipeFailureRenderings
+        #expect(failures.count == 8 && Set(failures.map { "\($0.failure)" }).count == 8, "the render row holds \(failures.count) failures")
+        // R2: bounded by the 8 rows.
+        for row in failures {
+            let message = renderStatusMessage(row.failure)
+            #expect(message == row.message, "\(row.failure) renders \"\(message)\", not \"\(row.message)\"")
+            let shown = renderSendState(.failed(row.failure))
+            #expect(shown == .failed(message: row.message), "the failed status \(row.failure) shows \(shown)")
+        }
+        #expect(renderSendState(.idle) == .idle, "the idle status shows \(renderSendState(.idle))")
+        let connecting = renderSendState(.connecting(recipientName: "R1"))
+        #expect(connecting == .connecting(recipientName: "R1"), "the connecting status shows \(connecting)")
+        let sending = renderSendState(.sending(recipientName: "R1"))
+        #expect(sending == .sending(recipientName: "R1"), "the sending status shows \(sending)")
+        let sent = renderSendState(.sent(recipientName: "R1"))
+        #expect(sent == .sent(recipientName: "R1"), "the sent status shows \(sent)")
     }
 
     /// `text` with each interpolation's contents read as an ellipsis, `\(…)`: a balanced-parenthesis
@@ -5278,15 +5367,42 @@ extension FernletFeatureGoldenTests {
         ProximityRecipeShareManager(store: host, makeSession: { radio }, identity: identity)
     }
 
-    /// The recipe title a share's outcome names: today `RecipeShareOutcome.recipeTitle`.
-    static func outcomeSubject(_ outcome: RecipeShareOutcome) -> String {
-        outcome.recipeTitle
+    /// The recipe title a share's outcome names: since plan step A0.7.2
+    /// `ProximityPairSendOutcome.subject`; until then `RecipeShareOutcome.recipeTitle`.
+    static func outcomeSubject(_ outcome: ProximityPairSendOutcome) -> String {
+        outcome.subject
     }
 
-    /// A picker row for a device the radio never discovered: today
-    /// `ProximityRecipeShareRecipient(id:displayName:fingerprint:)`, with no fingerprint.
-    static func recipientRow(id: UUID, name: String) -> ProximityRecipeShareRecipient {
-        ProximityRecipeShareRecipient(id: id, displayName: name, fingerprint: nil)
+    /// A picker row for a device the radio never discovered: since plan step A0.7.2
+    /// `ProximityPairPeer(id:displayName:fingerprint:)`, with no fingerprint; until then
+    /// `ProximityRecipeShareRecipient`.
+    static func recipientRow(id: UUID, name: String) -> ProximityPairPeer {
+        ProximityPairPeer(id: id, displayName: name, fingerprint: nil)
+    }
+
+    /// The recipe share's diagnostic event, the typed value 31e's render row renders: today the
+    /// recipe-share manager's `ProximityRecipeShareManager.Event`.
+    typealias RecipeEvent = ProximityRecipeShareManager.Event
+
+    /// The recipe share's typed status line, whose failures 31e's render row renders: today the
+    /// recipe-share manager's `ProximityRecipeShareManager.Status`.
+    typealias RecipeStatus = ProximityRecipeShareManager.Status
+
+    /// The diagnostics line the recipe share shows for `event`: today the recipe-share manager's
+    /// renderer, `ProximityRecipeShareManager.diagnostic(for:)`.
+    static func renderDiagnostic(_ event: RecipeEvent) -> String {
+        ProximityRecipeShareManager.diagnostic(for: event)
+    }
+
+    /// The status line's sentence for `failure`: today `ProximityRecipeShareManager.statusMessage(for:)`.
+    static func renderStatusMessage(_ failure: RecipeStatus.Failure) -> String {
+        ProximityRecipeShareManager.statusMessage(for: failure)
+    }
+
+    /// The status line the share sheet shows for `status`: today
+    /// `ProximityRecipeShareManager.sendState(for:)`.
+    static func renderSendState(_ status: RecipeStatus) -> ProximityRecipeShareManager.SendState {
+        ProximityRecipeShareManager.sendState(for: status)
     }
 
     /// 31a's saved recipe, `Shared Oats`, under `id`: today a `ProximityRecipeSharePayload` over a saved

@@ -33,16 +33,17 @@
 //      later step reshapes or closes, each row with that step (37 lines in 5 files: the presence
 //      radio's, until A1, and the coordinator's typed send, a forwarder the recipe-share manager calls,
 //      until A0.7);
-//   6. no type that left ProximityKit for FernletSocial or the app (76 names: the heart dead-drop's,
-//      presence's, moderation's (the report relay's among them), closeness's and friend state's types,
-//      the parked chat payload, the clothing shop's, the activity manager's with its payloads and the
-//      two domain types its signing extends, the live-session chat's with the content layer's first
-//      half, the session hearts' with the heart ledger, its proof, the ack, the merged heart, the
-//      commit and the body, the session photos' with the wall's post and preferences, the review batch
-//      and its answer, the routed photo body and the JSON sidecar, the deleted support layout and
-//      camera's copy vault, the sealed-backup escrow's, and the Live Activity reaper and its
-//      attributes, the app's since plan step A0.6) is declared, extended or aliased in ProximityKit
-//      code again.
+//   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (79 names:
+//      the heart dead-drop's, presence's, moderation's (the report relay's among them), closeness's
+//      and friend state's types, the parked chat payload, the clothing shop's, the activity manager's
+//      with its payloads and the two domain types its signing extends, the live-session chat's with
+//      the content layer's first half, the session hearts' with the heart ledger, its proof, the ack,
+//      the merged heart, the commit and the body, the session photos' with the wall's post and
+//      preferences, the review batch and its answer, the routed photo body and the JSON sidecar, the
+//      deleted support layout and camera's copy vault, the sealed-backup escrow's, the Live Activity
+//      reaper and its attributes, the app's since plan step A0.6, and the three public values plan
+//      step A0.7 renamed, so no compatibility alias brings a recipe name back) is declared, extended
+//      or aliased in ProximityKit code again.
 //
 // And ProximityKit's target in `FernletKit/Package.swift` depends on exactly FernletCrypto (the
 // `CryptographicPurpose` signing overloads FernletSocial's feature labels and the app's duress and
@@ -55,7 +56,8 @@
 // `package` door's row lives exactly as long as the door. Rule 2 lists nothing: any use fails.
 // Rule 6 only grows: a feature that came back under its old name with no Fernlet string, no registry
 // label and no domain type of its own would pass rules 2 to 4, so each step that moves features out
-// adds the types it took. Between them they hold what ProximityKit still takes from Fernlet rather
+// adds the types it took, and a step that renames a public value for its generic use adds the old
+// name. Between them they hold what ProximityKit still takes from Fernlet rather
 // than from its host: the recipe-share manager, its wire types and status copy, and the typed doors
 // only it and Fernlet's features go through, the envelope's typed view of its token and the
 // coordinator's typed send (until A0.7); the session mode (until A0.7 / C5); and the DEBUG test-hook
@@ -598,13 +600,13 @@ private extension UInt8 {
         FernletLiteral("RecipeSharing/ProximityRecipeShareManager.swift", "fernlet.proximity.recipe", 1,
                        .recipeFormat),
         FernletLiteral("RecipeSharing/ProximityRecipeShareManager.swift",
-                       #"Turned away \(displayName(for: channel.peer)) — recipe sharing links two Fernlets at a time."#,
-                       1, .recipeShareCopy),
+                       #"Turned away \(name) — recipe sharing links two Fernlets at a time."#, 1,
+                       .recipeShareCopy),
         FernletLiteral("RecipeSharing/ProximityRecipeShareManager.swift",
                        "Recipe sharing reopened to nearby Fernlets.", 1, .recipeShareCopy),
         FernletLiteral("RecipeSharing/ProximityRecipeShareManager.swift",
-                       #"No answer from \(recipient.displayName) — that Fernlet may be busy sharing with someone else."#,
-                       1, .recipeShareCopy),
+                       #"No answer from \(name) — that Fernlet may be busy sharing with someone else."#, 1,
+                       .recipeShareCopy),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CONSOLE_LOG", 1, .meshDebugHook),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS", 1, .meshDebugHook),
         FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS_BARRED", 1, .meshDebugHook),
@@ -982,7 +984,9 @@ private extension UInt8 {
     /// the routed photo body and the JSON sidecar, for FernletSocial, and the sealed-backup escrow and
     /// (plan step A0.6) the Live Activity reaper with its attributes type for the app; the support
     /// layout that named their folder and the camera's copy vault, whose one line FernletSocial's own
-    /// copy holds, were deleted. Rules 2 to 4 cannot see one come back: a feature
+    /// copy holds, were deleted; and (plan step A0.7) the recipe share's three public values were
+    /// renamed in place for the one-to-one send, so their old names are refused here too, against a
+    /// compatibility alias. Rules 2 to 4 cannot see one come back: a feature
     /// re-declared here under its old name, with no Fernlet string, no registry label and no domain
     /// type of its own, compiles clean and passes them and every other test, and two declarations of
     /// one name in two modules the app imports compile until a caller names it. So each name is
@@ -1108,7 +1112,10 @@ private extension UInt8 {
     /// app's: the sealed-backup escrow's (the escrow key, its reconcile outcome, its candidate and its
     /// legacy-account name), and, since plan step A0.6, the Live Activity reaper and the attributes
     /// type it enumerates. Deleted: the support layout that named their folder, and the camera's copy
-    /// vault, `ProximityUICopy`, whose one line FernletSocial's copy holds.
+    /// vault, `ProximityUICopy`, whose one line FernletSocial's copy holds. Renamed in place, since
+    /// plan step A0.7: the three public values of the one-to-one send, the recipe share's outcome, its
+    /// failure and its picker row, named `ProximityPairSendOutcome`, `ProximityPairSendFailure` and
+    /// `ProximityPairPeer`, so no compatibility alias brings a recipe name back.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -1130,7 +1137,8 @@ private extension UInt8 {
         "FriendPhotoWallPost", "FriendPhotoWallPreferences", "MeshFriendReviewBatch", "SessionPhotoAnswer",
         "SessionPhotoAnswerFailure", "MeshRoutedPhotoHeader", "MeshRoutedPhotoBody", "HeldKeepOutcome",
         "JSONSidecarFile", "ProximityUICopy",
-        "ProximityConnectionActivityAttributes", "ProximityLiveActivityReaper"
+        "ProximityConnectionActivityAttributes", "ProximityLiveActivityReaper",
+        "RecipeShareOutcome", "RecipeShareFailure", "ProximityRecipeShareRecipient"
     ]
 
     /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must

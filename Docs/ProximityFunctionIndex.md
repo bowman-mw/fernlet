@@ -1563,8 +1563,8 @@ lines that leave with the recipe profile (A0.7) or the session profile (A0.7 / C
 doors its list names (the presence radio's seam, its QUIC conformer, the peer channel, the epoch posture
 and the TXT vocabulary until A1; the coordinator's typed send, a forwarder to its public token send,
 until A0.7), and every
-type that left ProximityKit for `FernletSocial` or the app out of it: none is declared, extended or
-aliased there again. It holds ProximityKit's target to exactly two dependencies too: FernletCrypto (the
+type that left ProximityKit for `FernletSocial` or the app out of it, with the recipe share's three
+public values it renamed for the one-to-one send: none is declared, extended or aliased there again. It holds ProximityKit's target to exactly two dependencies too: FernletCrypto (the
 `CryptographicPurpose` signing overloads, until C1) and FernletDomainModel (until A0.7 and A0.7 / C5).
 The exact per-file lists in `ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
@@ -2316,7 +2316,7 @@ frame.
 | `dismissRecipeShare(id:)` | Removes a pending inbound share by ID. |
 | `proximityCoordinator(_:didReceive:plaintext:from:)` | Accepts valid `recipeShare` envelopes and inserts pending review items. |
 | `setupSession()` | Installs the radio's discovery/lost/channel/disconnect/transport-error hooks plus the two pass-2 inbound hooks, `resolveDialer` and `shouldAcceptDialer`. |
-| `handleTransportError(_:)` | The radio's START-failure door: records the message and `stop()`s so the run-policy seam re-applies a running verdict at its next run (P8 item 0 (b)). **Only a start failure reaches it** — a per-dial miss, a refused hello and a failed transfer are logged inside the radio, because under QUIC this door is reachable from far more than `didNotStart*` and would stand the whole radio down on an ordinary evening. Guarded on an empty connection list so it can never tear down a live pairing. |
+| `handleTransportError(_:)` | The radio's START-failure door: emits its first event (the radio's own message, `radioFailed(message:)`, or the error `start()` caught, `radioDidNotStart(error:)`) and `stop()`s so the run-policy seam re-applies a running verdict at its next run (P8 item 0 (b)). **Only a start failure reaches it** — a per-dial miss, a refused hello and a failed transfer are logged inside the radio, because under QUIC this door is reachable from far more than `didNotStart*` and would stand the whole radio down on an ordinary evening. Guarded on an empty connection list so it can never tear down a live pairing. |
 | `peerAdvertising(sessionID:)` | The `resolveDialer` body: which browsed peer, if any, advertises that `sid`. QUIC has no invitation carrying a browsed peer, so an inbound dialer names itself and this is the resolution; a `sid` no discovered peer carries resolves to nobody and the radio refuses the connection before any channel or handle exists. |
 | `discoveryInfo()` | Builds the OWNER's half of the TXT record (`v`/`mode`/`name`), with `name` bounded in BYTES by `RecipeShareAdvertisedName.publishable(_:in:)` under the manager's namespace so the Bonjour publisher cannot drop it — and the `name` key OMITTED when nothing publishable remains, matching `MeshLinkAdvertisement.publishedFields` (an absent name falls back to the peer hint; an empty one would render as the placeholder). The `sid` is deliberately absent: it belongs to the radio, which mints it with its instance name and TLS identity at every `start()` and every resume, and joins it in `RecipeShareAdvertisement.publishedFields(from:sessionID:)`. |
 | `applyDiscoveryGate(_:)` | The ONE door to the radio's discovery: takes `RecipeShareDiscoveryGate`'s verdict for a manager event, applies it to the session, tells the live `RecipeShareTransfer` which way the door moved, and returns the verdict (the resume's diagnostic line is conditional on it; the pause's is not). `session.pauseDiscovery()` and `session.resumeDiscovery()` appear nowhere else — walled by `RecipeShareTransferTests`. |
@@ -2328,14 +2328,17 @@ frame.
 | `startObserving()` | Observes connection coordinator states through the shared `ObservationLoop.start(on:tracking:onChange:)` and calls `checkCoordinatorStates()` after each observed change. |
 | `checkCoordinatorStates()` | Captures verified fingerprints/KA keys, ensures recipients, sends pending payloads, and drops stale connections. |
 | `ensureRecipient(for:identity:)` | Adds/updates a recipient from verified identity. |
-| `sendPendingPayload(via:)` | Encodes, seals, sends queued recipe payload, updates send state, and records diagnostics. The send is gated on the exchange's once-only `sendBegan` (belt-and-braces beside `pendingOutgoing = nil`, and the half a pass-2 session cannot quietly lose); a refusal is surfaced as a visible failure, never swallowed, and publishes no outcome (whatever reached it owns one). A completion publishes `sent` and a throw `sendIncomplete` (or `interrupted` if the throw came before `sendBegan`), both attributed by token. |
+| `sendPendingPayload(via:)` | Encodes, seals, sends queued recipe payload, updates the typed status, and emits its events. The send is gated on the exchange's once-only `sendBegan` (belt-and-braces beside `pendingOutgoing = nil`, and the half a pass-2 session cannot quietly lose); a refusal is surfaced as a visible failure, never swallowed, and publishes no outcome (whatever reached it owns one). A completion publishes `sent` and a throw `sendIncomplete` (or `interrupted` if the throw came before `sendBegan`), both attributed by token. |
 | `peer(for:)` | Finds a peer from the active connection, the discovered cache, or the radio's connected peers. |
-| `scheduleStatusClear()` | Resets send state to idle after a short delay. Why nothing that must stay on screen may be derived from `sendState`: read `lastShareOutcome`. |
-| `failLiveShare(_:statusMessage:diagnostic:)` | The one tail of every pre-send failure of the live share (recipient unavailable, connecting window, connect timeout, lost pairing): drops the queued payload, cancels the record, sets the English status line, records the diagnostic, releases the engaged row, and publishes the frozen cause. |
+| `scheduleStatusClear()` | Resets the typed `status` to idle 2.5 s later. Why nothing that must stay on screen may be derived from `sendState`: read `lastShareOutcome`. |
+| `failLiveShare(_:status:event:)` | The one tail of every pre-send failure of the live share (recipient unavailable, connecting window, connect timeout, lost pairing): drops the queued payload, cancels the record, sets the failed status, emits the event, releases the engaged row, and publishes the frozen cause, in that order. |
 | `failLiveShareIfItsPairingWasLost()` | Called from `finalizeConnectionRemovals`: fails the live share as `couldNotConnect` when its pairing had come up (`pairingSeen`), it is still pre-send, and no connection with the recipient's device remains. Closes the stuck "Connecting to …" left by a handshake that failed after the channel opened. |
 | `finishShareEndedByTeardown()` | Publishes `interrupted`/`sendIncomplete` for a non-terminal share a teardown ended, then forgets the live share. Runs before the record is discarded. |
 | `finishShare(_:token:)` | The one writer of `lastShareOutcome` for a minted share. A token names the send that produced the result; a superseded share's result is a diagnostic, and a result arriving after a teardown is dropped. |
-| `recordDiagnostic(_:)` | Appends capped diagnostic event. |
+| `emit(_:)` | Records one typed `Event` the mechanism just acted on: renders it with `diagnostic(for:)` and appends it, synchronously, so the list's order is the order the manager acts in. Every mechanism diagnostic goes through it, at the site that once spelled its sentence. |
+| `recordDiagnostic(_:)` | Appends a capped diagnostic line: a rendered event, or one of the receive handler's four lines. |
+| `sendState` | The public status line the share sheet shows: the typed `status` rendered by `sendState(for:)`. Every write of the status line writes `status`, at the line that once wrote `sendState`. |
+| `sendState(for:)` / `statusMessage(for:)` / `diagnostic(for:)` | The renderer, at the foot of the file: the one place the recipe share's status line and diagnostics become English, the frozen sentences the share sheet renders verbatim. Exhaustive switches with no `default`, so a new `Status.Failure` or `Event` case is a build error until it has its sentence. `FernletFeatureGoldenTests` 31e renders every case with distinct arguments against its frozen sentence; 31b and 31d read them in order on each path. |
 
 ### `ProximityRecipeShareSheet.swift`
 
@@ -2360,7 +2363,7 @@ frame.
 
 | Function | What It Does |
 | --- | --- |
-| `RecipeShareConfirmation.init(_:)` | Maps a `RecipeShareOutcome` to tone, headline, detail, announcement and `offersRetry`. Exhaustive per cause; "sent" never becomes "delivered", and the success copy says what the other person can do only on the condition that it reached them. |
+| `RecipeShareConfirmation.init(_:)` | Maps a `ProximityPairSendOutcome` to tone, headline, detail, announcement and `offersRetry`. Exhaustive per cause; "sent" never becomes "delivered", and the success copy says what the other person can do only on the condition that it reached them. |
 | `RecipeShareOutcomeLatch.beganShare(to:)` / `receive(_:)` / `retry()` / `reset()` | Latches only the outcome of a share the sheet began, once, for the tapped row; retry clears a failure panel and returns the row; reset forgets everything (appear, disappear). |
 | `RecipeShareRadioHandBack.step(currentOutcomeID:listeningWanted:)` | After the delay: leave the radio alone if the manager has moved on to a newer share (or a delete-all), else stop, and listen again only when wanted. |
 | `RecipeShareRadioCustody.handOff(afterSendOf:)` / `sheetStopsRadioOnDisappear` | Custody of the radio moves from the sheet to the hand back once, on a successful send; from then on the sheet's disappearance leaves the radio alone. |
