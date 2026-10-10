@@ -244,9 +244,10 @@ cannot statically follow — prefer an `enum` switch.
   no-tracking wall + the doc-coverage scan, all in CI on every push, plus the pre-push hook. (There
   is no C/Objective-C in the tree, so the Clang static analyzer has nothing to analyze.)
 
-`PowerOfTenBoundaryTests` also pins the build settings above by reading the pbxproj,
-`Scripts/spm-wall-check.sh` and `Scripts/macos-build-check.sh` (that script's one `xcodebuild build`
-command, joined across its continuations, never an `echo`), so removing a flag fails the test run.
+`PowerOfTenBoundaryTests` also pins the build settings above by reading the pbxproj and each strict
+build's one `xcodebuild` command, joined across its continuations and never an `echo`:
+`Scripts/spm-wall-check.sh`'s `build-for-testing` and `Scripts/macos-build-check.sh`'s `build`, so
+removing a flag from either command fails the test run.
 
 ---
 

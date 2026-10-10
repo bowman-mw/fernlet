@@ -30,8 +30,9 @@
 # scans the AI-facing source files for forbidden sealed-type tokens. Run the test suite to
 # exercise it; this script covers the compiler-enforced half of the wall.
 #
-# POWER-OF-10 RULE 10 (Docs/Power-of-10-Swift.md §R10) RIDES ON THIS BUILD TOO. It is the one
-# strict build CI runs, so it also carries the warnings-are-errors overrides:
+# POWER-OF-10 RULE 10 (Docs/Power-of-10-Swift.md §R10) RIDES ON THIS BUILD TOO. It is the iOS one
+# of the two strict builds CI runs (Scripts/macos-build-check.sh, ProximityKit's closure built for
+# native macOS, is the other), so it also carries the warnings-are-errors overrides:
 #
 #     SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES
 #
@@ -41,8 +42,9 @@
 # build command lifts that; the pbxproj carries SWIFT_/GCC_TREAT_WARNINGS_AS_ERRORS for the app
 # and test targets, but — like the dependency flag above — a project-level setting does not
 # reach the SwiftPM targets, and `.treatAllWarnings(as: .error)` in Package.swift collides with
-# Xcode's own `-suppress-warnings` ("conflicting options"), so the override here is the ONE
-# place package warnings become errors. A new warning anywhere therefore fails this check.
+# Xcode's own `-suppress-warnings` ("conflicting options"), so the overrides on the strict build
+# commands, here and in Scripts/macos-build-check.sh, are the only place package warnings become
+# errors. A new warning anywhere in this build therefore fails this check.
 #
 # USAGE:  Scripts/spm-wall-check.sh
 #         FERNLET_DESTINATION='platform=iOS Simulator,name=iPhone 17' Scripts/spm-wall-check.sh

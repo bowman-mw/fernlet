@@ -18,30 +18,37 @@
 // dropped, literals emptied) and holds five rules, its readers fixtured both ways in a cell of their
 // own, the fifth keeping the compiler half running:
 //
-//   1. every module a file imports (`import M`, `@preconcurrency import M`, `import struct M.X`) or
-//      tests for with `canImport(M)` is a neutral baseline module, available on both platforms, or an
-//      exact seam row: a file, a module, how its imports are guarded and, for a transient row, the
-//      plan step that deletes it. A guarded seam's every import sits in its `#if` branch, never in
-//      its `#else`; a whole-file seam's file opens with its `#if` and closes with its `#endif`, and
-//      holds no other `#if`;
+//   1. every module a file imports (`import M`, `@preconcurrency import M`, `@_spi(S) import M`,
+//      `import struct M.X`, at a line's start or after a `;`) or tests for with `canImport(M)` is a
+//      neutral baseline module, available on both platforms, or an exact seam row: a file, a module,
+//      how its imports are guarded and, for a transient row, the plan step that deletes it. A guarded
+//      seam's every import sits in its `#if` branch, never in its `#else`; a whole-file seam's file
+//      opens with its `#if` and closes with its `#endif`, and holds no other `#if`. And no `#if` or
+//      `#elseif` tests the platform with `os(…)` but a seam row's own guard: a platform branch is
+//      policy the iOS run never executes and the macOS build compiles;
 //   2. no file names a source of the device's name (`UIDevice`, `Host.current`, `NSHost`, `hostName`,
-//      the SystemConfiguration, CoreServices and BSD calls, `localizedName`), but on the rows listed;
-//   3. no file names a platform directory (Application Support, Documents, Caches, Library, the
-//      temporary and home directories, a search-path call, a container), but on the rows listed, and
-//      no `ProximityHost` extension declares a default for a fact only the host may state (its
-//      namespace, install binding, trust policy, identity, routed rows, fallback name, ranging
-//      provider and storage root), read as declarations at the extension's top level, never as names;
+//      the SystemConfiguration, CoreServices and BSD calls, the `KERN_HOSTNAME` sysctl,
+//      `localizedName`), but on the rows listed;
+//   3. no file names a Foundation API for a platform directory (Application Support, Documents,
+//      Caches, Library, the user's application, media and trash folders, the temporary, home and
+//      current directories, a search-path call or lookup, a container), but on the rows listed, a path
+//      spelled in a literal being out of a lexed reader's sight, and no `ProximityHost` extension
+//      declares a default for a fact only the host may state (its namespace, install binding, trust
+//      policy, identity, routed rows, fallback name, ranging provider and storage root), read as
+//      declarations at the extension's top level, never as names;
 //   4. every channel-ready door that builds a connection's coordinator (the mesh's and the recipe
 //      radio's here, and presence's heart door in FernletSocial, Fernlet's half) builds it over its
 //      host's `makeProximityRangingProvider()`, once, naming no provider of its own, and
 //      `NIRangingSession` is named in ProximityKit code only in its own file;
 //   5. ProximityKit's macOS build is a compiled fact on every push: the package manifest declares
-//      macOS 26 and ProximityKit's own product, the CI workflow's macOS step runs
-//      `Scripts/macos-build-selftest.sh` (whose negative leg plants an `import UIKit` in ProximityKit and
-//      greps the failure only a native macOS build gives, and whose positive leg builds the clean tree),
-//      `Scripts/macos-build-check.sh` holds the one `xcodebuild build` command for that product and
-//      native macOS, and the pre-push hook runs it; each read from what runs, never from a step's
-//      title, an `echo` or a comment, its readers fixtured both ways in the same cell.
+//      macOS 26 and ProximityKit's own product, the CI workflow's macOS step, with no `if:` or
+//      `continue-on-error:` on it or on its job, runs `Scripts/macos-build-selftest.sh` (whose negative
+//      leg plants an `import UIKit` in ProximityKit and greps the failure only a native macOS build
+//      gives, and whose positive leg builds the clean tree), `Scripts/macos-build-check.sh` holds the
+//      one `xcodebuild build` command for that product and native macOS, and the pre-push hook runs it,
+//      its leg on unless a person skips it and relevant to a change of the manifest or a ProximityKit
+//      source; each read from what runs, never from a step's title, an `echo` or a comment, its readers
+//      fixtured both ways in the same cell.
 //
 // The first three rules are exact both ways: a new use fails, and a use that goes away fails too,
 // until its row is deleted. Every row is permanent: `ProtectedSidecar.swift`'s guarded UIKit import
@@ -65,11 +72,11 @@
 import Foundation
 import Testing
 
-/// ProximityKit imports only neutral modules and its declared platform seams, reads no device name,
-/// computes no platform directory and defaults no fact only its host may state, every channel-ready
-/// door asks its host for each connection's ranging provider, and its native macOS build runs on every
-/// push: six cells, the first three rules exact both ways over rows that are all permanent, and their
-/// readers fixtured both ways.
+/// ProximityKit imports only neutral modules and its declared platform seams, branches on the platform
+/// only in their guards, reads no device name, computes no platform directory and defaults no fact only
+/// its host may state, every channel-ready door asks its host for each connection's ranging provider,
+/// and its native macOS build runs on every push: six cells, the first three rules exact both ways over
+/// rows that are all permanent, and their readers fixtured both ways.
 @Suite struct ProximityPlatformBoundaryTests {
 
     /// One ProximityKit file: its path under the module root and its lexed source, as
@@ -106,6 +113,17 @@ import Testing
         /// The file's code opens with `#if <condition>` and closes with its `#endif`, holding no other
         /// directive, so every import of the module sits in that one branch.
         case wholeFile(String)
+
+        /// The `#if` condition the row's imports sit under, as written; nil for an unguarded row. W1
+        /// allows a platform branch (`os(…)`) in the row's file under this condition alone.
+        var condition: String? {
+            switch self {
+            case .unguarded:
+                return nil
+            case .partial(let text), .wholeFile(let text):
+                return text
+            }
+        }
     }
 
     /// One module beyond the baseline that one ProximityKit file may import, or test for with
@@ -187,31 +205,39 @@ import Testing
     /// Every source of the device's name within a module's reach: UIKit's `UIDevice`, Foundation's
     /// `Host.current`, `NSHost` and `hostName`, SystemConfiguration's and CoreServices' computer and
     /// local-host names, the BSD calls (`utsname` stands for `uname`, which needs one, since a bare
-    /// `uname` is a common variable name) and `localizedName`. On a Mac they lead to the user's own name
-    /// for the machine, its Computer Name or host name, which the recipe radio would put in an
-    /// unauthenticated TXT record.
+    /// `uname` is a common variable name, and `KERN_HOSTNAME` for the `sysctl` that reads the host name
+    /// by its MIB, since a bare `sysctl` reads any setting) and `localizedName`. On a Mac they lead to the
+    /// user's own name for the machine, its Computer Name or host name, which the recipe radio would put
+    /// in an unauthenticated TXT record.
     static let deviceNameNeedles: [Needle] = [
         .identifier("UIDevice"), .dotted("Host", "current"), .identifier("NSHost"), .identifier("hostName"),
         .identifier("SCDynamicStoreCopyComputerName"), .identifier("SCDynamicStoreCopyLocalHostName"),
         .identifier("CSCopyMachineName"), .identifier("gethostname"), .identifier("sysctlbyname"),
-        .identifier("utsname"), .identifier("nodename"), .identifier("localizedName")
+        .identifier("utsname"), .identifier("nodename"), .identifier("KERN_HOSTNAME"), .identifier("localizedName")
     ]
 
     /// Every device-name read in ProximityKit, exactly: none since plan step A0.6.2, when the local
     /// name's fallback, which read `UIDevice`, became its host's `proximityFallbackDisplayName`.
     static let deviceNameRows: [TokenRow] = []
 
-    /// Every way a module could reach a platform directory: the `URL` and `FileManager` locations, the
-    /// two Foundation functions, the search-path call, an app-group container and the two `FileManager`
-    /// lookups by their first label.
+    /// Every Foundation API by which a module could name a platform directory: the `URL` and
+    /// `FileManager` locations by name (the user's application, media and trash folders and the current
+    /// directory among them), the three Foundation functions, the search-path call, an app-group or
+    /// ubiquity container, and the lookups by a search-path directory by their first label (`FileManager`'s
+    /// two and `URL`'s initializer). A path spelled in a literal is not code a lexed reader sees, since
+    /// the lexer empties literals: the needles hold the APIs, not every string.
     static let directoryNeedles: [Needle] = [
         .identifier("applicationSupportDirectory"), .identifier("documentDirectory"),
         .identifier("documentsDirectory"), .identifier("cachesDirectory"), .identifier("libraryDirectory"),
         .identifier("temporaryDirectory"), .identifier("NSTemporaryDirectory"), .identifier("NSHomeDirectory"),
-        .identifier("homeDirectory"), .identifier("homeDirectoryForCurrentUser"),
+        .identifier("NSHomeDirectoryForUser"), .identifier("homeDirectory"), .identifier("homeDirectoryForCurrentUser"),
         .identifier("NSSearchPathForDirectoriesInDomains"), .identifier("downloadsDirectory"),
-        .identifier("desktopDirectory"), .identifier("sharedPublicDirectory"), .identifier("containerURL"),
-        .call("urls", label: "for"), .call("url", label: "for")
+        .identifier("desktopDirectory"), .identifier("sharedPublicDirectory"), .identifier("applicationDirectory"),
+        .identifier("userDirectory"), .identifier("moviesDirectory"), .identifier("musicDirectory"),
+        .identifier("picturesDirectory"), .identifier("trashDirectory"), .identifier("currentDirectory"),
+        .identifier("currentDirectoryPath"), .identifier("containerURL"),
+        .call("url", label: "forUbiquityContainerIdentifier"), .call("urls", label: "for"), .call("url", label: "for"),
+        .call("URL", label: "for")
     ]
 
     /// Every platform directory ProximityKit names, exactly: none since plan step A0.6.6, when the
@@ -241,17 +267,21 @@ import Testing
     /// module or an exact seam row, and every seam row's file still imports its module; a guarded row's
     /// imports sit in its `#if` branch and never its `#else`, and a whole-file row's file is that one
     /// `#if` from its first code line to its last. A platform framework enters ProximityKit only as a
-    /// row with its guard and, unless it is a permanent mechanism seam, the step that removes it.
+    /// row with its guard and, unless it is a permanent mechanism seam, the step that removes it. And
+    /// no `#if` or `#elseif` names `os(…)` but a seam row's own guard in that row's file, so no branch
+    /// holds a platform answer the iOS run never executes and the macOS build compiles.
     @Test func proximityKitImportsOnlyNeutralModulesAndItsDeclaredSeams() throws {
         let sources = try ProximityNamespaceBoundaryTests.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
         var named: Set<String> = []
         var imported: Set<String> = []
+        var branches: Set<String> = []
         // R2: bounded by the module's files.
         for source in sources {
             let uses = try Self.moduleUses(in: source.lexed.code).filter { !Self.baselineModules.contains($0.module) }
             named.formUnion(uses.map { Self.key(source.path, $0.module) })
             imported.formUnion(uses.filter(\.isImport).map { Self.key(source.path, $0.module) })
+            branches.formUnion(try Self.platformConditions(in: source.lexed.code).map { Self.key(source.path, $0) })
             Self.expectPlacement(of: uses, in: source)
         }
         let unlisted = named.subtracting(Self.seamRows.map { Self.key($0.path, $0.module) }).sorted()
@@ -259,6 +289,13 @@ import Testing
             ProximityKit names a module that is neither a neutral baseline module nor a declared seam: \
             \(unlisted). A platform framework enters ProximityKit only as a seam row, with its guard and \
             the plan step that removes it
+            """)
+        let guards = Set(Self.seamRows.compactMap { row in row.guarded.condition.map { Self.key(row.path, $0) } })
+        let unguarded = branches.subtracting(guards).sorted()
+        #expect(unguarded.isEmpty, """
+            ProximityKit branches on the platform outside a seam row's own guard: \(unguarded). A platform \
+            branch is policy the iOS run never executes and the macOS build compiles: the host states the \
+            fact, and a mechanism that needs a platform guard is a seam row
             """)
         // R2: bounded by the rows.
         for row in Self.seamRows where !imported.contains(Self.key(row.path, row.module)) {
@@ -339,37 +376,47 @@ import Testing
 
     // MARK: W4: the readers, fixtured
 
-    /// **W4.** The readers read code as Swift does, both ways: an import in each of its forms, a
-    /// `canImport` condition and its `#if` region, each W2 and W3 token, and a declaration at a
-    /// `ProximityHost` extension's top level are read; the same text in a comment or a string literal,
-    /// a line after `#else` as inside the guard, a longer name holding a token, a name an extension only
-    /// reads, and a protocol's requirement are not. A whole-file guard is told from a partial one.
+    /// **W4.** The readers read code as Swift does, both ways: an import in each of its forms (an
+    /// attribute with arguments before it, and a second import after a `;`, included), a `canImport`
+    /// condition and its `#if` region, a platform branch's condition, each W2 and W3 token, and a
+    /// declaration at a `ProximityHost` extension's top level are read; the same text in a comment or a
+    /// string literal, a line after `#else` as inside the guard, a name that only starts with `import`,
+    /// a condition that names no `os(…)`, a longer name holding a token, a name an extension only reads,
+    /// and a protocol's requirement are not. A whole-file guard is told from a partial one.
     @Test func theReadersReadCodeAsSwiftDoes() throws {
         try Self.expectModuleReadersFixtured()
         Self.expectWholeFileReaderFixtured()
+        try Self.expectPlatformBranchReaderFixtured()
         try Self.expectTokenReadersFixtured()
         try Self.expectDeclarationReaderFixtured()
     }
 
     /// The module reader: each import form and a `canImport` condition read, with the regions they sit
-    /// in; nothing read from a comment or a literal; an import after `#else` outside the guard.
+    /// in; nothing read from a comment or a literal, nor from a name that only starts with `import`; an
+    /// import after `#else` outside the guard.
     static func expectModuleReadersFixtured() throws {
         let forms = try moduleUses(in: lexedCode("""
             import UIKit
             @preconcurrency import UIKit
             import struct Foundation.URL
+            import Foundation; import ActivityKit
+            @_spi(Private) import NearbyInteraction
+            @_spi(Private)import CoreServices
             #if canImport(UIKit)
             #endif
             """))
-        #expect(forms.map(\.module) == ["UIKit", "UIKit", "Foundation", "UIKit"], "read \(forms.map(\.module))")
-        #expect(forms.map(\.isImport) == [true, true, true, false], "told imports from conditions as \(forms)")
+        #expect(forms.map(\.module) == ["UIKit", "UIKit", "Foundation", "Foundation", "ActivityKit", "NearbyInteraction",
+                                        "CoreServices", "UIKit"], "read \(forms.map(\.module))")
+        #expect(forms.map(\.isImport) == [true, true, true, true, true, true, true, false],
+                "told imports from conditions as \(forms)")
         let prose = try moduleUses(in: lexedCode("""
             // import UIKit
             let a = "import UIKit"
             /* #if canImport(UIKit) */
             let b = "canImport(UIKit)"
+            let c = "x; import UIKit"; importantThing()
             """))
-        #expect(prose.isEmpty, "a comment or a literal was read as code: \(prose)")
+        #expect(prose.isEmpty, "a comment, a literal or a longer name was read as code: \(prose)")
         let branches = try moduleUses(in: lexedCode("""
             #if canImport(UIKit)
             import UIKit
@@ -403,6 +450,26 @@ import Testing
         #expect(!isWholeFile(whole, guardedBy: "canImport(NearbyInteraction)"), "another condition is not this guard")
     }
 
+    /// The platform-branch reader: an `#if` or `#elseif` that names `os(…)`, alone, negated or combined,
+    /// is read with its condition as written; a `DEBUG`, `canImport` or `targetEnvironment` condition,
+    /// an `os` that no directive tests, and a directive in a comment or a literal are not.
+    static func expectPlatformBranchReaderFixtured() throws {
+        let read = try platformConditions(in: lexedCode("""
+            #if os(iOS)
+            #elseif !os(macOS) && canImport(UIKit)
+            #endif
+            #if DEBUG
+            #elseif canImport(UIKit)
+            #endif
+            #if targetEnvironment(simulator)
+            #endif
+            let os = Logger(); _ = os(1)
+            // #if os(macOS)
+            let text = "#if os(macOS)"
+            """))
+        #expect(read == ["os(iOS)", "!os(macOS) && canImport(UIKit)"], "read the platform branches as \(read)")
+    }
+
     /// The token readers: each W2 and W3 token read once in `_ = <token>` beside the same text in a
     /// comment and a literal, and none read inside a longer name.
     static func expectTokenReadersFixtured() throws {
@@ -418,7 +485,11 @@ import Testing
         #expect(try mentions(of: .dotted("Host", "current"), in: neighbours) == 0, "HostName.current read as Host.current")
         let lookup = lexedCode("_ = FileManager.default.urls(for: .cachesDirectory, in: mask)\n")
         #expect(try mentions(of: .call("url", label: "for"), in: lookup) == 0, "urls(for: read as url(for:")
+        #expect(try mentions(of: .call("URL", label: "for"), in: lookup) == 0, "urls(for: read as URL(for:")
         #expect(try mentions(of: .call("urls", label: "for"), in: lookup) == 1, "urls(for: was not read")
+        let ubiquity = lexedCode("_ = FileManager.default.url(forUbiquityContainerIdentifier: nil)\n")
+        #expect(try mentions(of: .call("url", label: "for"), in: ubiquity) == 0,
+                "url(forUbiquityContainerIdentifier: read as url(for:")
     }
 
     /// The declaration reader: the names declared at a `ProximityHost` extension's top level, a body
@@ -556,16 +627,30 @@ import Testing
     /// The pre-push hook's macOS leg: the check's invocation on a line of its own, as the S3 leg's is.
     static let hookInvocation = #""$REPO_ROOT/Scripts/macos-build-check.sh""#
 
+    /// The test that opens the hook's macOS leg: the leg runs unless a person sets
+    /// `SKIP_MACOS_BUILD_CHECK=1`, its default `0`, as the S3 leg's is.
+    static let hookDefault = #"if [ "${SKIP_MACOS_BUILD_CHECK:-0}" = "1" ]; then"#
+
+    /// How the hook assigns the macOS leg's relevance pattern, the `grep -E` pattern a pushed path must
+    /// match for the leg to build.
+    static let hookRelevancePrefix = "macos_relevant_regex='"
+
+    /// Paths the macOS leg must find relevant: the manifest and a ProximityKit source.
+    static let hookRelevantPaths = [manifestPath, "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift"]
+
     /// **W6.** ProximityKit's macOS build is a compiled fact on every push, each piece read from what
     /// RUNS, never from a step's title, an `echo` or a comment, any of which can name a script nothing
     /// runs: the manifest declares exactly iOS 26 and macOS 26 and ProximityKit's own product; the
-    /// workflow declares its macOS step once, and that step's body runs the self-test; the self-test
-    /// plants its probe in ProximityKit, captures the check, greps the failure only a native macOS build
-    /// gives, and runs the check again on the clean tree; the check holds one `xcodebuild build`
-    /// command, for that product, native macOS, its own derived data and the dependency flag; and the
-    /// pre-push hook runs the check. Its readers are fixtured both ways. Each verdict is computed before
-    /// its `#expect`, so a failure prints the verdict and its message, never a whole file: the workflow's
-    /// own text names the floor script's restart line, which an echoed copy would trip.
+    /// workflow declares its macOS step once, with no `if:` or `continue-on-error:` on the step or on its
+    /// job (either keeps a declared step from running or from failing the run), and that step's body
+    /// runs the self-test; the self-test plants its probe in ProximityKit, captures the check, greps the
+    /// failure only a native macOS build gives, and runs the check again on the clean tree; the check
+    /// holds one `xcodebuild build` command, for that product, native macOS, its own derived data and the
+    /// dependency flag; and the pre-push hook runs the check, its leg on by default and relevant to a
+    /// change of the manifest or a ProximityKit source. Its readers are fixtured both ways. Each verdict
+    /// is computed before its `#expect`, so a failure prints the verdict and its message, never a whole
+    /// file: the workflow's own text names the floor script's restart line, which an echoed copy would
+    /// trip.
     @Test func theMacBuildIsACompiledFactOnEveryPush() throws {
         let manifest = try RepoRoot.source(Self.manifestPath)
         let platforms = Self.platformEntries(in: manifest)
@@ -578,8 +663,9 @@ import Testing
         let stepRunsTheSelfTest = Self.stepRuns(Self.macOSStepRun, step: Self.macOSStepName,
                                                 in: try RepoRoot.source(".github/workflows/s3-wall.yml"))
         #expect(stepRunsTheSelfTest, """
-            the workflow's "\(Self.macOSStepName)" step is not declared exactly once with a body that runs \
-            `\(Self.macOSStepRun)`: a step whose title names the script runs nothing
+            the workflow's "\(Self.macOSStepName)" step is not declared exactly once, with no `if:` or \
+            `continue-on-error:` on it or its job, and a body that runs `\(Self.macOSStepRun)`: a step \
+            whose title names the script, or that is skipped or tolerated, runs nothing that counts
             """)
         let missing = Self.missingSelfTestLegs(in: try RepoRoot.source("Scripts/macos-build-selftest.sh"))
         #expect(missing.isEmpty, "Scripts/macos-build-selftest.sh no longer runs \(missing)")
@@ -589,17 +675,26 @@ import Testing
             !(commands.first.map { Self.carries(flag, in: $0) } ?? false)
         }
         #expect(unflagged.isEmpty, "\(Self.checkScriptPath)'s `xcodebuild build` command no longer carries \(unflagged)")
-        let hookRuns = Self.runLines(of: try RepoRoot.source("Scripts/git-hooks/pre-push")).contains(Self.hookInvocation)
+        let hook = try RepoRoot.source("Scripts/git-hooks/pre-push")
+        let hookRuns = Self.runLines(of: hook).contains(Self.hookInvocation)
         #expect(hookRuns, "Scripts/git-hooks/pre-push no longer runs \(Self.hookInvocation)")
+        let hookLegOn = Self.hookLegRunsByDefault(hook)
+        #expect(hookLegOn, """
+            Scripts/git-hooks/pre-push's macOS leg no longer opens with `\(Self.hookDefault)` and one \
+            relevance pattern matching \(Self.hookRelevantPaths): a leg that skips itself builds nothing
+            """)
         Self.expectWorkflowAndHookReadersFixtured()
+        Self.expectHookLegReaderFixtured()
         Self.expectScriptReadersFixtured()
         Self.expectSelfTestReaderFixtured()
     }
 
     /// The workflow, hook and manifest readers, both ways: a step whose title names the script but whose
     /// run line is commented out or absent, or which is declared twice, does not run it, and the next
-    /// step's run line is not its own; a hook that only echoes the check's name, or names it in a
-    /// comment, does not run it; a commented-out platform is not declared.
+    /// step's run line is not its own; a step with an `if:` or a `continue-on-error:`, or in a job with
+    /// an `if:`, does not run it, while the same step in an unguarded job does; a hook that only echoes
+    /// the check's name, or names it in a comment, does not run it; a commented-out platform is not
+    /// declared.
     static func expectWorkflowAndHookReadersFixtured() {
         let name = "Mac (Scripts/macos-build-selftest.sh)"
         let script = "Scripts/macos-build-selftest.sh"
@@ -612,6 +707,14 @@ import Testing
         let nextStep = "  - name: \(name)\n    run: echo \"\(script)\"\n  - name: Next\n    run: |\n      \(script)\n"
         #expect(!stepRuns(script, step: name, in: nextStep), "the next step's run line was read as this step's")
         #expect(!stepRuns(script, step: name, in: running + running), "a step declared twice was read as declared once")
+        let skipped = "  - name: \(name)\n    if: ${{ false }}\n    run: |\n      \(script)\n"
+        #expect(!stepRuns(script, step: name, in: skipped), "a step its `if:` skips was read as running")
+        let tolerated = "  - name: \(name)\n    continue-on-error: true\n    run: |\n      \(script)\n"
+        #expect(!stepRuns(script, step: name, in: tolerated), "a step whose failure fails nothing was read as running")
+        let job = "jobs:\n  wall:\n    runs-on: macos-26\n    steps:\n      - name: \(name)\n        run: |\n          \(script)\n"
+        #expect(stepRuns(script, step: name, in: job), "a step in a job with no guard was not read as running")
+        let skippedJob = job.replacingOccurrences(of: "    steps:\n", with: "    if: false\n    steps:\n")
+        #expect(!stepRuns(script, step: name, in: skippedJob), "a step whose job its `if:` skips was read as running")
         let echoed = "echo \"[pre-push] Running the macOS build check (Scripts/macos-build-check.sh)…\"\n"
             + "# \(hookInvocation)\n"
         #expect(!runLines(of: echoed).contains(hookInvocation), "an echo or a comment naming the check was read as running it")
@@ -621,10 +724,24 @@ import Testing
         #expect(platformEntries(in: platforms) == [".iOS(.v26)"], "a commented-out platform was read as declared")
     }
 
+    /// The hook-leg reader, both ways: a leg on by default whose pattern matches the manifest and a
+    /// ProximityKit source runs; a leg off by default, a pattern that misses the manifest, and a pattern
+    /// only a comment assigns do not.
+    static func expectHookLegReaderFixtured() {
+        let pattern = #"'^(FernletKit/Package\.swift|FernletKit/Sources/ProximityKit/)'"#
+        let leg = "macos_relevant_regex=\(pattern)\n\(hookDefault)\n"
+        #expect(hookLegRunsByDefault(leg), "a leg on by default with a relevant pattern was not read as running")
+        #expect(!hookLegRunsByDefault(leg.replacingOccurrences(of: ":-0", with: ":-1")),
+                "a leg off by default was read as running")
+        #expect(!hookLegRunsByDefault(leg.replacingOccurrences(of: "FernletKit/Package", with: "Nothing/Package")),
+                "a pattern that misses the manifest was read as relevant")
+        #expect(!hookLegRunsByDefault("# " + leg), "a pattern only a comment assigns was read as relevant")
+    }
+
     /// The command reader, both ways: flags in an `echo` beside a bare `xcodebuild build` are not that
     /// command's; a command split across `\` continuations is read whole, every flag with it; a
-    /// commented-out command and a `build-for-testing` are no `xcodebuild build`; and a flag is matched
-    /// as whole words.
+    /// commented-out command and a `build-for-testing` are no `xcodebuild build`, while asked for its own
+    /// action the `build-for-testing` is read alone; and a flag is matched as whole words.
     static func expectScriptReadersFixtured() {
         let echoed = "echo \"xcodebuild build -scheme ProximityKit SUPPRESS_WARNINGS=NO\"\nxcodebuild build -scheme Other\n"
         let bare = xcodebuildBuildCommands(in: echoed)
@@ -643,6 +760,8 @@ import Testing
         let flags = checkCommandFlags + ["SUPPRESS_WARNINGS=NO"]
         #expect(flags.allSatisfy { flag in joined.contains { carries(flag, in: $0) } },
                 "a flag on a continuation line was not read with its command: \(joined)")
+        let testing = xcodebuildBuildCommands(in: split, action: "build-for-testing")
+        #expect(testing == ["xcodebuild build-for-testing -scheme Fernlet"], "read the build-for-testing commands as \(testing)")
         #expect(!carries("-scheme ProximityKit", in: "xcodebuild build -scheme ProximityKitTests"),
                 "a longer scheme name was read as ProximityKit")
         #expect(!carries("SUPPRESS_WARNINGS=NO", in: "xcodebuild build XSUPPRESS_WARNINGS=NO"),
@@ -700,14 +819,15 @@ import Testing
         let region: Region
     }
 
-    /// Every module `code` names: each `import` declaration (any attributes, access level or kind before
-    /// the path, its first component read) and each `canImport(…)` condition, with its region. Regions
-    /// are read flat, since Power of 10's R8 forbids nesting: an `#if` opens one with its condition's
-    /// text, an `#elseif` or `#else` moves past it, and `#endif` closes it.
+    /// Every module `code` names: each `import` declaration, at a line's start or after a `;` (any
+    /// attributes, an argument list such as `@_spi(S)`'s among them, access level or kind before the
+    /// path, its first component read), and each `canImport(…)` condition, with its region. Regions are
+    /// read flat, since Power of 10's R8 forbids nesting: an `#if` opens one with its condition's text,
+    /// an `#elseif` or `#else` moves past it, and `#endif` closes it.
     static func moduleUses(in code: String) throws -> [ModuleUse] {
         let declaration = try NSRegularExpression(
-            pattern: #"^\s*(?:@\w+\s+)*(?:(?:public|package|internal|fileprivate|private)\s+)?import\s+"#
-                + #"(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(\w+)"#)
+            pattern: #"(?:^|;)\s*(?:@\w+(?:\([^)]*\)\s*|\s+))*(?:(?:public|package|internal|fileprivate|private)\s+)?"#
+                + #"import\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(\w+)"#)
         let condition = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])canImport\s*\(\s*(\w+)"#)
         var uses: [ModuleUse] = []
         var region = Region(condition: nil, afterElse: false)
@@ -748,6 +868,23 @@ import Testing
         guard trimmed.hasPrefix("#") else { return nil }
         let word = String(trimmed.dropFirst().prefix { $0.isLetter })
         return ["if", "elseif", "else", "endif"].contains(word) ? word : nil
+    }
+
+    /// Every `#if` or `#elseif` condition in `code` that tests the platform with `os(…)`, as written
+    /// after its directive, in order.
+    static func platformConditions(in code: String) throws -> [String] {
+        let platform = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])os\s*\("#)
+        var conditions: [String] = []
+        // R2: bounded by the file's line count.
+        for line in code.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard let word = directive(of: trimmed), word == "if" || word == "elseif" else { continue }
+            let condition = String(trimmed.dropFirst(word.count + 1)).trimmingCharacters(in: .whitespaces)
+            if platform.firstMatch(in: condition, range: NSRange(condition.startIndex..., in: condition)) != nil {
+                conditions.append(condition)
+            }
+        }
+        return conditions
     }
 
     /// Whether `code`'s first code line is `#if <condition>`, its last is `#endif`, and it holds no
@@ -899,14 +1036,53 @@ import Testing
             .filter { !$0.isEmpty }
     }
 
-    /// Whether `workflow` declares the step named `name` exactly once and that step's body, read with
+    /// Whether `workflow` declares the step named `name` exactly once, that step's body, read with
     /// `CIGateSelectorBoundaryTests.stepBody(named:in:)` (its own non-comment lines, the `- name:` line
-    /// not among them), holds a line that is exactly `run`.
+    /// not among them), holds a line that is exactly `run`, and neither that body nor the keys of the job
+    /// that holds the step (``jobKeys(holding:in:)``) set `if:` or `continue-on-error:`: a step or job
+    /// with either is declared but may be skipped, or may fail without failing the run.
     static func stepRuns(_ run: String, step name: String, in workflow: String) -> Bool {
-        let declarations = workflow.components(separatedBy: "\n")
-            .filter { $0.trimmingCharacters(in: .whitespaces) == "- name: \(name)" }
-        let body = CIGateSelectorBoundaryTests.stepBody(named: name, in: workflow)
-        return declarations.count == 1 && body.components(separatedBy: "\n").contains(run)
+        let lines = workflow.components(separatedBy: "\n")
+        let declarations = lines.filter { $0.trimmingCharacters(in: .whitespaces) == "- name: \(name)" }
+        let body = CIGateSelectorBoundaryTests.stepBody(named: name, in: workflow).components(separatedBy: "\n")
+        let guarded = (body + jobKeys(holding: name, in: lines)).contains(where: isRunGuard)
+        return declarations.count == 1 && body.contains(run) && !guarded
+    }
+
+    /// Whether a trimmed workflow line sets `if:` or `continue-on-error:`, its key quoted or not.
+    static func isRunGuard(_ line: String) -> Bool {
+        line.range(of: #"^["']?(?:if|continue-on-error)["']?\s*:"#, options: .regularExpression) != nil
+    }
+
+    /// The keys of the job whose `steps:` hold the step named `name`, trimmed: the job's own lines at its
+    /// `steps:` key's indentation, from the job's header (the last line before `steps:` indented less) to
+    /// the next line indented no deeper than that header, blank and comment lines left out. Empty when no
+    /// `steps:` key precedes the step.
+    static func jobKeys(holding name: String, in lines: [String]) -> [String] {
+        let isCode = { (line: String) -> Bool in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.isEmpty && !trimmed.hasPrefix("#")
+        }
+        let indent = { (line: String) -> Int in line.prefix { $0 == " " }.count }
+        guard let step = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "- name: \(name)" }),
+              let steps = lines[..<step].lastIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "steps:" }),
+              let header = lines[..<steps].lastIndex(where: { isCode($0) && indent($0) < indent(lines[steps]) })
+        else { return [] }
+        let end = lines[(header + 1)...].firstIndex { isCode($0) && indent($0) <= indent(lines[header]) } ?? lines.endIndex
+        return lines[(header + 1)..<end].filter { isCode($0) && indent($0) == indent(lines[steps]) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    /// Whether the hook's macOS leg runs by default and finds a ProximityKit change relevant: the hook's
+    /// run lines hold ``hookDefault`` and exactly one assignment of the leg's relevance pattern
+    /// (``hookRelevancePrefix``, the pattern single-quoted), and that pattern matches every one of
+    /// ``hookRelevantPaths``.
+    static func hookLegRunsByDefault(_ hook: String) -> Bool {
+        let lines = runLines(of: hook)
+        let patterns = lines.filter { $0.hasPrefix(hookRelevancePrefix) && $0.hasSuffix("'") }
+            .map { String($0.dropFirst(hookRelevancePrefix.count).dropLast()) }
+        guard lines.contains(hookDefault), patterns.count == 1, let pattern = patterns.first else { return false }
+        return hookRelevantPaths.allSatisfy { $0.range(of: pattern, options: .regularExpression) != nil }
     }
 
     /// What the self-test must run, each on a line ``runLines(of:)`` reads, by name: the probe planted
@@ -929,11 +1105,13 @@ import Testing
         return legs.filter { leg in !lines.contains(where: leg.runs) }.map(\.name)
     }
 
-    /// The commands in a shell script that start `xcodebuild build`: comment lines dropped and each
-    /// command joined across its trailing-`\` continuations, so a flag on a continuation line is read
-    /// with its command, while a flag in an `echo` or a comment is not, and `build-for-testing` is not
-    /// `build`. Shared with `PowerOfTenBoundaryTests.r10MacOSBuildCheckScriptBuildsStrict()`.
-    static func xcodebuildBuildCommands(in script: String) -> [String] {
+    /// The commands in a shell script that start `xcodebuild <action>`, `build` unless another action is
+    /// asked for: comment lines dropped and each command joined across its trailing-`\` continuations,
+    /// so a flag on a continuation line is read with its command, while a flag in an `echo` or a comment
+    /// is not, and `build-for-testing` is not `build`. Shared with `PowerOfTenBoundaryTests`' two strict
+    /// build pins, `r10MacOSBuildCheckScriptBuildsStrict()` (`build`) and `r10WallCheckScriptBuildsStrict()`
+    /// (`build-for-testing`).
+    static func xcodebuildBuildCommands(in script: String, action: String = "build") -> [String] {
         var commands: [String] = []
         var carry = ""
         // R2: bounded by the script's line count.
@@ -950,7 +1128,7 @@ import Testing
         if !carry.isEmpty { commands.append(carry) }
         return commands.filter { command in
             let words = command.split(whereSeparator: \.isWhitespace)
-            return words.count >= 2 && words[0] == "xcodebuild" && words[1] == "build"
+            return words.count >= 2 && words[0] == "xcodebuild" && words[1] == action
         }
     }
 

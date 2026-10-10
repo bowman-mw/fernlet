@@ -627,14 +627,19 @@ struct PowerOfTenBoundaryTests {
         }
     }
 
-    /// R10: `Scripts/spm-wall-check.sh` builds strict — package warnings un-suppressed and both
-    /// warnings-as-errors flags on the build command (on non-comment lines).
+    /// R10: `Scripts/spm-wall-check.sh`, the iOS strict build, builds strict: it holds exactly one
+    /// `xcodebuild build-for-testing` command, read joined across its `\` continuations through
+    /// `ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in:action:)`, and that command carries all
+    /// three overrides as whole words — package warnings un-suppressed and both warnings-as-errors flags.
+    /// The script's `echo` of the flags, or a comment, is not the command and does not count.
     @Test func r10WallCheckScriptBuildsStrict() throws {
         let path = "Scripts/spm-wall-check.sh"
-        let code = Self.nonCommentLines(try RepoRoot.source(path), commentPrefix: "#")
+        let commands = ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in: try RepoRoot.source(path),
+                                                                              action: "build-for-testing")
+        #expect(commands.count == 1, "\(path) holds \(commands.count) `xcodebuild build-for-testing` commands, not exactly one — the S3 wall build is one strict build (Docs/Power-of-10-Swift.md §R10).")
         for flag in ["SUPPRESS_WARNINGS=NO", "SWIFT_TREAT_WARNINGS_AS_ERRORS=YES", "GCC_TREAT_WARNINGS_AS_ERRORS=YES"] {
             #expect(
-                code.contains { $0.contains(flag) },
+                commands.first.map { ProximityPlatformBoundaryTests.carries(flag, in: $0) } == true,
                 "\(path) no longer passes \(flag) on the xcodebuild command — the S3 wall build is also the rule-10 build; every warning, including hidden local-package warnings, must fail it (Docs/Power-of-10-Swift.md §R10)."
             )
         }
@@ -642,7 +647,7 @@ struct PowerOfTenBoundaryTests {
 
     /// R10: `Scripts/macos-build-check.sh`, the second strict build (ProximityKit's closure for native
     /// macOS, plan step A0.6.5), builds strict too: it holds exactly one `xcodebuild build` command, read
-    /// joined across its `\` continuations through `ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in:)`,
+    /// joined across its `\` continuations through `ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in:action:)`,
     /// and that command carries all three overrides as whole words. An `echo` of the flags, or a
     /// comment, is not the command and does not count.
     @Test func r10MacOSBuildCheckScriptBuildsStrict() throws {

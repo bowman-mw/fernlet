@@ -546,9 +546,9 @@ struct MeshContinuationTaskHostWallTests {
 
     /// Cell (g)'s second walk root: `FernletSocial`, the module Fernlet's presence lives in, whose
     /// heart door and its teardown seam are two of the three shipping constructions that take the
-    /// coordinator's default anchor. None of the retired or reaper-only spellings may appear in it at
-    /// all: a request raised there would be the same doomed proximity Live Activity from a file the
-    /// ProximityKit walk never reads.
+    /// coordinator's default anchor. None of the retired or reaper-only spellings, and no match of
+    /// ``activityKitPatterns``, may appear in it at all: a request raised there would be the same doomed
+    /// proximity Live Activity from a file the ProximityKit walk never reads.
     private static let fernletSocialRoot = "FernletKit/Sources/FernletSocial"
 
     /// Floor under the second walk, for the same reason. Measured 18 on 2026-10-03; the floor is
@@ -569,6 +569,35 @@ struct MeshContinuationTaskHostWallTests {
         "ProximityConnectionActivityAttributes"
     ]
 
+    /// What needle (2) also refuses, as patterns over each walked file's code lexed (comments dropped,
+    /// literals emptied), since the two lists above are literal spellings a respelling escapes:
+    /// ActivityKit named as a whole identifier, which every import form (`import class
+    /// ActivityKit.Activity` among them), `canImport` condition and qualified name spells; and a request
+    /// through `Activity`, its generic argument inferred or written out (`Activity<…>.request`), applied
+    /// or not.
+    private static let activityKitPatterns = [
+        (spelling: "ActivityKit", pattern: #"(?<![A-Za-z0-9_])ActivityKit(?![A-Za-z0-9_])"#),
+        (spelling: "Activity<…>.request",
+         pattern: #"(?<![A-Za-z0-9_])Activity\s*(?:<[^>]*>)?\s*\.\s*request(?![A-Za-z0-9_])"#)
+    ]
+
+    /// What the reaper's file may never name in its code (lexed: comments dropped, literals emptied),
+    /// each as a whole identifier: ActivityKit's `request`, however the call is spelled
+    /// (`Activity.request`, `Activity<…>.request`, through a type alias, unapplied, or bare inside an
+    /// `extension Activity`), and the app's generic requester and the run-state protocol it requests for,
+    /// which raise a Live Activity from a file that never spells `request`. Shared with
+    /// `FernletFeatureGoldenTests`' reaper cell.
+    static let reaperRequestSpellings = ["request", "LiveActivityStarter", "LiveActivityRunReflectable"]
+
+    /// The ``reaperRequestSpellings`` that `source`'s code names as whole identifiers (lexed: comments
+    /// dropped, literals emptied), in that list's order.
+    static func requestSpellings(in source: String) -> [String] {
+        let code = SwiftSourceLexer.lex(source).code
+        return reaperRequestSpellings.filter { spelling in
+            code.range(of: #"(?<![A-Za-z0-9_])"# + spelling + #"(?![A-Za-z0-9_])"#, options: .regularExpression) != nil
+        }
+    }
+
     /// Every `.swift` file under one repo-relative directory, comment-stripped.
     ///
     /// Reused from `MeshP7Acceptance`, as `MeshContinuationRaiseWallTests` already does — a sixth
@@ -580,6 +609,24 @@ struct MeshContinuationTaskHostWallTests {
     /// The file names in which `needle` occurs, one entry per occurrence.
     private static func homes(of needle: String, in sources: [(name: String, code: String)]) -> [String] {
         MeshP7Acceptance.homes(of: needle, in: sources)
+    }
+
+    /// Needle (2) over one walked module: no file holds a retired or reaper-only spelling, and no file's
+    /// code, lexed, matches one of ``activityKitPatterns``.
+    private static func expectNoProximityLiveActivity(in sources: [(name: String, code: String)], under root: String) {
+        // R2: bounded by the five spellings.
+        for needle in Self.retiredAnchorSpellings + Self.reaperOnlySpellings {
+            let homes = Set(Self.homes(of: needle, in: sources)).sorted()
+            #expect(homes.isEmpty,
+                    "`\(needle)` is under \(root), in \(homes) — only the app's \(Self.reaperFile) may name a proximity Live Activity")
+        }
+        let lexed = sources.map { (name: $0.name, code: SwiftSourceLexer.lex($0.code).code) }
+        // R2: bounded by the two patterns.
+        for (spelling, pattern) in Self.activityKitPatterns {
+            let homes = lexed.filter { $0.code.range(of: pattern, options: .regularExpression) != nil }.map(\.name)
+            #expect(homes.isEmpty,
+                    "`\(spelling)` is under \(root), in \(homes.sorted()) — only the app's \(Self.reaperFile) may name a proximity Live Activity")
+        }
     }
 
     /// **(a)** `BackgroundTasks` is reachable from exactly three files: item 6's seam, the DEBUG
@@ -706,13 +753,17 @@ struct MeshContinuationTaskHostWallTests {
     /// so each call either threw (audited) or spent a per-app Live Activity slot on something
     /// nothing draws.
     ///
-    /// Five independently reddenable needles: re-adding a request to the reaper's file — or moving
-    /// the enumeration out of the reaper's own brace-matched body — reddens (1); naming the retired
-    /// class, `Activity.request`, ActivityKit or the attributes type from ANY file under ProximityKit
-    /// or `FernletSocial` reddens (2); naming the attributes type from any app file but the reaper's
-    /// own reddens (3); restoring the `#if canImport` default reddens (4); declaring a proximity
-    /// configuration in the widget bundle reddens (5) — which is the honest signal that "retire" has
-    /// been reversed and this cell must be rewritten rather than deleted.
+    /// Five independently reddenable needles: re-adding a request to the reaper's file, in any spelling
+    /// ``reaperRequestSpellings`` reads (ActivityKit's `request` as a whole identifier, specialised,
+    /// aliased, unapplied or bare, or the app's `LiveActivityStarter` and its
+    /// `LiveActivityRunReflectable`) — or moving the enumeration out of the reaper's own brace-matched
+    /// body — reddens (1); naming the retired class, a request through `Activity` (its generic argument
+    /// inferred or written out), ActivityKit in any form (an import of any kind, a `canImport`, a
+    /// qualified name) or the attributes type from ANY file under ProximityKit or `FernletSocial`
+    /// reddens (2); naming the attributes type from any app file but the reaper's own reddens (3);
+    /// restoring the `#if canImport` default reddens (4); declaring a proximity configuration in the
+    /// widget bundle reddens (5) — which is the honest signal that "retire" has been reversed and this
+    /// cell must be rewritten rather than deleted.
     ///
     /// Needle (2) is a WALK of each module, not the four hand-listed files it replaced (the fix
     /// round's F2): those four made the comment's claim — "anywhere else in shipping source" —
@@ -724,12 +775,15 @@ struct MeshContinuationTaskHostWallTests {
     /// starter, and the type's one home is the reaper's file, matched by name, so the walk must see
     /// exactly one file of that name.
     @Test func theOneToOneForegroundAnchorsAreRetired() throws {
-        let reaperCode = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(Self.reaperPath))
-        // (1) Nothing requests one any more, and the one surviving read of the attributes type is
-        // INSIDE the reaper — brace-matched, so moving the enumeration into a requester elsewhere in
-        // the same file reddens instead of satisfying a file-wide `contains`.
-        #expect(!reaperCode.contains("Activity.request"),
-                "the retired 1:1 anchor was the only requester of a proximity Live Activity")
+        let reaperSource = try RepoRoot.source(Self.reaperPath)
+        let reaperCode = MeshRoutedSourceScan.codeOnly(reaperSource)
+        // (1) Nothing requests one any more, in any spelling the reaper's file could use, and the one
+        // surviving read of the attributes type is INSIDE the reaper — brace-matched, so moving the
+        // enumeration into a requester elsewhere in the same file reddens instead of satisfying a
+        // file-wide `contains`.
+        let requests = Self.requestSpellings(in: reaperSource)
+        #expect(requests.isEmpty,
+                "the retired 1:1 anchor was the only requester of a proximity Live Activity; \(Self.reaperFile) names \(requests)")
         let reaper = try #require(
             MeshRoutedSourceScan.bracedBody(after: "static func endOrphans() async {", in: reaperCode),
             "the once-per-launch orphan reaper's body is gone from \(Self.reaperPath)")
@@ -737,8 +791,8 @@ struct MeshContinuationTaskHostWallTests {
                 "the orphan reaper stays — it is the one remaining reader of the attributes type")
 
         // (2) ProximityKit and `FernletSocial`, WALKED (the suite's own `codeSources`/`homes`,
-        // comment-stripped), not hand-listed: since plan step A0.6 neither module may spell the
-        // retired conformer, a request, ActivityKit or the attributes type at all.
+        // comment-stripped, and lexed for the patterns), not hand-listed: since plan step A0.6 neither
+        // module may spell the retired conformer, a request, ActivityKit or the attributes type at all.
         let roots = [(Self.proximityKitRoot, Self.minimumProximityKitFilesWalked),
                      (Self.fernletSocialRoot, Self.minimumFernletSocialFilesWalked)]
         // R2: bounded by the two roots.
@@ -746,12 +800,7 @@ struct MeshContinuationTaskHostWallTests {
             let sources = try Self.codeSources(under: root)
             #expect(sources.count >= floor,
                     "walked only \(sources.count) files under \(root) (floor \(floor)) — the walk is broken, not the module clean")
-            // R2: bounded by the five spellings.
-            for needle in Self.retiredAnchorSpellings + Self.reaperOnlySpellings {
-                let homes = Set(Self.homes(of: needle, in: sources)).sorted()
-                #expect(homes.isEmpty,
-                        "`\(needle)` is under \(root), in \(homes) — only the app's \(Self.reaperFile) may name a proximity Live Activity")
-            }
+            Self.expectNoProximityLiveActivity(in: sources, under: root)
         }
 
         // (3) The app's sources, the widget folder included: the attributes type is spelled in the

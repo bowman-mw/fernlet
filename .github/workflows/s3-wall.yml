@@ -164,7 +164,8 @@ jobs:
         # Catalyst variant ("Using the first of multiple matching destinations"), so the check requires
         # native macOS products after its build. A build, not a test: it names no suite and no floor,
         # so CIGateSelectorBoundaryTests does not parse it, and ProximityPlatformBoundaryTests pins that
-        # this step's body runs the self-test.
+        # this step's body runs the self-test and that no `if:` or `continue-on-error:` sits on this
+        # step or on its job (plan step A0.6.8).
         run: |
           set -euo pipefail
           Scripts/macos-build-selftest.sh

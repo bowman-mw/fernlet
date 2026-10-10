@@ -8,9 +8,11 @@
 # it can be a required status check without slowing anything down.
 #
 # Rule 10 (warnings are errors, package warnings un-suppressed) is NOT here — it needs a real
-# build, and lives on the ONE strict build CI already does: Scripts/spm-wall-check.sh in
-# s3-wall.yml. The Swift grep-wall port of these same checks, PowerOfTenBoundaryTests, runs in the
-# normal test suite (and in s3-wall.yml) so a regression fails locally too.
+# build, and lives on the two strict builds s3-wall.yml already runs: Scripts/spm-wall-check.sh
+# (the app's iOS build, through Scripts/spm-wall-selftest.sh) and Scripts/macos-build-check.sh
+# (ProximityKit's closure on native macOS, through Scripts/macos-build-selftest.sh). The Swift
+# grep-wall port of these same checks, PowerOfTenBoundaryTests, runs in the normal test suite (and
+# in s3-wall.yml) so a regression fails locally too.
 #
 # Make this a REQUIRED status check in branch protection alongside "S3 Wall".
 

@@ -3638,8 +3638,10 @@ struct FernletFeatureGoldenTests {
     /// activity by (`String(reflecting:)` is module-qualified and not pinned), and their stored shape:
     /// `JSONEncoder` writes the frozen attributes and content state for them, compared as JSON objects,
     /// and the frozen texts decode back to the same fields. And the reaper still ends every stranded
-    /// proximity activity with ``reaperSpellings`` inside its own body while nothing requests one
-    /// (``reaperPath``, comments dropped).
+    /// proximity activity with ``reaperSpellings`` inside its own body (``reaperPath``, comments dropped)
+    /// while its file requests none: its code names none of
+    /// `MeshContinuationTaskHostWallTests.reaperRequestSpellings` (ActivityKit's `request`, however the
+    /// call is spelled, and the app's generic starter).
     @Test func theReapersAttributesKeepTheirNameShapeAndEnding() throws {
         let name = String(describing: ProximityConnectionActivityAttributes.self)
         #expect(name == "ProximityConnectionActivityAttributes", "the attributes' unqualified name is \(name)")
@@ -3659,8 +3661,10 @@ struct FernletFeatureGoldenTests {
         let readState = try JSONDecoder().decode(ProximityConnectionActivityAttributes.ContentState.self,
                                                  from: Data(Self.frozenActivityStateJSON.utf8))
         #expect(readState == state, "the frozen content state reads as \(readState)")
-        let anchor = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(Self.reaperPath))
-        #expect(!anchor.contains("Activity.request"), "a proximity Live Activity is requested again")
+        let source = try RepoRoot.source(Self.reaperPath)
+        let anchor = MeshRoutedSourceScan.codeOnly(source)
+        let requests = MeshContinuationTaskHostWallTests.requestSpellings(in: source)
+        #expect(requests.isEmpty, "a proximity Live Activity is requested again: \(Self.reaperPath) names \(requests)")
         let reaper = try #require(MeshRoutedSourceScan.bracedBody(after: "static func endOrphans() async {", in: anchor),
                                   "the reaper's body is gone from \(Self.reaperPath)")
         // R2: bounded by the four spellings.
