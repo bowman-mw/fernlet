@@ -4,9 +4,9 @@ The SwiftUI screens of Fernlet's in-person features: the session-end photo revie
 
 ## Overview
 
-`FernletProximityUI` is the presentation layer that sits on top of ProximityKit. The mesh, its
-sealed photo corpus and its review state stay in `ProximityKit`; this module owns what a person sees
-and touches when a session ends. ``FriendPhotoReviewSheet`` lets them choose which of a session's
+`FernletProximityUI` is the presentation layer that sits on top of ProximityKit. The mesh is
+`ProximityKit`'s, and the session photos' sealed corpus and review state are `FernletSocial`'s
+(`MeshSessionPhotos`); this module owns what a person sees and touches when a session ends. ``FriendPhotoReviewSheet`` lets them choose which of a session's
 photos to keep, with the keep-as-friend rows riding along when the session left eligible
 candidates. ``KeepFriendsPromptSheet`` asks the keep-as-friend question on its own when the session
 produced no photos. ``FriendPhotoLibrarySaver`` copies photos that are already on the wall to the
@@ -20,8 +20,9 @@ module boundary required (imports, and the copy vault's name). The move is what 
 become a drop-in package for any app: it now carries no SwiftUI view and no `FernletUI` edge.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit` (the
-keep rows' `MeshSessionRosterEntry`, the review's `SessionPhotoAnswerFailure`, and
-`PeerNameDisplay`, whose identifier filter is ProximityKit's), `FernletUI` (the design system:
+keep rows' `MeshSessionRosterEntry`, and `PeerNameDisplay`, whose identifier filter is
+ProximityKit's), `FernletSocial` (the review's `SessionPhotoAnswerFailure`; it depends on no UI
+module, so the edge makes no cycle), `FernletUI` (the design system:
 colour tokens, `.fernlet` fonts, `ChipButtonStyle`, `ActionPillButtonStyle`, `AdaptiveStack`,
 `confirmDestructive`, `FernletAnnouncer`), `FernletDomainModel` (`FriendPhotoPayload`),
 `FernletFoundation` (`FernletAuditLog`) and `FernletConnections` (the name placeholders, its
@@ -78,9 +79,10 @@ view spells the hex out for VoiceOver. `PeerNameDisplayTests` pins that no conne
 `FernletProximityUICopy` (the review, keep-friends and save-failure copy), and every lookup passes
 `bundle: .module`; `NothingSavedError`'s message is the one key written inline. These 28 keys moved
 here from ProximityKit's catalog byte for byte, because a key is a token: a renamed key strands its
-translations. ProximityKit keeps `ProximityUICopy` for the one string it still hands out itself (the
-camera's hold-failure line), and the two `PeerNameDisplay` placeholders the screens show are
-`FernletConnections`' (`FernletConnectionsCopy` and that module's catalog). The `friends.review.*`,
+translations. The camera's hold-failure line is `FernletSocial`'s (`FernletSocialCopy` and that
+module's catalog), and the two `PeerNameDisplay` placeholders the screens show are
+`FernletConnections`' (`FernletConnectionsCopy` and that module's catalog); ProximityKit hands
+out no copy. The `friends.review.*`,
 `friends.keepFriend.*` and `friends.keepFriends.done` accessibility identifiers are frozen tokens
 that the UI tests drive. One gap came over unchanged: the Delete all confirmation's title and message
 are English literals handed to `confirmDestructive`, which takes already-resolved strings, so they

@@ -383,21 +383,47 @@ extension MeshChunkAssembly {
 // HKDF salt — off the namespace since step A0.2.6; each door comes back here with Fernlet's labels.
 
 /// The routed item seal's three doors in the shapes the suites were written against (plan step
-/// A0.2.6).
+/// A0.2.6), the seal and the open in two shapes each since plan step A0.5.4, when both began taking
+/// the caller's bound: the shapes without one pass Fernlet's, the widest row of `.fernlet`'s registry
+/// clamped as `MeshNetworkManager` clamps it, and a cell about the bound itself names its own.
 extension MeshRoutedItemSealer {
 
-    /// `seal(_:contentKey:binding:typeToken:in: .fernlet)`.
+    /// `seal(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under Fernlet's bound,
+    /// `MeshRoutedTypeRegistry.increment1.maxItemByteCount`.
     static func seal(
         _ plaintext: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String
     ) throws -> Data {
-        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken, in: .fernlet)
+        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: Int(clamping: MeshRoutedTypeRegistry.increment1.maxItemByteCount), in: .fernlet)
     }
 
-    /// `open(_:contentKey:binding:typeToken:in: .fernlet)`.
+    /// `open(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under Fernlet's bound,
+    /// `MeshRoutedTypeRegistry.increment1.maxItemByteCount`.
     static func open(
         _ blob: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String
     ) throws -> Data {
-        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken, in: .fernlet)
+        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: Int(clamping: MeshRoutedTypeRegistry.increment1.maxItemByteCount), in: .fernlet)
+    }
+
+    /// `seal(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under a bound the cell
+    /// names, so the sealer's own edges can be driven far below Fernlet's 10 MB (plan step A0.5.4).
+    static func seal(
+        _ plaintext: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String,
+        maxBlobByteCount: Int
+    ) throws -> Data {
+        try seal(plaintext, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: maxBlobByteCount, in: .fernlet)
+    }
+
+    /// `open(_:contentKey:binding:typeToken:maxBlobByteCount:in: .fernlet)` under a bound the cell
+    /// names (plan step A0.5.4).
+    static func open(
+        _ blob: Data, contentKey: Data, binding: MeshRoutedWrapBinding, typeToken: String,
+        maxBlobByteCount: Int
+    ) throws -> Data {
+        try open(blob, contentKey: contentKey, binding: binding, typeToken: typeToken,
+                 maxBlobByteCount: maxBlobByteCount, in: .fernlet)
     }
 
     /// `additionalData(binding:typeToken:in: .fernlet)`.
@@ -681,11 +707,13 @@ extension PeerNameDisplay {
 //
 // ProximityKit spells no routed type: the routed type registry builds its rows from the routed types
 // it is handed, its ack-stage projection likewise, and the manifest mint takes its registry with no
-// default. The routed-type constants, the two `increment1` values and the mint's old shape come back
-// here with `.fernlet`'s `family.vocabulary.routedTypes`, read off the value, never respelled. A cell
-// whose subject is a token's spelling, or a registry's tokens, names `.fernlet` explicitly instead.
-// (The membership record kinds need no binding of their own: the verifier, the adoption and the
-// digest above take Fernlet's family, record kinds included.)
+// default. The routed-type constants and the mint's old shape come back here with `.fernlet`'s
+// `family.vocabulary.routedTypes`, read off the value, never respelled. The two `increment1` shapes
+// the mint reads followed the host's routed rows to `FernletSocialTestBindings.swift` at plan step
+// A0.5.9, because they build from FernletSocial's `FernletRoutedTypes`. A cell whose subject is a
+// token's spelling, or a registry's tokens, names `.fernlet` explicitly instead. (The membership
+// record kinds need no binding of their own: the verifier, the adoption and the digest above take
+// Fernlet's family, record kinds included.)
 
 /// The routed-type tokens the suites were written against, each read off `.fernlet`'s
 /// `family.vocabulary.routedTypes` (plan step A0.3.3), never respelled here.
@@ -700,31 +728,12 @@ enum MeshRoutedTypeToken {
     static let control = ProximityNamespace.fernlet.family.vocabulary.routedTypes.control
 }
 
-/// The shipping registry in the shape the suites were written against (plan step A0.3.3).
-extension MeshRoutedTypeRegistry {
-
-    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the registry the retired
-    /// `increment1` value held.
-    static var increment1: MeshRoutedTypeRegistry {
-        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
-    }
-}
-
-/// The ack-stage projection in the shape the suites were written against (plan step A0.3.3).
-extension MeshRoutedAckStageTable {
-
-    /// `increment1(_:)` over `.fernlet`'s `family.vocabulary.routedTypes`: the table the retired
-    /// `increment1` value held.
-    static var increment1: MeshRoutedAckStageTable {
-        increment1(ProximityNamespace.fernlet.family.vocabulary.routedTypes)
-    }
-}
-
 /// The manifest mint in the shape the suites were written against, with the registry its retired
 /// `types:` default named (plan step A0.3.3). It inherits the mint's main-actor isolation.
 extension MeshRoutedManifest {
 
-    /// `signed(...types:)` with `.fernlet`'s registry, `increment1(_:)` over its routed types.
+    /// `signed(...types:)` with `.fernlet`'s registry, the test target's `increment1(_:)` over its
+    /// routed types (Fernlet's host rows, `FernletSocialTestBindings.swift`).
     @MainActor
     static func signed(
         meshID: UUID, target: MeshDeliveryTarget, typeToken: String, contentHash: Data, size: UInt64,
@@ -748,14 +757,53 @@ extension MeshRoutedManifest {
 // `family.vocabulary.capabilities`, read off the value. A cell whose subject is the legacy
 // assumption names `.fernlet` explicitly instead.
 
-/// The coordinator's capability gate in the shape the suites were written against (plan step A0.3.4).
-/// It is main-actor, as the gate it restores is.
+/// The coordinator's capability gate in the shapes the suites were written against (plan steps A0.3.4
+/// and A0.5.8). They are main-actor, as the gate they restore is.
 extension ProximityCoordinator.PeerIdentity {
+
+    /// `supports(capability.rawValue, in: host)`: the typed gate that left ProximityKit with its last
+    /// caller, the mesh manager's activities leg (plan step A0.5.8), restored with its own body, so a
+    /// Fernlet capability is asked by its token as the features ask it.
+    @MainActor
+    func supports(_ capability: ProximityCapability, in host: ProximityNamespace.Capabilities) -> Bool {
+        supports(capability.rawValue, in: host)
+    }
 
     /// `supports(_:in:)` with `.fernlet`'s `family.vocabulary.capabilities`.
     @MainActor
     func supports(_ capability: ProximityCapability) -> Bool {
         supports(capability, in: ProximityNamespace.fernlet.family.vocabulary.capabilities)
+    }
+}
+
+/// The seat's capability gate in the shape the suites were written against (plan step A0.5.10). It is
+/// main-actor, as the gate it restores is.
+extension PeerSlot {
+
+    /// `supports(capability.rawValue, in: host)`: the typed gate that left ProximityKit with its last
+    /// caller, the mesh manager's live heart-slot question (FernletSocial's session hearts ask it by the
+    /// capability's token since plan step A0.5.10), restored with its own body.
+    @MainActor
+    func supports(_ capability: ProximityCapability, in host: ProximityNamespace.Capabilities) -> Bool {
+        supports(capability.rawValue, in: host)
+    }
+}
+
+// MARK: - The typed feature registration (A0.5.8)
+//
+// ProximityKit registers a feature's payload handler by its token alone
+// (`registerPayloadHandler(forToken:handler:)`): the typed convenience over Fernlet's `PayloadType` left
+// with its last caller, the mesh manager's activity handlers (plan step A0.5.8), and every feature
+// spells `forToken: PayloadType.<case>.rawValue`. The suites were written against the typed spelling,
+// which comes back here once with the convenience's own body: it passes no value of its own.
+
+/// The payload registry's typed registration in the shape the suites were written against (plan step
+/// A0.5.8). It inherits the manager's main-actor isolation, as the registration it restores had.
+extension MeshNetworkManager {
+
+    /// `registerPayloadHandler(forToken: type.rawValue, handler: handler)`.
+    func registerPayloadHandler(for type: PayloadType, handler: @escaping MeshPayloadHandler) {
+        registerPayloadHandler(forToken: type.rawValue, handler: handler)
     }
 }
 
@@ -766,8 +814,10 @@ extension ProximityCoordinator.PeerIdentity {
 // `ProximityDisplayName.peerDisplayName(_:in:)` rather than an extension of FernletDomainModel's
 // `ItemNameModeration`, the envelope's two sender reads are functions taking the namespace, and the
 // advertised recipe name and the session message store's ingest take it last. Each old shape comes
-// back here with `.fernlet`'s peer-name policy, never a cap or a floor of its own. A cell whose subject
-// is the cap or the floor names `.fernlet` explicitly instead.
+// back here with `.fernlet`'s peer-name policy, never a cap or a floor of its own, but the session
+// message store's, which followed the store to FernletSocial at plan step A0.5.9 and is in
+// `FernletSocialTestBindings.swift`. A cell whose subject is the cap or the floor names `.fernlet`
+// explicitly instead.
 
 /// ProximityKit's peer-name coercion in the shape the suites were written against (plan step
 /// A0.3.12), on the type that used to carry it.
@@ -796,20 +846,6 @@ extension RecipeShareAdvertisedName {
     /// `publishable(_:in: .fernlet)`.
     static func publishable(_ raw: String) -> String {
         publishable(raw, in: .fernlet)
-    }
-}
-
-/// The session message store's ingest in the shape the suites were written against (plan step
-/// A0.3.12). It inherits the store's main-actor isolation, as the function it restores has.
-extension SessionMessageStore {
-
-    /// `receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:in: .fernlet)`.
-    func receiveIncoming(
-        id: UUID, senderFingerprint: String, senderDisplayName: String, text rawText: String,
-        sentAt: Date, seenAt: Date
-    ) -> Acceptance {
-        receiveIncoming(id: id, senderFingerprint: senderFingerprint, senderDisplayName: senderDisplayName,
-                        text: rawText, sentAt: sentAt, seenAt: seenAt, in: .fernlet)
     }
 }
 

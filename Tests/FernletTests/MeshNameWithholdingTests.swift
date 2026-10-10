@@ -18,6 +18,7 @@ import Foundation
 import Testing
 import FernletFoundation
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -28,7 +29,11 @@ final class MeshNameWithholdingRig {
     /// The host. Held for the rig's life so every send reads a live one.
     let store: FernletStore
 
-    /// The manager under test.
+    /// Fernlet's mesh composition, which built the manager under test and owns it; held for the
+    /// rig's life.
+    let features: FernletMeshFeatures
+
+    /// The manager under test: ``features``' mesh.
     let manager: MeshNetworkManager
 
     /// Held strongly: a `FakePeerTransport` points at its fabric weakly.
@@ -52,7 +57,8 @@ final class MeshNameWithholdingRig {
         memberA = a.transport
         memberB = b.transport
         stranger = s.transport
-        manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        manager = features.mesh
         manager.addSlotForTesting(coordinator: MeshHostPinProbe.throwawayCoordinator(), peer: a.handle,
                                   fingerprint: Self.fingerprintA, channel: a.transport)
         manager.addSlotForTesting(coordinator: MeshHostPinProbe.throwawayCoordinator(), peer: b.handle,

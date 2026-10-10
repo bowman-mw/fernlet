@@ -26,6 +26,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -90,7 +91,7 @@ enum MeshP6Acceptance {
         let day = MeshRoutedFixtureClock.createdAt
         // R2: a fixed two-element list.
         for index in 0..<2 {
-            rig.nodes[index].manager.heartLedger = rig.isolatedHeartLedger(now: day)
+            rig.nodes[index].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
             rig.nodes[index].store.setAllowNearbyHearts(true)
         }
         rig.trustPeer(at: 1, asSeenFrom: 0)
@@ -169,7 +170,7 @@ struct MeshP6KeyAdvertisementAcceptanceTests {
             `chatAllowedProvider` is nil on a freshly built manager and `isChatAllowed` reads \
             `provider?() == true`, so the gate is fail-closed and the mint never reaches a resolver
             """)
-        #expect(run.livingMembers.allSatisfy { $0.node.manager.sessionMessages.messages.isEmpty },
+        #expect(run.livingMembers.allSatisfy { $0.node.features.chat.sessionMessages.messages.isEmpty },
                 "and no transcript anywhere holds a row for a message that was never minted")
     }
 }
@@ -208,9 +209,9 @@ struct MeshP6PairwiseIdentityAcceptanceTests {
         let toOne = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "One"))
         let toZero = try #require(rig.sendHeartReturningItemID(from: 1, to: 0, name: "Zero"))
         try await rig.settle()
-        #expect(rig.nodes[1].manager.heartLedger?.receivedHearts.map(\.id) == [toOne],
+        #expect(rig.nodes[1].features.hearts.heartLedger?.receivedHearts.map(\.id) == [toOne],
                 "node 1's ledger holds exactly the gift node 0 sent it")
-        #expect(rig.nodes[0].manager.heartLedger?.receivedHearts.map(\.id) == [toZero],
+        #expect(rig.nodes[0].features.hearts.heartLedger?.receivedHearts.map(\.id) == [toZero],
                 "and node 0's holds exactly the gift node 1 sent it")
     }
 
@@ -250,7 +251,7 @@ struct MeshP6PerTypeCapAcceptanceTests {
         let text = try #require(registry.entry(for: MeshRoutedTypeToken.tempMessage))
         let heart = try #require(registry.entry(for: MeshRoutedTypeToken.heart))
 
-        #expect(photo.maxItemByteCount == UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+        #expect(photo.maxItemByteCount == registry.maxItemByteCount,
                 "the photo row is the widest CIPHERTEXT a routed photo can measure")
         #expect(text.maxItemByteCount == UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
                 "the text row is the sanitized maximum plus its framed header plus the seal")
@@ -317,8 +318,8 @@ struct MeshP6TextRoutingAcceptanceTests {
     ///   the delivery-time projection marks this item at the gated member either way (measured: a
     ///   mark claim was written, run, and reddened with leg 4 INTACT, then withdrawn). It is a
     ///   pass-slot economy, and this battery does not claim it.
-    /// * **leg 3**, the `.sessionTranscript` arm's own `guard isChatAllowed`, applied BEFORE the
-    ///   unwrap. Deleting it alone also leaves this cell green (`neg-05.log`): the row is received
+    /// * **leg 3**, the text row's handler's own 13+ gate (`verdictBeforeOpen(_:)`), applied BEFORE
+    ///   the unwrap. Deleting it alone also leaves this cell green (`neg-05.log`): the row is received
     ///   and HELD, and the view gate below still hides it. Leg 3 is a *decrypt* claim — it is what
     ///   stops the plaintext existing — and the honest wall for it is an audit-line claim nobody has
     ///   written yet.
@@ -331,7 +332,8 @@ struct MeshP6TextRoutingAcceptanceTests {
     ///
     /// **Leg 3's own tripwire is one line, not a cell** (P6 item 9's second fix review, P3-6).
     /// `mesh.routedProjection.transcriptAgeGated` is written in exactly ONE place in the tree —
-    /// leg 3's refusal arm, `MeshNetworkManager.swift:7919` — so capturing it around this run says
+    /// leg 3's refusal arm, the text row's projection adapter in `MeshSessionChat.swift`
+    /// (FernletSocial's since plan step A0.5.9) — so capturing it around this run says
     /// leg 3 fired, which the view gate cannot fake. **Its one weakness, named rather than left for
     /// a reader to find:** the audit log is process-global and suites run in parallel, so a
     /// concurrent suite driving its own gated projection could satisfy the count. It is therefore a
@@ -353,9 +355,9 @@ struct MeshP6TextRoutingAcceptanceTests {
                                       "this clause runs only cells that really shut a gate")
         let gated = try #require(run.participant(global: gatedIndex),
                                  "the overlay named a gated member this run does not leave alive")
-        #expect(gated.node.manager.isChatAllowed == false,
+        #expect(gated.node.features.chat.isChatAllowed == false,
                 "the gated member's own precondition, read at the device rather than assumed")
-        #expect(gated.node.manager.sessionMessages.messages.isEmpty,
+        #expect(gated.node.features.chat.sessionMessages.messages.isEmpty,
                 "a routed text was projected below the 13+ line")
         #expect(run.routedIndex(of: gated)?.items
             .contains { $0.key == outcome.textKey } == true, """
@@ -366,12 +368,12 @@ struct MeshP6TextRoutingAcceptanceTests {
         // R2: bounded by the roster cap.
         for member in run.livingMembers
         where member.index != outcome.textOrigin.index && member.index != gatedIndex {
-            #expect(member.node.manager.sessionMessages.messages.map(\.text).contains(wanted),
+            #expect(member.node.features.chat.sessionMessages.messages.map(\.text).contains(wanted),
                     "an ungated survivor's transcript is missing the message")
         }
         #expect(gateAudit.count(of: "mesh.routedProjection.transcriptAgeGated") > 0, """
-            leg 3 — the `.sessionTranscript` arm's own `guard isChatAllowed`, applied BEFORE the \
-            unwrap — never refused anything while this cell ran, so the empty transcript above is \
+            leg 3 — the text row's handler's own 13+ gate (`verdictBeforeOpen(_:)`), applied BEFORE \
+            the unwrap — never refused anything while this cell ran, so the empty transcript above is \
             the VIEW gate's doing and the plaintext was decrypted below the 13+ line
             """)
     }
@@ -393,7 +395,7 @@ struct MeshP6TextRoutingAcceptanceTests {
         let outcome = try await MeshP6Acceptance.feature(cell, label: "p6text-order")
         defer { MeshP6Acceptance.teardown(outcome.run) }
         let readers = outcome.run.livingMembers.filter { $0.index != outcome.overlay.ageGatedMember }
-        let transcripts = readers.map { $0.node.manager.sessionMessages.messages }
+        let transcripts = readers.map { $0.node.features.chat.sessionMessages.messages }
         #expect(transcripts.first?.isEmpty == false, "an empty transcript everywhere compares nothing")
 
         let orders = transcripts.map { rows in
@@ -666,7 +668,7 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         let rig = try await MeshP6Acceptance.heartedPair("p6heart-defer")
         defer { rig.teardown() }
         var judged: [UUID] = []
-        rig.nodes[1].manager.onHeartJudgedForTesting = { judged.append($0.giftID) }
+        rig.nodes[1].features.hearts.onHeartJudgedForTesting = { judged.append($0.giftID) }
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             rig.nodes[1].manager.applySessionEvent(.backgrounded)
         }
@@ -678,7 +680,7 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         let gift = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "One"))
         try await rig.settle()
         #expect(judged.isEmpty, "a backgrounded recipient must judge nothing")
-        #expect(rig.nodes[1].manager.heartLedger?.receivedHearts.isEmpty == true,
+        #expect(rig.nodes[1].features.hearts.heartLedger?.receivedHearts.isEmpty == true,
                 "and no ledger row stands behind a judgement that never happened")
         let held = rig.routedIndex(1)?.items.first { $0.key.itemID == gift }
         #expect(held?.chunks.isEmpty == false, """
@@ -692,7 +694,7 @@ struct MeshP6HeartCeremonyAcceptanceTests {
         rig.pushGateEdge(at: 1)
         try await rig.settle()
         #expect(judged == [gift], "the re-entry judges the held gift EXACTLY once, not twice")
-        #expect(rig.nodes[1].manager.heartLedger?.receivedHearts.map(\.id) == [gift],
+        #expect(rig.nodes[1].features.hearts.heartLedger?.receivedHearts.map(\.id) == [gift],
                 "and the ledger holds exactly one row for it")
     }
 }

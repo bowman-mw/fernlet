@@ -1,6 +1,7 @@
 import Foundation
 import FernletCrypto
 import FernletDomainModel
+import FernletSocial
 import Testing
 @testable import ProximityKit
 
@@ -37,7 +38,8 @@ struct CryptographicPurposeBoundaryTests {
     /// signing boundary and every canonical verify returned false, which reached the suite as ~200
     /// unexplained failures rather than one named cause.
     ///
-    /// The envelope and the moderation row are two independent `canonicalBytes(for:)` overloads; the
+    /// The envelope and the moderation row are two independent `canonicalBytes(for:)` overloads (the
+    /// row's FernletSocial's since ProximityKit plan step A0.5.7, over the same public writer); the
     /// remaining `fernlet.canonical.*` types share that same writer and their own round-trip suites.
     @Test func canonicalSerializerTranscriptsMatchTheirDeclaredFraming() {
         let envelopePurpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
@@ -446,7 +448,7 @@ struct CryptographicPurposeBoundaryTests {
         "fernlet.canonical.mesh-admission-token.v2":
             "held by the admission-token round-trip and verify suites, which sign and verify real tokens",
         "fernlet.canonical.activity-descriptor.v2":
-            "held by the group-activity signing suites, which sign and verify real descriptors",
+            "held by FernletFeatureGoldenTests' activity transcripts; a descriptor is hashed, never signed",
         "fernlet.canonical.activity-join-token.v2":
             "held by the group-activity signing suites",
         "fernlet.canonical.activity-roster-snapshot.v2":

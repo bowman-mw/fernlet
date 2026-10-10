@@ -35,6 +35,7 @@ import Foundation
 import FernletDomainModel
 import FernletFoundation
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - Fixtures
@@ -76,7 +77,8 @@ enum MeshRoutedAckFixtures {
         try MeshRoutedCustodyFixtures.rig(scope: scope, typeToken: MeshRoutedTypeToken.photo)
     }
 
-    /// Commits the heart through the real ledger and builds the evidence, or fails the test.
+    /// Commits the heart through the real ledger and builds the evidence, or fails the test: the
+    /// ledger commit the engine would mint once the ledger stands behind the gift (plan step A0.5.3).
     static func evidence(
         for rig: MeshRoutedCustodyRig,
         in ledger: ProximityHeartLedger,
@@ -87,7 +89,7 @@ enum MeshRoutedAckFixtures {
             MeshRoutedHeartAck(outcome: outcome, giftID: rig.manifest.itemID, ledger: ledger),
             "the ledger refused to stand behind the committed gift: \(outcome)"
         )
-        return .heartLedgerCommit(ack)
+        return .ledgerCommit(MeshRoutedLedgerCommit(itemID: ack.giftID))
     }
 
     /// Admits the manifest WITHOUT staging any chunk — the control-item shape, and the only way to
@@ -421,7 +423,7 @@ struct MeshRoutedDeliveryAckTests {
                 MeshRoutedHeartAck(outcome: outcome, giftID: rig.manifest.itemID, ledger: ledger)
             )
             let acknowledged = MeshRoutedCustodyFixtures.commitDelivery(
-                rig, evidence: .heartLedgerCommit(ack)
+                rig, evidence: .ledgerCommit(MeshRoutedLedgerCommit(itemID: ack.giftID))
             )
             #expect(MeshRoutedCustodyFixtures.deliveryWitness(acknowledged) != nil, "\(acknowledged)")
         }
@@ -470,7 +472,9 @@ struct MeshRoutedDeliveryAckTests {
         let outcome = MeshHeartCommit.commit([Ack.heart(elsewhere)], into: ledger)
         let ack = try #require(MeshRoutedHeartAck(outcome: outcome, giftID: elsewhere, ledger: ledger))
 
-        let refused = MeshRoutedCustodyFixtures.commitDelivery(rig, evidence: .heartLedgerCommit(ack))
+        let refused = MeshRoutedCustodyFixtures.commitDelivery(
+            rig, evidence: .ledgerCommit(MeshRoutedLedgerCommit(itemID: ack.giftID))
+        )
         #expect(refused.value == .unsatisfied(.evidenceForAnotherItem), "\(refused)")
         #expect(Ack.record(rig)?.deliveredAt == nil)
     }
@@ -986,7 +990,9 @@ struct MeshRoutedDeliveryDurabilityTests {
         let ack = try #require(
             MeshRoutedHeartAck(outcome: reOffer, giftID: rig.manifest.itemID, ledger: ledger)
         )
-        let completed = MeshRoutedCustodyFixtures.commitDelivery(rig, evidence: .heartLedgerCommit(ack))
+        let completed = MeshRoutedCustodyFixtures.commitDelivery(
+            rig, evidence: .ledgerCommit(MeshRoutedLedgerCommit(itemID: ack.giftID))
+        )
         #expect(MeshRoutedCustodyFixtures.deliveryWitness(completed) != nil, "\(completed)")
     }
 }

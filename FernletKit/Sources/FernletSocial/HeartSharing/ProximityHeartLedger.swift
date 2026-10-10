@@ -1,5 +1,8 @@
 // ProximityHeartLedger.swift
-// ProximityKit/HeartSharing
+// FernletSocial/HeartSharing
+//
+// Its sidecar is ProximityKit's public `ProtectedSidecar`; its file name and its persisted shapes are
+// frozen by `FernletFeatureGoldenTests`' heart-ledger rows.
 //
 // Device-local persistence for the hearts feature: received hearts (for the Home bubble and
 // the 24h health-bar glow) plus the per-friend rate limit, enforced in BOTH directions.
@@ -25,6 +28,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import ProximityKit
 
 /// One received heart. `senderDisplayName` is sanitized at the wire boundary before it is
 /// handed to the ledger (see `PresenceManager`), so nothing peer-controlled lands here raw.

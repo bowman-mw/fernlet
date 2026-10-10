@@ -28,6 +28,7 @@ import PrivateMediaStore
 #if canImport(UIKit)
 import UIKit
 #endif
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -391,7 +392,7 @@ extension MeshRoutedDrainRig {
     func capturePhoto(at node: Int) {
         let jpeg = MeshRoutedPhotoFixtures.tinyJPEG()
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            nodes[node].manager.addPhoto(jpeg)
+            nodes[node].features.photos.addPhoto(jpeg)
         }
     }
 
@@ -417,8 +418,8 @@ extension MeshRoutedDrainRig {
     /// awaiting batch — since 2026-09-30 a delivered photo never reaches the wall before the answer)
     /// plus any kept on the wall. The name predates the change; the meaning is "this device has it".
     func wallEntries(at node: Int, itemID: UUID) -> [FriendPhotoPayload] {
-        let manager = nodes[node].manager
-        return (HeldPhotos.all(manager) + manager.meshPhotos).filter { $0.id == itemID }
+        let photos = nodes[node].features.photos
+        return (HeldPhotos.all(photos) + photos.meshPhotos).filter { $0.id == itemID }
     }
 }
 
@@ -447,7 +448,7 @@ struct MeshRoutedPhotoSenderTests {
         #expect(record.key.originFingerprint == rig.nodes[0].fingerprint)
         #expect(rig.nodes[0].manager.meshError == nil, "a staged item is silent")
         #expect(rig.nodes[0].manager.routedShareRefusal == nil, "and publishes no refusal")
-        #expect(HeldPhotos.all(rig.nodes[0].manager).count == 1, "and the sender's own copy is held for its review")
+        #expect(HeldPhotos.all(rig.nodes[0].features.photos).count == 1, "and the sender's own copy is held for its review")
     }
 
     /// **R-17.** A capture with no destinations at all reaches the sender's own wall, silently.
@@ -478,7 +479,9 @@ struct MeshRoutedPhotoSenderTests {
         defer { capture.uninstall() }
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         // Named rather than inlined so the skip's audit count below can be scoped to it (FIX-1).
         let meshID = UUID()
         manager.currentMesh = MeshP3Acceptance.mesh(
@@ -486,14 +489,14 @@ struct MeshRoutedPhotoSenderTests {
         )
 
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
+            photos.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
         }
 
-        #expect(HeldPhotos.all(manager).count == 1, "the echo is unconditional")
-        #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
+        #expect(HeldPhotos.all(photos).count == 1, "the echo is unconditional")
+        #expect(photos.photosAddedThisSession == 1, "and so is the session counter")
         #expect(manager.meshError == nil, "sending to nobody is not an error")
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
-        #expect(manager.photosKeptOnThisPhone == 1,
+        #expect(photos.photosKeptOnThisPhone == 1,
                 "but it is COUNTED: the photo is on this wall and no other, and never will be (P8 item 0 (c))")
         #expect(capture.count(of: "mesh.routedShare.skipped", where: heldBy(meshID)) == 1,
                 "and the skip is audited, once, by the device holding THIS mesh")
@@ -526,9 +529,11 @@ struct MeshRoutedPhotoSenderTests {
         let store = makeTestStore()
         defer { withExtendedLifetime(store) {} }
         let identity = try MeshPartitionFixtures.identity("solo-armed")
-        let manager = MeshNetworkManager(
+        let features = FernletMeshRig.features(
             store: store, transport: FakeMeshTransportSession(), identity: identity
         )
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             manager.startNewMesh(name: "Solo Meadow")
@@ -540,21 +545,21 @@ struct MeshRoutedPhotoSenderTests {
             """)
 
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
+            photos.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
         }
 
-        #expect(HeldPhotos.all(manager).count == 1, "the echo is unconditional here too")
-        #expect(manager.photosAddedThisSession == 1, "and so is the session counter")
+        #expect(HeldPhotos.all(photos).count == 1, "the echo is unconditional here too")
+        #expect(photos.photosAddedThisSession == 1, "and so is the session counter")
         #expect(manager.meshError == nil, "a roster of one is not an error")
         #expect(manager.routedShareRefusal == nil, "and publishes no refusal")
-        #expect(manager.photosKeptOnThisPhone == 1, "but the capture that reached nobody is counted")
+        #expect(photos.photosKeptOnThisPhone == 1, "but the capture that reached nobody is counted")
         #expect(capture.count(of: "mesh.routedShare.skipped", where: heldBy(meshID)) == 1,
                 "and audited, once, in this device's own mesh")
         var absent = false
         if case .absent = MeshRoutedStore(scope: store.meshRoutedStorage).load() { absent = true }
         #expect(absent, "nothing is staged for a destination set of zero")
         manager.leaveMesh()
-        #expect(manager.photosKeptOnThisPhone == 0, "the count is the session's, and leaves with it")
+        #expect(photos.photosKeptOnThisPhone == 0, "the count is the session's, and leaves with it")
     }
 
     /// **R-12a, the negative control.** A destination NO source has stated a key for — no
@@ -582,7 +587,7 @@ struct MeshRoutedPhotoSenderTests {
         #expect(capture.values(of: "mesh.routedShare.refused", key: "reason")
                 == ["destinationNotAddressable"],
                 "the refusal is named once, by its frozen token")
-        #expect(HeldPhotos.all(rig.nodes[0].manager).count == 1,
+        #expect(HeldPhotos.all(rig.nodes[0].features.photos).count == 1,
                 "the echo still runs: only the transport is conditional")
         rig.nodes[0].manager.leaveMesh()
         #expect(rig.nodes[0].manager.routedShareRefusal == nil,
@@ -620,10 +625,12 @@ struct MeshRoutedPhotoSenderTests {
                 "the real frame crossed: node 0 folded node 1's own signed row")
 
         // The process dies and comes back over the same sealed bytes, with the same identity.
-        let reborn = MeshNetworkManager(
+        let rebornFeatures = FernletMeshRig.features(
             store: rig.nodes[0].store, transport: FakeMeshTransportSession(),
             identity: rig.identities[0]
         )
+        let reborn = rebornFeatures.mesh
+        let rebornPhotos = rebornFeatures.photos
         let outcome = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             reborn.restoreSessionContextAtLaunch(now: MeshRoutedDrainRig.now)
         }
@@ -639,7 +646,7 @@ struct MeshRoutedPhotoSenderTests {
         )
         let rebornNode = MeshDepartureRig.node(
             "photo-resumed-reborn", identity: rig.identities[0], on: rig.fabric,
-            manager: reborn, store: rig.nodes[0].store
+            features: rebornFeatures, store: rig.nodes[0].store
         )
         MeshDepartureRig.link(rebornNode, rig.nodes[1], on: rig.fabric)
         let slotKeys = reborn.slots.compactMap(\.verifiedKeyAgreementPublicKey)
@@ -649,7 +656,7 @@ struct MeshRoutedPhotoSenderTests {
         #expect(reborn.slots.count == 1, "and a committed slot to push over")
 
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            reborn.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
+            rebornPhotos.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG())
         }
 
         #expect(reborn.routedShareRefusal == nil, "the mint must not refuse: the key was restored")
@@ -689,7 +696,7 @@ struct MeshRoutedPhotoSenderTests {
                 "an origin's own refusal rides the surface item 9 already built")
         #expect(rig.nodes[0].manager.routedShareRefusal == .storeRefused, "and it is visible, never silent")
         #expect(rig.routedIndex(rig.nodes[0])?.items.count == 1, "only the hog is held")
-        #expect(HeldPhotos.all(rig.nodes[0].manager).count == 1, "the sender's own copy is still held")
+        #expect(HeldPhotos.all(rig.nodes[0].features.photos).count == 1, "the sender's own copy is still held")
     }
 
     /// **R-14.** An origination pushes once to the committed slots and opens no exchange.
@@ -782,11 +789,11 @@ struct MeshRoutedPhotoDeliveryTests {
         let itemID = try #require(rig.routedIndex(rig.nodes[0])?.items.first?.key.itemID)
         rig.link(0, 1)
         rig.commit(0, 1)
-        try await rig.settle(until: { HeldPhotos.all(rig.nodes[1].manager).isEmpty == false })
+        try await rig.settle(until: { HeldPhotos.all(rig.nodes[1].features.photos).isEmpty == false })
 
         #expect(rig.wallEntries(at: 1, itemID: itemID).count == 1,
                 "the destination holds the photo the origin shared, for its review")
-        #expect(rig.nodes[1].manager.meshPhotos.isEmpty, "and none of it is on its wall before the answer")
+        #expect(rig.nodes[1].features.photos.meshPhotos.isEmpty, "and none of it is on its wall before the answer")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: MeshRoutedItemKey(
             originFingerprint: rig.nodes[0].fingerprint, itemID: itemID
         ))?.isComplete == true, "and the ciphertext it was opened from")
@@ -833,7 +840,7 @@ struct MeshRoutedPhotoDeliveryTests {
 
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key)?.isComplete == true,
                 "the ciphertext is durably held")
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty,
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty,
                 "and no plaintext exists behind a closed gate")
     }
 
@@ -851,7 +858,7 @@ struct MeshRoutedPhotoDeliveryTests {
         try await rig.settle(until: {
             rig.routedIndex(rig.nodes[1])?.record(for: key)?.isComplete == true
         })
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "the precondition: still sealed")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "the precondition: still sealed")
 
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
 
@@ -888,11 +895,11 @@ struct MeshRoutedPhotoDeliveryTests {
         rig.capturePhoto(at: 0)
         let key = try #require(rig.routedIndex(rig.nodes[0])?.items.first?.key)
         try await rig.settle()
-        #expect(HeldPhotos.all(rig.nodes[2].manager).isEmpty, "the precondition: node 2 was away")
+        #expect(HeldPhotos.all(rig.nodes[2].features.photos).isEmpty, "the precondition: node 2 was away")
 
         rig.link(0, 2)
         rig.commit(0, 2)
-        try await rig.settle(until: { HeldPhotos.all(rig.nodes[2].manager).isEmpty == false })
+        try await rig.settle(until: { HeldPhotos.all(rig.nodes[2].features.photos).isEmpty == false })
 
         #expect(rig.wallEntries(at: 2, itemID: key.itemID).count == 1,
                 "the branch that was away shows the photo after the heal")
@@ -934,7 +941,7 @@ struct MeshRoutedPhotoDeliveryTests {
         try await rig.settle()
 
         let key = MeshRoutedItemKey(item.manifest)
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "a blocked origin never reaches the wall")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "a blocked origin never reaches the wall")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key)?.isComplete == true,
                 "custody is kept: a view filter over an unmutated union, never a drop")
         #expect(capture.count(of: "mesh.routedProjection.blockedOrigin", where: mine) >= 1,
@@ -967,7 +974,7 @@ struct MeshRoutedPhotoDeliveryTests {
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
 
         #expect(rig.nodes[1].manager.membershipVerifier == nil, "the ledger is gone")
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "so nothing may be attributed, or shown")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "so nothing may be attributed, or shown")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key) != nil, "custody is kept")
         // UNSCOPED, deliberately, and this cell's own premise is the reason: the `leaveMesh()`
         // above nils `currentMesh`, so `heldMeshAuditContext(_:)` OMITS the `held` key here by
@@ -1033,7 +1040,7 @@ struct MeshRoutedPhotoDeliveryTests {
 
         // The cap, DERIVED rather than written twice: `filmRemaining` on a manager that has
         // captured nothing is exactly `maxPhotosPerSenderPerSession`, which is `private`.
-        let cap = rig.nodes[1].manager.filmRemaining
+        let cap = rig.nodes[1].features.photos.filmRemaining
         var eleventh: UUID?
         // R2: a hard constant ceiling, one above the per-origin cap.
         for position in 0...cap {
@@ -1043,7 +1050,7 @@ struct MeshRoutedPhotoDeliveryTests {
         }
         try await rig.settle()
 
-        #expect(HeldPhotos.all(rig.nodes[1].manager).count == cap,
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).count == cap,
                 "one origin fills its own budget and no more")
         #expect(rig.wallEntries(at: 1, itemID: try #require(eleventh)).isEmpty,
                 "and the item over the cap is the one that did not land")
@@ -1069,13 +1076,13 @@ struct MeshRoutedPhotoDeliveryTests {
         rig.seedAgreementKeys()
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
         rig.link(0, 1)
-        let cap = rig.nodes[1].manager.filmRemaining
+        let cap = rig.nodes[1].features.photos.filmRemaining
         // R2: a hard constant ceiling — exactly the per-origin budget, all projected.
         for _ in 0..<cap {
             try rig.handOver(try MeshRoutedPhotoFixtures.item(rig, origin: 0), sender: 0, receiver: 1)
         }
         try await rig.settle()
-        #expect(HeldPhotos.all(rig.nodes[1].manager).count == cap,
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).count == cap,
                 "the precondition: the budget is spent under the item's own mesh")
 
         rig.pushGate(.closed, at: 1)
@@ -1100,7 +1107,7 @@ struct MeshRoutedPhotoDeliveryTests {
 
         #expect(rig.wallEntries(at: 1, itemID: eleventh.manifest.itemID).isEmpty,
                 "a deferred hand-off cannot buy a fresh budget by changing mesh")
-        #expect(HeldPhotos.all(rig.nodes[1].manager).count == cap,
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).count == cap,
                 "the wall still holds exactly the budget")
     }
 
@@ -1126,7 +1133,7 @@ struct MeshRoutedPhotoDeliveryTests {
         try rig.handOver(item, sender: 0, receiver: 1)
         try await rig.settle()
 
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "a mismatched body id reaches no wall")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "a mismatched body id reaches no wall")
         #expect(capture.count(of: "mesh.routedProjection.openFailed", where: mine) >= 1,
                 "and the refusal is named on the projection's own audit line")
         #expect(rig.routedIndex(rig.nodes[1])?
@@ -1163,7 +1170,7 @@ struct MeshRoutedPhotoDeliveryTests {
             )
         }
         try await rig.settle()
-        #expect(HeldPhotos.all(rig.nodes[2].manager).isEmpty,
+        #expect(HeldPhotos.all(rig.nodes[2].features.photos).isEmpty,
                 "the precondition: the whole backlog is custodied behind a closed gate")
 
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 2)
@@ -1172,7 +1179,7 @@ struct MeshRoutedPhotoDeliveryTests {
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 2)
         try await rig.settle()
 
-        #expect(HeldPhotos.all(rig.nodes[2].manager).count == total,
+        #expect(HeldPhotos.all(rig.nodes[2].features.photos).count == total,
                 "every item of the backlog reaches the wall across successive rising edges")
     }
 
@@ -1214,7 +1221,7 @@ struct MeshRoutedPhotoDeliveryTests {
         let photo = try MeshRoutedPhotoFixtures.item(rig, origin: 1 - lower)
         try rig.handOver(photo, sender: 1 - lower, receiver: 2)
         try await rig.settle()
-        #expect(HeldPhotos.all(rig.nodes[2].manager).isEmpty,
+        #expect(HeldPhotos.all(rig.nodes[2].features.photos).isEmpty,
                 "the precondition: everything is custodied behind a closed gate")
 
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 2)
@@ -1307,7 +1314,7 @@ struct MeshRoutedPhotoDeliveryTests {
 
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
 
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "a removed origin reaches no wall")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "a removed origin reaches no wall")
         #expect(capture.count(of: "mesh.routedProjection.originRemoved", where: heldBy(rig.meshID)) >= 1,
                 "and the refusal is named, distinctly from an origin nobody ever admitted")
         #expect(rig.routedIndex(rig.nodes[1])?
@@ -1345,7 +1352,7 @@ struct MeshRoutedPhotoDeliveryTests {
 
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: key) == nil,
                 "an uncommitted slot writes no routed record")
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "and reaches no wall")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "and reaches no wall")
         #expect(capture.count(of: "mesh.routedDrain.droppedUncommittedSlot", where: mine) == 1,
                 "the drop is named once, at the routed door")
 
@@ -1622,7 +1629,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         #expect(rig.nodes[0].manager.routedShareRefusal == .keyMismatch,
                 "a conflicted destination refuses the mint by its own frozen name")
         #expect(rig.routedIndex(rig.nodes[0]) == nil, "and nothing is staged")
-        #expect(HeldPhotos.all(rig.nodes[0].manager).count == 1, "the local echo still runs")
+        #expect(HeldPhotos.all(rig.nodes[0].features.photos).count == 1, "the local echo still runs")
         #expect(capture.values(of: "mesh.routedShare.refused", key: "reason") == ["keyMismatch"],
                 "the refusal is audited by its frozen token")
     }

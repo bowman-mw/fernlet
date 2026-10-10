@@ -30,6 +30,7 @@ import SwiftUI
 import Testing
 @testable import FernletCrypto
 import LocalPersistence
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -282,8 +283,8 @@ enum MeshP8Acceptance {
         rig.commit(0, 1)
         rig.commit(1, 0)
         try await rig.settle()
-        rig.nodes[0].manager.heartLedger = rig.isolatedHeartLedger(now: day)
-        rig.nodes[1].manager.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[0].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[1].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
         rig.nodes[0].store.setAllowNearbyHearts(true)
         rig.nodes[1].store.setAllowNearbyHearts(true)
         rig.trustPeer(at: 1, asSeenFrom: 0)

@@ -243,59 +243,70 @@ final class FernletStore {
     @ObservationIgnored let milestoneLedgerService: MilestoneLedgerService
     @ObservationIgnored let proximityTrustVault: ProximityTrustVault
     @ObservationIgnored let aiRetryQueueService: AIRetryQueueService
-    @ObservationIgnored private(set) lazy var meshNetworkManager: MeshNetworkManager = {
-        let manager = MeshNetworkManager(store: self)
+    /// Fernlet's mesh features and the mesh engine they ride (FernletSocial's composition, ProximityKit
+    /// plan step A0.5.5), built on the first touch of this property or of ``meshNetworkManager``: it
+    /// asks this store for the device identity once, builds the mesh with it, and owns the mesh and
+    /// every feature. The providers below are wired onto the objects that own each one.
+    @ObservationIgnored private(set) lazy var meshFeatures: FernletMeshFeatures = {
+        let features = FernletMeshFeatures(host: self)
+        let manager = features.mesh
         // Clothing shop (Phase 3a): catalogs ride the friend mesh; the opt-out is payload-layer, wired
         // here as app-side closures so `ProximityHost` stays settings-free. While the setting is off the
         // provider returns nil (nothing sent), inbound catalogs drop, and the `shop` capability is not
         // advertised; `setAllowNearbyClothingShares(false)` also clears held state immediately.
-        manager.clothingShop.isSharingEnabledProvider = { [weak self] in
+        features.clothingShop.isSharingEnabledProvider = { [weak self] in
             self?.settings.allowNearbyClothingShares ?? false
         }
-        manager.clothingShop.localCatalogProvider = { [weak self] in
+        features.clothingShop.localCatalogProvider = { [weak self] in
             guard let self, self.settings.allowNearbyClothingShares else { return nil }
             return self.buildShopCatalog()
         }
         // The 13+ mesh-chat gate. Withholds the `messages` capability, refuses sends, and drops inbound
-        // messages — see `MeshNetworkManager.chatAllowedProvider`. `?? false` keeps a deallocated facade
+        // messages — see `MeshSessionChat.chatAllowedProvider`. `?? false` keeps a deallocated facade
         // fail-closed, matching the nil-means-no contract the provider already documents.
-        manager.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
+        features.chat.chatAllowedProvider = { [weak self] in self?.ageAssurance.allows(.chat) ?? false }
         // Phase 3b: one-hop moderation relay — supply our own reports to sign + send; ingest peers' verified rows.
-        manager.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
-        manager.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
+        features.moderation.ownModerationReportsProvider = { [weak self] in self?.moderationLedger.rows ?? [] }
+        features.moderation.onModerationRowsReceived = { [weak self] rows in self?.ingestModerationRows(rows) }
         // Phase 4: fuzzy state exchange — advertise/send only when opted in; cache friends' received state.
-        manager.friendStateEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
-        manager.friendStatePayloadProvider = { [weak self] in
+        features.friendState.isEnabledProvider = { [weak self] in self?.settings.allowNearbyFriendState ?? false }
+        features.friendState.payloadProvider = { [weak self] in
             guard let self, self.settings.allowNearbyFriendState else { return nil }
             return FriendStatePayload(state: self.companionState.fuzzy, appearance: self.settings.companionAppearance)
         }
-        manager.onFriendStateReceived = { [weak self] fingerprint, payload in
+        features.friendState.onFriendStateReceived = { [weak self] fingerprint, payload in
             self?.receiveFriendState(fingerprint: fingerprint, payload: payload)
         }
         // Phase 5: an in-person friend session feeds the closeness signal.
-        manager.onFriendSessionCommitted = { [weak self] fingerprint in
+        features.onFriendSessionCommitted = { [weak self] fingerprint in
             self?.closenessLedger.recordSession(fingerprint: fingerprint)
         }
         // A photo exchanged with a friend this session feeds the closeness photo signal.
-        manager.onFriendPhotoSession = { [weak self] fingerprint in
+        features.photos.onFriendPhotoSession = { [weak self] fingerprint in
             self?.closenessLedger.recordPhotoSession(fingerprint: fingerprint)
         }
         // TF b19 item 5: in-session hearts ride the live mesh session (reliable) instead of the fragile
         // on-demand presence connect. Share the SAME device-local ledger the presence path uses so the
         // 5-minute cooldown + received-heart dedup stay consistent across both transports, and route the
         // sent/received closeness signals to the SAME hooks (day-capped downstream).
-        manager.heartLedger = heartLedger
-        manager.onHeartSent = { [weak self] fingerprint in self?.closenessLedger.recordHeartSent(fingerprint: fingerprint) }
-        manager.onHeartReceived = { [weak self] fingerprint in self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint) }
+        features.hearts.heartLedger = heartLedger
+        features.hearts.onHeartSent = { [weak self] fingerprint in
+            self?.closenessLedger.recordHeartSent(fingerprint: fingerprint)
+        }
+        features.hearts.onHeartReceived = { [weak self] fingerprint in
+            self?.closenessLedger.recordHeartReceived(fingerprint: fingerprint)
+        }
         // Away hearts (Increment 3): prekey-bundle gossip over the mesh intros, mirroring the
         // presence path; the `heartsAway` capability advertises only under the user's consent.
         manager.heartDropBundleProvider = { [weak self] in self?.heartDropService.currentLocalBundle() }
         manager.onPeerPrekeyBundle = { [weak self] key, bundle in
             self?.heartDropService.storePeerBundle(bundle, friendSigningKey: key)
         }
-        manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
-        return manager
+        features.capabilities.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
+        return features
     }()
+    /// The mesh engine, which ``meshFeatures`` built and owns; reading it builds the features first.
+    var meshNetworkManager: MeshNetworkManager { meshFeatures.mesh }
     /// The one presenter of the session-end photo review (session photos U3, 2026-09-30): first
     /// thing shown, in its own overlay window above every tab and sheet, and the source of the run
     /// policy's `sessionPhotoReviewBlocksDiscovery` fact. It holds this store weakly (as its
@@ -303,6 +314,7 @@ final class FernletStore {
     /// so the coordinator's only route to the camera roll is its post-answer export.
     @ObservationIgnored private(set) lazy var sessionPhotoReviewCoordinator = SessionPhotoReviewCoordinator(
         manager: meshNetworkManager,
+        sessionPhotos: meshFeatures.photos,
         host: self,
         presenter: SessionPhotoReviewOverlayPresenter(),
         saveKeptPhotosToLibrary: { try await FriendPhotoLibrarySaver.save($0) }
@@ -427,7 +439,7 @@ final class FernletStore {
             self?.heartDropService.queueHeart(to: friend) == .queued
         }
         // The away-delivery consent, which presence reads only for its not-nearby copy: the same
-        // provider the mesh manager is handed above.
+        // setting the mesh features' capability list is handed above.
         manager.heartsAwayEnabledProvider = { [weak self] in self?.settings.heartsAwayDelivery ?? false }
         return manager
     }()
@@ -1616,7 +1628,7 @@ final class FernletStore {
     }
 
     // MARK: - Clothing shop (in-person friend shop)
-    // The catalog exchange rides the friend mesh (`meshNetworkManager.clothingShop`, Phase 3a):
+    // The catalog exchange rides the friend mesh (`meshFeatures.clothingShop`, Phase 3a):
     // catalogs are sent pairwise-sealed to committed peers during the session, and the shop opens as a
     // 1-hour post-session window on the Friends tab. Buying is local: spend coins + copy the
     // already-received item into the closet, preserving its provenance.
@@ -1798,14 +1810,14 @@ final class FernletStore {
     }
 
     /// Toggle the clothing-shop sharing opt-out. Payload-layer since Phase 3a (the shop rides the
-    /// friend mesh — there is no clothing radio to stop): the providers wired in `meshNetworkManager`'s
+    /// friend mesh — there is no clothing radio to stop): the providers wired in `meshFeatures`'
     /// initializer gate outbound catalogs, inbound catalogs, and the `shop` capability on this setting,
     /// and turning it OFF additionally drops every held peer catalog and closes any open shop window
     /// immediately — WITHOUT touching the friend-mesh radio (photos keep working).
     func setAllowNearbyClothingShares(_ value: Bool) {
         settings.allowNearbyClothingShares = value
         if !value {
-            meshNetworkManager.clothingShop.clearAll()
+            meshFeatures.clothingShop.clearAll()
         }
         snapshotSaveCoordinator.schedule()
     }
@@ -5959,7 +5971,7 @@ final class FernletStore {
     /// - the shared-photo wall (`PrivateMediaStore` via `meshNetworkManager`) — BOTH the photos friends
     ///   sent you and the ones you shared with them (a photo you shared is cached under your own
     ///   fingerprint, so it is not "someone else's gift" — it is still kept). By product decision the wall
-    ///   is curated one photo at a time (`MeshNetworkManager.deletePhoto`, which purges the sealed bytes);
+    ///   is curated one photo at a time (`MeshSessionPhotos.deletePhoto`, which purges the sealed bytes);
     ///   there is deliberately NO "delete all photos", so this funnel must not add a bulk purge here.
     ///   What the wall holds is only what the person CHOSE (2026-09-30). Session photos nobody has
     ///   chosen yet are a different corpus — `PendingSessionPhotos/`, sealed under its own
@@ -6291,7 +6303,7 @@ final class FernletStore {
         // after leg 0's hard stop has already moved any live roll into the batch. The wall is NOT
         // touched (see the survivors list above), and the pending key row survives like the
         // own-photo row: an emptied store's key protects nothing.
-        if !meshNetworkManager.purgeHeldSessionPhotosForDeleteAll() {
+        if !meshFeatures.photos.purgeHeldSessionPhotosForDeleteAll() {
             outcome.incompleteStores.append("session photos you hadn't chosen yet")
         }
     }
@@ -6324,7 +6336,7 @@ final class FernletStore {
 
         // 7. Friends' clothing catalogs browsable for an hour after a session. Memory-only, but it is
         // their social data visibly surviving a wipe in the running session.
-        meshNetworkManager.clothingShop.clearAll()
+        meshFeatures.clothingShop.clearAll()
 
         // 7b. The presence radio — and since P7 item 3 every proximity radio: the session, the
         // search and both listeners — stood down at leg 0, through `reapplyProximityRunPolicy()`
@@ -6419,6 +6431,10 @@ final class FernletStore {
         // matches the keychain until relaunch.
         do {
             try meshNetworkManager.wipeIdentityForDeleteAll()
+            // The session photos' two at-rest key caches (the wall's and the pending corpus's), dropped
+            // so a post-wipe write can't use an orphaned key: immediately after the mesh's identity wipe,
+            // so a throwing identity wipe skips them and a throwing presence or recipe-share wipe does not.
+            meshFeatures.photos.invalidateEncryptionKeyCaches()
             try presenceManager.wipeIdentityForDeleteAll()
             try recipeShareManager.wipeIdentityForDeleteAll()
         } catch {
@@ -6507,7 +6523,7 @@ final class FernletStore {
         KeychainItem.delete(for: .deviceWorryKey, service: KeychainItem.journalService)
         // NEITHER private-media content key (service `com.fernlet.private-media`) is deleted, and
         // neither must be re-added here.
-        //   • `…contentKey` (friend wall) backs `MeshNetworkManager.photoCacheStore`, which holds
+        //   • `…contentKey` (friend wall) backs `meshFeatures.photos`' `photoCacheStore`, which holds
         //     the friend photo wall this funnel keeps by design (see the survivors list above).
         //     Deleting it would not orphan a key, it would shred the wall: the next `mediaKey()`
         //     finds no row, mints a fresh random one, and every retained photo decrypts to garbage —
@@ -6651,7 +6667,7 @@ final class FernletStore {
         workoutTombstones.clearAll()
         // Group activities (hosted/joined rosters + join tokens) — device-local social data, never synced;
         // clear the sidecar too (the manager owns it, mirroring the clothing-shop clearAll seam).
-        meshNetworkManager.activities.clearAll()
+        meshFeatures.activities.clearAll()
         // The guided-workout runner mirrors an in-flight run to an app-group file that a
         // foreground/launch `reconcileGuidedRunFromAppGroup` re-reads — and a naturally-finished run
         // re-LOGS a workout back into the store (`finishGuidedRunLogging` → `addWorkout`; the dedup

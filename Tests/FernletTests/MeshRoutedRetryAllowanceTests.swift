@@ -27,7 +27,8 @@
 // **The projection list's retryable population IS reachable in production, and three documents said
 // otherwise** (item 5 review, P2-3; the commit message, the ledger row and this header's earlier
 // wording all claimed it was structural). Two real routes pass `isProjectableAtThisPass` and reach
-// the arm: `routedCanonicalDispatch(_: MeshRoutedTextBody, …)` answers `.refusedForNow` whenever
+// the arm: the text arm (`routedCanonicalDispatch(_: MeshRoutedTextBody, …)`, FernletSocial's chat's
+// since ProximityKit plan step A0.5.9) answers `.refusedForNow` whenever
 // `transcriptLiveness` is `.notLiveRightNow` — a session ended by the five-minute give-up door that
 // `startSearching()` can un-end, in the right mesh and the right generation — and
 // `routedProjectionBlob` answers nil for a store read that is `.unavailable` or `.refused`, which
@@ -35,6 +36,7 @@
 // projection half is load-bearing in production, not merely structural; what the plants buy is a
 // population that is easy to place at the HEAD of an index ordered by origin fingerprint.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import Foundation
 import Testing
@@ -237,7 +239,7 @@ struct MeshRoutedRetryPlanTests {
 
     /// **The planner is type-agnostic, and that is a wall rather than a claim** (item 5.2).
     ///
-    /// Item 6 supplies its heart predicate to `MeshNetworkManager.ackableNow(_:in:)`, the
+    /// Item 6 supplies its heart predicate to `MeshNetworkManager.ackableNow(_:in:judgement:)`, the
     /// filter-before-plan seam, and never here: a planner that could see a type token would be a
     /// second per-type source beside the registry, which `noShippingCodeBranchesOnARoutedTypeToken`
     /// exists to forbid. The needles are matched against CODE only, so the file's own doc comments
@@ -249,7 +251,7 @@ struct MeshRoutedRetryPlanTests {
         let code = MeshRoutedSourceScan.codeOnly(source)
         #expect(code.contains("MeshRoutedRetryPlan"), "the scan must be reading the right file")
         // R2: bounded by the needle list.
-        for needle in ["MeshRoutedTypeToken", "typeToken", "routedTypes", "canonicalStore",
+        for needle in ["MeshRoutedTypeToken", "typeToken", "routedTypes", "contentScope",
                        "entry(for:", "requiresForeground", "MeshRoutedManifest",
                        "MeshRoutedStore(", "MeshRoutedIndex(", "ProximityAudit"] {
             #expect(code.contains(needle) == false, "the planner acquired something it must not see")
@@ -287,11 +289,13 @@ struct MeshRoutedRetryAllowanceTests {
 
     /// One item on job 5's list that refuses `refusedForNow` at **every** pass and cannot heal.
     ///
-    /// Everything about it is real except `manifest.size`, which claims one byte more than
-    /// `MeshRoutedItemSealFormat.maxResidentBlobByteCount`. That makes the projection's resident-blob
-    /// guard refuse it **before** the store is read, which matters twice: the refusal repeats at
-    /// every pass (a missing chunk file would instead be repaired out of completeness on the first
-    /// read, taking the item off the list), and no store read means no repair and no seal work.
+    /// Everything about it is real except `manifest.size`, which claims one byte more than the
+    /// resident bound: `.fernlet`'s widest routed row, `MeshRoutedTypeRegistry.increment1.maxItemByteCount`,
+    /// the number the manager holds from its host registry since plan step A0.5.4. That makes the
+    /// projection's resident-blob guard refuse it **before** the store is read, which matters twice:
+    /// the refusal repeats at every pass (a missing chunk file would instead be repaired out of
+    /// completeness on the first read, taking the item off the list), and no store read means no
+    /// repair and no seal work.
     ///
     /// A registered mint cannot produce this item — the photo row's cap *is* the resident bound
     /// (D-13.19) — so it is planted, which is `MeshRoutedStoreFixtures.record`'s own stated purpose:
@@ -306,7 +310,7 @@ struct MeshRoutedRetryAllowanceTests {
             originFingerprint: manifest.originFingerprint,
             typeToken: manifest.typeToken,
             contentHash: manifest.contentHash,
-            size: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount + 1),
+            size: MeshRoutedTypeRegistry.increment1.maxItemByteCount + 1,
             createdAt: manifest.createdAt,
             expiresAt: manifest.expiresAt,
             destinations: manifest.destinations,
@@ -458,7 +462,7 @@ struct MeshRoutedRetryAllowanceTests {
             and the newcomer really does sort LAST, or the cell would pass under a plain \
             head-of-list prefix
             """)
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "nothing projected behind a closed gate")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "nothing projected behind a closed gate")
 
         rig.pushGate(Self.openGate, at: 1)
 
@@ -466,7 +470,7 @@ struct MeshRoutedRetryAllowanceTests {
             the session's FIRST pass must reach the newcomer: the sixteen it already held are \
             re-derivations, and they compete for the retry share
             """)
-        #expect(HeldPhotos.all(rig.nodes[1].manager).count == 1, "and only it — the backlog refuses")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).count == 1, "and only it — the backlog refuses")
     }
 
     /// **D-13.32 itself.** Sixteen items a previous pass attempted and could not finish do not
@@ -485,7 +489,7 @@ struct MeshRoutedRetryAllowanceTests {
 
         let first = try #require(rig.pushGate(Self.openGate, at: 1), "the unlock edge owes a pass")
         #expect(first.legs.isRising, "the plaintext pass runs on a rising leg only")
-        #expect(HeldPhotos.all(rig.nodes[1].manager).isEmpty, "an over-resident blob projects nothing")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).isEmpty, "an over-resident blob projects nothing")
 
         rig.pushGate(Self.closedGate, at: 1)
         let arriving = try MeshRoutedPhotoFixtures.item(rig, origin: 0, itemID: try Self.highID())
@@ -503,7 +507,7 @@ struct MeshRoutedRetryAllowanceTests {
             a retrying population may hold at most half the allowance; the reserved half is what \
             reaches the newcomer on its first pass
             """)
-        #expect(HeldPhotos.all(rig.nodes[1].manager).count == 1, "and nothing else was projected")
+        #expect(HeldPhotos.all(rig.nodes[1].features.photos).count == 1, "and nothing else was projected")
     }
 
     /// **The same discipline on job 4's list, where the population is real.** Sixteen unjudgeable
@@ -512,7 +516,7 @@ struct MeshRoutedRetryAllowanceTests {
     ///
     /// **Since P6 item 6 supplied `ackableNow`'s heart leg the hearts spend NO slot at all**, which
     /// is a strictly stronger statement than the retry share bounding them: this rig wires no heart
-    /// ledger, so `routedHeartJudgementReadiness()` is false, and the filter takes all sixteen off
+    /// ledger, so `routedHeartJudgementReadiness(_:)` is false, and the filter takes all sixteen off
     /// the list before the allowance is planned. `heartsPending` keeps its meaning — "heart-stage
     /// items this pass could not judge" — because the filter counts what it refused a slot to.
     @Test func aNewReceiptIsFiledOnItsFirstPassBehindAFullAllowanceOfHearts() async throws {

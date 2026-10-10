@@ -2743,16 +2743,18 @@ struct LocalizationBoundaryTests {
     /// The two package string catalogs added by review §4.0 must keep existing.
     ///
     /// Their absence is SILENT in exactly the way ``theDomainModelStringCatalogStillExists()``
-    /// describes: every `String(localized:…, bundle: .module)` in `FernletUI` and `ProximityKit`
+    /// describes: every `String(localized:…, bundle: .module)` in `FernletUI` and `FernletSocial`
     /// keeps compiling and keeps returning its `defaultValue`. Nothing else would notice.
     /// `FernletProximityUI` is pinned with them: ProximityKit's review sheet, keep-friends prompt
     /// and photo-save alert moved there with 28 of its 31 keys (ProximityKit plan step A0.1), so
     /// most of what §4.0 put in ProximityKit's catalog now lives in that module's. So is
     /// `FernletConnections`, whose catalog holds the two name placeholders
     /// `PeerNameDisplay.text(for:)` resolves (`FernletConnectionsCopy.Peer`, keys `proximity.peer.*`),
-    /// the rest of what §4.0 put there; ProximityKit's keeps the camera's hold-failure line.
+    /// the rest of what §4.0 put there. ProximityKit has no catalog: the camera's hold-failure line,
+    /// its last key, is FernletSocial's, in that module's first catalog (`FernletSocialCopy.Camera`,
+    /// key `proximity.camera.holdFailed`, since plan step A0.5.11).
     @Test func theModuleStringCatalogsAddedBySection40StillExist() {
-        for module in ["FernletUI", "ProximityKit", "FernletProximityUI", "FernletConnections", "AppServices"] {
+        for module in ["FernletUI", "FernletSocial", "FernletProximityUI", "FernletConnections", "AppServices"] {
             let catalog = RepoRoot.url("FernletKit/Sources/\(module)/Localizable.xcstrings")
             #expect(
                 FileManager.default.fileExists(atPath: catalog.path),

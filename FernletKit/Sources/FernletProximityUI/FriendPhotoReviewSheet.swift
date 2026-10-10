@@ -5,6 +5,7 @@ import UIKit
 import FernletDomainModel
 import FernletFoundation
 import ProximityKit
+import FernletSocial
 import FernletConnections
 import os
 

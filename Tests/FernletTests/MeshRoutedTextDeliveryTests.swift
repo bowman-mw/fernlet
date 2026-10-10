@@ -16,6 +16,10 @@
 // mint; and the sender cells assert the OUTCOME, because `.skipped(.noDestinations)` and a staged
 // mint are indistinguishable from a silent return. The retired legacy handler can no longer make
 // any of them pass: `MeshRoutedDrainTests.theRetiredTextTransportIsGone` pins it at zero.
+//
+// Since ProximityKit plan step A0.5.9 the sender, the gate, the budget and the transcript are each
+// node's FernletSocial chat (`node.features.chat`), whose projection handler the node's composition
+// registers; the session-content generation the liveness reads stays the manager's.
 
 @testable import ProximityKit
 import FernletConnections
@@ -24,24 +28,25 @@ import Testing
 @testable import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
+@testable import FernletSocial
 @testable import Fernlet
 
 // MARK: - The rig's text half
 
 extension MeshFoundingRig {
 
-    /// Opens the 13+ chat gate at every node. The rig builds managers directly, so
+    /// Opens the 13+ chat gate at every node. The rig wires no app over its nodes' chats, so each
     /// `chatAllowedProvider` is nil — i.e. **fail-closed** — until a cell says otherwise, which is
     /// itself the shape `aMessageBelowTheRecipientsAgeGateIsNotProjected` relies on.
     func allowChatEverywhere() {
         // R2: bounded by the rig's own node count.
-        for node in nodes { node.manager.chatAllowedProvider = { true } }
+        for node in nodes { node.features.chat.chatAllowedProvider = { true } }
     }
 
     /// Sends one message at `node` through the real public API and returns what the send decided.
     func sendText(at node: Int, _ text: String) -> MeshTextSendOutcome {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            nodes[node].manager.sendTempMessage(text)
+            nodes[node].features.chat.sendTempMessage(text)
         }
     }
 
@@ -59,12 +64,12 @@ extension MeshFoundingRig {
 
     /// One node's visible transcript, oldest-first in §10.3's total order.
     func transcript(at node: Int) -> [String] {
-        nodes[node].manager.sessionMessages.messages.map(\.text)
+        nodes[node].features.chat.sessionMessages.messages.map(\.text)
     }
 
     /// The rows one node shows, for the attribution assertions.
     func transcriptRows(at node: Int) -> [SessionMessageStore.Message] {
-        nodes[node].manager.sessionMessages.messages
+        nodes[node].features.chat.sessionMessages.messages
     }
 
     /// Whether one node has marked an item FINAL — i.e. `MeshRoutedProjectionVerdict`'s
@@ -126,7 +131,7 @@ struct MeshRoutedTextSenderTests {
         defer { rig.teardown() }
         rig.allowChatEverywhere()
         var outcomes: [MeshTextSendOutcome] = []
-        rig.nodes[0].manager.onTextSendForTesting = { outcomes.append($0) }
+        rig.nodes[0].features.chat.onTextSendForTesting = { outcomes.append($0) }
         rig.link(0, 1)
         rig.commit(0, 1)
         #expect(rig.roster(0).count == 1, "the founder's own roster is ONE until the grant lands")
@@ -154,16 +159,16 @@ struct MeshRoutedTextSenderTests {
         defer { rig.teardown() }
         try await rig.settleChattingPair()
         var outcomes: [MeshTextSendOutcome] = []
-        rig.nodes[0].manager.onTextSendForTesting = { outcomes.append($0) }
+        rig.nodes[0].features.chat.onTextSendForTesting = { outcomes.append($0) }
 
         #expect(rig.sendText(at: 0, "   \n\t ") == .empty)
         #expect(rig.transcript(at: 0).isEmpty)
 
-        rig.nodes[0].manager.chatAllowedProvider = { false }
+        rig.nodes[0].features.chat.chatAllowedProvider = { false }
         #expect(rig.sendText(at: 0, "hello") == .ageGated)
         #expect(rig.transcript(at: 0).isEmpty, "not even the local echo below the gate")
 
-        rig.nodes[0].manager.chatAllowedProvider = { true }
+        rig.nodes[0].features.chat.chatAllowedProvider = { true }
         #expect(rig.sendText(at: 0, "hello") == .staged)
         #expect(outcomes == [.empty, .ageGated, .staged],
                 "every outcome is reported exactly once, in order, through the one seam")
@@ -270,7 +275,7 @@ struct MeshRoutedTextDeliveryTests {
         let rig = try MeshFoundingRig.build(2, label: "text-gated")
         defer { rig.teardown() }
         try await rig.settleChattingPair()
-        rig.nodes[1].manager.chatAllowedProvider = { false }
+        rig.nodes[1].features.chat.chatAllowedProvider = { false }
 
         #expect(rig.sendText(at: 0, "not for you") == .staged)
         try await rig.settle(until: { rig.stagedOwnItemID(at: 0) != nil })
@@ -284,7 +289,7 @@ struct MeshRoutedTextDeliveryTests {
             """)
 
         // The gate opens and a fresh rising access edge re-runs the projection pass.
-        rig.nodes[1].manager.chatAllowedProvider = { true }
+        rig.nodes[1].features.chat.chatAllowedProvider = { true }
         rig.openGate(at: 1)
         try await rig.settle()
         #expect(rig.transcript(at: 1).isEmpty, """
@@ -359,7 +364,7 @@ struct MeshRoutedTextDeliveryTests {
         recipient.evictSlotForTesting(peerID: slot.id)
         #expect(!recipient.hasCommittedPeer, "the link is down")
         #expect(recipient.isSessionLive, "but the session is NOT over — a founded mesh outlives it")
-        #expect(recipient.sessionMessages.messages.isEmpty, "and nothing was cleared")
+        #expect(rig.transcript(at: 1).isEmpty, "and nothing was cleared")
 
         rig.reseat(1, toward: 0)
         rig.commit(1, 0)
@@ -652,8 +657,8 @@ struct MeshRoutedTextDeliveryTests {
     @Test func theIncomingTextQuotaRefusesPastItsCapAndIsFreeForAReSend() async throws {
         let rig = try MeshFoundingRig.build(2, label: "text-quota")
         defer { rig.teardown() }
-        let perOrigin = rig.nodes[0].manager
-        let cap = MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        let perOrigin = rig.nodes[0].features.chat
+        let cap = MeshSessionChat.maxTextMessagesPerSenderPerSession
         let manifest = Self.quotaManifest(origin: "quota-origin")
 
         var accepted: [UUID] = []
@@ -678,7 +683,7 @@ struct MeshRoutedTextDeliveryTests {
 
         // The other axis, on a manager whose map is still empty: `MeshRoutedStoreFormat.maxItems`
         // keys, and then a fresh `(mesh, origin)` is refused rather than admitted.
-        let mapBound = rig.nodes[1].manager
+        let mapBound = rig.nodes[1].features.chat
         // R2: bounded by the store's own item cap.
         for index in 0..<MeshRoutedStoreFormat.maxItems {
             #expect(mapBound.allowIncomingRoutedText(

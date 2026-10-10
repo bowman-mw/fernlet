@@ -27,6 +27,7 @@ import UIKit
 import FernletDomainModel
 import FernletFoundation
 import PrivateMediaStore
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -127,23 +128,25 @@ struct MeshHeldSessionPhotoTests {
     /// readable through the wall's byte doors — while every photo is held and readable through the
     /// review's gated seam.
     @Test func nothingReachesTheWallBeforeTheAnswer() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(3, on: manager)
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(3, on: photos)
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == 3)
 
         manager.leaveSession()
 
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == captured, "offered for review")
-        #expect(manager.meshPhotos.isEmpty, "no photo in the wall mirror (the Home photowall reads it)")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == captured, "offered for review")
+        #expect(photos.meshPhotos.isEmpty, "no photo in the wall mirror (the Home photowall reads it)")
         #expect((HeldPhotos.persistedWallIDs(store) ?? []).isDisjoint(with: captured), "none in the sealed wall index")
-        #expect(manager.photoWallPosts.isEmpty && manager.savedPhotoSessions.isEmpty, "no wall post or album session")
-        for photo in manager.pendingReviewPhotos {
-            #expect(manager.imageData(for: photo) == nil, "the wall's byte door knows nothing of it")
-            #expect(manager.thumbnailData(forPhotoID: photo.id) == nil)
-            #expect(manager.reviewThumbnailData(for: photo) != nil, "while the review's seam draws it")
+        #expect(photos.photoWallPosts.isEmpty && photos.savedPhotoSessions.isEmpty, "no wall post or album session")
+        for photo in photos.pendingReviewPhotos {
+            #expect(photos.imageData(for: photo) == nil, "the wall's byte door knows nothing of it")
+            #expect(photos.thumbnailData(forPhotoID: photo.id) == nil)
+            #expect(photos.reviewThumbnailData(for: photo) != nil, "while the review's seam draws it")
         }
         let held = try #require(HeldPhotos.persistedIndex(store))
         #expect(held.heldLocalIDs == captured, "every photo is held in the sealed pending corpus")
@@ -153,21 +156,23 @@ struct MeshHeldSessionPhotoTests {
     /// wall key; discarded = shown ∩ held − ticked, files gone; both tombstoned by (origin, id); an
     /// id not shown stays held; and an id answered once is ignored by every later answer.
     @Test func anAnswerIsExactAndFirstAnswerWins() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(4, on: manager)
-        let ids = manager.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(4, on: photos)
+        let ids = photos.sessionPhotos.map(\.id)
         try #require(ids.count == 4)
         manager.leaveSession()
-        let batch = try #require(manager.pendingFriendReview)
+        let batch = try #require(photos.pendingFriendReview)
 
-        let answer = manager.finishReviewedPhotos(Set(ids.prefix(3)), keeping: [ids[0], ids[3]], in: batch.id)
+        let answer = photos.finishReviewedPhotos(Set(ids.prefix(3)), keeping: [ids[0], ids[3]], in: batch.id)
 
         #expect(answer.keptOnWall == [ids[0]], "ticked but not shown is not kept")
         #expect(answer.discarded == [ids[1], ids[2]] && answer.notApplied.isEmpty && answer.failure == nil)
-        let kept = try #require(manager.meshPhotos.first { $0.id == ids[0] })
-        #expect(manager.imageData(for: kept) != nil, "the kept bytes open under the WALL key")
+        let kept = try #require(photos.meshPhotos.first { $0.id == ids[0] })
+        #expect(photos.imageData(for: kept) != nil, "the kept bytes open under the WALL key")
         #expect(!FileManager.default.fileExists(atPath: HeldPhotoFixtures.pendingImageURL(store, localID: ids[1]).path),
                 "a discarded photo's pending file is gone")
         #expect(!FileManager.default.fileExists(atPath: HeldPhotoFixtures.pendingImageURL(store, localID: ids[0]).path),
@@ -179,57 +184,64 @@ struct MeshHeldSessionPhotoTests {
                     "answered photos are tombstoned by origin and id")
         }
 
-        let again = manager.finishSessionPhotos(keeping: [], of: Set(ids))
+        let again = photos.finishSessionPhotos(keeping: [], of: Set(ids))
         #expect(again.discarded == [ids[3]], "a later answer reaches only what is still held")
-        #expect(manager.meshPhotos.contains { $0.id == ids[0] }, "and never un-keeps the first answer")
+        #expect(photos.meshPhotos.contains { $0.id == ids[0] }, "and never un-keeps the first answer")
     }
 
     /// **I6.** The session ending moves the live roll into the review WITHOUT a single disk write:
     /// the pending index is byte-identical across the ending, and a manager rebuilt over it offers
     /// every photo as awaiting.
     @Test func theEndingWritesNothing() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let captured = Set(photos.sessionPhotos.map(\.id))
         let indexURL = HeldPhotoFixtures.pendingIndexURL(store)
         let before = try Data(contentsOf: indexURL)
         let modifiedBefore = try FileManager.default.attributesOfItem(atPath: indexURL.path)[.modificationDate] as? Date
 
         manager.leaveSession()
 
-        #expect(Set(manager.pendingFriendReview?.photos.map(\.id) ?? []) == captured, "moved into the review")
+        #expect(Set(photos.pendingFriendReview?.photos.map(\.id) ?? []) == captured, "moved into the review")
         #expect(try Data(contentsOf: indexURL) == before, "the pending index is byte-identical")
         let modifiedAfter = try FileManager.default.attributesOfItem(atPath: indexURL.path)[.modificationDate] as? Date
         #expect(modifiedAfter == modifiedBefore, "and was not even rewritten")
-        let rebuilt = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
-        #expect(Set(rebuilt.pendingReviewPhotos.map(\.id)) == captured, "a rebuilt manager sees every photo awaiting")
+        let rebuiltFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let rebuiltPhotos = rebuiltFeatures.photos
+        #expect(Set(rebuiltPhotos.pendingReviewPhotos.map(\.id)) == captured, "a rebuilt manager sees every photo awaiting")
     }
 
     /// **I7.** A kill before the answer: a second manager over the same corpus rebuilds a
     /// photos-only batch with every held photo and NO candidates (they are memory-only key
     /// material — owner question Q5's default), and the review is outstanding.
     @Test func theReviewSurvivesAKillWithoutItsCandidates() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
         )
-        LastMemberReviewFixtures.capture(3, on: manager)
-        let captured = Set(manager.sessionPhotos.map(\.id))
+        LastMemberReviewFixtures.capture(3, on: photos)
+        let captured = Set(photos.sessionPhotos.map(\.id))
         try #require(captured.count == 3 && manager.isSessionLive, "a kill mid-session")
 
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
+        let relaunchedPhotos = relaunchedFeatures.photos
 
-        let batch = try #require(relaunched.pendingFriendReview, "the review came back")
+        let batch = try #require(relaunchedPhotos.pendingFriendReview, "the review came back")
         #expect(Set(batch.photos.map(\.id)) == captured, "with every held photo")
         #expect(batch.entries.isEmpty, "and without the keep-as-friend candidates")
-        #expect(relaunched.hasOutstandingPhotoReview)
-        #expect(relaunched.sessionPhotos.isEmpty, "at a launch every held photo is awaiting")
-        #expect(!relaunched.heldPhotosCanBeShown, "nothing is drawn before the gate opens")
+        #expect(relaunchedPhotos.hasOutstandingPhotoReview)
+        #expect(relaunchedPhotos.sessionPhotos.isEmpty, "at a launch every held photo is awaiting")
+        #expect(!relaunchedPhotos.heldPhotosCanBeShown, "nothing is drawn before the gate opens")
         HeldPhotos.openGate(on: relaunched)
-        #expect(relaunched.heldPhotosCanBeShown, "and it can be once it does")
+        #expect(relaunchedPhotos.heldPhotosCanBeShown, "and it can be once it does")
     }
 
     /// **I8.** The crash window of an answer — a photo already committed to the wall and still held
@@ -237,10 +249,12 @@ struct MeshHeldSessionPhotoTests {
     /// at a locked launch nothing is offered and the review cannot be shown; the unlock edge re-reads
     /// the wall and then drops the kept photo from the pending corpus, offering only the rest.
     @Test func theReconcileWaitsForAReadableWallThenDropsWhatTheWallHolds() throws {
-        let first = LastMemberReviewFixtures.foundedManager(store: store)
+        let firstFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let first = firstFeatures.mesh
+        let firstPhotos = firstFeatures.photos
         defer { first.leaveMesh() }
-        LastMemberReviewFixtures.capture(2, on: first)
-        let ids = first.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(2, on: firstPhotos)
+        let ids = firstPhotos.sessionPhotos.map(\.id)
         try #require(ids.count == 2)
         // The kill lands between the wall commit and the pending write: photo 0 is both kept and held.
         let pending = HeldPhotoFixtures.pendingStore(store)
@@ -251,16 +265,18 @@ struct MeshHeldSessionPhotoTests {
         #expect(wall.commitKept([hydrated], onto: wall.load()).keptOnWall == [ids[0]], "precondition: on the wall")
         let aside = try HeldPhotoFixtures.makeWallUnreadable(store)
 
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
+        let relaunchedPhotos = relaunchedFeatures.photos
 
-        #expect(relaunched.pendingFriendReview == nil, "over an unreadable wall nothing is offered")
-        #expect(!relaunched.heldPhotosCanBeShown && !relaunched.wallCanTakeKeeps)
+        #expect(relaunchedPhotos.pendingFriendReview == nil, "over an unreadable wall nothing is offered")
+        #expect(!relaunchedPhotos.heldPhotosCanBeShown && !relaunchedPhotos.wallCanTakeKeeps)
         try HeldPhotoFixtures.restoreWall(store, aside: aside)
         HeldPhotos.openGate(on: relaunched)
 
-        #expect(relaunched.pendingReviewPhotos.map(\.id) == [ids[1]], "the kept photo is never offered again")
-        #expect(relaunched.meshPhotos.map(\.id) == [ids[0]], "it is on the wall, recovered at the unlock edge")
-        #expect(relaunched.heldPhotosCanBeShown && relaunched.wallCanTakeKeeps)
+        #expect(relaunchedPhotos.pendingReviewPhotos.map(\.id) == [ids[1]], "the kept photo is never offered again")
+        #expect(relaunchedPhotos.meshPhotos.map(\.id) == [ids[0]], "it is on the wall, recovered at the unlock edge")
+        #expect(relaunchedPhotos.heldPhotosCanBeShown && relaunchedPhotos.wallCanTakeKeeps)
         let after = try #require(HeldPhotos.persistedIndex(store))
         #expect(after.heldLocalIDs == [ids[1]], "and the pending corpus let it go")
         #expect(after.isAnswered(HeldPhotoKey(origin: relaunched.localFingerprint, itemID: ids[0])))
@@ -271,25 +287,29 @@ struct MeshHeldSessionPhotoTests {
     /// never end), a Keep is not applied (`keepUnavailable`) and leaves the photo held, and a
     /// Delete all applies — it needs only the pending index.
     @Test func aWallThatStaysUnreadableRefusesKeepsButAppliesDiscards() throws {
-        let first = LastMemberReviewFixtures.foundedManager(store: store)
+        let firstFeatures = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let first = firstFeatures.mesh
+        let firstPhotos = firstFeatures.photos
         defer { first.leaveMesh() }
-        LastMemberReviewFixtures.capture(2, on: first)
-        let ids = first.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(2, on: firstPhotos)
+        let ids = firstPhotos.sessionPhotos.map(\.id)
         try #require(ids.count == 2)
         let aside = try HeldPhotoFixtures.makeWallUnreadable(store)
         defer { try? HeldPhotoFixtures.restoreWall(store, aside: aside) }
 
-        let relaunched = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
-        #expect(relaunched.pendingFriendReview == nil, "a locked launch waits")
+        let relaunchedFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let relaunched = relaunchedFeatures.mesh
+        let relaunchedPhotos = relaunchedFeatures.photos
+        #expect(relaunchedPhotos.pendingFriendReview == nil, "a locked launch waits")
         HeldPhotos.openGate(on: relaunched)
-        let batch = try #require(relaunched.pendingFriendReview, "unlocked and still unreadable: offered")
-        #expect(Set(batch.photos.map(\.id)) == Set(ids) && relaunched.heldPhotosCanBeShown && !relaunched.wallCanTakeKeeps)
+        let batch = try #require(relaunchedPhotos.pendingFriendReview, "unlocked and still unreadable: offered")
+        #expect(Set(batch.photos.map(\.id)) == Set(ids) && relaunchedPhotos.heldPhotosCanBeShown && !relaunchedPhotos.wallCanTakeKeeps)
 
-        let keep = relaunched.finishReviewedPhotos(Set(ids), keeping: [ids[0]], in: batch.id)
+        let keep = relaunchedPhotos.finishReviewedPhotos(Set(ids), keeping: [ids[0]], in: batch.id)
 
         #expect(keep.notApplied == [ids[0]] && keep.failure == .keepUnavailable, "the keep is refused, with its reason")
         #expect(keep.discarded == [ids[1]], "while the discard applied")
-        #expect(relaunched.pendingReviewPhotos.map(\.id) == [ids[0]], "the kept photo is still held and offered")
+        #expect(relaunchedPhotos.pendingReviewPhotos.map(\.id) == [ids[0]], "the kept photo is still held and offered")
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [ids[0]])
     }
 
@@ -297,23 +317,25 @@ struct MeshHeldSessionPhotoTests {
     /// spent, nothing shared), an answer applies nothing, and the review cannot be shown. Nothing held
     /// is deleted — hide, never delete.
     @Test func duressRevealsNothingAndAcceptsNothing() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(1, on: manager)
-        let held = try #require(manager.sessionPhotos.first)
-        let film = manager.filmRemaining
+        LastMemberReviewFixtures.capture(1, on: photos)
+        let held = try #require(photos.sessionPhotos.first)
+        let film = photos.filmRemaining
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             _ = manager.applyRoutedAccessGate(HeldPhotoFixtures.duressGate, now: Date())
         }
 
-        #expect(manager.reviewImageData(for: held) == nil && manager.reviewThumbnailData(for: held) == nil)
-        #expect(!manager.heldPhotosCanBeShown)
-        LastMemberReviewFixtures.capture(1, on: manager)
-        #expect(manager.sessionPhotos.map(\.id) == [held.id], "no capture is held under duress")
-        #expect(manager.filmRemaining == film, "and no film is spent")
+        #expect(photos.reviewImageData(for: held) == nil && photos.reviewThumbnailData(for: held) == nil)
+        #expect(!photos.heldPhotosCanBeShown)
+        LastMemberReviewFixtures.capture(1, on: photos)
+        #expect(photos.sessionPhotos.map(\.id) == [held.id], "no capture is held under duress")
+        #expect(photos.filmRemaining == film, "and no film is spent")
         #expect(manager.meshError != nil, "the capture says it could not keep the photo")
-        let answer = manager.finishSessionPhotos(keeping: [], of: [held.id])
+        let answer = photos.finishSessionPhotos(keeping: [], of: [held.id])
         #expect(answer.notApplied == [held.id] && answer.failure == .unavailable, "no answer runs")
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [held.id], "and nothing held was deleted")
     }
@@ -321,14 +343,15 @@ struct MeshHeldSessionPhotoTests {
     /// **I14.** The corpus is bounded without ever evicting: the 201st hold is `.full`, and every
     /// photo held before it is still held.
     @Test func theTwoHundredAndFirstHoldIsRefusedAndNothingIsEvicted() throws {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let photos = features.photos
         let cap = PendingSessionPhotoStore.maxHeldPhotos
         var first: UUID?
         // R2: a hard constant ceiling — the corpus bound.
         for position in 0..<cap {
             let id = UUID()
             if position == 0 { first = id }
-            let outcome = manager.holdSessionPhoto(
+            let outcome = photos.holdSessionPhoto(
                 HeldPhotoFixtures.peerPhoto(id: id, origin: "fp-cap"),
                 key: MeshContentKey(senderFingerprint: "fp-cap", contentID: id), live: false
             )
@@ -336,14 +359,14 @@ struct MeshHeldSessionPhotoTests {
         }
         let overflow = UUID()
 
-        let refused = manager.holdSessionPhoto(
+        let refused = photos.holdSessionPhoto(
             HeldPhotoFixtures.peerPhoto(id: overflow, origin: "fp-cap"),
             key: MeshContentKey(senderFingerprint: "fp-cap", contentID: overflow), live: false
         )
 
         #expect(refused == .full)
-        #expect(manager.pendingReviewPhotos.count == cap, "nothing evicted to make room")
-        #expect(manager.pendingReviewPhotos.contains { $0.id == first }, "the oldest is still held")
+        #expect(photos.pendingReviewPhotos.count == cap, "nothing evicted to make room")
+        #expect(photos.pendingReviewPhotos.contains { $0.id == first }, "the oldest is still held")
         #expect(HeldPhotos.persistedIndex(store)?.photos.count == cap)
     }
 
@@ -358,19 +381,22 @@ struct MeshHeldSessionPhotoTests {
         )
         try #require(outcome == .held)
 
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let photos = features.photos
 
-        #expect(manager.pendingReviewPhotos.map(\.id) == [id], "a year later it is still waiting for the person")
+        #expect(photos.pendingReviewPhotos.map(\.id) == [id], "a year later it is still waiting for the person")
     }
 
     /// **I22.** A kept photo whose sealed bytes do not land on the wall is NOT reported kept: it
     /// stays held and offered, the answer names the failure, and the export set cannot include it.
     @Test func aKeepThatDoesNotLandLeavesThePhotoHeldAndOffered() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let ids = manager.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let ids = photos.sessionPhotos.map(\.id)
         try #require(ids.count == 2)
         // The wall's write for photo 0 fails: a directory stands where its sealed file would go.
         try FileManager.default.createDirectory(
@@ -378,14 +404,14 @@ struct MeshHeldSessionPhotoTests {
             withIntermediateDirectories: true
         )
 
-        let answer = manager.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
+        let answer = photos.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
 
         #expect(answer.keptOnWall == [ids[1]], "only the photo that landed is kept")
         #expect(answer.notApplied == [ids[0]] && answer.failure == .wallWriteFailed)
-        #expect(manager.sessionPhotos.map(\.id) == [ids[0]], "the other is still offered")
+        #expect(photos.sessionPhotos.map(\.id) == [ids[0]], "the other is still offered")
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [ids[0]], "and still held, bytes and all")
-        #expect(manager.sessionPhotos.first.flatMap { manager.reviewImageData(for: $0) } != nil)
-        let exportable = manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) }.map(\.id)
+        #expect(photos.sessionPhotos.first.flatMap { photos.reviewImageData(for: $0) } != nil)
+        let exportable = photos.meshPhotos.filter { answer.keptOnWall.contains($0.id) }.map(\.id)
         #expect(exportable == [ids[1]], "the camera-roll export set cannot include a photo that did not land")
     }
 
@@ -395,27 +421,29 @@ struct MeshHeldSessionPhotoTests {
     /// keep lands. Before the fix every nil read was `unreadable`: the photo was tombstoned and its
     /// files swept — a photo the person chose to keep, deleted for good by a transient failure.
     @Test func aKeptPhotoThatCannotBeReadRightNowStaysHeld() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let ids = manager.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let ids = photos.sessionPhotos.map(\.id)
         try #require(ids.count == 2)
         let file = HeldPhotoFixtures.pendingImageURL(store, localID: ids[0])
         let aside = file.appendingPathExtension("aside")
         try FileManager.default.moveItem(at: file, to: aside)
         try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
 
-        let answer = manager.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
+        let answer = photos.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
 
         #expect(answer.keptOnWall == [ids[1]], "the readable photo is kept")
         #expect(answer.unreadable.isEmpty, "a read that may succeed later never classes a photo as lost")
         #expect(answer.notApplied == [ids[0]] && answer.failure == .unavailable)
-        #expect(manager.sessionPhotos.map(\.id) == [ids[0]], "still offered")
+        #expect(photos.sessionPhotos.map(\.id) == [ids[0]], "still offered")
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs == [ids[0]], "and still held")
         try FileManager.default.removeItem(at: file)
         try FileManager.default.moveItem(at: aside, to: file)
-        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]],
+        #expect(photos.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]],
                 "the retry keeps it once the file reads")
     }
 
@@ -423,73 +451,79 @@ struct MeshHeldSessionPhotoTests {
     /// unlock): the keep applies nothing and every ticked photo stays held for the retry.
     @Test func aKeepWithNoKeyAtTheAnswerLeavesEveryPhotoHeld() throws {
         let keys = SwitchableMediaKeyProvider()
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession(), heldPhotoKeys: keys)
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession(), heldPhotoKeys: keys)
+        let manager = features.mesh
+        let photos = features.photos
         HeldPhotos.openGate(on: manager)
         let ids = [UUID(), UUID()]
         for id in ids {
             let key = MeshContentKey(senderFingerprint: "fp-keyless", contentID: id)
-            try #require(manager.holdSessionPhoto(
+            try #require(photos.holdSessionPhoto(
                 HeldPhotoFixtures.peerPhoto(id: id, origin: "fp-keyless"), key: key, live: false) == .held)
         }
-        let batch = try #require(manager.pendingFriendReview)
+        let batch = try #require(photos.pendingFriendReview)
         keys.available = false
 
-        let answer = manager.finishReviewedPhotos(Set(ids), keeping: Set(ids), in: batch.id)
+        let answer = photos.finishReviewedPhotos(Set(ids), keeping: Set(ids), in: batch.id)
 
         #expect(answer.unreadable.isEmpty && answer.keptOnWall.isEmpty)
         #expect(answer.notApplied == Set(ids) && answer.failure == .unavailable)
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(ids), "every photo still offered")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == Set(ids), "every photo still offered")
         keys.available = true
-        #expect(manager.finishReviewedPhotos(Set(ids), keeping: Set(ids), in: batch.id).keptOnWall == Set(ids),
+        #expect(photos.finishReviewedPhotos(Set(ids), keeping: Set(ids), in: batch.id).keptOnWall == Set(ids),
                 "and kept once the key reads again")
     }
 
     /// **I22's boundary, fix round 1.** A ticked photo whose bytes are GONE — they do not open under
     /// the present key — is the one case a keep removes: reported `unreadable`, never offered again.
     @Test func aKeptPhotoWhoseBytesAreGoneIsRemovedAndReported() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let ids = manager.sessionPhotos.map(\.id)
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let ids = photos.sessionPhotos.map(\.id)
         try #require(ids.count == 2)
         try Data("FMA2 corrupt".utf8).write(to: HeldPhotoFixtures.pendingImageURL(store, localID: ids[0]))
 
-        let answer = manager.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
+        let answer = photos.finishSessionPhotos(keeping: Set(ids), of: Set(ids))
 
         #expect(answer.unreadable == [ids[0]] && answer.keptOnWall == [ids[1]])
         #expect(answer.notApplied.isEmpty && answer.failure == nil)
-        #expect(manager.sessionPhotos.isEmpty && HeldPhotos.persistedIndex(store)?.photos.isEmpty == true)
+        #expect(photos.sessionPhotos.isEmpty && HeldPhotos.persistedIndex(store)?.photos.isEmpty == true)
     }
 
     /// **I23.** Identity is origin + item id: an impostor reusing a genuine photo's item id is held
     /// separately (under a fresh local id), neither suppresses the other, and discarding the
     /// impostor tombstones only the impostor's key.
     @Test func anImpostorWithACopiedItemIDNeitherSuppressesNorTombstonesTheGenuinePhoto() throws {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
+        let photos = features.photos
         HeldPhotos.openGate(on: manager)
         let itemID = UUID()
         let impostorKey = MeshContentKey(senderFingerprint: "fp-impostor", contentID: itemID)
         let genuineKey = MeshContentKey(senderFingerprint: "fp-genuine", contentID: itemID)
-        #expect(manager.holdSessionPhoto(
+        #expect(photos.holdSessionPhoto(
             HeldPhotoFixtures.peerPhoto(id: itemID, origin: "fp-impostor"), key: impostorKey, live: false) == .held)
 
-        #expect(manager.holdSessionPhoto(
+        #expect(photos.holdSessionPhoto(
             HeldPhotoFixtures.peerPhoto(id: itemID, origin: "fp-genuine"), key: genuineKey, live: false) == .held,
                 "the genuine photo is not 'already held' because of the impostor")
-        let offered = manager.pendingReviewPhotos
+        let offered = photos.pendingReviewPhotos
         #expect(offered.count == 2 && Set(offered.map(\.id)).count == 2, "two photos under two local ids")
         let genuineLocal = try #require(offered.first { $0.senderFingerprint == "fp-genuine" }?.id)
         #expect(genuineLocal != itemID, "the later one got a fresh local id instead of overwriting a file")
 
-        let batch = try #require(manager.pendingFriendReview)
-        #expect(manager.finishReviewedPhotos([itemID], keeping: [], in: batch.id).discarded == [itemID])
+        let batch = try #require(photos.pendingFriendReview)
+        #expect(photos.finishReviewedPhotos([itemID], keeping: [], in: batch.id).discarded == [itemID])
 
-        #expect(manager.pendingReviewPhotos.map(\.id) == [genuineLocal], "the genuine photo is still offered")
-        #expect(manager.holdSessionPhoto(
+        #expect(photos.pendingReviewPhotos.map(\.id) == [genuineLocal], "the genuine photo is still offered")
+        #expect(photos.holdSessionPhoto(
             HeldPhotoFixtures.peerPhoto(id: itemID, origin: "fp-genuine"), key: genuineKey, live: false) == .alreadyHeld,
                 "and its key is held, not answered")
-        #expect(manager.holdSessionPhoto(
+        #expect(photos.holdSessionPhoto(
             HeldPhotoFixtures.peerPhoto(id: itemID, origin: "fp-impostor"), key: impostorKey, live: false) == .answered,
                 "while only the impostor's key carries the tombstone")
     }
@@ -497,21 +531,23 @@ struct MeshHeldSessionPhotoTests {
     /// A kept photo deleted from the wall is tombstoned by its identity for 24 hours, so a routed
     /// copy still in custody cannot come back as a new held photo; a HELD photo is not deletable.
     @Test func deletingAKeptPhotoTombstonesItAndAHeldPhotoIsNotDeletable() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(2, on: manager)
-        let ids = manager.sessionPhotos.map(\.id)
-        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
+        LastMemberReviewFixtures.capture(2, on: photos)
+        let ids = photos.sessionPhotos.map(\.id)
+        #expect(photos.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
 
-        manager.deletePhoto(ids[1])
-        #expect(manager.sessionPhotos.map(\.id) == [ids[1]], "a held photo leaves only through an answer")
+        photos.deletePhoto(ids[1])
+        #expect(photos.sessionPhotos.map(\.id) == [ids[1]], "a held photo leaves only through an answer")
 
-        manager.deletePhoto(ids[0])
-        #expect(manager.meshPhotos.isEmpty, "the kept photo left the wall")
+        photos.deletePhoto(ids[0])
+        #expect(photos.meshPhotos.isEmpty, "the kept photo left the wall")
         let key = MeshContentKey(senderFingerprint: manager.localFingerprint, contentID: ids[0])
         let photo = HeldPhotoFixtures.peerPhoto(id: ids[0], origin: manager.localFingerprint)
-        #expect(manager.holdSessionPhoto(photo, key: key, live: true) == .answered,
+        #expect(photos.holdSessionPhoto(photo, key: key, live: true) == .answered,
                 "and a re-delivery of it is refused by the tombstone")
     }
 
@@ -519,42 +555,65 @@ struct MeshHeldSessionPhotoTests {
     /// too) and the live roster are empty, the wall is untouched — and nothing comes back on a
     /// rebuild.
     @Test func theDeleteAllPurgeTakesEveryUnchosenPhotoAndTheirSessionsOffer() throws {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         defer { manager.leaveMesh() }
         HeldPhotos.openGate(on: manager)
-        LastMemberReviewFixtures.capture(3, on: manager)
-        let ids = manager.sessionPhotos.map(\.id)
-        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
+        LastMemberReviewFixtures.capture(3, on: photos)
+        let ids = photos.sessionPhotos.map(\.id)
+        #expect(photos.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
         )
         manager.leaveSession()
-        try #require(manager.pendingFriendReview?.entries.count == 1)
+        try #require(photos.pendingFriendReview?.entries.count == 1)
 
-        #expect(manager.purgeHeldSessionPhotosForDeleteAll())
+        #expect(photos.purgeHeldSessionPhotosForDeleteAll())
 
         #expect(!FileManager.default.fileExists(atPath: HeldPhotoFixtures.pendingDirectory(store).path))
-        #expect(manager.pendingFriendReview == nil && manager.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
-        #expect(!manager.hasOutstandingPhotoReview)
-        #expect(manager.meshPhotos.map(\.id) == [ids[0]], "the kept wall survives")
-        let rebuilt = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
-        #expect(rebuilt.pendingFriendReview == nil, "and nothing unchosen comes back")
+        #expect(photos.pendingFriendReview == nil && photos.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
+        #expect(!photos.hasOutstandingPhotoReview)
+        #expect(photos.meshPhotos.map(\.id) == [ids[0]], "the kept wall survives")
+        let rebuiltFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let rebuiltPhotos = rebuiltFeatures.photos
+        #expect(rebuiltPhotos.pendingFriendReview == nil, "and nothing unchosen comes back")
     }
 
-    /// The I5 source half: the tombstone refusal sits in the photo arm BEFORE the body is opened
-    /// (no decrypt) and so before the quota (spent inside the canonical dispatch), and the ending's
-    /// memory move never names a store (I6).
+    /// The I5 source half: the tombstone refusal is the photo row's pre-open verdict, which the
+    /// engine asks BEFORE the body is opened (no decrypt) and so before the quota (spent inside the
+    /// canonical write), and the ending's memory move never names a store (I6).
+    ///
+    /// Three brace-matched bodies since plan step A0.5.2, because the order is now held in three
+    /// places: `dispatchRoutedPlaintext` asks the handler's `.verdictBeforeOpen(` before it invokes
+    /// the box's open-then-project step; that step, built by `registerRoutedProjectionHandler`,
+    /// opens through `MeshRoutedItemDelivery.openBody(` before it calls the handler's
+    /// `.projectRoutedItem(`; and the photo handler's `verdictBeforeOpen` is the settlement. The first
+    /// two are the engine's, in the manager; the third is the session photos' projection adapter's,
+    /// in `MeshSessionPhotos.swift`, since plan step A0.5.11 (the manager's built-in's before it).
     @Test func theRoutedRefusalPrecedesTheDecryptAndTheQuota() throws {
         let source = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
         )
+        let photos = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshSessionPhotos.swift")
+        )
         let dispatch = try #require(MeshRoutedSourceScan.bracedBody(after: "private func dispatchRoutedPlaintext(", in: source))
-        let settle = try #require(dispatch.range(of: "routedPhotoSettlement(manifest)"))
-        let open = try #require(dispatch.range(of: "openedRoutedPhotoBody(blob, manifest: manifest)"))
-        #expect(settle.lowerBound < open.lowerBound, "the tombstone is read before anything is decrypted")
-        #expect(!source.contains("cachePhoto("), "the wall-first hold is gone for both producers")
-        #expect(!source.contains("isPhotoFromCurrentSession"), "live is the signed mesh id's call, never the header's")
+        let verdict = try #require(dispatch.range(of: ".verdictBeforeOpen(delivery)"))
+        let open = try #require(dispatch.range(of: ".openThenProject("))
+        #expect(verdict.lowerBound < open.lowerBound, "the pre-open verdict is read before anything is decrypted")
+        let register = try #require(MeshRoutedSourceScan.bracedBody(after: "func registerRoutedProjectionHandler<", in: source))
+        let decrypt = try #require(register.range(of: "MeshRoutedItemDelivery.openBody("))
+        let write = try #require(register.range(of: ".projectRoutedItem("))
+        #expect(decrypt.lowerBound < write.lowerBound, "the open precedes the canonical write, and the quota inside it")
+        let photo = try #require(MeshRoutedSourceScan.bracedBody(after: "private final class PhotoProjector", in: photos))
+        let settle = try #require(MeshRoutedSourceScan.bracedBody(after: "func verdictBeforeOpen(", in: photo))
+        #expect(settle.contains("routedPhotoSettlement(delivery)"), "the photo row's pre-open verdict is the tombstone read")
+        #expect(!source.contains("cachePhoto(") && !photos.contains("cachePhoto("),
+                "the wall-first hold is gone for both producers")
+        #expect(!source.contains("isPhotoFromCurrentSession") && !photos.contains("isPhotoFromCurrentSession"),
+                "live is the signed mesh id's call, never the header's")
     }
 }
 
@@ -581,6 +640,7 @@ struct MeshHeldRoutedPhotoTests {
         rig.seedAgreementKeys()
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
         let receiver = rig.nodes[1].manager
+        let receiverPhotos = rig.nodes[1].features.photos
         try #require(receiver.isSessionLive && receiver.currentMesh?.meshID == rig.meshID, "precondition: live")
         let item = try MeshRoutedPhotoFixtures.item(rig, origin: 0)
         rig.link(0, 1)
@@ -588,10 +648,10 @@ struct MeshHeldRoutedPhotoTests {
         try rig.handOver(item, sender: 0, receiver: 1)
         try await rig.settle()
 
-        #expect(receiver.sessionPhotos.map(\.id) == [item.manifest.itemID], "held on the live roll")
-        #expect(receiver.sessionPhotos.first?.session?.meshID == rig.meshID, "stamped with the live session")
-        #expect(receiver.pendingFriendReview == nil, "the review batch is untouched mid-session")
-        #expect(receiver.meshPhotos.isEmpty, "and the wall never sees it before the answer")
+        #expect(receiverPhotos.sessionPhotos.map(\.id) == [item.manifest.itemID], "held on the live roll")
+        #expect(receiverPhotos.sessionPhotos.first?.session?.meshID == rig.meshID, "stamped with the live session")
+        #expect(receiverPhotos.pendingFriendReview == nil, "the review batch is untouched mid-session")
+        #expect(receiverPhotos.meshPhotos.isEmpty, "and the wall never sees it before the answer")
     }
 
     /// **I16, the late arrival.** A photo projected after this device's session ended is held
@@ -601,6 +661,7 @@ struct MeshHeldRoutedPhotoTests {
         defer { rig.teardown() }
         rig.seedAgreementKeys()
         let receiver = rig.nodes[1].manager
+        let receiverPhotos = rig.nodes[1].features.photos
         receiver.endSessionAfterDiscoveryTimeout()
         try #require(!receiver.isSessionLive && receiver.currentMesh != nil, "precondition: ended, mesh held")
         rig.pushGate(MeshRoutedDrainRig.openGate, at: 1)
@@ -610,8 +671,8 @@ struct MeshHeldRoutedPhotoTests {
         try rig.handOver(item, sender: 0, receiver: 1)
         try await rig.settle()
 
-        #expect(receiver.pendingReviewPhotos.map(\.id) == [item.manifest.itemID], "held awaiting: the review re-triggers")
-        #expect(receiver.sessionPhotos.isEmpty && receiver.meshPhotos.isEmpty)
+        #expect(receiverPhotos.pendingReviewPhotos.map(\.id) == [item.manifest.itemID], "held awaiting: the review re-triggers")
+        #expect(receiverPhotos.sessionPhotos.isEmpty && receiverPhotos.meshPhotos.isEmpty)
     }
 
     /// **I5.** A photo the person discarded is refused by its (origin, item id) tombstone when the
@@ -628,18 +689,20 @@ struct MeshHeldRoutedPhotoTests {
         rig.link(0, 1)
         try rig.handOver(item, sender: 0, receiver: 1)
         try await rig.settle()
-        try #require(rig.nodes[1].manager.sessionPhotos.map(\.id) == [itemID], "precondition: held")
-        #expect(rig.nodes[1].manager.finishSessionPhotos(keeping: [], of: [itemID]).discarded == [itemID])
+        try #require(rig.nodes[1].features.photos.sessionPhotos.map(\.id) == [itemID], "precondition: held")
+        #expect(rig.nodes[1].features.photos.finishSessionPhotos(keeping: [], of: [itemID]).discarded == [itemID])
         let capture = MeshRoutedBackpressureAuditCapture()
         capture.install()
         defer { capture.uninstall() }
 
-        let reborn = MeshNetworkManager(
+        let rebornFeatures = FernletMeshRig.features(
             store: rig.nodes[1].store, transport: FakeMeshTransportSession(), identity: rig.identities[1]
         )
+        let reborn = rebornFeatures.mesh
+        let rebornPhotos = rebornFeatures.photos
         let rebornNode = MeshDepartureRig.node(
             "held-tombstone-reborn", identity: rig.identities[1], on: rig.fabric,
-            manager: reborn, store: rig.nodes[1].store
+            features: rebornFeatures, store: rig.nodes[1].store
         )
         MeshDepartureRig.start(
             rebornNode, ledger: rig.ledger, founderKey: rig.identities[0].localSigningPublicKey,
@@ -652,7 +715,7 @@ struct MeshHeldRoutedPhotoTests {
             _ = reborn.applyRoutedAccessGate(MeshRoutedDrainRig.openGate, now: MeshRoutedDrainRig.now)
         }
 
-        #expect(HeldPhotos.all(reborn).isEmpty && reborn.meshPhotos.isEmpty, "the answered photo never comes back")
+        #expect(HeldPhotos.all(rebornPhotos).isEmpty && rebornPhotos.meshPhotos.isEmpty, "the answered photo never comes back")
         #expect(capture.count(of: "mesh.routedProjection.photoAlreadyAnswered", where: heldBy(rig.meshID)) == 1,
                 "refused by its tombstone, by name")
         #expect(reborn.routedProjectedItems.contains(MeshRoutedItemKey(item.manifest)),

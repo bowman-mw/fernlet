@@ -28,6 +28,7 @@ import Photos
 import Testing
 import UIKit
 import FernletDomainModel
+@testable import FernletSocial
 import ProximityKit
 @testable import Fernlet
 
@@ -48,29 +49,31 @@ struct ConnectReviewKeepTests {
     /// keep in this flow.
     @Test func disconnectKeepOnWall_succeedsWithoutAnyPhotosAuthorization() throws {
         let statusBefore = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeConnectTestMesh()
         HeldPhotos.openGate(on: manager)
 
-        for _ in 0..<3 { manager.addPhoto(try makeConnectTestJPEG()) }
-        let sessionIDs = manager.sessionPhotos.map(\.id)
+        for _ in 0..<3 { photos.addPhoto(try makeConnectTestJPEG()) }
+        let sessionIDs = photos.sessionPhotos.map(\.id)
         try #require(sessionIDs.count == 3)
         let kept = Set(sessionIDs.prefix(2))
         manager.leaveSession()   // the ending promotes the roll into the batch the review answers
-        let batch = try #require(manager.pendingFriendReview, "the ending promoted the photos")
-        #expect(Set(manager.pendingReviewPhotos.map(\.id)) == Set(sessionIDs))
+        let batch = try #require(photos.pendingFriendReview, "the ending promoted the photos")
+        #expect(Set(photos.pendingReviewPhotos.map(\.id)) == Set(sessionIDs))
 
-        let answer = manager.finishReviewedPhotos(Set(sessionIDs), keeping: kept, in: batch.id)
+        let answer = photos.finishReviewedPhotos(Set(sessionIDs), keeping: kept, in: batch.id)
 
         #expect(answer.keptOnWall == kept && answer.notApplied.isEmpty)
-        let wallIDs = Set(manager.meshPhotos.map(\.id))
+        let wallIDs = Set(photos.meshPhotos.map(\.id))
         #expect(kept.isSubset(of: wallIDs),
                 "Kept photos must stay on the in-app wall — no Photos-library involvement required")
         for dropped in sessionIDs.dropFirst(2) {
             #expect(!wallIDs.contains(dropped),
                     "Unkept session photos are removed from the wall")
         }
-        #expect(manager.pendingReviewPhotos.isEmpty,
+        #expect(photos.pendingReviewPhotos.isEmpty,
                 "finishReviewedPhotos answers the batch's photo half")
         #expect(PHPhotoLibrary.authorizationStatus(for: .addOnly) == statusBefore,
                 "Keeping must not request Photos authorization (FRND-12: a denial used to also destroy the in-app keep)")
@@ -94,7 +97,7 @@ struct ConnectReviewKeepTests {
                 "The Photos copy is the review's opt-in toggle, read by the coordinator after the answer")
         #expect(!screen.contains("saveToPhotos:"),
                 "no pre-answer export button: the camera roll must not see a photo before the choice")
-        #expect(screen.contains("loadImageData: { coordinator.manager.reviewThumbnailData(for: $0) }"),
+        #expect(screen.contains("loadImageData: { coordinator.sessionPhotos.reviewThumbnailData(for: $0) }"),
                 "tiles load held photos through the gated review seam, never the wall")
 
         let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/SessionPhotoReviewCoordinator.swift"))
@@ -115,7 +118,7 @@ struct ConnectReviewKeepTests {
             after: "private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async", in: source),
             "the one review export takes a SessionPhotoAnswer — renamed?")
         #expect(export.contains("try await saveKeptPhotosToLibrary(toSave)"), "it is the one that reaches the saver")
-        #expect(export.contains("manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
+        #expect(export.contains("sessionPhotos.hydratedPhotos(sessionPhotos.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
                 "and saves only what the answer reports landed, hydrated from the WALL")
         #expect(export.contains("guard alsoSaveToPhotos"), "and only when the person turned the toggle on")
         #expect(source.components(separatedBy: "saveKeptPhotosToLibrary(").count - 1 == 1,

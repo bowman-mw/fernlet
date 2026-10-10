@@ -11,6 +11,7 @@ import FernletExchange
 import FernletFoundation
 import FernletLock
 import FernletPersistence
+@testable import FernletSocial
 import HealthKitGateway
 import LocalPersistence
 import PrivateHealthStore
@@ -361,8 +362,9 @@ struct DeleteAllDataTests {
         #expect(queue.records().isEmpty)
     }
 
-    /// **The live chat transcript goes through the MANAGER's clear funnel, not around it**
-    /// (P6 item 4 fix review, finding P2-1).
+    /// **The live chat transcript goes through the MANAGER's funnel, not around it** (P6 item 4 fix
+    /// review, finding P2-1): since plan step A0.5.9 the funnel's begin advances the generation and
+    /// tells the session observer, whose chat leg drops the transcript (the chat is FernletSocial's).
     ///
     /// Leg 7b used to call `sessionMessages.clear()` directly. That emptied the transcript and did
     /// two things it should not: it did not bump `transcriptGeneration`, which is what the routed
@@ -377,16 +379,17 @@ struct DeleteAllDataTests {
     @Test func deleteAllDropsTheTranscriptThroughTheGenerationFunnel() async {
         let store = makeStore("delete-all-transcript")
         let manager = store.meshNetworkManager
-        #expect(manager.sessionMessages.receiveIncoming(
+        let transcript = store.meshFeatures.chat.sessionMessages
+        #expect(transcript.receiveIncoming(
             id: UUID(), senderFingerprint: "fp-robin", senderDisplayName: "Robin",
             text: "said in the session", sentAt: Date(), seenAt: Date()
         ) == .appended)
-        #expect(!manager.sessionMessages.messages.isEmpty, "precondition: the seeded row did not land")
+        #expect(!transcript.messages.isEmpty, "precondition: the seeded row did not land")
         let generationBefore = manager.transcriptGeneration
 
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
-        #expect(manager.sessionMessages.messages.isEmpty, "the transcript is gone")
+        #expect(transcript.messages.isEmpty, "the transcript is gone")
         #expect(manager.transcriptGeneration > generationBefore, """
             and the generation MOVED with it, so a routed item custodied before the wipe can never \
             project into a transcript the user was told was emptied
@@ -403,21 +406,22 @@ struct DeleteAllDataTests {
     @Test func deleteAllRemovesUnchosenSessionPhotosAndKeepsTheChosenWall() async throws {
         let store = makeStore("delete-all-held-photos")
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         manager.currentMesh = MeshP3Acceptance.mesh(for: manager)
         HeldPhotos.openGate(on: manager)
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             // R2: a hard constant bound.
-            for _ in 0..<3 { manager.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
+            for _ in 0..<3 { photos.addPhoto(MeshRoutedPhotoFixtures.tinyJPEG()) }
         }
-        let ids = manager.sessionPhotos.map(\.id)
+        let ids = photos.sessionPhotos.map(\.id)
         try #require(ids.count == 3)
-        #expect(manager.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
+        #expect(photos.finishSessionPhotos(keeping: [ids[0]], of: [ids[0]]).keptOnWall == [ids[0]])
         manager.recordSessionParticipant(
             displayName: "Bea", fingerprint: "bea-fp-0011223344",
             signingPublicKey: Data([7]), keyAgreementPublicKey: Data([8])
         )
         manager.leaveSession()
-        try #require(manager.pendingFriendReview?.entries.count == 1 && manager.pendingReviewPhotos.count == 2,
+        try #require(photos.pendingFriendReview?.entries.count == 1 && photos.pendingReviewPhotos.count == 2,
                      "precondition: two unchosen photos and one candidate are waiting")
         let pendingDirectory = store.proximitySupportDirectory
             .appendingPathComponent(PendingSessionPhotoStore.directoryName, isDirectory: true)
@@ -425,9 +429,9 @@ struct DeleteAllDataTests {
         _ = await store.deleteAllData(includingHealthKitSamples: false)
 
         #expect(!FileManager.default.fileExists(atPath: pendingDirectory.path), "the pending corpus is gone")
-        #expect(manager.pendingFriendReview == nil, "and the whole batch, candidates included")
-        #expect(manager.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
-        #expect(manager.meshPhotos.map(\.id) == [ids[0]], "the chosen wall is kept")
+        #expect(photos.pendingFriendReview == nil, "and the whole batch, candidates included")
+        #expect(photos.sessionPhotos.isEmpty && manager.sessionRoster.isEmpty)
+        #expect(photos.meshPhotos.map(\.id) == [ids[0]], "the chosen wall is kept")
         #expect(HeldPhotos.persistedWallIDs(store) == [ids[0]], "on disk too")
     }
 

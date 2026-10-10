@@ -51,6 +51,7 @@
 @testable import Fernlet
 @testable import FernletCrypto
 import Foundation
+@testable import FernletSocial
 @testable import ProximityKit
 import Testing
 
@@ -670,8 +671,8 @@ struct MeshContinuationDisagreementTests {
         rig.commit(1, 0)
         try await rig.settle()
         let ledger = rig.isolatedHeartLedger(now: day)
-        rig.nodes[0].manager.heartLedger = rig.isolatedHeartLedger(now: day)
-        rig.nodes[1].manager.heartLedger = ledger
+        rig.nodes[0].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[1].features.hearts.heartLedger = ledger
         rig.nodes[0].store.setAllowNearbyHearts(true)
         rig.nodes[1].store.setAllowNearbyHearts(true)
         rig.trustPeer(at: 1, asSeenFrom: 0)
@@ -712,7 +713,7 @@ struct MeshContinuationDisagreementTests {
         let recipient = rig.nodes[1].manager
         let driver = MeshContinuationDriver(meshNetworkManager: recipient)
         var judged: [UUID] = []
-        recipient.onHeartJudgedForTesting = { judged.append($0.giftID) }
+        rig.nodes[1].features.hearts.onHeartJudgedForTesting = { judged.append($0.giftID) }
 
         // 1. The scene goes dark. The run policy's own leg falls — and a FALLING leg owes no work.
         let closing = pushGate(Self.backgroundedGate, at: 1, in: rig)

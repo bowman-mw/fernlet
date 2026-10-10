@@ -1,19 +1,24 @@
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import Foundation
 import FernletDomainModel
 
 /// Conforms `FernletStore` to the Proximity subsystem's `ProximityHost` seam
 /// (plan §5d `ProximityHostAdapter`). Every requirement but `proximityDisplayName`,
-/// `proximityNamespace`, `proximityInstallBinding`, `proximityTrustStore`,
-/// `makeProximityTrustPolicy()` and `makeProximityIdentity()` is already satisfied by existing store
-/// members (`trustedProximityPeers`, `isBlockedFingerprint`,
-/// `blockProximityPeer`). Kept in the app target: this conformance is the one piece that cannot
-/// move into `ProximityKit`, since it bridges the module's abstraction to the app's concrete store.
+/// `proximityNamespace`, `proximityInstallBinding`, `makeProximityTrustPolicy()`,
+/// `makeProximityIdentity()` and `meshRoutedTypeEntries` is already satisfied by existing store
+/// members (`isBlockedFingerprint`, `blockProximityPeer`). This extension also holds the two members
+/// the store's `FernletSocialHost` conformance (below) adds, `allowNearbyHearts` and
+/// `proximityTrustStore`.
+/// Kept in the app target: this conformance is the one piece that cannot move into `ProximityKit`,
+/// since it bridges the module's abstraction to the app's concrete store.
 extension FernletStore: ProximityHost {
     var proximityDisplayName: String { settings.proximityDisplayName }
     /// The live hearts opt-in — `PresenceManager` gates both the outbound send and the inbound
-    /// drop on this (mesh redesign Phase 4b). Overrides the protocol's `true` default.
+    /// drop on this (mesh redesign Phase 4b), and the session hearts their send and their ledger
+    /// judge's readiness. Witnesses `FernletSocialHost.allowNearbyHearts`, overriding its `true`
+    /// default.
     var allowNearbyHearts: Bool { settings.allowNearbyHearts }
     /// This store's own proximity-sidecar root, so the friend photo wall is isolated per store the
     /// same way the own-photo corpora are. Production resolves to the unchanged
@@ -23,10 +28,10 @@ extension FernletStore: ProximityHost {
     /// value this composition root hands ProximityKit for the protocol labels, radio values, QR
     /// scheme, identity and mesh seal-key rows, storage names and log subsystem it reads (ProximityKit
     /// plan step A0.2.3; ProximityKit reads the radios' presentation strings off it too, and the
-    /// payload vocabulary it carries, its mesh engine's own frames' tokens included, while the mesh
-    /// features' tokens stay Fernlet's `PayloadType` cases until A0.5 and A0.7 and the activities'
-    /// and the moderation report's feature labels stay outside it until A0.5; the heart-drop and
-    /// moderation ban services are FernletSocial's, and the sealed-backup escrow's labels this app's).
+    /// payload vocabulary it carries, its mesh engine's own frames' tokens included; the mesh
+    /// features' tokens, Fernlet's `PayloadType` cases, the activities' and the moderation report's
+    /// feature labels and the heart-drop and moderation ban services are FernletSocial's, and the
+    /// sealed-backup escrow's labels this app's).
     /// The requirement has no default, so a host that left this out would not compile. The app's name
     /// surfaces hand `PeerNameDisplay` the same `.fernlet`.
     ///
@@ -43,10 +48,11 @@ extension FernletStore: ProximityHost {
     /// storage-scope properties hand it to both scopes.
     nonisolated var proximityInstallBinding: any ProximityInstallBinding { FernletDeviceBindingAdapter() }
     /// Fernlet's durable trust records, this store's `ProximityTrustVault` from `FernletConnections`:
-    /// the mesh's kept-friend gates and presence's heart eligibility ask it whether a key is a
-    /// remembered, unrevoked friend and whether it is blocked, and `trustedProximityPeers` reads the
-    /// same vault's records. The requirement has no default, so a host that left this out would not
-    /// compile.
+    /// FernletSocial's kept-friend gates (the moderation report's and the friend state's exchanges)
+    /// and its heart eligibility (presence's and the session hearts' ledger judge's) ask it whether a
+    /// key is a remembered, unrevoked friend and whether it is blocked, and `trustedProximityPeers`
+    /// reads the same vault's records. Witnesses `FernletSocialHost.proximityTrustStore`, which has no
+    /// default, so a host that left this out would not compile.
     var proximityTrustStore: any ProximityTrustStore { proximityTrustVault }
     /// Fernlet's friend-session rule, `FriendSessionTrustPolicy` from `FernletConnections`, fresh for
     /// each connection the mesh, presence and recipe-share managers open, over this store's vault:
@@ -63,4 +69,19 @@ extension FernletStore: ProximityHost {
     /// `KeyCustodyBoundaryTests` holds each of the store's three managers to an identity carrying the
     /// escrow key.
     func makeProximityIdentity() -> IdentityService { .fernletApp() }
+    /// Fernlet's routed-type rows: FernletSocial's `FernletRoutedTypes.entries` over this store's
+    /// namespace's routed types (ProximityKit plan step A0.5.9) — the temporary-message, heart and
+    /// photo rows, every row the mesh's routed type registry holds. Read once, by the mesh's
+    /// initializer. The requirement has no default, so a host that left this out would not compile.
+    var meshRoutedTypeEntries: [MeshRoutedTypeEntry] {
+        FernletRoutedTypes.entries(proximityNamespace.family.vocabulary.routedTypes)
+    }
 }
+
+/// Conforms `FernletStore` to FernletSocial's `FernletSocialHost`, the host its features read
+/// (ProximityKit plan step A0.5.10, S17): the composition (`FernletMeshFeatures`) and presence
+/// (`PresenceManager`) take this store as one. Empty, because the store already has all three members:
+/// `trustedProximityPeers` (`FernletStore.swift`), and `allowNearbyHearts` and `proximityTrustStore`
+/// (above); the eligibility check, `isTrustedUnblockedPeer(signingPublicKey:fingerprint:)`, is the
+/// protocol's own.
+extension FernletStore: FernletSocialHost {}

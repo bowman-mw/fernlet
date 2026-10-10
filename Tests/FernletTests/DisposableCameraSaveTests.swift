@@ -27,6 +27,7 @@ import Photos
 import Testing
 import UIKit
 import FernletDomainModel
+@testable import FernletSocial
 import ProximityKit
 @testable import Fernlet
 
@@ -44,21 +45,23 @@ struct DisposableCameraSaveTests {
     /// either — `hydratedPhotos` reads the wall alone, so a held photo cannot reach the saver. After
     /// the keep, the export's own expression recovers real bytes for every kept photo.
     @Test func exportAfterTheKeep_hydratesEveryKeptPhotoFromTheWall() throws {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeCameraTestMesh()
         HeldPhotos.openGate(on: manager)
 
-        for _ in 0..<3 { manager.addPhoto(try makeCameraTestJPEG()) }
-        try #require(manager.sessionPhotos.count == 3)
-        #expect(manager.sessionPhotos.allSatisfy { $0.imageData == nil },
+        for _ in 0..<3 { photos.addPhoto(try makeCameraTestJPEG()) }
+        try #require(photos.sessionPhotos.count == 3)
+        #expect(photos.sessionPhotos.allSatisfy { $0.imageData == nil },
                 "Session photos are stored metadata-only")
-        #expect(manager.hydratedPhotos(manager.sessionPhotos).isEmpty,
+        #expect(photos.hydratedPhotos(photos.sessionPhotos).isEmpty,
                 "Before the answer no session photo is on the wall, so nothing can be handed to the saver")
 
-        let selected = Set(manager.sessionPhotos.prefix(2).map(\.id))
-        let answer = manager.finishSessionPhotos(keeping: selected)
+        let selected = Set(photos.sessionPhotos.prefix(2).map(\.id))
+        let answer = photos.finishSessionPhotos(keeping: selected)
         // The fixed DisposableCameraView export: the answer's kept photos, rehydrated from the wall.
-        let toSave = manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
+        let toSave = photos.hydratedPhotos(photos.meshPhotos.filter { answer.keptOnWall.contains($0.id) })
 
         #expect(answer.keptOnWall == selected)
         #expect(toSave.count == selected.count, "Every kept photo must rehydrate from the wall")
@@ -74,26 +77,28 @@ struct DisposableCameraSaveTests {
     /// state — i.e. it never triggers the system prompt whose denial used to cost the keep.
     @Test func keepOnWall_succeedsWithoutAnyPhotosAuthorization() throws {
         let statusBefore = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeCameraTestMesh()
         HeldPhotos.openGate(on: manager)
 
-        for _ in 0..<3 { manager.addPhoto(try makeCameraTestJPEG()) }
-        let sessionIDs = manager.sessionPhotos.map(\.id)
+        for _ in 0..<3 { photos.addPhoto(try makeCameraTestJPEG()) }
+        let sessionIDs = photos.sessionPhotos.map(\.id)
         try #require(sessionIDs.count == 3)
         let kept = Set(sessionIDs.prefix(2))
 
-        let answer = manager.finishSessionPhotos(keeping: kept)
+        let answer = photos.finishSessionPhotos(keeping: kept)
 
         #expect(answer.keptOnWall == kept && answer.notApplied.isEmpty)
-        let wallIDs = Set(manager.meshPhotos.map(\.id))
+        let wallIDs = Set(photos.meshPhotos.map(\.id))
         #expect(kept.isSubset(of: wallIDs),
                 "Kept photos must reach the in-app wall — no Photos-library involvement required")
         for dropped in sessionIDs.dropFirst(2) {
             #expect(!wallIDs.contains(dropped),
                     "Unkept session photos never reach the wall")
         }
-        #expect(manager.sessionPhotos.isEmpty,
+        #expect(photos.sessionPhotos.isEmpty,
                 "finishSessionPhotos consumes the session list")
         #expect(PHPhotoLibrary.authorizationStatus(for: .addOnly) == statusBefore,
                 "Keeping must not request Photos authorization (FRND-12: a denial used to also destroy the in-app keep)")
@@ -109,7 +114,7 @@ struct DisposableCameraSaveTests {
     @Test func disposableCameraSource_exportsOnlyTheAnswersKeptPhotos_andKeepsWithoutTheSaver() throws {
         let source = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/DisposableCameraView.swift"))
 
-        #expect(source.contains("loadImageData: { manager.reviewThumbnailData(for: $0) }"),
+        #expect(source.contains("loadImageData: { features.photos.reviewThumbnailData(for: $0) }"),
                 "The review tiles load held photos through the gated review seam")
         #expect(source.contains("alsoSaveToPhotos: $alsoSaveToPhotos"),
                 "The Photos copy is the sheet's opt-in toggle, applied after the answer")
@@ -122,7 +127,7 @@ struct DisposableCameraSaveTests {
             after: "private func exportKeptPhotosIfAsked(_ answer: SessionPhotoAnswer) async", in: source),
             "the one export takes a SessionPhotoAnswer — renamed?")
         #expect(export.contains("FriendPhotoLibrarySaver.save("), "and it is that function")
-        #expect(export.contains("manager.hydratedPhotos(manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
+        #expect(export.contains("features.photos.hydratedPhotos(features.photos.meshPhotos.filter { answer.keptOnWall.contains($0.id) })"),
                 "saving only what the answer reports landed, hydrated from the WALL")
         // Session photos U3 (design I2's source wall): in the camera, as in the review coordinator,
         // the ONLY function that names `FriendPhotoLibrarySaver` at all is the one taking the answer.

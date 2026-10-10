@@ -27,6 +27,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 @testable import Fernlet
@@ -639,16 +640,17 @@ extension MeshConvergenceRun {
 
     /// Opens the 13+ chat gate at every living member, except one that is deliberately left shut.
     ///
-    /// `chatAllowedProvider` is **nil** on a freshly built manager and `isChatAllowed` reads
-    /// `provider?() == true`, i.e. fail-closed — so without this call `sendTempMessage(_:)` answers
-    /// `.ageGated` at every member and the whole text half is green over nothing.
+    /// `chatAllowedProvider` is **nil** on a freshly built node's chat (FernletSocial's, the node's
+    /// `features.chat`, since plan step A0.5.9) and `isChatAllowed` reads `provider?() == true`, i.e.
+    /// fail-closed — so without this call `sendTempMessage(_:)` answers `.ageGated` at every member
+    /// and the whole text half is green over nothing.
     ///
     /// - Parameter gated: The member index to leave gated, or nil to open every member.
     func allowChatEverywhere(except gated: Int?) {
         // R2: bounded by the roster cap.
         for member in livingMembers {
             let allowed = member.index != gated
-            member.node.manager.chatAllowedProvider = { allowed }
+            member.node.features.chat.chatAllowedProvider = { allowed }
         }
     }
 
@@ -715,7 +717,7 @@ extension MeshConvergenceRun {
     /// and that named answer is what makes the arming door load-bearing instead of decorative.
     func sendTextOutcome(at member: MeshConvergenceMember, round: Int) -> MeshTextSendOutcome {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            member.node.manager.sendTempMessage(Self.featureText(round))
+            member.node.features.chat.sendTempMessage(Self.featureText(round))
         }
     }
 
@@ -838,7 +840,7 @@ extension MeshConvergenceRun {
         // R2: a fixed two-element list.
         for member in [origin, recipient] {
             member.node.store.setAllowNearbyHearts(true)
-            member.node.manager.heartLedger = isolatedHeartLedger()
+            member.node.features.hearts.heartLedger = isolatedHeartLedger()
         }
         origin.node.store.proximityTrustVault.trust(heartPeerIdentity(of: recipient), mode: .friend)
         recipient.node.store.proximityTrustVault.trust(heartPeerIdentity(of: origin), mode: .friend)
@@ -879,7 +881,7 @@ extension MeshConvergenceRun {
         // R2: bounded by the roster cap.
         for member in members {
             let fingerprint = member.fingerprint
-            member.node.manager.onHeartJudgedForTesting = { [weak log] ack in
+            member.node.features.hearts.onHeartJudgedForTesting = { [weak log] ack in
                 log?.record(ack, at: fingerprint)
             }
         }
@@ -903,7 +905,7 @@ extension MeshConvergenceRun {
     ) throws -> MeshRoutedItemKey {
         let before = Set(routedHeartKeys(at: member))
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            member.node.manager.sendSessionHeart(to: heartFriendRecord(of: recipient))
+            member.node.features.hearts.sendSessionHeart(to: heartFriendRecord(of: recipient))
         }
         let minted = Set(routedHeartKeys(at: member)).subtracting(before)
         guard minted.count == 1, let key = minted.first else {
@@ -967,7 +969,7 @@ extension MeshConvergenceRun {
     /// The heart-ledger rows one member holds for a gift — the ledger's own dedup, read at the
     /// device that holds it.
     func heartLedgerRows(at member: MeshConvergenceMember, giftID: UUID) -> [ReceivedHeartRecord] {
-        member.node.manager.heartLedger?.receivedHearts.filter { $0.id == giftID } ?? []
+        member.node.features.hearts.heartLedger?.receivedHearts.filter { $0.id == giftID } ?? []
     }
 
     /// One bounded full-mesh round for the feature window: every pair commits, then the fabric
@@ -1582,14 +1584,14 @@ extension MeshConvergenceRun {
     ) -> Bool {
         switch token {
         case MeshRoutedTypeToken.heart:
-            return member.node.manager.heartLedger?.receivedHearts
+            return member.node.features.hearts.heartLedger?.receivedHearts
                 .contains { $0.id == key.itemID } == true
         case MeshRoutedTypeToken.tempMessage:
-            return member.node.manager.sessionMessages.messages
+            return member.node.features.chat.sessionMessages.messages
                 .contains { $0.messageID == key.itemID }
         default:
             // A photo is HELD for the person's review since 2026-09-30, never on the wall first.
-            return HeldPhotos.all(member.node.manager).contains { $0.id == key.itemID }
+            return HeldPhotos.all(member.node.features.photos).contains { $0.id == key.itemID }
         }
     }
 
@@ -2548,7 +2550,7 @@ struct MeshRoutedDrainConvergenceTests {
         #expect(destinations.isEmpty == false, "the cell needs at least one destination")
         // R2: bounded by the roster cap.
         for member in destinations {
-            #expect(HeldPhotos.all(member.node.manager).filter { $0.id == key.itemID }.count == 1,
+            #expect(HeldPhotos.all(member.node.features.photos).filter { $0.id == key.itemID }.count == 1,
                     "every destination holds exactly one entry for the delivered item, for review")
         }
     }
@@ -2579,7 +2581,7 @@ struct MeshRoutedDrainConvergenceTests {
         #expect(destinations.isEmpty == false, "the cell needs at least one destination")
         // R2: bounded by the roster cap.
         for member in destinations {
-            #expect(HeldPhotos.all(member.node.manager).filter { $0.id == key.itemID }.count == 1,
+            #expect(HeldPhotos.all(member.node.features.photos).filter { $0.id == key.itemID }.count == 1,
                     "every destination holds exactly one entry for the delivered item, for review")
         }
     }

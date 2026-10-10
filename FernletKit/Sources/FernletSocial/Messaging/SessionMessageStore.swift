@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import ProximityKit
 
 /// The live-session temporary-message store (Phase 5, Docs/Proximity-Mesh-Redesign-2026-07-10.md).
 ///
@@ -8,19 +9,22 @@ import Observation
 /// in-memory holder of that transcript, and it is deliberately **NOT Codable**: it is structurally
 /// impossible for a message to enter a `FernletSnapshot` (mirrors
 /// `MeshSessionRosterEntry`/`MeshFriendReviewBatch`, which are equally non-Codable memory-only
-/// state). Owned by `MeshNetworkManager`, which drives the whole lifecycle:
-///  - **Outbound** — `sendTempMessage(_:)` sanitizes, byte-bounds and frames the text, mints a
-///    routed item for it, and appends the local echo here **only once the mint staged**.
-///  - **Inbound** — the routed projection's `.sessionTranscript` arm calls
+/// state). Owned by FernletSocial's chat (`MeshSessionChat`), which drives the whole lifecycle
+/// with the mesh engine:
+///  - **Outbound** — `MeshSessionChat.sendTempMessage(_:)` sanitizes, byte-bounds and frames the
+///    text, mints a routed item for it through the engine's origination door, and appends the local
+///    echo here **only once the mint staged**.
+///  - **Inbound** — the chat's projection handler for the temporary-message row calls
 ///    ``receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:in:)``, which dedupes
 ///    by ``MeshContentKey`` (author **and** id), sanitizes, caps, and returns which of the three
 ///    things it did. The author's fingerprint
 ///    is the origin's signed one resolved against the admission ledger, with the block list and the
 ///    removal set applied **before** the content key is unwrapped; the display name is the body's
-///    own claim, re-moderated here under the manager's namespace's peer-name policy.
-///  - **Clear** — the manager calls `clear()` at EVERY session-end path and on the next session
-///    formation, through one funnel (`clearSessionTranscript()`) that also bumps
-///    `transcriptGeneration`, which is what the projection keys on.
+///    own claim, re-moderated here under the host namespace's peer-name policy.
+///  - **Clear** — the composition's session observer calls `clear()`, through the chat, at the three
+///    moments the mesh advances its session-content generation, which is what the projection keys
+///    on: EVERY session-end path, the next session formation and the start of a privacy wipe, each
+///    right after the engine's advance (plan step A0.5.9).
 ///
 /// ## The transcript is a DERIVATION, not an append log (plan §10.3, §12)
 ///
@@ -30,7 +34,8 @@ import Observation
 /// index order, `(originFingerprint, itemID)`, so a device joining a chat in progress would
 /// otherwise see the transcript grouped by sender and shuffled within it. The order is §10.3's
 /// `(claimedSentAt clamped to ±10 min of first-seen, senderFingerprint, messageID)` plus a
-/// content-derived last resort, already implemented and tested in `MeshContentMerge.swift`.
+/// content-derived last resort, already implemented and tested in ProximityKit's
+/// `MeshContentMerge.swift` and this module's `MeshContentLedger.swift`.
 ///
 /// Two things follow from the shape rather than from an argument: the 500-row cap drops the oldest
 /// **in that order** instead of in arrival order, and a member that turns its age gate or a block
@@ -48,14 +53,14 @@ import Observation
 /// marked final → gone for the session, while its sender saw `.staged`. The key is local: nothing
 /// about the manifest or the body changed.
 ///
-/// The gate value arrives through ``refreshGates(chatAllowed:isRefused:)``, which the manager calls
-/// at every ingest — **and only there**. A block or an age-gate flip therefore re-renders at the
-/// NEXT ingest, not at the flip: the arm that folds the gates is the text projection itself, and it
-/// is unreachable while `isChatAllowed` is false, so a mid-session flip changes nothing visible
-/// until another message arrives. That is display only, and deliberately so — the *projection* is
-/// fail-closed at both ends (`projectableRoutedTypeTokens` omits `.sessionTranscript` while the
-/// gate is shut, and the live arm marks a gated item final), which is the load-bearing half and is
-/// tested. Its `isRefused` half is `ProximityHost.isBlockedFingerprint` and **not** yet
+/// The gate value arrives through ``refreshGates(chatAllowed:isRefused:)``, which the chat's text
+/// arm calls at every ingest — **and only there**. A block or an age-gate flip therefore re-renders
+/// at the NEXT ingest, not at the flip: the arm that folds the gates is the text projection itself,
+/// and it is unreachable while `isChatAllowed` is false, so a mid-session flip changes nothing
+/// visible until another message arrives. That is display only, and deliberately so — the
+/// *projection* is fail-closed at both ends (the engine's projectable set omits the text row while
+/// the gate is shut, and the chat's pre-open verdict marks a gated item final), which is the
+/// load-bearing half and is tested. Its `isRefused` half is `ProximityHost.isBlockedFingerprint` and **not** yet
 /// `ModerationBanStore.isPeerBanned`: the ban store is not reachable from `ProximityHost`, so the
 /// routed path consults the block half only — the same gap the photo arm has, inherited and named
 /// rather than silently different.
@@ -200,7 +205,7 @@ public final class SessionMessageStore {
     /// This member's own view gates — the 13+ chat gate and the local block/ban set — folded from
     /// the live seams by ``refreshGates(chatAllowed:isRefused:)``.
     ///
-    /// `.open` until the manager folds them, which it does at every ingest: a store nobody has told
+    /// `.open` until the chat folds them, which it does at every ingest: a store nobody has told
     /// about a block shows what it holds, and the routed projection additionally refuses a blocked
     /// or removed origin **before** the unwrap, so this is the second of two ends.
     @ObservationIgnored private var gates: MeshContentGates = .open
@@ -210,7 +215,7 @@ public final class SessionMessageStore {
     // MARK: - Outbound (local echo)
 
     /// Appends the local echo of a just-STAGED message. `text` is already sanitized and
-    /// byte-bounded by the sender (`MeshNetworkManager.sendTempMessage`). Idempotent by id.
+    /// byte-bounded by the sender (`MeshSessionChat.sendTempMessage`). Idempotent by id.
     ///
     /// The sender calls this only on `.staged` (P6 item 4): a photo's echo is unconditional because
     /// the photo is on the user's own wall either way, but a row in a transcript is a claim that
@@ -241,7 +246,7 @@ public final class SessionMessageStore {
         )
     }
 
-    // MARK: - Inbound (called by MeshNetworkManager's registered handler)
+    // MARK: - Inbound (called by the chat's registered projection handler)
 
     /// Accepts one routed text item's plaintext from an author the projection has already resolved
     /// and authorized.
@@ -251,7 +256,7 @@ public final class SessionMessageStore {
     /// applied the block list and the removal set before the content key was unwrapped, re-applied
     /// the 13+ gate, judged the session live, and spent the per-origin routed quota.
     /// `senderDisplayName` is the body's own display claim and is re-moderated here, under the
-    /// peer-name policy of `namespace`, the manager's.
+    /// peer-name policy of `namespace`, the host's.
     ///
     /// Applies, in order: dedup by `(senderFingerprint, id)`, sanitize + length-cap (empty after
     /// sanitize is refused). The dedup key is the PAIR and not the id, because the id is the
@@ -300,8 +305,8 @@ public final class SessionMessageStore {
 
     /// Re-folds this member's view gates from the live seams and re-derives the transcript.
     ///
-    /// Called by the manager at every ingest, so the gate value can never disagree with the seam it
-    /// came from (`MeshContentGates.folding`'s own contract). Because the transcript is a
+    /// Called by the chat's text arm at every ingest, so the gate value can never disagree with the
+    /// seam it came from (`MeshContentGates.folding`'s own contract). Because the transcript is a
     /// derivation, a gate that closes hides rows without destroying them and a gate that re-opens
     /// shows them again with no second delivery.
     ///
@@ -315,7 +320,7 @@ public final class SessionMessageStore {
     /// store is not observable from them.
     ///
     /// - Parameters:
-    ///   - chatAllowed: `MeshNetworkManager.isChatAllowed` at this member.
+    ///   - chatAllowed: `MeshSessionChat.isChatAllowed` at this member.
     ///   - isRefused: `ProximityHost.isBlockedFingerprint` ∪ `ModerationBanStore.isPeerBanned`.
     func refreshGates(chatAllowed: Bool, isRefused: (String) -> Bool) {
         gates = MeshContentGates.folding(

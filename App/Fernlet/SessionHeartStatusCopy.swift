@@ -2,7 +2,8 @@
 // Fernlet
 //
 // Network migration P6 item 6: the sentence an in-session heart's state shows.
-// `MeshNetworkManager.SessionHeartState` carries a frozen `SessionHeartFailure` token; this file, in
+// `MeshSessionHearts.SessionHeartState` (FernletSocial's in-session hearts) carries a frozen
+// `SessionHeartFailure` token; this file, in
 // the APP target, forks it into copy — the app bundle *is* `Bundle.main`, so a bare
 // `LocalizedStringKey` literal is the correct form and the catalog sync harvests it.
 //
@@ -27,12 +28,13 @@
 import SwiftUI
 import ProximityKit
 import FernletConnections
+import FernletSocial
 
 /// The copy for an in-session heart's state, one sentence per frozen cause.
 ///
 /// Every failure sentence says the same two things — no heart was sent, and what the user can do
 /// about it — and differs only where the user can act on the difference. The exhaustive `switch` is
-/// the point: a new `MeshNetworkManager.SessionHeartFailure` case is a build error here until it has
+/// the point: a new `MeshSessionHearts.SessionHeartFailure` case is a build error here until it has
 /// a sentence. Wording is the owner's to change; the shape is not.
 enum SessionHeartStatusCopy {
 
@@ -43,8 +45,8 @@ enum SessionHeartStatusCopy {
     /// be pushed, drained or custody-transferred until it is delivered or expires. The wording has
     /// never claimed a receipt.
     ///
-    /// - Parameter recipientName: The friend's display name as the manager published it, which is
-    ///   the trust-vault row's. Shown through ``shownRecipient(_:)``, never raw.
+    /// - Parameter recipientName: The friend's display name as the session hearts published it, which
+    ///   is the trust-vault row's. Shown through ``shownRecipient(_:)``, never raw.
     /// - Returns: a `LocalizedStringKey`, never a `String` — `Text(String)` selects the
     ///   `StringProtocol` overload and renders verbatim.
     static func sent(recipientName: String) -> LocalizedStringKey {
@@ -55,7 +57,7 @@ enum SessionHeartStatusCopy {
     ///
     /// Never the stored value raw (2026-09-29). A friend kept before their name arrived has their
     /// fingerprint filed AS the name (`MeshNetworkManager.rosterDisplayName`, then
-    /// `keepProximityFriends`), and the manager publishes `friend.displayName`, so "Sent
+    /// `keepProximityFriends`), and the session hearts publish `friend.displayName`, so "Sent
     /// 3f2a9c81b4de4a61 some good vibes." was one tap away on the session's info sheet.
     /// `PeerNameDisplay`'s 16-hex shape rule catches that without the fingerprint in hand.
     ///
@@ -68,13 +70,13 @@ enum SessionHeartStatusCopy {
     /// The sentence for one frozen failure cause.
     ///
     /// - Parameters:
-    ///   - cause: The frozen token the manager published.
+    ///   - cause: The frozen token the session hearts published.
     ///   - recipientName: The friend's display name; the first name is used where the sentence
     ///     reads better for it, exactly as the pre-item-6 sentences did, and a name that is really
     ///     an identifier reads "Someone you met" whole (``shownRecipient(_:)``'s rule).
     /// - Returns: a `LocalizedStringKey`, never a `String`.
     static func message(
-        _ cause: MeshNetworkManager.SessionHeartFailure, recipientName: String
+        _ cause: MeshSessionHearts.SessionHeartFailure, recipientName: String
     ) -> LocalizedStringKey {
         let firstName = PeerNameDisplay.firstName(recipientName, fingerprint: nil, placeholder: .met, in: .fernlet)
         switch cause {
@@ -96,7 +98,7 @@ enum SessionHeartStatusCopy {
             return "Could not send that heart just now."
         // The two store causes were paired with each other's sentence until the item 6 fix review
         // (P2-2): `.storeRefused` maps to `.holdingAllItCan` and `.storeUnavailable` to
-        // `.storageUnreachable` (`MeshNetworkManager.consumeSessionHeart`), so the cap refusal read
+        // `.storageUnreachable` (`MeshSessionHearts.consumeSessionHeart`), so the cap refusal read
         // "couldn't reach its heart storage" and the unreachable store read "holding all it can" —
         // the audit line and the sentence disagreeing about the same failure. Each case now carries
         // ITS own sentence, pinned per case by `everyHeartFailureCauseHasItsOwnSentence`.
@@ -117,9 +119,9 @@ enum SessionHeartStatusCopy {
     /// path answers a `LocalizedStringKey?` here, the presence path keeps its `String?`, and the
     /// view renders whichever is present.
     ///
-    /// - Parameter state: The manager's published state.
+    /// - Parameter state: The session hearts' published state.
     /// - Returns: a `LocalizedStringKey`, or nil for `.idle`.
-    static func line(_ state: MeshNetworkManager.SessionHeartState) -> LocalizedStringKey? {
+    static func line(_ state: MeshSessionHearts.SessionHeartState) -> LocalizedStringKey? {
         switch state {
         case .idle:
             return nil

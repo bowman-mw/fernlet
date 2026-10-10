@@ -3,7 +3,7 @@ import FernletDomainModel
 
 // Wire payloads for the in-person clothing shop (Increment 3). Mirrors RecipeSharePayloads.swift.
 //
-// WI-9: marked `nonisolated, Sendable` so ProximityKit's `.defaultIsolation(MainActor.self)` does not
+// WI-9: marked `nonisolated, Sendable` so FernletSocial's `.defaultIsolation(MainActor.self)` does not
 // MainActor-isolate these value types and their synthesized `Codable`, which would block off-main decode
 // of untrusted transport bytes (MCSession's then, the QUIC radio's now) under Swift 6.
 //

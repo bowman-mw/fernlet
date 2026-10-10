@@ -33,10 +33,14 @@ import Foundation
 /// **It is not silent for text** (P6 item 4). A message that reached nobody is not a copy the
 /// sender still has — destinations are frozen at the mint and there is no offline queue, so the
 /// item can never acquire one — and the founding window (commit → found → grant → adopt) is a real
-/// second or two on UWB and longer on the tap-to-tap fallback. `sendTempMessage(_:)` therefore
-/// RETURNS `MeshTextSendOutcome.noDestinations` and the chat panel says so inline. The token stays
-/// one token: the difference is what each caller does with it, not what happened.
-nonisolated enum MeshRoutedShareSkip: String, Equatable, Sendable {
+/// second or two on UWB and longer on the tap-to-tap fallback. The chat's sender
+/// (`MeshSessionChat.sendTempMessage(_:)`, in FernletSocial) therefore RETURNS
+/// `MeshTextSendOutcome.noDestinations` and the chat panel says so inline. The token stays one
+/// token: the difference is what each caller does with it, not what happened.
+///
+/// Public as the payload of ``MeshRoutedOriginationOutcome/skipped(_:)``, which a host's feature
+/// switches on. The `rawValue` is a frozen English audit token, never user copy.
+public nonisolated enum MeshRoutedShareSkip: String, Equatable, Sendable {
     /// No mesh, no membership ledger, or a derived roster of just this device — there is no
     /// destination set to mint against. Frozen English token.
     case noDestinations
@@ -104,6 +108,30 @@ public nonisolated enum MeshRoutedShareRefusal: String, CaseIterable, Equatable,
     case keyMismatch
 }
 
+// MARK: - MeshRoutedAudience
+
+/// Who one origination is for, stated by the CALLER of the routed sender door,
+/// `MeshNetworkManager.originateRoutedItem(body:typeToken:itemID:audience:now:)`, and checked
+/// against the type's registered `destinations` column (P6 item 6).
+///
+/// **The mint must never take its destination from the body.** A body is the origin's own
+/// bytes, so a destination set derived from it would let an origin address anyone it named —
+/// which for a single-recipient type means minting a heart "to" someone the roster does not put
+/// in reach. So the audience is an argument, resolved against the membership ledger's derived
+/// roster at creation, and the body is encoded in a separate step nothing downstream reads.
+///
+/// Public so a host's feature states its audience at the door. The contract: ``fullRoster`` passes
+/// the check unless the type's row is `.singleRecipient`, and ``recipient(_:)`` only when it is; a
+/// mismatch is refused as ``MeshRoutedShareRefusal/mintFailed``, with one
+/// `mesh.routedShare.destinationSemanticsMismatch` line, and is never silently re-addressed.
+public nonisolated enum MeshRoutedAudience: Equatable, Sendable {
+    /// Every member of the derived roster at creation, minus this device — the
+    /// `.fullRosterAtCreation` column, which photos and text pass.
+    case fullRoster
+    /// One named member, by fingerprint — the `.singleRecipient` column, which hearts pass.
+    case recipient(String)
+}
+
 // MARK: - MeshRoutedOriginationOutcome
 
 /// What the routed sender door did with one item (P5 item 13, plan §11).
@@ -111,47 +139,16 @@ public nonisolated enum MeshRoutedShareRefusal: String, CaseIterable, Equatable,
 /// Three answers rather than a `Bool` or an optional: "staged", "there was nobody to stage for" and
 /// "it failed" reach three different surfaces, and collapsing the middle one into either of the
 /// others is how a solo capture becomes either a silent loss or a false error.
-nonisolated enum MeshRoutedOriginationOutcome: Equatable, Sendable {
+///
+/// Public as the routed sender door's answer to a host's feature. The contract: every origination
+/// returns exactly one of the three, and what reaches the user is the caller's decision — the door
+/// publishes no refusal itself.
+public nonisolated enum MeshRoutedOriginationOutcome: Equatable, Sendable {
     /// The item is in this device's own routed store, complete, and pushed once to every committed
-    /// slot. The drain carries it to everyone else at the next exchange.
+    /// active slot. The drain carries it to everyone else at the next exchange.
     case staged(MeshRoutedItemKey, chunkCount: Int)
     /// Nothing was minted and nothing is wrong. Silent.
     case skipped(MeshRoutedShareSkip)
     /// A mint was attempted and failed. Visible.
     case refused(MeshRoutedShareRefusal)
-}
-
-// MARK: - MeshTextSendOutcome
-
-/// What `MeshNetworkManager.sendTempMessage(_:)` did with one typed message (P6 item 4, plan §12).
-///
-/// **Returned, never published.** `routedShareRefusal` is the photo path's observable and has
-/// exactly one consumer — a session `.alert` on `DisposableCameraView`, the view the chat panel is
-/// presented *over*, so publishing a chat refusal there fires an alert on a covered presenter and
-/// one of the two presentations is dropped. Its copy is photo-worded in every arm as well. The
-/// panel reads this value instead and shows the non-staged cases inline at the top of the compose
-/// bar — directly ABOVE the text field, between it and the transcript (P6 item 4 fix review, P3-2:
-/// five docs said "beneath the compose bar", which is not where `SessionChatPanel` draws it) —
-/// keeping the draft so "send again" is the retry.
-///
-/// Deliberately **not** `@discardableResult`: an unread outcome here is a message the user believes
-/// was sent (R7, `sendEnvelope(_:encodable:via:sealed:)`'s own precedent). The five cases are
-/// frozen and each reaches a different sentence or none; `staged` and `empty` are the two the panel
-/// says nothing about, the first because the echo in the transcript IS the feedback and the second
-/// because the send control is already disabled for it.
-public nonisolated enum MeshTextSendOutcome: Equatable, Sendable {
-
-    /// The item is in this device's routed store, complete, and pushed once to every committed
-    /// slot. The local echo is in the transcript — appended **only** here.
-    case staged
-    /// The derived roster names nobody else yet: the founding window, or a genuinely solo session.
-    /// Visible, because destinations are frozen at the mint and there is no offline queue.
-    case noDestinations
-    /// A mint was attempted and failed, with the routed path's own frozen cause.
-    case refused(MeshRoutedShareRefusal)
-    /// The 13+ chat gate refused. Unreachable from a gated UI, and enforced anyway.
-    case ageGated
-    /// Nothing survived the sanitizer and the wire byte bound — including the case the bound
-    /// creates, a single grapheme cluster wider than the whole allowance.
-    case empty
 }

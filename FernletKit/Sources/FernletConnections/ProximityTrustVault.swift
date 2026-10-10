@@ -24,10 +24,12 @@ import ProximityKit
 /// states); `trust` clears both, re-activating a removed friend. `report` stamps report metadata
 /// and, by default, blocks + revokes too.
 ///
-/// Conforms to ProximityKit's `ProximityTrustStore`: the app answers `ProximityHost.proximityTrustStore` with its
-/// vault, as every test double answers with its own, so the mesh's kept-friend gates and presence's
-/// heart eligibility ask ``isTrustedProximityPeer(signingPublicKey:)`` (an active, unrevoked record)
-/// and ``isBlockedProximitySigningKey(_:)`` here. Not itself a `ProximityTrustPolicy`: the session
+/// Conforms to ProximityKit's `ProximityTrustStore`: the app answers FernletSocial's
+/// `FernletSocialHost.proximityTrustStore` with its vault, as every test double answers with its
+/// own, so the friend-state and moderation-report exchanges' kept-friend gates and the
+/// heart-eligibility check (presence's and the session hearts') ask
+/// ``isTrustedProximityPeer(signingPublicKey:)`` (an active, unrevoked record) and
+/// ``isBlockedProximitySigningKey(_:)`` here. Not itself a `ProximityTrustPolicy`: the session
 /// policies beside it (``FriendSessionTrustPolicy``, ``CoachSessionTrustPolicy``) wrap it, answer a
 /// coordinator's questions from its records and keep each `ProximitySessionAudit` a coordinator
 /// reports here, converted into a `TrainerAuditEvent` (``recordTrainerAudit(_:)``).

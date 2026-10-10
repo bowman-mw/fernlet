@@ -30,6 +30,9 @@ struct PhotoDirectoryIsolationTests {
     private static let proximityRootedTriggers = [
         // Managers — build the photo wall, the activity ledger, and (via their builders) the ledger.
         "meshNetworkManager", "MeshNetworkManager(", "presenceManager",
+        // The mesh composition (ProximityKit plan step A0.5.5), which builds the mesh manager and, since
+        // A0.5.8, the activity ledger: the store's property, the app's construction and the test rig's.
+        "meshFeatures", "FernletMeshFeatures(", "FernletMeshRig",
         // Heart state on the same root.
         "heartLedger", "heartDropService", "heartGlow", "pendingHeartBubble", "queueHeart", "heartsAway",
         // The three JSONSidecarFile stores.
@@ -137,13 +140,13 @@ struct PhotoDirectoryIsolationTests {
         #expect(scanned > 20, "the FernletStore construction scan found only \(scanned) sites — scanner broken?")
     }
 
-    /// The friend photo wall is the same hazard one media key over: `MeshNetworkManager` loads
-    /// `MeshPhotoCache.json` at init and re-saves the WHOLE index on `deletePhoto` /
-    /// `deleteAllSessionPhotos`, so on a process-wide root one manager silently inherits — and then
-    /// overwrites — another suite's album.
+    /// The friend photo wall is the same hazard one media key over: FernletSocial's session photos
+    /// (`meshFeatures.photos`) load `MeshPhotoCache.json` at init and re-save the WHOLE index on
+    /// `deletePhoto` / `deleteAllSessionPhotos`, so on a process-wide root one store's photos silently
+    /// inherit — and then overwrite — another suite's album.
     ///
-    /// The root now rides `ProximityHost.proximitySupportDirectory`, so a manager built from a
-    /// helper-made store is isolated for free. What still needs walling is the other half: a file
+    /// The root now rides `ProximityHost.proximitySupportDirectory`, so the photos of a helper-made
+    /// store are isolated for free. What still needs walling is the other half: a file
     /// that reaches proximity state while building its store DIRECTLY gets the production root back,
     /// and the damage lands in whichever suite happens to be running beside it.
     ///
@@ -152,14 +155,14 @@ struct PhotoDirectoryIsolationTests {
     ///
     /// | sidecar | cleared by |
     /// | --- | --- |
-    /// | `MeshPhotoCache.json` + wall prefs | not by the funnel (a documented survivor), but re-saved whole per manager |
-    /// | `PendingSessionPhotos/` (session photos nobody chose yet) | `deleteAllData` leg 4d, and every manager loads and rewrites its index |
+    /// | `MeshPhotoCache.json` + wall prefs | not by the funnel (a documented survivor), but re-saved whole per session-photo object (`meshFeatures.photos`) |
+    /// | `PendingSessionPhotos/` (session photos nobody chose yet) | `deleteAllData` leg 4d, and every session-photo object loads and rewrites its index |
     /// | `HeartLedger.json` | `resetAll` |
     /// | `HeartDropOutbox/Dedup/PeerBundles.json` | `deleteAllData` (plus their seal key — see the next wall) |
     /// | `ModerationLedger.json` | `resetAll` |
     /// | `FriendStateCache.json` | `resetAll`, **and** turning fuzzy-state sharing off |
     /// | `ClosenessLedger.json` | `resetAll` |
-    /// | `ActivityLedger.json` | `resetAll`, via `meshNetworkManager.activities` |
+    /// | `ActivityLedger.json` | `resetAll`, via `meshFeatures.activities` |
     @Test func everyProximityTouchingStoreConstructionPinsItsOwnProximityDirectory() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
@@ -416,6 +419,12 @@ struct PhotoDirectoryIsolationTests {
     /// Deliberately ungated (no trigger list): constructing the service constructs the buffer, and
     /// resetting — which every one of these suites does — wipes it, so every construction site is
     /// a wiper. A trigger list could only create silent false negatives here.
+    ///
+    /// The scan reads each file's code, not its text: `SwiftSourceLexer` empties every string
+    /// literal and drops every comment first, so a construction spelled inside a string is not one.
+    /// `KeyCustodyBoundaryTests`' identity-matcher fixtures hold such a string (since plan step
+    /// A0.4.9, a lock-service construction with no scope, as a neighbour the identity matcher must
+    /// not read), which the text scan counted and failed on until this wall ran on a line.
     @Test func everyLockServiceConstructionPinsItsOwnNarrativeBufferScope() throws {
         let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
@@ -424,8 +433,8 @@ struct PhotoDirectoryIsolationTests {
 
         var scanned = 0
         for file in files.sorted(by: { $0.path < $1.path }) {
-            let source = try String(contentsOf: file, encoding: .utf8)
-            for arguments in Self.constructionArguments(of: "FernletLockService", in: source) {
+            let code = SwiftSourceLexer.lex(try String(contentsOf: file, encoding: .utf8)).code
+            for arguments in Self.constructionArguments(of: "FernletLockService", in: code) {
                 scanned += 1
                 #expect(
                     arguments.contains("narrativeBufferScope"),

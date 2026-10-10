@@ -3,6 +3,7 @@ import Testing
 import UIKit
 import FernletDomainModel
 import PrivateMediaStore
+@testable import FernletSocial
 import ProximityKit
 @testable import Fernlet
 
@@ -112,17 +113,19 @@ struct MeshNetworkManagerTests {
 
     /// The first 10 calls to addPhoto succeed; the 11th sets meshError.
     @Test func photoQuota_blocksEleventhPhoto() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
 
         let imageData = makeTinyJPEG()
         for _ in 0..<10 {
-            manager.addPhoto(imageData)
+            photos.addPhoto(imageData)
         }
         #expect(manager.meshError == nil,
                 "First 10 photos should not set meshError")
 
-        manager.addPhoto(imageData)
+        photos.addPhoto(imageData)
         #expect(manager.meshError != nil,
                 "11th photo must set meshError — quota exceeded")
     }
@@ -133,70 +136,78 @@ struct MeshNetworkManagerTests {
     /// 2026-09-30 in the PENDING corpus, through the review's gated seam, and on the wall only
     /// after a keep.
     @Test func sessionPhotos_holdMetadataOnlyNotRawBytes() throws {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
         HeldPhotos.openGate(on: manager)
 
-        manager.addPhoto(makeTinyJPEG())
+        photos.addPhoto(makeTinyJPEG())
 
-        let cached = try #require(manager.sessionPhotos.first)
+        let cached = try #require(photos.sessionPhotos.first)
         #expect(cached.imageData == nil,
                 "Session photo must not retain raw image bytes in memory")
         // Display path (FriendPhotoReviewSheet tile loadImageData closure): the review seam.
-        #expect(manager.reviewImageData(for: cached) != nil,
+        #expect(photos.reviewImageData(for: cached) != nil,
                 "Full-resolution bytes remain available from the sealed pending corpus on demand")
-        #expect(manager.reviewThumbnailData(for: cached) != nil, "and so does the tile's thumbnail")
-        #expect(manager.imageData(for: cached) == nil, "but the WALL has nothing before the answer")
+        #expect(photos.reviewThumbnailData(for: cached) != nil, "and so does the tile's thumbnail")
+        #expect(photos.imageData(for: cached) == nil, "but the WALL has nothing before the answer")
         // Library-save path: only after the keep, and only from the wall.
-        let answer = manager.finishSessionPhotos(keeping: [cached.id])
+        let answer = photos.finishSessionPhotos(keeping: [cached.id])
         #expect(answer.keptOnWall == [cached.id])
-        let kept = manager.meshPhotos.filter { answer.keptOnWall.contains($0.id) }
-        let rehydrated = try #require(manager.hydratedPhotos(kept).first)
+        let kept = photos.meshPhotos.filter { answer.keptOnWall.contains($0.id) }
+        let rehydrated = try #require(photos.hydratedPhotos(kept).first)
         #expect(rehydrated.imageData != nil,
                 "hydratedPhotos must repopulate bytes so the save flow does not silently save nothing")
     }
 
     /// After leaveMesh() the counter resets: the next mesh allows 10 new photos.
     @Test func photoQuota_resetsAfterLeaveMesh() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
 
         let imageData = makeTinyJPEG()
-        for _ in 0..<10 { manager.addPhoto(imageData) }
+        for _ in 0..<10 { photos.addPhoto(imageData) }
 
         manager.leaveMesh()
         manager.currentMesh = makeTestMesh()   // join a new mesh
         manager.meshError = nil                // clear any previous error
 
-        manager.addPhoto(imageData)
+        photos.addPhoto(imageData)
         #expect(manager.meshError == nil,
                 "Quota must reset after leaveMesh — first photo in new session should succeed")
     }
 
     /// Switching to a different mesh ID resets the counter without an explicit leave.
     @Test func photoQuota_resetsWhenMeshIDChanges() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh(name: "Mesh A")
 
         let imageData = makeTinyJPEG()
-        for _ in 0..<10 { manager.addPhoto(imageData) }
+        for _ in 0..<10 { photos.addPhoto(imageData) }
 
         manager.currentMesh = makeTestMesh(name: "Mesh B")  // different UUID
         manager.meshError = nil
 
-        manager.addPhoto(imageData)
+        photos.addPhoto(imageData)
         #expect(manager.meshError == nil,
                 "Quota must reset when currentMesh changes to a new meshID")
     }
 
     /// Exactly 10 photos are allowed; error is set only on attempt 11.
     @Test func photoQuota_limitIsExactlyTen() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
         let imageData = makeTinyJPEG()
 
         for i in 1...11 {
-            manager.addPhoto(imageData)
+            photos.addPhoto(imageData)
             if i < 11 {
                 #expect(manager.meshError == nil, "Photo \(i) should succeed")
             } else {
@@ -207,45 +218,51 @@ struct MeshNetworkManagerTests {
 
     /// filmRemaining starts at 10 and decrements with each photo.
     @Test func filmRemaining_decrementsWithEachPhoto() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
         let imageData = makeTinyJPEG()
 
-        #expect(manager.filmRemaining == 10, "Full roll should start at 10")
-        manager.addPhoto(imageData)
-        manager.addPhoto(imageData)
-        #expect(manager.filmRemaining == 8, "Two shots used — 8 remaining")
+        #expect(photos.filmRemaining == 10, "Full roll should start at 10")
+        photos.addPhoto(imageData)
+        photos.addPhoto(imageData)
+        #expect(photos.filmRemaining == 8, "Two shots used — 8 remaining")
     }
 
     /// filmRemaining resets to 10 after leaveSession.
     @Test func filmRemaining_resetsAfterLeaveSession() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
         let imageData = makeTinyJPEG()
-        for _ in 0..<5 { manager.addPhoto(imageData) }
+        for _ in 0..<5 { photos.addPhoto(imageData) }
 
         manager.leaveSession()
         manager.currentMesh = makeTestMesh()
         manager.meshError = nil
-        #expect(manager.filmRemaining == 10, "Film should reset to 10 after leaveSession")
+        #expect(photos.filmRemaining == 10, "Film should reset to 10 after leaveSession")
     }
 
     @Test func deleteAllSessionPhotosClearsCurrentRollFromAlbum() {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
         HeldPhotos.openGate(on: manager)
-        let existingAlbumIDs = Set(manager.meshPhotos.map(\.id))
-        manager.addPhoto(makeTinyJPEG())
-        let sessionPhotoID = manager.sessionPhotos[0].id
+        let existingAlbumIDs = Set(photos.meshPhotos.map(\.id))
+        photos.addPhoto(makeTinyJPEG())
+        let sessionPhotoID = photos.sessionPhotos[0].id
 
-        #expect(manager.sessionPhotos.isEmpty == false)
+        #expect(photos.sessionPhotos.isEmpty == false)
 
-        let answer = manager.deleteAllSessionPhotos()
+        let answer = photos.deleteAllSessionPhotos()
 
         #expect(answer.discarded == [sessionPhotoID])
-        #expect(manager.meshPhotos.contains(where: { $0.id == sessionPhotoID }) == false)
-        #expect(Set(manager.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs))
-        #expect(manager.sessionPhotos.isEmpty)
+        #expect(photos.meshPhotos.contains(where: { $0.id == sessionPhotoID }) == false)
+        #expect(Set(photos.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs))
+        #expect(photos.sessionPhotos.isEmpty)
         #expect(HeldPhotos.persistedIndex(store)?.heldLocalIDs.isEmpty == true, "and the pending corpus let it go")
     }
 
@@ -267,50 +284,54 @@ struct MeshNetworkManagerTests {
         let storeC = makeTestStore(proximitySupportDirectory: sharedRoot)
 
         try withExtendedLifetime((storeA, storeB, storeC)) {
-            let managerA = MeshNetworkManager(store: storeA)
+            let featuresA = FernletMeshRig.features(store: storeA)
+            let managerA = featuresA.mesh
+            let photosA = featuresA.photos
             managerA.currentMesh = makeTestMesh()
             HeldPhotos.openGate(on: managerA)
-            managerA.addPhoto(makeTinyJPEG())
-            let keptID = try #require(managerA.sessionPhotos.first?.id)
-            #expect(managerA.finishSessionPhotos(keeping: [keptID]).keptOnWall == [keptID])
-            #expect(managerA.meshPhotos.contains(where: { $0.id == keptID }))
+            photosA.addPhoto(makeTinyJPEG())
+            let keptID = try #require(photosA.sessionPhotos.first?.id)
+            #expect(photosA.finishSessionPhotos(keeping: [keptID]).keptOnWall == [keptID])
+            #expect(photosA.meshPhotos.contains(where: { $0.id == keptID }))
 
             // A store on its OWN root sees nothing of A's wall.
-            let managerB = MeshNetworkManager(store: storeB)
+            let featuresB = FernletMeshRig.features(store: storeB)
             #expect(
-                managerB.meshPhotos.isEmpty,
+                featuresB.photos.meshPhotos.isEmpty,
                 "a store on its own proximity root must start with an empty wall, not another store's album"
             )
 
             // ...but one on the SAME root does — so the isolation above is the root doing the work,
             // not the wall having quietly stopped persisting.
-            let managerC = MeshNetworkManager(store: storeC)
+            let featuresC = FernletMeshRig.features(store: storeC)
             #expect(
-                managerC.meshPhotos.contains(where: { $0.id == keptID }),
+                featuresC.photos.meshPhotos.contains(where: { $0.id == keptID }),
                 "a store sharing the proximity root must still load the wall persisted under it"
             )
         }
     }
 
     @Test func finishSessionPhotosKeepsOnlySelectedCurrentRollPhotos() throws {
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         manager.currentMesh = makeTestMesh()
         HeldPhotos.openGate(on: manager)
-        let existingAlbumIDs = Set(manager.meshPhotos.map(\.id))
-        manager.addPhoto(makeTinyJPEG())
-        manager.addPhoto(makeTinyJPEG())
-        let keptID = try #require(manager.sessionPhotos.first?.id)
-        let discardedID = try #require(manager.sessionPhotos.dropFirst().first?.id)
-        #expect(!manager.meshPhotos.contains { $0.id == keptID }, "held, not on the wall, before the answer")
+        let existingAlbumIDs = Set(photos.meshPhotos.map(\.id))
+        photos.addPhoto(makeTinyJPEG())
+        photos.addPhoto(makeTinyJPEG())
+        let keptID = try #require(photos.sessionPhotos.first?.id)
+        let discardedID = try #require(photos.sessionPhotos.dropFirst().first?.id)
+        #expect(!photos.meshPhotos.contains { $0.id == keptID }, "held, not on the wall, before the answer")
 
-        let answer = manager.finishSessionPhotos(keeping: [keptID])
+        let answer = photos.finishSessionPhotos(keeping: [keptID])
 
         #expect(answer.keptOnWall == [keptID] && answer.discarded == [discardedID] && answer.notApplied.isEmpty)
 
-        #expect(manager.meshPhotos.contains(where: { $0.id == keptID }))
-        #expect(manager.meshPhotos.contains(where: { $0.id == discardedID }) == false)
-        #expect(Set(manager.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs.union([keptID])))
-        #expect(manager.sessionPhotos.isEmpty)
+        #expect(photos.meshPhotos.contains(where: { $0.id == keptID }))
+        #expect(photos.meshPhotos.contains(where: { $0.id == discardedID }) == false)
+        #expect(Set(photos.meshPhotos.map(\.id)).isSubset(of: existingAlbumIDs.union([keptID])))
+        #expect(photos.sessionPhotos.isEmpty)
     }
 
     // MARK: - Phase 1: payload handler registry
@@ -427,7 +448,9 @@ struct MeshNetworkManagerTests {
                     "fernlet.friend.photo.request.v1", "fernlet.mesh.encrypted.meta.v1"] {
             #expect(PayloadType(rawValue: raw) != nil, "a parked wire token stopped decoding")
         }
-        let manager = MeshNetworkManager(store: store)
+        let features = FernletMeshRig.features(store: store)
+        let manager = features.mesh
+        let photos = features.photos
         let coordinator = throwawayCoordinator()
         let author = authorIdentity
         let fingerprint = IdentityService.fingerprint(of: author.localSigningPublicKey)
@@ -442,7 +465,7 @@ struct MeshNetworkManagerTests {
         let payload = makePhotoPayload(author: author)
         deliverPhoto(payload, to: manager, on: coordinator, relayer: fingerprint)
 
-        #expect(manager.meshPhotos.isEmpty,
+        #expect(photos.meshPhotos.isEmpty,
                 "a parked photo token must reach no wall, on a committed slot or otherwise")
     }
 
@@ -802,6 +825,36 @@ struct MeshNetworkManagerTests {
         manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: Data("not json".utf8), from: nil)
 
         #expect(handlerCalled == false)
+    }
+
+    /// The token door keeps the typed door's dispatch order (plan step A0.5.1, S1): a role-less
+    /// token registered through `registerPayloadHandler(forToken:handler:)` reaches its handler on a
+    /// committed slot only once the core switch has left it, and a mesh message's token registered
+    /// through the same door is never consulted — the switch runs first, so no registration can
+    /// shadow a mesh frame. The role-less half is the positive control that keeps the other honest.
+    @Test func registry_tokenDoorRoleLessTokenStillMeetsTheCoreSwitchFirst() {
+        let manager = MeshNetworkManager(store: store)
+        var featureCalls = 0
+        var meshCalls = 0
+        manager.registerPayloadHandler(forToken: PayloadType.trainerPlan.rawValue) { _, _, _ in featureCalls += 1 }
+        manager.registerPayloadHandler(forToken: PayloadType.meshDescriptor.rawValue) { _, _, _ in meshCalls += 1 }
+
+        // Committed slot, so a miss is core-switch precedence and not the commit gate.
+        let coordinator = throwawayCoordinator()
+        manager.addSlotForTesting(coordinator: coordinator, peer: makePeer(name: "Peer"), fingerprint: "fp-peer")
+        let feature = Data("feature payload".utf8)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .trainerPlan, plaintext: feature),
+                                     plaintext: feature,
+                                     from: nil)
+        let notJSON = Data("not json".utf8)
+        manager.proximityCoordinator(coordinator,
+                                     didReceive: inboundEnvelope(payloadType: .meshDescriptor, plaintext: notJSON),
+                                     plaintext: notJSON,
+                                     from: nil)
+
+        #expect(featureCalls == 1, "a role-less token reaches its token-door handler once the switch leaves it")
+        #expect(meshCalls == 0, "a mesh token registered through the token door must never shadow the core switch")
     }
 
     /// Belt-and-braces: an unknown-token envelope handed straight to the manager (the coordinator

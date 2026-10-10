@@ -13,10 +13,11 @@
 // every photo sentence ends "stayed on your own wall", which for a message is both false and
 // unactionable, and the photo path's `routedShareRefusal` alert lives on the view the chat panel
 // covers. Both forks switch exhaustively over the same frozen cause, so a new case is a build error
-// in each.
+// in each. The chat's outcome is FernletSocial's `MeshTextSendOutcome`, its chat's send's answer.
 
 import SwiftUI
 import ProximityKit
+import FernletSocial
 
 /// The copy for a refused routed share, one sentence per frozen cause.
 ///
@@ -52,7 +53,7 @@ enum RoutedShareRefusalCopy {
     /// The sentence for photos this session that reached nobody — one count, one sentence, nil
     /// for none (P8 item 0, device finding (c)).
     ///
-    /// - Parameter count: `MeshNetworkManager.photosKeptOnThisPhone`.
+    /// - Parameter count: FernletSocial's `MeshSessionPhotos.photosKeptOnThisPhone`.
     /// - Returns: a `LocalizedStringKey`, or nil when every capture was shared.
     static func photoKeptNotice(count: Int) -> LocalizedStringKey? {
         guard count > 0 else { return nil }
@@ -69,8 +70,9 @@ enum RoutedShareRefusalCopy {
     /// stayed on your own wall", which is both wrong and unactionable for a message — and the photo
     /// path publishes its refusal on `routedShareRefusal`, whose one consumer is a session `.alert`
     /// on `DisposableCameraView`, the view the chat panel is presented *over*. So chat neither
-    /// shares the copy nor shares the surface: `sendTempMessage(_:)` returns its outcome and this
-    /// turns it into one sentence, shown in place, with the draft kept so sending again is the retry.
+    /// shares the copy nor shares the surface: the chat's `sendTempMessage(_:)` returns its outcome
+    /// and this turns it into one sentence, shown in place, with the draft kept so sending again is
+    /// the retry.
     ///
     /// Two outcomes say nothing on purpose: `.staged`, because the row appearing in the transcript
     /// IS the feedback, and `.empty`, because the send control is already disabled for it.

@@ -28,6 +28,7 @@ import Foundation
 @testable import FernletCrypto
 import FernletDomainModel
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - Fixtures
@@ -244,7 +245,8 @@ struct MeshRoutedItemSealTests {
     /// S-11: an over-bound plaintext is refused at the MINT, so no recipient receipts an item it
     /// would then decline to open.
     @Test func aPlaintextAboveTheResidentBoundIsRefusedAtTheSeal() {
-        let overBound = MeshRoutedItemSealFormat.maxPlaintextByteCount + 1
+        let overBound = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount)
+            - MeshRoutedItemSealFormat.overheadByteCount + 1
         #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: overBound)) {
             _ = try MeshRoutedItemSealer.seal(
                 Data(repeating: 0x7A, count: overBound),
@@ -258,7 +260,7 @@ struct MeshRoutedItemSealTests {
     /// S-12: defence in depth for a blob this device did not mint — refused before any plaintext is
     /// allocated.
     @Test func aBlobAboveTheResidentBoundIsRefusedWithoutOpening() {
-        let overBound = MeshRoutedItemSealFormat.maxResidentBlobByteCount + 1
+        let overBound = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount) + 1
         var blob = MeshRoutedItemSealFormat.marker
         blob.append(Data(repeating: 0x00, count: overBound - MeshRoutedItemSealFormat.markerByteCount))
         #expect(throws: MeshRoutedItemSealError.blobTooLargeToOpen(byteCount: overBound)) {
@@ -267,10 +269,31 @@ struct MeshRoutedItemSealTests {
     }
 
     /// S-12b: the seal bound and the open bound are one number.
-    @Test func theSealBoundAndTheOpenBoundAreTheSameNumber() {
-        #expect(MeshRoutedItemSealFormat.maxPlaintextByteCount
-            + MeshRoutedItemSealFormat.overheadByteCount
-            == MeshRoutedItemSealFormat.maxResidentBlobByteCount)
+    ///
+    /// Since plan step A0.5.4 that number is the caller's `maxBlobByteCount` (the manager's resident
+    /// bound, its host registry's widest row) rather than two constants, one derived from the other,
+    /// so the claim is the sealer's own and is driven at a bound small enough to fill: the widest
+    /// plaintext the seal takes seals to a blob of exactly the bound, which the open takes, and one
+    /// byte more is refused at each end. A bound below the seal's overhead — 0, a host that registered
+    /// no routed row — refuses both ends by name rather than trapping.
+    @Test func theSealBoundAndTheOpenBoundAreTheSameNumber() throws {
+        let bound = MeshRoutedItemSealFormat.overheadByteCount + 64
+        let widest = Data(repeating: 0x7A, count: 64)
+        let blob = try Self.sealFixture(widest, maxBlobByteCount: bound)
+        #expect(blob.count == bound, "the widest plaintext sealed to \(blob.count) bytes, not the bound")
+        #expect(try Self.openFixture(blob, maxBlobByteCount: bound) == widest)
+        #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: 65)) {
+            _ = try Self.sealFixture(widest + Data([0x7A]), maxBlobByteCount: bound)
+        }
+        #expect(throws: MeshRoutedItemSealError.blobTooLargeToOpen(byteCount: bound)) {
+            _ = try Self.openFixture(blob, maxBlobByteCount: bound - 1)
+        }
+        #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: 1)) {
+            _ = try Self.sealFixture(Data([0x7A]), maxBlobByteCount: 0)
+        }
+        #expect(throws: MeshRoutedItemSealError.blobTooLargeToOpen(byteCount: bound)) {
+            _ = try Self.openFixture(blob, maxBlobByteCount: 0)
+        }
     }
 
     /// A blob with no room for a single ciphertext byte is malformed, not "foreign".
@@ -292,9 +315,10 @@ struct MeshRoutedItemSealTests {
     }
 
     /// B-2: the sealed plaintext names no epoch — the property that makes branch and epoch stop
-    /// deciding decryptability.
+    /// deciding decryptability. The body is FernletSocial's since plan step A0.5.11
+    /// (`MeshRoutedPhotoBody.swift`, moved from ProximityKit's `MeshRoutedItemBody.swift`).
     @Test func theRoutedPhotoBodyNamesNoEpoch() throws {
-        let body = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemBody.swift")
+        let body = try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshRoutedPhotoBody.swift")
         let seal = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemSeal.swift")
         #expect(!MeshRoutedSourceScan.codeOnly(body).contains("keyEpoch"))
         #expect(!MeshRoutedSourceScan.codeOnly(seal).contains("keyEpoch"))
@@ -378,6 +402,28 @@ struct MeshRoutedItemSealTests {
             contentKey: MeshRoutedItemSealFixtures.contentKey,
             binding: MeshRoutedItemSealFixtures.binding,
             typeToken: MeshRoutedItemSealFixtures.typeToken
+        )
+    }
+
+    /// The fixture seal under a bound the cell names rather than Fernlet's.
+    private static func sealFixture(_ plaintext: Data, maxBlobByteCount: Int) throws -> Data {
+        try MeshRoutedItemSealer.seal(
+            plaintext,
+            contentKey: MeshRoutedItemSealFixtures.contentKey,
+            binding: MeshRoutedItemSealFixtures.binding,
+            typeToken: MeshRoutedItemSealFixtures.typeToken,
+            maxBlobByteCount: maxBlobByteCount
+        )
+    }
+
+    /// The fixture open under a bound the cell names rather than Fernlet's.
+    private static func openFixture(_ blob: Data, maxBlobByteCount: Int) throws -> Data {
+        try MeshRoutedItemSealer.open(
+            blob,
+            contentKey: MeshRoutedItemSealFixtures.contentKey,
+            binding: MeshRoutedItemSealFixtures.binding,
+            typeToken: MeshRoutedItemSealFixtures.typeToken,
+            maxBlobByteCount: maxBlobByteCount
         )
     }
 }

@@ -1,5 +1,6 @@
 import ProximityKit
 import FernletConnections
+import FernletSocial
 import SwiftUI
 import UIKit
 import FernletDomainModel
@@ -128,6 +129,10 @@ struct FriendsView: View {
     private static let maxReviewRetries = 4
 
     private var manager: MeshNetworkManager { store.meshNetworkManager }
+    /// Fernlet's mesh features over ``manager``: the clothing shop and its post-session window live there,
+    /// and the session photos (`features.photos`): the friend-photo wall, the review batch and its
+    /// keep-as-friend candidates.
+    private var features: FernletMeshFeatures { store.meshFeatures }
     /// The app-level presenter of the session-end photo review (session photos U3).
     private var reviewCoordinator: SessionPhotoReviewCoordinator { store.sessionPhotoReviewCoordinator }
 
@@ -171,7 +176,7 @@ struct FriendsView: View {
         // batch moving, the session ending, the scene coming back (a session that ended in the dark
         // is answered on return, after ContentView's own activation routing), and whatever covered
         // the surface — the camera's own sheets, the root sheet — going away.
-        .onChange(of: manager.pendingFriendReview) { _, _ in scheduleReviewCheck() }
+        .onChange(of: features.photos.pendingFriendReview) { _, _ in scheduleReviewCheck() }
         .onChange(of: manager.isSessionLive) { _, live in if !live { scheduleReviewCheck() } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { scheduleReviewCheck() } }
         .onChange(of: cameraPresentsOwnSheet) { _, up in if !up { scheduleReviewCheck() } }
@@ -202,7 +207,7 @@ struct FriendsView: View {
             FriendPhotoFeedView(
                     posts: filteredPhotoWallPosts,
                     initialPostID: selectedAlbumPostID,
-                    manager: manager,
+                    photos: features.photos,
                     onDismiss: { selectedAlbumPostID = nil }
                 )
         }
@@ -369,7 +374,7 @@ struct FriendsView: View {
 
                     displayNameHint
 
-                    if manager.meshPhotos.isEmpty {
+                    if features.photos.meshPhotos.isEmpty {
                         emptyAlbumView
                     } else {
                         cacheWarningBanner
@@ -399,7 +404,7 @@ struct FriendsView: View {
         guard path.contains(.friendShop) else { return nil }
         return FriendsRoute.shopClosesAt(
             sharingEnabled: store.settings.allowNearbyClothingShares,
-            windowExpiresAt: manager.clothingShop.window?.expiresAt
+            windowExpiresAt: features.clothingShop.window?.expiresAt
         )
     }
 
@@ -428,7 +433,7 @@ struct FriendsView: View {
         case .friendList:
             FriendListView(store: store, isTabBarCompact: $isTabBarCompact, tabResetToken: $scrollToTopToken)
         case .friendShop:
-            FriendShopView(store: store, shop: manager.clothingShop)
+            FriendShopView(store: store, shop: features.clothingShop)
         }
     }
 
@@ -497,7 +502,7 @@ struct FriendsView: View {
     private var shopWindowCard: some View {
         if store.settings.allowNearbyClothingShares {
             TimelineView(.periodic(from: .now, by: 60)) { context in
-                if let minutesLeft = manager.clothingShop.remainingWindowMinutes(at: context.date) {
+                if let minutesLeft = features.clothingShop.remainingWindowMinutes(at: context.date) {
                     NavigationLink(value: FriendsRoute.friendShop) {
                         HStack(spacing: 12) {
                             Image(systemName: "bag")
@@ -535,8 +540,8 @@ struct FriendsView: View {
     /// and a dead "Choose photos" would make the decoy distinguishable).
     @ViewBuilder
     private var pendingPhotoReviewCard: some View {
-        if manager.hasOutstandingPhotoReview && !manager.isSessionLive && !store.duressSessionActive {
-            PendingPhotoReviewCard(count: manager.pendingReviewPhotos.count) { reviewCoordinator.reopen() }
+        if features.photos.hasOutstandingPhotoReview && !manager.isSessionLive && !store.duressSessionActive {
+            PendingPhotoReviewCard(count: features.photos.pendingReviewPhotos.count) { reviewCoordinator.reopen() }
         }
     }
 
@@ -732,7 +737,7 @@ struct FriendsView: View {
 
     @ViewBuilder
     private var cacheWarningBanner: some View {
-        if manager.meshPhotos.count >= PrivateMediaStore.cacheWarningThreshold, !cacheWarningDismissed {
+        if features.photos.meshPhotos.count >= PrivateMediaStore.cacheWarningThreshold, !cacheWarningDismissed {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.circle")
                     .foregroundStyle(Color.goldenrod)
@@ -740,7 +745,7 @@ struct FriendsView: View {
                     Text("Your photo shelf is nearly full")
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
-                    Text("You're keeping \(manager.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
+                    Text("You're keeping \(features.photos.meshPhotos.count) of \(PrivateMediaStore.maxCachedPhotos) shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep.")
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
@@ -837,7 +842,7 @@ struct FriendsView: View {
     }
 
     private var filteredPhotoWallPosts: [FriendPhotoWallPost] {
-        let posts = manager.photoWallPosts
+        let posts = features.photos.photoWallPosts
         let query = sessionSearchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return posts }
         return posts.filter { post in
@@ -853,7 +858,7 @@ struct FriendsView: View {
         Color.cream
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                LazyFriendPhotoImage(loadData: { manager.thumbnailData(for: post.coverPhoto) }, contentMode: .fill)
+                LazyFriendPhotoImage(loadData: { features.photos.thumbnailData(for: post.coverPhoto) }, contentMode: .fill)
             }
             .clipped()
             .overlay(alignment: .topTrailing) {
@@ -948,9 +953,9 @@ struct FriendsView: View {
         // sheets and alerts, or the root sheet. Each re-checks here the moment it goes away.
         guard activeSheet == nil, !cameraPresentsOwnSheet else { return }
         // Photos first (I17): the overlay answers a photo batch's candidates, once.
-        guard !manager.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,
+        guard !features.photos.hasOutstandingPhotoReview, !reviewCoordinator.isShowing,
               !reviewCoordinator.blocksDiscovery else { return }
-        guard let batch = manager.pendingFriendReview else { return }
+        guard let batch = features.photos.pendingFriendReview else { return }
         reviewBatch = batch
         friendCandidates = FriendMintingReview.eligibleCandidates(
             roster: batch.entries,
@@ -963,7 +968,7 @@ struct FriendsView: View {
             noteSessionEndSheetRequested()
         case .none:
             // Nothing to review — consume the batch immediately so it can't re-present.
-            manager.completeFriendReview(batch.id)
+            features.photos.completeFriendReview(batch.id)
             reviewBatch = nil
             friendCandidates = []
         case .photoReview:
@@ -997,7 +1002,7 @@ struct FriendsView: View {
     private func finalizeFriendKeeps() {
         if let batch = reviewBatch {
             store.keepProximityFriends(from: friendCandidates, keptFingerprints: keptFriendFingerprints)
-            manager.completeFriendReview(batch.id)
+            features.photos.completeFriendReview(batch.id)
         }
         reviewBatch = nil
         friendCandidates = []
@@ -1085,7 +1090,8 @@ struct FriendsView: View {
 private struct FriendPhotoFeedView: View {
     let posts: [FriendPhotoWallPost]
     let initialPostID: UUID?
-    let manager: MeshNetworkManager
+    /// The session photos whose wall the feed shows (the composition's `photos`).
+    let photos: MeshSessionPhotos
     let onDismiss: () -> Void
 
     var body: some View {
@@ -1096,7 +1102,7 @@ private struct FriendPhotoFeedView: View {
                         ForEach(posts) { post in
                             FriendPhotoCarouselPostView(
                                 post: post,
-                                manager: manager,
+                                photos: photos,
                                 width: geometry.size.width
                             )
                             .id(post.id)
@@ -1139,11 +1145,12 @@ private struct FriendPhotoFeedView: View {
 /// Tracks its own selected page and auto-fading chrome (page counter + dots), and re-anchors the
 /// selection when a deletion removes the current page — the post id is stable for aggregated
 /// sessions, so the view is reused without re-init. Saving rehydrates the metadata-only payload
-/// from the encrypted disk cache (`MeshNetworkManager.hydratedPhotos`) before handing bytes to
+/// from the encrypted disk cache (`MeshSessionPhotos.hydratedPhotos`) before handing bytes to
 /// `FriendPhotoLibrarySaver`, and never reports a false success when decryption fails.
 private struct FriendPhotoCarouselPostView: View {
     let post: FriendPhotoWallPost
-    let manager: MeshNetworkManager
+    /// The session photos whose wall holds this post (the composition's `photos`).
+    let photos: MeshSessionPhotos
     let width: CGFloat
 
     @State private var selectedPhotoID: UUID
@@ -1155,9 +1162,9 @@ private struct FriendPhotoCarouselPostView: View {
     /// Photos with a save Task already running — the per-photo in-flight cap (R3).
     @State private var inFlightSaveIDs: Set<UUID> = []
 
-    init(post: FriendPhotoWallPost, manager: MeshNetworkManager, width: CGFloat) {
+    init(post: FriendPhotoWallPost, photos: MeshSessionPhotos, width: CGFloat) {
         self.post = post
-        self.manager = manager
+        self.photos = photos
         self.width = width
         self._selectedPhotoID = State(initialValue: post.photos.first?.id ?? post.coverPhoto.id)
     }
@@ -1240,7 +1247,7 @@ private struct FriendPhotoCarouselPostView: View {
     @ViewBuilder
     private var deleteConfirmationButtons: some View {
         Button("Delete", role: .destructive) {
-            if let id = pendingDeletePhotoID { manager.deletePhoto(id) }
+            if let id = pendingDeletePhotoID { photos.deletePhoto(id) }
             pendingDeletePhotoID = nil
         }
         Button("Cancel", role: .cancel) { pendingDeletePhotoID = nil }
@@ -1269,7 +1276,7 @@ private struct FriendPhotoCarouselPostView: View {
         Color.parchment
             .overlay {
                 LazyFriendPhotoImage(
-                    loadData: { manager.imageData(for: photo) },
+                    loadData: { photos.imageData(for: photo) },
                     contentMode: .fit,
                     shouldLoad: shouldLoad(photo)
                 )
@@ -1288,13 +1295,13 @@ private struct FriendPhotoCarouselPostView: View {
                     ) { savePhoto(photo) }
 
                     if post.session != nil {
-                        let isFavorite = manager.favoritePhotoID(for: post) == photo.id
+                        let isFavorite = photos.favoritePhotoID(for: post) == photo.id
                         circleActionButton(
                             systemName: isFavorite ? "heart.fill" : "heart",
                             tint: isFavorite ? Color.dustyRose : .white,
                             accessibilityLabel: "Favorite this photo",
                             selected: isFavorite
-                        ) { manager.toggleFavorite(photoID: photo.id, in: post) }
+                        ) { photos.toggleFavorite(photoID: photo.id, in: post) }
                     }
 
                     circleActionButton(
@@ -1340,7 +1347,7 @@ private struct FriendPhotoCarouselPostView: View {
             defer { inFlightSaveIDs.remove(photo.id) }
             // Persistent-gallery photos are stored metadata-only in memory; rehydrate the bytes
             // from the encrypted disk cache before handing them to the photo library.
-            let hydrated = manager.hydratedPhotos([photo])
+            let hydrated = photos.hydratedPhotos([photo])
             // If the bytes can't be loaded/decrypted, don't report a false success.
             guard !hydrated.isEmpty else {
                 saveErrorMessage = .generic

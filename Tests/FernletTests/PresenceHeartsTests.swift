@@ -20,7 +20,7 @@ import FernletDomainModel
 @testable import Fernlet
 
 @MainActor
-private final class MockPresenceHeartsHost: ProximityHost {
+private final class MockPresenceHeartsHost: FernletSocialHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()

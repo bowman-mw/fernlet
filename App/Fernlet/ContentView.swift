@@ -684,7 +684,7 @@ struct ContentView: View {
         // (generalizes the older FERNLET_UI_TEST_OPEN_SETTINGS hook).
         if let initialSheet = UITestSupport.initialSheet { activeSheet = initialSheet }
         // Session photos U3: an ended session's photos held for review before the first evaluation.
-        UITestSupport.seedHeldSessionPhotosIfRequested(on: store.meshNetworkManager)
+        UITestSupport.seedHeldSessionPhotosIfRequested(on: store.meshFeatures.photos)
         #endif
         // A notification tapped during a cold launch stored its deep-link before this
         // view finished preparing — open it now (live taps arrive via the onReceive handlers).
@@ -1970,11 +1970,11 @@ struct ContentView: View {
     }
 
     // Phase 3a: the clothing-shop listener chain that lived here is gone — the shop rides the friend
-    // mesh (`MeshNetworkManager.clothingShop`), whose radio lifecycle is user-driven
-    // (startJoin/leaveSession), and the `allowNearbyClothingShares` opt-out is payload-layer (providers
-    // wired in FernletStore.meshNetworkManager). There is deliberately NO scene-dip clearing of the
-    // shop's held catalogs: the post-session window outlives the session by design, and radio privacy
-    // is the mesh lifecycle's job.
+    // mesh (FernletSocial's `MeshClothingShop`, the store's `meshFeatures.clothingShop`), whose radio
+    // lifecycle is user-driven (startJoin/leaveSession), and the `allowNearbyClothingShares` opt-out is
+    // payload-layer (providers wired in FernletStore.meshFeatures). There is deliberately NO scene-dip
+    // clearing of the shop's held catalogs: the post-session window outlives the session by design, and
+    // radio privacy is the mesh lifecycle's job.
 
     /// Away-hearts drop sync (bitchat adoptions Increment 3), on the same tab / scene / lock edges
     /// the radio listener chain used to carry it on — beside the run policy now, not inside it,

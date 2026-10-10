@@ -9,6 +9,7 @@
 // (P6 item 4 fix review, P3-8); and clear() (session end / formation) resets the badge.
 // Pure store-level tests — no radios, no live session.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import Foundation
 import Testing

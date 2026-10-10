@@ -109,7 +109,9 @@ struct PrivacyWipeCoverageTests {
         // Leg 4d (2026-09-30): the session photos nobody has chosen yet — the sealed pending corpus,
         // the whole review batch (candidates too) and the live roll and roster. The wall itself is
         // still a deliberate survivor; this is the separate corpus that holds photos BEFORE the choice.
-        "meshNetworkManager.purgeHeldSessionPhotosForDeleteAll",
+        // The session photos' (`meshFeatures.photos`, FernletSocial's); the purge empties the mesh's
+        // live roster in the same step.
+        "photos.purgeHeldSessionPhotosForDeleteAll",
         "sharedRecipeImportQueue.clear",
         // The un-consumed Messages deep-link request (destination + inbox id). Its own token, and
         // NOT the enclosing `clearMessagesImportInboxes` spelling: that helper is registered in
@@ -128,11 +130,12 @@ struct PrivacyWipeCoverageTests {
         "purgeDataExports",
         // Social / proximity
         "clothingShop.clearAll",
-        // The live chat transcript, dropped in leg 0 through the MANAGER's one clear funnel rather
-        // than by `sessionMessages.clear()` on leg 7b. The funnel is what bumps
-        // `transcriptGeneration` and what switches the routed projection off for the rest of the
-        // wipe; the direct call did neither, so items whose ciphertext leg 11 was about to destroy
-        // could re-project into a still-live transcript (P6 item 4 fix review, finding P2-1).
+        // The live chat transcript, dropped in leg 0 through the mesh's privacy-wipe funnel rather
+        // than by `sessionMessages.clear()` on leg 7b. The funnel advances the session-content
+        // generation, switches the routed projection off for the rest of the wipe and tells the
+        // session observer, whose chat drops the transcript; the direct call did none of that, so
+        // items whose ciphertext leg 11 was about to destroy could re-project into a still-live
+        // transcript (P6 item 4 fix review, finding P2-1).
         "meshNetworkManager.beginPrivacyWipe",
         // Every proximity radio — the session, the search and both listeners — stands down at
         // leg 0 through the run policy (P7 item 3): raising `deleteAllInProgress` and re-running
@@ -229,6 +232,12 @@ struct PrivacyWipeCoverageTests {
         "deviceJournalKey",
         "deviceWorryKey",
         "invalidateEncryptionKeyCache",
+        // The session photos' two at-rest key caches (the friend wall's and the pending corpus's),
+        // dropped immediately after the mesh's identity wipe, inside the same `do` and before
+        // presence's (since ProximityKit plan step A0.5.11). The token above is satisfied by the
+        // meal-photo store's own call and pins nothing of the session photos'; this one pins theirs,
+        // and `theSessionPhotoKeyCachesDropBetweenTheMeshAndPresenceIdentityWipes` pins where.
+        "photos.invalidateEncryptionKeyCaches",
         // Away-hearts dead-drop state (Increment 3): prekeys, peer bundles, outbox, dedup + the
         // service's own identity cache. The remote purge is a SEPARATE row because it must run
         // first — it needs the record names the local wipe destroys.
@@ -253,7 +262,7 @@ struct PrivacyWipeCoverageTests {
     /// manifest: some deletions are bugs, and a green manifest says nothing about them.
     ///
     /// `deleteKeychainRowForWipe` deletes the ONE shared `com.fernlet.private-media` keychain row
-    /// that encrypts every `PrivateMediaStore` — including `MeshNetworkManager.photoCacheStore`,
+    /// that encrypts every `PrivateMediaStore` — including the session photos' `photoCacheStore`,
     /// the friend photo wall this funnel keeps BY DESIGN. Deleting it doesn't orphan a key, it
     /// shreds the wall: the next `mediaKey()` mints a fresh random key and every retained photo
     /// decrypts to garbage, permanently and with no failure signal. See the deliberate-exceptions
@@ -786,6 +795,32 @@ struct PrivacyWipeCoverageTests {
             let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
             #expect(source.contains("func wipeIdentityForDeleteAll"), "\(file) owns a live IdentityService but lost its wipe seam.")
         }
+    }
+
+    /// The session photos' two at-rest key caches drop inside the funnel's identity `do` (leg 11,
+    /// `rotateProximityIdentityAndPurgeDeadDrop(into:)`), after the mesh's identity wipe and before
+    /// presence's (ProximityKit plan step A0.5.13). Until plan step A0.5.11 the mesh manager's own wipe
+    /// dropped them right after its identity's, so a throwing mesh wipe skipped them and a throwing
+    /// presence or recipe-share wipe did not; the funnel keeps that only by where the call sits, and the
+    /// manifest's `photos.invalidateEncryptionKeyCaches` token says only that the call is in the funnel.
+    /// Comments and string bodies blanked, so neither prose nor a log line stands in for a call, and the
+    /// `do`'s braces matched, so a call moved past its `catch` is outside it.
+    @Test func theSessionPhotoKeyCachesDropBetweenTheMeshAndPresenceIdentityWipes() throws {
+        let store = try Self.fernletStoreSource()
+        let leg = Self.strippingCommentsAndStringLiteralBodies(
+            try Self.functionBody(matching: "func rotateProximityIdentityAndPurgeDeadDrop(", in: store))
+        let identity = try #require(MeshRoutedSourceScan.bracedBody(after: "do {", in: leg),
+                                    "the identity leg holds no braced `do`")
+        let mesh = try #require(identity.range(of: "meshNetworkManager.wipeIdentityForDeleteAll()"),
+                                "the mesh's identity wipe left the identity `do`")
+        let caches = try #require(identity.range(of: "photos.invalidateEncryptionKeyCaches()"),
+                                  "the session photos' key caches drop outside the identity `do`")
+        let presence = try #require(identity.range(of: "presenceManager.wipeIdentityForDeleteAll()"),
+                                    "presence's identity wipe left the identity `do`")
+        #expect(mesh.upperBound <= caches.lowerBound,
+                "the key caches drop before the mesh's identity wipe: a throwing mesh wipe no longer skips them")
+        #expect(caches.upperBound <= presence.lowerBound,
+                "the key caches drop after presence's identity wipe: a throwing presence wipe now skips them")
     }
 
     /// The rebuild hook is nil-tolerant in the funnel (an unwired TEST store must not report a

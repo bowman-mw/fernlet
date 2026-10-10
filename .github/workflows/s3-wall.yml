@@ -230,6 +230,25 @@ jobs:
         # come back under its old name. Each carries its matcher fixtured both ways, so the suite holds
         # 11 cells (7 before the step), and the line, MEASURED on a Mac on that tree (iPhone 17
         # simulator, iOS 26.5), ran 103 tests in 10 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.5 (2026-10-09) splits the routed mesh manager: the engine stays in
+        # ProximityKit and gains the public seams a host's features need (the payload token door,
+        # routed-type rows the host supplies, projection handlers and ledger judges registered by
+        # token, from whose committed answer the engine mints the ack evidence itself, one session
+        # observer, the capability-list provider and the vouch-list exchange), and Fernlet's mesh
+        # features move to FernletSocial under its `FernletMeshFeatures` composition (the capability
+        # list and the vouch list's content, the clothing shop, the moderation report relay and friend
+        # state, activities, chat, the session hearts with the heart ledger, and the session photos
+        # with their review). It leaves the ratchet at the step's end state, with no row of A0.5's
+        # and no A0.5 exit step: `FernletCryptoPurpose` named nowhere in ProximityKit code (rule 2's
+        # list went with its last row), 17 `fernlet` literals on 16 lines in 4 files, 5 domain-type
+        # lines in 2 files and `package` on 38 lines in 5 files, every row leaving with the recipe
+        # profile (A0.7), the session profile (A0.7 / C5) or the package (A1); rule 6 refuses 74 names
+        # (A0.5's 50 among them); and a twelfth cell (A0.5.10) holds ProximityKit's target to exactly
+        # FernletCrypto and FernletDomainModel, so neither edge the step dropped, FernletFoundation's
+        # or PrivateMediaStore's, comes back unseen. That cell is the line's one new test, and the line,
+        # MEASURED on a Mac at A0.5.10 and again at A0.5.12 (iPhone 17 simulator, iOS 26.5), ran 104
+        # tests in 10 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -398,7 +417,19 @@ jobs:
         # account and provisioning's Cases 1 to 3, every row and its attributes. Its name ends
         # `GoldenTests`, so CIGateSelectorBoundaryTests demands it on a line; it rides this one beside
         # the namespace and vocabulary goldens it continues. No compiler half either: a moved byte
-        # compiles clean.
+        # compiles clean. Since A0.5.0 (2026-10-04), cut before plan step A0.5 splits the routed mesh
+        # manager, it also pins every byte that split moves or re-derives and no cell pinned, by literal
+        # and by driving its consumer: the capability array the mesh advertises in all 32 states of its
+        # five switches, the three routed rows' caps from their terms and the bound they share, held at
+        # the item seal's two edges, and the token each sender mints under; the routed heart body and a
+        # second text body; the activity descriptors, join token and roster snapshots and the moderation
+        # rows' canonical transcripts, with frozen RFC 8032 signatures production's verify accepts and
+        # flipped twins it refuses; the feature payloads' JSON, the heart and activity ledgers' files
+        # and the photo wall's index, preferences and layout; the keychain role that seals each photo
+        # corpus; the vouch list's two-hour lifetime and its label; the item report and the friend state
+        # sealed to a kept friend at a commit; the camera's hold-failure line; the audit lines the moved
+        # code writes; and the order a session's commit and end run their legs in. Those vectors were
+        # computed twice in Python and never by Swift, so this line's run is their third computation.
         #
         # RAISED 38 -> 153 across A0.2.0 to A0.2.6, MEASURED on a Mac, 2026-10-02 (iPhone 17
         # simulator, iOS 26.5), on the tree carrying all seven: this exact five-name list run at
@@ -564,9 +595,37 @@ jobs:
         # it. 279 + 1 (the gate suite's cell holding the pair-secret door to a declaration by bytes: a
         # salt only canonically equivalent to a declared one, the Kelvin sign for a `K`, is refused) =
         # 280 is the ARITHMETIC CHECK, never the source.
+        # A0.5.0 (2026-10-04) adds fifteen groups to FernletFeatureGoldenTests, 58 cells by declaration
+        # count: the capability array, two; the routed caps and bounds, three; the senders' tokens, one;
+        # the routed bodies, two; the canonical transcripts, eight; the payloads' JSON, five; the heart
+        # ledger's file, three; the activity ledger's, three; the photo wall's files and layout, three;
+        # the photo corpora's seal roles, two; the vouch list, two; the commit's report and friend
+        # state, two; the camera's line, one; the moved audit lines, seventeen; the session's order,
+        # four. RAISED 280 -> 338 at A0.5.0, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS
+        # 26.5): this exact eight-name list run at its floor after the strict build-for-testing (WALL
+        # CHECK PASSED), read off its own result bundle: "338 tests in 8 suites" (6 + 13 + 19 + 104 + 43
+        # + 50 + 17 + 86), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT
+        # 338: passed. Run once more at 338 without CryptographicPurposeBoundaryTests: 332 ran and the
+        # floor refused it. 280 + 58 = 338 is the ARITHMETIC CHECK, never the source.
+        # RAISED 338 -> 339 at A0.5.4, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "339 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 17 + 87), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 339:
+        # passed. Run once more at 339 without CryptographicPurposeBoundaryTests: 333 ran and the floor
+        # refused it. 338 + 1 (the feature golden's cell holding the manager's resident bound at
+        # 10 551 337 bytes, where its host's rows put it, after a fixture registry without the photo row
+        # is handed to it) = 339 is the ARITHMETIC CHECK, never the source.
+        # RAISED 339 -> 340 at A0.5.13, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "340 tests in 8 suites" (6 + 13 + 19 + 104 + 43 + 50
+        # + 17 + 88), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 340:
+        # passed. Run once more at 340 without CryptographicPurposeBoundaryTests: 334 ran and the floor
+        # refused it. 339 + 1 (the feature golden's cell holding the registry the app's own routed rows
+        # build, `FernletStore.meshRoutedTypeEntries`, to the one the cap cells read) = 340 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 280 \
+          Scripts/run-gated-suites.sh crypto-goldens 340 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
@@ -601,9 +660,17 @@ jobs:
         # cell reads the host's own media-key rows, which the wipe must KEEP) — and its
         # VERIFY-BATCH NOTE says CI wiring must name all three, since `-only-testing:` would
         # otherwise skip the two silently. So all three are named.
+        # RAISED 42 -> 43 at A0.5.13, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact four-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "43 tests in 4 suites" (18 + 1 + 1 + 23), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 43: passed. Run once more at
+        # 43 without PrivacyWipeMediaKeySurvivalTests: 42 ran and the floor refused it. 42 + 1 (the
+        # coverage suite's cell holding the session photos' key-cache drop between the mesh's and
+        # presence's identity wipes, inside the identity leg's one `do`) = 43 is the ARITHMETIC CHECK,
+        # never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh privacy-wipe 42 \
+          Scripts/run-gated-suites.sh privacy-wipe 43 \
             PrivacyWipeCoverageTests \
             PrivacyWipeMediaKeySurvivalTests \
             PrivacyWipeAttemptMemoryRemovalTests \
@@ -773,6 +840,123 @@ jobs:
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh recipe-wire 23 RecipeMultipartWireTests
+
+      - name: Mesh features (the only cover of the code plan step A0.5 moves out of the mesh manager)
+        # ProximityKit plan step A0.5 (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4 A0.5) splits
+        # the routed mesh manager: the engine stays in ProximityKit, and Fernlet's mesh features (the
+        # advertised capabilities, the clothing shop, the moderation relay and friend state, friend
+        # minting and the vouch list, activities, and the session's messages, hearts and photos with
+        # their review) move to FernletSocial, one family per commit. The suites that are the ONLY cover
+        # of that behaviour ran on no line: the A0.5 census read 47 that touch moving code, each green
+        # only when somebody ran it by name, so a move could break one and still land green. GATED
+        # 2026-10-04, at A0.5.0, before anything moves, so every commit of the split runs them. The 47
+        # less five: HeartShareTests (a de-flake follow-up, named as one in the mesh step's comment
+        # below); the three MemoryLifecycleTests.swift suites
+        # MeshP9HonestyAcceptanceTests.ungatedByDesign names (ProximityManagerDeallocationTests,
+        # PresenceReleaseTests, PhotoWallPreferencePruneTests: timed weak-reference polls, which that
+        # wall reds if any line gates them); and ProximityRunSeamsTests, which names no moving code.
+        # Plus the three suites the census's scan missed in the same files (FriendMintingStoreTests,
+        # MeshContentNWayConvergenceTests, MeshRoutedDeliveryIngestTests), the two store-level suites
+        # that are the only cover of the app's shop and friend-state paths (FriendShopTests,
+        # FriendStateTests), and PhotoDirectoryIsolationTests, a source wall whose triggers change at
+        # A0.5.5: 48 suites. ActivityTests and ModerationTests are XCTestCase classes, suites to
+        # CIGateSelectorBoundaryTests' declaration reader. LastMemberPhotoReviewSourceWallTests and
+        # PhotoDirectoryIsolationTests are walls with no compiler half, pinned by name in
+        # CIGateSelectorBoundaryTests' `wallLines`. A line of its own rather than more names on
+        # mesh-batteries: that floor carries a dated arithmetic history, and these suites change shape
+        # in every A0.5 commit, so this floor is re-measured at each of them without touching the mesh
+        # line's. A suite flaky in the three runs below leaves this line in the same commit, named, and
+        # runs locally.
+        # RAISED 1 -> 533 at A0.5.0, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5): this
+        # exact 48-name list run three times back to back at floor 1 after the strict build-for-testing
+        # (WALL CHECK PASSED), each read off its own result bundle: 533 tests in 48 suites (498 Swift
+        # Testing cells in 45 suites, passed after 22.8, 21.5 and 22.1 seconds, and the 35 XCTest cases
+        # of ActivityTests, ModerationTests and FriendStateTests), 0 failed, 0 skipped, no `Restarting
+        # after unexpected exit` line. Re-run AT 533: passed. Run once more at 533 without
+        # SessionPhotoReviewOverlayTests: 530 ran and the floor refused it. 533 cells by declaration count
+        # over the 48 declarations (DeleteAllDataTests' two parameterized cells counted once each) is the
+        # ARITHMETIC CHECK, never the number. The first three runs were red, the same two cells each
+        # time, in two suites that had never run beside the others: PhotoDirectoryIsolationTests'
+        # lock-service wall read a string among KeyCustodyBoundaryTests' fixtures as a construction (it
+        # scans lexed code now), and SessionPhotoReviewOverlayTests' hosted cell took
+        # FriendsViewLastMemberReviewPresentationTests' overlay window, held up on the one shared scene
+        # across a sleep while the suites run in parallel, for its own (it takes the window its presenter
+        # adds now). RAISE it when a suite here gains a cell; never lower it in passing.
+        # RAISED 533 -> 534 at A0.5.1, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 48-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: 534 tests in 48 suites (499 Swift Testing cells in 45
+        # suites, passed after 20.893 seconds, and the 35 XCTest cases of ActivityTests, ModerationTests
+        # and FriendStateTests; MeshNetworkManagerTests 40 -> 41, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 534: passed. Run once more at
+        # 534 without MeshFavoriteObservationTests: 532 ran and the floor refused it. 533 + 1 (the
+        # MeshNetworkManagerTests cell holding registerPayloadHandler(forToken:handler:), the token
+        # door, to the typed door's dispatch order: a role-less token reaches its handler on a
+        # committed slot, and a mesh token registered through it never shadows the core switch) = 534
+        # is the ARITHMETIC CHECK, never the source.
+        # RAISED 534 -> 536 at A0.5.9, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 48-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: 536 tests in 48 suites (501 Swift Testing cells in 45
+        # suites, passed after 30.588 seconds, and the 35 XCTest cases of ActivityTests, ModerationTests
+        # and FriendStateTests; SessionMessageTests 19 -> 21, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 536: passed. Run once more at
+        # 536 without MeshFavoriteObservationTests: 534 ran and the floor refused it. 534 + 2 (the
+        # SessionMessageTests cells holding the session-content generation: by behaviour, one advance
+        # at each of its three moments, a forming commit, a privacy wipe's begin and the session's end,
+        # with the chat's transcript dropped after each and nothing moved between them; by a source pin,
+        # its one writer with exactly three callers, each before its observer moment, and the
+        # composition's three drops in the order the manager ran them) = 536 is the ARITHMETIC CHECK,
+        # never the source.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh mesh-features 536 \
+            ActivityTests \
+            AgeGateWiringTests \
+            ClothingShareCodecTests \
+            ConnectReviewKeepTests \
+            DeleteAllDataTests \
+            DisposableCameraSaveTests \
+            FriendShopTests \
+            FriendStateTests \
+            SessionRosterTests \
+            FriendReviewBatchTests \
+            FriendMintingEligibilityTests \
+            FriendMintingStoreTests \
+            VouchListBroadcastGateTests \
+            HeartDropAppWiringTests \
+            HeartDropTests \
+            MeshClothingShopTests \
+            MeshContentUnionLawTests \
+            MeshContentPhotoMergeTests \
+            MeshContentTranscriptTests \
+            MeshContentHeartMergeTests \
+            MeshContentGateTests \
+            MeshContentNWayConvergenceTests \
+            MeshDeliveryTargetTests \
+            MeshFavoriteObservationTests \
+            MeshHeldSessionPhotoTests \
+            MeshHeldRoutedPhotoTests \
+            MeshLastMemberPhotoReviewTests \
+            MeshInvoluntaryEndingPhotoReviewTests \
+            MeshDevelopReviewUnderGiveUpTests \
+            PendingPhotoReviewScopingTests \
+            FriendsViewLastMemberReviewPresentationTests \
+            LastMemberPhotoReviewSourceWallTests \
+            MeshNetworkManagerTests \
+            MeshRoutedAckStageTests \
+            MeshRoutedDeliveryAckTests \
+            MeshRoutedDeliveryDurabilityTests \
+            MeshRoutedDeliveryIngestTests \
+            ModerationTests \
+            PeerNameDisplayTests \
+            PhotoDirectoryIsolationTests \
+            ProximityRunPolicyFunnelTests \
+            RoutedShareRefusalCopyTests \
+            SealedPayloadFramingTests \
+            SessionMessageTests \
+            SessionMessageUnreadTests \
+            SessionPhotoReviewCoordinatorTests \
+            SessionPhotoReviewDoor3Tests \
+            SessionPhotoReviewOverlayTests
 
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
@@ -1272,9 +1456,56 @@ jobs:
         # 0 skipped, no `Restarting after unexpected exit` line. 1226 + 125 (the thirteen) + 2
         # (CIGateSelectorBoundaryTests' two new cells) = 1353 is the ARITHMETIC CHECK, never the
         # number.
+        # At ProximityKit plan step A0.5.0 (2026-10-04), before anything A0.5 moves, no suite joined or
+        # left, so the NAME count stays 154 and CIGateSelectorBoundaryTests' entry is untouched. The cells
+        # the rounds since 2026-09-24 added to suites already on this line had never been measured into
+        # the floor (A0.4's runs of this list read 1367 tests in 154 suites):
+        # RAISED 1353 -> 1367 at A0.5.0, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "Test run with 1367 tests in 154 suites passed after
+        # 173.059 seconds", 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT
+        # 1367: passed. Run once more at 1367 without MeshHostPinTests: 1366 ran and the floor refused
+        # it. A0.4's 1367 over the same 154 names is the cross-check, never the source.
+        # At A0.5.1 no suite joined or left, so the NAME count stays 154; two suites here gained a cell:
+        # RAISED 1367 -> 1369 at A0.5.1, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "Test run with 1369 tests in 154 suites passed after
+        # 180.109 seconds" (MeshRoutedTypeRegistryConsumerTests 10 -> 11 and MeshSessionHeartTests
+        # 15 -> 16, no other suite moved), 0 failed, 0 skipped, no `Restarting after unexpected exit`
+        # line. Re-run AT 1369: passed. Run once more at 1369 without MeshHostPinTests: 1368 ran and the
+        # floor refused it. 1367 + 1 (MeshRoutedTypeRegistryConsumerTests' cell holding
+        # isRoutedTypeRegistered(_:) to the shipping registry and to each narrowed one) + 1
+        # (MeshSessionHeartTests' cell holding canSendSessionHeart(toFingerprint:) to the engine's
+        # isAddressableRoutedRecipient(_:)) = 1369 is the ARITHMETIC CHECK, never the source.
+        # At A0.5.2 no suite joined or left, so the NAME count stays 154; one suite here lost a cell:
+        # LOWERED 1369 -> 1368 at A0.5.2, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run after the strict build-for-testing (WALL CHECK PASSED), read off
+        # its own result bundle: "Test run with 1368 tests in 154 suites passed after 175.259 seconds"
+        # (MeshRoutedTypeRegistryTests 19 -> 18, no other suite moved), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, and the floor of 1369 refused it. ONE cell LEFT,
+        # deliberately: MeshRoutedTypeRegistryTests' theCanonicalStoreSlotNamesTheThreeP6Stores, the
+        # raw-value pin of MeshRoutedCanonicalStore, deleted with that type when the routed-type row's
+        # canonical-store column became its content scope and the projection began looking a
+        # registered handler up by token. It had to go: the type it pinned no longer exists, and its
+        # raw values were never on the wire or at rest (the enum was never encoded or stored; the three
+        # senders' token lookup, the projection's two filters and its dispatch switch read it in
+        # memory, and every one of those reads went with it), so no byte pin left with it. The
+        # column's replacement is pinned per row by everyFieldOfEveryEntryIsSet in the same suite.
+        # Re-run AT 1368: passed. Run once more at 1368 without MeshHostPinTests: 1367 ran and the
+        # floor refused it. 1369 - 1 (the deleted pin) = 1368 is the ARITHMETIC CHECK, never the source.
+        # At A0.5.9 no suite joined or left, so the NAME count stays 154; one suite here gained a cell:
+        # RAISED 1368 -> 1369 at A0.5.9, MEASURED on a Mac, 2026-10-09 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "Test run with 1369 tests in 154 suites passed after
+        # 175.389 seconds" (MeshRoutedLockedDeviceTests 27 -> 28, no other suite moved), 0 failed,
+        # 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 1369: passed. Run once more at
+        # 1369 without MeshHostPinTests: 1368 ran and the floor refused it. 1368 + 1 (W2's FernletSocial
+        # half: no FernletSocial file spells an engine-only seam or a gating predicate, and a feature's
+        # arm stands only in its pinned home, called once from inside its handler's write) = 1369 is the
+        # ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1353 \
+          Scripts/run-gated-suites.sh mesh-batteries 1369 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

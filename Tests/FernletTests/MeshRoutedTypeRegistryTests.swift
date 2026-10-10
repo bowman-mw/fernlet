@@ -34,6 +34,7 @@ import Testing
 import FernletDomainModel
 import FernletFoundation
 import PrivateMediaStore
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -49,6 +50,11 @@ enum MeshRoutedTypeRegistryFixtures {
     static let probeToken = "fernlet.mesh.routed-type.p6-probe.v1"
 
     /// The probe's row: photo-shaped, so nothing about the flow it drives is heart-specific.
+    ///
+    /// Photo-shaped is columns only. Since plan step A0.5.2 a row names no store and the projection
+    /// looks a handler up by token, so the probe has no handler (an item of it reaching the
+    /// projection logs `noDispatchArm` and stays for now) and no longer shadows the photo row's
+    /// token for the sender or the enumeration, as a lowest-token-per-store lookup let it.
     static func probeEntry(
         maxItemByteCount: UInt64? = nil,
         destinations: MeshRoutedDestinationSemantics = .fullRosterAtCreation,
@@ -62,7 +68,7 @@ enum MeshRoutedTypeRegistryFixtures {
             relayRetention: .originRetainsUntilDeparture,
             finalAck: finalAck,
             expiry: .meshHardDeadlinePlusGrace,
-            canonicalStore: .friendPhotoWall
+            contentScope: .persistent
         )
     }
 
@@ -102,7 +108,7 @@ enum MeshRoutedTypeRegistryFixtures {
                 relayRetention: row.relayRetention,
                 finalAck: row.finalAck,
                 expiry: row.expiry,
-                canonicalStore: row.canonicalStore
+                contentScope: row.contentScope
             )
         })
     }
@@ -214,10 +220,12 @@ struct MeshRoutedTypeRegistryTests {
     /// the registry safe to become the single source without moving any behaviour.
     @Test func everyFieldOfEveryEntryIsSet() throws {
         let registry = MeshRoutedTypeRegistry.increment1
-        let stores: [String: MeshRoutedCanonicalStore] = [
-            MeshRoutedTypeToken.photo: .friendPhotoWall,
-            MeshRoutedTypeToken.tempMessage: .sessionTranscript,
-            MeshRoutedTypeToken.heart: .heartLedger
+        // The content scope replaced the canonical-store column at plan step A0.5.2: a message
+        // belongs to its session's transcript, a photo and a heart outlive the session.
+        let scopes: [String: MeshRoutedContentScope] = [
+            MeshRoutedTypeToken.photo: .persistent,
+            MeshRoutedTypeToken.tempMessage: .session,
+            MeshRoutedTypeToken.heart: .persistent
         ]
         let stages: [String: MeshRoutedAckStage] = [
             MeshRoutedTypeToken.photo: .durableRecipientStorage,
@@ -228,9 +236,10 @@ struct MeshRoutedTypeRegistryTests {
         // body's, and item 6 the HEART row to its own — a header-only body, so the formula's payload
         // term is zero. Every row is now narrowed; none sits at the shared wire bound. Each is read
         // from the type that owns it — a literal here would be the second copy the formula exists to
-        // prevent.
+        // prevent. The photo row's formula lives in its row since plan step A0.5.4, and the row is
+        // the registry's widest: the bound the manager holds.
         let caps: [String: UInt64] = [
-            MeshRoutedTypeToken.photo: UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+            MeshRoutedTypeToken.photo: registry.maxItemByteCount,
             MeshRoutedTypeToken.tempMessage: UInt64(MeshRoutedTextBody.maxSealedBlobByteCount),
             MeshRoutedTypeToken.heart: UInt64(MeshRoutedHeartBody.maxSealedBlobByteCount)
         ]
@@ -248,7 +257,7 @@ struct MeshRoutedTypeRegistryTests {
             #expect(entry.destinations == semantics[token], "\(token)")
             #expect(entry.relayRetention == .originRetainsUntilDeparture, "\(token)")
             #expect(entry.expiry == .meshHardDeadlinePlusGrace, "\(token)")
-            #expect(entry.canonicalStore == stores[token], "\(token)")
+            #expect(entry.contentScope == scopes[token], "\(token)")
             #expect(entry.finalAck == stages[token], "\(token)")
         }
     }
@@ -306,7 +315,7 @@ struct MeshRoutedTypeRegistryTests {
             relayRetention: .relayInFlight,
             finalAck: .durableRecipientStorage,
             expiry: .meshHardDeadlinePlusGrace,
-            canonicalStore: .friendPhotoWall
+            contentScope: .persistent
         )
         let registry = MeshRoutedTypeRegistry(entries: [row])
         #expect(registry.tokens.isEmpty)
@@ -325,11 +334,11 @@ struct MeshRoutedTypeRegistryTests {
         #expect(MeshRoutedTypeRegistry(entries: [zero]).tokens.isEmpty)
     }
 
-    /// The declared slot, pinned. Read by P6's dispatch, by nothing today.
-    @Test func theCanonicalStoreSlotNamesTheThreeP6Stores() {
-        #expect(MeshRoutedCanonicalStore.allCases.map(\.rawValue)
-                == ["friendPhotoWall", "sessionTranscript", "heartLedger"])
-    }
+    // `theCanonicalStoreSlotNamesTheThreeP6Stores`, the raw-value pin of the canonical-store
+    // column, was deleted at plan step A0.5.2 with the column: a row names no store since then (the
+    // projection looks a registered handler up by token), and the content scope that replaced it is
+    // pinned per row by `everyFieldOfEveryEntryIsSet`. Its raw values were never on the wire or at
+    // rest, so no byte pin went with it.
 
     // MARK: - P6 item 3: the first narrowed cap, and it is a formula
 
@@ -341,11 +350,11 @@ struct MeshRoutedTypeRegistryTests {
             MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.photo)
         )
         let formula = PrivateMediaStore.maxIncomingPhotoBytes
-            + MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
+            + MeshRoutedPhotoBody.maxFramedHeaderByteCount
             + MeshRoutedItemSealFormat.overheadByteCount
         #expect(photo.maxItemByteCount == UInt64(formula),
                 "the row is not the payload bound plus the framing it rides under")
-        #expect(photo.maxItemByteCount == UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount),
+        #expect(photo.maxItemByteCount == MeshRoutedTypeRegistry.increment1.maxItemByteCount,
                 "the manifest door's cap and the projection's resident-blob guard must be one number")
         #expect(photo.maxItemByteCount < MeshRoutedManifestFormat.maxContentByteCount,
                 "a row still at the wire bound is not a narrowed cap")
@@ -382,12 +391,12 @@ struct MeshRoutedTypeRegistryTests {
     /// one drain answer carries up to `MeshRoutedDrainBounds.increment1.maxItems` items and a
     /// burst-5 bucket would flood-drop the rest of a single legitimate backlog.
     @Test func theProjectionQuotasAreBoundedOnBothAxes() {
-        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession == 200)
-        #expect(MeshNetworkManager.maxPhotosPerSenderPerSession == 10)
-        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession == 200)
+        #expect(MeshSessionPhotos.maxPhotosPerSenderPerSession == 10)
+        #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession
                     > MeshRoutedDrainBounds.increment1.maxItems,
                 "a quota below one drain answer's item allowance would refuse a legitimate backlog")
-        #expect(MeshNetworkManager.maxTextMessagesPerSenderPerSession
+        #expect(MeshSessionChat.maxTextMessagesPerSenderPerSession
                     <= SessionMessageStore.maxSeenIDs,
                 "and it stays inside the dedup set, so a spent quota is never reached via a forgotten id")
         #expect(MeshRoutedStoreFormat.maxItems == 1024,
@@ -404,11 +413,11 @@ struct MeshRoutedTypeRegistryTests {
     @Test func theHeaderAllowanceCoversAMaximalHeader() throws {
         let json = try MeshRoutedItemBodyFormat.headerEncoder()
             .encode(MeshRoutedTypeRegistryFixtures.maximalPhotoHeader())
-        #expect(json.count <= MeshRoutedItemBodyFormat.maxHeaderJSONByteCount / 8,
+        #expect(json.count <= MeshRoutedPhotoBody.maxHeaderJSONByteCount / 8,
                 "the widest header leaves under the documented 8×: \(json.count) bytes")
-        #expect(MeshRoutedItemBodyFormat.maxFramedHeaderByteCount
+        #expect(MeshRoutedPhotoBody.maxFramedHeaderByteCount
                 == MeshRoutedItemBodyFormat.headerLengthPrefixByteCount
-                + MeshRoutedItemBodyFormat.maxHeaderJSONByteCount)
+                + MeshRoutedPhotoBody.maxHeaderJSONByteCount)
     }
 
     /// The formula, end to end: a maximal photo body — the photo wall's entire plaintext bound under
@@ -439,10 +448,11 @@ struct MeshRoutedTypeRegistryTests {
         #expect(UInt64(blob.count) <= photo.maxItemByteCount,
                 "a photo the wall would accept cannot be minted under its own row")
         #expect(photo.maxItemByteCount - UInt64(blob.count)
-                == UInt64(MeshRoutedItemBodyFormat.maxHeaderJSONByteCount - json.count),
+                == UInt64(MeshRoutedPhotoBody.maxHeaderJSONByteCount - json.count),
                 "the gap to the cap is not the header allowance this header did not spend")
 
-        let padding = MeshRoutedItemSealFormat.maxPlaintextByteCount
+        let padding = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount)
+            - MeshRoutedItemSealFormat.overheadByteCount
             - (MeshRoutedItemBodyFormat.headerLengthPrefixByteCount + json.count)
         let atTheCap = try Self.seal(
             try MeshRoutedPhotoBody(
@@ -452,7 +462,8 @@ struct MeshRoutedTypeRegistryTests {
         #expect(UInt64(atTheCap.count) == photo.maxItemByteCount,
                 "the largest plaintext the sealer takes must seal to exactly the row's cap")
 
-        let overBound = MeshRoutedItemSealFormat.maxPlaintextByteCount + 1
+        let overBound = Int(MeshRoutedTypeRegistry.increment1.maxItemByteCount)
+            - MeshRoutedItemSealFormat.overheadByteCount + 1
         #expect(throws: MeshRoutedItemSealError.plaintextTooLarge(byteCount: overBound)) {
             _ = try Self.seal(Data(repeating: 0x5A, count: overBound))
         }
@@ -744,6 +755,41 @@ struct MeshRoutedTypeRegistryConsumerTests {
                 "an unregistered type was acknowledged")
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: inbound.key) == nil,
                 "the verifier admitted a token the SAME registry refuses at the ack pass")
+    }
+
+    /// The sender's registry question reads the same seam (plan step A0.5.1, S6):
+    /// `isRoutedTypeRegistered(_:)` answers yes for each of the three shipping tokens and no for the
+    /// reserved control token and the probe, and under each narrowed registry it agrees with that
+    /// registry row for row — so a sender that asks before it mints refuses exactly what a narrowed
+    /// build refuses at every other door.
+    @Test func theRegisteredTypeQueryAgreesWithTheRegistry() {
+        let store = makeTestStore()
+        defer { withExtendedLifetime(store) {} }   // `MeshNetworkManager.store` is `unowned`
+        let manager = MeshNetworkManager(store: store)
+        let tokens = [MeshRoutedTypeToken.photo, MeshRoutedTypeToken.tempMessage, MeshRoutedTypeToken.heart]
+        // R2: bounded by the three shipping rows.
+        for token in tokens {
+            #expect(manager.isRoutedTypeRegistered(token), "\(token) is a shipping row")
+            #expect(manager.isRoutedTypeRegistered(token)
+                    == (MeshRoutedTypeRegistry.increment1.entry(for: token) != nil))
+        }
+        #expect(!manager.isRoutedTypeRegistered(MeshRoutedTypeToken.control), "the reserved token has no row")
+        #expect(!manager.isRoutedTypeRegistered(MeshRoutedTypeRegistryFixtures.probeToken))
+        // R2: bounded by the three shipping rows, twice.
+        for dropped in tokens {
+            let narrowed = MeshRoutedTypeRegistryFixtures.narrowed(dropping: dropped)
+            manager.routedTypeRegistryForTesting = narrowed
+            #expect(!manager.isRoutedTypeRegistered(dropped), "a narrowed build must mint nothing for \(dropped)")
+            for token in tokens {
+                #expect(manager.isRoutedTypeRegistered(token) == (narrowed.entry(for: token) != nil),
+                        "the query must read the narrowed registry, not the shipping one")
+            }
+        }
+        manager.routedTypeRegistryForTesting = nil
+        // R2: bounded by the three shipping rows.
+        for token in tokens {
+            #expect(manager.isRoutedTypeRegistered(token), "clearing the override must restore \(token)")
+        }
     }
 }
 

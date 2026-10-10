@@ -27,6 +27,7 @@
 import Foundation
 import Testing
 import FernletFoundation
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -52,8 +53,12 @@ final class MeshHostPinProbe {
     /// The same store, weakly: how a cell observes whether anything still pins it.
     private(set) weak var weakHost: FernletStore?
 
-    /// The manager under test.
-    private(set) var manager: MeshNetworkManager?
+    /// Fernlet's mesh composition, which built the manager under test and owns it; the one strong
+    /// reference ``releaseManager()`` drops.
+    private var features: FernletMeshFeatures?
+
+    /// The manager under test: ``features``' mesh, until ``releaseManager()``.
+    var manager: MeshNetworkManager? { features?.mesh }
 
     /// The recording endpoint seated on the manager's one slot.
     let channel: FakePeerTransport
@@ -75,7 +80,7 @@ final class MeshHostPinProbe {
         expectedDisplayName = store.resolvedProximityDisplayName
         host = store
         weakHost = store
-        manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
     }
 
     /// Seats one COMMITTED slot on the recording endpoint, so the beacon fan-out has somewhere to send
@@ -97,9 +102,9 @@ final class MeshHostPinProbe {
         host = nil
     }
 
-    /// Drops the manager, so a cell can watch the pin dissolve.
+    /// Drops the manager, with the composition that owns it, so a cell can watch the pin dissolve.
     func releaseManager() {
-        manager = nil
+        features = nil
     }
 
     /// The sender display name carried by every frame the manager put on the wire.

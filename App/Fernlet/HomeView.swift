@@ -1,4 +1,5 @@
 import ProximityKit
+import FernletSocial
 import HealthKit
 import LocalPersistence
 import FernletFoundation
@@ -437,7 +438,7 @@ struct HomeView: View {
                             // front tile (highest zIndex) keeps its caption there.
                             caption: showsAllPolaroidCaptions || index == finalIndex ? tile.caption : "",
                             rotation: tile.rotation,
-                            imageData: tile.photoID.flatMap { store.meshNetworkManager.thumbnailData(forPhotoID: $0) },
+                            imageData: tile.photoID.flatMap { store.meshFeatures.photos.thumbnailData(forPhotoID: $0) },
                             // The original print, restored: at the 57×50 the 92pt strip allowed,
                             // the four tiles stopped overlapping and read as swatches rather than
                             // photos. 104 wide against the 90pt gap between positions is what

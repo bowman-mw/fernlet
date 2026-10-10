@@ -8,8 +8,9 @@ import FernletFoundation
 
 /// On-device, at-rest-encrypted store for friend/mesh media (the photowall cache).
 ///
-/// This is the peer-photo half of the module: `MeshNetworkManager` (in `ProximityKit`) owns one
-/// instance as its photowall cache, persisting the photos friends share over the proximity mesh.
+/// This is the peer-photo half of the module: the session photos (`MeshSessionPhotos`, in
+/// `FernletSocial`) own one instance as their photowall cache, persisting the photos friends share
+/// over the proximity mesh.
 /// Self-contained: it depends only on Foundation/CryptoKit/ImageIO and an injected
 /// ``PrivateMediaKeyProviding``. It shares files with nothing else and is a sealed S3 store
 /// (spec §3 — `PrivateMediaStore` must not be importable by AI providers; the SPM dependency
@@ -36,7 +37,7 @@ import FernletFoundation
 ///   empty wall, which is why ``loadIndex()`` reports a deferred read instead of an empty array.
 ///
 /// Concurrency: a plain nonisolated value type with no internal locking. All state is on disk;
-/// in practice every instance is confined to `MeshNetworkManager`'s main actor. The default
+/// in practice every instance is confined to `MeshSessionPhotos`' main actor. The default
 /// ``KeychainPrivateMediaKeyProvider`` caches its key without synchronization, so instances
 /// sharing a provider must share an isolation domain.
 public struct PrivateMediaStore {
@@ -54,11 +55,12 @@ public struct PrivateMediaStore {
     /// because a tiny, highly-compressed image can still decode to a multi-gigabyte bitmap.
     ///
     /// `public` since P6 item 3 so the routed mesh path can **derive** its per-type ciphertext cap
-    /// from this one number instead of restating it: `ProximityKit` owns this store as its
-    /// photowall cache and already depends on the module, and the S3 wall it sits behind is about
-    /// which targets may import `PrivateMediaStore` at all (the AI providers may not) — never about
-    /// the visibility of a byte bound inside it. Two restatements of "10 MB" that could drift is the
-    /// larger risk; see `MeshRoutedItemSealFormat.maxResidentBlobByteCount`.
+    /// from this one number instead of restating it: `FernletSocial` owns this store as its
+    /// photowall cache (its `MeshSessionPhotos`) and depends on the module, and the S3 wall it sits
+    /// behind is about which targets may import `PrivateMediaStore` at all (the AI providers may
+    /// not) — never about the visibility of a byte bound inside it. Two restatements of "10 MB" that
+    /// could drift is the larger risk; see the routed photo row in FernletSocial's
+    /// `FernletRoutedTypes`, which holds the formula.
     public static let maxIncomingPhotoBytes = 10 * 1024 * 1024  // 10 MB
     // A small, highly-compressed JPEG can decode to a multi-gigabyte bitmap, so the byte cap
     // above is not sufficient. Reject by pixel dimensions/area before the full-resolution bytes
@@ -117,7 +119,7 @@ public struct PrivateMediaStore {
     /// Loads the cached photo metadata, newest first, with image bytes stripped.
     ///
     /// Convenience over ``loadIndex()`` for callers that have nothing to do about a deferred read:
-    /// both failure classes read as an empty wall. `MeshNetworkManager` — the one owner that also
+    /// both failure classes read as an empty wall. `MeshSessionPhotos` — the one owner that also
     /// SAVES the index — uses ``loadIndex()`` instead, because an empty array it cannot tell apart
     /// from a locked keychain is exactly what a later save would write over the real index.
     /// - Returns: The index entries (metadata only; `imageData` is nil on every payload).

@@ -25,11 +25,13 @@
 //   claim is therefore witnessed by counting `onHeartJudgedForTesting` firings per gift, and
 //   `aTwoHeartBatchSeparatesTheBatchCounterFromThePerGiftCount` is the fixture-only cell proving the
 //   two fields really are different questions.
-// - **The ack the wall pins must be the SHIPPING one.** W2's pin scans
-//   `FernletKit/Sources/ProximityKit` only, so a `MeshRoutedHeartAck` a test constructs is invisible
-//   to it — which is why the ceremony cells assert a stored `MeshRecipientReceipt` produced by the
-//   real `commitLocalDelivery`, never an ack value a cell built.
+// - **The ack the wall pins must be the SHIPPING one.** W2's pins scan shipping sources only (the
+//   ack's one construction lives in FernletSocial's `MeshSessionHearts.swift` since plan step
+//   A0.5.10), so a `MeshRoutedHeartAck` a test constructs is invisible to them — which is why the
+//   ceremony cells assert a stored `MeshRecipientReceipt` produced by the real `commitLocalDelivery`,
+//   never an ack value a cell built.
 
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletConnections
 import Foundation
@@ -280,8 +282,8 @@ struct MeshRoutedHeartCeremonyTests {
         rig.commit(1, 0)
         try await rig.settle()
         let ledger = recipientLedger ?? rig.isolatedHeartLedger(now: day)
-        rig.nodes[0].manager.heartLedger = rig.isolatedHeartLedger(now: day)
-        rig.nodes[1].manager.heartLedger = ledger
+        rig.nodes[0].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[1].features.hearts.heartLedger = ledger
         rig.nodes[0].store.setAllowNearbyHearts(true)
         rig.nodes[1].store.setAllowNearbyHearts(true)
         if trustBothWays {
@@ -306,9 +308,9 @@ struct MeshRoutedHeartCeremonyTests {
         let (rig, ledger) = try await founded("heart-live")
         defer { rig.teardown() }
         var judged: [UUID] = []
-        rig.nodes[1].manager.onHeartJudgedForTesting = { judged.append($0.giftID) }
+        rig.nodes[1].features.hearts.onHeartJudgedForTesting = { judged.append($0.giftID) }
         var closeness: [String] = []
-        rig.nodes[1].manager.onHeartReceived = { closeness.append($0) }
+        rig.nodes[1].features.hearts.onHeartReceived = { closeness.append($0) }
 
         let giftID = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "Robin"))
         try await rig.settle()
@@ -354,8 +356,8 @@ struct MeshRoutedHeartCeremonyTests {
                 "the precondition: this really is the half that gave up its own mesh")
 
         let ledger = rig.isolatedHeartLedger(now: day)
-        rig.nodes[yielder].manager.heartLedger = ledger
-        rig.nodes[winner].manager.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[yielder].features.hearts.heartLedger = ledger
+        rig.nodes[winner].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
         rig.nodes[winner].store.setAllowNearbyHearts(true)
         rig.nodes[yielder].store.setAllowNearbyHearts(true)
         rig.trustPeer(at: winner, asSeenFrom: yielder)
@@ -405,7 +407,7 @@ struct MeshRoutedHeartCeremonyTests {
         let (rig, _) = try await founded("heart-dirty", recipientLedger: ledger)
         defer { rig.teardown() }
         var closeness: [String] = []
-        rig.nodes[1].manager.onHeartReceived = { closeness.append($0) }
+        rig.nodes[1].features.hearts.onHeartReceived = { closeness.append($0) }
 
         let giftID = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "Robin"))
         try await rig.settle()
@@ -460,8 +462,8 @@ struct MeshRoutedHeartCeremonyTests {
         ), "the precondition: the gift is stored BEFORE the ceremony runs")
         var closeness: [String] = []
         var judged: [UUID] = []
-        rig.nodes[1].manager.onHeartReceived = { closeness.append($0) }
-        rig.nodes[1].manager.onHeartJudgedForTesting = { judged.append($0.giftID) }
+        rig.nodes[1].features.hearts.onHeartReceived = { closeness.append($0) }
+        rig.nodes[1].features.hearts.onHeartJudgedForTesting = { judged.append($0.giftID) }
 
         rig.openGate(at: 1)
 
@@ -494,8 +496,8 @@ struct MeshRoutedHeartCeremonyTests {
         try #require(ledger.receivedHearts.map(\.id) == [giftID], "the precondition: it was judged")
         var judged: [UUID] = []
         var closeness: [String] = []
-        rig.nodes[1].manager.onHeartJudgedForTesting = { judged.append($0.giftID) }
-        rig.nodes[1].manager.onHeartReceived = { closeness.append($0) }
+        rig.nodes[1].features.hearts.onHeartJudgedForTesting = { judged.append($0.giftID) }
+        rig.nodes[1].features.hearts.onHeartReceived = { closeness.append($0) }
 
         rig.pushGateEdge(at: 1)
         try await rig.settle()
@@ -511,9 +513,9 @@ struct MeshRoutedHeartCeremonyTests {
         let (rig, ledger) = try await founded("heart-unlinked")
         defer { rig.teardown() }
         rig.dropLink(0, 1)
-        #expect(!rig.nodes[0].manager.hasLiveHeartSlot(forFingerprint: rig.nodes[1].fingerprint),
+        #expect(!rig.nodes[0].features.hearts.hasLiveHeartSlot(forFingerprint: rig.nodes[1].fingerprint),
                 "the precondition: no live slot faces the recipient")
-        #expect(rig.nodes[0].manager.canSendSessionHeart(toFingerprint: rig.nodes[1].fingerprint),
+        #expect(rig.nodes[0].features.hearts.canSendSessionHeart(toFingerprint: rig.nodes[1].fingerprint),
                 "but the member is still addressable — that is the unlock")
 
         let giftID = try #require(rig.sendHeartReturningItemID(from: 0, to: 1, name: "Robin"))
@@ -597,8 +599,8 @@ struct MeshRoutedHeartCeremonyTests {
         try await rig.settle()
         var clock = day
         let ledger = rig.isolatedHeartLedger(now: { clock })
-        rig.nodes[1].manager.heartLedger = ledger
-        rig.nodes[0].manager.heartLedger = rig.isolatedHeartLedger(now: day)
+        rig.nodes[1].features.hearts.heartLedger = ledger
+        rig.nodes[0].features.hearts.heartLedger = rig.isolatedHeartLedger(now: day)
         rig.nodes[0].store.setAllowNearbyHearts(true)
         rig.nodes[1].store.setAllowNearbyHearts(true)
         rig.trustPeer(at: 0, asSeenFrom: 1)
@@ -715,10 +717,11 @@ struct MeshRoutedHeartCeremonyTests {
         let projectable = rig.nodes[1].manager.projectableRoutedTypeTokensForTesting
         #expect(!projectable.contains(MeshRoutedTypeToken.heart),
                 "a heart's plaintext pass is its ack ceremony, not a projection")
-        // The set is exactly the two tokens that HAVE an arm, and `.sessionTranscript` is further
-        // conditional on `isChatAllowed` — off in this fixture's store, which is why the claim is
-        // written as a subset plus the heart's absence rather than as a count. A later tidy-up that
-        // added `.heartLedger` would break the first assertion and this one together.
+        // The set is at most the two tokens whose rows have a registered projection handler, and the
+        // text row's is further conditional on the chat's `isChatAllowed` (its handler's
+        // `isProjectable`) — off in this fixture's store, which is why the claim is written as a
+        // subset plus the heart's absence rather than as a count. A later change that made the heart
+        // row projectable would break the first assertion and this one together.
         #expect(projectable.isSubset(of: [MeshRoutedTypeToken.photo, MeshRoutedTypeToken.tempMessage]),
                 "only the two stores with a dispatch arm may be projectable")
         #expect(projectable.contains(MeshRoutedTypeToken.photo), "and the photo arm really is one")
@@ -758,7 +761,7 @@ struct MeshRoutedHeartCeremonyTests {
     /// The app's copy fork is exhaustive over the frozen token, and the package composes no sentence.
     @Test func everyHeartFailureCauseHasLocalizedCopy() throws {
         // R2: bounded by the enum's cases.
-        for cause in MeshNetworkManager.SessionHeartFailure.allCases {
+        for cause in MeshSessionHearts.SessionHeartFailure.allCases {
             let message: LocalizedStringKey = SessionHeartStatusCopy.message(
                 cause, recipientName: "Robin Jones"
             )
@@ -770,13 +773,13 @@ struct MeshRoutedHeartCeremonyTests {
                 "an unloaded ledger is a different fact from a live cooldown — the §2.1 bug fix")
         #expect(SessionHeartStatusCopy.line(.idle) == nil)
         #expect(SessionHeartStatusCopy.line(.sent(recipientName: "Robin")) != nil)
-        let manager = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
+        let hearts = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/FernletSocial/HeartSharing/MeshSessionHearts.swift")
         )
-        #expect(!manager.contains("some warmth"),
+        #expect(!hearts.contains("some warmth"),
                 "the heart sentences are composed in the app, never in the package")
-        #expect(!manager.contains("no heart was sent"))
-        #expect(manager.contains("sessionHeartState = .failed(cause, recipientName:"),
+        #expect(!hearts.contains("no heart was sent"))
+        #expect(hearts.contains("sessionHeartState = .failed(cause, recipientName:"),
                 "the package publishes its frozen token instead")
     }
 
@@ -785,7 +788,7 @@ struct MeshRoutedHeartCeremonyTests {
     /// "a failure sentence, never the success one" assertion was still green.
     ///
     /// `.storeRefused` maps to `.holdingAllItCan` and `.storeUnavailable` to `.storageUnreachable`
-    /// (`MeshNetworkManager.consumeSessionHeart`), so the user was told the storage was unreachable
+    /// (`MeshSessionHearts.consumeSessionHeart`), so the user was told the storage was unreachable
     /// when the store was full and that Fernlet was holding all it can when the store was
     /// unreadable: the audit line and the sentence disagreeing about the same failure.
     ///
@@ -803,7 +806,7 @@ struct MeshRoutedHeartCeremonyTests {
     /// suite (`LocalizationBoundaryTests` stays the authority on that).
     @Test func everyHeartFailureCauseHasItsOwnSentence() {
         let name = "Robin"
-        let table: [(MeshNetworkManager.SessionHeartFailure, LocalizedStringKey)] = [
+        let table: [(MeshSessionHearts.SessionHeartFailure, LocalizedStringKey)] = [
             (.heartsOff, "Turn on nearby hearts to send \(name) some warmth."),
             (.ledgerUnavailable,
              "Fernlet couldn't reach its own notes just now — unlock and reopen to send hearts."),
@@ -819,7 +822,7 @@ struct MeshRoutedHeartCeremonyTests {
             (.holdingAllItCan, "Fernlet is holding all it can, so no heart was sent.")
         ]
         #expect(Set(table.map(\.0.rawValue))
-                == Set(MeshNetworkManager.SessionHeartFailure.allCases.map(\.rawValue)),
+                == Set(MeshSessionHearts.SessionHeartFailure.allCases.map(\.rawValue)),
                 "a new cause owes a row here, not just a sentence")
         // R2: bounded by the table.
         for (cause, expected) in table {
@@ -893,11 +896,12 @@ extension MeshFoundingRig {
             .block(signingPublicKey: identities[index].localSigningPublicKey)
     }
 
-    /// Sends one heart through the real public API, under the pinned install binding (the founding's
-    /// own seal and the routed store's writes both need it).
+    /// Sends one heart through the real public API, the node's session hearts' (FernletSocial's since
+    /// plan step A0.5.10), under the pinned install binding (the founding's own seal and the routed
+    /// store's writes both need it).
     func sendHeart(from node: Int, to friend: ProximityTrustedPeerRecord) {
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            nodes[node].manager.sendSessionHeart(to: friend)
+            nodes[node].features.hearts.sendSessionHeart(to: friend)
         }
     }
 

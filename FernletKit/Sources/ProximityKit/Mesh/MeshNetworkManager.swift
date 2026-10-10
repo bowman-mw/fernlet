@@ -3,59 +3,27 @@ import Observation
 import UIKit
 import CryptoKit
 import FernletDomainModel
-import FernletFoundation
-import PrivateMediaStore
-
-// MARK: - Supporting types
-
-/// One tile on the home photo wall: a single photo, or an aggregated session carousel with its
-/// chosen cover.
-///
-/// Derived on demand by `MeshNetworkManager.photoWallPosts` from the cached photo metadata plus
-/// the wall preferences (aggregation, covers, favorites); never persisted itself.
-public struct FriendPhotoWallPost: Identifiable {
-    public let id: UUID
-    public let session: FriendPhotoSessionMetadata?
-    public let photos: [FriendPhotoPayload]
-    public let coverPhoto: FriendPhotoPayload
-
-    public init(
-        id: UUID,
-        session: FriendPhotoSessionMetadata?,
-        photos: [FriendPhotoPayload],
-        coverPhoto: FriendPhotoPayload
-    ) {
-        self.id = id
-        self.session = session
-        self.photos = photos
-        self.coverPhoto = coverPhoto
-    }
-
-    public var isCarousel: Bool { photos.count > 1 }
-}
-
-/// Persisted photo-wall preferences: which sessions are aggregated into carousels, their cover
-/// photos, and the per-session favorite.
-///
-/// Loaded/saved through the shared ``JSONSidecarFile`` helper (`MeshPhotoWallPreferences.json`,
-/// `.completeFileProtection`); lives beside the photo cache, never in the synced snapshot. A
-/// failed load falls back to empty preferences; a failed save is silently dropped — wall
-/// cosmetics, not data of record.
-private struct FriendPhotoWallPreferences: Codable, Equatable {
-    var aggregatedSessionIDs: Set<UUID> = []
-    var coverPhotoIDsBySession: [UUID: UUID] = [:]
-    var favoritePhotoIDsBySession: [UUID: UUID] = [:]
-}
 
 // MARK: - MeshNetworkManager
 
-/// The friend-mesh session manager — the largest orchestrator in the subsystem. Runs the
-/// `fernlet-friend` radio, forms UWB dwell-committed sessions (a mesh is **founded at the first
-/// commit**: descriptor, membership ledger, founder admission, ceiling and state machine, on both
-/// halves of a pair — see ``foundMesh(_:now:)`` and ``yieldsNewbornMesh(_:to:from:)``),
-/// and hosts every feature that rides the mesh: disposable-camera photos, the clothing shop,
-/// live-session chat, in-session hearts, moderation relay, fuzzy friend state, Group Activities,
-/// the QR verification ceremony, and the post-session keep-as-friend review.
+/// The friend-mesh session manager — the routed mesh engine, and the largest orchestrator in the
+/// subsystem. Runs the `fernlet-friend` radio, forms UWB dwell-committed sessions (a mesh is
+/// **founded at the first commit**: descriptor, membership ledger, founder admission, ceiling and
+/// state machine, on both halves of a pair — see ``foundMesh(_:now:)`` and
+/// ``yieldsNewbornMesh(_:to:from:)``), runs the QR verification ceremony and the session roster the
+/// post-session keep-as-friend review is built from, and carries the payloads and routed items of
+/// the features its host plugs in. The features are the host's — for Fernlet, FernletSocial's mesh
+/// composition (`FernletMeshFeatures`: the session photos and their review, the clothing shop,
+/// live-session chat, in-session hearts, the moderation relay, fuzzy friend state and Group
+/// Activities) — and so are the routed rows they ride (``ProximityHost/meshRoutedTypeEntries``). A
+/// feature plugs in through the engine's seams: the payload token door
+/// (``registerPayloadHandler(forToken:handler:)``) and the captured-slot send
+/// (``sendFeatureEnvelope(_:encodable:via:sealed:)``), the routed origination door
+/// (``originateRoutedItem(body:typeToken:itemID:audience:now:)``), one projection handler or ledger
+/// judge per routed row (``registerRoutedProjectionHandler(_:forToken:)``,
+/// ``registerRoutedLedgerJudge(_:forToken:)``), the capability-list provider
+/// (``localCapabilitiesProvider``), the vouch-list exchange (``vouchListExchange``) and the session
+/// observer (``sessionObserver``).
 ///
 /// Structure: one shared radio — held through `MeshTransportSession`; `NetworkMeshSession` since
 /// the MC→QUIC cutover, and the only radio in the tree since the deletion round — feeds per-peer
@@ -65,7 +33,7 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// capped (3 active + 2 lightweight, ranked by
 /// stable UWB distance with hysteresis-guarded overflow eviction) and a symmetric `sid`
 /// comparison picks the single inviter of a mutually-discovered pair. Core mesh-control payloads
-/// are handled in the dispatch switch; feature payloads go through the Phase-1 registry, whose
+/// are handled in the dispatch switch; feature payloads go through the payload registry, whose
 /// committed-slot gate (`slot.fingerprint != nil`) is the security boundary — the coordinator
 /// dispatches with a merely-pending identity and no state gate.
 ///
@@ -73,25 +41,21 @@ private struct FriendPhotoWallPreferences: Codable, Equatable {
 /// which fires on every Social-tab entry); the SESSION-END moment — ``isSessionLive`` going false,
 /// which since P6 item 2 means the **mesh** ending (End Session, a termination or completed
 /// departure, the five-minute discovery timeout with no peer, or slot loss while no mesh is held)
-/// and never a link blip — promotes the roster AND the session's unreviewed photos into
-/// `pendingFriendReview`, opens the clothing-shop window, and clears the chat transcript. Session
-/// photos are never on the wall before the person chooses (2026-09-30): each one — taken here or
-/// received — is HELD in the sealed pending corpus (`PendingSessionPhotoStore`) from the moment it
-/// exists, the ending moves it in memory only, a relaunch rebuilds the review from that corpus, and
-/// only the answer copies kept photos to the wall. `isInSession` is the surface question, ``hasCommittedPeer``
-/// the "is there a peer right now" question, and ``isSessionLive`` the lifecycle one; all three are
-/// read and they are not interchangeable. Phase-3 group crypto: a lowest-fingerprint coordinator election, a 20 s beacon,
-/// and a 15-minute key rotation distribute the ``MeshGroupKey`` pairwise-wrapped to
-/// handshake-verified KA keys; closed-mode metadata and epoch ≥ 1 photos ride AES-GCM under it.
-/// Chosen photos persist metadata-only in the `PrivateMediaStore`-backed wall (bytes on disk,
-/// rehydrated on demand) with per-sender send/receive quotas; unchosen ones only in the pending
-/// corpus, whose answered tombstones (origin + item id) refuse a routed re-delivery before decrypt.
+/// and never a link blip — drains the session roster into the ending, advances the session-content
+/// generation and tells the session observer, whose host's features act on it (for Fernlet: the
+/// review promotion with the session's unreviewed photos, the clothing-shop window, the chat
+/// transcript's drop and the session hearts' reset). `isInSession` is the surface question,
+/// ``hasCommittedPeer`` the "is there a peer right now" question, and ``isSessionLive`` the
+/// lifecycle one; all three are read and they are not interchangeable. Phase-3 group crypto: a
+/// lowest-fingerprint coordinator election, a 20 s beacon, and a 15-minute key rotation distribute
+/// the ``MeshGroupKey`` pairwise-wrapped to handshake-verified KA keys; closed-mode metadata rides
+/// AES-GCM under it. A routed item rides under its own content key, wrapped per recipient.
 ///
-/// Capabilities (`localCapabilities()`) gate every optional feature per peer, including the 13+
-/// chat age gate — enforced at advertisement, send, AND receive. `wipeIdentityForDeleteAll` is
-/// this manager's leg of the delete-all seam, and `purgeHeldSessionPhotosForDeleteAll` the pending
-/// corpus's. Memory-only session state everywhere except the photo wall, the pending corpus, wall
-/// preferences, and the activity sidecar — none of it synced.
+/// Capabilities (`localCapabilities()`: the host's list, through its provider) tell a peer which
+/// of the host's optional features this device runs. `wipeIdentityForDeleteAll` and
+/// ``beginPrivacyWipe()`` are this manager's legs of the delete-all seam; the features' stores'
+/// legs are the host's. Memory-only session state everywhere except the sealed session context
+/// and the routed store — none of it synced.
 /// `@MainActor @Observable`; the app owns start/stop via tab/scene/lock gating.
 @MainActor
 @Observable
@@ -102,172 +66,16 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     public var currentMesh: MeshDescriptor?
     public var pendingAdmissionRequests: [MeshAdmissionRequestPayload] = []
     public var pendingRemovalProposals: [MeshRemovalProposalPayload] = []
-    public var meshPhotos: [FriendPhotoPayload] = []
-    /// Photos taken/received during the current (LIVE) proximity-join session, metadata-only — the
-    /// list the in-camera Develop review snapshots its ids from (and renders through
-    /// ``photosAwaitingAnswer(among:)``, so a photo moved out from under it is still offered).
-    ///
-    /// A memory projection of the sealed pending corpus (2026-09-30): every entry is HELD there
-    /// (``holdSessionPhoto(_:key:live:)``), never on the wall, and its id is the photo's local id.
-    /// It is emptied only by the person's choice (``finishSessionPhotos(keeping:of:)``), by the
-    /// session-end promotion, which MOVES what is left into `pendingFriendReview.photos` without a
-    /// disk write (`promoteSessionToPendingReviewIfSessionEnded()`; `startJoin()` runs the photo
-    /// half unconditionally), and by delete-all (``purgeHeldSessionPhotosForDeleteAll()``).
-    public private(set) var sessionPhotos: [FriendPhotoPayload] = []
     /// Every peer whose handshake COMMITTED during the current session, for the post-session
     /// keep-as-friend prompt (Phase 2, Docs/Proximity-Mesh-Redesign-2026-07-10.md). Unlike
     /// `slots`, entries survive slot teardown — the review fires after the slots are gone: when
-    /// the last committed slot disappears the roster PROMOTES into `pendingFriendReview` (see
-    /// promoteSessionToPendingReviewIfSessionEnded). Reset when a NEW session begins
-    /// (startJoin/startNewMesh via resetSessionRosterForNewSession) or consumed scoped by the
-    /// in-session camera review (consumeRosterEntries). Memory-only key material; never
+    /// the last committed slot disappears the roster is DRAINED into the session's ending
+    /// (`endSessionIfEnded()`), whose observer receives it (``MeshSessionEnd/drainedRoster``; for
+    /// Fernlet, FernletSocial's photo object merges it into its pending review). Reset when a NEW
+    /// session begins (startJoin/startNewMesh via resetSessionRosterForNewSession) or consumed scoped
+    /// by the in-session camera review (consumeRosterEntries). Memory-only key material; never
     /// persisted/synced.
     public private(set) var sessionRoster: [MeshSessionRosterEntry] = []
-    /// The promoted, unconsumed session-end review: keep-as-friend candidates plus the ended
-    /// session's photos still awaiting the keep/discard choice. Set by
-    /// `promoteSessionToPendingReviewIfSessionEnded()` at the session-end moment, by a held photo
-    /// arriving while no session is live, and — photos only — by the launch rebuild from the
-    /// pending corpus (a process kill loses the candidates, never the photos). Cleared only once
-    /// BOTH halves are answered — the candidates by `completeFriendReview(_:)`, the photos by
-    /// ``finishReviewedPhotos(_:keeping:in:)`` — or by delete-all. Views present off this
-    /// observable state (`onChange` + `onAppear` + scene activation) — never off `isInSession`
-    /// view-events. Survives startJoin/startNewMesh by design.
-    public private(set) var pendingFriendReview: MeshFriendReviewBatch?
-    /// Whether a held photo may be drawn and answered right now: the routed access gate is open
-    /// (unlocked, foreground, no duress — the decrypt seam ``reviewThumbnailData(for:)`` obeys), the
-    /// pending index is readable, and the launch reconcile has run (so no photo already kept on the
-    /// wall can be offered again) — or the wall is unreadable with protected data available, the
-    /// persistent case in which the photos are offered with Keep refused rather than never.
-    ///
-    /// A stored, OBSERVED mirror rather than a computed property: two of its three inputs are
-    /// `@ObservationIgnored`, so a view reading a computed form would never re-render on the unlock
-    /// that opens it. Refreshed at every change of those inputs (``refreshHeldPhotosCanBeShown()``).
-    public private(set) var heldPhotosCanBeShown = false
-    /// The friend-mesh clothing shop (Phase 3a): catalogs exchanged during the session + the 1-hour
-    /// post-session browse window. Registered on the payload registry in `init`; lifecycle hooks fire
-    /// from the same moments that drive the friend-review batch — but the two deliberately diverge on
-    /// session FORMATION (the first slot commit, via `noteSlotCommittedForShop`): the review batch
-    /// survives it, the shop window closes. Search starts (startJoin/startNewMesh — which fire on every
-    /// Social-tab entry and scene reactivation) touch NEITHER.
-    public let clothingShop = MeshClothingShop()
-    /// Phase 6 (Group Activities): the state + host-authoritative roster/token brain. Rides this friend
-    /// mesh (no new radio); constructed + wired in `init`. Memory + a device-local sidecar (NEVER synced).
-    public let activities: ProximityActivityManager
-    /// Phase 3b (one-hop moderation relay): the local user's own moderation report rows, supplied by the
-    /// app so ProximityKit signs + hands them to a committed friend; and the sink for peers' verified
-    /// report rows (stored + reconciled by the app).
-    @ObservationIgnored public var ownModerationReportsProvider: (() -> [ModerationLedgerEntry])?
-    @ObservationIgnored public var onModerationRowsReceived: (([ModerationLedgerEntry]) -> Void)?
-    /// Phase 4 (fuzzy state): whether the user opted into sharing (gates the advertised capability); the
-    /// local fuzzy-state + appearance payload to send; and the sink for a friend's received state.
-    @ObservationIgnored public var friendStateEnabledProvider: (() -> Bool)?
-    @ObservationIgnored public var friendStatePayloadProvider: (() -> FriendStatePayload?)?
-    @ObservationIgnored public var onFriendStateReceived: ((String, FriendStatePayload) -> Void)?
-    /// Device-local hearts ledger (received-heart records + the 5-minute per-friend rate limit),
-    /// SHARED with the presence path (TF b19 item 5). In-session hearts ride the live mesh channel
-    /// instead of the fragile on-demand presence connect, but they record through the SAME ledger so
-    /// cooldown + dedup state stay consistent across both transports. Set by the app; `nil` in tests
-    /// that don't exercise hearts (send/receive then no-op).
-    @ObservationIgnored public var heartLedger: ProximityHeartLedger?
-    /// Fired with the friend's fingerprint when an in-session heart is SENT / RECEIVED over the mesh,
-    /// so the app feeds the closeness signal — wired to the SAME closeness hooks the presence path
-    /// uses, so both transports converge (TF b19 item 5).
-    @ObservationIgnored public var onHeartSent: ((String) -> Void)?
-    @ObservationIgnored public var onHeartReceived: ((String) -> Void)?
-    /// Test seam: fires with the ORIGINATION OUTCOME whenever an in-session heart is minted — the
-    /// last statement before the outcome is consumed, so a unit test can assert what the mint said
-    /// without reaching into the store (mirrors `onTextSendForTesting`, and renamed from
-    /// `onSessionHeartSendForTesting` so the retired spelling can be pinned at zero: there is no
-    /// slot on the routed path, so a seam that fired with a slot id could not be re-aimed in place).
-    @ObservationIgnored var onHeartSendForTesting: ((MeshRoutedOriginationOutcome) -> Void)?
-
-    /// Test seam: fires with the ACK whenever a heart's ledger judgement mints evidence (P6 item 6).
-    ///
-    /// It exists because the exactly-once claim has a trap: `MeshHeartCommit.commit` is a batch
-    /// door, the ceremony hands it a one-element batch, and so `MeshHeartCommitOutcome.judgements`
-    /// and `MeshRoutedHeartAck.judgementsForGift` coincide at every shipping call site — an
-    /// invariant written against the batch counter would be green for an accident of this call site
-    /// forever (`MeshRoutedHeartAck` forbids `outcome.judgements == 1` by name for the same reason).
-    /// Counting this seam's firings PER GIFT witnesses the per-gift field, and it is a witness the
-    /// heart ledger's own id-dedup cannot supply: a ledger asked twice answers "already held" and
-    /// looks identical to a ledger asked once.
-    @ObservationIgnored var onHeartJudgedForTesting: ((MeshRoutedHeartAck) -> Void)?
-    @ObservationIgnored private var sessionHeartStateClearTask: Task<Void, Never>?
-    /// Fingerprints with a session heart between the tap and the stage.
-    ///
-    /// Kept as a **fence** after P6 item 6 made the mint synchronous: the window it closes is empty
-    /// today, and it is what keeps it closed if an `await` is ever reintroduced between the cooldown
-    /// check and the stage. Deleting a fence whose absence is invisible is the change class this
-    /// codebase refuses — and `sessionEndClearsAStrandedInFlightHeartClaim` still holds it to its
-    /// lifetime.
-    @ObservationIgnored private var sessionHeartSendsInFlight: Set<String> = []
-    /// Phase 5: a friend session committed with this fingerprint (an in-person meeting) — feeds closeness.
-    @ObservationIgnored public var onFriendSessionCommitted: ((String) -> Void)?
-    /// A photo was exchanged with this friend in the current session (feeds the closeness photo signal).
-    @ObservationIgnored public var onFriendPhotoSession: ((String) -> Void)?
-    /// The live-session temporary-message store (Phase 5): the current session's chat transcript.
-    /// Registered on the payload registry in `init`. Memory-only and deliberately NOT Codable — it can
-    /// never enter a snapshot. Cleared at EVERY session-end path (the same last-committed-slot-gone
-    /// moment that promotes `pendingFriendReview` / opens the shop window) and on the next session
-    /// formation. Unlike the shop's 1-hour window, messages do NOT outlive the session — they vanish.
-    public let sessionMessages = SessionMessageStore()
-    /// Why an in-session heart was not sent — a **frozen English token**, never copy (P6 item 6).
-    ///
-    /// The case this replaced, `failed(message: String)`, composed six sentences inside ProximityKit
-    /// and handed them to a SwiftUI `Text` in the app: English in every language, and invisible to
-    /// both halves of `LocalizationBoundaryTests` — `everyPackageLocalizedStringPassesModuleBundle`
-    /// scans `String(localized:)` call sites and `packageDisplayLiteralsPassModuleBundle` scans
-    /// display-literal call heads and held `LocalizedStringKey` members, and a bare `String`
-    /// associated value matches neither. Exactly the D-13.15 defect, in a seam D-13.15 did not
-    /// reach. `App/Fernlet/SessionHeartStatusCopy.swift` is the fork, and its exhaustive
-    /// `CaseIterable` sweep makes a new case a build error until it has a sentence.
-    ///
-    /// `rawValue`s are audit vocabulary (`mesh.routedHeart.sendFailed`), so they are frozen.
-    public enum SessionHeartFailure: String, CaseIterable, Equatable, Sendable {
-        /// `store.allowNearbyHearts` is off — the send-side half of the opt-out.
-        case heartsOff
-        /// The heart ledger could not be read, so the cooldown could not be checked. Distinct from
-        /// ``cooldown`` on purpose: nothing was sent, and the cooldown sentence would be a lie.
-        case ledgerUnavailable
-        /// A heart went to this friend inside the last five minutes.
-        case cooldown
-        /// A heart to this friend is already between the tap and the stage.
-        case alreadySending
-        /// The derived roster at capture no longer holds this friend — they left, or were removed.
-        case recipientLeft
-        /// No verified X25519 key for this friend is known to this device yet.
-        case notReachableYet
-        /// Two verified sources disagree about this friend's key, or the set marked them conflicted.
-        case identityUnconfirmed
-        /// The body would not frame, the registry named no token, the seal refused, or the mint's
-        /// own guard chain refused the shape.
-        case couldNotSend
-        /// The routed store could not say what it holds: deferred protected data, a refused seal,
-        /// or a corrupt index. Reached from `.refused(.storeUnavailable)`, and its sentence says the
-        /// storage could not be reached — the two docs were swapped until the item 6 fix review.
-        case storageUnreachable
-        /// The routed store refused the manifest or a chunk — it is holding all it can. Reached from
-        /// `.refused(.storeRefused)`, and its sentence says so.
-        case holdingAllItCan
-    }
-
-    /// In-session heart send feedback (TF b19 item 5; rewritten for the routed store, P6 item 6).
-    ///
-    /// The routed mint is fully SYNCHRONOUS, so `.sending` is not reachable on the mesh path any
-    /// more and the case is gone with it. The presence fallback has its own state
-    /// (`PresenceManager.heartSendState`, a different type on a different object) and keeps its
-    /// `.connecting` / `.verifying`, so the app's "a send is in flight" question is now
-    /// **presence-only** — which is correct rather than a loss: there is no window on this path for
-    /// it to describe.
-    ///
-    /// Observable so the in-session heart affordance surfaces state instead of failing silently.
-    /// Memory-only, auto-clearing back to `.idle`.
-    public enum SessionHeartState: Equatable, Sendable {
-        case idle
-        case sent(recipientName: String)
-        case failed(SessionHeartFailure, recipientName: String)
-    }
-    public private(set) var sessionHeartState: SessionHeartState = .idle
     public var isSearching = false
 
     /// Whether the admission doors are open — the ONE flag ``holdCommittedLinks()`` closes, and the
@@ -352,16 +160,17 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// values off it and checks the peer's introduction under its labels, the labels this manager
     /// signs this side's under; since A0.2.8 the storage scopes its host builds carry it too. Its
     /// family is what the membership verifiers and the ledger adoption keep, so the inventory digest
-    /// tags every record with its family's record kinds, and its routed types are the tokens of the
-    /// routed type registry's rows (``routedTypes``, built from them once at `init`). Every capability
+    /// tags every record with its family's record kinds, and its routed types are the tokens its
+    /// host's routed-type rows are registered under (the registry, ``routedTypes``, is built once at
+    /// `init` from the host's ``ProximityHost/meshRoutedTypeEntries``). Every capability
     /// gate here asks under its capabilities: the wire2 token this manager advertises and frames
     /// sealed sends for, and what a peer that lists no capabilities is taken to support. Its mesh
     /// messages are the tokens of this manager's own frames (``meshToken(_:)``): every engine send is
     /// signed under one, and the payload door resolves each received token to its
-    /// ``MeshPayloadRole`` by them. What this manager still spells itself, its features' payload
-    /// tokens (Fernlet's `PayloadType`, sent through ``sendFeatureEnvelope(_:encodable:via:sealed:)``
-    /// and registered by token), values and capability tokens and the photo stores' names, leaves
-    /// with its feature parts (plan step A0.5).
+    /// ``MeshPayloadRole`` by them. A feature's payload tokens are its host's, never this manager's:
+    /// a feature registers its handler by token (``registerPayloadHandler(forToken:handler:)``) and
+    /// sends under it (``sendFeatureEnvelope(_:encodable:via:sealed:)``), so this manager spells no
+    /// feature's token, value, capability or store name.
     /// `nonisolated`: inert `Sendable` value data.
     @ObservationIgnored nonisolated let namespace: ProximityNamespace
     /// The shared radio, held through ``MeshTransportSession`` so this manager never names one in
@@ -385,72 +194,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// founds no mesh and links no peer.
     @ObservationIgnored private let identityIsOfNamespace: Bool
     @ObservationIgnored private let replayCache = ReplayCache()
-    @ObservationIgnored private let photoCacheStore: PrivateMediaStore
-    @ObservationIgnored private let photoWallPreferencesStore: JSONSidecarFile<FriendPhotoWallPreferences>
-    @ObservationIgnored private var photoWallPreferences: FriendPhotoWallPreferences
-    /// True when the sealed photo index existed at init but could not be opened yet (a locked
-    /// keychain before the first post-boot unlock). While set, `persistPhotoIndex` refuses to write:
-    /// `meshPhotos` is empty for a reason that is NOT "the wall is empty", and the index is also the
-    /// file manifest the store sweeps against, so saving it would delete every kept photo's bytes.
-    /// Cleared by the first re-read that succeeds — inside `persistPhotoIndex`, or at the unlock or
-    /// foreground edge that makes the file readable again (``retryDeferredPhotoIndexes(now:)``),
-    /// so a wall deferred at a locked background launch is not an empty album for the whole process.
-    @ObservationIgnored private var photoIndexDeferred = false
-    /// The sealed pending corpus (2026-09-30): every session photo, taken here or received, from
-    /// the moment it exists until the person answers the review — never the wall. Its own
-    /// `PendingSessionPhotos/` directory under the host's proximity root (excluded from backup) and
-    /// its own device-bound key (`KeychainPrivateMediaKeyProvider.Role.pendingSessionPhotos`).
-    @ObservationIgnored private let heldPhotoStore: PendingSessionPhotoStore
-    /// The durable mirror of the pending index: exactly what the last committed write (or a clean
-    /// load) left on disk, and what every write is handed. `sessionPhotos` and
-    /// `pendingFriendReview.photos` are memory projections of its `photos`; a held local id is in
-    /// exactly one of them once the index has been reconciled.
-    ///
-    /// The one sanctioned divergence: an answer whose write fails still takes its photos out of the
-    /// mirror (``PendingSessionPhotoStore/answering(_:in:now:)``), so the review stops offering them
-    /// and the next write that lands persists the answer.
-    @ObservationIgnored private var heldPhotoIndex = PendingSessionPhotoIndex.empty
-    /// Why the pending index could not be read, while it cannot. Nothing writes the corpus while
-    /// this is set (every hold is refused), because the mirror is empty for a reason that is not
-    /// "nothing is held". Re-read at the unlock/foreground edge and at the top of every hold and
-    /// answer.
-    @ObservationIgnored private var heldPhotoIndexDeferral: PendingSessionPhotoStore.Deferral?
-    /// Whether the launch reconcile has run: the held entries a kill left behind on the wall (the
-    /// crash window between an answer's wall commit and its pending write) are dropped, and the
-    /// rest offered. It runs only once BOTH indexes are readable — over an unreadable wall it would
-    /// re-offer a kept photo — so until then no held photo is offered at all.
-    @ObservationIgnored private var heldPhotosReconciled = false
-    /// Whether the held photos were offered over a wall that is still unreadable with protected data
-    /// AVAILABLE — a persistent failure, not a locked launch. Waiting for the reconcile then would
-    /// never end (and in the app it would hold the review, and so the discovery block, for good),
-    /// so they are offered with Keep refused (`keepUnavailable`) and Delete all working. The stated
-    /// cost: a photo kept just before a kill inside an answer is offered again, and discarding it
-    /// leaves the earlier wall copy. The real reconcile still runs the moment the wall reads.
-    @ObservationIgnored private var heldPhotosOfferedOverUnreadableWall = false
-    /// Observed proxy for favorite changes. `photoWallPreferences` itself is `@ObservationIgnored`
-    /// because its `photoWallPosts` getter mutates it during view-body evaluation (plainly observing
-    /// it would risk update loops). This counter is bumped ONLY from `toggleFavorite` (a tap handler,
-    /// never during body eval), and touch-read in `favoritePhotoID(for:)` and the `photoWallPosts`
-    /// getter so the viewer heart and the wall cover both re-render when a favorite toggles.
-    private var favoritesRevision = 0
     @ObservationIgnored private var slotTrustPolicies: [UUID: any ProximityTrustPolicy] = [:]
     @ObservationIgnored private var observationTask: Task<Void, Never>?
-    public private(set) var photosAddedThisSession = 0
-
-    /// How many of this session's captures reached nobody: the routed door answered
-    /// `.skipped(.noDestinations)` — no mesh, no ledger, or a derived roster of just this device —
-    /// so the photo is on this device alone (held for its review, 2026-09-30) and never will be anywhere
-    /// else: destinations are frozen at the mint and there is no offline queue (P8 item 0, device
-    /// finding (c)). A count rather than a refusal: the solo first minute of every session is
-    /// ordinary and an alert per shot would be hostile, but a session that ends with photos the
-    /// user believes were shared and were not is a silent loss. The app forks it into one sentence
-    /// (`RoutedShareRefusalCopy.photoKeptNotice(count:)`). Reset with ``photosAddedThisSession``.
-    public private(set) var photosKeptOnThisPhone = 0
-    @ObservationIgnored private var sessionQuotaMeshID: UUID?
-    @ObservationIgnored private var photoSessionStartedAt: Date?
-    @ObservationIgnored private var activePhotoSessionID: UUID?
-    // voucherFingerprint → cached payload; never persisted across app launches
-    @ObservationIgnored private var vouchCache: [String: MeshFriendVouchListPayload] = [:]
     /// Re-invite attempts spent per DEVICE for failed proximity-join connections.
     ///
     /// Keyed on ``PeerEndpointKey``, not `peer.id`, and that is the whole point of the key: the
@@ -466,39 +211,28 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// endpoint for the same reason as `peerRetryCount`: a deliberate eviction that stopped being
     /// recognized would be re-invited by its own retry.
     @ObservationIgnored private var locallyKickedEndpoints: Set<PeerEndpointKey> = []
-    /// Slots the local shop catalog was already sent to (belt-and-braces once-per-slot guard — the
-    /// commit transition in checkCoordinatorStates fires once per fingerprint change already). Pruned
-    /// per-slot on eviction (removeSlot/disconnectSlot) so a rejoining friend re-exchanges — the
-    /// transport's peerMap persists across a remote teardown, so a returning peer reuses its old slot
-    /// UUID. `clothingCatalogRequest` responses deliberately BYPASS this set (idempotent — the receiver
-    /// replaces by fingerprint).
-    @ObservationIgnored private var sentShopCatalogSlotIDs: Set<UUID> = []
-    /// Per-slot rate limit for `clothingCatalogRequest` responses (request-spam amplification guard:
-    /// each response is a full catalog send). Pruned with `sentShopCatalogSlotIDs`.
-    @ObservationIgnored private var shopCatalogRequestResponseAt: [UUID: Date] = [:]
     /// True from the first slot COMMIT of a session (formation) until the session ends (the same
     /// `!isSessionLive` condition the review promotion keys on — so a link blip no longer ends the
-    /// formation, and the heal that follows it is not a new one). Gates the
-    /// Phase-3a formation hook in `noteSlotCommittedForShop` so `clothingShop.beginNewSession()` fires
-    /// exactly once per formation — later commits, ``announcePromotedMesh()``'s committed loop, and a
-    /// re-handshake of the only committed slot must not re-fire it mid-session.
-    @ObservationIgnored private var hasFormedShopSession = false
-    /// Test seam: fires with the slot ID whenever a shop-catalog send is initiated (commit offer or
-    /// request response) and the provider produced a catalog — unit tests can't observe the real
-    /// channel (no live radio behind the test slots).
-    @ObservationIgnored var onShopCatalogSendForTesting: ((UUID) -> Void)?
-    /// Test seam: fires AFTER a `clothingCatalogRequest` send completes — i.e. after the commit
-    /// task's last touch of manager state. Tests that drive commits await this so the async send
-    /// task drains inside the test's lifetime (the manager's `unowned store` must not be reached
-    /// after the test's store deallocates).
-    @ObservationIgnored var onShopCatalogRequestSendForTesting: ((UUID) -> Void)?
-    /// Test seam: fires ONCE per `sendTempMessage(_:)` call with what the send decided (P6 item 4).
+    /// formation, and the heal that follows it is not a new one). The session-formation fact (plan
+    /// step A0.5.6): `noteSlotCommittedForShop` reads it into ``MeshSlotCommit/formsSession`` and
+    /// sets it, so the formation legs — the engine's own (the session-content generation's advance)
+    /// and the session observer's (the clothing shop's new session, the chat transcript's clear) — run
+    /// exactly once per formation; later commits,
+    /// ``announcePromotedMesh()``'s committed loop, and a re-handshake of the only committed slot must
+    /// not re-run them mid-session. Reset by `endSessionIfEnded()`.
+    @ObservationIgnored private var hasFormedSession = false
+    /// The host's session observer (plan step A0.5.6, S15): told each moment of a session's life its
+    /// features act on — a search's start and stop, a slot's commit and loss, the session's end and
+    /// this device's leaving it, a change of the mesh it counts against, a member's removal, a changed
+    /// access gate and a privacy wipe's start — at the one site where it happens
+    /// (``MeshSessionObserver`` states the contract and the order).
     ///
-    /// Re-aimed from the retired per-slot fan-out, which fired once per addressed slot with that
-    /// slot's id: there are no per-slot sends any more — the mint stages one item and
-    /// `pushOriginatedItem` offers it — so the observable fact is the outcome, not a slot list. The
-    /// name changed with the meaning so the retirement wall can pin the old one at zero.
-    @ObservationIgnored var onTextSendForTesting: ((MeshTextSendOutcome) -> Void)?
+    /// **Weak**: the object that installs it owns it (for Fernlet, FernletSocial's mesh composition,
+    /// which owns this manager too), so a manager whose observer is gone runs every moment with no
+    /// host leg. Installed before anything else can reach the manager — Fernlet's composition sets it
+    /// inside the initializer that builds the manager — so no commit, ending or radio start runs
+    /// without it.
+    @ObservationIgnored public weak var sessionObserver: (any MeshSessionObserver)?
     @ObservationIgnored private(set) var removedMemberFingerprints: Set<String> = []
     /// The one peer the user asked to remove through the pairwise shortcut of
     /// ``proposeRemoval(of:)``: refused by the session roster from the tap until the session is torn
@@ -599,12 +333,24 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     private static let maxRecordedRemovals = 64
     /// R3 cap on gossiped mesh membership: every `.meshDescriptor` merge is attacker-chosen input
     /// that is displayed, counted, and re-gossiped to every slot (amplification).
-    private static let maxMeshMembers = 16
+    ///
+    /// Public so a host's feature bounds a peer-supplied member list by the engine's own number
+    /// rather than a copy that could drift. The contract: a peer's descriptor listing more than 16
+    /// members is dropped, the descriptor coercion keeps at most the first 16, and a descriptor merge
+    /// appends no member past the 16th.
+    public static let maxMeshMembers = 16
     /// R3/R5 cap on a peer-supplied mesh name before it is adopted or displayed.
-    private static let maxMeshNameLength = 40
+    ///
+    /// Public for the same reason as ``maxMeshMembers``. The contract: a mesh name a peer supplied
+    /// keeps at most 40 `Character`s once sanitized, the cap the descriptor coercion applies before a
+    /// name is adopted, merged or shown.
+    public static let maxMeshNameLength = 40
     /// R3 cap on the session roster: one entry per distinct committed fingerprint, but a peer that
     /// regenerates its identity and re-commits would otherwise add one per commit.
-    private static let maxSessionRosterEntries = 32
+    ///
+    /// Public so a host's feature that keeps one row per session participant bounds it by the
+    /// engine's own number: ``sessionRoster`` never holds more than 32 entries.
+    public static let maxSessionRosterEntries = 32
     /// R3 cap on the observed pending-admission queue (wire input, rendered by the UI).
     private static let maxPendingAdmissionRequests = 8
     /// R3 cap on `outstandingAdmissionRequestBySlot`: at most one entry per slot, so it can never
@@ -615,9 +361,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// How many `(sender, refused mesh id)` re-announcements one mesh may spend: one per slot is
     /// the honest maximum, so the slot cap with headroom for a peer that re-founds after a blip.
     private static let maxNewbornReannouncements = maxTotalSlots * 2
-    /// Wall-post count at which older multi-photo sessions start collapsing into one aggregated
-    /// post — the bound of the aggregation loop in `progressivelyAggregatePhotoSessions`.
-    private static let maxUnaggregatedWallPosts = 24
     /// Delay before re-inviting a peer whose channel dropped pre-commit.
     private static let reinviteDelaySeconds: TimeInterval = 2
 
@@ -628,15 +371,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     private static let distanceStabilityWindow: TimeInterval = 10
     private static let requiredStableDistanceSamples = 5
     private static let evictionHysteresis = 0.20
-    static let maxPhotosPerSenderPerSession = 10
-    /// Hard cap on the in-session photo list, defending against memory growth even if the
-    /// per-sender receive quota is bypassed by a future code path. With the per-sender cap
-    /// this is reached only by an implausible number of peers.
-    private static let maxSessionPhotos = 200
     /// Hard cap on outstanding removal proposals (backstop against spoofed proposer fingerprints).
     private static let maxPendingRemovalProposals = 16
 
-    /// The app's entry point: a manager over the radio.
+    /// A manager over the radio, holding the device identity its host's
+    /// ``ProximityHost/makeProximityIdentity()`` answers.
     ///
     /// That is `NetworkMeshSession` — Network.framework/QUIC on `_fernlet-mesh2._udp` — since the
     /// MC→QUIC cutover (2026-09-21), and since the deletion round (2026-09-22) the only radio the
@@ -647,43 +386,59 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         self.init(store: store, transport: nil)
     }
 
+    /// The app's entry point: a manager over the radio, holding the device identity its host's
+    /// features were handed (plan step A0.5.5, S12).
+    ///
+    /// A host whose features sign under the device identity asks its host door once and hands the
+    /// same identity to the manager and to those features, so the engine never exposes its own: for
+    /// Fernlet that is FernletSocial's mesh composition, the one shipping caller. The radio is the
+    /// one ``init(store:)`` builds. The identity is checked against the host's namespace and
+    /// provisioned exactly as the identity ``init(store:)`` asks its host for: one of another
+    /// namespace makes the manager audit `mesh.identity.namespaceMismatch` and never start its radio
+    /// or found a mesh, and a failed provisioning is audited `mesh.identity.provisionFailed`, in that
+    /// order.
+    ///
+    /// - Parameters:
+    ///   - store: The host this manager's roots, vaults and namespace hang off.
+    ///   - identity: The device identity, built by the host's door.
+    public convenience init(store: any ProximityHost, identity: IdentityService) {
+        self.init(store: store, transport: nil, identity: identity)
+    }
+
     /// The designated initializer, taking the radio.
     ///
     /// `nil` means "whatever this build selects", which is what the public initializer passes. Tests
     /// pass an in-memory fake; that seam is the whole of P2 item 8, and what closes the long-standing
     /// gap where manager-level invite behaviour could not be asserted at tier 1 at all.
     ///
-    /// `identity` is the same kind of seam for the device's own keys, and exists for one reason: a
-    /// device has exactly ONE proximity identity, so the default ``IdentityService`` — the host's
-    /// ``ProximityHost/makeProximityIdentity()``, under its ``ProximityHost/proximityNamespace`` — is
-    /// keyed on its one process-wide keychain service, and two managers built in a single test
-    /// process are therefore literally the same device, sharing a fingerprint. That makes a two-node
-    /// tier-1 scenario (P4 item 2's wire exchange, `MeshMergeExchangeTests`) impossible to state
-    /// honestly. Passing a distinctly-keyed identity is the only thing that separates them. Nothing in
-    /// shipping code passes it: the public initializer above cannot, so a Release build always takes
-    /// this device's real identity. An identity of another namespace than the host's is refused: the
-    /// manager constructs, audits `mesh.identity.namespaceMismatch` and never starts its radio or
-    /// founds a mesh.
-    ///
-    /// `heldPhotoKeys` is the third seam, for the pending corpus's at-rest key: nil (every shipping
-    /// path) takes the device-bound keychain row; a test passes an in-memory or wrong key to reach
-    /// the corpus's deferral and purge branches without touching the process-wide row.
+    /// `identity` is the device's own keys. In shipping code only ``init(store:identity:)`` passes one,
+    /// the identity its host's door built for the host's features (plan step A0.5.5), so a Release
+    /// build always holds this device's real identity; nil, which ``init(store:)`` passes, asks the
+    /// host's ``ProximityHost/makeProximityIdentity()`` for it. In tests it is a seam with one reason
+    /// to exist: a device has exactly ONE proximity identity, so the default ``IdentityService`` —
+    /// under the host's ``ProximityHost/proximityNamespace`` — is keyed on its one process-wide
+    /// keychain service, and two managers built in a single test process are therefore literally the
+    /// same device, sharing a fingerprint. That makes a two-node tier-1 scenario (P4 item 2's wire
+    /// exchange, `MeshMergeExchangeTests`) impossible to state honestly. Passing a distinctly-keyed
+    /// identity is the only thing that separates them. An identity of another namespace than the
+    /// host's is refused: the manager constructs, audits `mesh.identity.namespaceMismatch` and never
+    /// starts its radio or founds a mesh.
     ///
     /// - Parameters:
     ///   - store: The host this manager's roots, vaults and namespace hang off.
     ///   - transport: The radio, or nil for the one this build selects, built from the host's namespace.
     ///   - identity: The device identity, or nil for the host's ``ProximityHost/makeProximityIdentity()``.
-    ///   - heldPhotoKeys: The pending corpus's key provider, or nil for the keychain row.
     init(
         store: any ProximityHost,
         transport: (any MeshTransportSession)?,
-        identity: IdentityService? = nil,
-        heldPhotoKeys: (any PrivateMediaKeyProviding)? = nil
+        identity: IdentityService? = nil
     ) {
         self.store = store
         let namespace = store.proximityNamespace
         self.namespace = namespace
-        self.hostRoutedTypeRegistry = MeshRoutedTypeRegistry.increment1(namespace.family.vocabulary.routedTypes)
+        let hostRoutedTypeRegistry = MeshRoutedTypeRegistry(entries: store.meshRoutedTypeEntries)
+        self.hostRoutedTypeRegistry = hostRoutedTypeRegistry
+        self.routedResidentBlobBound = Int(clamping: hostRoutedTypeRegistry.maxItemByteCount)
         self.transport = transport ?? NetworkMeshSession(namespace: namespace)
         let id = identity ?? store.makeProximityIdentity()
         self.identityIsOfNamespace = ProximityNamespaceGate.checkIdentity(
@@ -699,445 +454,49 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             )
         }
         self.identity = id
-        // Per-HOST root like the photo wall below: `FernletStore.resetAll` calls
-        // `meshNetworkManager.activities.clearAll()`, which removes this sidecar.
-        self.activities = ProximityActivityManager(
-            store: store,
-            identity: id,
-            fileURL: ProximityActivityManager.fileURL(in: store.proximitySupportDirectory)
-        )
-        // Per-HOST root, not a process-wide constant — see `ProximityHost.proximitySupportDirectory`
-        // for why the wall's index cannot be shared across concurrently-live managers.
-        let cacheURL = store.proximitySupportDirectory
-            .appendingPathComponent("MeshPhotoCache.json")
-        // Phase-5 media-key split: the wall stays on the ORIGINAL, backup-restorable row
-        // (`Role.friendWall`) — stated explicitly rather than left to the default so a future
-        // reader can see which side of the split this store is on. Nothing about the wall changed:
-        // no re-encryption, no dual-open fallback, and delete-all still keeps both the photos and
-        // the key. The user's OWN photos moved to `Role.ownPhotos` in `FernletStore`.
-        self.photoCacheStore = PrivateMediaStore(
-            indexURL: cacheURL,
-            keyProvider: KeychainPrivateMediaKeyProvider(role: .friendWall)
-        )
-        // Per-host like the wall, and a SUBDIRECTORY of the same root: each corpus sweeps orphans
-        // by directory, so siblings would sweep each other.
-        self.heldPhotoStore = PendingSessionPhotoStore(
-            directory: store.proximitySupportDirectory
-                .appendingPathComponent(PendingSessionPhotoStore.directoryName, isDirectory: true),
-            keyProvider: heldPhotoKeys ?? KeychainPrivateMediaKeyProvider(role: .pendingSessionPhotos)
-        )
-        let preferencesURL = cacheURL.deletingLastPathComponent().appendingPathComponent("MeshPhotoWallPreferences.json")
-        let preferencesStore = JSONSidecarFile<FriendPhotoWallPreferences>(fileURL: preferencesURL)
-        self.photoWallPreferencesStore = preferencesStore
-        self.photoWallPreferences = preferencesStore.load() ?? FriendPhotoWallPreferences()
-        loadPhotoCorpora(now: Date())
         setupMeshSession()
-        registerClothingShopHandler()
-        registerModerationReportHandler()
-        registerFriendStateHandler()
-        registerActivityHandlers()
-        // Phase 6: give the activity manager the two mesh seams it needs — a sealed/unsealed send to a
-        // verified fingerprint's committed slot, and the list of committed peers advertising `.activities`.
-        activities.send = { [weak self] type, payload, fingerprint, sealed in
-            await self?.sendActivityEnvelope(type, payload, toFingerprint: fingerprint, sealed: sealed)
-        }
-        activities.committedActivityPeerFingerprints = { [weak self] in
-            self?.committedActivityPeerFingerprints() ?? []
-        }
     }
 
     /// Ends every long-running task the manager owns if it is released without `stopSearching()`
-    /// (today it never is — it is a process-lifetime `lazy var` on the store — but the tasks must
-    /// not outlive their owner: the observation loop would stay parked and the `[weak self]` timers
-    /// would each spin one more tick). `isolated`: the handles are main-actor state.
+    /// (in shipping it never is: its host's composition owns it, for Fernlet FernletSocial's
+    /// `FernletMeshFeatures`, which the store keeps for the process as its `lazy var` `meshFeatures`;
+    /// but the tasks must not outlive their owner: the observation loop would stay parked and the
+    /// `[weak self]` timers would each spin one more tick). `isolated`: the handles are main-actor
+    /// state.
     isolated deinit {
         observationTask?.cancel()
         rotationTimer?.cancel()
         rotationDebounceTask?.cancel()
         beaconTimer?.cancel()
         rotationSyncTask?.cancel()
-        sessionHeartStateClearTask?.cancel()
     }
 
-    /// The init's two photo loads: the wall first, then the pending corpus, then the reconcile that
-    /// rebuilds the awaiting review from it (a process kill before the answer lands here).
+    // MARK: - Routed addressability (plan step A0.5.1, S6)
+
+    /// Whether this device could address a routed item to `fingerprint` alone right now: the
+    /// addressing half of ``originateRoutedItem(body:typeToken:itemID:audience:now:)``'s answer for a
+    /// ``MeshRoutedAudience/recipient(_:)`` audience, public so a host's single-recipient feature asks
+    /// the engine's rule instead of restating it.
     ///
-    /// `loadIndex`, not `load`: a DEFERRED wall read must not look like an empty wall (see
-    /// `photoIndexDeferred` — the index is also the store's file manifest). An `.unrecoverable`
-    /// index is different: nothing can bring those entries back, so the wall starts empty and
-    /// saves proceed, letting the next one replace the dead file and sweep its orphans.
+    /// The contract: true exactly when `fingerprint` is not this device's own, the current membership
+    /// ledger's derived roster holds it, and the mint's key lookup resolves one verified X25519 key
+    /// for it — a live handshake-verified key or a verified durable key advertisement, the two never
+    /// disagreeing and the member never marked conflicted. No live slot is required. It says nothing
+    /// about the routed type's row, the store's room or whether the member's build accepts the type.
     ///
-    /// - Parameter now: The launch instant, for dropping expired tombstones — never for removing a
-    ///   held photo, which no timer touches.
-    private func loadPhotoCorpora(now: Date) {
-        switch photoCacheStore.loadIndex() {
-        case .entries(let photos):
-            meshPhotos = photos
-        case .deferred:
-            photoIndexDeferred = true
-        case .unrecoverable:
-            ProximityAudit.log("mesh.photoIndex.unrecoverable")
-        }
-        prunePhotoWallPreferences()
-        loadHeldPhotoIndex(now: now)
-        reconcileHeldPhotosIfReady(now: now)
-    }
-
-    /// Phase 3a: the shop rides the friend mesh as registered feature payloads. The dispatch default's
-    /// committed-slot gate has already run by the time these fire; the remaining guards mirror
-    /// the routed photo projection: a transport-VERIFIED fingerprint is required (catalogs are keyed
-    /// by it exclusively — never a display name) and blocked fingerprints drop silently.
-    private func registerClothingShopHandler() {
-        registerPayloadHandler(for: .clothingCatalog) { [weak self] envelope, plaintext, peer in
-            guard let self else { return }
-            guard let fingerprint = peer?.fingerprint else {
-                ProximityAudit.log("mesh.clothingCatalog.droppedUnverifiedSender")
-                return
-            }
-            guard !self.store.isBlockedFingerprint(fingerprint) else { return }
-            self.clothingShop.receiveCatalog(envelope, plaintext: plaintext, verifiedFingerprint: fingerprint)
-        }
-        // Commit-symmetry request (spec: "Catalog delivery must not assume commit symmetry"): a
-        // committed peer is asking for our catalog because ITS commit landed after OUR once-per-slot
-        // send. The payload carries nothing — the verified sender identity is the whole message.
-        registerPayloadHandler(for: .clothingCatalogRequest) { [weak self] _, _, peer in
-            guard let self else { return }
-            guard let fingerprint = peer?.fingerprint else {
-                ProximityAudit.log("mesh.clothingCatalogRequest.droppedUnverifiedSender")
-                return
-            }
-            guard !self.store.isBlockedFingerprint(fingerprint) else { return }
-            self.respondToShopCatalogRequest(fromVerifiedFingerprint: fingerprint, identity: peer)
-        }
-    }
-
-    /// Phase 3b: one-hop moderation reports ride the friend mesh. The committed-slot gate has already
-    /// run; the remaining guards require a transport-verified, unblocked, vault-TRUSTED sender (reports
-    /// count only from friends accepted in person — the Sybil defense). `.itemReport` is sealed, so an
-    /// unsealed bundle was already rejected at `verify()`; each row's Ed25519 signature is re-checked
-    /// against the sender key inside `verifiedRows`, and rows the sender didn't personally sign drop.
-    private func registerModerationReportHandler() {
-        registerPayloadHandler(for: .itemReport) { [weak self] _, plaintext, peer in
-            guard let self else { return }
-            guard let peer else {
-                ProximityAudit.log("mesh.itemReport.droppedUnverifiedSender")
-                return
-            }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard self.store.proximityTrustStore.isTrustedProximityPeer(signingPublicKey: peer.signingPublicKey) else { return }
-            guard let payload = try? JSONDecoder().decode(ModerationReportPayload.self, from: plaintext) else { return }
-            let rows = ModerationReportRelay.verifiedRows(
-                from: payload, senderSigningKey: peer.signingPublicKey, now: Date())
-            guard !rows.isEmpty else { return }
-            self.onModerationRowsReceived?(rows)
-        }
-    }
-
-    /// Hands this device's OWN signed reports to a committed friend (one-hop). Gated on the recipient
-    /// being a vault-TRUSTED (kept-in-person) peer — symmetric with the receive handler — so your signed,
-    /// non-repudiable reports never leak to a merely-committed stranger you didn't keep as a friend. No
-    /// provider, an empty set, or no signable rows → sends nothing.
-    private func sendModerationReports(to slot: PeerSlot, recipientSigningKey: Data) async {
-        guard store.proximityTrustStore.isTrustedProximityPeer(signingPublicKey: recipientSigningKey) else { return }
-        guard let rows = ownModerationReportsProvider?(), !rows.isEmpty else { return }
-        let payload = ModerationReportRelay.buildPayload(ownReports: rows, identity: identity)
-        guard !payload.reports.isEmpty else { return }
-        await sendFeatureEnvelope(PayloadType.itemReport.rawValue, encodable: payload, via: slot, sealed: true)
-    }
-
-    /// Phase 4: fuzzy state + appearance exchange rides the friend session. The committed-slot gate has
-    /// run; require a verified, unblocked, vault-trusted sender and a well-formed payload, then hand it to
-    /// the app (which applies its own opt-in + caches). Sealed (in Fernlet's `payloads.sealingRequired`).
-    private func registerFriendStateHandler() {
-        registerPayloadHandler(for: .friendState) { [weak self] _, plaintext, peer in
-            guard let self, let peer else { return }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard self.store.proximityTrustStore.isTrustedProximityPeer(signingPublicKey: peer.signingPublicKey) else { return }
-            guard let payload = try? JSONDecoder().decode(FriendStatePayload.self, from: plaintext),
-                  payload.isWellFormed else { return }
-            self.onFriendStateReceived?(peer.fingerprint, payload)
-        }
-    }
-
-    /// Sends our fuzzy state + appearance to a committed friend. Gated on the recipient being a
-    /// vault-TRUSTED (kept-in-person) peer — symmetric with the receive handler — so the fuzzy wellbeing
-    /// vibe never leaks to a merely-committed stranger. A nil provider (opt-out) also sends nothing.
-    private func sendFriendState(to slot: PeerSlot, recipientSigningKey: Data) async {
-        guard store.proximityTrustStore.isTrustedProximityPeer(signingPublicKey: recipientSigningKey) else { return }
-        guard let payload = friendStatePayloadProvider?() else { return }
-        await sendFeatureEnvelope(PayloadType.friendState.rawValue, encodable: payload, via: slot, sealed: true)
-    }
-
-    /// Phase 6: Group Activities ride the friend mesh as registered feature payloads. The dispatch
-    /// default's committed-slot gate has already run; the remaining guard mirrors `.clothingCatalog`
-    /// (a transport-VERIFIED, unblocked sender) — NOT the vault-trust gate the friend-state/moderation
-    /// handlers use. Activities are ad-hoc, in-session interactions; authorization is carried by the
-    /// host-signed, invitee-key-bound `ActivityJoinToken`, not by prior vault friendship (kickoff:
-    /// "authorization is independent of the shared handshake"). `.activityJoinRequest` is UNSEALED
-    /// (identity-only, host re-validates against the verified slot); the other four are sealed.
-    private func registerActivityHandlers() {
-        registerPayloadHandler(for: .activityOffer) { [weak self] _, plaintext, peer in
-            guard let self, let peer else { return }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard let payload = try? JSONDecoder().decode(ActivityOfferPayload.self, from: plaintext),
-                  payload.isWellFormed else { return }   // R5: format+version validated at entry
-            self.activities.receiveOffer(payload, fromFingerprint: peer.fingerprint,
-                                         verifiedHostSigningPublicKey: peer.signingPublicKey)
-        }
-        registerPayloadHandler(for: .activityJoinRequest) { [weak self] _, plaintext, peer in
-            guard let self, let peer else { return }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard let payload = try? JSONDecoder().decode(ActivityJoinRequestPayload.self, from: plaintext),
-                  payload.isWellFormed else { return }   // R5: rejects empty keys too
-            self.activities.receiveJoinRequest(payload,
-                                               verifiedFingerprint: peer.fingerprint,
-                                               verifiedSigningPublicKey: peer.signingPublicKey,
-                                               verifiedKeyAgreementPublicKey: peer.keyAgreementPublicKey)
-        }
-        registerPayloadHandler(for: .activityJoinGrant) { [weak self] _, plaintext, peer in
-            guard let self, let peer else { return }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard let payload = try? JSONDecoder().decode(ActivityJoinGrantPayload.self, from: plaintext),
-                  payload.isWellFormed else { return }   // R5: format+version validated at entry
-            self.activities.receiveGrant(payload, fromFingerprint: peer.fingerprint)
-        }
-        registerPayloadHandler(for: .activityRosterSnapshot) { [weak self] _, plaintext, peer in
-            guard let self, let peer else { return }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard let payload = try? JSONDecoder().decode(ActivityRosterSnapshotPayload.self, from: plaintext),
-                  payload.isWellFormed else { return }
-            self.activities.receiveSnapshot(payload.snapshot)
-        }
-        registerPayloadHandler(for: .activitySync) { [weak self] _, plaintext, peer in
-            guard let self, let peer else { return }
-            guard !self.store.isBlockedFingerprint(peer.fingerprint) else { return }
-            guard let payload = try? JSONDecoder().decode(ActivitySyncPayload.self, from: plaintext),
-                  payload.isWellFormed else { return }   // R5: format+version validated at entry
-            self.activities.receiveSync(payload, fromFingerprint: peer.fingerprint)
-        }
-    }
-
-    /// Fingerprints of currently-committed slots that advertise the `.activities` capability — the
-    /// activity manager's "who can I offer/gossip to right now" seam.
-    private func committedActivityPeerFingerprints() -> [String] {
-        slots.compactMap { slot in
-            guard let fingerprint = slot.fingerprint, slot.supports(.activities, in: namespace.family.vocabulary.capabilities) else { return nil }
-            return fingerprint
-        }
-    }
-
-    /// Seal + sign + transmit an activity payload to a verified fingerprint's committed slot. Nothing is
-    /// sent if that peer no longer has a committed slot (they left the session).
-    private func sendActivityEnvelope(_ type: PayloadType, _ payload: any Encodable, toFingerprint fingerprint: String, sealed: Bool) async {
-        guard let slot = slots.first(where: { $0.fingerprint == fingerprint }) else { return }
-        await sendFeatureEnvelope(type.rawValue, encodable: payload, via: slot, sealed: sealed)
-    }
-
-    // MARK: - In-session hearts (TF b19 item 5; on the routed store since P6 item 6)
-
-    /// Whether a heart can ride the MESH to this friend right now — and since P6 item 6 that means
-    /// "are they a member this device can address", not "are they linked".
+    /// It writes what the key lookup writes, on every call: one `mesh.routedShare.keyMismatch` or
+    /// `mesh.routedShare.destinationNotAddressable` line for a roster member it refuses on those
+    /// grounds, and nothing for this device or for a fingerprint the roster does not hold.
     ///
-    /// The live-slot requirement went with the legacy transport. A heart to an admitted member with
-    /// no live slot is now sealed, wrapped, staged and custodied until a link forms or the origin
-    /// departs and hands custody on, which is the whole point of the routed store.
-    ///
-    /// **What that costs, named rather than hidden.** Capabilities arrive with a slot
-    /// (``localCapabilities()`` appends `.hearts` only while `store.allowNearbyHearts` is on),
-    /// `MeshSessionRosterEntry` carries none and is memory-only, and item 1's key advertisement
-    /// carries a key rather than a capability — so for a member with no live slot this device knows
-    /// neither their build nor their opt-out. The heart may therefore be staged for a peer that will
-    /// refuse it (hearts off) or never judge it (a build with no heart arm), and the sender sees
-    /// "Sent" and spends five minutes of cooldown. The real fix is a capability bit on the
-    /// key-advertisement family, which is a wire decision and is P9's / the owner's.
-    ///
-    /// **It is not the app's whole ordering.** `DisposableCameraView` prefers a live `.hearts` slot
-    /// (delivered now, capability known), then the presence path while the friend is presence-
-    /// reachable (also delivered now), and only then a routed custodied heart — because a
-    /// custodied heart is strictly worse than a delivered one in the one case the presence path was
-    /// best at. This answers the third question truthfully; it does not decide the order.
-    public func canSendSessionHeart(toFingerprint fingerprint: String) -> Bool {
+    /// - Parameter fingerprint: The member's fingerprint.
+    /// - Returns: whether a single-recipient mint could address that member now.
+    public func isAddressableRoutedRecipient(_ fingerprint: String) -> Bool {
         guard fingerprint != identity.localFingerprint,
               membershipVerifier?.roster.contains(fingerprint: fingerprint) == true else {
             return false
         }
         if case .resolved = routedDestinationKeys(for: [fingerprint]) { return true }
         return false
-    }
-
-    /// Whether a friend holds a LIVE committed slot advertising the `hearts` capability right now —
-    /// the question `canSendSessionHeart(toFingerprint:)` used to answer, kept as its own seam
-    /// (P6 item 6).
-    ///
-    /// It is no longer the send gate: the routed path does not need a link. It is the **ordering**
-    /// question the app asks first, because a live `.hearts` slot is the one case where a mesh heart
-    /// is both deliverable now and known to be acceptable to the far end's build and opt-out — the
-    /// two facts capabilities carry and neither the session roster nor the key advertisement does.
-    ///
-    /// - Parameter fingerprint: The friend.
-    /// - Returns: whether a linked, hearts-capable slot faces them.
-    public func hasLiveHeartSlot(forFingerprint fingerprint: String) -> Bool {
-        slots.contains { $0.fingerprint == fingerprint && $0.supports(.hearts, in: namespace.family.vocabulary.capabilities) }
-    }
-
-    /// Sends one in-session heart over the ROUTED store (P6 item 6, plan §12).
-    ///
-    /// Every gate the legacy sealed send had is kept, in the same order: the `allowNearbyHearts`
-    /// opt-out, the active-record-only check, the shared `heartLedger`'s five-minute per-friend
-    /// cooldown, and the fingerprint-keyed in-flight claim. Two things are new and one is gone.
-    ///
-    /// **New, and a bug fix:** the ledger's loaded-ness is now its own refusal.
-    /// `canSendHeart(to:)` is fail-closed and answers false for an UNLOADED ledger as well as for a
-    /// live cooldown, and the cooldown sentence is a lie there — nothing was sent.
-    /// `DisposableCameraView` already distinguished the two for its accessibility label; the send
-    /// did not. Since the item 6 fix review an **absent** ledger is refused the same way, rather
-    /// than optional-chained past into a send with no cooldown (P3-5).
-    ///
-    /// **New:** the delivery is the three lines every routed sender uses — frame a body, ask the
-    /// registry for the token, call the one origination door — with the audience stated as a single
-    /// recipient, which is what the heart row's `.singleRecipient` column means.
-    ///
-    /// **Gone:** the live-slot lookup, and with it `.sending`. The mint is fully synchronous, so
-    /// `.sending` was never an observable state on this path; the presence fallback keeps its own.
-    ///
-    /// One `UUID` is minted and used three times — the routed item id, the body header's id and the
-    /// gift id — because for ``ProximityNamespace/RoutedTypes/heart`` those are one value by frozen contract.
-    public func sendSessionHeart(to friend: ProximityTrustedPeerRecord) {
-        guard store.allowNearbyHearts else { return failSessionHeart(.heartsOff, friend) }
-        // Active record only — never send to a blocked or revoked (unfriended) peer. Silent: the
-        // affordance is not drawn for such a record at all, so reaching here is a caller bug.
-        guard friend.blockedAt == nil, friend.revokedAt == nil else { return }
-        // Both ledger gates are fail-CLOSED on a nil ledger since the item 6 fix review (P3-5).
-        // `heartLedger?.isLoaded != false` and `?? true` both passed a manager with no ledger wired,
-        // so it staged a heart with no cooldown at all — and this function's own doc claims every
-        // gate the legacy sealed send had is kept. Production always wires one (`init`), so this is
-        // not a live defect; it is the guard that makes the doc true and that fails safely if a
-        // future entry point forgets.
-        guard let heartLedger, heartLedger.isLoaded else {
-            return failSessionHeart(.ledgerUnavailable, friend)
-        }
-        guard heartLedger.canSendHeart(to: friend.fingerprint) else {
-            return failSessionHeart(.cooldown, friend)
-        }
-        // The in-flight claim, kept as a FENCE. The window it closes is empty while the mint is
-        // synchronous — everything from here to the stage is one main-actor turn with no suspension
-        // — and it is kept because the absence of a fence is invisible: it is what keeps the window
-        // closed if an `await` is ever reintroduced between the cooldown check and the stage.
-        guard sessionHeartSendsInFlight.insert(friend.fingerprint).inserted else {
-            return failSessionHeart(.alreadySending, friend)
-        }
-        defer { sessionHeartSendsInFlight.remove(friend.fingerprint) }
-        let giftID = UUID()
-        guard let typeToken = routedTypes.token(forCanonicalStore: .heartLedger),
-              let body = framedSessionHeartBody(giftID: giftID, typeToken: typeToken) else {
-            return failSessionHeart(.couldNotSend, friend)
-        }
-        let outcome = originateRoutedItem(
-            body: body, typeToken: typeToken, itemID: giftID,
-            audience: .recipient(friend.fingerprint), now: Date()
-        )
-        onHeartSendForTesting?(outcome)
-        consumeSessionHeart(outcome, friend)
-    }
-
-    /// The heart's framed plaintext, or nil when its own encode failed.
-    ///
-    /// The display name is bounded at the mint as well as on the wire: the heart row's cap is
-    /// arithmetic over `MeshRoutedHeartBody.maxSenderNameUTF8ByteCount`, so an unbounded local name
-    /// could push the header past its allowance and fail the sender's own row.
-    ///
-    /// `typeToken` is passed IN rather than spelled here, and it is not a style choice:
-    /// `noShippingCodeBranchesOnARoutedTypeToken` forbids the token type's qualified constants
-    /// anywhere in this file — **including inside an audit context**, which is where the first draft
-    /// of this function put one and where the wall caught it — so the caller's
-    /// `token(forCanonicalStore:)` answer is the only spelling the manager may hold.
-    private func framedSessionHeartBody(giftID: UUID, typeToken: String) -> Data? {
-        let header = MeshRoutedHeartHeader(
-            id: giftID,
-            sentAtDayKey: FernletDate.dayKey(for: Date()),
-            senderName: MeshRoutedHeartBody.bounded(senderName: displayName)
-        )
-        do {
-            return try MeshRoutedHeartBody(header: header).encoded()
-        } catch {
-            ProximityAudit.log(
-                "mesh.routedShare.mintFailed",
-                context: ["type": typeToken, "error": String(describing: error)]
-            )
-            return nil
-        }
-    }
-
-    /// **Consume-on-stage** (§5d): `.staged` arms the cooldown, feeds closeness and says "Sent".
-    ///
-    /// The legacy path consumed on the wire write because the wire write was the only durable
-    /// moment it had. The routed store's stage is durable-before-acknowledged: a `.staged` outcome
-    /// means the sealed item is on disk under a signed manifest and will be pushed, drained or
-    /// custody-transferred until it is delivered or expires. That is "sent" in every sense the
-    /// cooldown protects — the cooldown exists to stop a second *gift* being minted, and a second
-    /// tap inside the window would mint one the recipient's ledger dedups by id. The UI has never
-    /// claimed receipt ("Sent … some good vibes") and still does not.
-    ///
-    /// Two honest costs ride with it:
-    ///
-    /// 1. **`.staged` is not delivered**, and for a heart the gap is wide: a recipient who never
-    ///    foregrounds before the mesh ends never judges it, and it expires at
-    ///    `hardDeadline + 20 min` as `custodied(by: self)` (D-4.5). Nothing here lies; nothing here
-    ///    tells the sender either, and no delivery surface is built for it.
-    /// 2. **A refusal at the recipient does not refund the cooldown.** Hearts-off at the far end
-    ///    refuses FINAL, five minutes after this ledger armed. That is already the accepted shape
-    ///    for a mid-session opt-out, and a refund would need a wire message the routed path
-    ///    deliberately lacks.
-    ///
-    /// Exhaustive over both `MeshRoutedShareSkip` and `MeshRoutedShareRefusal`, so item 1's next
-    /// refusal case is a build error here as well as in the app's copy fork.
-    private func consumeSessionHeart(
-        _ outcome: MeshRoutedOriginationOutcome, _ friend: ProximityTrustedPeerRecord
-    ) {
-        switch outcome {
-        case .staged:
-            heartLedger?.recordHeartSent(to: friend.fingerprint)
-            onHeartSent?(friend.fingerprint)
-            sessionHeartState = .sent(recipientName: friend.displayName)
-            scheduleSessionHeartStateClear()
-        case .skipped(.noDestinations):
-            failSessionHeart(.recipientLeft, friend)
-        case .refused(.destinationNotAddressable):
-            failSessionHeart(.notReachableYet, friend)
-        case .refused(.keyMismatch):
-            failSessionHeart(.identityUnconfirmed, friend)
-        case .refused(.sealFailed), .refused(.mintFailed):
-            failSessionHeart(.couldNotSend, friend)
-        case .refused(.storeRefused):
-            failSessionHeart(.holdingAllItCan, friend)
-        case .refused(.storeUnavailable):
-            failSessionHeart(.storageUnreachable, friend)
-        }
-    }
-
-    /// Publishes one frozen failure cause and schedules its clear. **No sentence is composed here**
-    /// — a `String` written inside the package renders English in every language, which is the live
-    /// defect D-13.15 closed for the share refusal and which this seam carried until P6 item 6.
-    private func failSessionHeart(
-        _ cause: SessionHeartFailure, _ friend: ProximityTrustedPeerRecord
-    ) {
-        sessionHeartState = .failed(cause, recipientName: friend.displayName)
-        ProximityAudit.log("mesh.routedHeart.sendFailed", context: ["reason": cause.rawValue])
-        scheduleSessionHeartStateClear()
-    }
-
-    private func scheduleSessionHeartStateClear() {
-        sessionHeartStateClearTask?.cancel()
-        // host-pin: timer — stored handle, synchronous main-actor body; a task-lifetime pin would cycle (HP2)
-        sessionHeartStateClearTask = Task { [weak self] in
-            // Cancelled: a newer heart state replaced this one, so leave it alone (R7).
-            do {
-                try await Task.sleep(for: .seconds(3))
-            } catch {
-                return
-            }
-            self?.sessionHeartState = .idle
-        }
     }
 
     // MARK: - Proximity-join state
@@ -1187,20 +546,23 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// Observable (not `@ObservationIgnored`) because ``isSessionLive`` is what the app's review
     /// presentation guards on, and this is the one leg of it that no observable edge accompanies:
     /// every terminal ``sessionState`` carries `.stopParticipation`, which empties `slots`, and the
-    /// promotion hook writes `pendingFriendReview` — both observed. Cleared by `startSearching()`,
+    /// session observer's ending writes its host's review (for Fernlet, FernletSocial's photo
+    /// object's `pendingFriendReview`) — both observed. Cleared by `startSearching()`,
     /// so re-arming the radios over the same mesh un-ends it.
     private var sessionSearchGaveUp = false
 
     /// How long a session with **no committed peer** keeps searching before door 3 declares it over
     /// (P6 item 2 fix review, finding P2-1). One number, read by this manager's own clock and by
-    /// `ContentView.armDiscoveryTimeout()`, which arms the same interval for a fresh search.
+    /// the app's `armDiscoveryTimeout()` (its proximity run seams'), which arms the same interval
+    /// for a fresh search.
     public static let discoveryGiveUpInterval: TimeInterval = 5 * 60
 
     /// When door 3's clock, armed at the moment the last committed peer went away, comes due.
     ///
     /// **Armed in the manager, not in the tab** (the fix for review finding P2-1). The app's
-    /// `armDiscoveryTimeout()` fires only from `startFriendsDiscovery()` — tab entry or
-    /// scene-active — and bails on `isSearching`, so it is single-shot per visit: a pair that
+    /// `armDiscoveryTimeout()` fires only on the Friends discovery edge that starts or resumes a
+    /// search with no committed peer — tab entry or scene-active — so it is single-shot per
+    /// visit: a pair that
     /// blipped more than five minutes into a visit had **no** door 3 at all, and `isSessionLive`
     /// stayed true for the rest of the process unless the user bounced the Social tab. A session is
     /// manager state, not tab state, so the give-up clock lives here and the tab's arm stays only
@@ -1219,8 +581,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// the same verdict (the `wallclock-deadlines-vs-mainactor-starvation` lesson).
     @ObservationIgnored private var sessionGiveUpTask: Task<Void, Never>?
 
-    /// Which transcript this device is showing — a monotone counter bumped at **every** clear
-    /// (P6 item 2 fix review, finding P2-3; P6 item 4's projection reads it).
+    /// Which transcript this device is showing — a monotone counter advanced at **every** moment the
+    /// session's content is dropped (P6 item 2 fix review, finding P2-3; P6 item 4's projection reads
+    /// it): a session's formation, its end and a privacy wipe's start, each in
+    /// ``advanceTranscriptGeneration()`` just before the session observer is told, whose host drops
+    /// the transcript it holds (for Fernlet, FernletSocial's chat, since plan step A0.5.9).
     ///
     /// ``isSessionLive`` is REVERSIBLE — `startSearching()` clears `sessionSearchGaveUp`, so a
     /// resumed pair un-ends a session door 3 had given up on — while the transcript clear that ran
@@ -1387,9 +752,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// Whether this session is still LIVE — the ONE predicate "has the session ended" is the
     /// negation of, and the **only** thing the session-end ceremony may key on (P6 item 2 fix).
     ///
-    /// **Session end means MESH end, never slot loss.** The three hooks
-    /// (``promoteSessionToPendingReviewIfSessionEnded()``, ``openShopWindowIfSessionEnded()``,
-    /// ``clearSessionMessagesIfSessionEnded()``) and the app's review presentation
+    /// **Session end means MESH end, never slot loss.** The session-end funnel `endSessionIfEnded()`
+    /// (the review promotion, the session observer's ending — the post-session shop window — and the
+    /// transcript's clear) and the app's review presentation
     /// (`ConnectView.presentDisconnectReviewIfNeeded()`) read this and nothing else, so the four
     /// doors below are the whole list of ways a session can end:
     ///
@@ -1425,9 +790,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         guard currentMesh != nil else { return hasCommittedPeer }
         return !sessionState.hasEnded && !sessionSearchGaveUp
     }
-
-    /// Shots remaining for this session (10 minus sent count, clamped to ≥ 0).
-    public var filmRemaining: Int { max(0, Self.maxPhotosPerSenderPerSession - photosAddedThisSession) }
 
     public var localFingerprint: String { identity.localFingerprint }
     public var localSigningPublicKey: Data { identity.localSigningPublicKey }
@@ -1539,10 +901,12 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         sessionRoster[index].displayName = ProximityDisplayName.peerDisplayName(name, in: namespace)
     }
 
-    /// Drops the whole live roster. Internal/test seam only — UI finalize paths must NOT call
-    /// this (it clobbered entries belonging to the NEXT session's review): the scoped consumers
-    /// are `completeFriendReview(_:)` for a promoted batch and `consumeRosterEntries(fingerprints:)`
-    /// for the in-session camera review.
+    /// Drops the whole live roster: the host's delete-all leg for the photos nobody chose yet, which
+    /// empties the roster with its review in one synchronous step (FernletSocial's photo object's
+    /// `purgeHeldSessionPhotosForDeleteAll()`, since plan step A0.5.11), and a test seam. UI finalize
+    /// paths must NOT call this (it clobbered entries belonging to the NEXT session's review): the
+    /// session's ending drains the roster into its observer (``MeshSessionEnd/drainedRoster``), and
+    /// the in-session camera review consumes what it presented, scoped (`consumeRosterEntries(fingerprints:)`).
     public func clearSessionRoster() {
         sessionRoster.removeAll()
     }
@@ -1567,181 +931,22 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         sessionRoster.removeAll { fingerprints.contains($0.fingerprint) }
     }
 
-    /// Answers the promoted batch's CANDIDATE half iff `id` matches the outstanding one. The UI
-    /// calls this once its keep-as-friend flow completes (kept, skipped, dismissed = skip all, or
-    /// auto-consumed when nothing was eligible).
+    /// The roster half of the session-end moment (plan step A0.5.11): returns the live roster and
+    /// empties it, for `endSessionIfEnded()` to hand to the session observer in
+    /// ``MeshSessionEnd/drainedRoster`` — the roster half of the review promotion, whose merge is the
+    /// host's (for Fernlet, FernletSocial's photo object merges the entries into its pending review
+    /// by fingerprint: last write wins, capped at ``maxSessionRosterEntries``, the batch never
+    /// dropped). The roster and its custody are the engine's: a drained entry reaches the host once,
+    /// and a later ending drains only what committed after it.
     ///
-    /// **It never answers the photo half** (2026-09-30). A batch still carrying photos the user has
-    /// not chosen between keeps them and stays up — the keep-friends prompt, or the `.none`
-    /// auto-consume, must never be what throws a pending photo choice away — and is cleared only
-    /// once they are answered too (``finishReviewedPhotos(_:keeping:in:)``). A photo no longer held
-    /// (answered elsewhere, or purged) is no longer a choice, so it goes here.
-    public func completeFriendReview(_ id: UUID) {
-        guard var batch = pendingFriendReview, batch.id == id else { return }
-        batch.entries.removeAll()
-        batch.photos = reviewablePhotos(of: batch)
-        pendingFriendReview = batch.isEmpty ? nil : batch
-    }
-
-    /// The pending batch's photos that are still held — exactly what the session-end review can
-    /// offer, newest first. Empty when no batch is pending.
-    public var pendingReviewPhotos: [FriendPhotoPayload] {
-        guard let batch = pendingFriendReview else { return [] }
-        return reviewablePhotos(of: batch)
-    }
-
-    /// The photos among `ids` that still await the user's keep/discard answer, wherever each one is
-    /// listed right now: live in `sessionPhotos`, or moved into the pending batch — and still held
-    /// in the pending corpus either way. Live ones first, each list in its own order.
+    /// An empty roster is answered empty and left unwritten.
     ///
-    /// **What the in-camera Develop review renders** (2026-09-30 fix round, findings C-F1/L-F1). That
-    /// review snapshots the ids it offers at Develop and must keep offering them if the session ends
-    /// under it: door 3's five-minute give-up raises ``isSessionLive`` false while the mesh is still
-    /// held, so the camera — and its open review — stays on screen while the ending MOVES the live
-    /// list into `pendingFriendReview`. Reading `sessionPhotos` alone, the grid went empty and the
-    /// person's answer acted on nothing.
-    ///
-    /// - Parameter ids: The photo ids the review snapshotted.
-    /// - Returns: The ones still unanswered, as metadata-only payloads.
-    public func photosAwaitingAnswer(among ids: Set<UUID>) -> [FriendPhotoPayload] {
-        guard !ids.isEmpty else { return [] }
-        let live = stillHeld(sessionPhotos).filter { ids.contains($0.id) }
-        let liveIDs = Set(live.map(\.id))
-        return live + pendingReviewPhotos.filter { ids.contains($0.id) && !liveIDs.contains($0.id) }
-    }
-
-    /// `batch`'s photos filtered to the ones still held.
-    private func reviewablePhotos(of batch: MeshFriendReviewBatch) -> [FriendPhotoPayload] {
-        stillHeld(batch.photos)
-    }
-
-    /// `photos` filtered to the local ids the pending mirror still holds. The two memory lists are
-    /// projections of that mirror, so this drops nothing in a consistent state; it is the backstop
-    /// that keeps a photo already answered — or purged — from ever being offered again.
-    private func stillHeld(_ photos: [FriendPhotoPayload]) -> [FriendPhotoPayload] {
-        let held = heldPhotoIndex.heldLocalIDs
-        return photos.filter { held.contains($0.id) }
-    }
-
-    /// Answers the promoted batch's PHOTO half: of the `reviewed` photos — the ones the session-end
-    /// review actually showed — the ones in `kept` are copied to the wall and the rest are deleted
-    /// for good, all through ``applyPhotoAnswers(kept:discarded:now:)``. The post-session twin of
-    /// ``finishSessionPhotos(keeping:of:)``.
-    ///
-    /// **Scoped to what was shown, never to the whole batch.** A photo promoted while the sheet was
-    /// up — a late arrival, a second ending merged into the same batch — was never offered, so it is
-    /// neither discarded nor kept: it stays held and the review re-presents for it. A stale
-    /// `batchID` changes nothing and reports ``SessionPhotoAnswer/nothing`` — the conservative side
-    /// of an answer that can no longer be matched to its question. The batch clears once neither
-    /// half has anything left.
-    ///
-    /// - Parameters:
-    ///   - reviewed: The photo ids the review presented.
-    ///   - kept: The ids the user chose to keep; ids outside `reviewed` are ignored.
-    ///   - batchID: The batch the review was presented from.
-    /// - Returns: What landed, what was deleted, and what is still held — the review stays up while
-    ///   ``SessionPhotoAnswer/notApplied`` is not empty, and a camera-roll export may read only
-    ///   ``SessionPhotoAnswer/keptOnWall``.
-    public func finishReviewedPhotos(
-        _ reviewed: Set<UUID>, keeping kept: Set<UUID>, in batchID: UUID
-    ) -> SessionPhotoAnswer {
-        guard let batch = pendingFriendReview, batch.id == batchID else { return .nothing }
-        let answered = Set(stillHeld(batch.photos).map(\.id)).intersection(reviewed)
-        let answer = applyPhotoAnswers(
-            kept: answered.intersection(kept), discarded: answered.subtracting(kept), now: Date()
-        )
-        ProximityAudit.log(
-            "mesh.session.photoReviewAnswered",
-            context: ["kept": String(answer.keptOnWall.count), "discarded": String(answer.discarded.count),
-                      "unreadable": String(answer.unreadable.count), "notApplied": String(answer.notApplied.count),
-                      "stillPending": String(pendingFriendReview?.photos.count ?? 0)]
-        )
-        return answer
-    }
-
-    /// Phase 2 ("Session-end review is model-state, not view-events"): when the session has ENDED
-    /// (``isSessionLive``), move the live roster AND the live session photos into
-    /// `pendingFriendReview`, merging into any existing unconsumed batch — neither candidates nor
-    /// photos are ever dropped. Idempotent and cheap; called after every slot-removal path
-    /// (removeSlot, disconnectSlot — which the checkCoordinatorStates stale eviction funnels
-    /// through) and on leaveSession/stopSearching teardown.
-    ///
-    /// **The photo half is the 2026-09-30 fix.** The last device left in a mesh ends through a
-    /// verified termination (`applyVerifiedTermination()` → `leaveSession()`), with no Develop tap
-    /// and so no review of its own; `leaveSession()` used to empty `sessionPhotos` in the same
-    /// synchronous turn, so by the time the app's presenter ran it saw no photos and offered at most
-    /// the keep-friends prompt — and every photo, then already on the wall since capture, was kept
-    /// without asking. Every other ending the user did not choose (a removal, the ceiling, epoch
-    /// exhaustion, "Ask to remove" on the only other person, a hard stop) took the same shortcut.
-    /// Moving the photos here covers them all at once, because each reaches this funnel — and since
-    /// the photos are held in the pending corpus rather than the wall, the move is memory-only.
-    ///
-    /// The predicate is ``isSessionLive`` — neither `isInSession` nor ``hasCommittedPeer``, and the
-    /// P6 item 2 fix is where the last of those three stopped being right. On `isInSession` this
-    /// ceremony (the product's core loop, and item 6's tier-2 precondition) would never fire again
-    /// once a pair founds a mesh at its first commit; on `hasCommittedPeer` a two-second link blip
-    /// promoted the batch mid-session and the sheet that presents it terminates the live mesh. The
-    /// call sites are unchanged: they are still every slot-removal path, and slot loss still ends
-    /// the session when there is no mesh to outlive it.
-    private func promoteSessionToPendingReviewIfSessionEnded() {
-        guard !isSessionLive else { return }
-        promoteRosterIntoPendingReview()
-        movePhotosIntoPendingReview()
-    }
-
-    /// The roster half of the promotion: merges the live roster into the pending batch by
-    /// fingerprint (last write wins, capped at the roster's own bound) and empties it.
-    private func promoteRosterIntoPendingReview() {
-        guard !sessionRoster.isEmpty else { return }
-        if var batch = pendingFriendReview {
-            for entry in sessionRoster {
-                if let index = batch.entries.firstIndex(where: { $0.fingerprint == entry.fingerprint }) {
-                    batch.entries[index] = entry   // last-write-wins, matching the roster's dedupe rule
-                } else if batch.entries.count < Self.maxSessionRosterEntries {
-                    batch.entries.append(entry)
-                }   // R3: an unreviewed batch survives sessions, so the merge honors the roster cap
-            }
-            pendingFriendReview = batch
-        } else {
-            pendingFriendReview = MeshFriendReviewBatch(entries: sessionRoster)
-        }
+    /// - Returns: The roster as it stood, in its own order; empty when it held nothing.
+    private func drainSessionRoster() -> [MeshSessionRosterEntry] {
+        guard !sessionRoster.isEmpty else { return [] }
+        let drained = sessionRoster
         sessionRoster.removeAll()
-    }
-
-    /// The photo half of the promotion: MOVES whatever is still in `sessionPhotos` into the
-    /// pending batch, newest first, and empties the live list — never a drop.
-    ///
-    /// Not gated on ``isSessionLive`` itself: the ending caller gates it, and `startJoin()` runs it
-    /// bare, because a new search is a new session by definition and a photo still listed then
-    /// belongs to one that ended without an answer. The ended session's final metadata is stamped
-    /// first, while its photo-session id is still set — what the Develop flow's
-    /// ``finishSessionPhotos(keeping:)`` does before it answers. R3: the merged list is capped at the
-    /// pending corpus's own bound, which already bounds every photo that can be held.
-    ///
-    /// **It writes nothing** (invariant I6). Both lists are memory projections of the pending index,
-    /// which does not record "live" or "awaiting" at all — at a launch every held photo is awaiting
-    /// by definition — so an ending that runs while the device is locked (a continued-processing
-    /// task, a termination read in the background) cannot fail here and loses nothing. The
-    /// finalized session metadata rides only the memory lists; a kept photo carries it to the wall.
-    ///
-    /// **It can run under an open Develop review.** Door 3's give-up ends the session while the mesh
-    /// is held, so the camera and any review it has up stay on screen through this move. That
-    /// review renders and answers by the ids it snapshotted (``photosAwaitingAnswer(among:)``,
-    /// ``finishSessionPhotos(keeping:of:)``), so the move changes where its photos are held and
-    /// nothing about the person's answer (2026-09-30 fix round, findings C-F1/L-F1).
-    private func movePhotosIntoPendingReview() {
-        guard !sessionPhotos.isEmpty else { return }
-        finalizeCurrentPhotoSessionMetadata()
-        var batch = pendingFriendReview ?? MeshFriendReviewBatch(entries: [])
-        let alreadyPending = Set(batch.photos.map(\.id))
-        let arriving = sessionPhotos.filter { !alreadyPending.contains($0.id) }
-        batch.photos = Array((arriving + batch.photos).prefix(PendingSessionPhotoStore.maxHeldPhotos))
-        pendingFriendReview = batch
-        sessionPhotos.removeAll()
-        ProximityAudit.log(
-            "mesh.session.photosPendingReview",
-            context: ["moved": String(arriving.count), "pending": String(batch.photos.count)]
-        )
+        return drained
     }
 
     /// Pushes the three lock facts in, and runs the re-entry pass whichever legs moved owe (P5 item
@@ -1758,11 +963,13 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// `isOpen`'s edge: jobs that only move ciphertext must run on an unlock even while the app is
     /// backgrounded, which is exactly the window in which the store became readable.
     ///
-    /// **The photo indexes are re-read first** (2026-09-30). A rising ciphertext leg is also the
-    /// moment a wall or pending index that could not be read at a locked launch becomes readable,
-    /// so ``retryDeferredPhotoIndexes(now:)`` runs before the pass — which may project a routed
-    /// photo into the pending corpus, and must find its real index there — and before the
-    /// `runsPass` guard, so an edge that owes the routed store nothing still re-reads them.
+    /// **The session observer is told first** (S15, plan step A0.5.11): the changed gate, whether a
+    /// ciphertext leg rose, and the instant, before the pass and before the `runsPass` guard. For
+    /// Fernlet, FernletSocial's photo object re-reads its photo indexes on a rising edge (2026-09-30:
+    /// a rising ciphertext leg is also the moment a wall or pending index that could not be read at a
+    /// locked launch becomes readable, and the pass may project a routed photo into the pending
+    /// corpus, which must find its real index there) and recomputes whether its held photos can be
+    /// shown — so an edge that owes the routed store nothing still re-reads them.
     ///
     /// - Parameters:
     ///   - gate: The facts as the app now knows them.
@@ -1783,8 +990,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
                  "duress": String(gate.duressActive)]
             )
         )
-        if edge.isRising { retryDeferredPhotoIndexes(now: now) }
-        refreshHeldPhotosCanBeShown()
+        sessionObserver?.meshRoutedAccessGateDidChange(gate, isRising: edge.isRising, now: now)
         guard edge.runsPass else { return nil }
         return runRoutedReentry(edge, now: now)
     }
@@ -1798,15 +1004,16 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// mesh, a removal naming this device, the ceiling, epoch exhaustion, the pairwise "Ask to
     /// remove", a hard stop. Session photos were then on the wall from capture, so that line kept
     /// them all without asking. Now every session photo is held in the pending corpus and the
-    /// teardown's `stopSearching()` moves whatever is still listed into `pendingFriendReview`
-    /// (``finishReviewedPhotos(_:keeping:in:)`` answers it), with no disk write; a Develop flow
-    /// that already had the user choose (``finishSessionPhotos(keeping:of:)``) took its answered
-    /// photos out of the list first, so nothing is offered twice. The photo-session ids are cleared
-    /// only AFTER the teardown, because the promotion stamps the ended session's metadata with them.
+    /// teardown's `stopSearching()` ends the session, whose observer moves whatever is still listed
+    /// into the pending review with no disk write (FernletSocial's photo object, since plan step
+    /// A0.5.11, where the review's answer lives too); a Develop flow that already had the user
+    /// choose took its answered photos out of the list first, so nothing is offered twice. The
+    /// session observer is told the session was left only AFTER the teardown
+    /// (``MeshSessionObserver/meshSessionDidLeave()``), because the ending stamps the ended session's
+    /// photos with the photo session's ids, which the leave then forgets.
     public func leaveSession() {
         leaveMesh()
-        photoSessionStartedAt = nil
-        activePhotoSessionID = nil
+        sessionObserver?.meshSessionDidLeave()
     }
 
     /// Ends the session, telling every peer why first.
@@ -2164,609 +1371,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         )
     }
 
-    /// The answer for the whole LIVE roll: every listed photo not in `keptPhotoIDs` is deleted and
-    /// the kept ones are copied to the wall, so the teardown that follows has nothing left to
-    /// promote. ``finishSessionPhotos(keeping:of:)`` over every listed id. A photo the session ended
-    /// without an answer for is answered by the post-session review through
-    /// ``finishReviewedPhotos(_:keeping:in:)``.
-    ///
-    /// - Returns: What the answer did (``SessionPhotoAnswer``).
-    public func finishSessionPhotos(keeping keptPhotoIDs: Set<UUID>) -> SessionPhotoAnswer {
-        finishSessionPhotos(keeping: keptPhotoIDs, of: Set(sessionPhotos.map(\.id)))
-    }
-
-    /// The in-camera Develop review's answer, scoped to the photos it SHOWED (`reviewed`, snapshotted
-    /// at Develop) and applied wherever each one is listed now: of those still held, the ones in
-    /// `kept` are copied to the wall, the rest are deleted for good, and all of them leave the live
-    /// list AND the pending batch (``applyPhotoAnswers(kept:discarded:now:)``).
-    ///
-    /// **Held anywhere, not just live** (2026-09-30 fix round, findings C-F1/L-F1). Door 3's
-    /// five-minute give-up ends the session while the mesh is still held, so the camera and its open
-    /// review stay up while the ending moves the live list into `pendingFriendReview`. Answering
-    /// only `sessionPhotos` then answered nothing. The ids make the answer independent of where the
-    /// photo is listed.
-    ///
-    /// **First answer wins.** An id already answered — by the post-session review or an earlier
-    /// call — is no longer held, so it is ignored rather than answered again. A photo listed after
-    /// the snapshot (a late arrival while the sheet was up) was never shown, so it stays listed and
-    /// reaches the post-session review at the teardown.
-    ///
-    /// - Parameters:
-    ///   - kept: The ids the user chose to keep; ids outside `reviewed` are ignored.
-    ///   - reviewed: The ids the review presented.
-    /// - Returns: What the answer did (``SessionPhotoAnswer``); the review stays up while its
-    ///   ``SessionPhotoAnswer/notApplied`` is not empty.
-    public func finishSessionPhotos(keeping kept: Set<UUID>, of reviewed: Set<UUID>) -> SessionPhotoAnswer {
-        finalizeCurrentPhotoSessionMetadata()
-        let pendingIDs = Set(stillHeld(pendingFriendReview?.photos ?? []).map(\.id))
-        let answered = reviewed.intersection(Set(stillHeld(sessionPhotos).map(\.id)).union(pendingIDs))
-        let answer = applyPhotoAnswers(
-            kept: answered.intersection(kept), discarded: answered.subtracting(kept), now: Date()
-        )
-        if !pendingIDs.isDisjoint(with: answered) {
-            ProximityAudit.log(
-                "mesh.session.developAnsweredPendingPhotos",
-                context: ["answered": String(answered.intersection(pendingIDs).count)]
-            )
-        }
-        return answer
-    }
-
-    /// Deletes every photo on the live roll: ``finishSessionPhotos(keeping:)`` with nothing kept.
-    ///
-    /// - Returns: What the answer did (``SessionPhotoAnswer``).
-    public func deleteAllSessionPhotos() -> SessionPhotoAnswer {
-        finishSessionPhotos(keeping: [])
-    }
-
-    /// Permanently removes one KEPT photo from the wall: drops it from `meshPhotos`, clears any wall
-    /// preference that pointed at it (favorite / aggregated cover), re-saves the index so the
-    /// store's orphan sweep deletes its image and thumbnail files, and tombstones its identity
-    /// (sender fingerprint + id) for 24 hours so a routed copy still in custody cannot come back.
-    ///
-    /// **A held photo is refused** (2026-09-30): held photos leave only through an answer. A delete
-    /// that dropped one from the memory batch while the pending index kept it would bring it back at
-    /// the next launch — an answer that did not persist, which is worse than no answer at all.
-    public func deletePhoto(_ photoID: UUID) {
-        guard heldPhotoIndex.heldPhoto(localID: photoID) == nil else {
-            ProximityAudit.log("mesh.heldPhotos.deleteRefused")
-            return
-        }
-        let removed = meshPhotos.first { $0.id == photoID }
-        meshPhotos.removeAll { $0.id == photoID }
-        // Drops the favorite / aggregated-cover entries that pointed at the photo (and any other
-        // entry the cache no longer backs).
-        prunePhotoWallPreferences()
-        guard let removed else { return }
-        persistPhotoIndex(meshPhotos)
-        tombstoneDeletedWallPhoto(removed)
-    }
-
-    /// The tombstone half of ``deletePhoto(_:)``: a wall photo from an older build, deleted inside a
-    /// routed window after the upgrade, must not be re-projected as a NEW held photo. Skipped while
-    /// the pending index cannot be read (nothing writes it then) and for a photo with no sender.
-    private func tombstoneDeletedWallPhoto(_ photo: FriendPhotoPayload) {
-        guard let sender = photo.senderFingerprint, heldPhotoIndexDeferral == nil else { return }
-        commitHeldPhotoAnswers([HeldPhotoKey(origin: sender, itemID: photo.id)], now: Date())
-    }
-
-    /// The one seam every wall save goes through, so the deferred-index rule is enforced in a
-    /// single place.
-    ///
-    /// While `photoIndexDeferred` holds, `meshPhotos` is empty because the index could not be READ
-    /// — and ``PrivateMediaStore/save(_:)`` is a full-index rewrite that deletes every photo file
-    /// the set omits, so writing it would destroy the wall this funnel deliberately keeps. Re-read
-    /// first: only a successful read clears the flag, and it brings the disk entries back into
-    /// `meshPhotos` (this session's arrivals win by id — they carry the bytes still to be written).
-    /// Nothing was deletable while the flag was set, so nothing can be resurrected by that merge.
-    /// The unlock/foreground edge re-reads it too (``retryDeferredPhotoIndexes(now:)``), so a wall
-    /// deferred at launch recovers without waiting for a save — which, since the wall stopped
-    /// receiving captures (2026-09-30), might otherwise never come.
-    private func persistPhotoIndex(_ photos: [FriendPhotoPayload]) {
-        guard photoIndexDeferred else {
-            photoCacheStore.save(photos)
-            return
-        }
-        guard case .entries(let recovered) = photoCacheStore.loadIndex() else {
-            ProximityAudit.log("mesh.photoIndex.saveSkippedWhileDeferred")
-            return
-        }
-        photoIndexDeferred = false
-        let merged = Self.mergedPhotoIndex(session: photos, recovered: recovered)
-        meshPhotos = merged.map { $0.withoutImageData() }
-        photoCacheStore.save(merged)
-    }
-
-    /// Union of this session's index and the copy just recovered from disk: newest first, capped
-    /// like the store, session entries winning by id so a payload still carrying its bytes is not
-    /// replaced by the byte-less recovered row.
-    private static func mergedPhotoIndex(
-        session: [FriendPhotoPayload],
-        recovered: [FriendPhotoPayload]
-    ) -> [FriendPhotoPayload] {
-        let sessionIDs = Set(session.map(\.id))
-        let merged = session + recovered.filter { !sessionIDs.contains($0.id) }
-        return Array(merged.sorted { $0.addedAt > $1.addedAt }.prefix(PrivateMediaStore.maxCachedPhotos))
-    }
-
-    /// Drops wall-preference entries whose session or photo no longer exists in `meshPhotos`
-    /// (FIFO eviction past the 1000-photo cap, session discard, single-photo delete, or a favorite
-    /// on a photo that was never kept). The sidecar is install-lifetime and survives delete-all
-    /// (the wall is deliberately kept), so without this it accumulated one `aggregatedSessionIDs`
-    /// + cover entry per aggregated session forever while the photos themselves rolled off (R3).
-    /// Three filters over finite collections; persists only when something actually changed. Never
-    /// called from `photoWallPosts` — that getter must stay mutation-free.
-    private func prunePhotoWallPreferences() {
-        // A deferred index means `meshPhotos` is empty because nothing could be READ, not because
-        // the wall is empty; pruning against it would drop the favorite and cover of every photo
-        // still on disk. Same fail-closed rule as `persistPhotoIndex`.
-        guard !photoIndexDeferred else { return }
-        let liveSessionIDs = Set(meshPhotos.compactMap { $0.session?.id })
-        let livePhotoIDs = Set(meshPhotos.map(\.id))
-        var pruned = photoWallPreferences
-        pruned.aggregatedSessionIDs = pruned.aggregatedSessionIDs.filter { liveSessionIDs.contains($0) }
-        pruned.coverPhotoIDsBySession = pruned.coverPhotoIDsBySession
-            .filter { liveSessionIDs.contains($0.key) && livePhotoIDs.contains($0.value) }
-        pruned.favoritePhotoIDsBySession = pruned.favoritePhotoIDsBySession
-            .filter { liveSessionIDs.contains($0.key) && livePhotoIDs.contains($0.value) }
-        guard pruned != photoWallPreferences else { return }
-        photoWallPreferences = pruned
-        persistPhotoWallPreferences()
-    }
-
-    // MARK: - Held session photos (2026-09-30)
-
-    /// Holds one session photo in the sealed pending corpus — the ONLY way a session photo enters
-    /// this device, for BOTH producers (``addPhoto(_:)`` and the routed projection). It never
-    /// touches `meshPhotos`: nothing reaches the wall before the person's answer.
-    ///
-    /// Refused, by identity (origin + item id, never the id alone): a tombstoned key is
-    /// ``PendingSessionPhotoStore/Hold/answered`` (it was answered and must not come back), and a
-    /// key already held, or a wall photo with the same sender and id, is
-    /// ``PendingSessionPhotoStore/Hold/alreadyHeld``. Also refused, as `notPersisted`, while a
-    /// duress session is in force and while the pending index cannot be read — a write over an
-    /// unread index would replace every photo it holds.
-    ///
-    /// The local id is the item id unless another held photo or a wall photo already uses it (a
-    /// member reusing someone else's id), in which case a fresh one is minted so neither overwrites
-    /// the other's files. A live photo is stamped with the current session's metadata and listed
-    /// in `sessionPhotos`; an awaiting one keeps its own and joins the pending batch (a photos-only
-    /// batch is created if none exists), which re-triggers the review.
-    ///
-    /// - Parameters:
-    ///   - photo: The photo, carrying its plaintext bytes.
-    ///   - key: Who minted it and the id they chose: this device's own fingerprint for a capture,
-    ///     the signed manifest's origin and item id for a routed photo.
-    ///   - live: Whether it belongs to the session that is live right now.
-    /// - Returns: The store's outcome; only ``PendingSessionPhotoStore/Hold/held`` changed anything.
-    func holdSessionPhoto(
-        _ photo: FriendPhotoPayload, key: MeshContentKey, live: Bool
-    ) -> PendingSessionPhotoStore.Hold {
-        let now = Date()
-        retryDeferredPhotoIndexes(now: now)
-        guard !routedAccessGate.duressActive, heldPhotoIndexDeferral == nil else {
-            ProximityAudit.log(
-                "mesh.heldPhotos.holdRefused",
-                context: ["reason": routedAccessGate.duressActive ? "duress" : "pendingIndexDeferred"]
-            )
-            return .notPersisted
-        }
-        let heldKey = HeldPhotoKey(origin: key.senderFingerprint, itemID: key.contentID)
-        if let settled = heldPhotoSettlement(heldKey) { return settled }
-        guard let imageData = photo.imageData else { return .notPersisted }
-        let stamped = live ? photo.withSession(currentPhotoSessionMetadata()) : photo
-        let local = withHeldLocalID(stamped, imageData: imageData)
-        let entry = HeldSessionPhoto(key: heldKey, heldAt: now, payload: local)
-        let (outcome, next) = heldPhotoStore.hold(entry, imageData: imageData, into: heldPhotoIndex)
-        guard outcome == .held else {
-            ProximityAudit.log("mesh.heldPhotos.holdRefused", context: ["reason": Self.holdToken(outcome)])
-            return outcome
-        }
-        heldPhotoIndex = next
-        listHeldPhoto(local.withoutImageData(), live: live)
-        return .held
-    }
-
-    /// A frozen English audit token for a hold outcome — never copy, never localized.
-    private static func holdToken(_ outcome: PendingSessionPhotoStore.Hold) -> String {
-        switch outcome {
-        case .held: return "held"
-        case .alreadyHeld: return "alreadyHeld"
-        case .answered: return "answered"
-        case .full: return "full"
-        case .unsafeImage: return "unsafeImage"
-        case .notPersisted: return "notPersisted"
-        }
-    }
-
-    /// Whether this identity is already settled — answered (tombstoned), held, or on the wall with
-    /// the same sender and id — or nil when it may be held. Read from the mirror and the wall only;
-    /// nothing is decrypted to answer it, which is what lets the routed projection ask it before
-    /// the body is opened.
-    private func heldPhotoSettlement(_ key: HeldPhotoKey) -> PendingSessionPhotoStore.Hold? {
-        if heldPhotoIndex.isAnswered(key) { return .answered }
-        if heldPhotoIndex.holds(key) || wallHolds(key) { return .alreadyHeld }
-        return nil
-    }
-
-    /// Whether the wall holds a photo with this identity: the same sender fingerprint and id.
-    private func wallHolds(_ key: HeldPhotoKey) -> Bool {
-        meshPhotos.contains { $0.id == key.itemID && $0.senderFingerprint == key.origin }
-    }
-
-    /// `photo` under the local id it will be held by: its own id, or a fresh one when another held
-    /// photo or a wall photo already uses that id (audited — only a routed photo whose origin reused
-    /// someone else's item id can collide; an own capture's id is minted here).
-    private func withHeldLocalID(_ photo: FriendPhotoPayload, imageData: Data) -> FriendPhotoPayload {
-        let taken = heldPhotoIndex.heldLocalIDs.contains(photo.id) || meshPhotos.contains { $0.id == photo.id }
-        guard taken else { return photo }
-        ProximityAudit.log("mesh.heldPhotos.idCollision")
-        return FriendPhotoPayload(
-            id: UUID(),
-            imageData: imageData,
-            addedAt: photo.addedAt,
-            senderName: photo.senderName,
-            senderFingerprint: photo.senderFingerprint,
-            senderSigningPublicKey: photo.senderSigningPublicKey,
-            session: photo.session
-        )
-    }
-
-    /// Lists a just-held photo in its memory projection: the live roll, or the awaiting batch.
-    private func listHeldPhoto(_ metadata: FriendPhotoPayload, live: Bool) {
-        if live {
-            // R3: every listed photo is held, and the corpus refuses a hold past the same bound.
-            sessionPhotos.insert(metadata, at: 0)
-            sessionPhotos = Array(sessionPhotos.prefix(Self.maxSessionPhotos))
-            return
-        }
-        var batch = pendingFriendReview ?? MeshFriendReviewBatch(entries: [])
-        batch.photos.insert(metadata, at: 0)
-        batch.photos = Array(batch.photos.prefix(PendingSessionPhotoStore.maxHeldPhotos))
-        pendingFriendReview = batch
-        ProximityAudit.log("mesh.heldPhotos.heldAwaiting", context: ["pending": String(batch.photos.count)])
-    }
-
-    /// Re-reads whichever photo index could not be read before — the wall's, the pending corpus's,
-    /// or both — and then runs the reconcile if both are now readable.
-    ///
-    /// Callers: the gate door on a rising ciphertext leg (the unlock or foreground that makes the
-    /// `.completeFileProtection` files readable again), and the top of every hold and answer.
-    /// Nothing re-read the wall before this existed: a wall deferred at a locked background launch
-    /// was an empty album for the rest of the process.
-    ///
-    /// - Parameter now: The instant for the pending load's tombstone pruning.
-    private func retryDeferredPhotoIndexes(now: Date) {
-        guard photoIndexDeferred || heldPhotoIndexDeferral != nil else { return }
-        if photoIndexDeferred { retryDeferredWallIndex() }
-        if heldPhotoIndexDeferral != nil { loadHeldPhotoIndex(now: now) }
-        reconcileHeldPhotosIfReady(now: now)
-    }
-
-    /// The wall half of ``retryDeferredPhotoIndexes(now:)``: one re-read, merged exactly as
-    /// `persistPhotoIndex` merges. While the wall was deferred nothing could be added to
-    /// `meshPhotos` (a keep is refused then, and a hold never touches it), so the merge is the
-    /// recovered index; it is written back only if that ever stops being true.
-    private func retryDeferredWallIndex() {
-        guard case .entries(let recovered) = photoCacheStore.loadIndex() else { return }
-        photoIndexDeferred = false
-        let unsaved = meshPhotos
-        let merged = Self.mergedPhotoIndex(session: unsaved, recovered: recovered)
-        meshPhotos = merged.map { $0.withoutImageData() }
-        if !unsaved.isEmpty { photoCacheStore.save(merged) }
-        prunePhotoWallPreferences()
-        ProximityAudit.log("mesh.photoIndex.recoveredAfterDeferral", context: ["photos": String(meshPhotos.count)])
-    }
-
-    /// Loads the pending index into the mirror, or records why it cannot be read.
-    ///
-    /// An `.unrecoverable` index (a present key that fails to open it: corruption, or a duress
-    /// crypto-erase) has already been purged by the store; the mirror starts empty and holds may
-    /// proceed.
-    private func loadHeldPhotoIndex(now: Date) {
-        switch heldPhotoStore.load(now: now) {
-        case .loaded(let index):
-            heldPhotoIndex = index
-            heldPhotoIndexDeferral = nil
-        case .deferred(let deferral):
-            heldPhotoIndexDeferral = deferral
-        case .unrecoverable(let purged):
-            ProximityAudit.log("mesh.heldPhotos.indexUnrecoverable", context: ["purged": String(purged)])
-            heldPhotoIndex = .empty
-            heldPhotoIndexDeferral = nil
-        }
-        refreshHeldPhotosCanBeShown()
-    }
-
-    /// The launch reconcile, once BOTH indexes are readable: a held entry whose local id is on the
-    /// wall, whose key names a wall photo (same sender, same id), or that is tombstoned was already
-    /// answered — the kill landed between an answer's wall commit and its pending write — so it is
-    /// dropped and tombstoned, never offered. Everything else still held is offered as awaiting.
-    ///
-    /// Over a wall that could not be read it would re-offer a kept photo, and a discard of it would
-    /// then leave the wall copy — so it does not run until the wall is readable. While the wall is
-    /// deferred at a LOCKED launch nothing held is offered; once protected data is available and the
-    /// wall still cannot be read, the failure is persistent and waiting would deadlock the review,
-    /// so ``offerHeldPhotosOverUnreadableWallIfPersistent()`` offers them with Keep refused.
-    ///
-    /// - Parameter now: The instant the tombstones are stamped with.
-    private func reconcileHeldPhotosIfReady(now: Date) {
-        defer { refreshHeldPhotosCanBeShown() }
-        guard !heldPhotosReconciled, heldPhotoIndexDeferral == nil else { return }
-        guard !photoIndexDeferred else {
-            offerHeldPhotosOverUnreadableWallIfPersistent()
-            return
-        }
-        let wallIDs = Set(meshPhotos.map(\.id))
-        let stale = heldPhotoIndex.photos.filter {
-            wallIDs.contains($0.localID) || wallHolds($0.key) || heldPhotoIndex.isAnswered($0.key)
-        }
-        if !stale.isEmpty {
-            ProximityAudit.log("mesh.heldPhotos.reconciled", context: ["dropped": String(stale.count)])
-            commitHeldPhotoAnswers(Set(stale.map(\.key)), now: now)
-            // Already offered over an unreadable wall: take the ones that turned out to be kept back
-            // out of the review.
-            forgetAnsweredHeldPhotos(Set(stale.map(\.localID)))
-        }
-        heldPhotosReconciled = true
-        offerHeldPhotosAwaitingAnswer()
-    }
-
-    /// The persistent-failure half of the reconcile's precondition: with protected data available
-    /// (the device is unlocked, so the `.completeFileProtection` file SHOULD read) the wall still
-    /// cannot be read, so the held photos are offered now — Keep refused with its reason, Delete
-    /// all working — rather than never. See ``heldPhotosOfferedOverUnreadableWall`` for the cost.
-    private func offerHeldPhotosOverUnreadableWallIfPersistent() {
-        guard routedAccessGate.protectedDataAvailable, !heldPhotosOfferedOverUnreadableWall else { return }
-        ProximityAudit.log("mesh.heldPhotos.offeredOverUnreadableWall")
-        heldPhotosOfferedOverUnreadableWall = true
-        offerHeldPhotosAwaitingAnswer()
-    }
-
-    /// Lists every held photo not already listed as awaiting, in a photos-only batch if none exists:
-    /// the rebuild that makes the review survive a process kill. Newest first, as the index keeps
-    /// them. At a launch nothing is listed yet and no session is live, so every held photo lands
-    /// here.
-    private func offerHeldPhotosAwaitingAnswer() {
-        var listed = Set(sessionPhotos.map(\.id))
-        listed.formUnion(pendingFriendReview?.photos.map(\.id) ?? [])
-        let unlisted = heldPhotoIndex.photos.filter { !listed.contains($0.localID) }.map(\.payload)
-        guard !unlisted.isEmpty else { return }
-        var batch = pendingFriendReview ?? MeshFriendReviewBatch(entries: [])
-        batch.photos = Array((unlisted + batch.photos).prefix(PendingSessionPhotoStore.maxHeldPhotos))
-        pendingFriendReview = batch
-        ProximityAudit.log("mesh.heldPhotos.offeredFromIndex", context: ["photos": String(unlisted.count)])
-    }
-
-    /// Recomputes ``heldPhotosCanBeShown`` from its three inputs, writing only on a change so an
-    /// unchanged push does not wake every observer.
-    private func refreshHeldPhotosCanBeShown() {
-        let offered = heldPhotosReconciled || heldPhotosOfferedOverUnreadableWall
-        let next = routedAccessGate.isOpen && heldPhotoIndexDeferral == nil && offered
-        if next != heldPhotosCanBeShown { heldPhotosCanBeShown = next }
-    }
-
-    /// Whether the wall's index is readable, so a review may offer Keep. A review presented while it
-    /// is not says why and still offers Delete all, which needs only the pending index.
-    public var wallCanTakeKeeps: Bool { !photoIndexDeferred }
-
-    /// Whether ended-session photos are waiting for the person's answer.
-    public var hasOutstandingPhotoReview: Bool {
-        !(pendingFriendReview?.photos.isEmpty ?? true)
-    }
-
-    /// A held photo's full-size plaintext for the review, or nil. **The decrypt seam for pending
-    /// bytes** (invariant I13): it answers only while the routed access gate is open — unlocked,
-    /// foreground, and NOT under duress — so a duress decoy can never draw a held photo. The wall's
-    /// ``imageData(for:)`` never reads the pending corpus, and this never reads the wall.
-    public func reviewImageData(for photo: FriendPhotoPayload) -> Data? {
-        guard routedAccessGate.isOpen, let held = heldPhotoIndex.heldPhoto(localID: photo.id) else { return nil }
-        return heldPhotoStore.imageData(for: held)
-    }
-
-    /// A held photo's thumbnail plaintext for the review's tiles, or nil — under the same gate as
-    /// ``reviewImageData(for:)``.
-    public func reviewThumbnailData(for photo: FriendPhotoPayload) -> Data? {
-        guard routedAccessGate.isOpen, let held = heldPhotoIndex.heldPhoto(localID: photo.id) else { return nil }
-        return heldPhotoStore.thumbnailData(for: held)
-    }
-
-    /// Delete-all's leg for the photos nobody chose yet (wipe leg 4d): empties the live roll, the
-    /// live roster and the WHOLE pending batch — candidates too, because a keep-as-friend offer from
-    /// a session the person just asked to erase would write new trust rows about it — and the
-    /// mirror (tombstones included: after delete-all the routed store is wiped and the identity
-    /// rotated, so nothing can be re-projected), then removes the `PendingSessionPhotos/` directory.
-    ///
-    /// Clearing the live roster here means a hard-stop leave that runs after the purge promotes
-    /// nothing. The key row survives (an emptied store's key protects nothing), exactly like the
-    /// own-photo row.
-    ///
-    /// - Returns: Whether the corpus directory is gone; false is an incomplete-wipe line.
-    public func purgeHeldSessionPhotosForDeleteAll() -> Bool {
-        sessionPhotos = []
-        sessionRoster = []
-        pendingFriendReview = nil
-        heldPhotoIndex = .empty
-        let purged = heldPhotoStore.purgeAll()
-        if purged { heldPhotoIndexDeferral = nil }
-        refreshHeldPhotosCanBeShown()
-        ProximityAudit.log("mesh.heldPhotos.purgedForDeleteAll", context: ["purged": String(purged)])
-        return purged
-    }
-
-    // MARK: - The held-photo answer (2026-09-30)
-
-    /// The one engine every session-photo answer runs through (ids are LOCAL ids).
-    ///
-    /// Order, and why:
-    /// 1. The routed access gate must be open — a keep reads plaintext, and no answer may run under
-    ///    duress or in the background. Otherwise nothing is applied (`unavailable`).
-    /// 2. The deferred indexes are re-read. A pending index still unreadable applies nothing; a wall
-    ///    still unreadable refuses the keeps (`keepUnavailable`) while the DISCARDS proceed.
-    /// 3. Kept photos are hydrated from the pending corpus and committed to the wall with
-    ///    `PrivateMediaStore.commitKept(_:onto:)`, which reports exactly which ones landed; the
-    ///    wall mirror is REPLACED with the committed wall. A kept photo whose bytes are gone for
-    ///    good (missing, or not opening under a present key) is `unreadable` and treated as
-    ///    discarded; one whose bytes cannot be read RIGHT NOW (no key, a file read that failed)
-    ///    stays held (`unavailable`), as does one the wall did not take (`wallWriteFailed`) —
-    ///    nothing of theirs is swept.
-    /// 4. ONE pending index write removes and tombstones every answered photo — only after the wall
-    ///    commit, so a kill in between leaves a photo both kept and held, which the launch
-    ///    reconcile repairs; never the reverse.
-    /// 5. The memory lists and the wall preferences follow.
-    ///
-    /// - Parameters:
-    ///   - kept: The ids to keep.
-    ///   - discarded: The ids to delete (an id in both is kept).
-    ///   - now: The instant the tombstones are stamped with.
-    /// - Returns: The per-photo report. Ids not held are in no set.
-    func applyPhotoAnswers(kept: Set<UUID>, discarded: Set<UUID>, now: Date) -> SessionPhotoAnswer {
-        let asked = kept.union(discarded)
-        guard !asked.isEmpty else { return .nothing }
-        guard routedAccessGate.isOpen else {
-            ProximityAudit.log("mesh.heldPhotos.answerRefused", context: ["reason": "gateClosed"])
-            return Self.answerNotApplied(asked.intersection(heldPhotoIndex.heldLocalIDs))
-        }
-        retryDeferredPhotoIndexes(now: now)
-        guard heldPhotoIndexDeferral == nil else {
-            ProximityAudit.log("mesh.heldPhotos.answerRefused", context: ["reason": "pendingIndexDeferred"])
-            return Self.answerNotApplied(asked.intersection(heldPhotoIndex.heldLocalIDs))
-        }
-        let heldKept = heldPhotoIndex.photos.filter { kept.contains($0.localID) }
-        let heldDiscarded = heldPhotoIndex.photos.filter {
-            discarded.contains($0.localID) && !kept.contains($0.localID)
-        }
-        let keep = keepHeldPhotosOnWall(heldKept)
-        let answered = keep.landed + keep.unreadable + heldDiscarded
-        commitHeldPhotoAnswers(Set(answered.map(\.key)), now: now)
-        forgetAnsweredHeldPhotos(Set(answered.map(\.localID)))
-        if keep.wallChanged { prunePhotoWallPreferences() }
-        return SessionPhotoAnswer(
-            keptOnWall: Set(keep.landed.map(\.localID)),
-            discarded: Set(heldDiscarded.map(\.localID)),
-            unreadable: Set(keep.unreadable.map(\.localID)),
-            notApplied: Set(keep.notLanded.map(\.localID)),
-            failure: keep.failure
-        )
-    }
-
-    /// An answer that applied nothing: every held id it named is still held, for the stated reason.
-    private static func answerNotApplied(_ held: Set<UUID>) -> SessionPhotoAnswer {
-        SessionPhotoAnswer(keptOnWall: [], discarded: [], unreadable: [], notApplied: held, failure: .unavailable)
-    }
-
-    /// What step 3 of ``applyPhotoAnswers(kept:discarded:now:)`` did with the kept photos.
-    ///
-    /// Concurrency: a plain value, built and read on the manager's actor.
-    private struct HeldKeepOutcome {
-        /// On the wall: their sealed bytes landed and the committed index names them.
-        var landed: [HeldSessionPhoto] = []
-        /// Their held bytes could not be opened; answered like a discard.
-        var unreadable: [HeldSessionPhoto] = []
-        /// Still held, untouched: the wall could not take them, or cannot be read at all.
-        var notLanded: [HeldSessionPhoto] = []
-        /// Why ``notLanded`` is not empty.
-        var failure: SessionPhotoAnswerFailure?
-        /// Whether the wall index was rewritten (its preferences are then re-pruned).
-        var wallChanged = false
-    }
-
-    /// Step 3: copies the kept photos to the wall through the per-photo keep commit, re-sealing
-    /// them under the wall key (no file ever moves between corpora). Each carries the finalized
-    /// session metadata its memory list holds, falling back to what was stamped at hold.
-    ///
-    /// A ticked photo is removed as `unreadable` ONLY when its held bytes are gone for good (the
-    /// file is missing, or they do not open under a present key). A read that may succeed later —
-    /// no key right now, or a file that exists and could not be read — leaves it held and the answer
-    /// `unavailable` (fix round 1, U2-C-U2-R1 / U2-L-U2-R3): "a photo the person ticked is never
-    /// lost" (§0 item 2, I22).
-    private func keepHeldPhotosOnWall(_ held: [HeldSessionPhoto]) -> HeldKeepOutcome {
-        guard !held.isEmpty else { return HeldKeepOutcome() }
-        guard !photoIndexDeferred else {
-            ProximityAudit.log("mesh.heldPhotos.keepRefused", context: ["reason": "wallDeferred"])
-            return HeldKeepOutcome(notLanded: held, failure: .keepUnavailable)
-        }
-        let read = readHeldPhotosForKeep(held)
-        let result = photoCacheStore.commitKept(read.hydrated, onto: meshPhotos)
-        if result.indexCommitted { meshPhotos = result.committedWall }
-        let unreadableIDs = Set(read.gone.map(\.localID))
-        let landed = held.filter { result.keptOnWall.contains($0.localID) }
-        let notLanded = held.filter { !result.keptOnWall.contains($0.localID) && !unreadableIDs.contains($0.localID) }
-        if !read.gone.isEmpty {
-            ProximityAudit.log("mesh.heldPhotos.unreadableAtKeep", context: ["count": String(read.gone.count)])
-        }
-        if !notLanded.isEmpty {
-            ProximityAudit.log("mesh.heldPhotos.keepNotLanded", context: [
-                "count": String(notLanded.count), "unavailable": String(read.unavailableCount)
-            ])
-        }
-        return HeldKeepOutcome(
-            landed: landed, unreadable: read.gone, notLanded: notLanded,
-            failure: Self.keepFailure(notLanded: notLanded.count, unavailable: read.unavailableCount),
-            wallChanged: result.indexCommitted
-        )
-    }
-
-    /// The first half of step 3: each kept photo's held bytes, read with the reason when there are
-    /// none. Bounded by the held-photo cap (R2).
-    private func readHeldPhotosForKeep(
-        _ held: [HeldSessionPhoto]
-    ) -> (hydrated: [FriendPhotoPayload], gone: [HeldSessionPhoto], unavailableCount: Int) {
-        var hydrated: [FriendPhotoPayload] = []
-        var gone: [HeldSessionPhoto] = []
-        var unavailableCount = 0
-        for photo in held {
-            switch heldPhotoStore.readImage(for: photo) {
-            case .opened(let data):
-                hydrated.append(listedPayload(for: photo).withDecryptedImageData(data))
-            case .gone:
-                gone.append(photo)
-            case .unavailable:
-                unavailableCount += 1
-            }
-        }
-        return (hydrated, gone, unavailableCount)
-    }
-
-    /// Why a keep left photos held: a read that may succeed later says `unavailable` (retry once the
-    /// device can read them); otherwise the wall did not take them.
-    private static func keepFailure(notLanded: Int, unavailable: Int) -> SessionPhotoAnswerFailure? {
-        guard notLanded > 0 else { return nil }
-        return unavailable > 0 ? .unavailable : .wallWriteFailed
-    }
-
-    /// The payload a kept photo goes to the wall with: the memory list's copy (it carries the
-    /// session metadata finalized at the ending), else the one stamped at hold (after a kill).
-    private func listedPayload(for held: HeldSessionPhoto) -> FriendPhotoPayload {
-        sessionPhotos.first { $0.id == held.localID }
-            ?? pendingFriendReview?.photos.first { $0.id == held.localID }
-            ?? held.payload
-    }
-
-    /// Step 4: ONE pending index write that removes and tombstones `keys`. A write that fails after
-    /// the person answered still takes them out of the mirror (audited): the review stops offering
-    /// them and the next write that lands persists the answer; a kill first re-offers a discarded
-    /// photo (never keeps it) and the reconcile repairs a kept one.
-    private func commitHeldPhotoAnswers(_ keys: Set<HeldPhotoKey>, now: Date) {
-        guard !keys.isEmpty else { return }
-        let (committed, next) = heldPhotoStore.commitAnswers(keys, in: heldPhotoIndex, now: now)
-        guard !committed else {
-            heldPhotoIndex = next
-            return
-        }
-        ProximityAudit.log("mesh.heldPhotos.answerNotPersisted", context: ["count": String(keys.count)])
-        heldPhotoIndex = PendingSessionPhotoStore.answering(keys, in: heldPhotoIndex, now: now)
-    }
-
-    /// Step 5: answered photos leave both memory projections, and a batch left with nothing clears.
-    private func forgetAnsweredHeldPhotos(_ ids: Set<UUID>) {
-        guard !ids.isEmpty else { return }
-        sessionPhotos.removeAll { ids.contains($0.id) }
-        guard var batch = pendingFriendReview, batch.photos.contains(where: { ids.contains($0.id) }) else { return }
-        batch.photos.removeAll { ids.contains($0.id) }
-        pendingFriendReview = batch.isEmpty ? nil : batch
-    }
-
     // MARK: - Public API
 
     public func startNewMesh(name: String? = nil) {
@@ -2912,7 +1516,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         ProximityAudit.log("mesh.session.abandonedNotDurable")
         currentMesh = nil
         membershipVerifier = nil
-        sessionQuotaMeshID = nil
+        // The scope moment (S15, plan step A0.5.11): the founding this device gave up counts for
+        // nothing, so the observer's host drops what it pinned to it (for Fernlet, FernletSocial's
+        // photo object's film pin).
+        sessionObserver?.meshScopeDidChange(.foundingAbandoned)
         resetSessionStateMachine(keepingTerminalState: false)
     }
 
@@ -2953,13 +1560,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         sessionEnteredByProximityJoin = true
         isSessionOpen = true
         userClosedThisSession = false
-        photosAddedThisSession = 0
-        photosKeptOnThisPhone = 0
-        sessionQuotaMeshID = nil
-        // A new search is a new session: a photo still listed belongs to one that ended without an
-        // answer, so it joins the pending review rather than being dropped (a drop keeps it
-        // silently — the wall already holds it). Before the ids below are re-minted.
-        movePhotosIntoPendingReview()
+        // The session-begin moment (S15, plan step A0.5.11), before the resets below: a new search
+        // is a new session, so the observer's host takes up what the last one left (for Fernlet,
+        // FernletSocial's photo object resets the film, moves a photo still listed into the pending
+        // review rather than dropping it, and only then mints the new photo session's ids).
+        sessionObserver?.meshSessionWillBegin()
         // Live-roster reset only (new session). pendingFriendReview is deliberately untouched:
         // an unreviewed batch from the previous session survives into this search cycle.
         resetSessionRosterForNewSession()
@@ -2968,8 +1573,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         askedToRemoveFingerprint = nil
         approvedRemovalProposalIDs.removeAll()
         removalQuorum.removeAll()
-        photoSessionStartedAt = Date()
-        activePhotoSessionID = UUID()
         // A new search cycle is a new session: the machine goes back to `idle` even if the last one
         // ended (the rejoin bar for THAT mesh survives — see `resetSessionStateMachine`).
         resetSessionStateMachine(keepingTerminalState: false)
@@ -2987,7 +1590,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// The policy's background row for a running continuation task is mesh `run`, discovery `stop`:
     /// a live process that must stop browsing and admitting **and keep its links** (invariant 5).
     /// `stopJoin()` funnels through `stopSearching()`, which cancels every slot coordinator, empties
-    /// `slots`, clears the group key and runs the three session-end hooks — a teardown, not a
+    /// `slots`, clears the group key and runs the session-end moment — a teardown, not a
     /// stand-down — so until this verb existed the seam refused that row aloud rather than doing
     /// the wrong thing quietly.
     ///
@@ -3005,7 +1608,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// What it deliberately leaves alone is the rest of `stopSearching()`'s list: the observation
     /// loop (committed slots need it), the slot-scoped bookkeeping a held link still reads, the
     /// committed slots and their coordinators, the epoch keyring and rotation timers, and the
-    /// session-end hooks.
+    /// session-end moment.
     ///
     /// **The clock pauses with the radios** (review finding F-1). A committed link lost DURING a
     /// hold used to arm `armSessionGiveUpClock(now:)` from the slot-loss doors, and five minutes
@@ -3075,10 +1678,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// only escape was End Session.
     ///
     /// It deliberately does **not** call ``startJoin()``, and that is the whole reason it exists:
-    /// `startJoin` empties `sessionPhotos` (into the pending review, since 2026-09-30),
-    /// `photosAddedThisSession`, `sessionQuotaMeshID` and `removedMemberFingerprints` and resets the
-    /// session state machine — so it would take this live session's photos out of its own Develop
-    /// review, hand back a free film quota, forget who was voted out, and **nil the
+    /// `startJoin` tells the session observer a session begins (for Fernlet, FernletSocial's photo
+    /// object moves the live photos into the pending review and resets the film's count and mesh
+    /// pin), empties `removedMemberFingerprints` and resets the session state machine — so it would
+    /// take this live session's photos out of its own Develop review, hand back a free film quota,
+    /// forget who was voted out, and **nil the
     /// session ceiling** on a mesh that can never re-found (``promoteToMesh()`` fires only on
     /// `currentMesh == nil`), leaving a session that can no longer expire. The mesh, the membership
     /// ledger, the ceiling, the advertisement set and the state machine are all kept exactly as they
@@ -3089,10 +1693,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// keyring, `localJoinedEpoch`, the rotation and beacon timers and the `epochLog`
     /// (`clearGroupKeyState()`). So the resumed session holds **no group key** until the heal's
     /// merge or the next rotation re-keys it — named here because the doc above enumerates
-    /// `startJoin`'s resets and this is the one loss the resume cannot avoid. What it no longer
-    /// loses is the ceremony: `stopSearching()`'s three session-end hooks are gated on
-    /// ``isSessionLive``, so standing the radios down over a live mesh no longer consumes the
-    /// friend batch, the shop window or the chat transcript (the P6 item 2 fix). Delivery is
+    /// `startJoin`'s resets and this is the one loss the resume cannot avoid. What it does not
+    /// lose is the ceremony: `stopSearching()`'s session-end moment is gated on ``isSessionLive``,
+    /// so standing the radios down over a live mesh ends nothing for the observer's host (for
+    /// Fernlet, nothing consumes the friend batch, the shop window or the chat transcript: the P6
+    /// item 2 fix). Delivery is
     /// unaffected either way — the routed path wraps per recipient off the key-advertisement set,
     /// which `stopSearching` does not clear.
     ///
@@ -3228,9 +1833,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         askedToRemoveFingerprint = nil
         approvedRemovalProposalIDs.removeAll()
         removalQuorum.removeAll()
-        photosAddedThisSession = 0
-        photosKeptOnThisPhone = 0
-        sessionQuotaMeshID = nil
+        // The scope moment (S15, plan step A0.5.11): this device left its mesh, so the observer's
+        // host resets what it counted against it (for Fernlet, FernletSocial's photo object's film
+        // counters and pin).
+        sessionObserver?.meshScopeDidChange(.left)
         clearGroupKeyState()
         clearActiveVerifyQR()
         // P3 item 6: the run-scoped halves of the machine go with the session; a TERMINAL state
@@ -3388,109 +1994,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    /// Captures one photo, HOLDS it in the sealed pending corpus, and shares it as a routed item
-    /// (P5 item 13).
-    ///
-    /// **The local copy is held, never put on the wall** (2026-09-30): it waits for the person's
-    /// review like every other session photo, live if the session is, awaiting if it is not. The
-    /// share is unconditional on the transport side as before — the routed door answers `.skipped`
-    /// where there is nobody to send to, `.staged` where the item is minted, and `.refused` only
-    /// for a mint that was attempted and failed — but **only a held photo is shared**: if this
-    /// phone cannot seal its own copy, it spends no film and sends nothing, and says "Couldn't keep
-    /// that photo" (the routed store's rule, "if you cannot seal, you must not acknowledge").
-    ///
-    /// What replaced what: the group-key seal and the epoch-0 plaintext broadcast are both gone,
-    /// with the per-recipient content-key wrap in their place. An open-mesh photo used to travel in
-    /// the clear at epoch 0 and is now encrypted per recipient, which is a confidentiality
-    /// improvement (D-13.9); and the destination set is the full roster at creation rather than
-    /// whichever slots happened to be active, so a temporarily disconnected member is delivered at
-    /// reunion instead of never.
-    public func addPhoto(_ data: Data) {
-        // Reset counter when the mesh changes between calls.
-        if currentMesh?.meshID != sessionQuotaMeshID {
-            sessionQuotaMeshID = currentMesh?.meshID
-            photosAddedThisSession = 0
-            photosKeptOnThisPhone = 0
-        }
-        guard photosAddedThisSession < Self.maxPhotosPerSenderPerSession else {
-            meshError = "You've shared the maximum of \(Self.maxPhotosPerSenderPerSession) photos in this mesh session."
-            return
-        }
-        guard let image = UIImage(data: data),
-              let normalized = image.resizedForFriendSharing().jpegData(compressionQuality: 0.82) else { return }
-        let itemID = UUID()
-        let addedAt = Date()
-        let live = isSessionLive
-        let session = currentPhotoSessionMetadata()
-        let photo = FriendPhotoPayload(
-            id: itemID,
-            imageData: normalized,
-            addedAt: addedAt,
-            senderName: displayName,
-            senderFingerprint: identity.localFingerprint,
-            senderSigningPublicKey: identity.localSigningPublicKey,
-            session: session
-        )
-        let key = MeshContentKey(senderFingerprint: identity.localFingerprint, contentID: itemID)
-        guard holdSessionPhoto(photo, key: key, live: live) == .held else {
-            meshError = ProximityUICopy.Camera.holdFailed
-            return
-        }
-        photosAddedThisSession += 1
-        shareRoutedPhoto(itemID: itemID, addedAt: addedAt, imageData: normalized, session: session)
-    }
-
-    /// Frames one captured photo as a routed item body and puts it through the routed sender door.
-    ///
-    /// The body carries **no identity claim**: who sent it is the manifest's signed
-    /// `originFingerprint`, and the signing key is the receiver's own admission ledger. A refusal
-    /// reaches the user as a frozen token on ``routedShareRefusal``; a skip — nobody to send to —
-    /// reaches them as a count on ``photosKeptOnThisPhone``; a staged item says nothing, because
-    /// the held copy in the camera's roll is the feedback.
-    private func shareRoutedPhoto(
-        itemID: UUID, addedAt: Date, imageData: Data, session: FriendPhotoSessionMetadata
-    ) {
-        let header = MeshRoutedPhotoHeader(
-            id: itemID, addedAt: addedAt, senderName: displayName, session: session
-        )
-        let body: Data
-        do {
-            body = try MeshRoutedPhotoBody(header: header, imageData: imageData).encoded()
-        } catch {
-            noteRoutedShareRefusal(.sealFailed, error: error)
-            return
-        }
-        guard let typeToken = routedTypes.token(forCanonicalStore: .friendPhotoWall) else {
-            noteRoutedShareRefusal(.mintFailed, error: nil)
-            return
-        }
-        let outcome = originateRoutedItem(
-            body: body, typeToken: typeToken, itemID: itemID, audience: .fullRoster, now: Date()
-        )
-        switch outcome {
-        case .staged:
-            return
-        case .skipped(let skip):
-            noteRoutedPhotoSkip(skip)
-        case .refused(let refusal):
-            noteRoutedShareRefusal(refusal, error: nil)
-        }
-    }
-
-    /// The skip's one observable half (P8 item 0, device finding (c)): the capture is held on this
-    /// device and on no other, and never will be, so it is counted on
-    /// ``photosKeptOnThisPhone`` — which the app says as one sentence — and audited once, on the
-    /// same terms as a refusal but under its own token, because nothing failed.
-    private func noteRoutedPhotoSkip(_ skip: MeshRoutedShareSkip) {
-        // Bounded by the session quota: every skip is one of at most `maxPhotosPerSenderPerSession`
-        // captures, and the count leaves with the session.
-        photosKeptOnThisPhone += 1
-        ProximityAudit.log(
-            "mesh.routedShare.skipped",
-            context: heldMeshAuditContext(["reason": skip.rawValue, "type": "friendPhoto"])
-        )
-    }
-
     /// The one user-visible half of a share refusal: the frozen token published on
     /// ``routedShareRefusal`` for the app to fork into localized copy, plus one audit line carrying
     /// the same token (D-13.15; the P5 review's finding 5).
@@ -3499,7 +2002,17 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// what it failed to send. No sentence is composed here: a `String` written inside the package
     /// renders in English in every language, which is the live defect of the `meshError` seam this
     /// refusal used to ride.
-    private func noteRoutedShareRefusal(_ refusal: MeshRoutedShareRefusal, error: (any Error)?) {
+    ///
+    /// Public so a host's feature that originates routed items reports a refusal through the one
+    /// surface the app already shows. The contract: `refusal` becomes ``routedShareRefusal``'s value,
+    /// replacing whatever it held, and exactly one `mesh.routedShare.refused` line is written with
+    /// `reason` set to the refusal's frozen token and, when `error` is non-nil, `error` set to
+    /// `String(describing:)` of it. Nothing else moves.
+    ///
+    /// - Parameters:
+    ///   - refusal: The frozen refusal token to publish.
+    ///   - error: The underlying error, for the audit line only; never shown.
+    public func noteRoutedShareRefusal(_ refusal: MeshRoutedShareRefusal, error: (any Error)?) {
         routedShareRefusal = refusal
         var context = ["reason": refusal.rawValue]
         if let error { context["error"] = String(describing: error) }
@@ -3633,14 +2146,34 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// The feature handlers, keyed by the payload token each was registered for.
     @ObservationIgnored private var registeredPayloadHandlers: [String: MeshPayloadHandler] = [:]
 
-    /// Registration seam for feature payloads carried on the friend mesh (shop registers in
-    /// Phase 3, temp messages in Phase 5): a feature convenience that registers the case's token,
-    /// `type.rawValue`, in the token-keyed registry. Dispatch order: the core mesh switch runs first
-    /// (by role, from the host's mesh messages), so a registration can never shadow mesh-control
-    /// handling; the registry is consulted only for tokens the switch leaves unhandled; unregistered
-    /// known tokens keep today's silent drop.
-    public func registerPayloadHandler(for type: PayloadType, handler: @escaping MeshPayloadHandler) {
-        registeredPayloadHandlers[type.rawValue] = handler
+    /// The live payload registry's token door, the registry's one registration: `handler` receives
+    /// every frame whose payload token is `token` once the mesh's own dispatch has left it, replacing
+    /// any handler registered for that token before (the last registration wins).
+    ///
+    /// The contract a host's feature relies on, which is the payload door's order and not a policy
+    /// of this function:
+    /// - **A token outside the host's `payloads.known` never reaches a handler**: the coordinator
+    ///   parks it, and the payload door drops it again.
+    /// - **The core mesh switch runs first**, by role, from the host's mesh messages: a handler
+    ///   registered for a mesh message's token is never called, so no registration can shadow or
+    ///   double-handle a mesh frame.
+    /// - **The registry is asked only for a token the switch leaves**: a known token that names no
+    ///   mesh role (a feature's), and the state change the mesh opens only inside closed-mode
+    ///   metadata.
+    /// - **Committed slots only**: a frame on a slot this device has not committed, or through a
+    ///   coordinator it does not seat, is dropped before any handler runs, with one
+    ///   `mesh.registryPayload.droppedUncommittedSlot` line for the uncommitted slot.
+    /// - **An unregistered known token keeps the silent drop**: no line, and nothing moves.
+    ///
+    /// The handler runs on the main actor, synchronously, inside the payload door, with the verified
+    /// envelope, the decrypted plaintext and the identity the frame was credited to (nil when the
+    /// coordinator credited none).
+    ///
+    /// - Parameters:
+    ///   - token: The payload token, verbatim (a Fernlet feature passes its `PayloadType` raw value).
+    ///   - handler: The feature's inbound handler.
+    public func registerPayloadHandler(forToken token: String, handler: @escaping MeshPayloadHandler) {
+        registeredPayloadHandlers[token] = handler
     }
 
     // MARK: - ProximityPayloadHandling
@@ -3694,10 +2227,12 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         case .meshFriendVouchList:
             // COMMITTED SLOTS ONLY since D-4.3's Option 1b half. A vouch list names the sender's
             // whole trusted-peer graph, and it was the one frame in this switch that a
-            // merely-linked peer could push into `vouchCache` — where it composes "Friend of …"
+            // merely-linked peer could push into the vouch cache — where it composes "Friend of …"
             // labels for people it has never been introduced to. Its own two senders have always
             // been commit-side (`onSlotConnected`, `announcePromotedMesh`), so nothing honest
             // targets an uncommitted slot; the gate only closes the receive half of that asymmetry.
+            // The cache and its hygiene are the host's (`vouchListExchange`, plan step A0.5.5);
+            // the gate, its line and the decode stay here.
             guard slot.fingerprint != nil else {
                 ProximityAudit.log(
                     "mesh.vouchList.droppedUncommittedSlot",
@@ -3706,7 +2241,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
                 return
             }
             if let payload = try? decoder.decode(MeshFriendVouchListPayload.self, from: plaintext) {
-                receiveVouchList(payload, senderFingerprint: peer?.fingerprint)
+                vouchListExchange?.receiveVouchList(payload, senderFingerprint: peer?.fingerprint)
             }
         case .meshRemovalProposal, .meshRemovalSecond:
             dispatchRemovalPayload(payloadType, plaintext: plaintext, decoder: decoder, peer: peer, slot: slot)
@@ -4054,9 +2589,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// **Memory-only, and deliberately not a fourth stored rung** (D-13.16): a stored "handed to the
     /// app" state is exactly what ``MeshDeliveryTarget`` was built to avoid, since a max-merge could
     /// then overwrite it. This set exists so the per-origin quota is not spent twice inside one
-    /// session; across a restart the held/answered/wall dedup, keyed by origin and item id
-    /// (``holdSessionPhoto(_:key:live:)``, its durable tombstones), absorbs a re-hand — and refuses
-    /// one the person already answered, which the old wall-only `photo.id` dedup could not.
+    /// session; across a restart the held/answered/wall dedup, keyed by origin and item id (the
+    /// photo row's handler's: FernletSocial's photo object's hold and its durable tombstones), absorbs
+    /// a re-hand — and refuses one the person already answered, which the old wall-only `photo.id`
+    /// dedup could not.
     /// Bounded by the store's item cap, cleared with the rest of the drain state, and therefore
     /// owed no `Docs/PrivacyWipeCoverage.md` row.
     /// `private(set)` rather than `private` so a tier-1 cell can OBSERVE the mark instead of
@@ -4097,34 +2633,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// for the memory-only half and for what a restart therefore costs.
     @ObservationIgnored private var routedRetryRotations: [MeshRoutedRetryList: MeshRoutedRetryRotation] = [:]
 
-    /// The incoming per-origin photo budget, keyed on the ITEM's mesh (D-13.23).
-    ///
-    /// The legacy counter keyed on `currentMesh?.meshID` and reset whenever the live mesh changed —
-    /// sound while the check always ran inside the session that produced the photo, and wrong on a
-    /// routed path whose hand-off runs at any later access-gate edge. Keying on the origin's signed
-    /// `manifest.meshID` means a deferred hand-off cannot buy a fresh ten-slot budget.
-    ///
-    /// Memory-only, bounded on both axes (``MeshRoutedStoreFormat/maxItems`` keys, the per-sender
-    /// cap of ids in each) and **not cleared by a mesh change** — see ``clearRoutedDrainState()``,
-    /// which every production mesh change goes through and which would otherwise refund the budget
-    /// for items minted in the mesh that is being left (D-13.23a). It is therefore owed no
-    /// `Docs/PrivacyWipeCoverage.md` row for the same reason the drain state is not: nothing here
-    /// reaches disk, and the ciphertext it accounts for has its own row.
-    @ObservationIgnored private var routedOriginPhotoQuota: [MeshRoutedOriginQuotaKey: Set<UUID>] = [:]
-
-    /// How many messages one origin may project into one mesh's transcript. See
-    /// ``allowIncomingRoutedText(_:from:)`` for why this replaced a per-second token bucket and for
-    /// everything else that bounds a hostile origin.
-    ///
-    /// Twenty times the photo cap (`maxPhotosPerSenderPerSession`, 10) because a conversation is not
-    /// a film roll: the ring the transcript shows is 500 rows and `maxSeenIDs` is 2000, so a cap
-    /// materially above 500 would be decoration.
-    static let maxTextMessagesPerSenderPerSession = 200
-
-    /// The incoming per-`(mesh, origin)` MESSAGE budget — the twin of ``routedOriginPhotoQuota``,
-    /// with the same keying, the same bounds and the same reason for both.
-    @ObservationIgnored private var routedOriginTextQuota: [MeshRoutedOriginQuotaKey: Set<UUID>] = [:]
-
     /// Which transcript generation each routed item was first offered to the projection in — the
     /// third leg of ``transcriptLiveness(for:)``, and the one the item's mesh cannot supply.
     ///
@@ -4134,36 +2642,55 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// leg answers those from then on.
     @ObservationIgnored private var routedItemTranscriptGeneration: [MeshRoutedItemKey: Int] = [:]
 
-    /// The routed type tokens this build can actually hand to a canonical store — one per store
-    /// ``dispatchRoutedPlaintext(_:store:author:manifest:seenAt:)`` has an arm for **and may write**,
-    /// asked of the registry rather than typed (D-13.31).
+    /// The registered projection handlers, keyed by routed type token, each in the box
+    /// ``registerRoutedProjectionHandler(_:forToken:)`` built for it (plan step A0.5.2, S9).
     ///
-    /// **Two stores, and `.heartLedger` is deliberately NOT one of them** — P6 item 6 refused to add
-    /// it, and the refusal is the design rather than an omission. A heart's plaintext pass **is** its
-    /// ack ceremony (`routedAckEvidence` → `heartLedgerJudgement`, reached through
-    /// `commitLocalDelivery`), and that door writes no rung and returns evidence, so a projection arm
-    /// for it could not produce the `MeshRoutedHeartAck` the ack needs. Adding the token would break
-    /// twice: every heart would reach the dispatch's early return, be logged `noDispatchArm` and
-    /// **permanently occupy job 5's 16-slot allowance** — R-19's starvation, reintroduced by the edit
-    /// meant to honour R-19 — and, because job 5's list does not shrink as work is done (unlike job
-    /// 4's, which is keyed on the stored recipient receipt) while the mark is memory-only, every
-    /// restart would re-enumerate every delivered heart and re-stream its blob to re-ask the ledger
-    /// until expiry. The structural reason the heart belongs on job 4's list is that job 4's list
-    /// shrinks. D-13.34's rule as written is "P6 adds each store here in the same edit that lands its
-    /// arm", and no arm is landed for hearts.
+    /// Bounded by the registry's rows: a registration is refused for a token with no row, so the map
+    /// never holds more than ``MeshRoutedTypeRegistry/maxEntries`` handlers. Held for the manager's
+    /// lifetime and never cleared — a mesh change, a wipe and a session end leave it as it is — and
+    /// it holds each handler strongly, which is why a handler must not hold the manager strongly (the
+    /// host's: FernletSocial's chat and photo object hold the mesh weakly behind their handlers).
+    @ObservationIgnored private var routedProjectors: [String: RoutedProjector] = [:]
+
+    /// The registered ledger judges, keyed by routed type token, each in the box
+    /// ``registerRoutedLedgerJudge(_:forToken:)`` built for it (plan step A0.5.3, S10).
+    ///
+    /// Bounded by the registry's rows, as the projector map is: a registration is refused for a
+    /// token with no row. Held for the manager's lifetime and never cleared, and it holds each judge
+    /// strongly, which is why a judge must not hold the manager strongly (FernletSocial's heart judge,
+    /// since plan step A0.5.10, holds its hearts, which hold the mesh weakly).
+    @ObservationIgnored private var routedJudges: [String: RoutedJudge] = [:]
+
+    /// The routed type tokens this build can actually hand to a canonical store right now: the
+    /// tokens of the registry's rows whose registered projection handler says it is projectable,
+    /// asked of the registry and the handlers rather than typed (D-13.31, plan step A0.5.2).
+    ///
+    /// **Two rows, and the heart's is deliberately NOT one of them** — P6 item 6 refused to add it,
+    /// and the refusal is the design rather than an omission: no handler is registered for the
+    /// heart row, and ``registerRoutedProjectionHandler(_:forToken:)`` refuses one for any judge row.
+    /// A heart's plaintext pass **is** its ack ceremony (`routedAckEvidence` → `ledgerJudgement`
+    /// and the heart row's ledger judge, reached through `commitLocalDelivery`), and that door
+    /// writes no rung and returns evidence, so a projection handler for it could not produce the
+    /// ledger commit the ack needs. Projecting the token would break twice: every heart would
+    /// reach the dispatch's early return, be logged `noDispatchArm` and **permanently occupy job 5's
+    /// 16-slot allowance** — R-19's starvation, reintroduced by the edit meant to honour R-19 — and,
+    /// because job 5's list does not shrink as work is done (unlike job 4's, which is keyed on the
+    /// stored recipient receipt) while the mark is memory-only, every restart would re-enumerate
+    /// every delivered heart and re-stream its blob to re-ask the ledger until expiry. The structural
+    /// reason the heart belongs on job 4's list is that job 4's list shrinks.
     ///
     /// Everything that spends a bounded per-pass allowance on projection work reads this, so an
     /// unfinishable type cannot occupy a slot forever (R-19).
     ///
-    /// **`.sessionTranscript` is conditional on ``isChatAllowed``**, which is R-19's own rule applied
-    /// to a device that cannot finish the type rather than to a build that cannot: below the 13+
-    /// line every text item would refuse at the arm, and sixteen of them sorted first would strand
-    /// a photo behind them until expiry — the index is ordered by origin fingerprint, so that
-    /// position is an attacker's to choose.
+    /// **The text row is conditional on its handler's `isProjectable`** — for Fernlet,
+    /// FernletSocial's chat's 13+ gate since plan step A0.5.9 — which is R-19's own rule applied to a
+    /// device that cannot finish the type rather than to a build that cannot: below the 13+ line every
+    /// text item would refuse at its handler's age gate, and sixteen of them sorted first would strand
+    /// a photo behind them until expiry — the index is ordered by origin fingerprint, so that position
+    /// is an attacker's to choose.
     private var projectableRoutedTypeTokens: Set<String> {
-        var stores: [MeshRoutedCanonicalStore] = [.friendPhotoWall]
-        if isChatAllowed { stores.append(.sessionTranscript) }
-        return Set(stores.compactMap { routedTypes.token(forCanonicalStore: $0) })
+        // R2: bounded by the registry's rows (at most `MeshRoutedTypeRegistry.maxEntries`).
+        routedTypes.tokens.filter { routedProjectors[$0]?.isProjectable() == true }
     }
 
     // MARK: Routed backpressure state (P5 item 9, plan §11)
@@ -6077,9 +4604,23 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         MeshRoutedStore(scope: store.meshRoutedStorage)
     }
 
-    /// The shipping routed type registry: built once, in `init`, from ``namespace``'s routed types,
-    /// and read through ``routedTypes`` unless a test narrowed or widened it.
+    /// The shipping routed type registry: built once, in `init`, from the host's
+    /// ``ProximityHost/meshRoutedTypeEntries`` alone (the engine registers no row of its own), and
+    /// read through ``routedTypes`` unless a test narrowed or widened it.
     @ObservationIgnored private let hostRoutedTypeRegistry: MeshRoutedTypeRegistry
+
+    /// The largest routed blob this device seals, opens or keeps resident, in bytes: the host
+    /// registry's widest row (``MeshRoutedTypeRegistry/maxItemByteCount``), clamped into an `Int`
+    /// once, in `init` (plan step A0.5.4).
+    ///
+    /// One number at three sites — the mint's seal, the delivery door's open (the engine hands it to
+    /// each registered box beside the decrypt predicate) and the projection's resident-blob guard —
+    /// so the seal refuses exactly what the open and the guard would (D-13.19). Taken from
+    /// ``hostRoutedTypeRegistry`` and never through ``routedTypes``: `routedTypeRegistryForTesting`
+    /// narrows or widens every door that resolves a token and moves no bound. An `Int`, compared with
+    /// no subtraction, so a host whose rows are narrower than the seal's overhead, or that registered
+    /// none (0), refuses every seal and every open instead of trapping. 10 551 337 for Fernlet's rows.
+    @ObservationIgnored private let routedResidentBlobBound: Int
 
     /// The routed type registry this device admits, resolves and forwards by (P5 item 11, plan §11).
     ///
@@ -6087,12 +4628,27 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// ack-stage projection, the re-entry stage branch and the four forwarding gates all resolve
     /// through this property, so a build cannot register a token at one door and refuse it at
     /// another. Its rows' tokens are the host's: the registry is built once, at `init`, from the
-    /// routed types of ``namespace`` (``hostRoutedTypeRegistry``), so this manager mints, accepts and
-    /// acknowledges its host's spellings and no other. `routedTypeRegistryForTesting` is the
-    /// `@testable` seam that makes the build-narrowed doors — unreachable in one shipping build —
-    /// reachable in a cell.
+    /// host's own rows (``hostRoutedTypeRegistry``), so this manager mints, accepts and acknowledges
+    /// its host's spellings and no other. `routedTypeRegistryForTesting` is the `@testable` seam that
+    /// makes the build-narrowed doors — unreachable in one shipping build — reachable in a cell.
     private var routedTypes: MeshRoutedTypeRegistry {
         routedTypeRegistryForTesting ?? hostRoutedTypeRegistry
+    }
+
+    /// Whether this device's routed type registry has a row for `token`: the question a sender asks
+    /// before it mints, so a type with no row mints nothing.
+    ///
+    /// The contract: the answer is ``routedTypes``' own — the registry the manifest verifier, the
+    /// ack-stage projection and the forwarding gates read, a test's narrowed or widened registry
+    /// included — so a sender that asks first never mints under a token every other door of this
+    /// device refuses. It is not asked by
+    /// ``originateRoutedItem(body:typeToken:itemID:audience:now:)``, whose manifest mint does not
+    /// enforce acceptance: asking is the caller's half of "no row, no mint".
+    ///
+    /// - Parameter token: A routed type token, verbatim.
+    /// - Returns: whether the registry holds a row for it.
+    public func isRoutedTypeRegistered(_ token: String) -> Bool {
+        routedTypes.entry(for: token) != nil
     }
 
     /// How many routed content ids one AUTHOR may occupy in this session's replay window (P5 item
@@ -6118,13 +4674,15 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// **Not** from `abandonMergeExchange()`: a partition is not a new session, and refunding the
     /// per-peer frame budget on every flap is precisely what that budget exists to prevent.
     ///
-    /// **`routedOriginPhotoQuota` is deliberately absent** (D-13.23a). Every one of this function's
-    /// callers is a real "this device moved to another mesh" — `leaveMesh()`, a
-    /// `prepareMembershipLedger` for a different mesh id, the grant-time bootstrap — and mesh A's
-    /// items outlive that move (expiry is A's `hardDeadline + 20 min`, and the projection never
-    /// compares the item's mesh to the live one). Clearing the budget here would therefore hand an
+    /// **The per-origin projection budgets are deliberately absent** (D-13.23a): the photo row's and
+    /// the text row's, each its handler's own (for Fernlet, FernletSocial's photo object's and
+    /// chat's), and no event reaches them at a mesh change. Every one of this function's callers is a
+    /// real "this device moved to another mesh" —
+    /// `leaveMesh()`, a `prepareMembershipLedger` for a different mesh id, the grant-time bootstrap —
+    /// and mesh A's items outlive that move (expiry is A's `hardDeadline + 20 min`, and the projection
+    /// never compares the item's mesh to the live one). Clearing a budget here would therefore hand an
     /// origin a fresh ten slots for the backlog it queued in mesh A, which is exactly the case
-    /// D-13.23 keyed that map on `manifest.meshID` to close. It is bounded on both axes without a
+    /// D-13.23 keyed those maps on `manifest.meshID` to close. Each is bounded on both axes without a
     /// clear, and the ciphertext it accounts for survives the same move.
     private func clearRoutedDrainState() {
         peerRoutedInventories.removeAll()
@@ -6904,10 +5462,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///
     /// The compared number is the origin-signed ``MeshRoutedManifest/size``: the complete sealed
     /// **ciphertext** blob, marker and tag included. The row's ``MeshRoutedTypeEntry/maxItemByteCount``
-    /// is a ciphertext cap for the same reason, which is why the photo row is defined as the seal
-    /// format's resident bound rather than as the photo wall's plaintext bound — the two differ by
-    /// the framing, and comparing a ciphertext size against a plaintext bound would refuse items
-    /// that are perfectly in bounds.
+    /// is a ciphertext cap for the same reason, which is why the photo row is the photo wall's
+    /// plaintext bound plus the body's framed header allowance plus the seal's overhead, never the
+    /// plaintext bound alone — the two differ by the framing, and comparing a ciphertext size against
+    /// a plaintext bound would refuse items that are perfectly in bounds. Among Fernlet's rows it is
+    /// the widest, so it is also ``routedResidentBlobBound``, the number the resident-blob guard reads.
     ///
     /// Runs **after** the verifier, so it is a statement about what the origin signed rather than
     /// about what a relay changed, and **before** the destination/hand-off gate, so a custodian's
@@ -7555,8 +6114,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// Mints one routed item from this device's own bytes, stages it into this device's own store,
     /// and tells the committed slots it exists.
     ///
-    /// The **generic** sender door: photos are its one caller today, and P6's text and heart callers
-    /// are three lines each. It re-uses the two store doors the ingest path uses, so item 9's caps
+    /// The **generic** sender door, and public so a host's feature originates through it: the photo,
+    /// text and heart senders are three lines each — frame a body, ask the registry for the token,
+    /// call this. It re-uses the two store doors the ingest path uses, so item 9's caps
     /// and item 12's bookkeeping apply to an origin's own item exactly as they do to an inbound one;
     /// it runs **no verifier** on its own mint (the origin is not receiving and there is no envelope
     /// sender); and it never calls `finishLocalRungs` — `commitLocalCustody` skips own items by name
@@ -7569,17 +6129,39 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// with a ledger at its first commit, so "the pairwise phase" is no longer an instance of this)
     /// — a **staged** key, or a named **refusal** for a mint that was attempted and failed.
     ///
+    /// **The contract a caller relies on:**
+    /// - `.skipped(.noDestinations)`: no mesh or no membership ledger yet, a derived roster of this
+    ///   device alone, or a ``MeshRoutedAudience/recipient(_:)`` the roster does not hold.
+    /// - The audience is checked against the type's registered `destinations` column, and the
+    ///   destination set is never taken from `body`: a ``MeshRoutedAudience/fullRoster`` audience for
+    ///   a `.singleRecipient` row, or a recipient for any other row or an unregistered token, is
+    ///   `.refused(.mintFailed)` with one `mesh.routedShare.destinationSemanticsMismatch` line; a
+    ///   recipient that is this device is the same refusal under `mesh.routedShare.recipientIsSelf`.
+    /// - A destination with no verified key is `.refused(.destinationNotAddressable)`, and two
+    ///   verified keys that disagree (or a member marked conflicted) `.refused(.keyMismatch)`; the
+    ///   seal's refusal is `.refused(.sealFailed)`, any other mint failure `.refused(.mintFailed)`
+    ///   with one `mesh.routedShare.mintFailed` line, and the store's `.refused(.storeRefused)` (one
+    ///   `mesh.routedShare.storeRefused` line, and at a capacity cap item 9's `.storeFull` hold on
+    ///   ``routedDeliveryHold``) or `.refused(.storeUnavailable)`.
+    /// - `.staged(key, chunkCount:)`: the whole item is in this device's routed store and was pushed
+    ///   once to each committed active slot.
+    /// - It does not ask whether `typeToken` is registered — a full-roster audience mints under any
+    ///   token, and every receiver refuses one it does not register — so a caller asks
+    ///   ``isRoutedTypeRegistered(_:)`` first and mints nothing when the answer is no.
+    /// - It is synchronous, and it never sets ``routedShareRefusal``: a caller that wants a refusal
+    ///   shown passes it to ``noteRoutedShareRefusal(_:error:)``.
+    ///
     /// - Parameters:
-    ///   - body: The framed plaintext — for photos, ``MeshRoutedPhotoBody/encoded()``.
+    ///   - body: The framed plaintext — for Fernlet's photos, FernletSocial's `MeshRoutedPhotoBody.encoded()`.
     ///   - typeToken: The registered routed type token.
     ///   - itemID: The item id, minted by the caller so its local echo can carry the same id.
     ///   - audience: Who this origination is for, stated by the caller and checked against the
     ///     type's registered `destinations` column (P6 item 6).
     ///   - now: The injected instant; the manifest's `createdAt`.
     /// - Returns: what the door did.
-    private func originateRoutedItem(
+    public func originateRoutedItem(
         body: Data, typeToken: String, itemID: UUID,
-        audience: RoutedOriginationAudience, now: Date
+        audience: MeshRoutedAudience, now: Date
     ) -> MeshRoutedOriginationOutcome {
         guard let mesh = currentMesh, let roster = membershipVerifier?.roster,
               let hardDeadline = routedHardDeadline else { return .skipped(.noDestinations) }
@@ -7611,22 +6193,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    /// Who one origination is for, stated by the CALLER and checked against the type's registered
-    /// `destinations` column (P6 item 6).
-    ///
-    /// **The mint must never take its destination from the body.** A body is the origin's own
-    /// bytes, so a destination set derived from it would let an origin address anyone it named —
-    /// which for a single-recipient type means minting a heart "to" someone the roster does not put
-    /// in reach. So the audience is an argument, resolved against `membershipVerifier?.roster`, and
-    /// the body is encoded in a separate step nothing downstream reads.
-    private enum RoutedOriginationAudience: Equatable {
-        /// Every member of the derived roster at creation, minus this device — the
-        /// `.fullRosterAtCreation` column, which photos and text pass.
-        case fullRoster
-        /// One named member — the `.singleRecipient` column, which hearts pass.
-        case recipient(String)
-    }
-
     /// What the capture step produced: a target, or the whole door's answer.
     ///
     /// Not an `Optional<MeshDeliveryTarget>`: the three refusal routes below reach three different
@@ -7645,8 +6211,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///
     /// - **A semantics mismatch** — the caller's audience is not the shape the registry row
     ///   declares — is `.refused(.mintFailed)` plus one audit line, and **no new
-    ///   `MeshRoutedShareRefusal` case**. It is unreachable from the two shipping callers (photos
-    ///   and text pass `.fullRoster`, hearts pass `.recipient`), so a new case would owe
+    ///   `MeshRoutedShareRefusal` case**. It is unreachable from the shipping senders (for Fernlet,
+    ///   FernletSocial's: photos and text pass `.fullRoster`, hearts `.recipient`), so a new case would owe
     ///   `RoutedShareRefusalCopy` two sentences, a catalog row and an `allCases` pin move for a
     ///   condition no user can reach. `mintFailed`'s own doc already covers "a shape the mint's
     ///   guard chain refused by name". This is also the ONLY fence for a `.fullRosterAtCreation`
@@ -7663,7 +6229,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///   - typeToken: The registered token, for the registry lookup and the audit line.
     /// - Returns: the captured target, or the door's answer.
     private func originationTarget(
-        itemID: UUID, audience: RoutedOriginationAudience,
+        itemID: UUID, audience: MeshRoutedAudience,
         roster: MeshDerivedRoster, typeToken: String
     ) -> RoutedOriginationCapture {
         let declared = routedTypes.entry(for: typeToken)?.destinations
@@ -7857,7 +6423,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             meshID: meshID, itemID: target.contentID, originFingerprint: identity.localFingerprint
         )
         let blob = try MeshRoutedItemSealer.seal(
-            body, contentKey: contentKey, binding: binding, typeToken: typeToken, in: namespace.family.purposes
+            body, contentKey: contentKey, binding: binding, typeToken: typeToken,
+            maxBlobByteCount: routedResidentBlobBound, in: namespace.family.purposes
         )
         let manifest = try MeshRoutedManifest.signed(
             meshID: meshID, target: target, typeToken: typeToken,
@@ -8134,8 +6701,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///
     /// Incomplete items are skipped **without** a line: `committingDelivery` would answer
     /// `.unsatisfied` once per item per pass, which is noise for a state a peer's next chunk fixes.
-    /// Since item 5 they are skipped by ``ackableNow(_:in:)`` **before** the allowance is planned
-    /// rather than inside the loop, which is R-19's rule on this list: this list is ordered by
+    /// Since item 5 they are skipped by ``ackableNow(_:in:judgement:)`` **before** the allowance is
+    /// planned rather than inside the loop, which is R-19's rule on this list: this list is ordered by
     /// origin fingerprint, so sixteen items this pass cannot finish, sorted first by an origin that
     /// ground for the position, would hold the whole allowance and strand this device's own
     /// receipts. What the pass DOES attempt is chosen by
@@ -8211,8 +6778,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         // Hoisted out of the predicate: the three device-wide reads a heart's answer turns on are
         // the same for every item on the list, and the list is bounded by the store's item cap
         // (1024), so reading them per item would ask the settings store and the ledger a thousand
-        // times per pass for one answer (item 5 review).
-        let judgement = routedHeartJudgementReadiness()
+        // times per pass for one answer (item 5 review). One read per registered judge, keyed by its
+        // token since plan step A0.5.3 — one for Fernlet. R2: bounded by the registry's rows.
+        let judgement = routedJudges.mapValues { routedHeartJudgementReadiness($0) }
         var finishable: [MeshRoutedItemRef] = []
         var hearts = 0
         // R2: bounded by the store's item cap.
@@ -8245,10 +6813,12 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// - Parameters:
     ///   - ref: The item, from the list the pass already read.
     ///   - index: The same index — never a second load.
-    ///   - judgement: The pass's one read of the heart stage's device-wide preconditions.
+    ///   - judgement: The pass's one read of the heart stage's device-wide preconditions, per
+    ///     registered judge's token (plan step A0.5.3). A judge row no judge is registered for has no
+    ///     entry, and its items wait.
     /// - Returns: what to do with it.
     private func ackableNow(
-        _ ref: MeshRoutedItemRef, in index: MeshRoutedIndex, judgement: Bool
+        _ ref: MeshRoutedItemRef, in index: MeshRoutedIndex, judgement: [String: Bool]
     ) -> RoutedAckability {
         guard let record = index.record(for: ref.key), let manifest = record.manifest else {
             return .unfinishable
@@ -8264,7 +6834,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         // invariants over: a blocked origin's sixteen hearts are refused for good, and counting them
         // as "waiting" would leave the number climbing for a session that will never move it.
         guard !routedHeartRefusedKeys.contains(ref.key) else { return .unfinishable }
-        guard judgement else { return .heartDeferred }
+        guard judgement[manifest.typeToken] == true else { return .heartDeferred }
         return record.isComplete ? .finishable : .heartDeferred
     }
 
@@ -8420,7 +6990,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// whole pass at every rising edge. A text item whose transcript is gone is exactly that
     /// population, and it is the one an ended session creates by the dozen.
     ///
-    /// Only the transcript store has an answer here; every other store is left to its arm.
+    /// Only a `.session` row has an answer here — a pure read of the registry row's content scope
+    /// and the engine's own ``transcriptLiveness(for:)`` (plan step A0.5.2); every other row is left
+    /// to its handler.
     ///
     /// - Parameters:
     ///   - ref: The item, from the list the pass already read.
@@ -8436,10 +7008,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     func isProjectableAtThisPass(_ ref: MeshRoutedItemRef, in index: MeshRoutedIndex) -> Bool {
         guard let manifest = index.record(for: ref.key)?.manifest,
               let entry = routedTypes.entry(for: manifest.typeToken) else { return true }
-        switch entry.canonicalStore {
-        case .friendPhotoWall, .heartLedger:
+        switch entry.contentScope {
+        case .persistent:
             return true
-        case .sessionTranscript:
+        case .session:
             return transcriptLiveness(for: manifest) != .endedForGood
         }
     }
@@ -8447,10 +7019,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// Job 4c — says whether the heart stage is evaluable right now, and counts what is waiting.
     ///
     /// **A counter, and it stays one** (the doc said "until P6" until the item 6 fix review, which
-    /// was then false). P6 item 6 did not move the ceremony here: the unwrap → ledger commit →
-    /// ``MeshRoutedAckEvidence/heartLedgerCommit`` runs at `commitLocalDelivery`, the ONE ack door,
-    /// so this site judges nothing and only names what the pass could not judge. The count it is
-    /// handed excludes hearts already marked FINAL in ``routedHeartRefusedKeys`` — see
+    /// was then false). P6 item 6 did not move the ceremony here: the unwrap → the judge's ledger
+    /// commit → ``MeshRoutedAckEvidence/ledgerCommit(_:)`` runs at `commitLocalDelivery`, the ONE
+    /// ack door, so this site judges nothing and only names what the pass could not judge. The
+    /// count it is handed excludes hearts already marked FINAL in ``routedHeartRefusedKeys`` — see
     /// ``ackableNow(_:in:judgement:)`` — so "pending" means pending, not "refused for good".
     ///
     /// - Parameter count: How many unstamped heart-stage items the retry list named.
@@ -8908,6 +7480,46 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     // MARK: Routed heart ceremony (P6 item 6, plan §12, D-4.16/D-10.12)
 
+    /// Registers the ledger judge for one routed type: from here on the ack ceremony of an item of
+    /// `token` asks `judge` (plan step A0.5.3, S10).
+    ///
+    /// The contract. Answers `false` and stores nothing when `token` has no row in this device's
+    /// routed type registry, or when its row is not a judge row — one whose final ack is the
+    /// foreground decrypt and ledger commit, the one stage whose evidence the store cannot read for
+    /// itself — so a refused registration leaves the row's items unjudged for good, and the caller
+    /// checks the answer (which is why it is not `@discardableResult`). Answers `true` once the
+    /// judge is held: strongly, for the manager's lifetime, and replacing any judge registered for
+    /// the token before. Register before the first re-entry pass can run: until a judge row has a
+    /// judge, its items are counted as pending and never judged.
+    ///
+    /// The judge is kept in a box built here over `J.Body` — its readiness, its admission, and an
+    /// open-then-judge step that runs the engine's one generic opener with `J.Body` and then the
+    /// judge's commit — so the ceremony never opens an existential judge, inside the ack door's
+    /// `@autoclosure` or anywhere else.
+    ///
+    /// - Parameters:
+    ///   - judge: The routed type's ledger judge.
+    ///   - token: The routed type token it judges, verbatim.
+    /// - Returns: whether the judge was registered.
+    public func registerRoutedLedgerJudge<J: MeshRoutedLedgerJudge>(
+        _ judge: J, forToken token: String
+    ) -> Bool {
+        guard let entry = routedTypes.entry(for: token) else { return false }
+        guard entry.requiresForegroundDecryptBeforeFinal else { return false }
+        routedJudges[token] = RoutedJudge(                            // R3: bounded by the registry's rows
+            isReadyToJudge: { judge.isReadyToJudge },
+            admits: { judge.admits($0) },
+            openThenJudge: { blob, manifest, identity, maxBlobByteCount, mayDecryptRoutedContent, delivery in
+                let body = try MeshRoutedItemDelivery.openBody(
+                    J.Body.self, blob: blob, manifest: manifest, identity: identity,
+                    maxBlobByteCount: maxBlobByteCount, mayDecryptRoutedContent: mayDecryptRoutedContent
+                )
+                return judge.judgeRoutedItem(body, delivery: delivery())
+            }
+        )
+        return true
+    }
+
     /// What this device can offer the ack commit as evidence for one item's stage.
     ///
     /// `.none` for every stage the store reads for itself — and for an **already-stamped** record of
@@ -8915,6 +7527,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// (its own file header says so): with `deliveredAt` written, the durable ack IS the satisfied
     /// precondition, and re-running the ceremony would re-stream the blob and re-ask the ledger on
     /// every pass. The guard mirrors the store's own condition exactly, so the two cannot drift.
+    /// Then the judge registered for the row's token is looked up (plan step A0.5.3): a judge row
+    /// with none answers `.none`.
     ///
     /// Reached through `committingDelivery`'s `@autoclosure`, so it does not run at all for a
     /// delivery that door refuses (fix review P2-3) — the guard here is the second belt, kept
@@ -8929,28 +7543,42 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ) -> MeshRoutedAckEvidence {
         guard let entry = routedTypes.entry(for: manifest.typeToken),
               entry.requiresForegroundDecryptBeforeFinal,
-              routedIndexForReading(reason: .rung)?.record(for: key)?.deliveredAt == nil
+              routedIndexForReading(reason: .rung)?.record(for: key)?.deliveredAt == nil,
+              let judge = routedJudges[manifest.typeToken]
         else { return .none }
-        return heartLedgerJudgement(for: key, manifest: manifest)
+        return ledgerJudgement(for: key, manifest: manifest, judge: judge)
     }
 
-    /// Whether the heart stage's **device-wide** preconditions hold right now — one read, shared by
-    /// the enumeration filter and the ceremony.
+    /// Whether the heart stage's **device-wide** preconditions hold right now for one judge's row —
+    /// one read, shared by the enumeration filter (once per pass) and the ceremony.
     ///
-    /// Three legs, and all three are reversible, which is why the filter that consults this is a
-    /// filter and not a mark: the access gate can open, the app can return to the foreground, the
-    /// user can turn nearby hearts back on, and the ledger can finish loading.
-    private func routedHeartJudgementReadiness() -> Bool {
-        mayCommitRoutedHeartLedgerJudgement && store.allowNearbyHearts
-            && heartLedger?.isLoaded == true
+    /// The stage's own predicate first, then the judge's own legs (plan step A0.5.3), short-circuiting
+    /// as the one conjunction always did. Three legs for the heart judge, and all three are
+    /// reversible, which is why the filter that consults this is a filter and not a mark: the access
+    /// gate can open, the app can return to the foreground, the user can turn nearby hearts back on,
+    /// and the ledger can finish loading.
+    ///
+    /// - Parameter judge: The judge registered for the row.
+    /// - Returns: whether the row's items may be judged right now.
+    private func routedHeartJudgementReadiness(_ judge: RoutedJudge) -> Bool {
+        mayCommitRoutedHeartLedgerJudgement && judge.isReadyToJudge()
     }
 
-    /// The heart stage's judgement: unwrap, re-apply the heart gates, ask the ONE ledger door, and
-    /// carry its proof as evidence (P6 item 6).
+    /// The ledger stage's judgement over the row's registered judge: re-apply the gates, open the
+    /// item as the judge's body, ask the judge, and mint the evidence from its answer (P6 item 6's
+    /// heart ceremony, generic over a ``MeshRoutedLedgerJudge`` since plan step A0.5.3).
     ///
     /// Behind ``mayCommitRoutedHeartLedgerJudgement`` and nothing weaker — the only routed stage
     /// whose own source demands a live foreground session, because a ledger judgement is a durable
     /// act on the user's own closeness state rather than a receipt about ciphertext.
+    ///
+    /// **The order is the contract, and it is the engine's**: readiness; the ledger-resolved author
+    /// with its block and removal legs; the judge's admission, before any byte is read; the blob;
+    /// the engine's open; the delivery, whose `seenAt` is read from the routed index only after the
+    /// open, as it always was; the judgement. What a judgement feeds — for hearts the ledger's
+    /// commit and the closeness hook above the ack's own guard (the fix review's P2-1) — is the
+    /// judge's, in that order, and never the engine's. The evidence is the engine's alone: it mints
+    /// `.ledgerCommit`, bound to THIS item, from a `.committed` answer and from nothing else.
     ///
     /// **RETRYABLE vs FINAL, leg by leg.** Retryable (no mark, custody kept, the item stays
     /// enumerable and heals for free): the predicate closed (a lock, a background, a duress
@@ -8958,9 +7586,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// so a blip really does defer a heart), hearts turned off, a ledger that is not loaded, a
     /// store that could not produce the blob, and the ledger's own five-minute **cooldown** — which
     /// answers "not yet" rather than "no": the gift is refused, nothing is stored, `commitProof`
-    /// therefore answers nil, the stage reports `.ledgerJudgementMissing` and the same gift is
-    /// accepted inside five minutes. FINAL (marked in ``routedHeartRefusedKeys``): a removed or
-    /// locally **blocked** origin, a sender who is not a vault friend, and a malformed body.
+    /// therefore answers nil, the judge answers `.notYet`, the stage reports
+    /// `.ledgerJudgementMissing` and the same gift is accepted inside five minutes. FINAL (marked in
+    /// ``routedHeartRefusedKeys``): a removed or locally **blocked** origin, a sender the judge does
+    /// not admit (for hearts, one who is not a vault friend), and a malformed body.
     ///
     /// **Not-a-friend is FINAL, and the two-session reality is the argument.** A mesh heart needs
     /// mutual trust-vault rows, and a row appears when `pendingFriendReview` completes — which
@@ -8973,64 +7602,78 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// - Parameters:
     ///   - key: The item.
     ///   - manifest: The origin's signed manifest.
-    /// - Returns: `.heartLedgerCommit` when the ledger judged this gift exactly once and stands
-    ///   behind it, `.none` otherwise.
-    private func heartLedgerJudgement(
-        for key: MeshRoutedItemKey, manifest: MeshRoutedManifest
+    ///   - judge: The judge registered for the item's row.
+    /// - Returns: `.ledgerCommit` when the judge's ledger judged this item and stands behind it,
+    ///   `.none` otherwise.
+    private func ledgerJudgement(
+        for key: MeshRoutedItemKey, manifest: MeshRoutedManifest, judge: RoutedJudge
     ) -> MeshRoutedAckEvidence {
-        guard routedHeartJudgementReadiness(), let ledger = heartLedger else { return .none }
-        guard let author = eligibleHeartAuthor(key, manifest) else { return .none }
+        guard routedHeartJudgementReadiness(judge) else { return .none }
+        guard let author = eligibleHeartAuthor(key, manifest, judge: judge) else { return .none }
         guard let blob = routedProjectionBlob(key: key, manifest: manifest) else { return .none }
-        guard let body = openedRoutedHeartBody(blob, manifest: manifest) else {
+        let judgement: MeshRoutedJudgement
+        do {
+            judgement = try judge.openThenJudge(
+                blob, manifest, identity, routedResidentBlobBound, mayDecryptRoutedContent
+            ) {
+                self.ledgerJudgementDelivery(key: key, manifest: manifest, author: author)
+            }
+        } catch {
+            ProximityAudit.log(
+                "mesh.routedHeart.openFailed",
+                context: ["type": manifest.typeToken, "error": String(describing: error)]
+            )
             return refusedHeart(key, reason: "malformed")
         }
-        let merged = MeshMergedHeart(
-            giftID: manifest.itemID,
-            senderFingerprint: author.fingerprint,
-            senderDisplayName: ProximityDisplayName.peerDisplayName(body.header.senderName, in: namespace),
-            firstSeenAt: routedIndexForReading(reason: .rung)?
-                .record(for: key)?.firstSeenAt ?? manifest.createdAt
-        )
-        let outcome = MeshHeartCommit.commit([merged], into: ledger)
-        // Closeness is fed on FIRST ACCEPTANCE only, never on every ack mint. `commitProof` answers
-        // non-nil for an already-stored gift, so a pass that re-reaches this ceremony (the store
-        // answered `.unavailable` after the row was written, say) re-mints the ack — and the hook
-        // behind this is `closenessLedger.recordHeartReceived`, which is not idempotent.
-        //
-        // **Above the ack guard, and that is the fix review's P2-1.** `recordReceivedHeart` answers
-        // true for an applied-but-UNPERSISTED mutation while `commitProof(for:)` answers nil for
-        // exactly that state (`ProximityHeartLedger`'s own docs on both), so a dirty sidecar makes
-        // this gift accepted and the ack nil in the same pass. Fed below the guard, the feed is not
-        // deferred to the flush — it is lost for good, because the re-judgement that follows finds
-        // the gift already stored and puts it in `refusedGiftIDs`, where `receivedGiftIDs.contains`
-        // is false forever. The R1 gate still holds: a second judgement of the same gift is a
-        // refusal, not a receipt, so this cannot double-feed.
-        if outcome.receivedGiftIDs.contains(manifest.itemID) {
-            onHeartReceived?(author.fingerprint)
-        }
-        guard let ack = MeshRoutedHeartAck(
-            outcome: outcome, giftID: manifest.itemID, ledger: ledger
-        ) else {
+        guard judgement == .committed else {
             ProximityAudit.log("mesh.routedHeart.noJudgement")
             return .none
         }
-        onHeartJudgedForTesting?(ack)
-        return .heartLedgerCommit(ack)
+        return .ledgerCommit(MeshRoutedLedgerCommit(itemID: manifest.itemID))
     }
 
-    /// The heart's author, when the ledger resolves it AND the trust vault and both block lists
-    /// admit it — with the FINAL legs marked so they leave job 4's list (P6 item 6).
+    /// The delivery a ledger judge is handed for one opened item, built only once the open has
+    /// succeeded (plan step A0.5.3).
+    ///
+    /// `seenAt` is the routed index's `firstSeenAt` for the item, or the manifest's `createdAt` when
+    /// the index cannot say — the instant the heart ledger's merged row has always carried — and the
+    /// index is read here, after the open, exactly where the ceremony always read it (a suppressed
+    /// read logs its own line). A `.session` row's delivery carries the engine's
+    /// ``transcriptLiveness(for:)``, as a projection's does; any other row's — the heart's — none.
+    ///
+    /// - Parameters:
+    ///   - key: The item.
+    ///   - manifest: The origin's signed manifest.
+    ///   - author: The origin, as the admission ledger resolved it and the judge admitted it.
+    /// - Returns: the delivery.
+    private func ledgerJudgementDelivery(
+        key: MeshRoutedItemKey, manifest: MeshRoutedManifest, author: MeshRoutedAuthor
+    ) -> MeshRoutedDelivery {
+        let scope = routedTypes.entry(for: manifest.typeToken)?.contentScope
+        return MeshRoutedDelivery(
+            manifest: manifest,
+            author: author,
+            seenAt: routedIndexForReading(reason: .rung)?
+                .record(for: key)?.firstSeenAt ?? manifest.createdAt,
+            sessionLiveness: scope == .session ? transcriptLiveness(for: manifest) : nil
+        )
+    }
+
+    /// The heart's author, when the ledger resolves it AND the row's judge admits it — with the
+    /// FINAL legs marked so they leave job 4's list (P6 item 6; the judge's admission since plan
+    /// step A0.5.3).
     ///
     /// `routedProjectionAuthor` already applies three of the gates before any unwrap — ledger
     /// resolution over `admissions − removals` (D-13.33), the removal set, and the fingerprint
-    /// block list — so this adds the trust-vault leg and the mark, and never a second block check.
+    /// block list — so this adds the judge's admission (for hearts, the trust-vault leg, refused as
+    /// `notAFriend`) and the mark, and never a second block check.
     ///
-    /// Inherited residual, unchanged and named: `ModerationBanStore.isPeerBanned` is still not
-    /// consulted on the routed path (only `isBlockedFingerprint`), where `MeshContentGates.folding`
-    /// folds both. The same gap item 4 names; it is not closed here.
+    /// Inherited residual, unchanged and named: FernletSocial's `ModerationBanStore.isPeerBanned` is
+    /// not consulted on the routed path (only `isBlockedFingerprint`), where its
+    /// `MeshContentGates.folding` folds both. The same gap item 4 names; it is not closed here.
     private func eligibleHeartAuthor(
-        _ key: MeshRoutedItemKey, _ manifest: MeshRoutedManifest
-    ) -> MeshRosterMember? {
+        _ key: MeshRoutedItemKey, _ manifest: MeshRoutedManifest, judge: RoutedJudge
+    ) -> MeshRoutedAuthor? {
         let resolved = routedProjectionAuthor(for: manifest)
         switch resolved {
         case .notYet:
@@ -9038,15 +7681,17 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         case .refusedForGood:
             _ = refusedHeart(key, reason: "originRefused")
             return nil
-        case .resolved(let author):
-            guard store.isTrustedUnblockedPeer(
-                signingPublicKey: author.signingPublicKey,
-                fingerprint: author.fingerprint
-            ) else {
-                _ = refusedHeart(key, reason: "notAFriend")
+        case .resolved(let member):
+            let author = MeshRoutedAuthor(
+                fingerprint: member.fingerprint, signingPublicKey: member.signingPublicKey
+            )
+            switch judge.admits(author) {
+            case .admitted:
+                return author
+            case .refusedForGood(let reason):
+                _ = refusedHeart(key, reason: reason)
                 return nil
             }
-            return author
         }
     }
 
@@ -9069,29 +7714,72 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         return .none
     }
 
-    /// The one plaintext seam's heart caller: the predicate is passed in by name and the refusal is
-    /// named in an audit line rather than swallowed.
-    private func openedRoutedHeartBody(
-        _ blob: Data, manifest: MeshRoutedManifest
-    ) -> MeshRoutedHeartBody? {
-        do {
-            return try MeshRoutedItemDelivery.openHeartBody(
-                blob, manifest: manifest, identity: identity,
-                mayDecryptRoutedContent: mayDecryptRoutedContent
-            )
-        } catch {
-            ProximityAudit.log(
-                "mesh.routedHeart.openFailed",
-                context: ["type": manifest.typeToken, "error": String(describing: error)]
-            )
-            return nil
-        }
+    /// One registered ledger judge, type-erased at registration over its `Body` (plan step A0.5.3;
+    /// the design's fallback for opening an existential judge inside the ack door's `@autoclosure`):
+    /// the ceremony calls these three closures and never names the judge's type.
+    ///
+    /// Each closure holds its judge strongly, as the judge map holds the box for the manager's
+    /// lifetime; none holds the manager, so a box can never keep the manager alive.
+    private struct RoutedJudge {
+        /// The judge's ``MeshRoutedLedgerJudge/isReadyToJudge``, read once per pass and once per
+        /// ceremony.
+        let isReadyToJudge: () -> Bool
+        /// The judge's ``MeshRoutedLedgerJudge/admits(_:)``.
+        let admits: (_ author: MeshRoutedAuthor) -> MeshRoutedAdmission
+        /// The engine's one generic open with the judge's `Body`, under the resident bound the engine
+        /// hands it (plan step A0.5.4), then the delivery the engine builds once the open has
+        /// succeeded, then the judge's ``MeshRoutedLedgerJudge/judgeRoutedItem(_:delivery:)``.
+        /// Throws only what the open throws: the delivery and the judgement never throw.
+        let openThenJudge: (
+            _ blob: Data, _ manifest: MeshRoutedManifest, _ identity: IdentityService,
+            _ maxBlobByteCount: Int, _ mayDecryptRoutedContent: Bool, _ delivery: () -> MeshRoutedDelivery
+        ) throws -> MeshRoutedJudgement
     }
 
     // MARK: Routed delivery projection (P5 item 13, plan §11, §12)
 
-    /// Hands one already-delivered routed item's plaintext to the canonical store its registered
-    /// type names — behind the two access predicates, and only then.
+    /// Registers the projection handler for one routed type: from here on an item of `token` that
+    /// passes the engine's guard chain is offered to `handler` (plan step A0.5.2, S9).
+    ///
+    /// The contract. Answers `false` and stores nothing when `token` has no row in this device's
+    /// routed type registry, or when its row is a judge row — one whose final ack is the foreground
+    /// decrypt and ledger commit, whose plaintext pass is its ack ceremony and never a projection —
+    /// so a refused registration leaves the row answering `mesh.routedProjection.noDispatchArm` for
+    /// good, and the caller checks the answer (which is why it is not `@discardableResult`). Answers
+    /// `true` once the handler is held: strongly, for the manager's lifetime, and replacing any
+    /// handler registered for the token before. Register before the first re-entry pass can run: an
+    /// item whose row has no handler yet is refused for now, and the row is not enumerated for
+    /// projection until a handler says it is projectable.
+    ///
+    /// The handler is kept in a box built here over `H.Body` — its two pre-open answers, and an
+    /// open-then-project step that runs the engine's one generic opener with `H.Body` and then the
+    /// handler's canonical write — so the engine's dispatch never opens an existential handler.
+    ///
+    /// - Parameters:
+    ///   - handler: The routed type's projection handler.
+    ///   - token: The routed type token it projects, verbatim.
+    /// - Returns: whether the handler was registered.
+    public func registerRoutedProjectionHandler<H: MeshRoutedProjectionHandler>(
+        _ handler: H, forToken token: String
+    ) -> Bool {
+        guard let entry = routedTypes.entry(for: token) else { return false }
+        guard !entry.requiresForegroundDecryptBeforeFinal else { return false }
+        routedProjectors[token] = RoutedProjector(                    // R3: bounded by the registry's rows
+            isProjectable: { handler.isProjectable },
+            verdictBeforeOpen: { handler.verdictBeforeOpen($0) },
+            openThenProject: { blob, manifest, delivery, identity, maxBlobByteCount, mayDecryptRoutedContent in
+                let body = try MeshRoutedItemDelivery.openBody(
+                    H.Body.self, blob: blob, manifest: manifest, identity: identity,
+                    maxBlobByteCount: maxBlobByteCount, mayDecryptRoutedContent: mayDecryptRoutedContent
+                )
+                return handler.projectRoutedItem(body, delivery: delivery)
+            }
+        )
+        return true
+    }
+
+    /// Hands one already-delivered routed item's plaintext to the projection handler registered for
+    /// its type, which writes its canonical store — behind the two access predicates, and only then.
     ///
     /// **Everything above it is unchanged.** The replay verdict, the verifiers, the store doors, the
     /// custody rung and the recipient receipt all ran on ciphertext, and the photo stage is final on
@@ -9175,7 +7863,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         guard case .resolved(let author) = routedProjectionAuthor(for: manifest) else {
             return .refusedForGood
         }
-        guard manifest.size <= UInt64(MeshRoutedItemSealFormat.maxResidentBlobByteCount) else {
+        guard manifest.size <= UInt64(routedResidentBlobBound) else {
             ProximityAudit.log(
                 "mesh.routedProjection.blobTooLarge", context: ["size": String(manifest.size)]
             )
@@ -9193,82 +7881,104 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             return .refusedForNow
         }
         return dispatchRoutedPlaintext(
-            blob, store: entry.canonicalStore, author: author, manifest: manifest, seenAt: seenAt
+            blob, entry: entry, author: author, manifest: manifest, seenAt: seenAt
         )
     }
 
-    /// Routes one item's ciphertext to the canonical store its REGISTRY ROW names, and answers
-    /// whether the item still owes the projection anything (P6 item 4).
+    /// Hands one item to the projection handler registered for its token, and answers whether the
+    /// item still owes the projection anything (P6 item 4; a token-keyed lookup of a registered
+    /// ``MeshRoutedProjectionHandler`` since plan step A0.5.2).
     ///
-    /// The `switch` is on `entry.canonicalStore` — a **resolved value**, which
-    /// `noShippingCodeBranchesOnARoutedTypeToken` permits by name and which matches none of its six
-    /// needles. Never a token spelling: the registry is the only per-type source, and a sender asks
-    /// it for a token exactly as this asks it for a store.
+    /// The lookup is keyed on `manifest.typeToken` — a **lookup argument**, which
+    /// `noShippingCodeBranchesOnARoutedTypeToken` permits and which matches none of its needles —
+    /// and the only row column read is a resolved value. Reached only from
+    /// ``routedProjectionVerdict(key:manifest:seenAt:)``, behind the whole guard chain (the mutation
+    /// predicate included) and after the blob read. The order inside is the engine's:
     ///
-    /// Each arm opens its own body, because that is the one step that differs per family, and the
-    /// open is therefore inside the arm rather than above the switch — the caller cannot know the
-    /// body type before the store is resolved. A body that will not open is `refusedForGood`: a
-    /// malformed framing and an id mismatch are permanent facts about origin-signed bytes, and a
-    /// text item costs its origin ~600 bytes, so leaving sixteen of them in the retry list is a
-    /// permanent projection outage for photos too (they share the one 16-item allowance).
+    /// 1. **A judge row, or a row no handler projects**, logs `mesh.routedProjection.noDispatchArm`
+    ///    and answers `refusedForNow` — never the unknown row's FINAL one, because the row is
+    ///    registered and a handler may still be. For a
+    ///    judge row it is unreachable by construction since P6 item 6 — the re-entry pass never
+    ///    enumerates its token and `finishLocalRungs` filters the live door's call by the same
+    ///    derived fact — and kept fail-closed anyway.
+    /// 2. **The delivery** is built: the signed facts, the ledger's author, `seenAt`, and for a
+    ///    `.session` row the engine's own ``transcriptLiveness(for:)``. Computed before the open,
+    ///    which changes nothing: between here and the handler's write only its pre-open answer (an
+    ///    audit line at most) and the decrypt run, synchronously, and neither writes the mesh, the
+    ///    generation map or the session state the liveness reads.
+    /// 3. **The handler's pre-open verdict** — the photo row's tombstone and held-copy settlement,
+    ///    the text row's 13+ age gate — so an item it refuses is never decrypted.
+    /// 4. **The open**, through the engine's one generic opener as the handler's `Body`, under one
+    ///    `do`/`catch`. A body that will not open is `refusedForGood` with one
+    ///    `mesh.routedProjection.openFailed` line: a malformed framing and an id mismatch are
+    ///    permanent facts about origin-signed bytes, and a text item costs its origin ~600 bytes, so
+    ///    leaving sixteen of them in the retry list is a permanent projection outage for photos too
+    ///    (they share the one 16-item allowance).
+    /// 5. **The handler's canonical write**, once, whose verdict is the item's.
     ///
     /// - Parameters:
     ///   - blob: The item's complete ciphertext.
-    ///   - store: The canonical store the registry row names.
+    ///   - entry: The item's registry row.
     ///   - author: The origin, as the admission ledger resolved it.
     ///   - manifest: The origin's signed manifest.
     ///   - seenAt: When this device first saw the item — the receiver-local anchor §10.3's clamp
     ///     and the transcript's ordering need. Never a clock read here.
-    /// - Returns: the arm's verdict.
+    /// - Returns: the handler's verdict, or the refusal that stopped it.
     private func dispatchRoutedPlaintext(
         _ blob: Data,
-        store canonicalStore: MeshRoutedCanonicalStore,
+        entry: MeshRoutedTypeEntry,
         author: MeshRosterMember,
         manifest: MeshRoutedManifest,
         seenAt: Date
     ) -> MeshRoutedProjectionVerdict {
-        switch canonicalStore {
-        case .friendPhotoWall:
-            // FIRST, before the body is opened and before the quota (invariant I5): a photo this
-            // phone already answered is refused for good by its (origin, item id) tombstone, so a
-            // custody copy still live in the mesh can never become a photo here again; one already
-            // held or on the wall is handed on without a second write.
-            if let settled = routedPhotoSettlement(manifest) { return settled }
-            guard let body = openedRoutedPhotoBody(blob, manifest: manifest) else {
-                return .refusedForGood
-            }
-            return routedCanonicalDispatch(body, author: author, manifest: manifest)
-        case .sessionTranscript:
-            // Leg 3 of the 13+ gate — advertisement, send, projection, and leg 4 is the
-            // enumeration filter in `projectableRoutedTypeTokens`. Applied BEFORE the unwrap, so a
-            // device below the line decrypts nothing rather than decrypting and discarding, and it
-            // is the ONE place the arm reads it: a second check with nothing saying which is live
-            // is the shape the retired handler's block check had. FINAL, because the gate is a
-            // durable product rule about this recipient and the transcript it would have entered
-            // belongs to this session.
-            guard isChatAllowed else {
-                ProximityAudit.log("mesh.routedProjection.transcriptAgeGated")
-                return .refusedForGood
-            }
-            guard let body = openedRoutedTextBody(blob, manifest: manifest) else {
-                return .refusedForGood
-            }
-            return routedCanonicalDispatch(
-                body, author: author, manifest: manifest, seenAt: seenAt
-            )
-        case .heartLedger:
-            // **Unreachable by construction since P6 item 6, and kept fail-closed anyway.** A
-            // heart's plaintext pass is its ack ceremony (`heartLedgerJudgement`), not a
-            // projection: `projectableRoutedTypeTokens` deliberately omits the token, so the
-            // re-entry pass never enumerates one, and `finishLocalRungs` filters the live door's
-            // call by the same derived fact. The arm stays because the `switch` is exhaustive over
-            // a resolved value — and because an arm that refuses is the right answer for a future
-            // store this build has no writer for.
+        guard !entry.requiresForegroundDecryptBeforeFinal,
+              let projector = routedProjectors[manifest.typeToken] else {
             ProximityAudit.log(
                 "mesh.routedProjection.noDispatchArm", context: ["type": manifest.typeToken]
             )
             return .refusedForNow
         }
+        let delivery = MeshRoutedDelivery(
+            manifest: manifest,
+            author: MeshRoutedAuthor(fingerprint: author.fingerprint, signingPublicKey: author.signingPublicKey),
+            seenAt: seenAt,
+            sessionLiveness: entry.contentScope == .session ? transcriptLiveness(for: manifest) : nil
+        )
+        if let verdict = projector.verdictBeforeOpen(delivery) { return verdict }
+        do {
+            return try projector.openThenProject(
+                blob, manifest, delivery, identity, routedResidentBlobBound, mayDecryptRoutedContent
+            )
+        } catch {
+            ProximityAudit.log(
+                "mesh.routedProjection.openFailed",
+                context: heldMeshAuditContext(
+                    ["type": manifest.typeToken, "error": String(describing: error)]
+                )
+            )
+            return .refusedForGood
+        }
+    }
+
+    /// One registered projection handler, type-erased at registration over its `Body` (plan step
+    /// A0.5.2; the design's fallback for opening an existential handler inside the engine): the
+    /// dispatch calls these three closures and never names the handler's type.
+    ///
+    /// Each closure holds its handler strongly, as the projector map holds the box for the manager's
+    /// lifetime; none holds the manager, so a box can never keep the manager alive.
+    private struct RoutedProjector {
+        /// The handler's ``MeshRoutedProjectionHandler/isProjectable``, read at each enumeration.
+        let isProjectable: () -> Bool
+        /// The handler's ``MeshRoutedProjectionHandler/verdictBeforeOpen(_:)``.
+        let verdictBeforeOpen: (_ delivery: MeshRoutedDelivery) -> MeshRoutedProjectionVerdict?
+        /// The engine's one generic open with the handler's `Body`, under the resident bound the
+        /// engine hands it (plan step A0.5.4), then the handler's
+        /// ``MeshRoutedProjectionHandler/projectRoutedItem(_:delivery:)``. Throws only what the open
+        /// throws: the canonical write never throws.
+        let openThenProject: (
+            _ blob: Data, _ manifest: MeshRoutedManifest, _ delivery: MeshRoutedDelivery,
+            _ identity: IdentityService, _ maxBlobByteCount: Int, _ mayDecryptRoutedContent: Bool
+        ) throws -> MeshRoutedProjectionVerdict
     }
 
     /// The item's complete blob, or nil with the STORE's own answer named rather than collapsed.
@@ -9378,181 +8088,13 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         case notYet
     }
 
-    /// The one plaintext seam's manager-side caller: the predicate is passed in by name and the
-    /// refusal is named in an audit line rather than swallowed.
-    private func openedRoutedPhotoBody(
-        _ blob: Data, manifest: MeshRoutedManifest
-    ) -> MeshRoutedPhotoBody? {
-        do {
-            return try MeshRoutedItemDelivery.openPhotoBody(
-                blob, manifest: manifest, identity: identity,
-                mayDecryptRoutedContent: mayDecryptRoutedContent
-            )
-        } catch {
-            ProximityAudit.log(
-                "mesh.routedProjection.openFailed",
-                context: heldMeshAuditContext(
-                    ["type": manifest.typeToken, "error": String(describing: error)]
-                )
-            )
-            return nil
-        }
-    }
-
-    /// Whether a routed photo's identity is already settled on this phone, asked before its body is
-    /// opened: tombstoned → `refusedForGood` (it was answered — kept, discarded or deleted — and must
-    /// never come back; the verdict takes it off the retry list), already held or on the wall →
-    /// `handedOn` with nothing written, otherwise nil.
-    ///
-    /// Keyed on the SIGNED origin and item id (``MeshContentKey``), never the id alone: a member
-    /// who copies another member's item id can neither make the genuine photo look settled nor get
-    /// it tombstoned.
-    private func routedPhotoSettlement(_ manifest: MeshRoutedManifest) -> MeshRoutedProjectionVerdict? {
-        let key = HeldPhotoKey(origin: manifest.originFingerprint, itemID: manifest.itemID)
-        switch heldPhotoSettlement(key) {
-        case .answered?:
-            ProximityAudit.log("mesh.routedProjection.photoAlreadyAnswered", context: heldMeshAuditContext())
-            return .refusedForGood
-        case .alreadyHeld?:
-            return .handedOn
-        default:
-            return nil
-        }
-    }
-
-    /// The canonical-store write for a routed photo: it is HELD for the person's review
-    /// (``holdSessionPhoto(_:key:live:)``), never put on the wall (2026-09-30).
-    ///
-    /// The per-origin quota, the display-field sanitisation and the closeness hook are unchanged;
-    /// the attribution comes from the origin's signed fingerprint and the ledger's key for it, and
-    /// the closeness hook is called with the **origin** rather than the courier.
-    ///
-    /// **Live is the SIGNED mesh id's call**: the photo belongs to the live session when a session
-    /// is live and `manifest.meshID` is the current mesh — never the optional, peer-supplied
-    /// `header.session`, so a session-less photo from the live mesh joins the live roll (and is
-    /// stamped with its metadata) instead of disturbing it as an awaiting one. A late arrival — the
-    /// session ended, a reunion delivery, another mesh — is held awaiting and re-triggers the review.
-    ///
-    /// A hold that cannot be persisted (the corpus is full, or no key) is `refusedForNow`: the item
-    /// stays in routed custody and is retried after the review frees room. An unsafe image is
-    /// refused for good, as no retry can change it.
-    ///
-    /// The one call site is ``dispatchRoutedPlaintext(_:store:author:manifest:seenAt:)``, which has
-    /// just consulted ``mayMutateCanonicalStoreWithRoutedContent``; the pin in
-    /// `MeshRoutedLockedDeviceTests` is what makes a second, ungated one a build failure. It takes
-    /// **no clock**: the one instant it stores is the origin's signed `addedAt`, and the hold's own
-    /// `heldAt` is this phone's clock at the write, read there.
-    private func routedCanonicalDispatch(
-        _ body: MeshRoutedPhotoBody,
-        author: MeshRosterMember,
-        manifest: MeshRoutedManifest
-    ) -> MeshRoutedProjectionVerdict {
-        guard allowIncomingRoutedPhoto(body.header.id, from: manifest) else {
-            return .refusedForGood
-        }
-        let photo = Self.sanitizedIncomingPhoto(FriendPhotoPayload(
-            id: body.header.id,
-            imageData: body.imageData,
-            addedAt: body.header.addedAt,
-            senderName: body.header.senderName,
-            senderFingerprint: author.fingerprint,
-            senderSigningPublicKey: author.signingPublicKey,
-            session: body.header.session
-        ), in: namespace)
-        let live = isSessionLive && manifest.meshID == currentMesh?.meshID
-        let key = MeshContentKey(senderFingerprint: manifest.originFingerprint, contentID: manifest.itemID)
-        switch holdSessionPhoto(photo, key: key, live: live) {
-        case .held:
-            if live { onFriendPhotoSession?(author.fingerprint) }
-            return .handedOn
-        case .alreadyHeld:
-            return .handedOn
-        case .answered, .unsafeImage:
-            return .refusedForGood
-        case .full, .notPersisted:
-            return .refusedForNow
-        }
-    }
-
-    /// The canonical-store write for a routed TEXT item: the same effects the legacy `.tempMessage`
-    /// handler produced, reached through the same store function (P6 item 4, plan §12).
-    ///
-    /// Nothing here re-implements what `SessionMessageStore` already owns — dedup by id, the
-    /// sanitizer, the display-name moderation, the 500-row cap and §10.3's ordering all live there,
-    /// and the arm would be a second copy of each. What it adds is the two things the store cannot
-    /// know: whether this device's session is still the one the message belongs to, and whether the
-    /// origin has spent its per-mesh message budget.
-    ///
-    /// Two things are corrected rather than reproduced. The attribution's FINGERPRINT comes from
-    /// the origin's signed manifest resolved against `admissions − removals`, where the legacy
-    /// handler used the live transport identity — which is what makes a message from a member who
-    /// has since walked out of the room still attributable. And the block list is applied by
-    /// ``routedProjectionAuthor(for:)`` **before** the content key is unwrapped, where the legacy
-    /// handler checked it after decoding; the arm therefore adds no second block check, and must
-    /// not grow one.
-    ///
-    /// The one call site is ``dispatchRoutedPlaintext(_:store:author:manifest:seenAt:)``, which has
-    /// just consulted ``mayMutateCanonicalStoreWithRoutedContent``; the pin in
-    /// `MeshRoutedLockedDeviceTests` is what makes a second, ungated one a build failure.
-    ///
-    /// It takes **no clock**: `sentAt` is the origin's own claim and `seenAt` is a stored fact
-    /// about the item (the index's `firstSeenAt`, or the delivery pass's injected instant), passed
-    /// in rather than read here.
-    private func routedCanonicalDispatch(
-        _ body: MeshRoutedTextBody,
-        author: MeshRosterMember,
-        manifest: MeshRoutedManifest,
-        seenAt: Date
-    ) -> MeshRoutedProjectionVerdict {
-        switch transcriptLiveness(for: manifest) {
-        case .live:
-            break
-        case .endedForGood:
-            ProximityAudit.log(
-                "mesh.routedProjection.transcriptSessionEnded",
-                context: ["type": manifest.typeToken, "mesh": manifest.meshID.uuidString]
-            )
-            return .refusedForGood
-        case .notLiveRightNow:
-            ProximityAudit.log("mesh.routedProjection.transcriptNotLiveYet")
-            return .refusedForNow
-        }
-        guard allowIncomingRoutedText(body.header.id, from: manifest) else {
-            return .refusedForGood
-        }
-        // Folded at the call site so the gate value cannot disagree with the seam it came from.
-        // `isBlockedFingerprint` ONLY: `ModerationBanStore.isPeerBanned` is not reachable from
-        // `ProximityHost`, so the routed path consults the block half and not the ban half —
-        // inherited from the photo arm, which has the same gap, and named rather than papered over.
-        // Closing it is a host-protocol widening, not an item-4 edit.
-        sessionMessages.refreshGates(chatAllowed: isChatAllowed) { [store] fingerprint in
-            store.isBlockedFingerprint(fingerprint)
-        }
-        let accepted = sessionMessages.receiveIncoming(
-            id: body.header.id,
-            senderFingerprint: author.fingerprint,
-            senderDisplayName: body.header.senderName,
-            text: body.text,
-            sentAt: body.header.sentAt,
-            seenAt: seenAt,
-            in: namespace
-        )
-        if accepted != .appended {
-            ProximityAudit.log(
-                "mesh.routedProjection.transcriptRefused",
-                context: ["reason": accepted.rawValue]
-            )
-        }
-        return .handedOn
-    }
-
     /// Whether a routed text item may enter the transcript this device is showing right now.
     ///
     /// Three legs, and each closes a different way of projecting into the wrong room:
     ///
-    /// 1. ``isSessionLive`` — the ONE predicate `clearSessionMessagesIfSessionEnded()` keys on, so
-    ///    the gate and the clear can never disagree. A **blip** leaves it true (item 2's fix), so a
-    ///    message that completes during one is projected rather than lost.
+    /// 1. ``isSessionLive`` — the ONE predicate the session-end funnel `endSessionIfEnded()` keys
+    ///    on, so the gate and the clear can never disagree. A **blip** leaves it true (item 2's fix),
+    ///    so a message that completes during one is projected rather than lost.
     /// 2. the item's **mesh** — mesh A's ciphertext outlives the move to mesh B (expiry is A's
     ///    `hardDeadline + 20 min`), so without this A's messages would appear in B's transcript.
     /// 3. the item's **transcript generation** — because leg 1 is REVERSIBLE and the clear is not.
@@ -9575,69 +8117,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         return isSessionLive ? .live : .notLiveRightNow
     }
 
-    /// The one plaintext seam's manager-side caller for text: the predicate is passed in by name
-    /// and the refusal is named in an audit line rather than swallowed.
-    private func openedRoutedTextBody(
-        _ blob: Data, manifest: MeshRoutedManifest
-    ) -> MeshRoutedTextBody? {
-        do {
-            return try MeshRoutedItemDelivery.openTextBody(
-                blob, manifest: manifest, identity: identity,
-                mayDecryptRoutedContent: mayDecryptRoutedContent
-            )
-        } catch {
-            ProximityAudit.log(
-                "mesh.routedProjection.openFailed",
-                context: heldMeshAuditContext(
-                    ["type": manifest.typeToken, "error": String(describing: error)]
-                )
-            )
-            return nil
-        }
-    }
-
-    /// The incoming per-origin MESSAGE budget, keyed on the ITEM's mesh (D-13.23) — the twin of
-    /// ``allowIncomingRoutedPhoto(_:from:)``, and the routed path's replacement for the retired
-    /// per-sender token bucket.
-    ///
-    /// **A policy act, stated plainly** (P6 item 4): a per-SECOND rate limit is replaced by a
-    /// per-session TOTAL. The bucket that went with the live transport (burst 5, refill 1/s) is
-    /// wrong twice over on a store-and-forward path — a single drain answer carries up to
-    /// `MeshRoutedDrainBounds.increment1.maxItems` (16) items, so a chatty pair's backlog reaching a
-    /// joining third device would have 11 legitimate messages dropped; and feeding it a *fixed*
-    /// per-item `firstSeenAt` makes `elapsed` zero forever, so the bucket would never refill. What
-    /// bounds the RATE now is the drain's own 16-item answer and its pacing, not a token count.
-    ///
-    /// Re-sends of an already-accepted id are free, exactly as the photo quota allows, so a
-    /// re-projection after a restart cannot cost a slot it already spent.
-    ///
-    /// Bounded on both axes: `MeshRoutedStoreFormat.maxItems` (1024) keys × this cap (200) ids, i.e.
-    /// at most 204 800 UUIDs if every possible origin in every possible mesh filled its budget.
-    /// What else bounds a hostile origin: the per-peer session frame budget
-    /// (`sessionFramesPerPeer` 1056, and a 9 065-byte item is one chunk), the store's item and byte
-    /// caps, the replay window, the 500-row transcript ring and `maxSeenIDs` (2000).
-    /// Internal rather than private so its three legs have a behavioural cell rather than only a
-    /// constants pin: making the body `return true` used to redden nothing (P6 item 4 fix review,
-    /// finding P2-4). **Not a door** — no caller outside this type, and the one shipping caller is
-    /// the text arm.
-    func allowIncomingRoutedText(_ messageID: UUID, from manifest: MeshRoutedManifest) -> Bool {
-        let budget = MeshRoutedOriginQuotaKey(manifest)
-        var accepted = routedOriginTextQuota[budget] ?? []
-        if accepted.contains(messageID) { return true }
-        guard accepted.count < Self.maxTextMessagesPerSenderPerSession else {
-            ProximityAudit.log("mesh.routedProjection.textQuotaSpent")
-            return false
-        }
-        guard routedOriginTextQuota[budget] != nil
-                || routedOriginTextQuota.count < MeshRoutedStoreFormat.maxItems else {
-            ProximityAudit.log("mesh.routedProjection.textQuotaMapFull")
-            return false
-        }
-        accepted.insert(messageID)
-        routedOriginTextQuota[budget] = accepted                      // R3: bounded map
-        return true
-    }
-
     /// Records which transcript generation an item was FIRST offered to the projection in.
     ///
     /// The first statement of ``projectRoutedItemIfPermitted(key:manifest:seenAt:)``, deliberately
@@ -9645,8 +8124,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// closed still belongs to the generation it arrived in, and recording it only once the gate
     /// opens would let the clear in between pass unnoticed.
     ///
-    /// Recorded for every item and read only by the transcript arm. Memory-only and bounded by
-    /// `MeshRoutedStoreFormat.maxItems`, cleared with the rest of the drain state at a mesh change.
+    /// Recorded for every item and read only by ``transcriptLiveness(for:)``, for the items of a
+    /// `.session` row. Memory-only and bounded by `MeshRoutedStoreFormat.maxItems`, cleared with the
+    /// rest of the drain state at a mesh change.
     private func noteRoutedItemOffered(_ key: MeshRoutedItemKey) {
         guard routedItemTranscriptGeneration[key] == nil else { return }
         guard routedItemTranscriptGeneration.count < MeshRoutedStoreFormat.maxItems else {
@@ -9654,29 +8134,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             return
         }
         routedItemTranscriptGeneration[key] = transcriptGeneration    // R3: bounded map
-    }
-
-    /// The incoming per-origin photo budget, keyed on the ITEM's mesh (D-13.23) — the routed twin of
-    /// the legacy per-sender quota, which keyed on the live one.
-    ///
-    /// Re-sends of an already-accepted id are free, exactly as the legacy counter allowed, so a
-    /// re-projection after a restart cannot cost a slot it already spent.
-    private func allowIncomingRoutedPhoto(_ photoID: UUID, from manifest: MeshRoutedManifest) -> Bool {
-        let budget = MeshRoutedOriginQuotaKey(manifest)
-        var accepted = routedOriginPhotoQuota[budget] ?? []
-        if accepted.contains(photoID) { return true }
-        guard accepted.count < Self.maxPhotosPerSenderPerSession else {
-            ProximityAudit.log("mesh.routedProjection.quotaSpent")
-            return false
-        }
-        guard routedOriginPhotoQuota[budget] != nil
-                || routedOriginPhotoQuota.count < MeshRoutedStoreFormat.maxItems else {
-            ProximityAudit.log("mesh.routedProjection.quotaMapFull")
-            return false
-        }
-        accepted.insert(photoID)
-        routedOriginPhotoQuota[budget] = accepted                     // R3: bounded map
-        return true
     }
 
     /// Remembers that one item's plaintext has been handed on — **or refused for a reason that
@@ -10310,9 +8767,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// The ONE predicate every decrypt of routed content consults (P5 item 10, D-10.12).
     ///
     /// Consultation sites: **two, both real since P5 item 13** — this device's own outer guard in
-    /// `projectRoutedItemIfPermitted(key:manifest:)`, and the parameter
-    /// `MeshRoutedItemDelivery.openPhotoBody(_:manifest:identity:mayDecryptRoutedContent:)` guards
-    /// on as its first line, so the two halves of one fact are stated at both ends. The source wall
+    /// `projectRoutedItemIfPermitted(key:manifest:)`, and the parameter the routed delivery door
+    /// guards on as its first line, which the projection hands over through
+    /// `MeshRoutedItemDelivery.openBody(_:blob:manifest:identity:maxBlobByteCount:mayDecryptRoutedContent:)`
+    /// (plan step A0.5.2), so the two halves of one fact are stated at both ends. The source wall
     /// (`everyRoutedPlaintextSeamNamesItsPredicate`) pins the unwrap and the item open to that one
     /// file and requires it to hold a `guard` on this spelling, not a mention.
     ///
@@ -11959,13 +10417,14 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     // MARK: - Friend-of-friend labels
 
-    /// Returns a label like "Friend of Aisha" if any cached voucher lists this fingerprint as trusted.
-    public func vouchLabel(for fingerprint: String) -> String? {
-        let now = Date()
-        return vouchCache.values
-            .first { $0.expiresAt > now && $0.trustedFingerprints.contains(fingerprint) }
-            .map { "Friend of \($0.voucherDisplayName)" }
-    }
+    /// The host's vouch-list content (plan step A0.5.5, S14): the list ``sendVouchList(to:)`` sends a
+    /// just-committed peer, and the keeper of every list the vouch arm decodes from a committed slot.
+    ///
+    /// nil, the default, sends no vouch list and drops every decoded one; a host installs its exchange
+    /// while it builds the manager, before any slot can commit. Held strongly for the manager's
+    /// lifetime. The frame stays the engine's: the vouch role and token, the committed-slot gate and
+    /// its `mesh.vouchList.droppedUncommittedSlot` line, the decode and both commit-time sends.
+    @ObservationIgnored public var vouchListExchange: (any MeshVouchListExchange)?
 
     public func block(_ participant: MeshSessionParticipant) {
         let signingPublicKey = currentMesh?.members
@@ -11977,59 +10436,11 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         store.blockProximityPeer(signingPublicKey: signingPublicKey)
     }
 
-    /// Phase 2 gate (Docs/Proximity-Mesh-Redesign-2026-07-10.md, "Phase 2 — Friend minting"):
-    /// the vouch-list broadcast disclosed every unblocked trusted fingerprint to all session
-    /// peers, and was dormant only because the trust vault had no production writers. Friend
-    /// minting (Phase 2) is exactly what would have switched it on, so it is gated OFF here.
-    /// Re-enable only with an explicit consent design for sharing the friend graph.
-    @ObservationIgnored var isVouchListBroadcastEnabled = false
-
-    /// The payload `sendVouchList` would broadcast, or nil while the broadcast is disabled.
-    /// Internal seam so tests can pin both the gate (default off ⇒ nil) and the machinery
-    /// (forced on ⇒ correct fingerprint filtering) without a live transport.
-    func vouchListPayloadForBroadcast() -> MeshFriendVouchListPayload? {
-        guard isVouchListBroadcastEnabled else { return nil }
-        let trusted = store.trustedProximityPeers
-            .filter { $0.blockedAt == nil && $0.revokedAt == nil }
-            .map { $0.fingerprint }
-        return MeshFriendVouchListPayload(
-            voucherFingerprint: identity.localFingerprint,
-            voucherDisplayName: displayName,
-            trustedFingerprints: trusted,
-            expiresAt: Date().addingTimeInterval(2 * 3600)
-        )
-    }
-
+    /// Sends `slot` the vouch list ``vouchListExchange`` builds for it now, signed under the vouch
+    /// token, or nothing when there is no exchange or it answers nil.
     private func sendVouchList(to slot: PeerSlot) async {
-        guard let payload = vouchListPayloadForBroadcast() else { return }
+        guard let payload = vouchListExchange?.vouchListForBroadcast() else { return }
         await sendEnvelope(.meshFriendVouchList, encodable: payload, via: slot)
-    }
-
-    /// Inbound counterpart of the Phase-2 vouch gate. While `isVouchListBroadcastEnabled` is
-    /// off, inbound vouch lists are dropped wholesale — no cache write, no "Friend of …" label:
-    /// the gate exists because vouch lists disclose a peer's friend graph without a consent
-    /// design, and accepting/rendering them would keep that disclosure live on the receive side
-    /// even with our own broadcast off. When enabled, the cached entry is hygiened: expiry is
-    /// capped at the protocol's 2 h TTL (the wire value is sender-controlled) and the
-    /// peer-supplied display name is sanitized before it is stored or rendered.
-    /// Internal seam so tests can drive it without a live transport.
-    func receiveVouchList(_ payload: MeshFriendVouchListPayload, senderFingerprint: String?) {
-        guard isVouchListBroadcastEnabled else { return }
-        guard payload.expiresAt > Date(),
-              payload.voucherFingerprint == senderFingerprint else { return }
-        let cappedExpiry = min(payload.expiresAt, Date().addingTimeInterval(2 * 3600))
-        let name = ProximityDisplayName.peerDisplayName(payload.voucherDisplayName, in: namespace)
-        vouchCache[payload.voucherFingerprint] = MeshFriendVouchListPayload(
-            voucherFingerprint: payload.voucherFingerprint,
-            voucherDisplayName: name,
-            trustedFingerprints: payload.trustedFingerprints,
-            expiresAt: cappedExpiry
-        )
-    }
-
-    /// Test seam: the cached (gated, capped, sanitized) vouch payload for a voucher, if any.
-    func cachedVouchList(from voucherFingerprint: String) -> MeshFriendVouchListPayload? {
-        vouchCache[voucherFingerprint]
     }
 
     // MARK: - Private helpers
@@ -12039,8 +10450,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
 
     /// Spawns a detached task that PINS this manager's host for the task's own lifetime.
     ///
-    /// ``store`` is `unowned` because the host owns this manager (`FernletStore.swift`'s `lazy var`
-    /// managers), and the unowned back-reference is that ownership's cycle-breaker. A detached task,
+    /// ``store`` is `unowned` because the host owns this manager, through the composition that owns it
+    /// (for Fernlet, FernletSocial's `FernletMeshFeatures`, the store's `lazy var` `meshFeatures`), and
+    /// the unowned back-reference is that ownership's cycle-breaker. A detached task,
     /// however, holds `self` STRONGLY for the duration of every `self?.method()` it awaits, so it can
     /// outlive the host and then read a destroyed object — `swift_abortRetainUnowned` aborts the whole
     /// process, which is what P5 item 1a's crash reports are. Capturing the host here, read
@@ -12068,103 +10480,34 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         slots.filter { $0.kind == .active }
     }
 
-    /// The capability tokens advertised in this device's identity introduction. Photos always (the
-    /// mesh's founding feature); `shop` only while clothing-shop sharing is enabled — the opt-out is
-    /// payload-layer (Phase 3a), so an opted-out device neither advertises nor is sent catalogs.
-    /// Snapshot at coordinator creation (capabilities ride the handshake intro); a mid-session toggle
-    /// affects the NEXT session's advertisement, while its send/receive effect is immediate via the
-    /// provider gates. Internal seam so tests can pin the gate without a live channel.
     /// Away-hearts gossip seams (bitchat adoptions Increment 3), wired by FernletStore: the local
-    /// prekey bundle to ride our intros (nil = consent off or feature absent), the sink for
-    /// friends' verified bundles, and the consent flag gating the `heartsAway` advertisement.
+    /// prekey bundle to ride our intros (nil = consent off or feature absent), and the sink for
+    /// friends' verified bundles. The consent flag gating the `heartsAway` advertisement is the
+    /// host's capability list's (``localCapabilitiesProvider``).
     public var heartDropBundleProvider: (() -> ProximityPrekeyBundle?)?
     public var onPeerPrekeyBundle: ((Data, ProximityPrekeyBundle) -> Void)?
-    public var heartsAwayEnabledProvider: (() -> Bool)?
 
-    /// Whether this device may take part in live-session chat at all — the 13+ age gate (see
-    /// `AgeAssuranceRecord`). Optional-and-nil means NOT allowed, matching `heartsAwayEnabledProvider`:
-    /// a manager nobody wired stays silent rather than opening a messaging surface to a child.
+    /// The host's capability list (plan step A0.5.5, S13): the whole ordered list of capability
+    /// tokens this device advertises in its identity introduction, or nil for the engine's own,
+    /// which is the host's wire2 framing token alone.
     ///
-    /// Enforced in FOUR places since P6 item 4, because any one alone is insufficient:
-    /// 1. `localCapabilities()` withholds `.messages` — now an **advertisement only**: it is a
-    ///    truthful statement that this device is above the line and will show a transcript, and
-    ///    nothing reads it to decide a destination any more, because a routed manifest binds
-    ///    wraps ≡ destinations and the roster carries no capabilities.
-    /// 2. `sendTempMessage(_:)` refuses by name (`MeshTextSendOutcome.ageGated`), so nothing leaves
-    ///    this device.
-    /// 3. the **projection** refuses before the unwrap, so a gated device decrypts nothing rather
-    ///    than decrypting and discarding — the leg the retired `.tempMessage` handler used to hold,
-    ///    and still necessary for the same reason: (1) is only an advertisement, and a peer on a
-    ///    modified build or with cached capabilities can still address us.
-    /// 4. `projectableRoutedTypeTokens` leaves `.sessionTranscript` out entirely while the gate is
-    ///    shut, so a gated device's text items never spend a projection allowance slot either
-    ///    (R-19 applied to a device that cannot finish a type rather than a build that cannot).
-    ///
-    /// Consequence, named for the owner rather than fixed here: a below-13 member of a mesh still
-    /// STORES and acknowledges the ciphertext of every message, because destinations are
-    /// `.fullRosterAtCreation`. Addressing only chat-capable members would need a subset delivery
-    /// target and capabilities on the roster, and the roster carries none.
-    @ObservationIgnored public var chatAllowedProvider: (() -> Bool)?
+    /// The list is advertised verbatim, in its order — the order is a signed byte of the
+    /// introduction and of its acknowledgement — and read once per coordinator, when a peer's
+    /// coordinator is built, so a switch the provider reads reaches the next session's
+    /// introductions, never one already sent. A host that ships the wire2 framing lists its wire2
+    /// token (``ProximityNamespace/Capabilities``), since a peer frames its sealed sends to this
+    /// device that way only when this device advertises it. Installed while the manager is built,
+    /// before any coordinator exists; nothing else in the engine reads it.
+    @ObservationIgnored public var localCapabilitiesProvider: (() -> [String])?
 
-    /// Resolved once per decision point so the four enforcement seams can never disagree. Public so
-    /// the in-session UI can withhold the chat affordance from the same value the transport enforces.
-    public var isChatAllowed: Bool { chatAllowedProvider?() == true }
-
+    /// The capability tokens advertised in this device's identity introduction: the host's list
+    /// (``localCapabilitiesProvider``), verbatim, or, with none installed, the host's wire2 token
+    /// alone — the one capability the engine itself implements (sealed-payload compress+pad
+    /// framing, bitchat adoptions Increment 2). Snapshot at coordinator creation (capabilities ride
+    /// the handshake intro); a mid-session toggle affects the NEXT session's advertisement.
+    /// Internal seam so tests can read the advertisement without a live channel.
     func localCapabilities() -> [String] {
-        var capabilities = [ProximityCapability.photos.rawValue]
-        // wire2 (bitchat adoptions Increment 2): sealed-payload compress+pad framing. A wire
-        // format, not a user feature — no opt-out; advertised by every build that ships it, under
-        // the host's wire2 token, the one every peer's sealed sends look for.
-        capabilities.append(namespace.family.vocabulary.capabilities.wire2)
-        // heartsAway (bitchat adoptions Increment 3): advertised only when the user opted into
-        // away delivery — signals our intro carries a prekey bundle and we accept drops.
-        if heartsAwayEnabledProvider?() == true {
-            capabilities.append(ProximityCapability.heartsAway.rawValue)
-        }
-        if clothingShop.isSharingEnabled {
-            capabilities.append(ProximityCapability.shop.rawValue)
-        }
-        // Phase 5: temporary messages are a core in-session feature with no separate v1 opt-out —
-        // session membership (the UWB dwell + admission) IS the consent gate. The one thing that DOES
-        // withhold it is the 13+ age gate: a device below the line never advertises `messages`, so
-        // friends' devices skip it in the room broadcast instead of sending into a surface it will drop.
-        if isChatAllowed {
-            capabilities.append(ProximityCapability.messages.rawValue)
-        }
-        // Content-moderation reports are a safety feature with no opt-out — always advertised so a
-        // friend's device knows it may hand us the reports it has verified.
-        capabilities.append(ProximityCapability.moderation.rawValue)
-        // Phase 4: advertise fuzzy-state exchange only when the user opted in, so a friend sends us their
-        // vibe only if we accept (and share) ours.
-        if friendStateEnabledProvider?() == true {
-            capabilities.append(ProximityCapability.friendState.rawValue)
-        }
-        // Phase 6: group activities are session-scoped; membership (the UWB dwell + the host's explicit
-        // confirm) is the consent gate, so advertise unconditionally like messages. Offers are only sent
-        // for activities the user chose to host, so there is nothing to opt out of.
-        capabilities.append(ProximityCapability.activities.rawValue)
-        // TF b19 item 5: in-session hearts ride the live mesh session. Advertise `.hearts` ONLY when this
-        // device has opted in (`allowNearbyHearts`). The receiver enforces that same opt-out (plus the
-        // trusted-friend requirement + block list) before recording anything, so advertising it while
-        // opted out would make an opted-out device look heart-reachable: a sender would send, see a false
-        // "Sent … good vibes", and burn the 5-minute cooldown even though the receiver silently drops it
-        // (`receiveSessionHeart`). Gating the advertisement means opted-out peers never appear reachable,
-        // so the sender's button reflects the true unavailable state. Also lets a sender skip peers on an
-        // older build (no `.friendHeart` mesh handler) and fall back to presence.
-        //
-        // Accepted limitation: capabilities are exchanged once at the session handshake, so toggling this
-        // setting mid-session does not retroactively update peers already connected in the session.
-        if store.allowNearbyHearts {
-            capabilities.append(ProximityCapability.hearts.rawValue)
-        }
-        return capabilities
-    }
-
-    /// Phase 3a outbound gate: send our catalog only to peers advertising the `shop` capability (a
-    /// legacy client would park-and-drop it anyway — skip the bytes), and only while sharing is
-    /// enabled locally. Internal seam so tests can pin the gate without a transport.
-    func shouldOfferShopCatalog(to peerIdentity: ProximityCoordinator.PeerIdentity) -> Bool {
-        clothingShop.isSharingEnabled && peerIdentity.supports(.shop, in: namespace.family.vocabulary.capabilities)
+        localCapabilitiesProvider?() ?? [namespace.family.vocabulary.capabilities.wire2]
     }
 
     /// Installs this manager's callbacks on its radio and, for a radio that authenticates peers
@@ -12328,8 +10671,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         isProximityJoin = false
         peerRetryCount.removeAll()
         locallyKickedEndpoints.removeAll()
-        sentShopCatalogSlotIDs.removeAll()
-        shopCatalogRequestResponseAt.removeAll()
+        // The search-stop moment (S15), before the radio is stood down and the slots are dropped:
+        // Fernlet's observer clears the clothing shop's per-slot send tracking here.
+        sessionObserver?.meshSearchDidStop()
         transport.stop()
         // Door 3's clock has nothing left to count once the radios are down — and door 1/2 have
         // already said the session is over by the time this funnel runs.
@@ -12343,12 +10687,12 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         // rotation timer kept waking for the manager's lifetime after a stopJoin-ended session.
         clearGroupKeyState()
         // Teardown path (leaveSession/leaveMesh/stopJoin funnel through here): the last committed
-        // slot is gone, so any unreviewed roster and any unreviewed session photos promote into the
-        // pending review batch and any held shop catalogs open the post-session shop window
-        // (Phase 3a).
-        promoteSessionToPendingReviewIfSessionEnded()
-        openShopWindowIfSessionEnded()
-        clearSessionMessagesIfSessionEnded()
+        // slot is gone, so the live roster is drained into the ending, the session-content generation
+        // advances, and the session observer is told the session ended (Fernlet's merges the drained
+        // roster and moves any unreviewed session photos into the pending review batch, opens the
+        // post-session shop window over any held catalogs, Phase 3a, drops the chat transcript and
+        // resets the heart state).
+        endSessionIfEnded()
     }
 
     /// The advertised TXT payload: version + the per-launch session id, plus the mesh identifiers
@@ -12636,18 +10980,18 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         outstandingAdmissionRequestBySlot.removeValue(forKey: slot.id)
         slots.removeAll { $0.id == slot.id }
         slotTrustPolicies.removeValue(forKey: slot.id)
-        pruneShopSendTracking(for: slot.id)
+        // The slot-loss moment (S15): Fernlet's observer prunes the clothing shop's send tracking for
+        // this slot, so a rejoining friend re-exchanges catalogs.
+        sessionObserver?.meshSlotDidLeave(slotID: slot.id)
         rerankSlots()
         // A peer whose slot is gone leaves the merge window's reach set, so the verdict is spent at
         // the moment it changes rather than at the next inbound frame. `rerankSlots()` is NOT an
         // evaluation site and must not become one: it moves `kind`, which the rule never reads.
         concludeMergeIfConverged()
-        promoteSessionToPendingReviewIfSessionEnded()
-        openShopWindowIfSessionEnded()
-        clearSessionMessagesIfSessionEnded()
-        // Door 3's clock starts HERE for a founded session (fix review P2-1): the hooks above just
-        // answered "still live", so somebody has to count the five minutes the app only counts on
-        // tab entry.
+        endSessionIfEnded()
+        // Door 3's clock starts HERE for a founded session (fix review P2-1): the session-end check
+        // above just answered "still live", so somebody has to count the five minutes the app only
+        // counts on tab entry.
         armSessionGiveUpClock(now: Date())
     }
 
@@ -12669,15 +11013,14 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         outstandingAdmissionRequestBySlot.removeValue(forKey: slot.id)
         slots.removeAll { $0.id == slot.id }
         slotTrustPolicies.removeValue(forKey: slot.id)
-        pruneShopSendTracking(for: slot.id)
+        // The slot-loss moment (S15), as in `removeSlot`.
+        sessionObserver?.meshSlotDidLeave(slotID: slot.id)
         rerankSlots()
         // A peer whose slot is gone leaves the merge window's reach set, so the verdict is spent at
         // the moment it changes rather than at the next inbound frame. `rerankSlots()` is NOT an
         // evaluation site and must not become one: it moves `kind`, which the rule never reads.
         concludeMergeIfConverged()
-        promoteSessionToPendingReviewIfSessionEnded()
-        openShopWindowIfSessionEnded()
-        clearSessionMessagesIfSessionEnded()
+        endSessionIfEnded()
         armSessionGiveUpClock(now: Date())
     }
 
@@ -12696,14 +11039,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             locallyKickedEndpoints.insert(peer.endpoint)
         }
         transport.disconnectPeer(peer, cause: cause)
-    }
-
-    /// Slot eviction prunes the shop send-tracking so a REJOINING friend re-exchanges catalogs: the
-    /// transport's peerMap persists across a remote teardown, so a returning peer reuses its old slot
-    /// UUID — without this, the once-per-slot guard would silently skip its re-commit send forever.
-    private func pruneShopSendTracking(for slotID: UUID) {
-        sentShopCatalogSlotIDs.remove(slotID)
-        shopCatalogRequestResponseAt.removeValue(forKey: slotID)
     }
 
     /// The name the session roster records for a peer committing now.
@@ -12878,11 +11213,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             createdAt: now
         )
         currentMesh = created
-        // Keep the quota counter across the founding: pin the new meshID so the addPhoto reset
-        // guard doesn't fire and grant a free extra 27 shots. (Pre-item-2 this was the
-        // pairwise→mesh promotion at the second commit; it is now the first commit's founding, and
-        // the guard it protects is the same one.)
-        sessionQuotaMeshID = created.meshID
+        // The scope moment (S15, plan step A0.5.11), before the founding is sealed: the observer's
+        // host keeps its per-session allowance across the founding (for Fernlet, FernletSocial's
+        // photo object pins the film to the new meshID).
+        sessionObserver?.meshScopeDidChange(.foundedAtFirstCommit(meshID: created.meshID))
         guard foundMesh(created, now: now) else { return false }
         updateDiscoveryInfo()
         return true
@@ -13693,13 +12027,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         }
         // A voted-out peer must never be offered by the keep-as-friend prompt: purge them from
         // the live roster and from any unconsumed promoted batch (belt-and-braces — promotion
-        // normally happens after this purge).
+        // normally happens after this purge). The batch is the observer's host's (S15, plan step
+        // A0.5.11: for Fernlet, FernletSocial's photo object's pending review).
         sessionRoster.removeAll { $0.fingerprint == proposal.targetFingerprint }
-        if var batch = pendingFriendReview {
-            batch.entries.removeAll { $0.fingerprint == proposal.targetFingerprint }
-            // Never on entries alone: a batch still carrying unanswered photos stays up.
-            pendingFriendReview = batch.isEmpty ? nil : batch
-        }
+        sessionObserver?.meshMemberWasRemoved(fingerprint: proposal.targetFingerprint)
 
         if proposal.targetFingerprint == identity.localFingerprint {
             leaveSession()
@@ -13806,8 +12137,9 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// key, so it never reaches `.connected` and never commits. (That is a stronger argument than
     /// "not barred or removed", which reads only THIS mesh's departures and removals and is empty
     /// for a mesh minted seconds ago.) The 13+ chat gate is untouched — it is applied at
-    /// advertisement, send, projection and enumeration off `chatAllowedProvider` (four legs since
-    /// P6 item 4) and never reads the mesh.
+    /// advertisement, send, projection and enumeration off the host chat's `chatAllowedProvider`
+    /// (four legs since P6 item 4; FernletSocial's `MeshSessionChat` since plan step A0.5.9) and never
+    /// reads the mesh.
     ///
     /// - Parameter request: The queued, sanitized request.
     /// - Returns: `true` when it may be granted without asking.
@@ -13971,479 +12303,126 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         }
     }
 
-    // MARK: - Photo handling
+    // MARK: - Session commit and end (the session observer's moments)
 
-    /// Coerces a peer-supplied photo payload before it is held in the sealed pending corpus (and so
-    /// before it can ever reach the persistent wall) (R3/R5): moderated sender name, moderated +
-    /// capped session participants, capped mesh name.
+    /// The per-commit hook, called from `onSlotConnected` for every slot commit. Three steps, in order:
     ///
-    /// Its one caller is now ``routedCanonicalDispatch(_:author:manifest:)``, which hands it a
-    /// payload built from an opened routed body — so the encrypted branch below is unreachable for
-    /// routed input. It stays: the `guard let imageData else { return payload }` fallback would
-    /// otherwise return an UNSANITIZED payload for a legacy-shaped one, which is the wrong direction
-    /// for a function whose whole job is coercion. The names are coerced under `namespace`'s
-    /// peer-name policy, the mesh name under its cap.
-    private static func sanitizedIncomingPhoto(_ payload: FriendPhotoPayload, in namespace: ProximityNamespace) -> FriendPhotoPayload {
-        let nameCap = namespace.installation.peerNames.maxLength
-        let session = payload.session.map { metadata in
-            FriendPhotoSessionMetadata(
-                id: metadata.id,
-                meshID: metadata.meshID,
-                meshName: metadata.meshName.map {
-                    String(ProximityDisplayName.sanitized($0, maxLength: nameCap).prefix(maxMeshNameLength))
-                },
-                startedAt: metadata.startedAt,
-                participants: metadata.participants.prefix(maxMeshMembers).map {
-                    FriendPhotoSessionParticipant(
-                        fingerprint: $0.fingerprint,
-                        displayName: ProximityDisplayName.peerDisplayName($0.displayName, in: namespace)
-                    )
-                }
-            )
-        }
-        let senderName = ProximityDisplayName.peerDisplayName(payload.senderName, in: namespace)
-        if let encryptedImageData = payload.encryptedImageData, let nonce = payload.nonce,
-           payload.keyEpoch > 0 {
-            return FriendPhotoPayload(
-                id: payload.id,
-                encryptedImageData: encryptedImageData,
-                nonce: nonce,
-                keyEpoch: payload.keyEpoch,
-                addedAt: payload.addedAt,
-                senderName: senderName,
-                senderFingerprint: payload.senderFingerprint,
-                senderSigningPublicKey: payload.senderSigningPublicKey,
-                session: session
-            )
-        }
-        guard let imageData = payload.imageData else { return payload }
-        return FriendPhotoPayload(
-            id: payload.id,
-            imageData: imageData,
-            addedAt: payload.addedAt,
-            senderName: senderName,
-            senderFingerprint: payload.senderFingerprint,
-            senderSigningPublicKey: payload.senderSigningPublicKey,
-            session: session
-        )
-    }
-
-    public func imageData(for photo: FriendPhotoPayload) -> Data? {
-        photoCacheStore.imageData(for: photo)
-    }
-
-    public func thumbnailData(for photo: FriendPhotoPayload) -> Data? {
-        photoCacheStore.thumbnailData(for: photo)
-    }
-
-    public func thumbnailData(forPhotoID photoID: UUID) -> Data? {
-        guard let photo = meshPhotos.first(where: { $0.id == photoID }) else { return nil }
-        return thumbnailData(for: photo)
-    }
-
-    public func hydratedPhotos(_ photos: [FriendPhotoPayload]) -> [FriendPhotoPayload] {
-        photos.compactMap { photoCacheStore.hydrated($0) }
-    }
-
-    public func favoritePhotoID(for post: FriendPhotoWallPost) -> UUID? {
-        _ = favoritesRevision  // observe favorite toggles so the heart re-renders (see favoritesRevision)
-        guard let sessionID = post.session?.id else { return nil }
-        return photoWallPreferences.favoritePhotoIDsBySession[sessionID]
-    }
-
-    /// Every photo the user has hearted (favorited), flattened from the per-session favorite map into one
-    /// global id set. Read-only: the home photowall reads this to weight hearted photos higher in its
-    /// rotation. Touches `favoritesRevision` so an observing surface re-picks when a favorite toggles, but
-    /// NEVER mutates preferences — the `@ObservationIgnored` constraint on `photoWallPreferences` holds.
-    public var allFavoritePhotoIDs: Set<UUID> {
-        _ = favoritesRevision
-        return Set(photoWallPreferences.favoritePhotoIDsBySession.values)
-    }
-
-    public func toggleFavorite(photoID: UUID, in post: FriendPhotoWallPost) {
-        guard let sessionID = post.session?.id else { return }
-        if photoWallPreferences.favoritePhotoIDsBySession[sessionID] == photoID {
-            photoWallPreferences.favoritePhotoIDsBySession.removeValue(forKey: sessionID)
-        } else {
-            photoWallPreferences.favoritePhotoIDsBySession[sessionID] = photoID
-        }
-        favoritesRevision &+= 1  // notify observers of favoritePhotoID(for:) / photoWallPosts
-        persistPhotoWallPreferences()
-    }
-
-    public var photoWallPosts: [FriendPhotoWallPost] {
-        _ = favoritesRevision  // read-only: re-render the wall cover when a favorite toggles; NEVER bump here
-        progressivelyAggregatePhotoSessions()
-        return makePhotoWallPosts()
-    }
-
-    public var savedPhotoSessions: [FriendPhotoSessionMetadata] {
-        Dictionary(grouping: meshPhotos.compactMap(\.session), by: \.id)
-            .compactMap { $0.value.first }
-            .sorted { $0.startedAt > $1.startedAt }
-    }
-
-    private func currentPhotoSessionMetadata() -> FriendPhotoSessionMetadata {
-        let sessionID = activePhotoSessionID ?? UUID()
-        let startedAt = photoSessionStartedAt ?? Date()
-        let previousMetadata = sessionPhotos.first(where: { $0.session?.id == sessionID })?.session
-        activePhotoSessionID = sessionID
-        photoSessionStartedAt = startedAt
-        let participants = (previousMetadata?.participants ?? []) + sessionParticipants.map {
-            FriendPhotoSessionParticipant(fingerprint: $0.fingerprint, displayName: $0.displayName)
-        }
-        return FriendPhotoSessionMetadata(
-            id: sessionID,
-            meshID: currentMesh?.meshID ?? previousMetadata?.meshID,
-            meshName: currentMesh?.name ?? previousMetadata?.meshName,
-            startedAt: startedAt,
-            participants: participants.reduce(into: []) { result, participant in
-                if !result.contains(where: { $0.fingerprint == participant.fingerprint }) {
-                    result.append(participant)
-                }
-            }
-        )
-    }
-
-    private func finalizeCurrentPhotoSessionMetadata() {
-        guard activePhotoSessionID != nil, !sessionPhotos.isEmpty else { return }
-        let metadata = currentPhotoSessionMetadata()
-        meshPhotos = meshPhotos.map { photo in
-            photo.session?.id == metadata.id ? photo.withSession(metadata) : photo
-        }
-        sessionPhotos = sessionPhotos.map { $0.withSession(metadata) }
-    }
-
-    private func progressivelyAggregatePhotoSessions() {
-        var posts = makePhotoWallPosts()
-        var didChange = false
-        // R2: both terminators are in the condition — the wall is below the post cap, or there is
-        // no unaggregated session left (each iteration aggregates exactly one of a finite set).
-        while posts.count >= Self.maxUnaggregatedWallPosts, let candidate = newestUnaggregatedSession() {
-            photoWallPreferences.aggregatedSessionIDs.insert(candidate.id)
-            if photoWallPreferences.coverPhotoIDsBySession[candidate.id] == nil,
-               let coverID = photos(in: candidate.id).randomElement()?.id {
-                photoWallPreferences.coverPhotoIDsBySession[candidate.id] = coverID
-            }
-            didChange = true
-            posts = makePhotoWallPosts()
-        }
-        if didChange {
-            persistPhotoWallPreferences()
-        }
-    }
-
-    private func makePhotoWallPosts() -> [FriendPhotoWallPost] {
-        var posts: [FriendPhotoWallPost] = []
-        var emittedSessionIDs: Set<UUID> = []
-        for photo in meshPhotos.sorted(by: { $0.addedAt > $1.addedAt }) {
-            guard let session = photo.session,
-                  photoWallPreferences.aggregatedSessionIDs.contains(session.id) else {
-                posts.append(FriendPhotoWallPost(id: photo.id, session: photo.session, photos: [photo], coverPhoto: photo))
-                continue
-            }
-            guard emittedSessionIDs.insert(session.id).inserted else { continue }
-            let sessionPhotos = photos(in: session.id)
-            let coverID = photoWallPreferences.favoritePhotoIDsBySession[session.id]
-                ?? photoWallPreferences.coverPhotoIDsBySession[session.id]
-            // `sessionPhotos.first` rather than `[0]` (R5: no trapping subscript) — `photo` is the
-            // element being iterated and always belongs to this session, so it is a valid cover.
-            let coverPhoto = sessionPhotos.first(where: { $0.id == coverID }) ?? sessionPhotos.first ?? photo
-            posts.append(FriendPhotoWallPost(id: session.id, session: session, photos: sessionPhotos, coverPhoto: coverPhoto))
-        }
-        return posts
-    }
-
-    private func newestUnaggregatedSession() -> FriendPhotoSessionMetadata? {
-        savedPhotoSessions
-            .filter { !photoWallPreferences.aggregatedSessionIDs.contains($0.id) }
-            .filter { photos(in: $0.id).count > 1 }
-            .max { $0.startedAt < $1.startedAt }
-    }
-
-    private func photos(in sessionID: UUID) -> [FriendPhotoPayload] {
-        meshPhotos
-            .filter { $0.session?.id == sessionID }
-            .sorted { $0.addedAt < $1.addedAt }
-    }
-
-    private func persistPhotoWallPreferences() {
-        photoWallPreferencesStore.save(photoWallPreferences)
-    }
-
-    // MARK: - Clothing shop (Phase 3a)
-
-    /// The per-commit shop hook, called from `onSlotConnected` for every slot commit. Two jobs:
+    /// 1. **The session-formation fact** (spec: "'Next session start' = first slot COMMIT, not search
+    ///    start"): the FIRST commit after a no-session state forms a session — startJoin/startNewMesh
+    ///    must never do this (they fire on every Social-tab entry / scene dip). `hasFormedSession` makes
+    ///    it once-per-formation: later commits (including the founding's own, which re-enter via
+    ///    onSlotConnected's fingerprint transition) and a mid-session re-handshake of the sole committed
+    ///    slot form nothing. This also covers the transient-drop case: last slot lost mid-outing ends a
+    ///    session that holds no mesh; a re-commit lands here and forms the next one.
+    /// 2. **The engine's own leg on a formation**: the session-content generation advances
+    ///    (``advanceTranscriptGeneration()``), so nothing offered to the projection before this
+    ///    formation projects into the new session's content.
+    /// 3. **The session observer's commit** (S15), told that fact: the host's legs for a commit, in the
+    ///    host's own order. Fernlet's (FernletSocial's mesh composition) feeds closeness first; on a
+    ///    formation it closes the previous post-session shop window and drops its catalogs, drops the
+    ///    chat transcript (Phase 5: a NEW session forms with an empty transcript, which also covers the
+    ///    transient-drop → re-commit case) and forgets the shop's send tracking; it offers this
+    ///    device's clothing catalog once per slot, pairwise sealed and capability-gated, with a
+    ///    `clothingCatalogRequest` for the peer's, so the exchange does not depend on which side
+    ///    commits first (spec: "Catalog delivery must not assume commit symmetry"); it hands this
+    ///    peer, when it advertises each, this device's own signed moderation reports and its fuzzy
+    ///    friend state, each to a vault-trusted friend only; and, last, when the peer advertises
+    ///    activities, it offers the activities this device hosts with a roster version digest.
     ///
-    /// 1. **Session formation** (spec: "'Next session start' = first slot COMMIT, not search start"):
-    ///    the FIRST commit after a no-session state is when the previous post-session window closes
-    ///    and its catalogs drop — startJoin/startNewMesh must never do this (they fire on every
-    ///    Social-tab entry / scene dip). `hasFormedShopSession` makes the reset once-per-formation:
-    ///    later commits (including the founding's own, which re-enter via onSlotConnected's fingerprint
-    ///    transition) and a mid-session re-handshake of the sole committed slot can't wipe catalogs.
-    ///    This also covers the transient-drop case: last slot lost mid-outing opens the window; a
-    ///    re-commit lands here, closes it, clears catalogs, and the exchange re-runs.
-    /// 2. **Catalog offer** — send our catalog once per slot, pairwise sealed (the same sendEnvelope
-    ///    path photos use; `slot.verifiedKeyAgreementPublicKey` was set just before onSlotConnected),
-    ///    capability-gated, nil provider (sharing off) sends nothing — PLUS a
-    ///    `clothingCatalogRequest` for the peer's catalog: our send fires at OUR commit, but the
-    ///    peer's registry gate requires the PEER's commit, so a slightly-later committer would drop
-    ///    our catalog forever under once-per-slot tracking. The request, sent at its own commit,
-    ///    makes the exchange commit-order-independent (spec: "Catalog delivery must not assume
-    ///    commit symmetry").
+    /// The advance and the observer's transcript drop are synchronous and adjacent, on the main
+    /// actor, with nothing between them that reads, logs or persists the transcript, so no projection
+    /// pass can land between them (plan step A0.5.9).
     ///
-    /// Internal seam so unit tests can drive a slot commit without a live handshake.
+    /// Internal seam so unit tests can drive a slot commit without a live handshake; its spelling
+    /// (named for the shop's hook) is one of the engine names the package's rename pass settles.
     func noteSlotCommittedForShop(slot: PeerSlot, identity peerIdentity: ProximityCoordinator.PeerIdentity) {
-        // Phase 5: this committed friend is physically present — feed closeness (day-capped downstream).
-        onFriendSessionCommitted?(peerIdentity.fingerprint)
-        if !hasFormedShopSession {
-            hasFormedShopSession = true
-            clothingShop.beginNewSession()
-            // Phase 5: a NEW session forms with an empty transcript. Messages already cleared at the
-            // prior session end; this is belt-and-braces and covers the transient-drop → re-commit case.
-            clearSessionTranscript()
-            sentShopCatalogSlotIDs.removeAll()
-            shopCatalogRequestResponseAt.removeAll()
+        let formsSession = !hasFormedSession
+        hasFormedSession = true
+        if formsSession {
+            advanceTranscriptGeneration()
         }
-        if shouldOfferShopCatalog(to: peerIdentity), sentShopCatalogSlotIDs.insert(slot.id).inserted {
-            spawnHostPinned { [weak self] in
-                await self?.sendShopCatalog(to: slot)
-                await self?.sendShopCatalogRequest(to: slot)
-            }
-        }
-        // Phase 3b: hand our own signed moderation reports to this committed friend (one-hop relay).
-        // The send method additionally requires the recipient be a vault-trusted (kept) friend.
-        if peerIdentity.supports(.moderation, in: namespace.family.vocabulary.capabilities) {
-            let recipientKey = peerIdentity.signingPublicKey
-            spawnHostPinned { [weak self] in await self?.sendModerationReports(to: slot, recipientSigningKey: recipientKey) }
-        }
-        // Phase 4: share our fuzzy vibe + appearance with this committed friend (kept friends only).
-        if peerIdentity.supports(.friendState, in: namespace.family.vocabulary.capabilities) {
-            let recipientKey = peerIdentity.signingPublicKey
-            spawnHostPinned { [weak self] in await self?.sendFriendState(to: slot, recipientSigningKey: recipientKey) }
-        }
-        // Phase 6: offer any activities we host to this committed peer + exchange a roster version digest
-        // so the highest verified snapshot converges. The manager sends via its wired `send` closure.
-        if peerIdentity.supports(.activities, in: namespace.family.vocabulary.capabilities) {
-            activities.onPeerCommitted(fingerprint: peerIdentity.fingerprint)
-        }
-    }
-
-    /// Answers a verified `clothingCatalogRequest` from a committed, unblocked peer (the registry gate
-    /// + handler already enforced both): re-send our catalog to that slot, BYPASSING the once-per-slot
-    /// guard — idempotent, the receiver replaces by fingerprint. Rate-limited per slot so a hostile
-    /// peer can't use requests as a send-amplification lever, and gated on the same sharing-enabled +
-    /// capability checks as the commit-time offer.
-    private func respondToShopCatalogRequest(
-        fromVerifiedFingerprint fingerprint: String,
-        identity peerIdentity: ProximityCoordinator.PeerIdentity?
-    ) {
-        guard let peerIdentity, shouldOfferShopCatalog(to: peerIdentity) else { return }
-        guard let slot = slots.first(where: { $0.fingerprint == fingerprint }) else { return }
-        let now = Date()
-        if let last = shopCatalogRequestResponseAt[slot.id],
-           now.timeIntervalSince(last) < MeshClothingShop.perSenderRateLimitSeconds {
-            return
-        }
-        shopCatalogRequestResponseAt[slot.id] = now
-        spawnHostPinned { [weak self] in await self?.sendShopCatalog(to: slot) }
-    }
-
-    /// Sends this device's current catalog to a committed slot, pairwise sealed. A nil provider
-    /// result (sharing disabled, or the app never wired it) sends nothing — the payload-layer opt-out.
-    private func sendShopCatalog(to slot: PeerSlot) async {
-        guard let payload = clothingShop.localCatalogProvider?() else { return }
-        onShopCatalogSendForTesting?(slot.id)
-        await sendFeatureEnvelope(PayloadType.clothingCatalog.rawValue, encodable: payload, via: slot, sealed: true)
-    }
-
-    /// Asks a just-committed peer for its catalog (commit symmetry — see `noteSlotCommittedForShop`).
-    /// Signed like every control payload but not sealed: it carries nothing (the summary is the whole
-    /// body, mirroring `.sessionGoodbye`), and it is deliberately NOT in Fernlet's `payloads.sealingRequired`.
-    private func sendShopCatalogRequest(to slot: PeerSlot) async {
-        // DO NOT LOCALIZE "Clothing catalog request" — as the doc comment above says, the summary is
-        // the whole body here, so this literal is signed wire bytes AND the receiving peer's
-        // Inspector row. See `FernletIdentityEnvelope.payloadSummary`.
-        await sendFeatureEnvelope(
-            PayloadType.clothingCatalogRequest.rawValue,
-            encodable: PayloadSummary(title: "Clothing catalog request"), via: slot
+        sessionObserver?.meshSlotDidCommit(
+            MeshSlotCommit(slot: slot, peer: peerIdentity, formsSession: formsSession)
         )
-        onShopCatalogRequestSendForTesting?(slot.id)
     }
 
-    /// Phase 3a: the shop window opens at the same last-committed-slot-gone moment that promotes
-    /// `pendingFriendReview` — call sites mirror `promoteSessionToPendingReviewIfSessionEnded()` exactly.
-    /// The same moment ends the formed-session epoch: the NEXT slot commit is a new formation.
+    /// The session-end moment, at the same last-committed-slot-gone sites that have always run the
+    /// ending (`stopSearching()`, `removeSlot`, `disconnectSlot`): when the session has ENDED, its legs
+    /// run in this order —
     ///
-    /// ``isSessionLive``, not `isInSession` and not ``hasCommittedPeer`` — same reason as the review
-    /// promotion (P6 item 2 and its fix). A blip must not open the post-session shop window over a
-    /// session that is still running.
-    private func openShopWindowIfSessionEnded() {
+    /// 1. the roster drain: the live roster is emptied and handed to the ending
+    ///    (``drainSessionRoster()``, plan step A0.5.11);
+    /// 2. the formed-session epoch ends: the NEXT slot commit is a new formation;
+    /// 3. the session-content generation advances (``advanceTranscriptGeneration()``), so nothing
+    ///    offered to the projection in this session projects into its content again;
+    /// 4. the session observer's ending (S15), with the drained roster: Fernlet's first promotes the
+    ///    session's review (Phase 2, "Session-end review is model-state, not view-events") — its photo
+    ///    object merges the drained roster into the pending batch (last write wins, never a drop) and
+    ///    moves the session's unreviewed photos into it, memory only, logged
+    ///    `mesh.session.photosPendingReview`; then it opens the clothing shop's one-hour
+    ///    post-session window over the catalogs it holds (Phase 3a), drops the chat transcript
+    ///    (Phase 5: messages VANISH — where the shop KEEPS catalogs through a 1-hour window, the
+    ///    transcript is dropped immediately, nothing to retain, nothing to sync), and, last, drops
+    ///    the in-session heart's feedback and its in-flight claims.
+    ///
+    /// Idempotent and cheap: a site that finds the session still live does nothing, and a later
+    /// teardown that finds it still ended re-runs legs that have nothing left to move.
+    ///
+    /// ``isSessionLive``, not `isInSession` and not ``hasCommittedPeer`` (P6 item 2 and its fix): §12's
+    /// privacy rule — the transcript vanishes at session end — silently stopped holding for every
+    /// founded pair on `isInSession`, and on ``hasCommittedPeer`` it went the other way and deleted a
+    /// live room's transcript, and opened the post-session shop window, on a two-second link drop.
+    /// Item 4's live-transcript projection reads the same predicate, so the clear and the gate can
+    /// never disagree.
+    private func endSessionIfEnded() {
         guard !isSessionLive else { return }
-        hasFormedShopSession = false
-        clothingShop.openWindowAtSessionEnd()
+        let drainedRoster = drainSessionRoster()
+        hasFormedSession = false
+        advanceTranscriptGeneration()
+        sessionObserver?.meshSessionDidEnd(MeshSessionEnd(drainedRoster: drainedRoster))
     }
 
-    // MARK: - Temporary messages (Phase 5)
+    // MARK: - The session-content generation (Phase 5) and the privacy wipe
 
-    /// Send a live-session chat message to the room, as a **routed item** (P6 item 4, plan §12).
+    /// The ONE place the session-content generation advances, so it cannot move at one drop of the
+    /// transcript and not another (P6 item 2 fix review, finding P2-3; plan step A0.5.9).
     ///
-    /// The same three lines ``shareRoutedPhoto(itemID:addedAt:imageData:session:)`` uses: ask the
-    /// registry for `.sessionTranscript`'s token, frame a ``MeshRoutedTextBody`` under the family's
-    /// frozen framing, and hand it to ``originateRoutedItem(body:typeToken:itemID:audience:now:)``, which
-    /// pushes it once to every committed slot and leaves the drain to carry it to everyone else.
-    /// The legacy per-slot sealed `.tempMessage` fan-out — and with it the `messages` capability
-    /// read, the live-slot requirement and the "no offline queue" rule — is **gone**: a message to
-    /// an admitted member who is not linked right now is sealed, wrapped and custodied until a link
-    /// forms, which is the whole point of the routed store.
-    ///
-    /// Three things the sanitizer and the sender do in order, and the order matters: sanitize (500
-    /// `Character`s), byte-bound for the wire (``MeshRoutedTextBody/boundedText(_:)``), then
-    /// re-check emptiness — because the byte bound can empty a message the Character cap admitted,
-    /// and minting an empty body would echo an empty row the user cannot dismiss.
-    ///
-    /// **The byte bound TRUNCATES rather than refuses, and it is audited when it bites** (P6 item 4
-    /// fix review, P3-4). "Never a surprise refusal for honest input" is bought with a silent edit:
-    /// the bounded text is what is minted *and* what the local echo shows, so sender and recipient
-    /// agree and the user sees the shortened row with no label. Only a draft whose whole allowance
-    /// is one grapheme cluster becomes `.empty`. The audit line is the honest half — a diagnostic,
-    /// never user copy, and never a second refusal path.
-    ///
-    /// **It RETURNS its outcome and publishes nothing.** `routedShareRefusal` is the photo path's
-    /// seam and is consumed by one `.alert` on `DisposableCameraView` — the very view the chat panel
-    /// is presented *over*, so a refusal published there would fire an alert on a covered presenter
-    /// — and every one of its sentences is photo-worded. The panel shows the non-staged outcomes
-    /// inline instead, at the top of the compose bar (i.e. directly ABOVE the text field, between it
-    /// and the transcript), and keeps the draft so "send again" is the retry.
-    ///
-    /// - Parameter rawText: What the user typed.
-    /// - Returns: what happened, including `.noDestinations` — which for text is **not** silent:
-    ///   the founding window (commit → found → grant → adopt) is a real second or two in which a
-    ///   roster of one has nobody to address, destinations are immutable at the mint, and there is
-    ///   no offline queue, so the item can never acquire one later.
-    public func sendTempMessage(_ rawText: String) -> MeshTextSendOutcome {
-        // The 13+ age gate. The compose bar is withheld below the line, so this is the defense-in-depth
-        // re-check at the point of use rather than the primary gate; the projection re-applies it.
-        guard isChatAllowed else {
-            ProximityAudit.log("mesh.routedShare.textBlockedAgeGated")
-            return noteTextSendOutcome(.ageGated)
-        }
-        let sanitized = SessionMessageStore.sanitize(rawText)
-        let text = MeshRoutedTextBody.boundedText(sanitized)
-        guard !text.isEmpty else { return noteTextSendOutcome(.empty) }
-        if text != sanitized {
-            ProximityAudit.log(
-                "mesh.routedShare.textByteBounded",
-                context: ["characters": String(sanitized.count),
-                          "bytes": String(sanitized.utf8.count)]
-            )
-        }
-        let id = UUID()
-        let now = Date()
-        guard let typeToken = routedTypes.token(forCanonicalStore: .sessionTranscript) else {
-            return noteTextSendOutcome(.refused(.mintFailed))
-        }
-        let body: Data
-        do {
-            body = try MeshRoutedTextBody(
-                header: MeshRoutedTextHeader(
-                    id: id, sentAt: now,
-                    senderName: MeshRoutedTextBody.boundedSenderName(displayName)
-                ),
-                text: text
-            ).encoded()
-        } catch {
-            ProximityAudit.log(
-                "mesh.routedShare.textRefused",
-                context: ["reason": MeshRoutedShareRefusal.sealFailed.rawValue,
-                          "error": String(describing: error)]
-            )
-            return noteTextSendOutcome(.refused(.sealFailed))
-        }
-        switch originateRoutedItem(
-            body: body, typeToken: typeToken, itemID: id, audience: .fullRoster, now: now
-        ) {
-        case .staged:
-            sessionMessages.appendOutgoing(
-                id: id, senderFingerprint: identity.localFingerprint,
-                senderDisplayName: displayName, text: text, sentAt: now
-            )
-            return noteTextSendOutcome(.staged)
-        case .skipped:
-            return noteTextSendOutcome(.noDestinations)
-        case .refused(let refusal):
-            ProximityAudit.log(
-                "mesh.routedShare.textRefused", context: ["reason": refusal.rawValue]
-            )
-            return noteTextSendOutcome(.refused(refusal))
-        }
-    }
-
-    /// Fires the send seam and returns the outcome, so every `return` in ``sendTempMessage(_:)``
-    /// reports exactly once and none can forget to.
-    private func noteTextSendOutcome(_ outcome: MeshTextSendOutcome) -> MeshTextSendOutcome {
-        onTextSendForTesting?(outcome)
-        return outcome
-    }
-
-    /// Phase 5: messages VANISH at session end. Called at the same last-committed-slot-gone moment that
-    /// promotes `pendingFriendReview` / opens the shop window — but where the shop KEEPS catalogs through
-    /// a 1-hour window, the transcript is dropped immediately. Nothing to retain, nothing to sync.
-    ///
-    /// ``isSessionLive`` (P6 item 2 and its fix): §12's privacy rule — the transcript vanishes at
-    /// session end — silently stopped holding for every founded pair on `isInSession`, and on
-    /// ``hasCommittedPeer`` it went the other way and deleted a live room's transcript on a
-    /// two-second link drop. Item 4's live-transcript projection reads the same predicate, so the
-    /// clear and the gate can never disagree.
-    private func clearSessionMessagesIfSessionEnded() {
-        guard !isSessionLive else { return }
-        clearSessionTranscript()
-        // TF b19 item 5: drop any lingering in-session heart feedback so a "Sent"/failure line
-        // can't outlive the session that produced it (there is no "Sending…" state on this path any
-        // more — P6 item 6 made the mint synchronous).
-        sessionHeartStateClearTask?.cancel()
-        sessionHeartStateClearTask = nil
-        sessionHeartState = .idle
-        // The slots these claims named are gone; a stale claim would refuse the first heart of the
-        // NEXT session (the deliver task's own `defer` never runs if its slot died mid-flight).
-        sessionHeartSendsInFlight.removeAll()
-    }
-
-    /// The ONE place the transcript is dropped, so the generation cannot be bumped by one clear and
-    /// not another (P6 item 2 fix review, finding P2-3).
-    ///
-    /// **Three callers, all real:** session end (``clearSessionMessagesIfSessionEnded()``), the next
-    /// session's formation (``noteSlotCommittedForShop(slot:identity:)``), and the app's delete-all
-    /// funnel through ``beginPrivacyWipe()``. The third was a fourth, bypassing clear until P6 item
-    /// 4's fix review found it (`FernletStore.clearInboxesAndExports` called
-    /// `sessionMessages.clear()` directly, so the generation did not move and the just-wiped
-    /// messages could re-project). Bumping here rather than at each site is the difference between
-    /// "the projection agrees with the clear" and "the projection agrees with one of the clears".
-    private func clearSessionTranscript() {
-        sessionMessages.clear()
+    /// **Three callers, all real, each just before the session observer is told the moment**, whose
+    /// host drops the transcript it holds (for Fernlet, FernletSocial's chat): session end
+    /// (`endSessionIfEnded()`), the next session's formation
+    /// (``noteSlotCommittedForShop(slot:identity:)``), and the app's delete-all funnel through
+    /// ``beginPrivacyWipe()``. The third was a fourth, bypassing the funnel until P6 item 4's fix
+    /// review found it (`FernletStore.clearInboxesAndExports` cleared the transcript directly, so the
+    /// generation did not move and the just-wiped messages could re-project). Advancing here, once
+    /// per moment, is the difference between "the projection agrees with the drop" and "the
+    /// projection agrees with one of the drops". The advance precedes the drop: both run
+    /// synchronously on the main actor at the same site, with nothing between them that reads, logs
+    /// or persists the transcript.
+    private func advanceTranscriptGeneration() {
         // R2/R3: a monotone counter bounded by the number of sessions one process holds; it names
         // a generation, it is never an index into anything.
         transcriptGeneration += 1
     }
 
-    /// The app's "delete everything" funnel has started: drop the live transcript through the ONE
-    /// clear funnel, and refuse every routed projection until ``endPrivacyWipe()`` (P6 item 4 fix
-    /// review, finding P2-1).
+    /// The app's "delete everything" funnel has started: refuse every routed projection until
+    /// ``endPrivacyWipe()``, advance the session-content generation, and tell the session observer,
+    /// whose host drops the live transcript (P6 item 4 fix review, finding P2-1; the observer's moment
+    /// since plan step A0.5.9).
     ///
     /// Called at the TOP of `FernletStore.deleteAllData(includingHealthKitSamples:)`, before its
     /// first suspension point, and paired with `endPrivacyWipe()` in a `defer` so no exit leaves the
     /// projection switched off for the process. See ``privacyWipeInProgress`` for why the window
     /// between the transcript clear and the ciphertext purge needed closing at all.
     ///
-    /// It is the transcript's clear, not the routed store's: the sealed store's own wipe
+    /// It is the transcript's drop, not the routed store's: the sealed store's own wipe
     /// (`MeshRoutedStore.wipeForDeleteAll`) stays where it is, later in the same funnel.
     ///
     /// **Counts, it does not set** (P6 item 4 fix review P3-2, taken in item 7): see
     /// ``privacyWipeDepth`` for the two overlapping funnels a `Bool` was fail-open under. The
-    /// transcript clear runs on **every** begin, including one past the cap — a nested funnel really
-    /// is asking for the live transcript to go, whatever the counter can represent — and a begin the
-    /// depth cannot hold is counted in ``privacyWipeOverflow`` rather than dropped, so its own end
-    /// still has something to pair with (P6 item 7 fix review, P3-7).
+    /// generation's advance and the observer's moment run on **every** begin, including one past the
+    /// cap — a nested funnel really is asking for the live transcript to go, whatever the counter can
+    /// represent — and a begin the depth cannot hold is counted in ``privacyWipeOverflow`` rather than
+    /// dropped, so its own end still has something to pair with (P6 item 7 fix review, P3-7).
     public func beginPrivacyWipe() {
         if privacyWipeDepth < Self.maxPrivacyWipeDepth {
             privacyWipeDepth += 1
@@ -14459,7 +12438,8 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             )
         }
         ProximityAudit.log("mesh.privacyWipe.began", context: ["depth": String(privacyWipeDepth)])
-        clearSessionTranscript()
+        advanceTranscriptGeneration()
+        sessionObserver?.meshPrivacyWipeDidBegin()
     }
 
     /// One delete-all funnel has finished (completely or not). The routed projection may run again
@@ -14506,10 +12486,30 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     }
 
     /// The same send for a feature's payload, under the token its caller passes: Fernlet's
-    /// `PayloadType` raw value, spelled at each feature call site, so the lines that name it are the
-    /// feature lines that leave with the manager's feature parts (plan step A0.5). The mesh's own frames
-    /// never come through here: they are sent by role, through ``sendEnvelope(_:encodable:via:sealed:)``.
-    private func sendFeatureEnvelope(_ token: String, encodable: some Encodable, via slot: PeerSlot, sealed: Bool = false) async {
+    /// `PayloadType` raw value, spelled at each feature call site. The mesh's own frames never come
+    /// through here: they are sent by role, through ``sendEnvelope(_:encodable:via:sealed:)``.
+    ///
+    /// Public so a host's feature sends its own payload to one seat. The contract, which is the
+    /// mesh's one signing door and not a policy of this function:
+    /// - The payload is JSON-encoded and signed under `token`, which is also the summary title, by
+    ///   this device's identity; it goes out reliably on `slot`'s channel to `slot`'s peer. `slot` is
+    ///   the value the caller holds, so a seat captured at commit is sent to as captured: nothing
+    ///   re-reads the live slot list.
+    /// - `sealed` seals the payload to the slot's handshake-verified X25519 key, in the wire2 format
+    ///   when the peer advertised the host's wire2 token (or the host assumes it for a peer that
+    ///   listed no capabilities) and the legacy one otherwise. A sealed send to a slot with no
+    ///   verified key sends nothing, and a sealed request is never downgraded to an unsealed send.
+    /// - A slot this device has not committed (`fingerprint == nil`) receives no display name: the
+    ///   sender name is empty and a payload carrying names is sent with them withheld.
+    /// - Best effort, with no result: every failing stage past the key check (encode, seal, sign,
+    ///   envelope encode, transport) writes one `mesh.sendEnvelope.failed` line naming `token`.
+    ///
+    /// - Parameters:
+    ///   - token: The payload token the envelope is signed and titled under.
+    ///   - encodable: The payload.
+    ///   - slot: The seat to send to.
+    ///   - sealed: Whether to seal the payload to the seat's verified key-agreement key.
+    public func sendFeatureEnvelope(_ token: String, encodable: some Encodable, via slot: PeerSlot, sealed: Bool = false) async {
         _ = await sendEnvelopeReportingResult(token, encodable: encodable, via: slot, sealed: sealed)
     }
 
@@ -14643,8 +12643,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// proximity identity keypairs + every row its host keeps beside them under the identity's
     /// service (Fernlet's backup-escrow rows), with its participant's in-memory key (this manager owns
     /// one of the three live `IdentityService` caches — presence and recipe share hold the others over
-    /// the same keychain rows) and drops the mesh photo cache's in-memory media key so a post-wipe write
-    /// can't use the orphaned key. Breaks every trust relationship on purpose.
+    /// the same keychain rows). Breaks every trust relationship on purpose. The photo stores'
+    /// in-memory media keys are the host's to drop (for Fernlet, FernletSocial's photo object's
+    /// `invalidateEncryptionKeyCaches()`, which the host's funnel calls right after this returns, so a
+    /// throwing wipe here skips them too).
     ///
     /// **The MC peer-identity archive leg RETIRED here on 2026-09-21** — decision D-4.4, the
     /// owner's, recorded in `Docs/Mesh-Migration-Loop-Ledger-Cutover-2026-09-21.md`. Until the
@@ -14667,8 +12669,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     ///   the user is told is complete must not silently leave them behind.
     public func wipeIdentityForDeleteAll() throws {
         try identity.wipe()
-        photoCacheStore.invalidateEncryptionKeyCache()
-        heldPhotoStore.invalidateEncryptionKeyCache()
     }
 
     // MARK: - Phase 3: Static decrypt helper (the surviving control half)
@@ -15715,9 +13715,21 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         slots.append(slot)
     }
 
-    /// A narrowed or widened routed type registry for one manager, or nil for the shipping value
-    /// ``MeshRoutedTypeRegistry/increment1(_:)`` over the host namespace's routed types, built once at
-    /// `init`. `internal` for `@testable` unit tests only.
+    /// Whether the payload registry holds a handler for `token`, so a test's composition rig can check
+    /// that its host installed every feature handler it owes this manager before any frame arrives:
+    /// the registry is otherwise observable only by delivering a frame, and a handler may drop a frame
+    /// with no line at all (friend state's drops an unattributed one silently). `internal` for
+    /// `@testable` unit tests only.
+    ///
+    /// - Parameter token: The payload token, verbatim.
+    /// - Returns: Whether ``registerPayloadHandler(forToken:handler:)`` registered a handler for it.
+    func hasPayloadHandlerForTesting(forToken token: String) -> Bool {
+        registeredPayloadHandlers[token] != nil
+    }
+
+    /// A narrowed or widened routed type registry for one manager, or nil for the shipping value, the
+    /// registry of the host's rows (``ProximityHost/meshRoutedTypeEntries``), built once at `init`.
+    /// `internal` for `@testable` unit tests only.
     ///
     /// P5 item 11's four forwarding gates are *unreachable in one shipping build* — nothing carrying
     /// an unregistered token can be admitted, so no such record exists at rest. This seam is what
@@ -15725,6 +13737,13 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// unregistered type, or widen both nodes' and a fourth type flows end to end with no consumer
     /// edited. An instance property, never a global (Power of 10 R6).
     @ObservationIgnored var routedTypeRegistryForTesting: MeshRoutedTypeRegistry?
+
+    /// The resident bound this manager holds — its host registry's widest routed row, clamped into
+    /// an `Int` once at `init` (plan step A0.5.4) — so a cell can read the number its seal, its open
+    /// and its resident-blob guard share, which no test could otherwise see, and show that a
+    /// ``routedTypeRegistryForTesting`` narrowing or widening the doors leaves it where it was.
+    /// `internal` for `@testable` unit tests only.
+    var routedResidentBlobBoundForTesting: Int { routedResidentBlobBound }
 
     /// The radio this manager is driving, so a test can assert WHICH one it selected — and, when it
     /// injected a fake, read back what the manager asked the radio to do.
@@ -16151,23 +14170,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     /// `internal` for `@testable` unit tests only.
     var projectableRoutedTypeTokensForTesting: Set<String> { projectableRoutedTypeTokens }
 
-    /// Takes the in-flight heart claim for one fingerprint and leaves it held, so a cell can assert
-    /// the SESSION-END clear rather than a `defer` that has already run (P6 item 6).
-    ///
-    /// The claim's own window is empty now that the mint is synchronous, which is exactly why the
-    /// clear needs its own seam: no production sequence can strand a claim any more, and the
-    /// `clearAll` that releases a stranded one would otherwise be untestable. `internal` for
-    /// `@testable` unit tests only.
-    func claimSessionHeartForTesting(_ fingerprint: String) {
-        sessionHeartSendsInFlight.insert(fingerprint)
-    }
-
-    /// Whether the in-flight heart claim for one fingerprint is held. `internal` for `@testable`
-    /// unit tests only.
-    func holdsSessionHeartClaimForTesting(_ fingerprint: String) -> Bool {
-        sessionHeartSendsInFlight.contains(fingerprint)
-    }
-
     /// Runs one pass of the observation loop's check — seat what committed, sweep what ended,
     /// re-seat returning members — exactly as a coordinator-state change drives it on a live radio.
     ///
@@ -16185,14 +14187,6 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     func evictSlotForTesting(peerID: UUID) {
         guard let slot = slots.first(where: { $0.id == peerID }) else { return }
         removeSlot(slot)
-    }
-
-    /// Total wall-preference entries (aggregated sessions + covers + favorites) — the number the
-    /// prune must drive back to zero once the photos they describe have left the cache.
-    var photoWallPreferenceEntryCountForTesting: Int {
-        photoWallPreferences.aggregatedSessionIDs.count
-            + photoWallPreferences.coverPhotoIDsBySession.count
-            + photoWallPreferences.favoritePhotoIDsBySession.count
     }
 
     /// Builds AND retains a slot coordinator exactly as `handleChannelReady` does — asking the host

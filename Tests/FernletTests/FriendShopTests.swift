@@ -4,6 +4,7 @@ import FernletDomainModel
 import LocalPersistence
 import CloudKitSync
 import ProximityKit
+@testable import FernletSocial
 @testable import Fernlet
 
 /// Increment 3 — the in-person friend shop. Covers the store-level buy flow (debits coins idempotently,

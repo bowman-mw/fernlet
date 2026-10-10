@@ -16,6 +16,7 @@
 
 import CoreGraphics
 import FernletDomainModel
+import FernletSocial
 import Foundation
 import ProximityKit
 import UIKit
@@ -62,8 +63,8 @@ enum MeshFlowVerb: String, CaseIterable, Sendable {
     /// Add one friend photo, which broadcasts it to every active committed slot.
     case photo
 
-    /// Exchange clothing-shop catalogs. Nothing is sent by hand: the manager offers a catalog once
-    /// per slot at commit, so this verb supplies a catalog to offer and then observes.
+    /// Exchange clothing-shop catalogs. Nothing is sent by hand: the mesh features' shop offers a
+    /// catalog once per slot at commit, so this verb supplies a catalog to offer and then observes.
     case shop
 
     /// Send one in-session heart to the first trusted session peer (P6 item 10).
@@ -196,8 +197,9 @@ struct MeshFlowRunState {
 /// never reaches inside the manager, never forges a slot, and never touches the transport: the code
 /// under observation is the shipping code, exactly as in ``MeshRejectionMatrixHarness``.
 ///
-/// Two seams it does set, and why. ``MeshNetworkManager/chatAllowedProvider`` stands in for a
-/// completed age determination, which a fresh Simulator has no way to reach and which no
+/// Two seams it does set, and why. The chat's `chatAllowedProvider` (FernletSocial's
+/// `MeshSessionChat`, the store's `meshFeatures.chat`) stands in for a completed age determination,
+/// which a fresh Simulator has no way to reach and which no
 /// self-attestation can open (`AgeGate.chat.allowsSelfAttestation` is false) — and setting it
 /// *closed* is how the 13+ gate's enforcement point is observed rather than assumed. The clothing
 /// shop's two providers stand in for the `allowNearbyClothingShares` setting and a designed
@@ -254,7 +256,7 @@ enum MeshFlowDriver {
         // Fail closed on purpose: a run that asks for both gets the gated behaviour.
         let chatAllowed = flows.contains(.chat) && !flows.contains(.chatAgeGated)
         if flows.contains(.chat) || flows.contains(.chatAgeGated) {
-            manager.chatAllowedProvider = { chatAllowed }
+            store.meshFeatures.chat.chatAllowedProvider = { chatAllowed }
             echo("ageGate chatAllowed=\(chatAllowed)")
         }
         guard flows.contains(.shop) else { return }
@@ -263,8 +265,8 @@ enum MeshFlowDriver {
             displayName: "matrix",
             items: []
         )
-        manager.clothingShop.isSharingEnabledProvider = { true }
-        manager.clothingShop.localCatalogProvider = { catalog }
+        store.meshFeatures.clothingShop.isSharingEnabledProvider = { true }
+        store.meshFeatures.clothingShop.localCatalogProvider = { catalog }
         echo("shop sharing=on catalogItems=\(catalog.items.count)")
     }
 
@@ -322,12 +324,12 @@ enum MeshFlowDriver {
     /// count it asked for.
     private static func autoKeepFriendsIfDue(manager: MeshNetworkManager, store: FernletStore) {
         guard MeshMatrixDebugOptions.autoKeepsFriends,
-              let batch = manager.pendingFriendReview else { return }
+              let batch = store.meshFeatures.photos.pendingFriendReview else { return }
         let kept = Set(batch.entries.map(\.fingerprint))
-        let photoIDs = Set(manager.pendingReviewPhotos.map(\.id))
-        let answer = manager.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
+        let photoIDs = Set(store.meshFeatures.photos.pendingReviewPhotos.map(\.id))
+        let answer = store.meshFeatures.photos.finishReviewedPhotos(photoIDs, keeping: photoIDs, in: batch.id)
         store.keepProximityFriends(from: batch.entries, keptFingerprints: kept)
-        manager.completeFriendReview(batch.id)
+        store.meshFeatures.photos.completeFriendReview(batch.id)
         echo("friends kept=\(kept.count) vault=\(store.trustedProximityPeers.count) reviewedPhotos=\(photoIDs.count) "
              + "keptOnWall=\(answer.keptOnWall.count) notApplied=\(answer.notApplied.count)")
     }
@@ -485,10 +487,10 @@ enum MeshFlowDriver {
         case .commit, .firstMeetingOnly, .capabilities, .shop:
             echo("armed \(verb.rawValue)")
         case .chat, .chatAgeGated:
-            echo("sending chat isChatAllowed=\(manager.isChatAllowed)")
+            echo("sending chat isChatAllowed=\(store.meshFeatures.chat.isChatAllowed)")
             // Since P6 item 4 this is a ROUTED flow: the send mints an item and answers what it
             // did, so the lane log carries the outcome instead of inferring it from silence.
-            let outcome = manager.sendTempMessage("\(chatText)-\(MeshMatrixDebugOptions.label)")
+            let outcome = store.meshFeatures.chat.sendTempMessage("\(chatText)-\(MeshMatrixDebugOptions.label)")
             echo("chat outcome=\(outcome)")
         case .photo:
             guard let data = noiseJPEG(side: noiseImageSide) else {
@@ -496,7 +498,7 @@ enum MeshFlowDriver {
                 return
             }
             echo("sending photo jpegBytes=\(data.count)")
-            manager.addPhoto(data)
+            store.meshFeatures.photos.addPhoto(data)
         }
     }
 
@@ -520,9 +522,10 @@ enum MeshFlowDriver {
             echo("heart NOT sent: no trust-vault row for \(peer.fingerprint)")
             return
         }
+        let hearts = store.meshFeatures.hearts
         echo("sending heart to=\(friend.fingerprint) "
-            + "canSendSessionHeart=\(manager.canSendSessionHeart(toFingerprint: friend.fingerprint))")
-        manager.sendSessionHeart(to: friend)
+            + "canSendSessionHeart=\(hearts.canSendSessionHeart(toFingerprint: friend.fingerprint))")
+        hearts.sendSessionHeart(to: friend)
     }
 
     // MARK: - Observation
@@ -541,7 +544,7 @@ enum MeshFlowDriver {
             echo("capabilities peer=[\(capabilities)]")
             state.capabilities = capabilities
         }
-        reportPayloads(manager: manager, state: &state)
+        reportPayloads(manager: manager, store: store, state: &state)
         reportHearts(manager: manager, store: store, state: &state)
     }
 
@@ -559,31 +562,35 @@ enum MeshFlowDriver {
         let summary = "vault friends=\(store.trustedProximityPeers.count) "
             + "heartsReceived=\(store.heartLedger.receivedHearts.count) "
             + "ledgerLoaded=\(store.heartLedger.isLoaded) "
-            + "heartState=\(manager.sessionHeartState)"
+            + "heartState=\(store.meshFeatures.hearts.sessionHeartState)"
         guard summary != state.hearts else { return }
         echo(summary)
         state.hearts = summary
     }
 
     /// The three receive-side counters a flow run is read off.
-    private static func reportPayloads(manager: MeshNetworkManager, state: inout MeshFlowRunState) {
-        let messages = manager.sessionMessages.messages
+    private static func reportPayloads(
+        manager: MeshNetworkManager, store: FernletStore, state: inout MeshFlowRunState
+    ) {
+        let chat = store.meshFeatures.chat
+        let messages = chat.sessionMessages.messages
         let incoming = messages.filter { !$0.isOutgoing }.count
         let outgoing = messages.count - incoming
         if incoming != state.messagesIn || outgoing != state.messagesOut {
-            echo("chat received=\(incoming) sent=\(outgoing) isChatAllowed=\(manager.isChatAllowed)")
+            echo("chat received=\(incoming) sent=\(outgoing) isChatAllowed=\(chat.isChatAllowed)")
             state.messagesIn = incoming
             state.messagesOut = outgoing
         }
         // Received photos are HELD for the review until answered (2026-09-30), so "received" counts
         // the held ones (live roll + awaiting batch) and the wall together; `held` and `wall` split them.
-        let held = manager.sessionPhotos + manager.pendingReviewPhotos
-        let photosIn = (held + manager.meshPhotos).filter { $0.senderFingerprint != manager.localFingerprint }.count
+        let photos = store.meshFeatures.photos
+        let held = photos.sessionPhotos + photos.pendingReviewPhotos
+        let photosIn = (held + photos.meshPhotos).filter { $0.senderFingerprint != manager.localFingerprint }.count
         if photosIn != state.photosIn {
-            echo("photos received=\(photosIn) held=\(held.count) wall=\(manager.meshPhotos.count)")
+            echo("photos received=\(photosIn) held=\(held.count) wall=\(photos.meshPhotos.count)")
             state.photosIn = photosIn
         }
-        let catalogs = manager.clothingShop.peerCatalogs.count
+        let catalogs = store.meshFeatures.clothingShop.peerCatalogs.count
         if catalogs != state.catalogs {
             echo("shop peerCatalogs=\(catalogs)")
             state.catalogs = catalogs

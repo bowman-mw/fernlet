@@ -5,21 +5,27 @@
 //
 // §10.3 answers "how do the messages and photos combine?" in one sentence: *by ID-keyed union +
 // deterministic re-derivation; nothing is overwritten because nothing conflicting can exist (only
-// missing).* This file is that sentence as code, for the three content kinds a partition can split:
+// missing).* This file is that sentence as code: the generic union every content kind merges by
+// (``MeshContentKey``, ``MeshMergeableContent``, ``MeshContentOrder``, ``MeshContentSet``, public with
+// their union laws since plan step A0.5.1), for the three content kinds a partition can split. The
+// kinds themselves are their features', FernletSocial's: the photo and message kinds and the ledger
+// that holds all three in `Mesh/MeshContentLedger.swift`, and the heart kind beside the heart ledger:
 //
-//   * **Photos** — union by `(author, manifest ID)`, hash-validated on reassembly
-//     (``MeshPhotoReassembly``), then the existing review flow.
+//   * **Photos** — union by `(author, manifest ID)`, hash-validated on reassembly, then the existing
+//     review flow.
 //   * **Texts** — union by `(author, message ID)`; the visible transcript is re-derived in total
 //     order `(claimedSentAt clamped to ±10 min of first-seen, senderFingerprint, messageID)`.
 //   * **Hearts** — union by `(author, gift ID)`; the final receipt is still only the foreground
-//     decrypt + ``ProximityHeartLedger`` commit, which is why receipt state is deliberately NOT a
-//     field here.
+//     decrypt + heart ledger commit, which is why receipt state is deliberately NOT a field of the
+//     kind. The merged heart is FernletSocial's `HeartSharing/MeshMergedHeart.swift`, beside the
+//     heart ledger and its commit.
 //
 // **The author is part of the identity for all three, and that is the P6 item 4 fix-review change**
-// (finding P1-1; see ``MeshContentKey``). Only the TEXT set has a shipping call site today
-// (`SessionMessageStore`), so only text's hazard was live — but the photo and heart sets are keyed
-// the same way for the same reason: the routed index's key is `(originFingerprint, itemID)` for
-// every family, a manifest publishes that id to the whole roster before delivery, and neither
+// (finding P1-1; see ``MeshContentKey``). Only the TEXT set has a shipping call site
+// (FernletSocial's `SessionMessageStore`), so only text's hazard was live — but the photo and heart
+// sets are keyed the same way for the same reason: the routed index's key is
+// `(originFingerprint, itemID)` for every family, a manifest publishes that id to the whole roster
+// before delivery, and neither
 // `MeshRoutedManifestVerifier` nor `MeshRoutedIndex` refuses a duplicate id from a second origin.
 // Closing it at the protocol means item 6's heart wiring and any future photo wiring inherit the
 // fix rather than re-deriving it. The key is LOCAL: no wire field, no golden, no persisted surface.
@@ -34,7 +40,7 @@
 //
 // **Nothing here is persisted and nothing here is wire.** `MeshSessionContext`'s schema stays 2,
 // no `UserDefaults` key is added, and no payload gains a field — these are in-memory projections
-// built from payloads that already exist. The gates that filter them live in
+// built from payloads that already exist. The gates that filter them live in FernletSocial's
 // `MeshContentIngest.swift`, as a **view filter over an unmutated union**, exactly as termination is
 // derived at read rather than applied at merge.
 //
@@ -42,7 +48,6 @@
 // (P6). This file owns the *rules* only.
 
 import Foundation
-import FernletDomainModel
 
 // MARK: - MeshContentKey
 
@@ -94,7 +99,13 @@ public nonisolated struct MeshContentKey: Hashable, Sendable {
 /// ``mergeTiebreak`` exists so that even the pathological case — two copies of one item that the
 /// instant and the sender cannot separate — resolves the same way at every member, which is what
 /// keeps the union commutative.
-nonisolated protocol MeshMergeableContent: Equatable, Sendable {
+///
+/// Public so a host's content kind conforms and unions in a ``MeshContentSet``. The contract a
+/// conformer owes: `contentID` and `senderFingerprint` are the author's id and the
+/// transport-verified author, never a wire claim; `orderingInstant` and `mergeTiebreak` are pure
+/// functions of the item's own values (no clock, no arrival order), so every member orders two
+/// copies alike; `setCapacity` is the live surface's own cap. Owed that, the set's union laws hold.
+public nonisolated protocol MeshMergeableContent: Equatable, Sendable {
 
     /// The id this item's author minted. One half of ``mergeKey``, which is what the union
     /// actually keys on: two items with equal ids are the same item only if their AUTHORS agree.
@@ -123,7 +134,8 @@ extension MeshMergeableContent {
     ///
     /// Derived rather than stored, and not overridable by a conformer — the two halves are already
     /// required members of the protocol, so every kind gets the same rule and none can weaken it.
-    nonisolated var mergeKey: MeshContentKey {
+    /// Public as the key a holder of merged items keys its own side tables on.
+    public nonisolated var mergeKey: MeshContentKey {
         MeshContentKey(senderFingerprint: senderFingerprint, contentID: contentID)
     }
 }
@@ -135,11 +147,19 @@ extension MeshMergeableContent {
 /// `(orderingInstant, senderFingerprint, contentID, mergeTiebreak)`, ascending. The first three are
 /// plan §10.3's stated transcript order verbatim; the fourth can only ever break a tie the first
 /// three could not, which for distinct ids never happens.
-nonisolated enum MeshContentOrder {
+///
+/// Public as the order a ``MeshContentSet`` keeps, dedupes and caps by, so a host's view over a set
+/// sorts the way the union does.
+public nonisolated enum MeshContentOrder {
 
     /// Whether `lhs` sorts before `rhs`. A strict total order: irreflexive, transitive, and total
     /// over any two items that are not equal in all four keys.
-    static func precedes<Item: MeshMergeableContent>(_ lhs: Item, _ rhs: Item) -> Bool {
+    ///
+    /// - Parameters:
+    ///   - lhs: One item.
+    ///   - rhs: Another item of the same kind.
+    /// - Returns: whether `lhs` sorts strictly before `rhs`.
+    public static func precedes<Item: MeshMergeableContent>(_ lhs: Item, _ rhs: Item) -> Bool {
         if lhs.orderingInstant != rhs.orderingInstant {
             return lhs.orderingInstant < rhs.orderingInstant
         }
@@ -163,9 +183,9 @@ nonisolated enum MeshContentOrder {
 /// origin's own choice and a manifest publishes it to the whole roster before delivery, so keying
 /// on it alone lets one admitted member spend another's dedup slot) — with the
 /// ``MeshContentOrder``-least copy winning, sorted by that same order oldest-first, and capped
-/// at `Item.setCapacity` keeping the **newest** k — which is what all three live surfaces do
-/// (`SessionMessageStore` drops oldest, the photo wall prefixes a newest-first list,
-/// `ProximityHeartLedger` suffixes its records).
+/// at `Item.setCapacity` keeping the **newest** k — which is what Fernlet's three live surfaces do
+/// (all FernletSocial's: `SessionMessageStore` drops oldest, the photo wall prefixes a newest-first
+/// list, `ProximityHeartLedger` suffixes its records).
 ///
 /// Deliberately **not** `Codable`: this is a merge-time projection, never a persisted surface. The
 /// sealed `MeshSessionContext` schema stays 2 because of it.
@@ -181,7 +201,13 @@ nonisolated enum MeshContentOrder {
 /// full set is the one shape where the inner merge could drop the copy the outer would have kept.
 /// Named here rather than papered over — P5's routed store is where a per-item first-seen becomes
 /// authoritative, and that is where it should be closed.
-nonisolated struct MeshContentSet<Item: MeshMergeableContent>: Equatable, Sendable {
+///
+/// Public, with the members a holder of merged content needs, so a host's content kind unions in
+/// the engine's set rather than a copy of it. The contract is §10.3's union laws: ``merging(_:)`` is
+/// commutative, associative and idempotent, at the cap as well as below it, for every item whose
+/// copies agree on their ordering keys; every value is normalized (one item per ``MeshContentKey``,
+/// the ``MeshContentOrder``-least copy winning, oldest-first, the newest `Item.setCapacity` kept).
+public nonisolated struct MeshContentSet<Item: MeshMergeableContent>: Equatable, Sendable {
 
     /// Defensive bound on one normalization pass. Inputs are already-normalized sets, so a union of
     /// two is at most `2 × setCapacity`; four times that is slack, not a policy.
@@ -189,16 +215,16 @@ nonisolated struct MeshContentSet<Item: MeshMergeableContent>: Equatable, Sendab
 
     private let ordered: [Item]
 
-    /// A set holding nothing.
-    static var empty: MeshContentSet<Item> { MeshContentSet([]) }
+    /// A set holding nothing — the identity of ``merging(_:)``.
+    public static var empty: MeshContentSet<Item> { MeshContentSet([]) }
 
     /// Builds a set, normalizing the input (dedup by id, sort, cap).
     init(_ items: [Item]) {
         ordered = Self.normalized(items)
     }
 
-    /// The items, oldest-first in the set's total order.
-    var all: [Item] { ordered }
+    /// The items, oldest-first in the set's total order, at most `Item.setCapacity` of them.
+    public var all: [Item] { ordered }
 
     /// How many items the set holds.
     var count: Int { ordered.count }
@@ -218,7 +244,7 @@ nonisolated struct MeshContentSet<Item: MeshMergeableContent>: Equatable, Sendab
 
     /// The identities the set holds — one per item, author included. The key a holder of the items
     /// keys its own side tables on.
-    var mergeKeys: Set<MeshContentKey> { Set(ordered.map(\.mergeKey)) }
+    public var mergeKeys: Set<MeshContentKey> { Set(ordered.map(\.mergeKey)) }
 
     /// Whether the set already holds `id`, from **any** author.
     func contains(_ id: UUID) -> Bool { ordered.contains { $0.contentID == id } }
@@ -227,14 +253,20 @@ nonisolated struct MeshContentSet<Item: MeshMergeableContent>: Equatable, Sendab
     func contains(_ key: MeshContentKey) -> Bool { ordered.contains { $0.mergeKey == key } }
 
     /// The set with `item` added. An existing copy of the same ``MeshContentKey`` that sorts
-    /// earlier wins.
-    func inserting(_ item: Item) -> MeshContentSet<Item> {
+    /// earlier wins, and at the cap the oldest item in the total order leaves (which may be `item`).
+    ///
+    /// - Parameter item: The item to add.
+    /// - Returns: The normalized set holding it, or holding the copy that beat it.
+    public func inserting(_ item: Item) -> MeshContentSet<Item> {
         MeshContentSet(ordered + [item])
     }
 
     /// The union of two sets — the merge plan §10.3 runs on every reconnect. Commutative,
     /// associative and idempotent, at the cap as well as below it.
-    func merging(_ other: MeshContentSet<Item>) -> MeshContentSet<Item> {
+    ///
+    /// - Parameter other: The set to union with.
+    /// - Returns: The normalized union.
+    public func merging(_ other: MeshContentSet<Item>) -> MeshContentSet<Item> {
         MeshContentSet(ordered + other.ordered)
     }
 
@@ -255,181 +287,5 @@ nonisolated struct MeshContentSet<Item: MeshMergeableContent>: Equatable, Sendab
         }
         let sorted = winnerByKey.values.sorted(by: MeshContentOrder.precedes)
         return Array(sorted.suffix(Item.setCapacity))
-    }
-}
-
-// MARK: - MeshMergedPhoto
-
-/// One shared photo as the merge sees it: manifest id, author, the epoch it was sealed at, when it
-/// was added, and the digest its reassembled bytes must match.
-///
-/// A projection of ``FriendPhotoManifestEntry`` plus what the holder knows about the bytes — the
-/// digest is a **local** value, not a wire field, so no manifest golden moves. `keyEpoch` is carried
-/// because the legacy path gated on it and a photo created in the *other* branch of a split
-/// necessarily names another epoch. Since P5 item 13 the LIVE photo path gates on no epoch at all
-/// (see `MeshContentIngest.swift`'s note), and this value is untouched by that retirement: it is a
-/// pure value with no manager call site, and P6 owns its wiring.
-nonisolated struct MeshMergedPhoto: MeshMergeableContent {
-
-    static let setCapacity = FriendPhotoLimits.maxManifestEntries
-
-    /// The manifest id the union keys on.
-    let manifestID: UUID
-    /// The photo's author, as the manifest announced it.
-    let senderFingerprint: String
-    /// The group-key epoch the bytes were sealed at. `0` is the legacy unencrypted shape.
-    let keyEpoch: Int
-    /// When the author added the photo — the set's ordering instant.
-    let addedAt: Date
-    /// SHA-256 of the photo's reassembled bytes, as this holder computed them.
-    let contentDigest: Data
-
-    var contentID: UUID { manifestID }
-    var orderingInstant: Date { addedAt }
-    var mergeTiebreak: String { contentDigest.base64EncodedString() }
-
-    /// Builds a merged-photo projection.
-    init(manifestID: UUID, senderFingerprint: String, keyEpoch: Int, addedAt: Date, contentDigest: Data) {
-        self.manifestID = manifestID
-        self.senderFingerprint = senderFingerprint
-        self.keyEpoch = keyEpoch
-        self.addedAt = addedAt
-        self.contentDigest = contentDigest
-    }
-}
-
-// MARK: - MeshMergedMessage
-
-/// One session message as the merge sees it, carrying **both** clocks §10.3's order needs.
-///
-/// `claimedSentAt` is the sender's own stamp and is never trusted alone; `firstSeenAt` is the
-/// **receiver's** clock at the moment the message entered this device's view, and it is the anchor
-/// the claim is clamped against. ``orderingInstant`` is the clamped value, so a peer claiming three
-/// hours ago — or three hours hence — moves at most ``claimWindow`` from where it actually arrived.
-///
-/// **The clamp is a bound, not a coordination mechanism.** Two members assign their own first-seen
-/// instants, so convergence on an identical transcript holds for every claim *inside* its window
-/// (the ordering instant is then the claim itself, which every member agrees on). A forged claim
-/// outside the window is bounded at each member's own clock, which is the security property; it is
-/// not a promise that a forger sorts identically everywhere.
-nonisolated struct MeshMergedMessage: MeshMergeableContent {
-
-    static let setCapacity = SessionMessageStore.maxMessages
-
-    /// How far from first-seen a claimed stamp may reach, in either direction (plan §10.3).
-    static let claimWindow: TimeInterval = 10 * 60
-
-    /// The message id the union keys on.
-    let messageID: UUID
-    /// The transport-verified sender.
-    let senderFingerprint: String
-    /// The already-sanitized text (`SessionMessageStore.sanitize` ran at the wire boundary).
-    let text: String
-    /// The sender's own stamp. Untrusted; clamped before it orders anything.
-    let claimedSentAt: Date
-    /// The receiving member's clock when this message first entered its view. Never a wire value.
-    let firstSeenAt: Date
-
-    var contentID: UUID { messageID }
-    var orderingInstant: Date { Self.clamped(claimedSentAt, around: firstSeenAt) }
-    var mergeTiebreak: String { text }
-
-    /// Builds a merged-message projection. `firstSeenAt` must come from the receiver's clock.
-    init(messageID: UUID, senderFingerprint: String, text: String, claimedSentAt: Date, firstSeenAt: Date) {
-        self.messageID = messageID
-        self.senderFingerprint = senderFingerprint
-        self.text = text
-        self.claimedSentAt = claimedSentAt
-        self.firstSeenAt = firstSeenAt
-    }
-
-    /// `claim` pulled into ±``claimWindow`` of `firstSeen`. A claim already inside the window is
-    /// returned unchanged, which is why honest traffic sorts identically at every member.
-    static func clamped(_ claim: Date, around firstSeen: Date) -> Date {
-        let earliest = firstSeen.addingTimeInterval(-claimWindow)
-        let latest = firstSeen.addingTimeInterval(claimWindow)
-        return min(max(claim, earliest), latest)
-    }
-}
-
-// MARK: - MeshMergedHeart
-
-/// One heart as the merge sees it — and deliberately **without** a receipt field.
-///
-/// §10.3: the final receipt is still only the foreground decrypt + ``ProximityHeartLedger`` commit.
-/// A peer's "received" is that peer's receipt, not this member's, so merging one in would be a
-/// receipt this device never issued. Receipt state is therefore local and derived
-/// (`MeshContentLedger.heartReceipt(_:committed:)`), never merged.
-nonisolated struct MeshMergedHeart: MeshMergeableContent {
-
-    static let setCapacity = ProximityHeartLedger.maxStoredHearts
-
-    /// The gift id the union keys on — the wire payload's id, stable across a duplicate delivery.
-    let giftID: UUID
-    /// The transport-verified sender.
-    let senderFingerprint: String
-    /// The sender's display name, already sanitized at the wire boundary.
-    let senderDisplayName: String
-    /// The receiving member's clock when this heart first entered its view.
-    let firstSeenAt: Date
-
-    var contentID: UUID { giftID }
-    var orderingInstant: Date { firstSeenAt }
-    var mergeTiebreak: String { senderDisplayName }
-
-    /// Builds a merged-heart projection. `firstSeenAt` must come from the receiver's clock.
-    init(giftID: UUID, senderFingerprint: String, senderDisplayName: String, firstSeenAt: Date) {
-        self.giftID = giftID
-        self.senderFingerprint = senderFingerprint
-        self.senderDisplayName = senderDisplayName
-        self.firstSeenAt = firstSeenAt
-    }
-}
-
-// MARK: - MeshContentLedger
-
-/// Everything a member holds of a split's *content*: three ``MeshContentKey``-keyed sets, and
-/// nothing else.
-///
-/// The content-side twin of ``MeshMembershipLedger`` — pure value data with a pure union, so
-/// §16.2's convergence property needs no store and no transport. Merging is the only way two views
-/// combine; there is no "apply an item to a transcript" path, which is what makes reconnect, merge
-/// and reload one code path.
-///
-/// The gates that decide what a member *shows* are a separate, read-time filter
-/// (`MeshContentIngest.swift`): a blocked sender's message still unions, it simply does not render
-/// at the member that blocked them. Same shape as termination-derived-at-read, and for the same
-/// reason — a merge that mutated records would break the union laws.
-nonisolated struct MeshContentLedger: Equatable, Sendable {
-
-    /// Photos held, by manifest id.
-    var photos: MeshContentSet<MeshMergedPhoto>
-    /// Messages held, by message id.
-    var messages: MeshContentSet<MeshMergedMessage>
-    /// Hearts held, by gift id.
-    var hearts: MeshContentSet<MeshMergedHeart>
-
-    /// A ledger holding no content.
-    static var empty: MeshContentLedger { MeshContentLedger() }
-
-    /// Builds a content ledger from any combination of sets.
-    init(
-        photos: MeshContentSet<MeshMergedPhoto> = .empty,
-        messages: MeshContentSet<MeshMergedMessage> = .empty,
-        hearts: MeshContentSet<MeshMergedHeart> = .empty
-    ) {
-        self.photos = photos
-        self.messages = messages
-        self.hearts = hearts
-    }
-
-    /// The union of two content ledgers: set union in all three kinds. Commutative, associative,
-    /// idempotent — N-way merges need no special case because pairwise union already converges.
-    func merging(_ other: MeshContentLedger) -> MeshContentLedger {
-        MeshContentLedger(
-            photos: photos.merging(other.photos),
-            messages: messages.merging(other.messages),
-            hearts: hearts.merging(other.hearts)
-        )
     }
 }

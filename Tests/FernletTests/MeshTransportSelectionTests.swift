@@ -29,8 +29,10 @@ struct MeshTransportSelectionTests {
 
     // MARK: - Selection
 
-    /// A manager built the way the app builds one runs on the QUIC radio — the assertion that would
-    /// fail the moment the initializer's one default moved. Since the deletion round (2026-09-22)
+    /// A manager built by the public initializer runs on the QUIC radio — the assertion that would
+    /// fail the moment the initializer's one default moved. The app's composition builds its mesh
+    /// through `init(store:identity:)`, which passes the same nil radio to the same default; the cell
+    /// keeps the name it had when `init(store:)` was the app's own. Since the deletion round (2026-09-22)
     /// retired the second conformer with the selection seam, there is nothing left for it to move
     /// TO except a mistake; this is the cutover's red-once #1, kept as the VALUE half of
     /// `MeshP9McRetirementAcceptanceTests`' source pin on

@@ -675,9 +675,11 @@ struct ProximityVocabularyGoldenTests {
             assumedForLegacyPeers: ["golden-snapshots", "golden-framing"]))
     }
 
-    /// The clothing catalog a mesh manager over a scratch host of `namespace` seals for a committed
-    /// slot whose peer advertised `shop` and `wire2Token`, opened as a legacy receiver would, so a body
-    /// sealed in the wire2 framing keeps its frame tag. The manager runs on a fake radio with its
+    /// The clothing catalog Fernlet's mesh composition over a scratch host of `namespace` seals for a
+    /// committed slot whose peer advertised `shop` and `wire2Token`, opened as a legacy receiver would,
+    /// so a body sealed in the wire2 framing keeps its frame tag. The shop is the composition's since
+    /// plan step A0.5.6, so the composition is built (the rig's `FernletMeshRig`) and its mesh seals
+    /// the catalog the shop's exchange sends at the commit. The mesh runs on a fake radio with its
     /// identity and the peer's on throwaway services; the host's root and seal-key rows and both
     /// identities' rows are removed before this returns.
     static func sealedCatalog(
@@ -690,7 +692,8 @@ struct ProximityVocabularyGoldenTests {
         let local = IdentityService(namespace: namespace, keychainService: services[0])
         let peer = IdentityService(namespace: namespace, keychainService: services[1])
         try peer.ensureProvisioned()
-        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(), identity: local)
+        let features = FernletMeshRig.features(store: host, transport: FakeMeshTransportSession(), identity: local)
+        let manager = features.mesh
         let network = FakePeerNetwork()
         let link = network.addEndpoint(named: "vocabulary-mesh-peer")
         let capabilities = [frozen("capability.shop"), wire2Token]
@@ -701,8 +704,8 @@ struct ProximityVocabularyGoldenTests {
             peer: link.handle, fingerprint: peer.localFingerprint,
             verifiedKeyAgreementPublicKey: peer.localKeyAgreementPublicKey, peerCapabilities: capabilities,
             channel: link.transport)
-        manager.clothingShop.isSharingEnabledProvider = { true }
-        manager.clothingShop.localCatalogProvider = {
+        features.clothingShop.isSharingEnabledProvider = { true }
+        features.clothingShop.localCatalogProvider = {
             ClothingCatalogPayload(designerID: UUID(), displayName: VocabularyCoordinatorRig.displayName, items: [])
         }
         let slot = try #require(manager.slots.first, "the manager seated the slot")
@@ -717,7 +720,7 @@ struct ProximityVocabularyGoldenTests {
                 .first { $0.payloadTypeToken == catalogToken }
         }
         await VocabularyCoordinatorRig.settle { catalog() != nil }
-        withExtendedLifetime(manager) {}   // its sends hold it weakly
+        withExtendedLifetime(features) {}   // the shop's sends hold its exchange weakly, the exchange the mesh
         let sent = try #require(catalog(), "the manager never sent its catalog")
         return try peer.open(sent.payload, from: sent.senderKeyAgreementPublicKey, format: .legacy)
     }
@@ -973,30 +976,34 @@ struct ProximityVocabularyGoldenTests {
 
     /// The registry and its ack-stage projection take every row's token from the routed types they
     /// are handed and nothing else. Built from `.fernlet`'s, the registry holds exactly the three
-    /// frozen tokens, each for its canonical store; built from a namespace whose record kinds and
-    /// routed types alone are its own, it holds that namespace's three and none of Fernlet's, every
-    /// row otherwise the very row Fernlet's registry holds for the same store, and the projection keys
-    /// the same stages by them. The control type has no row under either.
+    /// frozen tokens, each as its named row (``fernletRoutedRows(_:)``: the photo and heart rows the
+    /// engine keeps resident and registers its built-ins under and mints under, plan step A0.5.2, and
+    /// the temporary-message row FernletSocial declares through its host, plan step A0.5.9); built from
+    /// a namespace whose record kinds and routed types alone are its own, it holds that namespace's
+    /// three and none of Fernlet's, every row otherwise the very row Fernlet's registry holds under
+    /// the same name, and the projection keys the same stages by them. The control type has no row
+    /// under either.
     @Test func theRegistryIsBuiltFromTheRoutedTypesItIsHanded() throws {
         let fernlet = ProximityNamespace.fernlet.family.vocabulary.routedTypes
         let shipped = MeshRoutedTypeRegistry.increment1(fernlet)
         let frozen = ["routedType.photo", "routedType.tempMessage", "routedType.heart"].map { Self.frozen($0) }
-        let stores: [MeshRoutedCanonicalStore] = [.friendPhotoWall, .sessionTranscript, .heartLedger]
+        let resident = Self.fernletRoutedRows(fernlet)
         #expect(shipped.tokens == Set(frozen), "Fernlet's registry holds \(shipped.tokens.sorted())")
-        #expect(stores.map { shipped.token(forCanonicalStore: $0) } == frozen, "Fernlet's rows are filed under other stores")
+        #expect(resident.map(\.token) == frozen, "Fernlet's rows are named under other tokens")
+        #expect(resident.allSatisfy { shipped.entry(for: $0.token) == $0 }, "Fernlet's registry is not its resident rows")
         let renamed = Self.renamedMeshTokensNamespace().family.vocabulary.routedTypes
         let other = MeshRoutedTypeRegistry.increment1(renamed)
         let stages = MeshRoutedAckStageTable.increment1(renamed)
         let theirs = [renamed.photo, renamed.tempMessage, renamed.heart]
         #expect(other.tokens == Set(theirs), "another namespace's registry holds \(other.tokens.sorted())")
-        #expect(stores.map { other.token(forCanonicalStore: $0) } == theirs, "its rows are filed under other stores")
+        #expect(Self.fernletRoutedRows(renamed).map(\.token) == theirs, "its rows are named under other tokens")
         // R2: bounded by the three rows.
         for (token, twinToken) in zip(theirs, frozen) {
             let twin = try #require(shipped.entry(for: twinToken), "Fernlet's registry has no \(twinToken) row")
             let expected = MeshRoutedTypeEntry(
                 token: token, maxItemByteCount: twin.maxItemByteCount, destinations: twin.destinations,
                 relayRetention: twin.relayRetention, finalAck: twin.finalAck, expiry: twin.expiry,
-                canonicalStore: twin.canonicalStore)
+                contentScope: twin.contentScope)
             #expect(other.entry(for: token) == expected, "the \(token) row is not Fernlet's \(twinToken) row")
             #expect(other.entry(for: twinToken) == nil && stages.stage(for: twinToken) == nil, "\(twinToken) is registered")
             #expect(stages.stage(for: token) == twin.finalAck, "the projection stages \(token) otherwise")
@@ -1008,10 +1015,20 @@ struct ProximityVocabularyGoldenTests {
                 "another namespace's control type is registered")
     }
 
-    /// A mesh manager's registry is built from its host namespace's routed types: what it can project
-    /// once chat is allowed (the photo wall's type and the transcript's) is `.fernlet`'s frozen photo
-    /// and temporary-message tokens under a host of `.fernlet`, and that namespace's own under a host
-    /// of the namespace whose record kinds and routed types alone are its own.
+    /// Fernlet's three routed rows by name, in the order the registry declared them — photo,
+    /// temporary message, heart — built from `routedTypes`: FernletSocial's photo, text and heart rows
+    /// (`FernletRoutedTypes`, the host's since plan steps A0.5.9, A0.5.10 and A0.5.11, when the engine's
+    /// resident rows, `MeshRoutedTypeRegistry.increment1Rows(_:)` until then, lost them). Re-pointed at
+    /// A0.5.9, A0.5.10 and A0.5.11; the tokens it is held to are the group's frozen literals.
+    static func fernletRoutedRows(_ routedTypes: ProximityNamespace.RoutedTypes) -> [MeshRoutedTypeEntry] {
+        let rows = FernletRoutedTypes(routedTypes)
+        return [rows.photo, rows.text, rows.heart]
+    }
+
+    /// A mesh's registry is built from its host namespace's routed types: what Fernlet's mesh can
+    /// project once chat is allowed (the photo wall's type and the transcript's) is `.fernlet`'s frozen
+    /// photo and temporary-message tokens under a host of `.fernlet`, and that namespace's own under a
+    /// host of the namespace whose record kinds and routed types alone are its own.
     @Test func theManagersRegistryIsItsHostNamespaces() {
         let fernlet = Self.projectableRoutedTypes(underHostOf: .fernlet)
         #expect(fernlet == [Self.frozen("routedType.photo"), Self.frozen("routedType.tempMessage")],
@@ -1022,18 +1039,22 @@ struct ProximityVocabularyGoldenTests {
         #expect(other == [routed.photo, routed.tempMessage], "a manager of another namespace projects \(other.sorted())")
     }
 
-    /// The routed types a manager over a scratch host of `namespace` can project once chat is allowed.
-    /// It runs on a fake radio, with an identity on a throwaway service; the host's root and seal-key
-    /// rows and the identity's rows are removed before this returns.
+    /// The routed types Fernlet's mesh over a scratch host of `namespace` can project once chat is
+    /// allowed: the app's composition through `FernletMeshRig`, because the transcript's projection
+    /// handler is the composition's chat's since plan step A0.5.9 (the photo's is still the manager's
+    /// built-in until A0.5.11), its chat gate opened. It runs on a fake radio, with an identity on a
+    /// throwaway service; the host's root and seal-key rows and the identity's rows are removed before
+    /// this returns. Re-pointed at A0.5.9 (setup only; the expected sets are unchanged).
     static func projectableRoutedTypes(underHostOf namespace: ProximityNamespace) -> Set<String> {
         let host = ScratchNamespaceHost(namespace: namespace)
         defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
         let service = isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
-                                         identity: IdentityService(namespace: namespace, keychainService: service))
-        manager.chatAllowedProvider = { true }
-        return manager.projectableRoutedTypeTokensForTesting
+        let features = FernletMeshRig.features(
+            store: host, transport: FakeMeshTransportSession(),
+            identity: IdentityService(namespace: namespace, keychainService: service))
+        features.chat.chatAllowedProvider = { true }
+        return features.mesh.projectableRoutedTypeTokensForTesting
     }
 
     // MARK: Group 7 — the coordinator's session messages
@@ -1983,19 +2004,21 @@ struct ProximityVocabularyGoldenTests {
         return Dictionary(store.messages.map { ($0.senderFingerprint, $0.senderDisplayName) }, uniquingKeysWith: { first, _ in first })
     }
 
-    /// What a mesh manager over a scratch host of `namespace` records: its session roster's names by
-    /// fingerprint after it records a committed peer with a long name, one with an invisible name,
-    /// and one with an invisible name that discloses the long one, and the voucher name it files for a
-    /// vouch that names nothing displayable. It runs on a fake radio, with an identity on a throwaway
-    /// service; the host's root and seal-key rows and the identity's rows are removed before this
-    /// returns.
+    /// What Fernlet's mesh over a scratch host of `namespace` records: its manager's session roster's
+    /// names by fingerprint after it records a committed peer with a long name, one with an invisible
+    /// name, and one with an invisible name that discloses the long one, and the voucher name its vouch
+    /// list files for a vouch that names nothing displayable (the vouch list is the composition's since
+    /// plan step A0.5.5, and reads the namespace its host was read for once). It runs on a fake radio,
+    /// with an identity on a throwaway service; the host's root and seal-key rows and the identity's
+    /// rows are removed before this returns.
     static func meshRecordedNames(underHostOf namespace: ProximityNamespace) -> (roster: [String: String], voucher: String?) {
         let host = ScratchNamespaceHost(namespace: namespace)
         defer { withExtendedLifetime(host) { host.tearDown() } }   // `MeshNetworkManager.store` is `unowned`
         let service = isolatedIdentityService()
         defer { KeychainItem.deleteAll(service: service) }
-        let manager = MeshNetworkManager(store: host, transport: FakeMeshTransportSession(),
-                                         identity: IdentityService(namespace: namespace, keychainService: service))
+        let features = FernletMeshRig.features(store: host, transport: FakeMeshTransportSession(),
+                                               identity: IdentityService(namespace: namespace, keychainService: service))
+        let manager = features.mesh
         let (signing, agreement) = (Data(repeating: 0x5A, count: 32), Data(repeating: 0xA5, count: 32))
         manager.recordSessionParticipant(displayName: longPeerName, fingerprint: "fp-long",
                                          signingPublicKey: signing, keyAgreementPublicKey: agreement)
@@ -2004,13 +2027,13 @@ struct ProximityVocabularyGoldenTests {
         manager.recordSessionParticipant(displayName: "\u{2066}", fingerprint: "fp-renamed",
                                          signingPublicKey: signing, keyAgreementPublicKey: agreement)
         manager.renameSessionParticipant(fingerprint: "fp-renamed", to: longPeerName)
-        manager.isVouchListBroadcastEnabled = true
-        manager.receiveVouchList(MeshFriendVouchListPayload(
+        features.vouchList.isVouchListBroadcastEnabled = true
+        features.vouchList.receiveVouchList(MeshFriendVouchListPayload(
             voucherFingerprint: "fp-voucher", voucherDisplayName: "\u{200B}\u{FEFF}", trustedFingerprints: [],
             expiresAt: Date().addingTimeInterval(600)), senderFingerprint: "fp-voucher")
         let roster = Dictionary(manager.sessionRoster.map { ($0.fingerprint, $0.displayName) },
                                 uniquingKeysWith: { first, _ in first })
-        return (roster, manager.cachedVouchList(from: "fp-voucher")?.voucherDisplayName)
+        return (roster, features.vouchList.cachedVouchList(from: "fp-voucher")?.voucherDisplayName)
     }
 
     /// `.fernlet` with its peer-name policy replaced by one of its own (a 20-character cap and the
@@ -2514,11 +2537,11 @@ final class VocabularyCoordinatorRig {
 
 // MARK: - A host of one namespace
 
-/// A `ProximityHost` that supplies the namespace a cell hands it and the requirements with no default,
-/// so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
+/// A `FernletSocialHost` that supplies the namespace a cell hands it and the requirements with no
+/// default, so a presence or recipe-share manager can be built over `.fernlet` or over a namespace whose
 /// presentation strings or peer-name policy are its own. Building one touches no disk and no keychain.
 @MainActor
-private final class PresentationNamespaceHost: ProximityHost {
+private final class PresentationNamespaceHost: FernletSocialHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximityTrustVault = ProximityTrustVault()
@@ -2540,12 +2563,12 @@ private final class PresentationNamespaceHost: ProximityHost {
 
 // MARK: - A host of one namespace on a scratch root
 
-/// A `ProximityHost` that supplies the namespace a cell hands it on a scratch sidecar root and
-/// seal-key services of its own, so a mesh manager can be built over `.fernlet` or over a namespace
-/// whose tokens are its own and touch nothing another suite holds. ``tearDown()`` removes the root and
-/// both seal-key rows.
+/// A `FernletSocialHost` that supplies the namespace a cell hands it on a scratch sidecar root and
+/// seal-key services of its own, so a mesh manager, or Fernlet's composition over one, can be built over
+/// `.fernlet` or over a namespace whose tokens are its own and touch nothing another suite holds.
+/// ``tearDown()`` removes the root and both seal-key rows.
 @MainActor
-private final class ScratchNamespaceHost: ProximityHost {
+private final class ScratchNamespaceHost: FernletSocialHost {
     let proximityNamespace: ProximityNamespace
     let proximityInstallBinding: any ProximityInstallBinding = FernletDeviceBindingAdapter()
     let proximitySupportDirectory: URL

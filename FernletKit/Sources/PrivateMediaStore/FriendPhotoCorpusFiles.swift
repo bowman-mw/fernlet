@@ -176,7 +176,7 @@ struct FriendPhotoCorpusFiles {
     /// DECODER enforces. Everything else is untouched.
     ///
     /// The encoder is synthesized and bounds nothing, and a local session's list is not bounded at
-    /// its source (the mesh manager unions every member it has seen, so a long session with churn
+    /// its source (the session photos union every member the mesh has seen, so a long session with churn
     /// passes 32). One such entry used to make the WHOLE index fail to decode on the next read: the
     /// wall read as unrecoverable (and the next save swept every kept photo), the pending corpus
     /// deferred for good with no build able to read it. Cut at write, every index reads back by

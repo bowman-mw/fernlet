@@ -38,6 +38,7 @@ import Testing
 import FernletDomainModel
 import FernletLock
 import LocalPersistence
+import FernletSocial
 import ProximityKit
 @testable import Fernlet
 
@@ -648,7 +649,7 @@ struct ProximityRunPolicyFunnelTests {
     }
 
     /// A store on the given proximity root — two stores on one root stand in for one device's
-    /// launches, since the manager's photo stores are files under it.
+    /// launches, since the session photos' stores are files under it.
     private func makeStore(_ name: String, proximity: URL) -> FernletStore {
         FernletStore(
             repository: LocalFernletRepository(
@@ -766,14 +767,16 @@ struct ProximityRunPolicyFunnelTests {
     @Test func aReviewTheGatesPassCreatesHoldsThatEdgesSearchBack() throws {
         let proximity = uniqueProximityDirectory()
         let before = makeStore("run-policy-funnel-review-seed", proximity: proximity)
-        let seeding = LastMemberReviewFixtures.foundedManager(store: before)
-        LastMemberReviewFixtures.capture(2, on: seeding)
+        let seedingFeatures = LastMemberReviewFixtures.foundedFeatures(store: before)
+        let seeding = seedingFeatures.mesh
+        LastMemberReviewFixtures.capture(2, on: seedingFeatures.photos)
         seeding.leaveSession()
         let aside = try HeldPhotoFixtures.makeWallUnreadable(before)   // the next launch is a locked one
         let store = makeStore("run-policy-funnel-review", proximity: proximity)
         let manager = store.meshNetworkManager
+        let photos = store.meshFeatures.photos
         defer { if manager.isSearching { manager.stopJoin() } }
-        try #require(!manager.hasOutstandingPhotoReview && !store.sessionPhotoReviewCoordinator.blocksDiscovery,
+        try #require(!photos.hasOutstandingPhotoReview && !store.sessionPhotoReviewCoordinator.blocksDiscovery,
                      "precondition: over a wall that could not be read at launch nothing is offered yet")
         try HeldPhotoFixtures.restoreWall(store, aside: aside)   // the unlock makes it readable
         store.selectedTab = .social
@@ -782,7 +785,7 @@ struct ProximityRunPolicyFunnelTests {
             scenePhase: .active, protectedDataAvailable: true, duressSessionActive: false, now: Self.epoch
         )
 
-        #expect(manager.hasOutstandingPhotoReview && store.sessionPhotoReviewCoordinator.blocksDiscovery,
+        #expect(photos.hasOutstandingPhotoReview && store.sessionPhotoReviewCoordinator.blocksDiscovery,
                 "the unlock edge's own gate pass re-read the index and offered the held photos")
         #expect(verdict.discovery == .stop, "and the radio half saw that review: discovery stays down")
         #expect(!manager.isSearching, "so no search started under a review that blocks it")

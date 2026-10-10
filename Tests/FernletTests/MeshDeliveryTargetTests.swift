@@ -31,6 +31,7 @@
 
 import Foundation
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 
 // MARK: - Shared fixtures

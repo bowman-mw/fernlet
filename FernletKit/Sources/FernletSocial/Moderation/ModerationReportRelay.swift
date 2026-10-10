@@ -1,15 +1,20 @@
 // ModerationReportRelay.swift
-// ProximityKit/Moderation
+// FernletSocial/Moderation
 //
 // The one-hop report wire (Phase 3b). A reporter hands their OWN Ed25519-signed report rows to a
 // vault-trusted friend in person; the friend's device verifies each signature against the
 // transport-verified sender key and stores only rows that sender personally signed. There is NO
 // transitive relay and no merged global count — each device tallies over reports it verified itself,
 // which is the Sybil defense (2026-07-11 ban memo).
+//
+// The canonical bytes its rows are signed over are this module's too (`FeatureCanonicalBytes.swift`);
+// its one audit line goes to `FernletAuditLog`.
 
 import Foundation
 import FernletCrypto
 import FernletDomainModel
+import FernletFoundation
+import ProximityKit
 
 /// One report row plus the reporter's Ed25519 signature over its canonical bytes.
 ///
@@ -70,9 +75,9 @@ public nonisolated struct ModerationReportPayload: Codable, Equatable, Sendable 
 /// transport-verified sender signed.
 ///
 /// The no-transitive-relay rule is the Sybil defense — each device tallies over reports it
-/// verified itself. Stateless namespace enum; ``MeshNetworkManager`` calls `buildPayload` on slot
-/// commit and `verifiedRows` in its `.itemReport` handler, with storage owned by FernletSocial's
-/// `ModerationLedger`, which the app files the verified rows in.
+/// verified itself. Stateless namespace enum; the mesh composition's ``ModerationReportExchange``
+/// calls `buildPayload` at a slot commit and `verifiedRows` in its `.itemReport` handler, with
+/// storage owned by ``ModerationLedger``, which the app files the verified rows in.
 public enum ModerationReportRelay {
     /// Builds a payload of the local user's OWN rows (reporter == local key), each signed. Carries both
     /// reports AND their retractions, so undoing a report propagates to peers who already stored it (a
@@ -138,7 +143,7 @@ public enum ModerationReportRelay {
         // is named once per payload rather than vanishing inside the `compactMap`. Counts only — the
         // reporter fingerprint is sensitive social data and does not belong in the audit log.
         if rows.count < payload.reports.count {
-            ProximityAudit.log("moderation.relay.rowsRejected", context: [
+            FernletAuditLog.log("moderation.relay.rowsRejected", context: [
                 "received": String(payload.reports.count),
                 "kept": String(rows.count)
             ])

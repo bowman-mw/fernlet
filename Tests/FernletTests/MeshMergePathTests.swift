@@ -39,6 +39,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -50,7 +51,9 @@ import FernletDomainModel
 @MainActor
 enum MeshMergeFixtures {
 
-    /// A live manager with a mesh, a seeded ledger and a session in `activeForeground`.
+    /// Fernlet's mesh composition over a live manager with a mesh, a seeded ledger and a session in
+    /// `activeForeground`; the caller keeps the composition for as long as it uses the manager, its
+    /// `mesh`.
     ///
     /// The ledger is seeded through `seedMembershipLedgerForTesting` because seeding it *via* the
     /// merge trigger would spend the `.merge` rotation these scenarios are about.
@@ -65,14 +68,15 @@ enum MeshMergeFixtures {
     ///     `MeshP3Acceptance.base` is *expired*, not resumable, and the restore would silently test
     ///     the wrong outcome. Defaulted to nil and resolved in the body because a `@MainActor`
     ///     value cannot be a default argument.
-    /// - Returns: The manager, live and holding a roster of `others.count + 1`.
-    static func liveManager(
+    /// - Returns: The composition, whose manager is live and holds a roster of `others.count + 1`.
+    static func liveFeatures(
         store: FernletStore,
         others: [IdentityService],
         meshID: UUID,
         createdAt: Date? = nil
-    ) throws -> MeshNetworkManager {
-        let manager = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+    ) throws -> FernletMeshFeatures {
+        let features = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let manager = features.mesh
         manager.currentMesh = MeshP3Acceptance.mesh(
             for: manager, meshID: meshID, createdAt: createdAt ?? MeshP3Acceptance.base
         )
@@ -86,7 +90,7 @@ enum MeshMergeFixtures {
             manager.applySessionEvent(.founded)
             manager.applySessionEvent(.peerCommitted)
         }
-        return manager
+        return features
     }
 
     /// A ledger the local device signed as founder, admitting itself and everybody in `others`.
@@ -213,9 +217,10 @@ struct MeshMergePathTests {
             let scoped = makeTestStore()
             let meshID = UUID()
             let seeded = try MeshMergeFixtures.members(1, "\(entry.rawValue)-seed")
-            let manager = try MeshMergeFixtures.liveManager(
+            let features = try MeshMergeFixtures.liveFeatures(
                 store: scoped, others: seeded, meshID: meshID
             )
+            let manager = features.mesh
             let newcomer = try MeshMergeFixtures.members(1, "\(entry.rawValue)-new")
             let offered = try MeshMergeFixtures.offeredLedger(
                 manager, others: seeded + newcomer, meshID: meshID
@@ -281,7 +286,8 @@ struct MeshMergePathTests {
     @Test func aReGossipBurstInsideTheMergeWindowMintsOneMergeEpoch() throws {
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(1, "burst-seed")
-        let manager = try MeshMergeFixtures.liveManager(store: store, others: seeded, meshID: meshID)
+        let features = try MeshMergeFixtures.liveFeatures(store: store, others: seeded, meshID: meshID)
+        let manager = features.mesh
         let newcomers = try MeshMergeFixtures.members(3, "burst-new")
         // An existing member's commit — the blip opens the window (a NEW peer's would not).
         manager.applySessionEvent(.peerCommitted, committedPeer: seeded[0].localFingerprint)
@@ -309,7 +315,8 @@ struct MeshMergePathTests {
     @Test func theUnionConvergesAndAHardRecordBeatsSoftPresence() throws {
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(2, "union-seed")
-        let manager = try MeshMergeFixtures.liveManager(store: store, others: seeded, meshID: meshID)
+        let features = try MeshMergeFixtures.liveFeatures(store: store, others: seeded, meshID: meshID)
+        let manager = features.mesh
         let names = MeshMergeFixtures.roster(manager)
         let leaver = seeded[0]
         #expect(names.contains(leaver.localFingerprint))
@@ -351,7 +358,8 @@ struct MeshMergePathTests {
         let scoped = makeTestStore()
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(1, "heads-seed")
-        let manager = try MeshMergeFixtures.liveManager(store: scoped, others: seeded, meshID: meshID)
+        let features = try MeshMergeFixtures.liveFeatures(store: scoped, others: seeded, meshID: meshID)
+        let manager = features.mesh
         guard let ownHead = MeshP3Acceptance.seedEpoch(manager, counter: 6),
               let peerHead = MeshEpochRef.minted(
                   counter: 6, coordinatorFingerprint: seeded[0].localFingerprint, meshID: meshID
@@ -392,7 +400,8 @@ struct MeshMergePathTests {
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(1, "restart-seed")
         let first = makeTestStore(proximitySupportDirectory: root, heartDropKeychainService: keychain)
-        let before = try MeshMergeFixtures.liveManager(store: first, others: seeded, meshID: meshID)
+        let beforeFeatures = try MeshMergeFixtures.liveFeatures(store: first, others: seeded, meshID: meshID)
+        let before = beforeFeatures.mesh
         let rosterBefore = MeshMergeFixtures.roster(before)
         #expect(rosterBefore.count == 2)
         #expect(MeshP3Acceptance.loadContext(from: first)?.ledger.admissions.count == 2,
@@ -400,7 +409,8 @@ struct MeshMergePathTests {
 
         // The process dies and comes back over the same bytes.
         let second = makeTestStore(proximitySupportDirectory: root, heartDropKeychainService: keychain)
-        let restarted = MeshNetworkManager(store: second, transport: FakeMeshTransportSession())
+        let restartedFeatures = FernletMeshRig.features(store: second, transport: FakeMeshTransportSession())
+        let restarted = restartedFeatures.mesh
         let outcome = DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
             restarted.restoreSessionContextAtLaunch(now: MeshP3Acceptance.base.addingTimeInterval(60))
         }
@@ -456,7 +466,8 @@ struct MeshMergePathTests {
             (left, right, headL, headR), (right, left, headR, headL)
         ] {
             let scoped = makeTestStore()
-            let manager = MeshNetworkManager(store: scoped, transport: FakeMeshTransportSession())
+            let features = FernletMeshRig.features(store: scoped, transport: FakeMeshTransportSession())
+            let manager = features.mesh
             manager.currentMesh = MeshP3Acceptance.mesh(for: manager, meshID: meshID)
             manager.seedMembershipLedgerForTesting(
                 meshID: meshID, founderSigningPublicKey: founder.localSigningPublicKey, ledger: mine
@@ -491,7 +502,8 @@ struct MeshMergePathTests {
         let scoped = makeTestStore()
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(1, "cap-seed")
-        let manager = try MeshMergeFixtures.liveManager(store: scoped, others: seeded, meshID: meshID)
+        let features = try MeshMergeFixtures.liveFeatures(store: scoped, others: seeded, meshID: meshID)
+        let manager = features.mesh
         let cap = MeshSessionContextSchema.maxEpochHeads
         // One head per hypothetical branch coordinator, all at one counter — the only shape that
         // can reach the cap at all (plan §21.3: a nested re-split cannot exceed everyone-alone).
@@ -532,7 +544,8 @@ struct MeshMergePathTests {
     @Test func onlyAnAlreadyMemberCommitOpensTheMergeWindow() throws {
         let meshID = UUID()
         let seeded = try MeshMergeFixtures.members(1, "gate-seed")
-        let manager = try MeshMergeFixtures.liveManager(store: store, others: seeded, meshID: meshID)
+        let features = try MeshMergeFixtures.liveFeatures(store: store, others: seeded, meshID: meshID)
+        let manager = features.mesh
         let newcomer = try MeshMergeFixtures.members(1, "gate-new")[0]
         let before = manager.mergeApplicationCount
 

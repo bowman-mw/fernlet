@@ -25,6 +25,7 @@ import Testing
 import UIKit
 @testable import FernletCrypto
 import FernletDomainModel
+@testable import FernletSocial
 @testable import ProximityKit
 import FernletProximityUI
 @testable import Fernlet
@@ -170,14 +171,17 @@ enum OverlayTestSupport {
 struct SessionPhotoReviewOverlayTests {
     let store = makeTestStore()
 
-    /// An ended session with `photos` held on a founded manager over this cell's store.
-    private func endedManager(photos: Int) throws -> MeshNetworkManager {
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
-        LastMemberReviewFixtures.capture(photos, on: manager)
+    /// An ended session with `photos` held by the session photos of a founded mesh over this cell's
+    /// store, with the mesh composition that owns both; the caller keeps the composition for as long
+    /// as it uses the manager or the photos.
+    private func endedFeatures(photos: Int) throws -> FernletMeshFeatures {
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
+        LastMemberReviewFixtures.capture(photos, on: features.photos)
         manager.leaveSession()
         HeldPhotos.openGate(on: manager)
-        try #require(manager.pendingReviewPhotos.count == photos)
-        return manager
+        try #require(features.photos.pendingReviewPhotos.count == photos)
+        return features
     }
 
     /// **I9, hosted.** A SwiftUI sheet presented in the main window survives the overlay: the
@@ -190,18 +194,29 @@ struct SessionPhotoReviewOverlayTests {
         defer { OverlayTestSupport.close(main, hosting) }
         try await OverlayTestSupport.waitUntil { holdsForeignCover(hosting.presentedViewController) }
         try #require(holdsForeignCover(hosting.presentedViewController), "precondition: the sheet is up")
-        let manager = try endedManager(photos: 1)
+        let features = try endedFeatures(photos: 1)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         let presenter = SessionPhotoReviewOverlayPresenter(appearance: { _ in .dark })
         let coordinator = SessionPhotoReviewCoordinator(
-            manager: manager, host: store, presenter: presenter, saveKeptPhotosToLibrary: { _ in }
+            manager: manager, sessionPhotos: features.photos, host: store, presenter: presenter,
+            saveKeptPhotosToLibrary: { _ in }
         )
         defer { presenter.hide() }
         presenter.attach(to: scene)
+        // Suites run in parallel on the one scene, and another can hold its own review overlay up across a
+        // suspension (FriendsViewLastMemberReviewPresentationTests sleeps with the store's up): so the
+        // overlay asserted here is the window `show` adds, and this cell's main window is key again
+        // before it, as the awaits above may have handed key status to that other overlay.
+        let otherOverlays = Set(scene.windows.filter {
+            $0.accessibilityIdentifier == SessionPhotoReviewOverlayPresenter.windowIdentifier
+        }.map(ObjectIdentifier.init))
+        main.makeKey()
 
         #expect(presenter.show(coordinator), "the presenter draws once it has a scene")
         let overlay = try #require(scene.windows.first {
             $0.accessibilityIdentifier == SessionPhotoReviewOverlayPresenter.windowIdentifier
+                && !otherOverlays.contains(ObjectIdentifier($0))
         })
         #expect(overlay.isKeyWindow && overlay.windowLevel > main.windowLevel, "the overlay is key and above the main window")
         #expect(overlay.overrideUserInterfaceStyle == .dark, "in the appearance it was handed")
@@ -247,15 +262,17 @@ struct SessionPhotoReviewOverlayTests {
     /// coordinator (ContentView feeds it), not from an environment its window does not have.
     @Test func theOverlayScreenTakesItsScenePhaseFromTheCoordinator() async throws {
         let scene = try OverlayTestSupport.scene()
-        let manager = LastMemberReviewFixtures.foundedManager(store: store)
+        let features = LastMemberReviewFixtures.foundedFeatures(store: store)
+        let manager = features.mesh
         defer { manager.leaveMesh() }
         DeviceBindingID.$testOverride.withValue(.identifier(MeshP3Acceptance.install)) {
-            for _ in 0..<2 { manager.addPhoto(OverlayTestSupport.magentaJPEG()) }
+            for _ in 0..<2 { features.photos.addPhoto(OverlayTestSupport.magentaJPEG()) }
         }
         manager.leaveSession()
         HeldPhotos.openGate(on: manager)
         let coordinator = SessionPhotoReviewCoordinator(
-            manager: manager, host: store, presenter: RecordingReviewPresenter(), saveKeptPhotosToLibrary: { _ in }
+            manager: manager, sessionPhotos: features.photos, host: store, presenter: RecordingReviewPresenter(),
+            saveKeptPhotosToLibrary: { _ in }
         )
         coordinator.launchComplete = true
         coordinator.scenePhase = .active

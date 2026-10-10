@@ -25,7 +25,7 @@ import FernletDomainModel
 // MARK: - Test host + fixtures
 
 @MainActor
-private final class MockPresenceHost: ProximityHost {
+private final class MockPresenceHost: FernletSocialHost {
     var proximityDisplayName: String { "Tester" }
     var trustedProximityPeers: [ProximityTrustedPeerRecord] { proximityTrustVault.trustedPeers }
     let proximityTrustVault = ProximityTrustVault()

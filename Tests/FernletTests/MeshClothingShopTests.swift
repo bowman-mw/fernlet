@@ -17,6 +17,7 @@
 // the mesh's slotTrustPolicies retention is the same pattern).
 
 @testable import ProximityKit
+@testable import FernletSocial
 import FernletConnections
 import Foundation
 import Testing
@@ -27,9 +28,14 @@ import FernletDomainModel
 @Suite(.serialized) @MainActor
 struct MeshClothingShopTests {
     // Keeps the FernletStore alive past the manager's `unowned let store` (mirrors
-    // MeshNetworkManagerTests). Uses the store's own lazily-wired mesh manager so the payload-layer
+    // MeshNetworkManagerTests). Uses the store's own lazily-wired mesh composition so the payload-layer
     // opt-out closures (isSharingEnabledProvider / localCatalogProvider) are the production wiring.
     let store = makeTestStore()
+
+    /// The store's own composition (`FernletStore.meshFeatures`, plan step A0.5.6): its shop carries the
+    /// app's provider wiring, and its shop exchange the two send seams and the offer gate. The store
+    /// keeps it for the suite's lifetime, so its session observer stays installed on the mesh.
+    private var features: FernletMeshFeatures { store.meshFeatures }
 
     private let day = Date(timeIntervalSince1970: 1_780_000_000)
 
@@ -184,12 +190,12 @@ struct MeshClothingShopTests {
         let alex = try deliverCatalog(via: manager, senderName: "Alex", senderSigningKey: Data([4, 5, 6]),
                                       items: [sellerItem(name: "Sun Hat", designer: UUID())])
 
-        #expect(manager.clothingShop.peerCatalogs.count == 2)
-        #expect(Set(manager.clothingShop.peerCatalogs.map(\.id)) == [robin.fingerprint, alex.fingerprint])
+        #expect(features.clothingShop.peerCatalogs.count == 2)
+        #expect(Set(features.clothingShop.peerCatalogs.map(\.id)) == [robin.fingerprint, alex.fingerprint])
         // Keyed by the transport-VERIFIED fingerprint exclusively — never a display name.
-        #expect(manager.clothingShop.peerCatalogs.allSatisfy { $0.senderFingerprint != nil })
+        #expect(features.clothingShop.peerCatalogs.allSatisfy { $0.senderFingerprint != nil })
         // Catalogs accumulate mid-session; no window yet (the session hasn't ended).
-        #expect(manager.clothingShop.window == nil)
+        #expect(features.clothingShop.window == nil)
     }
 
     @Test func reBroadcastReplacesTheSendersPriorCatalogInsteadOfStacking() throws {
@@ -261,7 +267,7 @@ struct MeshClothingShopTests {
         let (envelope, plaintext) = try catalogEnvelope(displayName: "Blocked", items: [sellerItem(designer: UUID())])
         manager.proximityCoordinator(coordinator, didReceive: envelope, plaintext: plaintext, from: identity)
 
-        #expect(manager.clothingShop.peerCatalogs.isEmpty)
+        #expect(features.clothingShop.peerCatalogs.isEmpty)
     }
 
     // MARK: - Post-session window lifecycle
@@ -270,21 +276,21 @@ struct MeshClothingShopTests {
         let manager = store.meshNetworkManager
         try deliverCatalog(via: manager, senderName: "Robin", senderSigningKey: Data([1, 2, 3]),
                            items: [sellerItem(designer: UUID())])
-        #expect(manager.clothingShop.window == nil)
+        #expect(features.clothingShop.window == nil)
 
         manager.leaveSession()   // the same teardown funnel that promotes pendingFriendReview
 
-        let window = try #require(manager.clothingShop.window)
-        #expect(manager.clothingShop.isWindowOpen)
+        let window = try #require(features.clothingShop.window)
+        #expect(features.clothingShop.isWindowOpen)
         #expect(abs(window.expiresAt.timeIntervalSince(window.opensAt) - MeshClothingShop.windowDuration) < 1)
-        #expect(manager.clothingShop.peerCatalogs.count == 1, "Catalogs stay browsable through the window")
+        #expect(features.clothingShop.peerCatalogs.count == 1, "Catalogs stay browsable through the window")
     }
 
     @Test func windowDoesNotOpenWithoutCatalogs() {
         let manager = store.meshNetworkManager
         manager.leaveSession()
-        #expect(manager.clothingShop.window == nil)
-        #expect(!manager.clothingShop.isWindowOpen)
+        #expect(features.clothingShop.window == nil)
+        #expect(!features.clothingShop.isWindowOpen)
     }
 
     @Test func windowExpiresLazilyAfterOneHour() throws {
@@ -332,14 +338,14 @@ struct MeshClothingShopTests {
                            items: [sellerItem(designer: UUID())])
 
         manager.leaveSession()
-        #expect(manager.clothingShop.isWindowOpen)
-        #expect(manager.pendingFriendReview != nil)
+        #expect(features.clothingShop.isWindowOpen)
+        #expect(features.photos.pendingFriendReview != nil)
 
         manager.resetSessionRosterForNewSession()   // the startJoin/startNewMesh seam (tab entry / scene dip)
 
-        #expect(manager.clothingShop.isWindowOpen, "The window survives search starts — it closes at session FORMATION")
-        #expect(manager.clothingShop.peerCatalogs.count == 1, "Held catalogs survive with it")
-        #expect(manager.pendingFriendReview != nil, "The friend-review batch survives search starts by design")
+        #expect(features.clothingShop.isWindowOpen, "The window survives search starts — it closes at session FORMATION")
+        #expect(features.clothingShop.peerCatalogs.count == 1, "Held catalogs survive with it")
+        #expect(features.photos.pendingFriendReview != nil, "The friend-review batch survives search starts by design")
     }
 
     /// The owner decision "closes when a new session starts" keys on FORMATION: the first slot
@@ -350,15 +356,15 @@ struct MeshClothingShopTests {
         try deliverCatalog(via: manager, senderName: "Robin", senderSigningKey: Data([1, 2, 3]),
                            items: [sellerItem(designer: UUID())])
         manager.leaveSession()
-        #expect(manager.clothingShop.isWindowOpen)
+        #expect(features.clothingShop.isWindowOpen)
 
         // photos-only peer: formation runs regardless of capability, and no async catalog-offer
         // task is spawned to outlive this synchronous test (the offer path has its own tests).
         commitSlot(via: manager, name: "Alex", signingKey: Data([4, 5, 6]),
                    capabilities: [ProximityCapability.photos.rawValue])   // session formation
 
-        #expect(manager.clothingShop.window == nil, "The first commit closes the previous window")
-        #expect(manager.clothingShop.peerCatalogs.isEmpty, "…and drops the previous session's catalogs")
+        #expect(features.clothingShop.window == nil, "The first commit closes the previous window")
+        #expect(features.clothingShop.peerCatalogs.isEmpty, "…and drops the previous session's catalogs")
     }
 
     /// The formation reset is once-per-formation: later commits (promoteToMesh's loop re-enters the
@@ -371,12 +377,12 @@ struct MeshClothingShopTests {
         let robin = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]), capabilities: photosOnly)
         let (envelope, plaintext) = try catalogEnvelope(displayName: "Robin", items: [sellerItem(designer: UUID())])
         manager.proximityCoordinator(robin.coordinator, didReceive: envelope, plaintext: plaintext, from: robin.identity)
-        #expect(manager.clothingShop.peerCatalogs.count == 1)
+        #expect(features.clothingShop.peerCatalogs.count == 1)
 
         commitSlot(via: manager, name: "Alex", signingKey: Data([4, 5, 6]), capabilities: photosOnly)   // 2nd commit, same session
 
-        #expect(manager.clothingShop.peerCatalogs.count == 1, "A mid-session commit must not clear catalogs")
-        #expect(manager.clothingShop.window == nil)
+        #expect(features.clothingShop.peerCatalogs.count == 1, "A mid-session commit must not clear catalogs")
+        #expect(features.clothingShop.window == nil)
     }
 
     /// The transient-drop case the formation model makes coherent: last slot lost mid-outing opens
@@ -392,24 +398,24 @@ struct MeshClothingShopTests {
 
         // Transient drop: the last committed slot is lost mid-outing — the window opens.
         manager.evictSlotForTesting(peerID: first.peer.id)
-        let transientWindow = try #require(manager.clothingShop.window)
+        let transientWindow = try #require(features.clothingShop.window)
 
         // A second teardown with NO intervening commit must not extend the open window.
         manager.leaveSession()
-        #expect(manager.clothingShop.window == transientWindow, "Repeated teardowns never extend an open window")
+        #expect(features.clothingShop.window == transientWindow, "Repeated teardowns never extend an open window")
 
         // Re-commit: formation closes the transient window, clears catalogs, the exchange re-runs.
         let second = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]), capabilities: photosOnly)
-        #expect(manager.clothingShop.window == nil)
-        #expect(manager.clothingShop.peerCatalogs.isEmpty)
+        #expect(features.clothingShop.window == nil)
+        #expect(features.clothingShop.peerCatalogs.isEmpty)
         let (again, againPlain) = try catalogEnvelope(displayName: "Robin", items: [sellerItem(name: "Sun Hat", designer: UUID())])
         manager.proximityCoordinator(second.coordinator, didReceive: again, plaintext: againPlain, from: second.identity)
 
         // The real session end opens a FRESH 1 h window over the re-received catalogs.
         manager.leaveSession()
-        let freshWindow = try #require(manager.clothingShop.window)
+        let freshWindow = try #require(features.clothingShop.window)
         #expect(freshWindow.opensAt >= transientWindow.opensAt)
-        #expect(manager.clothingShop.peerCatalogs.first?.payload.items.first?.name == "Sun Hat")
+        #expect(features.clothingShop.peerCatalogs.first?.payload.items.first?.name == "Sun Hat")
     }
 
     // MARK: - Commit-symmetry catalog exchange (clothingCatalogRequest)
@@ -422,8 +428,8 @@ struct MeshClothingShopTests {
         let manager = store.meshNetworkManager
         var catalogSends = 0
         var requestSends = 0
-        manager.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
-        manager.onShopCatalogRequestSendForTesting = { _ in requestSends += 1 }
+        features.shopExchange.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
+        features.shopExchange.onShopCatalogRequestSendForTesting = { _ in requestSends += 1 }
 
         let robin = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]))
         // The commit-time offer sends the catalog AND the commit-symmetry request; awaiting the
@@ -457,8 +463,8 @@ struct MeshClothingShopTests {
         let manager = store.meshNetworkManager
         var catalogSends = 0
         var requestSends = 0
-        manager.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
-        manager.onShopCatalogRequestSendForTesting = { _ in requestSends += 1 }
+        features.shopExchange.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
+        features.shopExchange.onShopCatalogRequestSendForTesting = { _ in requestSends += 1 }
 
         let robin = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]))
         await waitUntil { catalogSends == 1 && requestSends == 1 }
@@ -473,7 +479,7 @@ struct MeshClothingShopTests {
     @Test func requestFromUncommittedSlotIsDroppedByTheRegistryGate() async throws {
         let manager = store.meshNetworkManager
         var catalogSends = 0
-        manager.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
+        features.shopExchange.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
 
         let coordinator = throwawayCoordinator()
         let identity = makePeerIdentity(name: "Pending", signingPublicKey: Data([9, 9, 1]))
@@ -489,7 +495,7 @@ struct MeshClothingShopTests {
         let manager = store.meshNetworkManager
         store.setAllowNearbyClothingShares(false)
         var catalogSends = 0
-        manager.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
+        features.shopExchange.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
 
         let robin = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]))
         manager.proximityCoordinator(robin.coordinator, didReceive: requestEnvelope(displayName: "Robin"),
@@ -507,15 +513,15 @@ struct MeshClothingShopTests {
         let manager = store.meshNetworkManager
         var catalogSends = 0
         var requestSends = 0
-        manager.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
-        manager.onShopCatalogRequestSendForTesting = { _ in requestSends += 1 }
+        features.shopExchange.onShopCatalogSendForTesting = { _ in catalogSends += 1 }
+        features.shopExchange.onShopCatalogRequestSendForTesting = { _ in requestSends += 1 }
 
         let robin = commitSlot(via: manager, name: "Robin", signingKey: Data([1, 2, 3]))
         commitSlot(via: manager, name: "Alex", signingKey: Data([4, 5, 6]))
         await waitUntil { catalogSends == 2 && requestSends == 2 }
 
         manager.evictSlotForTesting(peerID: robin.peer.id)
-        #expect(manager.clothingShop.window == nil, "Alex keeps the session alive — no window mid-session")
+        #expect(features.clothingShop.window == nil, "Alex keeps the session alive — no window mid-session")
 
         // Robin rejoins with the SAME transport identity (same slot UUID).
         manager.addSlotForTesting(coordinator: robin.coordinator, peer: robin.peer, fingerprint: robin.identity.fingerprint)
@@ -529,7 +535,7 @@ struct MeshClothingShopTests {
     // MARK: - Payload-layer opt-out
 
     @Test func localCatalogProviderIsNilWhileSharingIsOff() {
-        let shop = store.meshNetworkManager.clothingShop
+        let shop = features.clothingShop
         #expect(store.settings.allowNearbyClothingShares)
         #expect(shop.isSharingEnabled)
         #expect(shop.localCatalogProvider?() != nil)
@@ -547,7 +553,7 @@ struct MeshClothingShopTests {
         try deliverCatalog(via: manager, senderName: "Robin", senderSigningKey: Data([1, 2, 3]),
                            items: [sellerItem(designer: UUID())])
 
-        #expect(manager.clothingShop.peerCatalogs.isEmpty)
+        #expect(features.clothingShop.peerCatalogs.isEmpty)
     }
 
     @Test func turningSharingOffClearsHeldCatalogsAndClosesTheWindow() throws {
@@ -555,12 +561,12 @@ struct MeshClothingShopTests {
         try deliverCatalog(via: manager, senderName: "Robin", senderSigningKey: Data([1, 2, 3]),
                            items: [sellerItem(designer: UUID())])
         manager.leaveSession()
-        #expect(manager.clothingShop.isWindowOpen)
+        #expect(features.clothingShop.isWindowOpen)
 
         store.setAllowNearbyClothingShares(false)
 
-        #expect(manager.clothingShop.window == nil)
-        #expect(manager.clothingShop.peerCatalogs.isEmpty)
+        #expect(features.clothingShop.window == nil)
+        #expect(features.clothingShop.peerCatalogs.isEmpty)
     }
 
     // MARK: - Capability-gated outbound
@@ -577,7 +583,7 @@ struct MeshClothingShopTests {
     }
 
     @Test func shopCatalogIsOfferedOnlyToPeersAdvertisingTheShopCapability() {
-        let manager = store.meshNetworkManager
+        let exchange = features.shopExchange
         let withShop = ProximityCoordinator.PeerIdentity(
             id: UUID(), displayName: "New", signingPublicKey: Data([1]), keyAgreementPublicKey: Data([2]),
             fingerprint: "fp-new", rangingMode: .none, firstSeenAt: day,
@@ -593,12 +599,12 @@ struct MeshClothingShopTests {
             fingerprint: "fp-legacy", rangingMode: .none, firstSeenAt: day
         )
 
-        #expect(manager.shouldOfferShopCatalog(to: withShop))
-        #expect(!manager.shouldOfferShopCatalog(to: photosOnly))
-        #expect(!manager.shouldOfferShopCatalog(to: legacy), "A pre-capability legacy peer is photos-only")
+        #expect(exchange.shouldOfferShopCatalog(to: withShop))
+        #expect(!exchange.shouldOfferShopCatalog(to: photosOnly))
+        #expect(!exchange.shouldOfferShopCatalog(to: legacy), "A pre-capability legacy peer is photos-only")
 
         store.setAllowNearbyClothingShares(false)
-        #expect(!manager.shouldOfferShopCatalog(to: withShop), "Sharing off sends nothing to anyone")
+        #expect(!exchange.shouldOfferShopCatalog(to: withShop), "Sharing off sends nothing to anyone")
     }
 
     // MARK: - Retained trust policy enforces blocked keys at the envelope layer

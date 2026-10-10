@@ -52,16 +52,31 @@ import FernletDomainModel
 
 /// Append-only binary writer for canonical signing bytes. The format is positional and
 /// length-prefixed: the field order in the `canonicalBytes(for:)` functions below IS the schema.
-nonisolated struct CanonicalByteWriter {
-    private(set) var bytes = Data()
+///
+/// Public so a host's feature writes its own signing input and its routed body framing in the
+/// engine's encodings, never a copy that could drift. The contract: append-only and positional (no
+/// key names, no locale, no number formatting), every integer big-endian, every variable-width field
+/// length-prefixed by a `UInt64`, every optional led by one presence byte; every encoding it writes
+/// is already frozen by the engine's goldens, so none of them ever changes.
+public nonisolated struct CanonicalByteWriter {
+    /// The bytes appended so far, in append order.
+    public private(set) var bytes = Data()
 
-    mutating func appendByte(_ value: UInt8) {
+    /// An empty writer.
+    public init() {}
+
+    /// One raw byte (a bool, an enum discriminant or a presence flag).
+    ///
+    /// - Parameter value: The byte.
+    public mutating func appendByte(_ value: UInt8) {
         bytes.append(value)
     }
 
     /// 8-byte big-endian. Endianness is pinned by `bigEndian`, so the on-wire bytes are identical
     /// regardless of host byte order.
-    mutating func appendUInt64(_ value: UInt64) {
+    ///
+    /// - Parameter value: The integer.
+    public mutating func appendUInt64(_ value: UInt64) {
         // Pure-Swift shift-out (R9: no pointer seam). Byte-identical to the previous
         // `withUnsafeBytes(of: value.bigEndian)`: most-significant byte first.
         for shift in stride(from: 56, through: 0, by: -8) {
@@ -70,23 +85,31 @@ nonisolated struct CanonicalByteWriter {
     }
 
     /// 8-byte big-endian two's-complement.
-    mutating func appendInt64(_ value: Int64) {
+    ///
+    /// - Parameter value: The integer.
+    public mutating func appendInt64(_ value: Int64) {
         appendUInt64(UInt64(bitPattern: value))
     }
 
     /// UInt64 big-endian length prefix followed by the raw bytes.
-    mutating func appendLengthPrefixed(_ data: Data) {
+    ///
+    /// - Parameter data: The bytes.
+    public mutating func appendLengthPrefixed(_ data: Data) {
         appendUInt64(UInt64(data.count))
         bytes.append(data)
     }
 
     /// Length-prefixed UTF-8.
-    mutating func appendString(_ string: String) {
+    ///
+    /// - Parameter string: The string, written as its UTF-8 bytes.
+    public mutating func appendString(_ string: String) {
         appendLengthPrefixed(Data(string.utf8))
     }
 
     /// 16 raw bytes in network order (no length prefix — a UUID is always 16 bytes).
-    mutating func appendUUID(_ uuid: UUID) {
+    ///
+    /// - Parameter uuid: The UUID.
+    public mutating func appendUUID(_ uuid: UUID) {
         // Same 16 network-order bytes as the previous `withUnsafeBytes(of: uuid.uuid)`, spelled
         // without a pointer seam (R9). `uuid.uuid` is a 16-tuple in network order by definition.
         let raw = uuid.uuid
@@ -96,9 +119,12 @@ nonisolated struct CanonicalByteWriter {
         ])
     }
 
-    /// Whole seconds since the Unix epoch, floored. Saturating: an out-of-range or non-finite value
-    /// (only reachable from a hostile decoded envelope) clamps instead of trapping.
-    mutating func appendDate(_ date: Date) {
+    /// Whole seconds since the Unix epoch, floored, as an 8-byte big-endian `Int64`. Saturating: an
+    /// out-of-range or non-finite value (only reachable from a hostile decoded envelope) clamps
+    /// instead of trapping.
+    ///
+    /// - Parameter date: The instant.
+    public mutating func appendDate(_ date: Date) {
         let seconds = date.timeIntervalSince1970.rounded(.down)
         let clamped: Int64
         if !seconds.isFinite {
@@ -113,7 +139,10 @@ nonisolated struct CanonicalByteWriter {
         appendInt64(clamped)
     }
 
-    mutating func appendOptional(_ date: Date?) {
+    /// An optional instant: presence byte `1` then ``appendDate(_:)``'s eight bytes, or a lone `0`.
+    ///
+    /// - Parameter date: The instant, or nil.
+    public mutating func appendOptional(_ date: Date?) {
         if let date {
             appendByte(1)
             appendDate(date)
@@ -122,7 +151,10 @@ nonisolated struct CanonicalByteWriter {
         }
     }
 
-    mutating func appendOptional(_ string: String?) {
+    /// An optional string: presence byte `1` then ``appendString(_:)``'s bytes, or a lone `0`.
+    ///
+    /// - Parameter string: The string, or nil.
+    public mutating func appendOptional(_ string: String?) {
         if let string {
             appendByte(1)
             appendString(string)
@@ -181,17 +213,10 @@ nonisolated func canonicalUTF8Ordered(_ lhs: String, _ rhs: String) -> Bool {
 // inventory digest ("what content I am carrying, and for whom") from the membership one ("what
 // records I hold"); and the drain answer ("we are in sync") from the routed inventory digest ("here is
 // everything I hold"), or a stale quiescence bit could close a merge window that should still be
-// open. The four tags left below are the activity and moderation features', which leave with those
-// features when the mesh manager's feature parts do (plan step A0.5).
-//
-// Group Activities (Phase 6). Distinct tags so an activity descriptor hash, a join token, and a roster
-// snapshot can never cross-validate one another (or the mesh types above).
-private nonisolated let canonicalActivityDescriptorDomain = FernletCryptoPurpose.Signature.activityDescriptorV2.data
-private nonisolated let canonicalActivityJoinTokenDomain = FernletCryptoPurpose.Signature.activityJoinTokenV2.data
-private nonisolated let canonicalActivityRosterSnapshotDomain = FernletCryptoPurpose.Signature.activityRosterSnapshotV2.data
-// Moderation report row (Phase 3b). Distinct tag so a report signature can never cross-validate any
-// other signed type.
-private nonisolated let canonicalModerationReportDomain = FernletCryptoPurpose.Signature.moderationReportV2.data
+// open. No feature's tag is here: the moderation report row's tag and its bytes are FernletSocial's
+// (`FeatureCanonicalBytes.swift`, beside the report relay), and so are the activity feature's three
+// (the descriptor its params hash is taken over, the join token and the roster snapshot), beside
+// the activity manager and its payloads.
 
 // MARK: - Identity envelope
 
@@ -277,94 +302,6 @@ public nonisolated func canonicalBytes(for token: MeshAdmissionToken,
     writer.appendDate(token.expiresAt)
     writer.appendLengthPrefixed(token.admitterSigningPublicKey)
     // admitterSignature: deliberately excluded.
-    return writer.bytes
-}
-
-// MARK: - Group Activities (Phase 6)
-
-// All three include the SIGNED `schemaVersion` (where present), so `verify` uses a SINGLE encoder gated
-// on the version — no permanent dual-verify (contrast the `MeshAdmissionToken` note above). Because
-// these types are new (day one), there is no legacy encoder for them and never will be.
-
-/// Canonical bytes an `ActivityDescriptor` is hashed over to form `activityParamsHash` (SHA-256). The
-/// descriptor is not itself signed; this hash is what the signed token/snapshot bind, so its byte
-/// layout must be as stable as any signing input.
-public nonisolated func canonicalBytes(for descriptor: ActivityDescriptor) -> Data {
-    var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalActivityDescriptorDomain)
-    writer.appendUUID(descriptor.activityID)
-    writer.appendString(descriptor.hostFingerprint)
-    writer.appendLengthPrefixed(descriptor.hostSigningPublicKey)
-    writer.appendString(descriptor.title)
-    writer.appendString(descriptor.activityTypeToken)
-    writer.appendOptional(descriptor.coarseLocation)
-    writer.appendDate(descriptor.createdAt)
-    writer.appendDate(descriptor.expiresAt)
-    return writer.bytes
-}
-
-/// Canonical signing bytes for an `ActivityJoinToken`. The `hostSignature` field is excluded (it is the
-/// output of signing these bytes).
-public nonisolated func canonicalBytes(for token: ActivityJoinToken) -> Data {
-    var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalActivityJoinTokenDomain)
-    writer.appendInt64(Int64(token.schemaVersion))
-    writer.appendUUID(token.activityID)
-    writer.appendLengthPrefixed(token.activityParamsHash)
-    writer.appendString(token.joinerFingerprint)
-    writer.appendLengthPrefixed(token.joinerSigningPublicKey)
-    writer.appendString(token.hostFingerprint)
-    writer.appendLengthPrefixed(token.hostSigningPublicKey)
-    writer.appendDate(token.grantedAt)
-    writer.appendDate(token.expiresAt)
-    writer.appendInt64(Int64(token.rosterVersionAtGrant))
-    // hostSignature: deliberately excluded.
-    return writer.bytes
-}
-
-/// Canonical signing bytes for an `ActivityRosterSnapshot`. The `hostSignature` field is excluded. The
-/// participant array is length-prefixed and serialized in array order (the host's authored order IS the
-/// canonical order), so the same roster always produces the same bytes.
-public nonisolated func canonicalBytes(for snapshot: ActivityRosterSnapshot) -> Data {
-    var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalActivityRosterSnapshotDomain)
-    writer.appendInt64(Int64(snapshot.schemaVersion))
-    writer.appendUUID(snapshot.activityID)
-    writer.appendInt64(Int64(snapshot.version))
-    writer.appendUInt64(UInt64(snapshot.participants.count))
-    for participant in snapshot.participants {
-        writer.appendString(participant.fingerprint)
-        writer.appendString(participant.displayName)
-        writer.appendLengthPrefixed(participant.signingPublicKey)
-        writer.appendLengthPrefixed(participant.keyAgreementPublicKey)
-        writer.appendDate(participant.joinedAt)
-    }
-    writer.appendDate(snapshot.issuedAt)
-    writer.appendLengthPrefixed(snapshot.hostSigningPublicKey)
-    // hostSignature: deliberately excluded.
-    return writer.bytes
-}
-
-// MARK: - Moderation report (Phase 3b)
-
-/// Canonical signing bytes for a `ModerationLedgerEntry` — the deterministic bytes a reporter signs and
-/// a receiver re-derives to verify. Both ends produce identical bytes for the same row. `createdAt` is
-/// bound at whole-second resolution (a hostile future date is part of the signature; the receiver may
-/// then clamp the STORED createdAt for decay without touching verification). Length-prefixing makes the
-/// encoding injective — no value can shift a field boundary — and `appendDate` saturates instead of
-/// trapping on an out-of-range wire date. There is no legacy encoder: this row type never signed before.
-public nonisolated func canonicalBytes(for entry: ModerationLedgerEntry) -> Data {
-    var writer = CanonicalByteWriter()
-    writer.appendLengthPrefixed(canonicalModerationReportDomain)
-    writer.appendString(entry.kind.rawValue)
-    writer.appendLengthPrefixed(entry.reporterSigningPublicKey)
-    writer.appendLengthPrefixed(entry.subjectSigningPublicKey)
-    writer.appendUUID(entry.itemID)
-    writer.appendLengthPrefixed(entry.contentHash)
-    writer.appendString(entry.reasonToken)
-    writer.appendUInt64(entry.reporterSeq)
-    writer.appendDate(entry.createdAt)
-    // signature: lives on `SignedModerationReport`, not the entry — nothing to exclude here.
     return writer.bytes
 }
 

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -32,8 +33,8 @@ struct MeshClosedMeshStarTopologyTests {
 
     // MARK: - Fixtures
 
-    /// One node: its store, its manager, the radio underneath it, and the advertisement its peers
-    /// browse.
+    /// One node: its store, its mesh composition and the manager it owns, the radio underneath it,
+    /// and the advertisement its peers browse.
     ///
     /// The store is held **here** and not created inline: `MeshNetworkManager` keeps its host
     /// `unowned`, so a manager built over a temporary store traps the moment anything reaches
@@ -41,6 +42,8 @@ struct MeshClosedMeshStarTopologyTests {
     struct Node {
         let store: FernletStore
         let transport: FakeMeshTransportSession
+        /// Fernlet's mesh composition, which built ``manager`` and owns it; kept for the node's lifetime.
+        let features: FernletMeshFeatures
         let manager: MeshNetworkManager
         /// The handle the OTHER two nodes see for this one, carrying this manager's real `sid`.
         let advertisement: PeerHandle
@@ -60,7 +63,8 @@ struct MeshClosedMeshStarTopologyTests {
     static func makeNode() -> Node {
         let transport = FakeMeshTransportSession()
         let store = makeTestStore()
-        let manager = MeshNetworkManager(store: store, transport: transport)
+        let features = FernletMeshRig.features(store: store, transport: transport)
+        let manager = features.mesh
         manager.markProximityJoinForTesting()
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         manager.currentMesh = MeshDescriptor(
@@ -87,6 +91,7 @@ struct MeshClosedMeshStarTopologyTests {
         return Node(
             store: store,
             transport: transport,
+            features: features,
             manager: manager,
             advertisement: PeerHandle(
                 id: UUID(),
@@ -169,7 +174,8 @@ struct MeshClosedMeshStarTopologyTests {
     /// session with anybody" has to keep meaning that.
     @Test func aClosedSessionWithNoMeshStillRefusesEveryLink() {
         let transport = FakeMeshTransportSession()
-        let manager = MeshNetworkManager(store: store, transport: transport)
+        let features = FernletMeshRig.features(store: store, transport: transport)
+        let manager = features.mesh
         manager.markProximityJoinForTesting()
         manager.setSessionOpen(false)
         #expect(manager.currentMesh == nil, "test premise: no descriptor exists yet")
@@ -221,7 +227,8 @@ struct MeshClosedMeshStarTopologyTests {
         #expect(openNode.manager.maySeatVerifiedPeer(signingPublicKey: Data(repeating: 0x5A, count: 32)),
                 "an open mesh admits strangers — that is the join flow")
 
-        let bare = MeshNetworkManager(store: store, transport: FakeMeshTransportSession())
+        let bareFeatures = FernletMeshRig.features(store: store, transport: FakeMeshTransportSession())
+        let bare = bareFeatures.mesh
         bare.markProximityJoinForTesting()
         bare.setSessionOpen(false)
         #expect(bare.maySeatVerifiedPeer(signingPublicKey: Data(repeating: 0x5A, count: 32)),

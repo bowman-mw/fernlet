@@ -666,10 +666,12 @@ struct KeyCustodyBoundaryTests {
     // has no default, so the store must answer it; this cell holds what the managers hold at run time.
 
     /// The app's own store (`makeTestStore()`, the real `FernletStore`) hands its mesh, recipe-share and
-    /// presence managers, each built with no identity, an identity whose provisioning participant is a
-    /// `SealedBackupEscrowKey`, one of its own per identity, and its host door, asked through the
-    /// protocol as the managers ask it, answers the same. A participant-less identity on a device a
-    /// pre-migration build left in provisioning Case 3 would mint over the synced key-agreement row
+    /// presence managers an identity whose provisioning participant is a `SealedBackupEscrowKey`, one
+    /// of its own per identity — the recipe-share and presence managers are built with none and ask
+    /// the host door, the mesh is handed the one FernletSocial's mesh composition asked that door
+    /// for — and its host door, asked through the protocol as the managers ask it, answers the same.
+    /// A participant-less identity on a device a pre-migration build left in provisioning Case 3 would
+    /// mint over the synced key-agreement row
     /// without promoting it into the escrow, destroying the user's backup key. Each manager keeps its
     /// identity private, so it is read by reflection: a manager that stops keeping one under that name
     /// fails here by name.

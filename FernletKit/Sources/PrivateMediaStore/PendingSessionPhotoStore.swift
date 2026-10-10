@@ -89,9 +89,9 @@ public nonisolated struct AnsweredSessionPhoto: Codable, Equatable, Sendable {
 /// The pending corpus's durable truth: every held photo and every live tombstone, sealed at rest
 /// as `PendingSessionPhotoIndex.sealed`.
 ///
-/// The owner (`MeshNetworkManager`) keeps an in-memory mirror and passes it back into every
-/// ``PendingSessionPhotoStore`` write; the store returns the committed successor. After a process
-/// kill the review is rebuilt from this and nothing else.
+/// The owner (FernletSocial's `MeshSessionPhotos`) keeps an in-memory mirror and passes it back
+/// into every ``PendingSessionPhotoStore`` write; the store returns the committed successor. After
+/// a process kill the review is rebuilt from this and nothing else.
 ///
 /// Frozen at rest: `schemaVersion`, `photos` and `answered` are field names, and
 /// ``schemaVersion`` only ever rises — an older build reading a newer file defers rather than
@@ -189,9 +189,9 @@ public nonisolated struct PendingSessionPhotoIndex: Codable, Equatable, Sendable
 /// Stateless like ``PrivateMediaStore``: all state is on disk, and the owner holds the mirror.
 ///
 /// Concurrency: a plain value type; confined to its owner's isolation domain (in practice
-/// `MeshNetworkManager`'s main actor) because the default key provider caches without locking.
+/// `MeshSessionPhotos`' main actor) because the default key provider caches without locking.
 public struct PendingSessionPhotoStore {
-    /// Hard cap on held photos — equal to `MeshNetworkManager.maxSessionPhotos`. A hold past it is
+    /// Hard cap on held photos — equal to `MeshSessionPhotos.maxSessionPhotos`. A hold past it is
     /// REFUSED (``Hold/full``), never an eviction: evicting a held photo would be a discard nobody
     /// chose.
     public static let maxHeldPhotos = 200
