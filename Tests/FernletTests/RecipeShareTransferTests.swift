@@ -20,6 +20,7 @@
 // the air.
 
 @testable import ProximityKit
+import FernletSocial
 import FernletConnections
 import Foundation
 import Testing
@@ -527,8 +528,10 @@ struct RecipeShareTransferTests {
         return transfer
     }
 
+    /// The recipe radio's owner's source: ProximityKit's pair session (the recipe-share manager's
+    /// mechanism until plan step A0.7.3, when the manager left for FernletSocial over it).
     private static func managerSource() throws -> String {
-        let path = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift"
+        let path = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
         return try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
     }
 

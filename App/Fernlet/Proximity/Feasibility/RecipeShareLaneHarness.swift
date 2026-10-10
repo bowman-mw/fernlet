@@ -24,6 +24,7 @@
 import CoreGraphics
 import FernletConnections
 import FernletDomainModel
+import FernletSocial
 import Foundation
 import ProximityKit
 import UIKit

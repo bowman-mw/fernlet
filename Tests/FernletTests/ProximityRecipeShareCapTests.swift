@@ -27,6 +27,7 @@
 // manager, whether the manager stores those values itself or forwards them from a session it drives.
 
 @testable import ProximityKit
+import FernletSocial
 import FernletConnections
 import Foundation
 import Observation

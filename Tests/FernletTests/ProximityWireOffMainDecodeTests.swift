@@ -21,6 +21,7 @@
 //      no shared-state data race.
 
 import ProximityKit
+import FernletSocial
 import Foundation
 import FernletCrypto
 import FernletFoundation

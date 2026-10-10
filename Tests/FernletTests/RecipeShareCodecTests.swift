@@ -1,4 +1,5 @@
 @testable import ProximityKit
+import FernletSocial
 import FernletConnections
 import Foundation
 import Testing

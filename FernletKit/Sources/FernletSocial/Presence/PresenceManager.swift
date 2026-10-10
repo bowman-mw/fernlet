@@ -410,7 +410,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// Local Network permission prompt guarantees on a fresh install's very first start.
     ///
     /// Stands the radio down (P8 item 0, device finding (b)), mirroring
-    /// `ProximityRecipeShareManager`'s handler: with `isRunning` left true the idempotent
+    /// `ProximityPairSession`'s handler: with `isRunning` left true the idempotent
     /// `start()` no-ops forever over a dead radio, and the app's run-policy seam — which
     /// re-applies a running verdict to a listener whose ``isListening`` says it is down — would
     /// have nothing to see. `didNotStart*` only fires from start attempts, but guard on no heart

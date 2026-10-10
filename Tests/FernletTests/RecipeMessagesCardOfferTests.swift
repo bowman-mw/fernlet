@@ -3,6 +3,7 @@ import Testing
 import FernletDomainModel
 import FernletExchange
 import ProximityKit
+import FernletSocial
 @testable import Fernlet
 
 /// What the recipe Share screen's "Send in Messages" row offers (`FernletStore.recipeMessagesCardOffer`),

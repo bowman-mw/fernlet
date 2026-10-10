@@ -1,6 +1,6 @@
 # ``FernletSocial``
 
-Fernlet's social features over ProximityKit's mechanisms: the mesh features the routed mesh engine carries — ``FernletMeshFeatures``, the composition that owns the engine and every feature on it (the session photos and their review, live-session chat, the in-session hearts with the heart ledger, the clothing shop, Group Activities, the moderation report relay, friend-state exchange, the capability list and the vouch list), and ``FernletRoutedTypes``, the routed-type rows those features ride — presence — ``PresenceManager``, which drives ProximityKit's presence radio so kept friends recognize each other nearby by rotating pairwise tags, and delivers in-person hearts over short-lived connections formed on that recognition — the heart dead-drop — ``HeartDropService``, the offline "away" hearts that ride an injected public-database transport as sealed blobs under rotating day tags, with its sealer, prekey store, sidecar stores and seal — moderation's device-local records — ``ModerationLedger``, the report rows; ``ModerationBanStore``, the tamper-resistant store-ban clock; and ``ModerationContentHash``, the key a report binds an artwork by — with the ``ClosenessLedger``, the ``FriendStateCache`` and its ``CachedFriendState`` rows, and ``TempMessagePayload``, the parked live-session chat payload.
+Fernlet's social features over ProximityKit's mechanisms: the mesh features the routed mesh engine carries — ``FernletMeshFeatures``, the composition that owns the engine and every feature on it (the session photos and their review, live-session chat, the in-session hearts with the heart ledger, the clothing shop, Group Activities, the moderation report relay, friend-state exchange, the capability list and the vouch list), and ``FernletRoutedTypes``, the routed-type rows those features ride — presence — ``PresenceManager``, which drives ProximityKit's presence radio so kept friends recognize each other nearby by rotating pairwise tags, and delivers in-person hearts over short-lived connections formed on that recognition — recipe sharing — ``ProximityRecipeShareManager``, which sends a recipe to a nearby Fernlet and queues the recipes nearby Fernlets send, over ProximityKit's one-to-one pair session under Fernlet's recipe profile, with the recipe payload's wire types — the heart dead-drop — ``HeartDropService``, the offline "away" hearts that ride an injected public-database transport as sealed blobs under rotating day tags, with its sealer, prekey store, sidecar stores and seal — moderation's device-local records — ``ModerationLedger``, the report rows; ``ModerationBanStore``, the tamper-resistant store-ban clock; and ``ModerationContentHash``, the key a report binds an artwork by — with the ``ClosenessLedger``, the ``FriendStateCache`` and its ``CachedFriendState`` rows, and ``TempMessagePayload``, the parked live-session chat payload.
 
 ## Overview
 
@@ -10,8 +10,9 @@ namespace, trust vault and session policies, live in `FernletConnections`; Fernl
 here, every byte they put on the wire, in the keychain or on disk the one Fernlet shipped (pinned
 below). The edge runs `FernletSocial` → ProximityKit, never the reverse, so ProximityKit can never
 name a type of this module, and `ProximityNamespaceBoundaryTests` refuses one declared, extended or
-aliased there again under its old name, which nothing else would notice. The one Fernlet feature
-still built into ProximityKit, the recipe-share manager, joins this module at plan step A0.7.
+aliased there again under its old name, which nothing else would notice. Recipe sharing, the last
+Fernlet feature ProximityKit held, is here too, over ProximityKit's one-to-one pair session (plan step
+A0.7).
 
 **The mesh features.** ProximityKit's `MeshNetworkManager` is a routed mesh engine: it forms the
 session, keeps the membership and the session roster, and carries routed items, and it knows no
@@ -358,7 +359,7 @@ over (`ProximityCoordinator`, with `ProximityPayloadHandling`, the host's rangin
 watches its coordinators through, `ProximityNamespaceGate`'s two manager doors, the peer-name coercion
 `ProximityDisplayName.peerDisplayName(_:in:)`, which every feature here re-moderates a peer's name
 through, the name display `PeerNameDisplay` (its identifier filter, which `FernletConnections`'
-`firstName` runs first) and the recipe-share diagnostics types its connection log rides. A heart
+`firstName` runs first). A heart
 connection sends and commits through the coordinator's public per-connection API: its token send,
 `sendPayload(payloadTypeToken:summary:payload:sealed:)`, under `PayloadType.friendHeart`'s raw value,
 and its manual commit, `commitManualProximity()`. The `package` doors, each of which
@@ -368,14 +369,40 @@ connection runs over (`NetworkPeerChannel`), the epoch posture (`PresenceEpochPo
 vocabulary (`PresenceAdvertisement`), until A1, when the seam is published as mechanism or wrapped by
 a presence engine.
 
+**Recipe sharing.** ``ProximityRecipeShareManager`` (`RecipeSharing/ProximityRecipeShareManager.swift`)
+is Fernlet's recipe share over ProximityKit's `ProximityPairSession`, which it builds at construction
+under FernletConnections' recipe profile on its host's own namespace
+(`ProximityPairProfile.recipeShare(in:)`: the recipe radio's row, the TXT mode `recipe`, the audit
+area `recipeShare`). The mechanism is the session's: discovery, the hard two-device cap, the identity
+handshake and commit, the status line with its 2.5 s clear, and the send outcome, each published to
+the share sheet through this manager's computed reads (`nearbyRecipients`, `sendState`,
+`lastShareOutcome`, `engagedRecipientID`, `isListening`), so a view observing the manager re-renders
+on the session's writes. What is the recipe's is here: the payload (``ProximityRecipeSharePayload``,
+`Wire/RecipeSharePayloads.swift`) and the summary `Recipe share` over its ingredient count, signed into
+every recipe envelope and never localized; the inbound rules (it is the session's payload handler: a
+1 MiB size gate before decoding, the format and version check, the 512 KiB image drop, the review
+clamps, a 3 s per-sender rate limit and an eight-share queue, ``PendingProximityRecipeShare``); and the
+English the share sheet shows, rendered from the session's typed status and events by one renderer
+whose switches are exhaustive, byte for byte the sentences the sheet renders verbatim. The session's
+events and the receive handler's own lines land in the diagnostics ring
+(``ProximityRecipeShareDiagnostics``, ``ProximityRecipeShareDiagnosticEvent``), which presence's
+connection log rides too. The body grows only by OPTIONAL keys on `version` 1: the saved arm's steps,
+the picture, and a multipart recipe's `components` partition on the local arm (the rule is documented
+in `FernletDomainModel`'s `RecipeComponentWire.swift`); an older peer's synthesized decode ignores them
+and still reads a whole recipe. The "Include notes" strip
+(``ProximityRecipeSharePayload/omittingShareNotes()``) withholds a local recipe's steps through
+`SharedRecipePayload.withoutSteps()`, which rewrites the partition to match. `FernletFeatureGoldenTests`
+group 31 pins the payload's JSON, the pairing's frames, persisted audit rows and status sentences,
+the copy's templates and the profile and constants.
+
 **What is still in ProximityKit.** The presence radio itself (its seam and QUIC conformer, its epoch
-posture and TXT vocabulary), the mechanism presence drives, and the routed mesh engine the mesh
-features ride, both for good; and the recipe-share manager, the one Fernlet feature still built into
-it, until A0.7, when it joins this module.
+posture and TXT vocabulary), the mechanism presence drives, the routed mesh engine the mesh features
+ride, and the one-to-one pair session recipe sharing runs over, each for good.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the
-declared salts the heart-drop and presence pair secrets derive under,
+declared salts the heart-drop and presence pair secrets derive under, the recipe share's pair
+profile, `ProximityPairProfile.recipeShare(in:)`,
 `FernletProximityStorage.productionDirectory`, Fernlet's proximity root, which is the production
 heart-drop scope's directory, `ProximityNamespace.fernlet`, whose routed types ``FernletRoutedTypes``
 reads, and the name placeholders,
@@ -384,8 +411,9 @@ delegates to; on `FernletCrypto`, for the dead-drop's, presence's and the ban st
 and the activities' and the moderation report's four signing labels; on `FernletDomainModel`, for the
 heart, moderation, closeness, friend-state and companion value types the stores keep, the friend
 records the dead-drop, presence and the session hearts read, the dead-drop's transport seam, the
-payload types and capabilities the features register, send and check, and the activity, clothing,
-photo-session and friend-state values the mesh features carry; on `FernletFoundation`, for
+payload types and capabilities the features register, send and check, the activity, clothing,
+photo-session and friend-state values the mesh features carry, and the recipe payload's models
+(`SharedRecipePayload`, `RecipeStep`, `Micronutrients`, `SharedRecipeLimits`); on `FernletFoundation`, for
 `KeychainItem`, `MonotonicClock`, `FernletAuditLog` and the `FernletDate` day key a presence or
 session heart carries; and on `PrivateMediaStore`, for the session photos' friend wall and sealed
 pending corpus, their keychain key providers and the capture's resize. It imports nothing else but
@@ -408,18 +436,20 @@ relay and the canonical bytes, whose bytes every relayed report's signature cove
 manager and its payloads, whose bytes every grant, roster and activity ledger covers; the JSON
 sidecar, whose encoder settings every ledger file already saved depends on; the `HeartSharing/`
 folder, which holds the dead-drop's seals, its keychain service and the derivations every drop in
-flight depends on, and the heart ledger and the session hearts beside them; and the presence tags'
-file, which every pair of friends recognizes each other by.
+flight depends on, and the heart ledger and the session hearts beside them; the presence tags'
+file, which every pair of friends recognizes each other by; and the recipe share's wire file and its
+`RecipeSharing/` folder, the payload's format and the summary signed into every recipe envelope.
 
 **Isolation.** The module is main-actor by default (`defaultIsolation(MainActor.self)` in
-`Package.swift`), matching ProximityKit: ``FernletMeshFeatures``, ``PresenceManager``, the session
-photos, chat, hearts, transcript store, clothing shop, activity manager, heart ledger, ban store, the
+`Package.swift`), matching ProximityKit: ``FernletMeshFeatures``, ``PresenceManager``,
+``ProximityRecipeShareManager``, the session photos, chat, hearts, transcript store, clothing shop, activity manager, heart ledger, ban store, the
 three ledgers and ``HeartDropService`` are main-actor classes, all but the composition `@Observable`,
 and the capability list, the vouch list, the two exchanges and the dead-drop's prekey store, outbox,
 dedup store and peer-bundle cache main-actor classes, as the main-actor store that owns them and the
 UI that observes them are; presence's pair secret and tag are main-actor members, as the identity
 whose key they read is. ``FernletRoutedTypes``, the routed bodies, the review values, the feature
-payloads, the ban record, ``CachedFriendState``, ``ModerationContentHash``, ``TempMessagePayload``,
+payloads, the recipe payload and its shapes, the diagnostics ring, the ban record, ``CachedFriendState``,
+``ModerationContentHash``, ``TempMessagePayload``,
 the ledgers' persisted shapes, ``HeartDropSealer``, ``HeartDropStorageScope``,
 ``HeartDropSidecarFormatCensus``, the heart-drop tag statics, the presence tag length, presence's
 pure first-name and heart-affordance statics and the mesh-scope derivations are `nonisolated`, so a
@@ -476,6 +506,17 @@ decode or a derivation never hops an actor.
 ### Presence and in-person hearts
 
 - ``PresenceManager``
+
+### Recipe sharing
+
+- ``ProximityRecipeShareManager``
+- ``ProximityRecipeSharePayload``
+- ``ProximitySharedRecipe``
+- ``ProximitySharedRecipeKind``
+- ``SharedSavedRecipePayload``
+- ``PendingProximityRecipeShare``
+- ``ProximityRecipeShareDiagnostics``
+- ``ProximityRecipeShareDiagnosticEvent``
 
 ### Away hearts
 

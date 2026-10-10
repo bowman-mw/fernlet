@@ -754,7 +754,7 @@ struct MeshContinuationTaskHostWallTests {
     ///
     /// Cell (e) pinned the mesh's door. This pins the half P8 left open — the coordinator's
     /// DEFAULT anchor, which three shipping construction sites take by omitting the argument
-    /// (`ProximityRecipeShareManager.handleChannelReady`, and `FernletSocial`'s `PresenceManager`'s
+    /// (`ProximityPairSession.handleChannelReady`, and `FernletSocial`'s `PresenceManager`'s
     /// heart door and its teardown seam). Until P9 that default was the ActivityKit conformer, whose
     /// every request was doomed: the attributes type was internal to ProximityKit and
     /// `App/FernletWidgets/FernletWidgetsBundle.swift` declares no `ActivityConfiguration` for it,

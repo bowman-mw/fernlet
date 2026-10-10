@@ -36,8 +36,8 @@
 //      declares a default for a fact only the host may state (its namespace, install binding, trust
 //      policy, identity, routed rows, fallback name, ranging provider and storage root), read as
 //      declarations at the extension's top level, never as names;
-//   4. every channel-ready door that builds a connection's coordinator (the mesh's and the recipe
-//      radio's here, and presence's heart door in FernletSocial, Fernlet's half) builds it over its
+//   4. every channel-ready door that builds a connection's coordinator (the mesh's and the pair
+//      session's here, and presence's heart door in FernletSocial, Fernlet's half) builds it over its
 //      host's `makeProximityRangingProvider()`, once, naming no provider of its own, and
 //      `NIRangingSession` is named in ProximityKit code only in its own file;
 //   5. ProximityKit's macOS build is a compiled fact on every push: the package manifest declares
@@ -537,13 +537,13 @@ import Testing
         let signature: String
     }
 
-    /// The three doors that build one connection's coordinator: the mesh's and the recipe radio's in
+    /// The three doors that build one connection's coordinator: the mesh's and the pair session's in
     /// ProximityKit, and presence's heart door in FernletSocial, which is Fernlet's half and stays with
     /// Fernlet's walls when ProximityKit leaves the tree.
     static let channelReadyDoors = [
         Door(path: "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
              signature: "private func handleChannelReady("),
-        Door(path: "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
+        Door(path: "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift",
              signature: "private func handleChannelReady("),
         Door(path: "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
              signature: "private func handleHeartChannelReady(")

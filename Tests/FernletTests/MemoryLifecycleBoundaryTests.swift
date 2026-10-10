@@ -39,7 +39,8 @@
 //       itself a call: `MeshNetworkManager(store: makeTestStore(), …)` gives the manager a host that
 //       dies at the end of the expression (invariant HP0), which is a dangling `unowned` from birth.
 //       The mesh composition's two constructions, `FernletMeshFeatures(host:` and the test rig's
-//       `FernletMeshRig.features(store:`, are held to the same rule.
+//       `FernletMeshRig.features(store:`, and the recipe pair session's, `ProximityPairSession(host:`,
+//       are held to the same rule.
 //
 // Every scan discovers its inputs from the file system and carries a hard FLOOR (a moved root or a
 // broken enumerator must fail loudly, never pass vacuously — the S3BoundaryTests house rule), every
@@ -71,9 +72,10 @@ struct MemoryLifecycleBoundaryTests {
     /// Files with a block-based observer today; a wall that finds fewer has stopped looking.
     static let minimumObserverFiles = 2
 
-    /// Files holding an `unowned` `ProximityHost` today, five: the four proximity managers (the mesh
-    /// and recipe-share managers in ProximityKit, presence and the activity manager in FernletSocial)
-    /// and, since ProximityKit plan step A0.5.5, the mesh features' `FernletMeshHost`; presence and the
+    /// Files holding an `unowned` `ProximityHost` today, five: the mesh manager and the recipe pair
+    /// session in ProximityKit (FernletSocial's recipe-share manager holds none: its session does),
+    /// presence and the activity manager in FernletSocial, and, since ProximityKit plan step A0.5.5,
+    /// the mesh features' `FernletMeshHost`; presence and the
     /// holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10. Pinned at today's
     /// count (plan step A0.5.13): a matcher that finds fewer has stopped looking, or a holder has left
     /// the scan, and either fails here; a new holder raises the count, and is found and held to ML4.
@@ -308,11 +310,13 @@ struct MemoryLifecycleBoundaryTests {
     /// `MeshNetworkManager(store: makeTestStore(), …)` trips; `MeshNetworkManager(store: store)` and
     /// `PresenceManager(store: host, ledger: ledger)` pass. The mesh composition is held the same way
     /// (ProximityKit plan step A0.5.5): `FernletMeshFeatures(host: makeTestStore())` and
-    /// `FernletMeshRig.features(store: makeTestStore())` trip. Known narrowness, stated on purpose: a
+    /// `FernletMeshRig.features(store: makeTestStore())` trip, and so does the recipe pair session,
+    /// which holds the host the manager over it does not: `ProximityPairSession(host: makeTestStore(),
+    /// …)`. Known narrowness, stated on purpose: a
     /// multi-line call with `store:` on its own line is not matched — this covers the one shape that
     /// has ever occurred in the tree, and ML5 is a ratchet on a repaired site, not a proof.
     static let inlineHostPattern =
-        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\(|FernletMeshFeatures\(\s*host:\s*\w+\(|FernletMeshRig\.features\(\s*store:\s*\w+\("#
+        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\(|ProximityPairSession\(\s*host:\s*\w+\(|FernletMeshFeatures\(\s*host:\s*\w+\(|FernletMeshRig\.features\(\s*store:\s*\w+\("#
 
     /// Whether `line` constructs a `Task`. `///` documentation lines are excluded (the helper's own
     /// doc comment quotes the literal it replaces), as is a match that sits after a `//` on the line.
@@ -437,7 +441,7 @@ struct MemoryLifecycleBoundaryTests {
         #expect(violations.isEmpty, """
             ML1: these files store a Task<…> handle but neither cancel it in a deinit / isolated deinit \
             nor state an allowlisted invariant. Add `isolated deinit { <handle>?.cancel() }` (the pattern \
-            MeshNetworkManager / PresenceManager / ProximityRecipeShareManager use), or add an Exemption \
+            MeshNetworkManager / PresenceManager / ProximityPairSession use), or add an Exemption \
             naming the invariant that makes the missing cancel safe:
             \(violations.joined(separator: "\n"))
             """)

@@ -11,7 +11,7 @@
 //
 // TRANSPORT SEAM (deferred): a coach is NOT a friend. When the dedicated coaching feature ships, this
 // bundle will travel over the separate `fernlet-coach` trainer channel (`ProximityMode.trainer`, a
-// service type its radio profile brings, the coordinator's public token send
+// service type the pair session's coach profile brings at C5, the coordinator's public token send
 // `ProximityCoordinator.sendPayload(payloadTypeToken:summary:payload:sealed:)`) to a coach running the
 // separate coaching app — never over the friend mesh. Until then the app shares the reviewed bundle as a
 // file. This type + `PayloadType.workoutCompletion`'s membership in Fernlet's `payloads.sealingRequired` (so an

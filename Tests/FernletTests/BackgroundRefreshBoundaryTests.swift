@@ -354,6 +354,7 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "ProximityCoordinator", why: "the proximity fan-out"),
         Spelling(token: "PresenceManager", why: "the presence listener"),
         Spelling(token: "ProximityRecipeShareManager", why: "the recipe-share listener"),
+        Spelling(token: "ProximityPairSession", why: "the recipe-share listener's radio owner"),
         Spelling(token: "MeshContinuationDriver", why: "the continuation claim; a refresh task is not a continuation task", isAppDeclaration: true),
         Spelling(token: "MeshContinuationTaskHost", why: "the continuation's scheduler half", isAppDeclaration: true),
         Spelling(token: "BGContinuedProcessingTask", why: "the mesh's task class — the refresh uses `BGAppRefreshTask`"),
@@ -500,7 +501,12 @@ struct BackgroundRefreshBoundaryTests {
     /// **85 at ProximityKit plan step A0.5.5**, which added `meshFeatures`: the store's mesh
     /// composition (FernletSocial's `FernletMeshFeatures`), which builds and owns the mesh manager, so
     /// it hands out the radio manager exactly as `meshNetworkManager`, now a read of it, does.
-    static let measuredSpellingCount = 85
+    ///
+    /// **86 at ProximityKit plan step A0.7.3**, which added `ProximityPairSession`: ProximityKit's
+    /// one-to-one pair session, which owns the recipe-share listener's radio, identity and pairings
+    /// beneath FernletSocial's recipe-share manager, so a refresh file that named it would reach the
+    /// listener without naming the manager.
+    static let measuredSpellingCount = 86
 
     /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
     /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set

@@ -4111,6 +4111,14 @@ struct FernletFeatureGoldenTests {
                 "a refused start recorded \(refused.messages)")
     }
 
+    /// 31f's recipe profile: the audit area `recipeShare`, the recipe radio's row
+    /// (`_fernlet-recipe2._udp`, `fernlet-recipe-v1`) and the TXT mode `recipe`, the values the recipe
+    /// radio and its manager spelled before the profile existed.
+    static let frozenRecipeProfile = ProximityPairProfile(
+        auditArea: "recipeShare",
+        radio: ProximityNamespace.Radio(serviceType: "_fernlet-recipe2._udp", alpn: "fernlet-recipe-v1"),
+        advertisementMode: "recipe")
+
     /// 31e's frozen templates: every code literal in the recipe share's copy holding a space, each
     /// interpolation read as `\(…)`, the forty the copy census finds there.
     static let frozenRecipeCopyTemplates = [
@@ -4206,8 +4214,9 @@ struct FernletFeatureGoldenTests {
 
     /// **31e.** The recipe copy is its frozen templates in its home: the code literals of
     /// ``recipeCopyHomes`` that hold a space (lexed as Swift reads them, comments out), each
-    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct. And
-    /// the render row: every event and every status failure, each argument a distinct sentinel,
+    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct; and no
+    /// ProximityKit file holds one of the forty as a literal, so none comes back to the pair session.
+    /// And the render row: every event and every status failure, each argument a distinct sentinel,
     /// renders to its frozen sentence, and every status maps to the status line that names the same
     /// case, a failure to its sentence, so two arguments swapped inside one template, or two cases'
     /// sentences exchanged, fail here though the set of templates is unchanged.
@@ -4224,6 +4233,15 @@ struct FernletFeatureGoldenTests {
             the copy's templates moved: missing \(frozen.subtracting(found).sorted()), \
             unexpected \(found.subtracting(frozen).sorted())
             """)
+        var strays: [String] = []
+        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        // R2: bounded by ProximityKit's file list.
+        for source in sources {
+            let held = Set(source.lexed.literals.map { Self.normalizingInterpolations($0.text) }).intersection(frozen)
+            strays += held.sorted().map { "\(source.path): \($0)" }
+        }
+        #expect(sources.count >= 50, "the ProximityKit walk read only \(sources.count) Swift files")
+        #expect(strays.isEmpty, "the recipe copy is back in ProximityKit: \(strays)")
         Self.expectRecipeRenderings()
     }
 
@@ -4281,16 +4299,21 @@ struct FernletFeatureGoldenTests {
     }
 
     /// **31f.** The recipe and heart sends keep their constants and spellings: the 12 s connect timeout,
-    /// the radio's one tunnel and two pending inbound connections, and ``recipeConstantsPaths``' rows,
-    /// each needle counted exactly in its file or its brace-matched body (comments dropped): the door's
-    /// 25 s handshake, its friend-mode browser start, its retained trust policy and its default
-    /// capabilities and plain introduction; the parked timeout and sweep, the status clear, the
-    /// inbound cap and rate limit, the summary's title, the payload's encoder and the identity
-    /// checks' audit events; and the heart delivery's token, title and seal.
+    /// Fernlet's recipe profile (``frozenRecipeProfile``: the recipe radio's row, the TXT mode and the
+    /// audit area), the radio's one tunnel and two pending inbound connections, and
+    /// ``recipeConstantsPaths``' rows, each needle counted exactly in its file or its brace-matched body
+    /// (comments dropped): the door's 25 s handshake, its friend-mode browser start, its retained trust
+    /// policy and its default capabilities and plain introduction; the parked timeout and sweep, the
+    /// status clear and the identity checks' audit events, spelled in full under the profile's area;
+    /// the inbound cap and rate limit, the summary's title and the payload's encoder; and the heart
+    /// delivery's token, title and seal.
     @Test func theRecipeAndHeartSendsKeepTheirConstantsAndSpellings() throws {
         let rig = try RecipePairingRig()
         defer { rig.tearDown() }
-        #expect(rig.manager.connectTimeoutSeconds == 12, "the connect timeout is \(rig.manager.connectTimeoutSeconds) s")
+        let connectTimeout = Self.recipeConnectTimeoutSeconds(rig.manager)
+        #expect(connectTimeout == 12, "the connect timeout is \(connectTimeout) s")
+        #expect(Self.recipeProfile(in: .fernlet) == Self.frozenRecipeProfile,
+                "Fernlet's recipe profile is \(Self.recipeProfile(in: .fernlet))")
         #expect(NetworkRecipeShareSession.maxTunnels == 1, "the recipe radio holds \(NetworkRecipeShareSession.maxTunnels) tunnels")
         #expect(NetworkRecipeShareSession.maxPendingInbound == 2,
                 "the recipe radio holds \(NetworkRecipeShareSession.maxPendingInbound) pending inbound connections")
@@ -5334,7 +5357,7 @@ extension FernletFeatureGoldenTests {
 
     /// The ranging provider Fernlet's host builds one connection's coordinator over: since plan step
     /// A0.6.3 its host's `makeProximityRangingProvider()` (`ProximityHostAdapter.swift`), which the
-    /// mesh's and the recipe radio's channel-ready doors in ProximityKit and presence's heart door in
+    /// mesh's and the pair session's channel-ready doors in ProximityKit and presence's heart door in
     /// FernletSocial each call once per connection; until then each door's own `NIRangingSession()`.
     static func rangingProvider(of store: FernletStore) -> any RangingProvider {
         store.makeProximityRangingProvider()
@@ -5359,12 +5382,29 @@ extension FernletFeatureGoldenTests {
     /// The activity manager, whose two sends carry the raw local name: today FernletSocial's.
     static let activityManagerPath = "FernletKit/Sources/FernletSocial/Activities/ProximityActivityManager.swift"
 
-    /// A recipe-share manager over `host`, driving `radio` and holding `identity`: today the manager's
-    /// test seam, `ProximityRecipeShareManager(store:makeSession:identity:)`.
+    /// A recipe-share manager over `host`, driving `radio` and holding `identity`: since plan step
+    /// A0.7.3 FernletSocial's manager over a `ProximityPairSession` built explicitly, under Fernlet's
+    /// recipe profile on `.fernlet` (FernletConnections' `recipeShare(in:)`), with the session's radio
+    /// and identity seam (`init(host:profile:makeRadio:identity:)`); until then the manager's own test
+    /// seam, `ProximityRecipeShareManager(store:makeSession:identity:)`.
     static func recipeManager(
         host: any ProximityHost, radio: FakeRecipeShareRadioSession, identity: IdentityService
     ) -> ProximityRecipeShareManager {
-        ProximityRecipeShareManager(store: host, makeSession: { radio }, identity: identity)
+        ProximityRecipeShareManager(pairSession: ProximityPairSession(
+            host: host, profile: .recipeShare(in: .fernlet), makeRadio: { radio }, identity: identity))
+    }
+
+    /// The pre-connect timeout a recipe-share manager's pairing waits: since plan step A0.7.3 its pair
+    /// session's `connectTimeoutSeconds`, read on the session; until then the manager's own.
+    static func recipeConnectTimeoutSeconds(_ manager: ProximityRecipeShareManager) -> TimeInterval {
+        manager.pairSession.connectTimeoutSeconds
+    }
+
+    /// Fernlet's recipe profile under `namespace`: since plan step A0.7.3 FernletConnections'
+    /// `ProximityPairProfile.recipeShare(in:)`; before it, the radio read its row off the namespace and
+    /// the advertisement and the manager spelled the mode and the audit area themselves.
+    static func recipeProfile(in namespace: ProximityNamespace) -> ProximityPairProfile {
+        .recipeShare(in: namespace)
     }
 
     /// The recipe title a share's outcome names: since plan step A0.7.2
@@ -5380,32 +5420,34 @@ extension FernletFeatureGoldenTests {
         ProximityPairPeer(id: id, displayName: name, fingerprint: nil)
     }
 
-    /// The recipe share's diagnostic event, the typed value 31e's render row renders: today the
-    /// recipe-share manager's `ProximityRecipeShareManager.Event`.
-    typealias RecipeEvent = ProximityRecipeShareManager.Event
+    /// The recipe share's diagnostic event, the typed value 31e's render row renders: since plan step
+    /// A0.7.3 the pair session's `ProximityPairSession.Event`; until then the recipe-share manager's.
+    typealias RecipeEvent = ProximityPairSession.Event
 
-    /// The recipe share's typed status line, whose failures 31e's render row renders: today the
-    /// recipe-share manager's `ProximityRecipeShareManager.Status`.
-    typealias RecipeStatus = ProximityRecipeShareManager.Status
+    /// The recipe share's typed status line, whose failures 31e's render row renders: since plan step
+    /// A0.7.3 the pair session's `ProximityPairSession.Status`; until then the recipe-share manager's.
+    typealias RecipeStatus = ProximityPairSession.Status
 
-    /// The diagnostics line the recipe share shows for `event`: today the recipe-share manager's
-    /// renderer, `ProximityRecipeShareManager.diagnostic(for:)`.
+    /// The diagnostics line the recipe share shows for `event`: the recipe-share manager's renderer,
+    /// `ProximityRecipeShareManager.diagnostic(for:)`, FernletSocial's since plan step A0.7.3.
     static func renderDiagnostic(_ event: RecipeEvent) -> String {
         ProximityRecipeShareManager.diagnostic(for: event)
     }
 
-    /// The status line's sentence for `failure`: today `ProximityRecipeShareManager.statusMessage(for:)`.
+    /// The status line's sentence for `failure`: `ProximityRecipeShareManager.statusMessage(for:)`,
+    /// FernletSocial's since plan step A0.7.3.
     static func renderStatusMessage(_ failure: RecipeStatus.Failure) -> String {
         ProximityRecipeShareManager.statusMessage(for: failure)
     }
 
-    /// The status line the share sheet shows for `status`: today
-    /// `ProximityRecipeShareManager.sendState(for:)`.
+    /// The status line the share sheet shows for `status`: `ProximityRecipeShareManager.sendState(for:)`,
+    /// FernletSocial's since plan step A0.7.3.
     static func renderSendState(_ status: RecipeStatus) -> ProximityRecipeShareManager.SendState {
         ProximityRecipeShareManager.sendState(for: status)
     }
 
-    /// 31a's saved recipe, `Shared Oats`, under `id`: today a `ProximityRecipeSharePayload` over a saved
+    /// 31a's saved recipe, `Shared Oats`, under `id`: a `ProximityRecipeSharePayload` (FernletSocial's
+    /// since plan step A0.7.3) over a saved
     /// `ProximitySharedRecipe` (two servings, 10 g protein, 20 g carbohydrate, 3 g fat, 4 g fibre, two
     /// ingredients, one step), sent 780 000 000.5 s after the reference date, with a six-byte picture.
     static func recipeOatsPayload(id: UUID) -> ProximityRecipeSharePayload {
@@ -5452,12 +5494,19 @@ extension FernletFeatureGoldenTests {
         }
     }
 
-    /// The files that hold the recipe share's copy: today the recipe-share manager in ProximityKit.
-    static let recipeCopyHomes = ["FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift"]
+    /// The files that hold the recipe share's copy: since plan step A0.7.3 the recipe-share manager in
+    /// FernletSocial, which renders the pair session's typed status and events; until then the manager
+    /// in ProximityKit.
+    static let recipeCopyHomes = ["FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"]
 
-    /// The file that holds the recipe pairing's channel-ready door and the recipe share's constants:
-    /// today the recipe-share manager in ProximityKit.
-    static let recipeDoorPath = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift"
+    /// The file that holds the recipe pairing's channel-ready door and the pair session's constants:
+    /// since plan step A0.7.3 ProximityKit's pair session; until then the recipe-share manager there.
+    static let recipeDoorPath = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
+
+    /// The file that holds the recipe share's own constants (the inbound queue and rate limit, the
+    /// signed summary and the payload's encoder): since plan step A0.7.3 FernletSocial's recipe-share
+    /// manager; until then the manager's file in ProximityKit, which also held the door.
+    static let recipeFeaturePath = "FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"
 
     /// The file that holds the heart delivery, presence's send through the coordinator's payload door.
     static let heartDeliveryPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
@@ -5474,12 +5523,12 @@ extension FernletFeatureGoldenTests {
         (recipeDoorPath, nil, "parkedConnectionTimeoutSeconds: TimeInterval = 30", 1),
         (recipeDoorPath, nil, "parkedSweepIntervalSeconds: TimeInterval = 5", 1),
         (recipeDoorPath, nil, ".seconds(2.5)", 1),
-        (recipeDoorPath, nil, "maxPendingShares = 8", 1),
-        (recipeDoorPath, nil, "perSenderRateLimitSeconds: TimeInterval = 3", 1),
-        (recipeDoorPath, nil, #"title: "Recipe share""#, 1),
-        (recipeDoorPath, nil, "JSONEncoder().encode(", 1),
-        (recipeDoorPath, nil, #""recipeShare.identity.namespaceMismatch""#, 2),
-        (recipeDoorPath, nil, #""recipeShare.identity.provisionFailed""#, 1),
+        (recipeFeaturePath, nil, "maxPendingShares = 8", 1),
+        (recipeFeaturePath, nil, "perSenderRateLimitSeconds: TimeInterval = 3", 1),
+        (recipeFeaturePath, "public func sendRecipeShare(", #"title: "Recipe share""#, 1),
+        (recipeFeaturePath, "public func sendRecipeShare(", "JSONEncoder().encode(", 1),
+        (recipeDoorPath, nil, #""\(profile.auditArea).identity.namespaceMismatch""#, 2),
+        (recipeDoorPath, nil, #""\(profile.auditArea).identity.provisionFailed""#, 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", "payloadTypeToken: PayloadType.friendHeart.rawValue", 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", #"PayloadSummary(title: "Good vibes")"#, 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", "sealed: true", 1)

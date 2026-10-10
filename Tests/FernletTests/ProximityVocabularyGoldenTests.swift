@@ -1428,7 +1428,7 @@ struct ProximityVocabularyGoldenTests {
     /// identity sits on a throwaway service it never writes.
     static func presentationReadings(of namespace: ProximityNamespace) throws -> PresentationReadings {
         let mesh = NetworkMeshSession(namespace: namespace)
-        let recipe = NetworkRecipeShareSession(namespace: namespace)
+        let recipe = NetworkRecipeShareSession(namespace: namespace, profile: .recipeShare(in: namespace))
         let recipePosture = try recipe.runWithoutRadiosForTesting()
         recipe.stop()
         let host = PresentationNamespaceHost(namespace: namespace)
@@ -2488,21 +2488,25 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 15 — the recipe pair session's advertisement and envelope
 
-    /// The TXT fields a recipe-share manager over `host` hands its radio to advertise: today
-    /// `ProximityRecipeShareManager(store: host).discoveryInfoForTesting`, the production builder.
+    /// The TXT fields a recipe-share manager over `host` hands its radio to advertise: since plan step
+    /// A0.7.3 its pair session's, `ProximityRecipeShareManager(store: host).pairSession.discoveryInfoForTesting`,
+    /// the production builder (read on the session directly, never through a test binding); until then
+    /// the manager's own.
     static func recipeAdvertisedFields(host: any ProximityHost) -> [String: String] {
-        ProximityRecipeShareManager(store: host).discoveryInfoForTesting
+        ProximityRecipeShareManager(store: host).pairSession.discoveryInfoForTesting
     }
 
-    /// The radio a recipe-share manager over `host` builds for itself: today
-    /// `ProximityRecipeShareManager(store: host).radioForTesting`.
+    /// The radio a recipe-share manager over `host` builds: since plan step A0.7.3 its pair session's,
+    /// `ProximityRecipeShareManager(store: host).pairSession.radioForTesting`; until then the manager's own.
     static func recipeManagerRadio(host: any ProximityHost) -> any RecipeShareRadioSession {
-        ProximityRecipeShareManager(store: host).radioForTesting
+        ProximityRecipeShareManager(store: host).pairSession.radioForTesting
     }
 
-    /// The recipe radio for `namespace`, built explicitly: today `NetworkRecipeShareSession(namespace:)`.
+    /// The recipe radio for `namespace`, built explicitly: since plan step A0.7.3
+    /// `NetworkRecipeShareSession(namespace:profile:)` under Fernlet's recipe profile on `namespace`,
+    /// FernletConnections' `recipeShare(in:)`; until then `NetworkRecipeShareSession(namespace:)`.
     static func recipeRadio(namespace: ProximityNamespace) -> NetworkRecipeShareSession {
-        NetworkRecipeShareSession(namespace: namespace)
+        NetworkRecipeShareSession(namespace: namespace, profile: .recipeShare(in: namespace))
     }
 
     /// The canonical bytes of 15b's recipe envelope, schema 2 under `.fernlet`'s labels: 336 bytes,

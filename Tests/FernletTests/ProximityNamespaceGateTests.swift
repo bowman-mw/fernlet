@@ -140,7 +140,8 @@ struct ProximityNamespaceGateTests {
     /// its start, reached here with no listener or browser, throws every violation and writes
     /// `recipe.quic.namespaceUnsound` at `start`, and nothing else, before it mints a posture.
     @Test func theRecipeShareRadioRefusesToStartUnderAnUnsoundNamespace() {
-        let radio = NetworkRecipeShareSession(namespace: GateFixtureApp.unsound())
+        let unsound = GateFixtureApp.unsound()
+        let radio = NetworkRecipeShareSession(namespace: unsound, profile: .recipeShare(in: unsound))
         defer { radio.stop() }
         #expect(radio.namespaceSoundness == .unsound(GateFixtureApp.unsoundViolations),
                 "the recipe-share radio keeps \(radio.namespaceSoundness), not its namespace's verdict")
@@ -344,7 +345,10 @@ struct ProximityNamespaceGateTests {
     /// The recipe-share manager handed an identity of another namespace constructs, writes
     /// `recipeShare.identity.namespaceMismatch` once at `construction`, and refuses every start of its
     /// radio with it at `start`: its radio is never started and it never reads as listening. Handed an
-    /// identity of its own namespace, it writes no such line and starts.
+    /// identity of its own namespace, it writes no such line and starts. And its pair session's profile
+    /// check: a pair session whose profile is not of its host's namespace (a radio that is not one of
+    /// the namespace's pair-session rows, or an empty TXT mode) is refused the same way, under
+    /// `recipeShare.profile.namespaceMismatch` (``expectTheProfileCheckRefuses(identityService:)``).
     @Test func theRecipeShareManagerRefusesToStartItsRadioUnderAnIdentityOfAnotherNamespace() throws {
         let event = "recipeShare.identity.namespaceMismatch"
         let services = [Self.isolatedIdentityService(), Self.isolatedIdentityService()]
@@ -369,7 +373,7 @@ struct ProximityNamespaceGateTests {
         #expect(!radio.isStarted && radio.advertised.isEmpty,
                 "the recipe-share manager started its radio under two namespaces")
         #expect(!mismatched.isListening, "the refused recipe-share manager reads as listening")
-        withExtendedLifetime(store) {}   // `ProximityRecipeShareManager.store` is `unowned`
+        withExtendedLifetime(store) {}   // its pair session's `store` is `unowned`
 
         let ownStore = makeTestStore()
         let ownRadio = FakeRecipeShareRadioSession()
@@ -386,6 +390,43 @@ struct ProximityNamespaceGateTests {
                 "a recipe-share manager of its own namespace did not start its radio")
         matched.stop()
         withExtendedLifetime(ownStore) {}
+        try Self.expectTheProfileCheckRefuses(identityService: services[1])
+    }
+
+    /// The pair session's profile check, a row of the recipe-share manager's cell: a
+    /// `ProximityPairSession` over the store, holding an identity of the store's own namespace, whose
+    /// profile names a radio that is not one of the namespace's pair-session rows (the mesh's), or the
+    /// recipe row under an empty TXT mode, constructs, writes `recipeShare.profile.namespaceMismatch`
+    /// once at `construction` and at each of two starts, never starts its radio, never reads as
+    /// listening and writes no `recipeShare.identity.*` line.
+    private static func expectTheProfileCheckRefuses(identityService: String) throws {
+        let store = makeTestStore()
+        let radios = store.proximityNamespace.family.radios
+        let profiles = [
+            ProximityPairProfile(auditArea: "recipeShare", radio: radios.mesh, advertisementMode: "recipe"),
+            ProximityPairProfile(auditArea: "recipeShare", radio: radios.recipeShare, advertisementMode: "")
+        ]
+        // R2: bounded by the two profiles.
+        for profile in profiles {
+            let radio = FakeRecipeShareRadioSession()
+            let identity = IdentityService(namespace: store.proximityNamespace, keychainService: identityService)
+            var built: ProximityPairSession?
+            let construction = GateAuditLines.delivered {
+                built = ProximityPairSession(host: store, profile: profile, makeRadio: { radio }, identity: identity)
+            }
+            let session = try #require(built, "the pair session did not construct")
+            let starts = GateAuditLines.delivered {
+                session.start()
+                session.start()
+            }
+            expectRefusedTwice("recipeShare.profile.namespaceMismatch", construction: construction, starts: starts)
+            #expect(!radio.isStarted && radio.advertised.isEmpty,
+                    "a pair session started its radio under a profile its namespace never vetted: \(profile)")
+            #expect(!session.isListening, "a pair session under a refused profile reads as listening: \(profile)")
+            let identityLines = (construction + starts).filter { $0.event.hasPrefix("recipeShare.identity.") }
+            #expect(identityLines.isEmpty, "a refused profile's session wrote \(identityLines)")
+        }
+        withExtendedLifetime(store) {}   // `ProximityPairSession.store` is `unowned`
     }
 
     /// Each manager handed no identity asks its host's `makeProximityIdentity()` for one and checks it
@@ -623,7 +664,7 @@ struct ProximityNamespaceGateTests {
     /// start runs passes that verdict without a line; the refusal cells above prove the starts run it.
     @Test func aSoundNamespacePassesTheRadiosDoors() throws {
         let sound = GateFixtureApp.sound()
-        let recipe = NetworkRecipeShareSession(namespace: sound)
+        let recipe = NetworkRecipeShareSession(namespace: sound, profile: .recipeShare(in: sound))
         defer { recipe.stop() }
         var posture: RecipeSharePosture?
         let recipeLines = try GateAuditLines.delivered { posture = try recipe.runWithoutRadiosForTesting() }

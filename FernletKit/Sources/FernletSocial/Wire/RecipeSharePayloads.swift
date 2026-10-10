@@ -1,9 +1,10 @@
 import Foundation
 import FernletDomainModel
 
-// WI-9: wire recipe-share payloads marked `nonisolated, Sendable` — see the note in MeshPayloads.swift.
-// ProximityKit's `.defaultIsolation(MainActor.self)` would otherwise MainActor-isolate these value
-// types and their synthesized `Codable` conformances, blocking off-main decode under Swift 6.
+// WI-9: wire recipe-share payloads marked `nonisolated, Sendable` — see the note in ProximityKit's
+// MeshPayloads.swift. FernletSocial's `.defaultIsolation(MainActor.self)`, like ProximityKit's, would
+// otherwise MainActor-isolate these value types and their synthesized `Codable` conformances, blocking
+// off-main decode under Swift 6.
 /// The `.recipeShare` wire body: format/version markers plus one ``ProximitySharedRecipe``.
 ///
 /// Built by the app's share sheet, sent sealed by ``ProximityRecipeShareManager``, and received

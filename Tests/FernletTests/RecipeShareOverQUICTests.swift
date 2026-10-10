@@ -13,6 +13,7 @@
 // drive it over `FakeRecipeShareRadioSession`, the in-memory conformer of the seam pass 2 added.
 
 @testable import ProximityKit
+import FernletSocial
 import FernletConnections
 import Combine
 import Foundation
@@ -508,7 +509,7 @@ struct RecipeShareOverQUICTests {
     /// the connection itself and refused every inbound dial there is — end to end, both users see
     /// the sender's 12 s "that Fernlet may be busy sharing with someone else".
     ///
-    /// The gate is wired the shape `ProximityRecipeShareManager` wires it, ending in
+    /// The gate is wired the shape `ProximityPairSession` wires it, ending in
     /// `hasConnectingPeers(besides:)`, because that is where the question is actually asked.
     @Test func theOnlyInboundDialInFlightIsAdmitted() throws {
         let radio = NetworkRecipeShareSession()
@@ -934,9 +935,9 @@ struct RecipeShareOverQUICTests {
         for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",
                        "PeerChannelTransport", "shouldAcceptInvitation", "hasPendingConnections",
                        "disconnectPeer"] {
-            #expect(!code.contains(needle), "ProximityRecipeShareManager still names `\(needle)` in code")
+            #expect(!code.contains(needle), "ProximityPairSession still names `\(needle)` in code")
         }
-        // One FILE is not the unit: an `extension ProximityRecipeShareManager` in a new file, or a
+        // One FILE is not the unit: an `extension ProximityPairSession` in a new file, or a
         // `typealias`, reintroduces every needle above without reddening a scan of this one. The
         // subtree is, and `displayHint` joins the list — under QUIC the hint is empty, so a reader
         // that still prefers it renders nothing where a name belongs.
@@ -958,7 +959,7 @@ struct RecipeShareOverQUICTests {
         // history and is the sentence that explains why the posture is ephemeral at all.
         for needle in ["MCPeerID", "MCSession", "MCNearbyServiceAdvertiser", "MCNearbyServiceBrowser"] {
             #expect(!source.contains(needle),
-                    "a ProximityRecipeShareManager comment still describes `\(needle)` machinery")
+                    "a ProximityPairSession comment still describes `\(needle)` machinery")
         }
     }
 
@@ -978,8 +979,8 @@ struct RecipeShareOverQUICTests {
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
         #expect(plist.contains("<string>\(radios.recipeShare.serviceType)</string>"))
         let session = try Self.sessionSource()
-        #expect(session.contains("alpn = namespace.family.radios.recipeShare.alpn"),
-                "the session reads its ALPN off the host's namespace, from its own radio's field")
+        #expect(session.contains("alpn = profile.radio.alpn"),
+                "the session reads its ALPN off its pair profile's radio, the host namespace's recipe row")
         #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
     }
 
@@ -999,15 +1000,17 @@ struct RecipeShareOverQUICTests {
         return RecipeShareCodec.proximityPayload(for: recipe, foodItems: [])
     }
 
+    /// The recipe radio's owner, ProximityKit's pair session (the recipe-share manager's mechanism
+    /// until plan step A0.7.3, when the manager left for FernletSocial over it).
     private static let managerPath =
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift"
+        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
 
     private static func managerSource() throws -> String {
         try RepoRoot.source(managerPath)
     }
 
     /// Every Swift file under `RecipeSharing/`, plus any file ANYWHERE in ProximityKit that
-    /// extends the manager — the unit the rule-7 scan has to cover, because one file is not it.
+    /// extends the pair session — the unit the rule-7 scan has to cover, because one file is not it.
     private static func recipeSharingSources() throws -> [(String, String)] {
         let root = "FernletKit/Sources/ProximityKit"
         let directory = RepoRoot.url(root)
@@ -1023,7 +1026,7 @@ struct RecipeShareOverQUICTests {
             .compactMap { $0 as? String }.filter { $0.hasSuffix(".swift") } ?? []
         for relative in all.sorted().prefix(512) where !relative.hasPrefix("RecipeSharing/") {
             let source = try RepoRoot.source("\(root)/\(relative)")
-            guard source.contains("extension ProximityRecipeShareManager") else { continue }
+            guard source.contains("extension ProximityPairSession") else { continue }
             sources.append(("\(root)/\(relative)", source))
         }
         return sources

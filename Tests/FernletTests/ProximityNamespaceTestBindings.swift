@@ -528,10 +528,26 @@ extension NetworkPresenceSession {
 /// The recipe-share radio's argument-less initializer, restored as ``NetworkMeshSession``'s is.
 extension NetworkRecipeShareSession {
 
-    /// `NetworkRecipeShareSession(namespace: .fernlet)`: the recipe-share radio on Fernlet's wire, the
-    /// radio the retired `init()` built.
+    /// `NetworkRecipeShareSession(namespace: .fernlet, profile: .recipeShare(in: .fernlet))`: the
+    /// recipe-share radio on Fernlet's wire under Fernlet's recipe profile (FernletConnections'), the
+    /// radio the retired `init()` built. No `init(namespace:)` comes back: it would read a row off the
+    /// caller's namespace, so the cells that pass one construct the radio explicitly.
     convenience init() {
-        self.init(namespace: .fernlet)
+        self.init(namespace: .fernlet, profile: .recipeShare(in: .fernlet))
+    }
+}
+
+/// The recipe advertisement's mode and session-id read in the shapes the suites were written
+/// against (plan step A0.7.3), when the advertisement spelled the recipe mode for itself.
+extension RecipeShareAdvertisement {
+
+    /// The mode Fernlet's recipe profile advertises, read off `ProximityPairProfile.recipeShare(in:
+    /// .fernlet)`: the value the retired `mode` constant held.
+    static var mode: String { ProximityPairProfile.recipeShare(in: .fernlet).advertisementMode }
+
+    /// `sessionID(from:mode:)` under ``mode``.
+    static func sessionID(from fields: [String: String]?) -> String? {
+        sessionID(from: fields, mode: mode)
     }
 }
 

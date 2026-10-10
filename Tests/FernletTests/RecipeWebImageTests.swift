@@ -3,6 +3,7 @@ import Testing
 import UIKit
 import FernletDomainModel
 import ProximityKit
+import FernletSocial
 @testable import Fernlet
 
 /// Feature coverage for "the page's picture becomes a recipe's default photo" (owner decision
