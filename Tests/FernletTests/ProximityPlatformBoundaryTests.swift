@@ -10,7 +10,8 @@
 // of the device's name, a platform directory and a default for a fact only the host may state all
 // compile clean on iOS and pass every other test. So this suite reads ProximityKit's source through
 // `ProximityNamespaceBoundaryTests`' one walker (lexed: comments dropped, literals emptied) and holds
-// four rules, its readers fixtured both ways in a cell of their own:
+// four rules, its readers fixtured both ways in a cell of their own, and, since plan step A0.6.5, a
+// fifth that keeps the compiler half running:
 //
 //   1. every module a file imports (`import M`, `@preconcurrency import M`, `import struct M.X`) or
 //      tests for with `canImport(M)` is a neutral baseline module, available on both platforms, or an
@@ -28,7 +29,14 @@
 //   4. every channel-ready door that builds a connection's coordinator (the mesh's and the recipe
 //      radio's here, and presence's heart door in FernletSocial, Fernlet's half) builds it over its
 //      host's `makeProximityRangingProvider()`, once, naming no provider of its own, and
-//      `NIRangingSession` is named in ProximityKit code only in its own file.
+//      `NIRangingSession` is named in ProximityKit code only in its own file;
+//   5. ProximityKit's macOS build is a compiled fact on every push: the package manifest declares
+//      macOS 26 and ProximityKit's own product, the CI workflow's macOS step runs
+//      `Scripts/macos-build-selftest.sh` (whose negative leg plants an `import UIKit` in ProximityKit and
+//      greps the failure only a native macOS build gives, and whose positive leg builds the clean tree),
+//      `Scripts/macos-build-check.sh` holds the one `xcodebuild build` command for that product and
+//      native macOS, and the pre-push hook runs it; each read from what runs, never from a step's
+//      title, an `echo` or a comment, its readers fixtured both ways in the same cell.
 //
 // The first three rules are ratchets both ways. A new use fails; a use that goes away fails too, until
 // its row is deleted. Each transient row names the plan step that deletes it, and later steps only
@@ -41,8 +49,11 @@
 // import and its `UIDevice` read at A0.6.2, when the host began stating the fallback name; at A0.6.3,
 // when the doors began asking their host for each connection's ranging provider, the NearbyInteraction
 // provider's file was guarded whole; and at A0.6.4 the Live Activity reaper's ActivityKit import left
-// with the reaper, which is the app's. Until ProximityKit builds for macOS on every push, this scan is
-// the only thing that sees a platform fact enter it.
+// with the reaper, which is the app's. Since A0.6.5 ProximityKit's closure builds for native macOS on
+// every push, the compiler half, which refuses any symbol native macOS lacks wherever it stands outside
+// its guard; this scan is the source half, which also sees a platform fact that compiles on both
+// platforms (a directory, a device-name read, a host default), and its fifth rule keeps the compiler
+// half running.
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -51,9 +62,10 @@ import Foundation
 import Testing
 
 /// ProximityKit imports only neutral modules and its declared platform seams, reads no device name,
-/// computes no platform directory and defaults no fact only its host may state, and every channel-ready
-/// door asks its host for each connection's ranging provider: five cells, the first three rules ratchets
-/// whose transient rows name the plan step that deletes them, and their readers fixtured both ways.
+/// computes no platform directory and defaults no fact only its host may state, every channel-ready
+/// door asks its host for each connection's ranging provider, and its native macOS build runs on every
+/// push: six cells, the first three rules ratchets whose transient rows name the plan step that deletes
+/// them, and their readers fixtured both ways.
 @Suite struct ProximityPlatformBoundaryTests {
 
     /// One ProximityKit file: its path under the module root and its lexed source, as
@@ -497,6 +509,168 @@ import Testing
             """)
     }
 
+    // MARK: W6: the Mac build, on every push
+
+    /// The package manifest, whose platforms and products W6 reads.
+    static let manifestPath = "FernletKit/Package.swift"
+
+    /// The manifest's platforms, exactly: iOS 26 and, since plan step A0.6.5, native macOS 26.
+    static let manifestPlatforms: Set<String> = [".iOS(.v26)", ".macOS(.v26)"]
+
+    /// ProximityKit's own product: the one scheme `xcodebuild` offers that builds exactly its closure.
+    static let proximityKitProduct = #".library(name: "ProximityKit", targets: ["ProximityKit"])"#
+
+    /// The CI workflow step that runs the macOS self-test, by its `- name:`.
+    static let macOSStepName = "ProximityKit on native macOS (Scripts/macos-build-selftest.sh)"
+
+    /// The one line the macOS step's body runs.
+    static let macOSStepRun = "Scripts/macos-build-selftest.sh"
+
+    /// Where the self-test plants its probe: inside ProximityKit, so only a native macOS build fails on it.
+    static let selfTestProbePath = "FernletKit/Sources/ProximityKit/__MacOSBuildSelfTestProbe.swift"
+
+    /// The self-test's negative leg: the check run over the probe, its output kept for the grep.
+    static let selfTestCapture = #""$(Scripts/macos-build-check.sh 2>&1)""#
+
+    /// The failure only a native macOS build gives the probe's `import UIKit`: the explicit-module
+    /// dependency scan's wording for a module the platform lacks. xcodebuild never prints the SwiftPM
+    /// command line's "no such module", so the self-test greps this, case-insensitively.
+    static let macOSOnlyFailure = "unable to resolve module dependency: 'UIKit'"
+
+    /// The check, whose one `xcodebuild build` command W6 and rule 10's pin read.
+    static let checkScriptPath = "Scripts/macos-build-check.sh"
+
+    /// What the check's command carries so that it builds ProximityKit's closure, for native macOS, into
+    /// its own derived data, with the dependency DAG enforced. Rule 10's three warnings-as-errors flags
+    /// are `PowerOfTenBoundaryTests.r10MacOSBuildCheckScriptBuildsStrict()`'s to pin.
+    static let checkCommandFlags = [
+        "-scheme ProximityKit", "-destination 'generic/platform=macOS'", "-derivedDataPath",
+        "DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR"
+    ]
+
+    /// The pre-push hook's macOS leg: the check's invocation on a line of its own, as the S3 leg's is.
+    static let hookInvocation = #""$REPO_ROOT/Scripts/macos-build-check.sh""#
+
+    /// **W6.** ProximityKit's macOS build is a compiled fact on every push, each piece read from what
+    /// RUNS, never from a step's title, an `echo` or a comment, any of which can name a script nothing
+    /// runs: the manifest declares exactly iOS 26 and macOS 26 and ProximityKit's own product; the
+    /// workflow declares its macOS step once, and that step's body runs the self-test; the self-test
+    /// plants its probe in ProximityKit, captures the check, greps the failure only a native macOS build
+    /// gives, and runs the check again on the clean tree; the check holds one `xcodebuild build`
+    /// command, for that product, native macOS, its own derived data and the dependency flag; and the
+    /// pre-push hook runs the check. Its readers are fixtured both ways. Each verdict is computed before
+    /// its `#expect`, so a failure prints the verdict and its message, never a whole file: the workflow's
+    /// own text names the floor script's restart line, which an echoed copy would trip.
+    @Test func theMacBuildIsACompiledFactOnEveryPush() throws {
+        let manifest = try RepoRoot.source(Self.manifestPath)
+        let platforms = Self.platformEntries(in: manifest)
+        let exactPlatforms = platforms.map { $0.count == Self.manifestPlatforms.count && Set($0) == Self.manifestPlatforms }
+        #expect(exactPlatforms == true,
+                "\(Self.manifestPath) declares the platforms \(platforms ?? []), not \(Self.manifestPlatforms.sorted())")
+        let products = Self.nonCommentLines(manifest, commentPrefix: "//")
+            .filter { Self.droppingTrailingComma($0) == Self.proximityKitProduct }.count
+        #expect(products == 1, "\(Self.manifestPath) declares `\(Self.proximityKitProduct)` \(products) times")
+        let stepRunsTheSelfTest = Self.stepRuns(Self.macOSStepRun, step: Self.macOSStepName,
+                                                in: try RepoRoot.source(".github/workflows/s3-wall.yml"))
+        #expect(stepRunsTheSelfTest, """
+            the workflow's "\(Self.macOSStepName)" step is not declared exactly once with a body that runs \
+            `\(Self.macOSStepRun)`: a step whose title names the script runs nothing
+            """)
+        let missing = Self.missingSelfTestLegs(in: try RepoRoot.source("Scripts/macos-build-selftest.sh"))
+        #expect(missing.isEmpty, "Scripts/macos-build-selftest.sh no longer runs \(missing)")
+        let commands = Self.xcodebuildBuildCommands(in: try RepoRoot.source(Self.checkScriptPath))
+        #expect(commands.count == 1, "\(Self.checkScriptPath) holds \(commands.count) `xcodebuild build` commands, not one")
+        let unflagged = Self.checkCommandFlags.filter { flag in
+            !(commands.first.map { Self.carries(flag, in: $0) } ?? false)
+        }
+        #expect(unflagged.isEmpty, "\(Self.checkScriptPath)'s `xcodebuild build` command no longer carries \(unflagged)")
+        let hookRuns = Self.runLines(of: try RepoRoot.source("Scripts/git-hooks/pre-push")).contains(Self.hookInvocation)
+        #expect(hookRuns, "Scripts/git-hooks/pre-push no longer runs \(Self.hookInvocation)")
+        Self.expectWorkflowAndHookReadersFixtured()
+        Self.expectScriptReadersFixtured()
+        Self.expectSelfTestReaderFixtured()
+    }
+
+    /// The workflow, hook and manifest readers, both ways: a step whose title names the script but whose
+    /// run line is commented out or absent, or which is declared twice, does not run it, and the next
+    /// step's run line is not its own; a hook that only echoes the check's name, or names it in a
+    /// comment, does not run it; a commented-out platform is not declared.
+    static func expectWorkflowAndHookReadersFixtured() {
+        let name = "Mac (Scripts/macos-build-selftest.sh)"
+        let script = "Scripts/macos-build-selftest.sh"
+        let running = "  - name: \(name)\n    run: |\n      set -euo pipefail\n      \(script)\n  - name: Next\n    run: x\n"
+        #expect(stepRuns(script, step: name, in: running), "a step whose body runs the script was not read")
+        let commented = "  - name: \(name)\n    run: |\n      set -euo pipefail\n      # \(script)\n"
+        #expect(!stepRuns(script, step: name, in: commented), "a commented-out run line was read as running")
+        let titled = "  - name: \(name)\n    run: |\n      set -euo pipefail\n"
+        #expect(!stepRuns(script, step: name, in: titled), "a step whose title alone names the script was read as running")
+        let nextStep = "  - name: \(name)\n    run: echo \"\(script)\"\n  - name: Next\n    run: |\n      \(script)\n"
+        #expect(!stepRuns(script, step: name, in: nextStep), "the next step's run line was read as this step's")
+        #expect(!stepRuns(script, step: name, in: running + running), "a step declared twice was read as declared once")
+        let echoed = "echo \"[pre-push] Running the macOS build check (Scripts/macos-build-check.sh)…\"\n"
+            + "# \(hookInvocation)\n"
+        #expect(!runLines(of: echoed).contains(hookInvocation), "an echo or a comment naming the check was read as running it")
+        #expect(runLines(of: "  \(hookInvocation)\n  code=$?\n").contains(hookInvocation),
+                "the hook's invocation line was not read")
+        let platforms = "platforms: [\n    .iOS(.v26),\n    // .macOS(.v26),\n],\nproducts: []\n"
+        #expect(platformEntries(in: platforms) == [".iOS(.v26)"], "a commented-out platform was read as declared")
+    }
+
+    /// The command reader, both ways: flags in an `echo` beside a bare `xcodebuild build` are not that
+    /// command's; a command split across `\` continuations is read whole, every flag with it; a
+    /// commented-out command and a `build-for-testing` are no `xcodebuild build`; and a flag is matched
+    /// as whole words.
+    static func expectScriptReadersFixtured() {
+        let echoed = "echo \"xcodebuild build -scheme ProximityKit SUPPRESS_WARNINGS=NO\"\nxcodebuild build -scheme Other\n"
+        let bare = xcodebuildBuildCommands(in: echoed)
+        #expect(bare == ["xcodebuild build -scheme Other"], "read the commands as \(bare)")
+        #expect(!bare.contains { carries("SUPPRESS_WARNINGS=NO", in: $0) || carries("-scheme ProximityKit", in: $0) },
+                "flags in an echo were read as the command's")
+        let split = #"""
+            # xcodebuild build -scheme Commented
+            xcodebuild build -scheme ProximityKit -destination 'generic/platform=macOS' \
+              -derivedDataPath "$DERIVED" \
+              DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR SUPPRESS_WARNINGS=NO
+            xcodebuild build-for-testing -scheme Fernlet
+            """#
+        let joined = xcodebuildBuildCommands(in: split)
+        #expect(joined.count == 1, "read \(joined.count) `xcodebuild build` commands, not the one split across lines")
+        let flags = checkCommandFlags + ["SUPPRESS_WARNINGS=NO"]
+        #expect(flags.allSatisfy { flag in joined.contains { carries(flag, in: $0) } },
+                "a flag on a continuation line was not read with its command: \(joined)")
+        #expect(!carries("-scheme ProximityKit", in: "xcodebuild build -scheme ProximityKitTests"),
+                "a longer scheme name was read as ProximityKit")
+        #expect(!carries("SUPPRESS_WARNINGS=NO", in: "xcodebuild build XSUPPRESS_WARNINGS=NO"),
+                "a longer setting was read as SUPPRESS_WARNINGS=NO")
+    }
+
+    /// The self-test reader, both ways: a self-test that runs both legs is read whole, and one whose
+    /// grep and positive leg appear only in `echo` lines and comments is missing exactly those two.
+    static func expectSelfTestReaderFixtured() {
+        let whole = """
+            PROBE="\(selfTestProbePath)"
+            cat > "$PROBE" <<'SWIFT'
+            import UIKit
+            SWIFT
+            OUT=\(selfTestCapture)
+            printf '%s' "$OUT" | grep -qi "\(macOSOnlyFailure)"
+            Scripts/macos-build-check.sh
+            """
+        let read = missingSelfTestLegs(in: whole)
+        #expect(read.isEmpty, "a self-test running both legs was read as missing \(read)")
+        let named = """
+            PROBE="\(selfTestProbePath)"
+            import UIKit
+            OUT=\(selfTestCapture)
+            echo "grep for \(macOSOnlyFailure)"
+            # Scripts/macos-build-check.sh
+            echo "Scripts/macos-build-check.sh again"
+            """
+        let missing = missingSelfTestLegs(in: named)
+        #expect(missing.count == 2 && missing.allSatisfy { $0.contains("grep") || $0.contains("positive") },
+                "a self-test naming its grep and its positive leg only in an echo or a comment was read as \(missing)")
+    }
+
     // MARK: The readers
 
     /// The `#if` region a line sits in: the condition of the `#if` that opened it, and whether an
@@ -680,6 +854,104 @@ import Testing
     /// A row's exit, as a failure message says it.
     static func exitText(_ exit: ExitStep?) -> String {
         exit.map { "a row plan step \($0.rawValue) deletes" } ?? "a permanent row"
+    }
+
+    // MARK: The build readers (W6)
+
+    /// The trimmed lines of `text` that are neither blank nor comment-only (`commentPrefix` first).
+    static func nonCommentLines(_ text: String, commentPrefix: String) -> [String] {
+        text.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix(commentPrefix) }
+    }
+
+    /// The lines of a shell script that run something, trimmed: not blank, not a `#` comment and not an
+    /// `echo`, so a line that only prints a script's or a flag's name runs neither.
+    static func runLines(of script: String) -> [String] {
+        nonCommentLines(script, commentPrefix: "#").filter { $0 != "echo" && !$0.hasPrefix("echo ") }
+    }
+
+    /// `line` without one trailing comma, as an array element's line is compared.
+    static func droppingTrailingComma(_ line: String) -> String {
+        line.hasSuffix(",") ? String(line.dropLast()).trimmingCharacters(in: .whitespaces) : line
+    }
+
+    /// The entries of a manifest's `platforms:` array, read from its non-comment lines, or nil when the
+    /// manifest does not declare `platforms:` exactly once with a bracketed list.
+    static func platformEntries(in manifest: String) -> [String]? {
+        let code = nonCommentLines(manifest, commentPrefix: "//").joined(separator: "\n")
+        guard code.components(separatedBy: "platforms:").count == 2,
+              let key = code.range(of: "platforms:"),
+              let open = code[key.upperBound...].firstIndex(of: "["),
+              let close = code[open...].firstIndex(of: "]") else { return nil }
+        return code[code.index(after: open)..<close].split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    /// Whether `workflow` declares the step named `name` exactly once and that step's body, read with
+    /// `CIGateSelectorBoundaryTests.stepBody(named:in:)` (its own non-comment lines, the `- name:` line
+    /// not among them), holds a line that is exactly `run`.
+    static func stepRuns(_ run: String, step name: String, in workflow: String) -> Bool {
+        let declarations = workflow.components(separatedBy: "\n")
+            .filter { $0.trimmingCharacters(in: .whitespaces) == "- name: \(name)" }
+        let body = CIGateSelectorBoundaryTests.stepBody(named: name, in: workflow)
+        return declarations.count == 1 && body.components(separatedBy: "\n").contains(run)
+    }
+
+    /// What the self-test must run, each on a line ``runLines(of:)`` reads, by name: the probe planted
+    /// in ProximityKit and its `import UIKit`; the negative leg's capture of the check and its grep for
+    /// the failure only a native macOS build gives; and the positive leg, a line that runs the check
+    /// again. Empty when every leg runs.
+    static func missingSelfTestLegs(in script: String) -> [String] {
+        let lines = runLines(of: script)
+        let probe = Self.selfTestProbePath
+        let capture = Self.selfTestCapture
+        let failure = Self.macOSOnlyFailure
+        let check = "Scripts/macos-build-check.sh"
+        let legs: [(name: String, runs: (String) -> Bool)] = [
+            ("the probe planted at \(probe)", { $0.contains(probe) }),
+            ("the probe's `import UIKit`", { $0 == "import UIKit" }),
+            ("the negative leg's capture \(capture)", { $0.contains(capture) }),
+            ("the negative leg's grep for \"\(failure)\"", { $0.contains("grep") && $0.contains(failure) }),
+            ("the positive leg, a line that runs \(check)", { $0.hasPrefix(check) })
+        ]
+        return legs.filter { leg in !lines.contains(where: leg.runs) }.map(\.name)
+    }
+
+    /// The commands in a shell script that start `xcodebuild build`: comment lines dropped and each
+    /// command joined across its trailing-`\` continuations, so a flag on a continuation line is read
+    /// with its command, while a flag in an `echo` or a comment is not, and `build-for-testing` is not
+    /// `build`. Shared with `PowerOfTenBoundaryTests.r10MacOSBuildCheckScriptBuildsStrict()`.
+    static func xcodebuildBuildCommands(in script: String) -> [String] {
+        var commands: [String] = []
+        var carry = ""
+        // R2: bounded by the script's line count.
+        for rawLine in script.components(separatedBy: "\n") {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") { continue }
+            if line.hasSuffix("\\") {
+                carry += String(line.dropLast()) + " "
+                continue
+            }
+            commands.append(carry + line)
+            carry = ""
+        }
+        if !carry.isEmpty { commands.append(carry) }
+        return commands.filter { command in
+            let words = command.split(whereSeparator: \.isWhitespace)
+            return words.count >= 2 && words[0] == "xcodebuild" && words[1] == "build"
+        }
+    }
+
+    /// Whether `command` holds `flag`'s words as whole words, in order and adjacent, so
+    /// `-scheme ProximityKit` is not `-scheme ProximityKitTests` and `SUPPRESS_WARNINGS=NO` is not the
+    /// tail of a longer setting. Shared with `PowerOfTenBoundaryTests.r10MacOSBuildCheckScriptBuildsStrict()`.
+    static func carries(_ flag: String, in command: String) -> Bool {
+        let words = command.split(whereSeparator: \.isWhitespace).map(String.init)
+        let needle = flag.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !needle.isEmpty, words.count >= needle.count else { return false }
+        return (0...(words.count - needle.count)).contains { Array(words[$0..<($0 + needle.count)]) == needle }
     }
 
     /// `source`'s code as the walls read it: comments dropped, literals emptied.

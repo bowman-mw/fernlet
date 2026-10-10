@@ -226,12 +226,17 @@ cannot statically follow — prefer an `enum` switch.
   Xcode passes `-suppress-warnings` to every local-package target (so an ordinary build hides
   package warnings outright), and `.treatAllWarnings(as: .error)` in `Package.swift` collides with
   that flag ("conflicting options -warnings-as-errors and -suppress-warnings" — verified, it breaks
-  the Xcode build). So `Scripts/spm-wall-check.sh` — the one strict build CI runs, via
-  `spm-wall-selftest.sh` and the pre-push hook — passes `SUPPRESS_WARNINGS=NO
+  the Xcode build). So the strict builds pass `SUPPRESS_WARNINGS=NO
   SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES` on the `xcodebuild`
-  command, which does reach the synthesized package targets. Locally, the same three overrides on
-  any `xcodebuild build-for-testing`, or `swift build … -Xswiftc -warnings-as-errors` inside
-  `FernletKit/`, reproduce the strict build.
+  command, which does reach the synthesized package targets. There are two, CI runs both on every
+  push, and the pre-push hook runs each when a push touches what it builds:
+  `Scripts/spm-wall-check.sh`, the app's iOS `build-for-testing` (via `spm-wall-selftest.sh` in CI),
+  and, since ProximityKit plan step A0.6.5, `Scripts/macos-build-check.sh`, ProximityKit's closure
+  built for native macOS (via `macos-build-selftest.sh` in CI), so a warning only a macOS build
+  reports fails too. Locally, the same three overrides on any `xcodebuild build-for-testing`
+  reproduce the strict build. The SwiftPM command line does not: `swift build` inside `FernletKit/`
+  leaves the package's string catalogs unprocessed, so the catalog-bearing modules get no
+  `Bundle.module` and fail to build.
 - The package builds in Swift 6 language mode; the app targets use approachable concurrency with
   `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (the "most pedantic setting" available while the app
   stays in Swift 5 mode; moving the app to Swift 6 mode is tracked in RemainingWork).
@@ -239,8 +244,9 @@ cannot statically follow — prefer an `enum` switch.
   no-tracking wall + the doc-coverage scan, all in CI on every push, plus the pre-push hook. (There
   is no C/Objective-C in the tree, so the Clang static analyzer has nothing to analyze.)
 
-`PowerOfTenBoundaryTests` also pins the build settings above by reading the pbxproj and
-`Scripts/spm-wall-check.sh`, so removing a flag fails the test run.
+`PowerOfTenBoundaryTests` also pins the build settings above by reading the pbxproj,
+`Scripts/spm-wall-check.sh` and `Scripts/macos-build-check.sh` (that script's one `xcodebuild build`
+command, joined across its continuations, never an `echo`), so removing a flag fails the test run.
 
 ---
 

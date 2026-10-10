@@ -95,6 +95,11 @@ struct CodeOwnersResolutionTests {
         "/Tests/FernletTests/LocalizationBoundaryTests.swift",
         "/Tests/FernletTests/CIGateSelectorBoundaryTests.swift",
         "/Tests/FernletTests/IdentityProvisioningReadTests.swift",
+        // ProximityKit's platform wall and the native-macOS build it rides on (plan step A0.6.5): the
+        // source half, the check and its negative test, named in Docs/Verifiability.md.
+        "/Tests/FernletTests/ProximityPlatformBoundaryTests.swift",
+        "/Scripts/macos-build-check.sh",
+        "/Scripts/macos-build-selftest.sh",
         "/Scripts/run-gated-suites.sh",
         "/FernletKit/Package.swift",
         "/.github/CODEOWNERS",

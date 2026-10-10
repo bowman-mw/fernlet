@@ -40,6 +40,8 @@
 # exception, so adding one deserves the same review as weakening a wall test.
 /Scripts/spm-wall-check.sh                    @bowman-mw
 /Scripts/spm-wall-selftest.sh                 @bowman-mw
+/Scripts/macos-build-check.sh                 @bowman-mw
+/Scripts/macos-build-selftest.sh              @bowman-mw
 /Scripts/install-git-hooks.sh                 @bowman-mw
 /Scripts/git-hooks/                           @bowman-mw
 /Scripts/release-checksum.sh                  @bowman-mw

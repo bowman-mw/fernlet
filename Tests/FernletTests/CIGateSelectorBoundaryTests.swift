@@ -644,6 +644,8 @@ import Testing
     ]
 
     /// The non-comment lines of one named workflow step: from its `- name:` line to the next one.
+    /// Shared with `ProximityPlatformBoundaryTests` (W6, plan step A0.6.5), which reads the macOS
+    /// step's body with it, so a step's title naming a script is never mistaken for a line that runs it.
     static func stepBody(named name: String, in workflow: String) -> String {
         var inStep = false
         var body: [String] = []

@@ -40,7 +40,8 @@ import Testing
 /// - ``r9UnsafeOnlyAtAllowlistedSeams()`` — `R9-UNSAFE`.
 /// - ``allowlistIsWellFormedAndFullyUsed()`` — the shared allowlist contract.
 /// - ``constantsMatchTheCanonicalScanner()`` / ``portedPatternsAppearVerbatimInTheCanonicalScanner()`` — anti-drift.
-/// - the `r10…` tests — rule 10 pins (project file, package manifest, wall script, CI, pre-push hook).
+/// - the `r10…` tests — rule 10 pins (project file, package manifest, wall script, the macOS check
+///   script, CI, pre-push hook).
 ///
 /// The scan runs ONCE per process (``sharedScan`` / ``sharedVerdict``) and every enforcement test reads
 /// from it. Concurrency: every cached value is an immutable `static let` of `Sendable` value types.
@@ -635,6 +636,23 @@ struct PowerOfTenBoundaryTests {
             #expect(
                 code.contains { $0.contains(flag) },
                 "\(path) no longer passes \(flag) on the xcodebuild command — the S3 wall build is also the rule-10 build; every warning, including hidden local-package warnings, must fail it (Docs/Power-of-10-Swift.md §R10)."
+            )
+        }
+    }
+
+    /// R10: `Scripts/macos-build-check.sh`, the second strict build (ProximityKit's closure for native
+    /// macOS, plan step A0.6.5), builds strict too: it holds exactly one `xcodebuild build` command, read
+    /// joined across its `\` continuations through `ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in:)`,
+    /// and that command carries all three overrides as whole words. An `echo` of the flags, or a
+    /// comment, is not the command and does not count.
+    @Test func r10MacOSBuildCheckScriptBuildsStrict() throws {
+        let path = "Scripts/macos-build-check.sh"
+        let commands = ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in: try RepoRoot.source(path))
+        #expect(commands.count == 1, "\(path) holds \(commands.count) `xcodebuild build` commands, not exactly one — the macOS check is one strict build (Docs/Power-of-10-Swift.md §R10).")
+        for flag in ["SUPPRESS_WARNINGS=NO", "SWIFT_TREAT_WARNINGS_AS_ERRORS=YES", "GCC_TREAT_WARNINGS_AS_ERRORS=YES"] {
+            #expect(
+                commands.first.map { ProximityPlatformBoundaryTests.carries(flag, in: $0) } == true,
+                "\(path)'s `xcodebuild build` command no longer passes \(flag) — the macOS build is the second rule-10 build; a warning only a macOS build reports must fail it, package warnings included (Docs/Power-of-10-Swift.md §R10)."
             )
         }
     }

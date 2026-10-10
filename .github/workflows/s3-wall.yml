@@ -27,7 +27,10 @@
 # GCC_TREAT_WARNINGS_AS_ERRORS=YES, so every warning — including the package warnings Xcode hides
 # behind -suppress-warnings for local packages — fails the build. The Swift grep-wall port of the
 # Power-of-10 mechanical checks (PowerOfTenBoundaryTests) runs below next to the other grep-walls;
-# the Python scanner itself runs in power-of-10.yml on a cheap runner.
+# the Python scanner itself runs in power-of-10.yml on a cheap runner. Since 2026-10-09 (ProximityKit
+# plan step A0.6.5) a second strict build runs too: Scripts/macos-build-selftest.sh builds
+# ProximityKit's closure for native macOS 26 through Scripts/macos-build-check.sh, with the same
+# overrides, after proving that a planted `import UIKit` fails it.
 #
 # Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
 # refuses a green run that executed fewer tests than the step's floor: `-only-testing:` matches
@@ -148,6 +151,23 @@ jobs:
           set -euo pipefail
           Scripts/spm-wall-selftest.sh
           Scripts/run-gated-suites-selftest.sh
+
+      - name: ProximityKit on native macOS (Scripts/macos-build-selftest.sh)
+        # ProximityKit builds for iOS 26 and native macOS 26 (plan step A0.6). This step builds the
+        # ProximityKit product's closure (ProximityKit, FernletCrypto, FernletDomainModel,
+        # FernletFoundation) for generic/platform=macOS, arm64 and x86_64, with warnings as errors, after
+        # proving the check is a macOS build: a planted `import UIKit` must fail it with "unable to
+        # resolve module dependency: 'UIKit'", the explicit-module scanner's wording for a module the
+        # platform lacks (xcodebuild never prints the CLI compiler's "no such module"). xcodebuild, not
+        # `swift build`: the SwiftPM CLI leaves the closure's string catalogs unprocessed. The Xcode
+        # floor above (iOS 26.5 SDK) brings a macOS 26 SDK. generic/platform=macOS also matches the Mac
+        # Catalyst variant ("Using the first of multiple matching destinations"), so the check requires
+        # native macOS products after its build. A build, not a test: it names no suite and no floor,
+        # so CIGateSelectorBoundaryTests does not parse it, and ProximityPlatformBoundaryTests pins that
+        # this step's body runs the self-test.
+        run: |
+          set -euo pipefail
+          Scripts/macos-build-selftest.sh
 
       - name: Grep-wall (S3BoundaryTests) + the companion-refresh seam
         # `AuditRatchetBoundaryTests` joins the two at P9 item 9's fix review (2026-09-20). It is a
@@ -273,6 +293,20 @@ jobs:
         # its own file. 109 tests in 11 suites by declaration count (108 + 1), the ARITHMETIC CHECK,
         # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 109 tests
         # in 11 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A0.6.5 (2026-10-09) makes ProximityKit's macOS build a compiled fact on
+        # every push: the manifest declares macOS 26 and a `ProximityKit` product, the step above this
+        # one builds that product's closure for native macOS through Scripts/macos-build-selftest.sh,
+        # and the pre-push hook runs Scripts/macos-build-check.sh when a push touches the closure. It
+        # gives the suite a sixth cell, W6, which reads each of those from what runs, never from a
+        # step's title, an `echo` or a comment: the manifest's two platforms and the product line; this
+        # workflow's macOS step, declared once, running the self-test in its body; the self-test's probe,
+        # its capture and grep in the negative leg and its positive leg; the check's one `xcodebuild
+        # build` command, joined across its continuations, with its scheme, destination, derived data
+        # and dependency flag; and the hook's invocation line, with its readers fixtured both ways in
+        # the cell. 110 tests in 11 suites by declaration count (109 + 1), the ARITHMETIC CHECK, and the
+        # line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 110 tests in 11
+        # suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -295,6 +329,15 @@ jobs:
         # length, force unwraps / traps, swallowed `try?`, unbounded loops, mutable globals, `#if`
         # policy, unsafe seams, the assertion-density floor, and the rule-10 build-setting pins.
         # Reads the same allowlist as the scanner, so the two cannot disagree about an exemption.
+        #
+        # ProximityKit plan step A0.6.5 (2026-10-09) gives the suite the rule-10 pin of the second
+        # strict build, `r10MacOSBuildCheckScriptBuildsStrict`: Scripts/macos-build-check.sh holds
+        # exactly one `xcodebuild build` command, read joined across its continuations, and that command
+        # carries SUPPRESS_WARNINGS=NO, SWIFT_TREAT_WARNINGS_AS_ERRORS=YES and
+        # GCC_TREAT_WARNINGS_AS_ERRORS=YES (an `echo` of the flags is not the command). 34 tests in 1
+        # suite by declaration count (33 + 1), the ARITHMETIC CHECK, and the line, MEASURED on a Mac on
+        # that tree (iPhone 17 simulator, iOS 26.5), ran 34 tests in 1 suite; its floor stays the shared
+        # `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh power-of-10 1 PowerOfTenBoundaryTests
