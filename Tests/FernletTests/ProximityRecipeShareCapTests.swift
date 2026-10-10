@@ -20,10 +20,16 @@
 // would leave the radio paused forever with no connection (the deadlock class the redesign
 // closes). All three removal paths are covered: onPeerDisconnected, the stale-coordinator sweep
 // (.ended/.failed), and the parked pre-verification sweep (.idle/.starting/.discovering).
+//
+// The observation cell (`theManagersObservablesFollowItsPairSession`) holds the four values the share
+// sheet observes (the recipient rows, the status line, the outcome and the engaged row) to the
+// notifications SwiftUI redraws on, a discovery and a failed share each notifying an observer of the
+// manager, whether the manager stores those values itself or forwards them from a session it drives.
 
 @testable import ProximityKit
 import FernletConnections
 import Foundation
+import Observation
 import Testing
 import FernletDomainModel
 import AIProviders
@@ -1105,4 +1111,58 @@ struct ProximityRecipeShareCapTests {
 
         #expect(manager.lastShareOutcome == nil)
     }
+
+    // MARK: - Observation
+
+    /// The four observables the share sheet reads (the recipient rows, the status line, the outcome and
+    /// the engaged row) notify an observer when the radio discovers a peer and when a share fails, the
+    /// changes SwiftUI redraws the sheet on. Whatever holds those values, the manager's stored
+    /// properties or a session it forwards them from, an observer of the manager must hear both.
+    @Test func theManagersObservablesFollowItsPairSession() {
+        let host = RecipeCapTestHost()
+        let radio = FakeRecipeShareRadioSession()
+        let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
+        manager.markRunningForTesting()  // keeps sendRecipeShare's start() from touching radios
+        let discovery = RecipeShareObservationRecorder()
+        withObservationTracking {
+            Self.readSheetObservables(of: manager)
+        } onChange: {
+            MainActor.assumeIsolated { discovery.recordChange() }
+        }
+        radio.onPeerDiscovered?(makePeer(named: "Blair"))
+        #expect(discovery.changes == 1, "a discovery notified the sheet \(discovery.changes) times")
+        #expect(manager.nearbyRecipients.count == 1, "the discovery listed \(manager.nearbyRecipients.count) rows")
+
+        let failure = RecipeShareObservationRecorder()
+        withObservationTracking {
+            Self.readSheetObservables(of: manager)
+        } onChange: {
+            MainActor.assumeIsolated { failure.recordChange() }
+        }
+        let gone = ProximityRecipeShareRecipient(id: UUID(), displayName: "Gone", fingerprint: nil)
+        manager.sendRecipeShare(makePayload(), to: gone)
+        #expect(failure.changes == 1, "a failed share notified the sheet \(failure.changes) times")
+        #expect(manager.sendState == .failed(message: "That nearby Fernlet is no longer available."),
+                "the status line reads \(manager.sendState)")
+        #expect(manager.lastShareOutcome?.result == .notSent(.recipientUnavailable),
+                "the share ended \(String(describing: manager.lastShareOutcome?.result))")
+    }
+
+    /// Reads the four observables the share sheet reads, so an observation tracks them.
+    private static func readSheetObservables(of manager: ProximityRecipeShareManager) {
+        _ = manager.nearbyRecipients
+        _ = manager.sendState
+        _ = manager.lastShareOutcome
+        _ = manager.engagedRecipientID
+    }
+}
+
+/// Counts the notifications one observation delivered: `withObservationTracking` fires its handler once
+/// per registration, so a count above zero is that registration's change, and zero is none.
+private final class RecipeShareObservationRecorder {
+    /// How many notifications arrived.
+    private(set) var changes = 0
+
+    /// Notes one notification.
+    func recordChange() { changes += 1 }
 }

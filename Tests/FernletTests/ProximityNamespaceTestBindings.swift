@@ -911,12 +911,13 @@ extension ProximityHost {
 //   before. Every double states a non-empty name of its own, so only a cell that empties one reads it;
 //   the cells that pin Fernlet's fallback run on `FernletStore`, which answers `UIDevice.current.name`.
 // - `makeProximityRangingProvider()` (A0.6.3) is a fresh `NoopRangingProvider()`: a provider without
-//   ranging, which builds no `NISession`, reads no capability and names no iOS-only type. No test
-//   fires a channel-ready door (no cell starts a radio), so no cell's behaviour moves; a later test
-//   that reaches one ranges nothing, where the doors' own `NIRangingSession()` would have tried to
-//   range, since NearbyInteraction reports precise-distance support on the iOS 26.5 simulator. The
-//   coordinator tests build theirs through the managers' test seams with a provider of their own,
-//   and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
+//   ranging, which builds no `NISession`, reads no capability and names no iOS-only type. No cell
+//   starts a radio. The one cell that fires a channel-ready door, `FernletFeatureGoldenTests`' recipe
+//   pairing (group 31), fires it through the recipe radio's in-memory double, and its connection
+//   ranges nothing, as a host without ranging's does, where the door's own `NIRangingSession()` would
+//   have tried to range, since NearbyInteraction reports precise-distance support on the iOS 26.5
+//   simulator. The coordinator tests build theirs through the managers' test seams with a provider of
+//   their own, and the cell that pins Fernlet's answer, `NIRangingSession()`, runs on `FernletStore`.
 // - `proximitySupportDirectory` (A0.6.6) is the double's namespace's folder under Application Support,
 //   `proximityNamespace.installation.storage.directory(under: .applicationSupportDirectory)`: the
 //   production-shaped folder the doubles always shared, the very path ProximityKit's root default

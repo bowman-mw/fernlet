@@ -852,11 +852,12 @@ struct MeshP9RecipeSwapAcceptanceTests {
 
         // The BIRTH SEED has one mint site (item 9's fix review, FIX 3). `beginTransferForTesting`
         // is what every cell of this battery and of `RecipeShareTransferTests` drives;
-        // `sendRecipeShare` is what ships, and nothing at tier 1 executes it — so while the seed
-        // was spelled twice, item 3 pass 1's own defect (`radioIsQuiet: false` on the shipping
-        // line) could be restored with the whole tree green. Containment, not proximity: the
-        // shipping door's brace-matched body must call the helper, and the record may be
-        // constructed in exactly one place.
+        // `sendRecipeShare` is what ships, and no cell of either executes it (one golden does,
+        // `FernletFeatureGoldenTests`' recipe pairing, which reads the bytes, not the seed) — so
+        // while the seed was spelled twice, item 3 pass 1's own defect (`radioIsQuiet: false` on
+        // the shipping line) could be restored with the whole tree green. Containment, not
+        // proximity: the shipping door's brace-matched body must call the helper, and the record
+        // may be constructed in exactly one place.
         let send = try #require(
             MeshRoutedSourceScan.bracedBody(after: "public func sendRecipeShare(", in: manager),
             "the recipe share's shipping door is gone")

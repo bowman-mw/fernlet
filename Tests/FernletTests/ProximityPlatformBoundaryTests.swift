@@ -26,9 +26,9 @@
 //      opens with its `#if` and closes with its `#endif`, and holds no other `#if`. And no `#if` or
 //      `#elseif` tests the platform with `os(…)` but a seam row's own guard: a platform branch is
 //      policy the iOS run never executes and the macOS build compiles;
-//   2. no file names a source of the device's name (`UIDevice`, `Host.current`, `NSHost`, `hostName`,
-//      the SystemConfiguration, CoreServices and BSD calls, the `KERN_HOSTNAME` sysctl,
-//      `localizedName`), but on the rows listed;
+//   2. no file names a source of the device's or its user's name (`UIDevice`, `Host.current`, `NSHost`,
+//      `hostName`, `NSFullUserName` and `NSUserName`, the SystemConfiguration, CoreServices and BSD
+//      calls, the `KERN_HOSTNAME` sysctl, `localizedName`), but on the rows listed;
 //   3. no file names a Foundation API for a platform directory (Application Support, Documents,
 //      Caches, Library, the user's application, media and trash folders, the temporary, home and
 //      current directories, a search-path call or lookup, a container), but on the rows listed, a path
@@ -41,14 +41,15 @@
 //      host's `makeProximityRangingProvider()`, once, naming no provider of its own, and
 //      `NIRangingSession` is named in ProximityKit code only in its own file;
 //   5. ProximityKit's macOS build is a compiled fact on every push: the package manifest declares
-//      macOS 26 and ProximityKit's own product, the CI workflow's macOS step, with no `if:` or
-//      `continue-on-error:` on it or on its job, runs `Scripts/macos-build-selftest.sh` (whose negative
-//      leg plants an `import UIKit` in ProximityKit and greps the failure only a native macOS build
-//      gives, and whose positive leg builds the clean tree), `Scripts/macos-build-check.sh` holds the
-//      one `xcodebuild build` command for that product and native macOS, and the pre-push hook runs it,
-//      its leg on unless a person skips it and relevant to a change of the manifest or a ProximityKit
-//      source; each read from what runs, never from a step's title, an `echo` or a comment, its readers
-//      fixtured both ways in the same cell.
+//      macOS 26 and ProximityKit's own product, the CI workflow runs on every push and pull request to
+//      `main` with no path or branch filter, and its macOS step, with no `if:` or `continue-on-error:`
+//      on it or on its job and no `exit` before its run line, runs `Scripts/macos-build-selftest.sh`
+//      (whose negative leg plants an `import UIKit` in ProximityKit and greps the failure only a native
+//      macOS build gives, and whose positive leg builds the clean tree), `Scripts/macos-build-check.sh`
+//      holds the one `xcodebuild build` command for that product and native macOS, and the pre-push
+//      hook runs it, its leg on unless a person skips it and relevant to a change of the manifest or a
+//      ProximityKit source; each read from what runs, never from a step's title, an `echo` or a comment,
+//      its readers fixtured both ways in the same cell.
 //
 // The first three rules are exact both ways: a new use fails, and a use that goes away fails too,
 // until its row is deleted. Every row is permanent: `ProtectedSidecar.swift`'s guarded UIKit import
@@ -203,14 +204,16 @@ import Testing
     ]
 
     /// Every source of the device's name within a module's reach: UIKit's `UIDevice`, Foundation's
-    /// `Host.current`, `NSHost` and `hostName`, SystemConfiguration's and CoreServices' computer and
-    /// local-host names, the BSD calls (`utsname` stands for `uname`, which needs one, since a bare
-    /// `uname` is a common variable name, and `KERN_HOSTNAME` for the `sysctl` that reads the host name
-    /// by its MIB, since a bare `sysctl` reads any setting) and `localizedName`. On a Mac they lead to the
-    /// user's own name for the machine, its Computer Name or host name, which the recipe radio would put
-    /// in an unauthenticated TXT record.
+    /// `Host.current`, `NSHost` and `hostName`, and its `NSFullUserName()` and `NSUserName()`, which on a
+    /// Mac return the person's own full and short account names; SystemConfiguration's and CoreServices'
+    /// computer and local-host names, the BSD calls (`utsname` stands for `uname`, which needs one, since
+    /// a bare `uname` is a common variable name, and `KERN_HOSTNAME` for the `sysctl` that reads the host
+    /// name by its MIB, since a bare `sysctl` reads any setting) and `localizedName`. On a Mac they lead to
+    /// the user's own name or their name for the machine, its Computer Name or host name, which the recipe
+    /// radio would put in an unauthenticated TXT record.
     static let deviceNameNeedles: [Needle] = [
         .identifier("UIDevice"), .dotted("Host", "current"), .identifier("NSHost"), .identifier("hostName"),
+        .identifier("NSFullUserName"), .identifier("NSUserName"),
         .identifier("SCDynamicStoreCopyComputerName"), .identifier("SCDynamicStoreCopyLocalHostName"),
         .identifier("CSCopyMachineName"), .identifier("gethostname"), .identifier("sysctlbyname"),
         .identifier("utsname"), .identifier("nodename"), .identifier("KERN_HOSTNAME"), .identifier("localizedName")
@@ -339,9 +342,9 @@ import Testing
 
     // MARK: W2: the device's name
 
-    /// **W2.** No ProximityKit file reads the device's name but on ``deviceNameRows``: what an unnamed
-    /// device is called is its host's fact. Both directions: a row whose file no longer names its token
-    /// fails until the row is deleted.
+    /// **W2.** No ProximityKit file reads the device's name, or its user's, but on ``deviceNameRows``:
+    /// what an unnamed device is called is its host's fact. Both directions: a row whose file no longer
+    /// names its token fails until the row is deleted.
     @Test func proximityKitReadsNoDeviceName() throws {
         let sources = try ProximityNamespaceBoundaryTests.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
@@ -641,16 +644,17 @@ import Testing
     /// **W6.** ProximityKit's macOS build is a compiled fact on every push, each piece read from what
     /// RUNS, never from a step's title, an `echo` or a comment, any of which can name a script nothing
     /// runs: the manifest declares exactly iOS 26 and macOS 26 and ProximityKit's own product; the
-    /// workflow declares its macOS step once, with no `if:` or `continue-on-error:` on the step or on its
-    /// job (either keeps a declared step from running or from failing the run), and that step's body
-    /// runs the self-test; the self-test plants its probe in ProximityKit, captures the check, greps the
-    /// failure only a native macOS build gives, and runs the check again on the clean tree; the check
-    /// holds one `xcodebuild build` command, for that product, native macOS, its own derived data and the
-    /// dependency flag; and the pre-push hook runs the check, its leg on by default and relevant to a
-    /// change of the manifest or a ProximityKit source. Its readers are fixtured both ways. Each verdict
-    /// is computed before its `#expect`, so a failure prints the verdict and its message, never a whole
-    /// file: the workflow's own text names the floor script's restart line, which an echoed copy would
-    /// trip.
+    /// workflow runs on every push and every pull request to `main`, its `on:` block filtering neither by
+    /// path nor by branch, and declares its macOS step once, with no `if:` or `continue-on-error:` on the
+    /// step or on its job (either keeps a declared step from running or from failing the run), and that
+    /// step's body runs the self-test with no `exit` before it; the self-test plants its probe in
+    /// ProximityKit, captures the check, greps the failure only a native macOS build gives, and runs the
+    /// check again on the clean tree; the check holds one `xcodebuild build` command, for that product,
+    /// native macOS, its own derived data and the dependency flag; and the pre-push hook runs the check,
+    /// its leg on by default and relevant to a change of the manifest or a ProximityKit source. Its
+    /// readers are fixtured both ways. Each verdict is computed before its `#expect`, so a failure prints
+    /// the verdict and its message, never a whole file: the workflow's own text names the floor script's
+    /// restart line, which an echoed copy would trip.
     @Test func theMacBuildIsACompiledFactOnEveryPush() throws {
         let manifest = try RepoRoot.source(Self.manifestPath)
         let platforms = Self.platformEntries(in: manifest)
@@ -660,12 +664,19 @@ import Testing
         let products = Self.nonCommentLines(manifest, commentPrefix: "//")
             .filter { Self.droppingTrailingComma($0) == Self.proximityKitProduct }.count
         #expect(products == 1, "\(Self.manifestPath) declares `\(Self.proximityKitProduct)` \(products) times")
-        let stepRunsTheSelfTest = Self.stepRuns(Self.macOSStepRun, step: Self.macOSStepName,
-                                                in: try RepoRoot.source(".github/workflows/s3-wall.yml"))
+        let workflow = try RepoRoot.source(".github/workflows/s3-wall.yml")
+        let stepRunsTheSelfTest = Self.stepRuns(Self.macOSStepRun, step: Self.macOSStepName, in: workflow)
         #expect(stepRunsTheSelfTest, """
             the workflow's "\(Self.macOSStepName)" step is not declared exactly once, with no `if:` or \
-            `continue-on-error:` on it or its job, and a body that runs `\(Self.macOSStepRun)`: a step \
-            whose title names the script, or that is skipped or tolerated, runs nothing that counts
+            `continue-on-error:` on it or its job, and a body that runs `\(Self.macOSStepRun)` with no \
+            `exit` before it: a step whose title names the script, or that is skipped, tolerated or exits \
+            first, runs nothing that counts
+            """)
+        let runsOnMain = Self.triggersRunOnMain(workflow)
+        #expect(runsOnMain, """
+            the workflow's `on:` block no longer runs it on every push and every pull request to `main` \
+            (`push:` and `pull_request:`, each with `branches: ["main"]`, and no `paths:`, \
+            `paths-ignore:` or `branches-ignore:`): a change it skips is a change the Mac build never saw
             """)
         let missing = Self.missingSelfTestLegs(in: try RepoRoot.source("Scripts/macos-build-selftest.sh"))
         #expect(missing.isEmpty, "Scripts/macos-build-selftest.sh no longer runs \(missing)")
@@ -694,7 +705,7 @@ import Testing
     /// step's run line is not its own; a step with an `if:` or a `continue-on-error:`, or in a job with
     /// an `if:`, does not run it, while the same step in an unguarded job does; a hook that only echoes
     /// the check's name, or names it in a comment, does not run it; a commented-out platform is not
-    /// declared.
+    /// declared; and the early-exit and trigger readers (``expectExitAndTriggerReadersFixtured(step:script:)``).
     static func expectWorkflowAndHookReadersFixtured() {
         let name = "Mac (Scripts/macos-build-selftest.sh)"
         let script = "Scripts/macos-build-selftest.sh"
@@ -722,6 +733,32 @@ import Testing
                 "the hook's invocation line was not read")
         let platforms = "platforms: [\n    .iOS(.v26),\n    // .macOS(.v26),\n],\nproducts: []\n"
         #expect(platformEntries(in: platforms) == [".iOS(.v26)"], "a commented-out platform was read as declared")
+        expectExitAndTriggerReadersFixtured(step: name, script: script)
+    }
+
+    /// The early-exit and trigger readers, both ways: a step whose body exits before its run line (a bare
+    /// `exit 0`, one after `&&`, one inside an `if …; then … fi`) does not run it, while the same lines
+    /// after the run line do not stop it; and an `on:` block without `pull_request:`, with
+    /// `workflow_dispatch:` where `push:` was, or with a `paths:` filter under `push:` does not run on every
+    /// change to `main`, while the workflow's own shape does.
+    static func expectExitAndTriggerReadersFixtured(step name: String, script: String) {
+        let head = "  - name: \(name)\n    run: |\n      set -euo pipefail\n"
+        // R2: bounded by the three exit shapes.
+        for early in ["exit 0", #"[ -n "$X" ] && exit 0"#, "if true; then exit 0; fi"] {
+            #expect(!stepRuns(script, step: name, in: head + "      \(early)\n      \(script)\n"),
+                    "a step that runs `\(early)` before its run line was read as running")
+            #expect(stepRuns(script, step: name, in: head + "      \(script)\n      \(early)\n"),
+                    "a step that runs `\(early)` after its run line was not read as running")
+        }
+        let main = #"branches: ["main"]"#
+        let shaped = "on:\n  push:\n    \(main)\n  pull_request:\n    \(main)\n\nconcurrency:\n  group: x\n"
+        #expect(triggersRunOnMain(shaped), "the workflow's own `on:` shape was not read as running on every change")
+        let unreviewed = "on:\n  push:\n    \(main)\njobs:\n  wall:\n"
+        #expect(!triggersRunOnMain(unreviewed), "an `on:` without `pull_request:` was read as running on every change")
+        let dispatched = shaped.replacingOccurrences(of: "  push:\n", with: "  workflow_dispatch:\n")
+        #expect(!triggersRunOnMain(dispatched), "an `on:` with `workflow_dispatch:` for `push:` was read as running on every push")
+        let filtered = shaped.replacingOccurrences(of: "  push:\n    \(main)\n", with: "  push:\n    \(main)\n    paths: [\"Docs/**\"]\n")
+        #expect(!triggersRunOnMain(filtered), "an `on:` whose push is filtered by `paths:` was read as running on every push")
     }
 
     /// The hook-leg reader, both ways: a leg on by default whose pattern matches the manifest and a
@@ -1038,20 +1075,63 @@ import Testing
 
     /// Whether `workflow` declares the step named `name` exactly once, that step's body, read with
     /// `CIGateSelectorBoundaryTests.stepBody(named:in:)` (its own non-comment lines, the `- name:` line
-    /// not among them), holds a line that is exactly `run`, and neither that body nor the keys of the job
-    /// that holds the step (``jobKeys(holding:in:)``) set `if:` or `continue-on-error:`: a step or job
-    /// with either is declared but may be skipped, or may fail without failing the run.
+    /// not among them), holds a line that is exactly `run`, no line before it exits (``exitsEarly(_:)``),
+    /// and neither that body nor the keys of the job that holds the step (``jobKeys(holding:in:)``) set
+    /// `if:` or `continue-on-error:`: a step or job with either is declared but may be skipped, or may
+    /// fail without failing the run, and a step that exits before its run line passes having run nothing.
     static func stepRuns(_ run: String, step name: String, in workflow: String) -> Bool {
         let lines = workflow.components(separatedBy: "\n")
         let declarations = lines.filter { $0.trimmingCharacters(in: .whitespaces) == "- name: \(name)" }
         let body = CIGateSelectorBoundaryTests.stepBody(named: name, in: workflow).components(separatedBy: "\n")
         let guarded = (body + jobKeys(holding: name, in: lines)).contains(where: isRunGuard)
-        return declarations.count == 1 && body.contains(run) && !guarded
+        guard declarations.count == 1, !guarded, let runLine = body.firstIndex(of: run) else { return false }
+        return !body[..<runLine].contains(where: exitsEarly)
     }
 
     /// Whether a trimmed workflow line sets `if:` or `continue-on-error:`, its key quoted or not.
     static func isRunGuard(_ line: String) -> Bool {
         line.range(of: #"^["']?(?:if|continue-on-error)["']?\s*:"#, options: .regularExpression) != nil
+    }
+
+    /// Whether a step body's line names `exit` as a whole word, whatever precedes it: `exit 0` alone,
+    /// after `&&` or `||`, or inside an `if …; then exit 0; fi`, each of which ends the step before a later
+    /// line runs, with the step's status the exit's.
+    static func exitsEarly(_ line: String) -> Bool {
+        line.range(of: #"(?<![\w-])exit(?![\w-])"#, options: .regularExpression) != nil
+    }
+
+    /// Whether `workflow`'s top-level `on:` block (``onBlock(of:)``) runs the workflow on every push and
+    /// every pull request to `main`: it holds `push:` and `pull_request:`, each directly holding
+    /// `branches: ["main"]`, and nowhere a `paths:`, `paths-ignore:` or `branches-ignore:` key, any of
+    /// which lets a change to `main` pass without the workflow running.
+    static func triggersRunOnMain(_ workflow: String) -> Bool {
+        let indentOf = { (line: String) -> Int in line.prefix { $0 == " " }.count }
+        guard let block = onBlock(of: workflow), let first = block.first else { return false }
+        let indent = indentOf(first)
+        let keys = block.map { $0.trimmingCharacters(in: .whitespaces) }
+        let refused = ["paths:", "paths-ignore:", "branches-ignore:"]
+        guard !keys.contains(where: { key in refused.contains(where: { key.hasPrefix($0) }) }) else { return false }
+        return ["push:", "pull_request:"].allSatisfy { trigger in
+            guard let start = block.indices.first(where: { indentOf(block[$0]) == indent && keys[$0] == trigger }) else {
+                return false
+            }
+            let end = block.indices.first(where: { $0 > start && indentOf(block[$0]) <= indent }) ?? block.endIndex
+            return keys[(start + 1)..<end].contains(#"branches: ["main"]"#)
+        }
+    }
+
+    /// The code lines of `workflow`'s top-level `on:` block, as written: from the line that is exactly
+    /// `on:` to the next line at the left margin, blank and comment lines left out; nil when the workflow
+    /// does not declare it exactly once as a block.
+    static func onBlock(of workflow: String) -> [String]? {
+        let lines = workflow.components(separatedBy: "\n").filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.isEmpty && !trimmed.hasPrefix("#")
+        }
+        let starts = lines.indices.filter { lines[$0] == "on:" }
+        guard starts.count == 1, let start = starts.first else { return nil }
+        let end = lines[(start + 1)...].firstIndex { !$0.hasPrefix(" ") } ?? lines.endIndex
+        return Array(lines[(start + 1)..<end])
     }
 
     /// The keys of the job whose `steps:` hold the step named `name`, trimmed: the job's own lines at its

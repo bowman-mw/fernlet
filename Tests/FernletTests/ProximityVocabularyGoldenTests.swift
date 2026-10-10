@@ -14,7 +14,7 @@
 // a moved consumer no cell drives yet gains a cell. A behavioural cell needs no re-pointing at all:
 // it pins the consumer along with the value, and it reads its expectations off the frozen column.
 //
-// Fourteen groups:
+// Fifteen groups:
 //
 // 1. **Payload tokens.** All 55 `PayloadType` tokens, and a table that is exactly the type's cases.
 // 2. **The sealing rule, by behaviour.** The 17 tokens an envelope must carry sealed; every one of
@@ -79,6 +79,14 @@
 //     its doors, and so whether a UWB iPhone introduces itself as `uwb` with its token, is the host's:
 //     Fernlet's, an `NIRangingSession` fresh per connection, is `FernletFeatureGoldenTests`' group 30,
 //     as is the fallback Fernlet's host states, this device's name.
+// 15. **The recipe pair session's advertisement and envelope.** The recipe radio's TXT record through
+//     the production builder (`v`, `mode` and `name`, and a name too wide for a TXT value omitted
+//     rather than cut) and through the radio's join (its own `sid` beside the owner's fields, `fp`
+//     withheld, at most eight fields, every entry within DNS-SD's 255 bytes), the record's key
+//     spellings and the dial hello's keys, which equal them, the recipe row a manager's radio is built
+//     on, and the `sighted` audit line's `recipe` context; and one recipe envelope's schema-v2
+//     canonical bytes, a gated vector on the recipe token of its own. What the recipe profile puts on
+//     the wire through the production door is `FernletFeatureGoldenTests`' group 31.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
 // golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
@@ -101,9 +109,14 @@
 // `MeshMembershipEventGoldenTests.goldenRecordsHashHex`; nothing here was copied out of Swift's
 // output. Group 14's local-name rows were confirmed the same way, by a Python predicate for
 // Foundation's `.whitespaces` (`c == "\t"` or Unicode category Zs; `str.strip()` is not that
-// predicate: it strips a line break).
+// predicate: it strips a line break). Group 15's vectors were derived twice, by two independent Python
+// implementations that agree byte for byte: one with `struct` and `json`, which first reproduced
+// `FernletIdentityEnvelopeTests.goldenEnvelopeHex`, and one writing big-endian fields by shifts into a
+// `bytearray`; its TXT rows by a Python model of `MeshLinkAdvertisement`'s publishing rule (the `sid`
+// hoisted, `fp` withheld, empty or over-64-byte values dropped, keys sorted, at most eight kept).
 
 import Combine
+import CryptoKit
 import FernletConnections
 import FernletDomainModel
 import FernletFoundation
@@ -1942,7 +1955,7 @@ struct ProximityVocabularyGoldenTests {
             #expect(names.voucher == policy.floor, "and filed the voucher as \(names.voucher ?? "nothing")")
             let host = PresentationNamespaceHost(namespace: namespace, displayName: long)
             let advertised = withExtendedLifetime(host) {   // the manager's `store` is `unowned`
-                ProximityRecipeShareManager(store: host).discoveryInfoForTesting[RecipeShareAdvertisement.nameKey]
+                Self.recipeAdvertisedFields(host: host)[RecipeShareAdvertisement.nameKey]
             }
             #expect(advertised == capped, "a recipe-share manager under a cap of \(policy.maxLength) advertised \(advertised ?? "nothing")")
         }
@@ -2470,6 +2483,161 @@ struct ProximityVocabularyGoldenTests {
                 resolved to \(resolved.debugDescription)
                 """)
         }
+    }
+
+    // MARK: Group 15 — the recipe pair session's advertisement and envelope
+
+    /// The TXT fields a recipe-share manager over `host` hands its radio to advertise: today
+    /// `ProximityRecipeShareManager(store: host).discoveryInfoForTesting`, the production builder.
+    static func recipeAdvertisedFields(host: any ProximityHost) -> [String: String] {
+        ProximityRecipeShareManager(store: host).discoveryInfoForTesting
+    }
+
+    /// The radio a recipe-share manager over `host` builds for itself: today
+    /// `ProximityRecipeShareManager(store: host).radioForTesting`.
+    static func recipeManagerRadio(host: any ProximityHost) -> any RecipeShareRadioSession {
+        ProximityRecipeShareManager(store: host).radioForTesting
+    }
+
+    /// The recipe radio for `namespace`, built explicitly: today `NetworkRecipeShareSession(namespace:)`.
+    static func recipeRadio(namespace: ProximityNamespace) -> NetworkRecipeShareSession {
+        NetworkRecipeShareSession(namespace: namespace)
+    }
+
+    /// The canonical bytes of 15b's recipe envelope, schema 2 under `.fernlet`'s labels: 336 bytes,
+    /// derived by two independent Python implementations from `CanonicalByteWriter`'s fields.
+    static let recipeEnvelopeCanonicalHex = [
+        "00000000000000266665726e6c65742e63616e6f6e6963616c2e6964656e746974792d656e76656c6f70652e76320000",
+        "0000000000020a0a0a0a1b1b4c4c8d8d2e2e2e2e2e2e0000000000000020010101010101010101010101010101010101",
+        "010101010101010101010101010100000000000000200202020202020202020202020202020202020202020202020202",
+        "0202020202020000000000000005526f62696e0100000000000000106234636234623933633430323763653300000000",
+        "000000176665726e6c65742e7265636970652e73686172652e7631010000000000000020030303030303030303030303",
+        "0303030303030303030303030303030303030303000000000000000c5265636970652073686172650000000000000000",
+        "03000000000000000000000000000000000d7365616c65642d726563697065000000006553f10001000000006553f22c"
+    ].joined()
+
+    /// SHA-256 over ``recipeEnvelopeCanonicalHex``'s bytes, by the same two computations.
+    static let recipeEnvelopeCanonicalSHA256 = "5d826c78080fec0b18ac4a8d1df3589790a46acab45cd346e48b3d916eddc0ef"
+
+    /// **15a.** The recipe radio advertises its frozen fields on its own row. The owner's half, through
+    /// the production builder, is exactly `v`, `mode` and `name` for a host named Alex, and the name is
+    /// omitted, not cut, for one grapheme wider than a TXT value; the radio joins its own `sid`, withholds
+    /// `fp` and keeps at most eight fields, each entry within DNS-SD's 255 bytes; the record's keys and
+    /// version are their frozen spellings, which the dial hello's keys equal; the radio a manager builds
+    /// is the recipe row's service type and ALPN; and the `sighted` audit line says whether a browsed
+    /// record is a recipe advertisement.
+    @Test func theRecipeRadioAdvertisesItsFrozenFieldsOnItsOwnRow() throws {
+        Self.expectRecipeOwnerFields()
+        try Self.expectRecipeRadioJoin()
+        try Self.expectRecipeKeySpellings()
+        Self.expectRecipeRadioRow()
+        Self.expectRecipeSightingContext()
+    }
+
+    /// 15a's owner half: the fields the manager builds for a host named Alex, and for a host whose name
+    /// is one grapheme of 81 UTF-8 bytes (`e` under forty U+0301), which no TXT value can carry.
+    static func expectRecipeOwnerFields() {
+        let named = recipeAdvertisedFields(host: PresentationNamespaceHost(namespace: .fernlet, displayName: "Alex"))
+        #expect(named == ["v": "1", "mode": "recipe", "name": "Alex"], "the owner's fields for Alex are \(named)")
+        let wide = "e" + String(repeating: "\u{0301}", count: 40)
+        #expect(wide.count == 1 && wide.utf8.count == 81, "the wide name is \(wide.count) graphemes, \(wide.utf8.count) bytes")
+        let unnamed = recipeAdvertisedFields(host: PresentationNamespaceHost(namespace: .fernlet, displayName: wide))
+        #expect(unnamed == ["v": "1", "mode": "recipe"], "a name no TXT value can carry was advertised as \(unnamed)")
+    }
+
+    /// 15a's join: the radio's published record for Alex's fields plus `fp` is the four fields with its
+    /// own `sid` and no `fp`, each `key=value` entry its frozen byte count; and an owner with nine keys
+    /// keeps the `sid` and the first seven keys alone.
+    static func expectRecipeRadioJoin() throws {
+        let radio = recipeRadio(namespace: .fernlet)
+        defer { radio.stop() }
+        let posture = try radio.runWithoutRadiosForTesting(
+            advertisement: ["v": "1", "mode": "recipe", "name": "Alex", "fp": "abcd"])
+        let fields = radio.advertisedFieldsForTesting
+        #expect(posture.sessionID.utf8.count == 36, "the radio's sid is \(posture.sessionID)")
+        #expect(fields == ["mode": "recipe", "name": "Alex", "sid": posture.sessionID, "v": "1"], "published \(fields)")
+        let entries = Dictionary(uniqueKeysWithValues: fields.map { ($0.key, "\($0.key)=\($0.value)".utf8.count) })
+        #expect(entries == ["mode": 11, "name": 9, "sid": 40, "v": 3], "the entries' byte counts are \(entries)")
+        let crowded = recipeRadio(namespace: .fernlet)
+        defer { crowded.stop() }
+        let nine = Dictionary(uniqueKeysWithValues: (0..<9).map { ("k\($0)", "x") })
+        let crowdedPosture = try crowded.runWithoutRadiosForTesting(advertisement: nine)
+        var seven = Dictionary(uniqueKeysWithValues: (0..<7).map { ("k\($0)", "x") })
+        seven["sid"] = crowdedPosture.sessionID
+        let kept = crowded.advertisedFieldsForTesting
+        #expect(kept == seven, "an owner of nine keys published \(kept.keys.sorted())")
+        let widest = (Array(fields) + Array(kept)).map { "\($0.key)=\($0.value)".utf8.count }.max() ?? 0
+        #expect(widest <= 255, "an entry of \(widest) bytes was published")
+    }
+
+    /// 15a's spellings: the record's keys, its version and its entry bound as frozen literals, and the
+    /// dial hello's keys exactly the record's `sid` and `v`.
+    static func expectRecipeKeySpellings() throws {
+        let spellings = [RecipeShareAdvertisement.versionKey, RecipeShareAdvertisement.sessionIDKey,
+                         RecipeShareAdvertisement.nameKey, RecipeShareAdvertisement.modeKey,
+                         RecipeShareAdvertisement.version]
+        #expect(spellings == ["v", "sid", "name", "mode", "1"], "the record's keys and version are \(spellings)")
+        #expect(RecipeShareAdvertisement.maxEntryByteCount == 255, "an entry may hold \(RecipeShareAdvertisement.maxEntryByteCount) bytes")
+        let hello = try RecipeShareDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
+        let object = try #require(try JSONSerialization.jsonObject(with: hello) as? [String: Any], "the hello is no JSON object")
+        #expect(Set(object.keys) == ["sid", "v"], "the hello's keys are \(object.keys.sorted())")
+    }
+
+    /// 15a's row: the radio a recipe-share manager over a host of `.fernlet` builds advertises and
+    /// browses the recipe row's service type and binds its ALPN.
+    static func expectRecipeRadioRow() {
+        let host = PresentationNamespaceHost(namespace: .fernlet, displayName: "Alex")
+        let radio = recipeManagerRadio(host: host) as? NetworkRecipeShareSession
+        #expect(radio?.serviceType == "_fernlet-recipe2._udp", "the manager's radio browses \(radio?.serviceType ?? "nothing")")
+        #expect(radio?.alpn == "fernlet-recipe-v1", "the manager's radio binds \(radio?.alpn ?? "nothing")")
+    }
+
+    /// 15a's sighting: one `recipe.quic.sighted` line per browsed record, its `recipe` context `true` for
+    /// a recipe advertisement and `false` for another mode. The capture is process-global and other
+    /// suites write `recipe.quic.*` lines, so each record is browsed under an instance name no other
+    /// suite uses, and only the lines whose `peer` is this radio's salted label for that key count.
+    static func expectRecipeSightingContext() {
+        let radio = recipeRadio(namespace: .fernlet)
+        let prefix = ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix
+        let rows = [(name: prefix + "a07015a0000000a1", mode: "recipe", recipe: "true"),
+                    (name: prefix + "a07015a0000000a2", mode: "near", recipe: "false")]
+        let capture = MeshRoutedBackpressureAuditCapture()
+        capture.install()
+        defer { capture.uninstall() }
+        // R2: bounded by the two rows.
+        for row in rows {
+            let key = MeshLinkKey("\(row.name).\(radio.serviceType).local.")
+            radio.noteBrowsedForTesting(key, instanceName: row.name, advertisement: ["v": "1", "mode": row.mode, "sid": "abc"])
+            let label = radio.peerLabel(for: key)
+            let lines = capture.count(of: "recipe.quic.sighted", where: { $0["peer"] == label })
+            let marked = capture.count(of: "recipe.quic.sighted", where: { $0["peer"] == label && $0["recipe"] == row.recipe })
+            #expect(lines == 1 && marked == 1, "a `\(row.mode)` record was sighted \(lines) times, \(marked) with recipe=\(row.recipe)")
+        }
+    }
+
+    /// **15b.** A recipe envelope signs its frozen canonical bytes: schema 2 under `.fernlet`'s labels,
+    /// built with the raw-token initializer (sender keys `0x01` and `0x02` × 32, `Robin`, bob's
+    /// fingerprint as recipient, sealed to `0x03` × 32, the summary `Recipe share` with three items,
+    /// the payload `sealed-recipe`, created at 1 700 000 000 s and expiring 300 s later), is
+    /// ``recipeEnvelopeCanonicalHex``, 336 bytes, whose SHA-256 is ``recipeEnvelopeCanonicalSHA256``.
+    /// A second, independent vector on the recipe token beside `FernletIdentityEnvelopeTests`' own
+    /// golden, whose input differs.
+    @Test func aRecipeEnvelopeSignsItsFrozenCanonicalBytes() {
+        let envelope = FernletIdentityEnvelope(
+            schemaVersion: 2, envelopeID: Self.uuid("0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E"),
+            senderSigningPublicKey: Data(repeating: 0x01, count: 32),
+            senderKeyAgreementPublicKey: Data(repeating: 0x02, count: 32),
+            senderDisplayName: "Robin", recipientFingerprint: "b4cb4b93c4027ce3",
+            payloadTypeToken: "fernlet.recipe.share.v1",
+            payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: Data(repeating: 0x03, count: 32)),
+            payloadSummary: PayloadSummary(title: "Recipe share", subtitle: nil, itemCount: 3, dateRange: nil, extraDetails: [:]),
+            payload: Data("sealed-recipe".utf8), createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            expiresAt: Date(timeIntervalSince1970: 1_700_000_300), signature: Data())
+        let bytes = canonicalBytes(for: envelope, in: .fernlet)
+        #expect(bytes.count == 336, "the recipe envelope's canonical bytes are \(bytes.count) bytes")
+        #expect(Self.hex(bytes) == Self.recipeEnvelopeCanonicalHex, "actual recipe envelope canonical hex = \(Self.hex(bytes))")
+        let digest = Self.hex(Data(SHA256.hash(data: bytes)))
+        #expect(digest == Self.recipeEnvelopeCanonicalSHA256, "actual recipe envelope canonical SHA-256 = \(digest)")
     }
 
     // MARK: Helpers
