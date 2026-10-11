@@ -2,8 +2,6 @@ import ProximityKit
 import Foundation
 import Synchronization
 import Testing
-import FernletDomainModel
-@testable import Fernlet
 
 @MainActor
 struct ReplayCacheTests {

@@ -33,10 +33,15 @@
 # overrides, after proving that a planted `import UIKit` fails it.
 #
 # Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
-# refuses a green run that executed fewer tests than the step's floor: `-only-testing:` matches
-# suite names exactly and matches NOTHING on a misspelling, so a bare xcodebuild line can name a
-# suite that no longer exists and stay green forever. Tests/FernletTests/CIGateSelectorBoundaryTests
-# is the static half (every named suite is declared; every mesh battery is named).
+# refuses a green run that executed fewer tests than the step's floor, or in which a named suite ran
+# no test: `-only-testing:` matches suite names exactly and matches NOTHING on a misspelling, so a
+# bare xcodebuild line can name a suite that no longer exists and stay green forever. A selector is a
+# FernletTests suite's bare name or, since ProximityKit plan step A0.8, `ProximityKitTests/<Suite>`
+# for a suite of ProximityKit's own package test target; one run may name both, and its floor counts
+# both bundles. The build and every run go through Fernlet.xcworkspace, the one container in which
+# the Fernlet scheme can see a package test target. Tests/FernletTests/CIGateSelectorBoundaryTests is
+# the static half (every named suite is declared in its target; every mesh battery and golden is
+# named; Tests/suite-inventory.tsv holds every suite's target, file and lines).
 #
 # Make this a REQUIRED status check in branch protection so the wall cannot be merged around.
 
@@ -137,14 +142,20 @@ jobs:
         # requires the clean case to pass — a negative alone proves nothing about the mechanism.
         #   * spm-wall-selftest.sh plants a forbidden cross-wall import into the walled AIProviders
         #     target and requires the compiler wall to reject it (WI-3), then re-runs the wall check
-        #     on the clean tree.
+        #     on the clean tree. The check builds Fernlet.xcworkspace's Fernlet scheme (plan step
+        #     A0.8), whose testables include ProximityKit's package test target, so it is compiled
+        #     strict beside FernletTests, and whose packages resolve from FernletKit/Package.resolved.
         #   * run-gated-suites-selftest.sh (P10 item 5 (c)) stubs `xcodebuild` and `xcrun` on PATH
         #     and requires run-gated-suites.sh to refuse a green-LOOKING run whose output carries
         #     `Restarting after unexpected exit, crash, or test timeout`. Until this existed the
         #     restart guard was executed only at its `--check-log` seam — a SECOND code path — so a
         #     refactor that dropped the `tee`, renamed `$RUN_LOG` or moved the grep would have left
-        #     the seam green and every floor on this workflow inflated by re-run suites. It needs no
-        #     Simulator and no build: the stubs are what the gate reads.
+        #     the seam green and every floor on this workflow inflated by re-run suites. Since plan
+        #     step A0.8 it also requires the runner to go through the workspace, to read exactly the
+        #     two selector shapes, and to refuse a suite named twice and a named suite that ran no
+        #     test case (per suite, since A0.8.5, beside a tree it cannot read, a non-ASCII selector
+        #     and a missing log at the seam). It needs no Simulator and no build: the stubs are what
+        #     the gate reads. CIGateSelectorBoundaryTests pins that this step runs it (A0.8.5).
         # Neither line names Scripts/run-gated-suites.sh as a word, so CIGateSelectorBoundaryTests'
         # `gatedSteps` parses no step here and no measured suite-name count moves.
         run: |
@@ -343,6 +354,37 @@ jobs:
         # iOS 26.5), ran 110 tests in 11 suites; its floor stays the shared `1`. crypto-goldens holds
         # the step's goldens at 355 and mesh-batteries the recipe-share manager's observation cell at
         # 1370, both raised at A0.7.0.
+        #
+        # ProximityKit plan step A0.8.0 (2026-10-10), before any suite moves to ProximityKit's own
+        # package test target, gives the selector wall its suite-inventory and twin cells:
+        # `theSuiteInventoryIsTheTree` holds Tests/suite-inventory.tsv (every one of the 642
+        # FernletTests suites with its file and the lines that name it, and each package suite's
+        # declared tests once one moves) to the tree, and `everyTwinMatchesItsOriginal` holds every
+        # helper both test targets compile identical but for its imports. Its selector reader learns
+        # `ProximityKitTests/<Suite>`, read against that target's own declarations, and its
+        # declaration reader `nonisolated`. 112 tests in 11 suites by declaration count (110 + 2), the
+        # ARITHMETIC CHECK, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
+        # 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`. mesh-batteries, which
+        # runs the wall too, is raised 1370 -> 1372.
+        #
+        # ProximityKit plan step A0.8 (2026-10-11), sort the tests, gives ProximityKit its own package
+        # test target, FernletKit/Tests/ProximityKitTests: unhosted, Swift 6 with no default isolation,
+        # depending on ProximityKit alone, built strict and run by the Fernlet scheme through
+        # Fernlet.xcworkspace. It holds the eight suites (59 tests) that need nothing but ProximityKit
+        # and its closure, moved there with their cells and assertions unchanged; three helpers live in
+        # both test targets, held identical but for imports by the selector wall's twin cell, and
+        # Tests/suite-inventory.tsv holds every suite to one target, one file and its lines. No
+        # existing line changed membership: mesh-batteries 1372 counts a ProximityKitTests share of
+        # 15 (PeerHandleIdentityTests 5, FakePeerTransportTests 10), and the new `proximitykit` line,
+        # the last step, runs the other six (44). crypto-goldens stays 355, all FernletTests:
+        # ProximityNamespaceSoundnessTests, which needs nothing but ProximityKit too, stays there with
+        # its five framing byte pins until plan step A1 moves it with the package (an owner
+        # decision), after the mesh-message spelling helper its file declares, which three staying
+        # suites build their fixtures with, moves to a file of its own. No cell was added to this line
+        # after A0.8.0, and the line, MEASURED on a Mac at A0.8.4 (iPhone 17 simulator, iOS 26.5), ran
+        # 112 tests in 11 suites; its floor stays the shared `1`. A0.8.5's review fixes added no cell
+        # either (the selector wall's new checks ride its existing ones), and the line, MEASURED again on
+        # that tree, ran 112.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -1373,7 +1415,8 @@ jobs:
         # `PeerTransportNeutralityTests`, names no declared type at all: that FILE declares
         # PeerHandleIdentityTests, MeshMultipeerSessionIdentityTests and FakePeerTransportTests, and
         # it is not in `git diff bb454fe..HEAD -- Tests/FernletTests`, so P9 never touched it and
-        # `p9TouchedSuites` correctly omits it. It is TIER 3 below, on its own argument.
+        # `p9TouchedSuites` correctly omits it. It is TIER 3 below, on its own argument. (That file is
+        # in FernletKit/Tests/ProximityKitTests since ProximityKit plan step A0.8.2.)
         # Per suite, counted over `@Test` FUNCTIONS inside each DECLARATION - a grep for @Suite
         # under-counts, and a grep for @Test over a FILE over-counts across its siblings:
         #   + 16  MeshRoutedManifestGoldenTests          (MeshRoutedManifestTests.swift)
@@ -1402,6 +1445,9 @@ jobs:
         # TIER 3, three names / 19 cells: PeerTransportNeutralityTests.swift's
         #   +  10  FakePeerTransportTests   +  5  PeerHandleIdentityTests
         #   +   4  MeshMultipeerSessionIdentityTests
+        #   (in FernletKit/Tests/ProximityKitTests since ProximityKit plan step A0.8.2, named
+        #   ProximityKitTests/<Suite> below; MeshMultipeerSessionIdentityTests has since been retired,
+        #   so the file holds two suites, 15 cells)
         # gated on its OWN argument, not on P9's: it holds the `PeerHandle.isSameEndpoint(as:)` rule
         # the mesh call sites depend on, the plan's endpoint->identity split, and the FakePeerNetwork
         # fabric every acceptance battery on this line is built on - a fake nobody checks is a source
@@ -1663,9 +1709,31 @@ jobs:
         # (ProximityRecipeShareCapTests' cell holding the recipe-share manager's observables to the
         # notifications SwiftUI reads, before plan step A0.7.3 makes them its pair session's) = 1370 is
         # the ARITHMETIC CHECK, never the source.
+        # At A0.8.0 no suite joined or left, so the NAME count stays 154; one suite here gained two cells:
+        # RAISED 1370 -> 1372 at A0.8.0, MEASURED on a Mac, 2026-10-10 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: totalTestCount 1372, "Test run with 1372 tests in
+        # 154 suites passed after 182.020 seconds" (CIGateSelectorBoundaryTests 7 -> 9, no other suite
+        # moved), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 1372:
+        # passed. Run once more at 1372 without CIGateSelectorBoundaryTests: 1363 ran and the floor
+        # refused it. 1370 + 2 (the selector wall's suite-inventory cell, holding
+        # Tests/suite-inventory.tsv to the tree, and its twin cell) = 1372 is the ARITHMETIC CHECK,
+        # never the source.
+        # At A0.8.2 no suite joined or left and no cell was added, so the NAME count stays 154 and the
+        # floor 1372; two suites changed bundles: HELD at 1372 at A0.8.2, MEASURED on a Mac, 2026-10-11
+        # (iPhone 17 simulator, iOS 26.5): this exact 154-name list, PeerHandleIdentityTests and
+        # FakePeerTransportTests now in ProximityKit's package test target and named
+        # ProximityKitTests/<Suite>, run at its floor through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 1372
+        # (FernletTests 1357 in 152 suites, "Test run with 1357 tests in 152 suites passed after 168.856
+        # seconds"; ProximityKitTests 15 in 2, PeerHandleIdentityTests 5 and FakePeerTransportTests 10),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent.
+        # Re-run AT 1372: passed. Run once more at 1372 without ProximityKitTests/FakePeerTransportTests:
+        # 1362 ran and the floor refused it; and without ProximityKitTests/PeerHandleIdentityTests: 1367
+        # ran and the floor refused it. 1372 - 15 + 15 = 1372 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1370 \
+          Scripts/run-gated-suites.sh mesh-batteries 1372 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -1799,8 +1867,8 @@ jobs:
             MeshRoutedBackpressureTests \
             MeshRoutedParkedDropDoorTests \
             RoutedDeliveryHoldCopyTests \
-            PeerHandleIdentityTests \
-            FakePeerTransportTests \
+            ProximityKitTests/PeerHandleIdentityTests \
+            ProximityKitTests/FakePeerTransportTests \
             MeshP10SchedulingSeamAcceptanceTests \
             MeshP10HandlerPipelineAcceptanceTests \
             MeshP10DiffRuleAcceptanceTests \
@@ -1820,3 +1888,33 @@ jobs:
             MeshRoutedDrainAnswerGoldenTests \
             MeshRoutedInventoryGoldenTests \
             PeerHandleWireGoldenTests
+
+      - name: ProximityKit's own tests (FernletKit/Tests/ProximityKitTests)
+        # ProximityKit plan step A0.8.3 (2026-10-11): the suites of ProximityKit's own package test target
+        # that ride no other line. The target is unhosted (the simulator's xctest agent: no keychain
+        # entitlement, no ProximityAudit sink), Swift 6 with no default isolation, and depends on
+        # ProximityKit alone; the Fernlet scheme runs it through Fernlet.xcworkspace. Two of its suites stay
+        # on the line they ran on before they moved (mesh-batteries: PeerHandleIdentityTests and
+        # FakePeerTransportTests); these six ran on no line and join this one, so CI runs every suite the
+        # package holds (Tests/suite-inventory.tsv's I10). Every selector here is ProximityKitTests/<Suite>,
+        # so the run starts the package bundle alone.
+        # NEW at A0.8.3, MEASURED on a Mac, 2026-10-11 (iPhone 17 simulator, iOS 26.5): this exact
+        # six-name list run at floor 1 through Fernlet.xcworkspace after the strict build-for-testing (WALL
+        # CHECK PASSED), read off its own result bundle: totalTestCount 44 (ProximityKitTests 44, "Test run
+        # with 44 tests in 6 suites passed after 0.036 seconds": MeshDerivedRosterTests 9,
+        # MeshMembershipMergeTests 6, MeshMembershipBoundsTests 9, MeshRoutedDrainPlanTests 10,
+        # NearbyRangingSessionTests 9 and ReplayCacheTests 1, each its count in FernletTests before the
+        # move), 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent.
+        # Re-run AT 44: passed. Run once more at 44 without ProximityKitTests/MeshDerivedRosterTests: 35 ran
+        # and the floor refused it; and without ProximityKitTests/ReplayCacheTests: 43 ran and the floor
+        # refused it. 9 + 6 + 9 + 10 + 9 + 1 = 44 is the ARITHMETIC CHECK, never the source. RAISE it when
+        # a suite here gains a cell; never lower it in passing.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh proximitykit 44 \
+            ProximityKitTests/MeshDerivedRosterTests \
+            ProximityKitTests/MeshMembershipMergeTests \
+            ProximityKitTests/MeshMembershipBoundsTests \
+            ProximityKitTests/MeshRoutedDrainPlanTests \
+            ProximityKitTests/NearbyRangingSessionTests \
+            ProximityKitTests/ReplayCacheTests

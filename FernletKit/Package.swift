@@ -2,11 +2,12 @@
 import PackageDescription
 
 // FernletKit — the local Swift package for the SPM module carve-up (plan §6).
-// The layered DAG below (28 targets, one umbrella product) IS the S3 privacy
-// wall: the walled AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) targets
-// have no dependency edge to the sealed `Private*` stores, and the build runs
-// with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import
-// is a hard build error (see Scripts/spm-wall-check.sh).
+// The layered DAG below (28 targets and ProximityKit's test target, one
+// umbrella product) IS the S3 privacy wall: the walled AI (`AIProviders`) and
+// iCloud-sync (`CloudKitSync`) targets have no dependency edge to the sealed
+// `Private*` stores, and the build runs with
+// `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import is a
+// hard build error (see Scripts/spm-wall-check.sh).
 //
 // `defaultIsolation(MainActor.self)` is set per target up front: MainActor
 // isolation is NOT inherited from the app target's SWIFT_DEFAULT_ACTOR_ISOLATION
@@ -24,10 +25,12 @@ import PackageDescription
 let package = Package(
     name: "FernletKit",
     defaultLocalization: "en",
-    // macOS 26 is declared package-wide, which is how SwiftPM declares a platform. Only ProximityKit's
+    // macOS 26 is declared package-wide, which is how SwiftPM declares a platform. ProximityKit's
     // closure (ProximityKit, FernletCrypto, FernletDomainModel, FernletFoundation) builds for it, and
-    // Scripts/macos-build-check.sh builds exactly that on every push (plan step A0.6). Every other
-    // target is iOS-only until a plan step says otherwise (FernletUI: workstream B).
+    // Scripts/macos-build-check.sh builds exactly that on every push (plan step A0.6); since plan step
+    // A0.8.2 ProximityKit's own test target, ProximityKitTests, builds and runs natively on macOS too,
+    // though no CI lane runs it there before plan step A1. Every other target is iOS-only until a plan
+    // step says otherwise (FernletUI: workstream B).
     platforms: [
         .iOS(.v26),
         .macOS(.v26),
@@ -568,6 +571,28 @@ let package = Package(
             dependencies: ["ProximityKit", "FernletConnections", "FernletCrypto", "FernletDomainModel", "FernletFoundation", "PrivateMediaStore"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // ProximityKit's own tests (plan step A0.8): the suites that need nothing but ProximityKit, moved out
+        // of the app's FernletTests so they travel with the package at plan step A1 (their files import
+        // nothing of ProximityKit's closure, which stays in this repository). The
+        // Fernlet scheme runs them as a second, unhosted test bundle (the simulator's xctest agent: no keychain
+        // entitlement, no ProximityAudit sink) through Fernlet.xcworkspace, the one container in which the
+        // scheme can see a package test target, so Scripts/spm-wall-check.sh builds them strict;
+        // Tests/FernletTests/CIGateSelectorBoundaryTests holds them to Tests/suite-inventory.tsv and pins this
+        // target's dependencies to ProximityKit alone. FernletTests builds in Swift 5 language mode with six
+        // upcoming features (SWIFT_APPROACHABLE_CONCURRENCY's five, and member import visibility); this target
+        // builds in Swift 6 mode (the package default), which implies three of them, with no default isolation
+        // and the other three below, so a suite keeps the isolation, executor semantics and name lookup it had
+        // there. Swift 6 also checks concurrency completely and isolation at run time, which FernletTests does
+        // not, so each move's behaviour is measured on the new target rather than equal by construction.
+        .testTarget(
+            name: "ProximityKitTests",
+            dependencies: ["ProximityKit"],
+            swiftSettings: [
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+                .enableUpcomingFeature("InferIsolatedConformances"),
+                .enableUpcomingFeature("MemberImportVisibility"),
             ]
         ),
     ]
