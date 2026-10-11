@@ -27,8 +27,8 @@
 # re-fires on (re)compilation, so a CI clean build always triggers it.
 #
 # COMPLEMENTARY CHECK: FernletTests/S3BoundaryTests is a grep-wall (belt-and-suspenders) that
-# scans the AI-facing source files for forbidden sealed-type tokens. Run the test suite to
-# exercise it; this script covers the compiler-enforced half of the wall.
+# scans the AI-facing source files for forbidden sealed-type tokens. Scripts/run-gated-suites.sh
+# runs it on CI's s3-grep line; this script covers the compiler-enforced half of the wall.
 #
 # POWER-OF-10 RULE 10 (Docs/Power-of-10-Swift.md §R10) RIDES ON THIS BUILD TOO. It is the iOS one
 # of the two strict builds CI runs (Scripts/macos-build-check.sh, ProximityKit's closure built for
@@ -46,6 +46,14 @@
 # commands, here and in Scripts/macos-build-check.sh, are the only place package warnings become
 # errors. A new warning anywhere in this build therefore fails this check.
 #
+# WHY THE WORKSPACE (ProximityKit plan step A0.8): `-project App/Fernlet.xcodeproj` cannot see a
+# local package's test target. As a scheme testable it is absent from the build graph, and
+# build-for-testing exits 0 without compiling it (measured 2026-10-10). Fernlet.xcworkspace holds
+# FernletKit as a root beside the app project, the one container in which the Fernlet scheme can see
+# a package test target. Its packages resolve from FernletKit/Package.resolved.
+# Scripts/run-gated-suites.sh runs through the same workspace: a build and a run through different
+# containers land in different derived data.
+#
 # USAGE:  Scripts/spm-wall-check.sh
 #         FERNLET_DESTINATION='platform=iOS Simulator,name=iPhone 17' Scripts/spm-wall-check.sh
 set -o pipefail
@@ -60,9 +68,10 @@ echo "    repo:        $REPO_ROOT"
 echo "    destination: $DESTINATION"
 echo "    flag:        DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR"
 echo "    R10 flags:   SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES"
+echo "    container:   Fernlet.xcworkspace (scheme Fernlet)"
 echo
 
-xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet \
+xcodebuild build-for-testing -workspace Fernlet.xcworkspace -scheme Fernlet \
   -destination "$DESTINATION" \
   DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR \
   SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES

@@ -3,7 +3,8 @@
 //
 // The STATIC half of the CI non-vacuity guard (P5 close-out review, finding 4). The dynamic half is
 // `Scripts/run-gated-suites.sh`: every test step in `.github/workflows/s3-wall.yml` runs through it,
-// and it refuses a green run whose result bundle counts fewer tests than the step's floor.
+// and it refuses a green run whose result bundle counts fewer tests than the step's floor, or in
+// which a named suite ran no test case.
 //
 // What this file adds is the check that can run WITHOUT a simulator: `-only-testing:` matches suite
 // names exactly and matches nothing on a misspelling, so a workflow line can name a suite that no
@@ -13,8 +14,9 @@
 // A0.8), every mesh acceptance battery and wire golden declared in either target must be named by the
 // workflow (the P3/P4/P5 batteries were ungated for three phases because nothing said they had to
 // be), `Tests/suite-inventory.tsv` must be the tree (every suite's target, file and lines, and each
-// package suite's declared tests), the helpers both targets compile must be twins, and this suite
-// gates itself.
+// package suite's declared tests), the helpers both targets compile must be twins, the strict build
+// and every run go through `Fernlet.xcworkspace`, which resolves the CryptoSwift revision the app
+// project pins (ProximityKit plan step A0.8.1), and this suite gates itself.
 
 import Foundation
 import Testing
@@ -629,7 +631,12 @@ import Testing
         }
     }
 
-    /// No test step bypasses the floor, and this suite gates itself.
+    /// No test step bypasses the floor, and this suite gates itself. Since ProximityKit plan step
+    /// A0.8.1 the floor script and the strict build both go through `Fernlet.xcworkspace`, the floor
+    /// script reads `ProximityKitTests/<Suite>` selectors and refuses a named suite that ran no test
+    /// case, and the workspace and a release archive resolve one CryptoSwift
+    /// (``expectTheRunnerReadsTwoTargets(_:)``, ``expectTheBuildAndTheRunsShareTheWorkspace()``,
+    /// ``expectOneCryptoSwiftRevision()``).
     @Test func everyTestStepRunsThroughTheFloorScript() throws {
         let workflow = try RepoRoot.source(Self.workflowPath)
         let code = workflow.components(separatedBy: "\n")
@@ -706,6 +713,142 @@ import Testing
         // compiler half, so it is pinned here, beside the bundle-count pin it protects.
         #expect(script.contains("Restarting after unexpected exit, crash, or test timeout"),
                 "the floor script no longer refuses a run xcodebuild restarted")
+        // ProximityKit plan step A0.8.1: a package test target is visible only through the workspace,
+        // a build and a run through different containers land in different derived data, and a
+        // mixed line's total can hide a selector of the wrong target. Each pin is a shell or JSON
+        // fact with no compiler half, read here so it reds with no simulator.
+        Self.expectTheRunnerReadsTwoTargets(script)
+        try Self.expectTheBuildAndTheRunsShareTheWorkspace()
+        try Self.expectOneCryptoSwiftRevision()
+    }
+
+    // MARK: - The container, the runner and the resolution (ProximityKit plan step A0.8.1)
+
+    /// The root workspace the strict build and every run go through: `FernletKit` beside the app
+    /// project, the one container in which the Fernlet scheme can see a package test target
+    /// (`-project App/Fernlet.xcodeproj` leaves a package testable out of the build graph and exits 0).
+    static let workspacePath = "Fernlet.xcworkspace/contents.xcworkspacedata"
+
+    /// The two roots ``workspacePath`` must hold, as its `FileRef` locations.
+    static let workspaceRoots = ["group:FernletKit", "group:App/Fernlet.xcodeproj"]
+
+    /// The strict build-for-testing whose derived data every run of ``floorScript`` reads.
+    private static let wallCheckScript = "Scripts/spm-wall-check.sh"
+
+    /// The two resolved files that must pin one CryptoSwift (the Scrypt KDF behind FernletLock):
+    /// `FernletKit/Package.resolved`, which a build through ``workspacePath`` resolves from (measured
+    /// on Xcode 26.5: a zero revision planted there fails `-onlyUsePackageVersionsFromResolvedFile`
+    /// through the workspace, while the same plant in the project's file does not), and the app
+    /// project's, which `-project`, and so `xcodebuild archive` in `Scripts/release-checksum.sh`,
+    /// resolves from. Nothing else holds the two equal, so CI and a release could build different
+    /// revisions.
+    static let resolvedFiles = [
+        "FernletKit/Package.resolved",
+        "App/Fernlet.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+    ]
+
+    /// A shell script's code: every line whose trimmed text starts `#` dropped (the script's own
+    /// comments and the embedded Python's), so a pinned word in a comment does not count.
+    static func shellCode(_ script: String) -> String {
+        script.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+            .joined(separator: "\n")
+    }
+
+    /// ``floorScript`` runs through the workspace and never `-project`, emits a target-qualified
+    /// selector for a package suite, reads the result bundle's tests tree, and refuses both a named
+    /// suite that ran no test case and a tree whose suites it cannot read (the suite census). Each
+    /// fact is read into a `Bool` before it is expected, so a failure never prints the script: its
+    /// text holds the restart marker, which the floor script would read back as a restart.
+    private static func expectTheRunnerReadsTwoTargets(_ script: String) {
+        let code = shellCode(script)
+        let pins: [(needle: String, why: String)] = [
+            ("-workspace Fernlet.xcworkspace", "runs through the workspace the strict build uses"),
+            ("ProximityKitTests/", "reads a ProximityKitTests/<Suite> selector"),
+            ("xcresulttool get test-results tests", "reads the result bundle's tests tree"),
+            ("named but ran no test case", "refuses a named suite that ran no test case"),
+            ("no parseable nodeIdentifierURL", "refuses a tests tree whose suites it cannot read")
+        ]
+        // R2: bounded by the fixed list.
+        for pin in pins {
+            let holds = code.contains(pin.needle)
+            #expect(holds, """
+                \(floorScript)'s code no longer contains `\(pin.needle)`: it must say it \(pin.why) \
+                (ProximityKit plan step A0.8.1) — a mixed line's total can hide a selector of the \
+                wrong target, and only the suite census cannot
+                """)
+        }
+        let throughProject = code.contains("-project ")
+        #expect(!throughProject, """
+            \(floorScript) runs through `-project`: that container cannot see a package test target, \
+            and \(wallCheckScript) builds through the workspace, so a run there reads other derived data
+            """)
+    }
+
+    /// ``wallCheckScript`` holds one `xcodebuild build-for-testing`, through the workspace and not
+    /// `-project`, and the workspace holds both of ``workspaceRoots``.
+    private static func expectTheBuildAndTheRunsShareTheWorkspace() throws {
+        let commands = ProximityPlatformBoundaryTests.xcodebuildBuildCommands(
+            in: try RepoRoot.source(wallCheckScript), action: "build-for-testing")
+        #expect(commands.count == 1, "\(wallCheckScript) holds \(commands.count) `xcodebuild build-for-testing` commands, not one")
+        let command = commands.first ?? ""
+        #expect(ProximityPlatformBoundaryTests.carries("-workspace Fernlet.xcworkspace", in: command)
+                && !ProximityPlatformBoundaryTests.carries("-project", in: command), """
+            \(wallCheckScript)'s strict build no longer goes through `-workspace Fernlet.xcworkspace` \
+            alone: under `-project` a package test target is silently left unbuilt, and \(floorScript) \
+            runs through the workspace, so the two would read different derived data
+            """)
+        let workspace = try RepoRoot.source(workspacePath)
+        // R2: bounded by the two roots.
+        for root in workspaceRoots {
+            #expect(workspace.contains("location = \"\(root)\""),
+                    "\(workspacePath) no longer holds the `\(root)` root the strict build and every run need")
+        }
+    }
+
+    /// Both of ``resolvedFiles`` parse, each holds exactly one `cryptoswift` pin with a location, a
+    /// revision and a version, and the two pins are equal. Only `cryptoswift` is compared: a pin one
+    /// file holds alone (a branch-pinned package reference carries no `version`) is not this pin's.
+    private static func expectOneCryptoSwiftRevision() throws {
+        var triples: [[String]] = []
+        // R2: bounded by the two files.
+        for path in resolvedFiles {
+            let read = cryptoSwiftPin(inResolved: try Data(contentsOf: RepoRoot.url(path)), path: path)
+            #expect(read.problem == nil, "\(read.problem ?? "")")
+            triples.append(read.pin)
+        }
+        #expect(triples.count == 2 && triples.allSatisfy { $0.count == 3 } && triples[0] == triples[1], """
+            \(resolvedFiles[0]) and \(resolvedFiles[1]) pin different CryptoSwift revisions \
+            (location, revision, version: \(triples)). CI builds through the workspace, which resolves \
+            from the first; a release archive builds through the project, which resolves from the \
+            second. Re-resolve so both name one revision, in the same commit.
+            """)
+    }
+
+    /// The `cryptoswift` pin of one `Package.resolved`'s data as (location, revision, version), or a
+    /// problem naming `path`: data that is not JSON, no `pins` array, or not exactly one
+    /// `cryptoswift` pin carrying all three.
+    static func cryptoSwiftPin(inResolved data: Data, path: String) -> (pin: [String], problem: String?) {
+        let object: Any
+        do {
+            object = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            return ([], "\(path) is not JSON (\(error)): the CryptoSwift pin cannot be read")
+        }
+        guard let root = object as? [String: Any], let pins = root["pins"] as? [[String: Any]] else {
+            return ([], "\(path) has no `pins` array: the CryptoSwift pin cannot be read")
+        }
+        let matching = pins.filter { ($0["identity"] as? String) == "cryptoswift" }
+        guard matching.count == 1, let pin = matching.first, let state = pin["state"] as? [String: Any],
+              let location = pin["location"] as? String, let revision = state["revision"] as? String,
+              let version = state["version"] as? String else {
+            return ([], """
+                \(path) holds \(matching.count) `cryptoswift` pin(s), or one without a location, a \
+                revision and a version: exactly one, pinned to a released version, is what the \
+                workspace build and a release archive must agree on
+                """)
+        }
+        return ([location, revision, version], nil)
     }
 
     /// The one device every test line runs on is named once, is the same device the scripts default
@@ -1405,6 +1548,7 @@ import Testing
         Self.expectSelectorReaderFixtured()
         Self.expectDeclaredTestReaderFixtured()
         Self.expectInventoryReaderFixtured()
+        Self.expectResolutionReaderFixtured()
         let steps2 = """
               - name: Other step
                 run: echo other
@@ -1511,5 +1655,27 @@ import Testing
                          file: "FernletKit/Tests/ProximityKitTests/ReplayCacheTests.swift", lines: ["proximitykit"], cells: 1)
         ])
         #expect(read.problems.count == 1, "the four-field row is the one problem: \(read.problems)")
+    }
+
+    /// The resolution pin's readers, both ways: a file's one `cryptoswift` pin is read as its triple
+    /// beside a branch-pinned reference that carries no version; a file that is not JSON, one with two
+    /// `cryptoswift` pins and one whose pin has no version are each a named problem; and a shell
+    /// script's comment lines, indented or not, are not its code.
+    private static func expectResolutionReaderFixtured() {
+        let pin = #"{"identity":"cryptoswift","location":"L","state":{"revision":"R","version":"1.10.0"}}"#
+        let branch = #"{"identity":"proximitykit","location":"P","state":{"branch":"main","revision":"B"}}"#
+        let both = Data(#"{"pins":[\#(pin),\#(branch)],"version":3}"#.utf8)
+        #expect(cryptoSwiftPin(inResolved: both, path: "a").pin == ["L", "R", "1.10.0"])
+        #expect(cryptoSwiftPin(inResolved: both, path: "a").problem == nil)
+        let refused = [
+            Data("not json".utf8),
+            Data(#"{"pins":[\#(pin),\#(pin)]}"#.utf8),
+            Data(#"{"pins":[{"identity":"cryptoswift","location":"L","state":{"branch":"main","revision":"R"}}]}"#.utf8)
+        ]
+        // R2: bounded by the fixed list.
+        for data in refused {
+            #expect(cryptoSwiftPin(inResolved: data, path: "b").problem != nil, "a resolved file the pin cannot read was read")
+        }
+        #expect(shellCode("# a comment\nARGS=(-workspace X)\n    # indented -project\necho done") == "ARGS=(-workspace X)\necho done")
     }
 }

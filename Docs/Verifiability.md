@@ -48,14 +48,14 @@ names the exact command, test, or file that backs it, so "trust us" can be repla
 All commands run from the repo root and need Xcode with an iOS simulator. Build once:
 
 ```
-xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet \
+xcodebuild build-for-testing -workspace Fernlet.xcworkspace -scheme Fernlet \
   -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 Then run any single suite by name:
 
 ```
-xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet \
+xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:FernletTests/NoTrackingBoundaryTests
 ```
@@ -68,7 +68,10 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 > - **`-project App/Fernlet.xcodeproj` was missing.** The 2026-08-12 repo restructure moved the
 >   sources under `App/` and the tests under `Tests/`; there is no `.xcodeproj` at the repo root any
 >   more, so a bare `xcodebuild -scheme Fernlet` from the root finds no project. Same invocation
->   shape as `Scripts/spm-wall-check.sh` and the build/test commands in `CLAUDE.md`.
+>   shape as `Scripts/spm-wall-check.sh` and the build/test commands in `CLAUDE.md` (since
+>   ProximityKit plan step A0.8 the root holds `Fernlet.xcworkspace`, which the commands above name
+>   with `-workspace`; `-project App/Fernlet.xcodeproj` still builds the app but cannot see a
+>   package test target).
 > - **`-only-testing:` takes a TEST-TARGET path, not a filesystem path.** The old commands read
 >   `-only-testing:Tests/FernletTests/<Suite>`, which mirrors where the file lives on disk.
 >   `xcodebuild` wants `<TestTarget>/<Suite>`, and the target is named **`FernletTests`** — so it is
@@ -79,16 +82,19 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 >
 > Suite identifiers are matched **exactly**, with no prefix matching, so a file declaring several
 > suites needs each one named. The `-only-testing:` fragments in the table below all assume the
-> `xcodebuild test-without-building -project … -scheme Fernlet -destination …` prefix above.
+> `xcodebuild test-without-building -workspace … -scheme Fernlet -destination …` prefix above.
 >
 > **Since 2026-09-06 the zero-tests failure mode is refused mechanically in CI**, not merely warned
 > about: every test step in `s3-wall.yml` runs through `Scripts/run-gated-suites.sh`, which writes a
 > result bundle and fails the step unless `xcresulttool`'s `totalTestCount` reaches the step's floor
 > (1 for the older single-wall steps; a MEASURED count for the mesh batteries, the crypto goldens
 > and every wall line added since 2026-09-24), and
-> `CIGateSelectorBoundaryTests` pins every named suite to a declared type. Use the same script
-> locally — `Scripts/run-gated-suites.sh check 1 NoTrackingBoundaryTests` — and it will refuse the
-> green banner over nothing for you too.
+> `CIGateSelectorBoundaryTests` pins every named suite to a declared type. Since ProximityKit plan
+> step A0.8 the script also reads the bundle's tests tree and fails the step when any suite it named
+> ran no test case, so a suite named in the wrong test target cannot hide behind the rest of its
+> line's total. Use the same script locally — after `Scripts/spm-wall-check.sh` has built through
+> the same workspace, `Scripts/run-gated-suites.sh check 1 NoTrackingBoundaryTests` — and it will
+> refuse the green banner over nothing for you too.
 >
 > The floor has a second half: a test run that **restarts** re-runs suites, so the bundle's
 > `totalTestCount` counts cells twice and a floor it clears proves nothing. The script refuses a
@@ -96,12 +102,14 @@ xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet 
 > P10 item 5 that refusal is itself proved on the LIVE branch rather than only at its
 > `--check-log` seam: `Scripts/run-gated-suites-selftest.sh` runs the real script with
 > `xcodebuild` and `xcrun` stubbed on `PATH` — a green-looking run, a count above the floor —
-> and asserts the exit code with the restart line present and absent, on both code paths. It
-> needs no Simulator and runs beside `spm-wall-selftest.sh` on CI's enforcement step.
+> and asserts the exit code with the restart line present and absent, on both code paths, and
+> (since plan step A0.8) that the script runs through the workspace and refuses a named suite that
+> ran no test case. It needs no Simulator and runs beside `spm-wall-selftest.sh` on CI's
+> enforcement step.
 
 | Claim | Verification |
 |---|---|
-| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/NoTrackingBoundaryTests` — eleven independent scans, with planted-violation fixtures proving the scans themselves work (this row said eight until 2026-09-24; the two local-link scans and the retired-radio scan had joined since). What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. The Open Food Facts barcode lookup's consent gate — no request is even built without the web-nutrition-lookup consent — is pinned separately by `-only-testing:FernletTests/OpenFoodFactsLookupTests`. |
+| No tracking SDK, no unlisted network destination, no third-party dependency beyond CryptoSwift, private-tab-only fetching, clean privacy manifests | `xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/NoTrackingBoundaryTests` — eleven independent scans, with planted-violation fixtures proving the scans themselves work (this row said eight until 2026-09-24; the two local-link scans and the retired-radio scan had joined since). What each test forbids is tabled in [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §2. The Open Food Facts barcode lookup's consent gate — no request is even built without the web-nutrition-lookup consent — is pinned separately by `-only-testing:FernletTests/OpenFoodFactsLookupTests`. |
 | AI/sync modules structurally cannot reach sealed stores | `Scripts/spm-wall-check.sh` (the enforcement build), and `Scripts/spm-wall-selftest.sh` — the negative test: it *plants* a forbidden `import PrivateHealthStore` inside the walled `AIProviders`, asserts the build fails, reverts, and re-confirms the clean tree passes. Plus the grep half: `-only-testing:FernletTests/S3BoundaryTests`. |
 | ProximityKit, the in-person subsystem, builds for native macOS as well as iOS, and holds no platform policy: every platform fact comes from its host (ProximityKit plan step A0.6) | `Scripts/macos-build-check.sh` (ProximityKit's closure built for `generic/platform=macOS` with warnings as errors, then checked for native macOS products, since that destination also matches Mac Catalyst), and `Scripts/macos-build-selftest.sh` — the negative test: it *plants* an `import UIKit` inside ProximityKit, asserts the macOS build fails on it (native macOS has no UIKit; an iOS or Mac Catalyst build would pass), removes it, and re-confirms the clean tree passes. Plus the source half: `-only-testing:FernletTests/ProximityPlatformBoundaryTests` (ProximityKit's imports held to a neutral baseline and its two guarded mechanism seams, and no device-name read, platform directory or default for a host fact at all, each rule a ratchet whose transient rows would name the plan step that deletes them, and the macOS build pinned to run in CI and on pre-push). |
 | The complete egress inventory is accurate | Read [`No-Tracking-Wall.md`](No-Tracking-Wall.md) §3 (hardcoded-host allowlist — the test fails on both an unlisted host AND a stale listed one) and §4 (Apple services, user-supplied URLs, link-local mesh). Then grep the tree yourself: every HTTP client must live in one of the four pinned files (three fetchers and the session factory they share), each held to its own exact host set, so there is very little to read. |

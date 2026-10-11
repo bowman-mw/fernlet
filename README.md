@@ -90,12 +90,15 @@ every type in the codebase carries a `///` doc comment, and
 
 ## Build and test
 
+Open and build `Fernlet.xcworkspace`, which holds the app project and the FernletKit package side by
+side; the project alone cannot see a package test target.
+
 ```bash
-xcodebuild build-for-testing -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
+xcodebuild build-for-testing -workspace Fernlet.xcworkspace -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 ```bash
-xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
+xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
 ```
 
 The full suite takes several minutes; run it in batches by suite when iterating.

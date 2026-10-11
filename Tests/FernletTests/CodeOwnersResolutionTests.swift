@@ -105,6 +105,8 @@ struct CodeOwnersResolutionTests {
         "/.github/CODEOWNERS",
         // The suite inventory CIGateSelectorBoundaryTests holds to the tree (ProximityKit plan step A0.8).
         "/Tests/suite-inventory.tsv",
+        // The workspace the strict build and every CI test run go through (ProximityKit plan step A0.8).
+        "/Fernlet.xcworkspace/",
         "/.github/workflows/s3-wall.yml",
         "/.github/workflows/power-of-10.yml",
         // All four privacy manifests — the public App Store claim NoTrackingBoundaryTests pins. The

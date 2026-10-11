@@ -1,25 +1,31 @@
 #!/bin/bash
 #
-# run-gated-suites.sh — run named FernletTests suites against the ALREADY-BUILT test bundle and
-# refuse a green run that executed fewer tests than its floor.
+# run-gated-suites.sh — run named test suites against the ALREADY-BUILT test bundles and
+# refuse a green run that executed fewer tests than its floor, or in which a named suite ran none.
 #
-# Why the floor exists: `-only-testing:FernletTests/<Suite>` matches suite names exactly and
+# Why the floor exists: `-only-testing:<Target>/<Suite>` matches suite names exactly and
 # matches NOTHING on a misspelling, a renamed suite, a file name where a `@Suite` struct was
 # meant, or a suite that has since been deleted — and xcodebuild then exits 0 having executed
 # zero tests under a "TEST EXECUTE SUCCEEDED" banner. A wall gated on such a line is not a wall
 # (Docs/Verifiability.md §1 learned this on 2026-08-20; the P5 close-out found three phases of
 # mesh batteries ungated for the same reason). So every CI test step goes through here: the run
 # writes a result bundle, and the bundle's OWN test count is checked against the floor before
-# the step may pass. Tests/FernletTests/CIGateSelectorBoundaryTests.swift is the static half —
-# every suite the workflow names must be a declared suite, and every mesh battery declared in the
-# tree must be named.
+# the step may pass, and its own tests tree against every selector (the suite census below).
+# Tests/FernletTests/CIGateSelectorBoundaryTests.swift is the static half — every suite the
+# workflow names must be a declared suite of its target, every mesh battery declared in the tree
+# must be named, and Tests/suite-inventory.tsv holds every suite to its target, file and lines.
 #
-# Usage:  Scripts/run-gated-suites.sh <label> <min-tests> <Suite> [<Suite> ...]
+# Usage:  Scripts/run-gated-suites.sh <label> <min-tests> <Selector> [<Selector> ...]
 #         <label>      a short name for the result bundle (letters, digits, dashes)
 #         <min-tests>  the smallest test count that may pass. 1 means "at least not vacuous";
 #                      a battery pins its real count and RAISES it as suites grow — lowering a
 #                      floor is a review event, never a drive-by.
-#         <Suite>      a suite name WITHOUT the FernletTests/ prefix
+#         <Selector>   a FernletTests suite's bare name, or ProximityKitTests/<Suite> for a suite
+#                      of ProximityKit's own package test target (plan step A0.8); no other shape,
+#                      so this script and CIGateSelectorBoundaryTests read a line alike. One run may
+#                      name both: xcodebuild runs FernletTests, then ProximityKitTests, and
+#                      totalTestCount, which the floor reads, is their sum. Every named suite must
+#                      run at least one test case (the suite census).
 #
 #         Scripts/run-gated-suites.sh --check-log <xcodebuild-log>
 #                      scans a SAVED xcodebuild log for the restart marker with the same grep the
@@ -31,7 +37,8 @@
 #         FERNLET_RESULT_DIR     where the result bundle AND the run log are written
 #                                (default: $TMPDIR or /tmp)
 #
-# This script never builds: run `xcodebuild build-for-testing …` (CLAUDE.md) first.
+# This script never builds: run Scripts/spm-wall-check.sh (the strict build-for-testing through
+# Fernlet.xcworkspace) first; a -project build lands in other derived data.
 set -euo pipefail
 
 # The line xcodebuild prints when it restarts a test run after a crash, an unexpected exit or a
@@ -59,7 +66,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 if [[ $# -lt 3 ]]; then
-    echo "usage: Scripts/run-gated-suites.sh <label> <min-tests> <Suite> [<Suite> ...]" >&2
+    echo "usage: Scripts/run-gated-suites.sh <label> <min-tests> <Selector> [<Selector> ...]" >&2
     exit 2
 fi
 LABEL="$1"; MIN_TESTS="$2"; shift 2
@@ -78,18 +85,37 @@ RUN_LOG="$RESULT_DIR/fernlet-$LABEL-$$.log"
 rm -rf "$BUNDLE"
 rm -f "$RUN_LOG"
 
+# Through the workspace: -project cannot see ProximityKit's package test target (a selector naming it
+# exits 70), and Scripts/spm-wall-check.sh builds through the same workspace, so this run finds what
+# that build made.
 # Seeded non-empty on purpose: macOS ships bash 3.2, where expanding an EMPTY array under
 # `set -u` is an unbound-variable error.
-ARGS=(-project App/Fernlet.xcodeproj -scheme Fernlet -destination "$DESTINATION" -resultBundlePath "$BUNDLE")
+ARGS=(-workspace Fernlet.xcworkspace -scheme Fernlet -destination "$DESTINATION" -resultBundlePath "$BUNDLE")
 if [[ -n "${FERNLET_DERIVED_DATA:-}" ]]; then
     ARGS+=(-derivedDataPath "$FERNLET_DERIVED_DATA")
 fi
-for suite in "$@"; do
-    case "$suite" in *[!A-Za-z0-9_]*|"") echo "suite names are bare identifiers, got '$suite'" >&2; exit 2 ;; esac
-    ARGS+=("-only-testing:FernletTests/$suite")
+# Two shapes: a bare FernletTests suite, or ProximityKitTests/<Suite>. Every other shape, and a suite
+# named twice on one line (it would run twice and inflate the floor), is refused before xcodebuild
+# runs. Bounded: one pass over the arguments.
+SELECTORS=""
+for selector in "$@"; do
+    case "$selector" in
+        ProximityKitTests/*) target="ProximityKitTests"; suite="${selector#ProximityKitTests/}" ;;
+        *) target="FernletTests"; suite="$selector" ;;
+    esac
+    case "$suite" in
+        *[!A-Za-z0-9_]*|"")
+            echo "a selector is a FernletTests suite's bare name or ProximityKitTests/<Suite>, got '$selector'" >&2
+            exit 2 ;;
+    esac
+    case " $SELECTORS " in
+        *" $target/$suite "*) echo "'$selector' is named twice on this line: it would run twice" >&2; exit 2 ;;
+    esac
+    SELECTORS="$SELECTORS $target/$suite"
+    ARGS+=("-only-testing:$target/$suite")
 done
 
-echo "==> $LABEL: $# suite(s), floor $MIN_TESTS test(s)"
+echo "==> $LABEL: $# selector(s), floor $MIN_TESTS test(s)"
 RUN_STATUS=0
 # Through `tee` so the restart marker can be read back: the console still sees every line, and
 # `set -o pipefail` keeps the pipeline's status xcodebuild's own.
@@ -106,7 +132,11 @@ if [[ ! -d "$BUNDLE" ]]; then
 fi
 
 SUMMARY_JSON="$(xcrun xcresulttool get test-results summary --path "$BUNDLE" --compact)"
-export SUMMARY_JSON
+# The tests tree goes to a FILE: mesh-batteries' compact tree is ~600 KB, and arguments plus
+# environment share macOS's 1 MiB ARG_MAX.
+TESTS_PATH="$RESULT_DIR/fernlet-$LABEL-$$.tests.json"
+xcrun xcresulttool get test-results tests --path "$BUNDLE" --compact > "$TESTS_PATH"
+export SUMMARY_JSON TESTS_PATH SELECTORS
 python3 - "$LABEL" "$MIN_TESTS" "$RUN_STATUS" "$RESTARTED" <<'PY'
 import json, os, sys
 label, floor, run_status = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
@@ -116,7 +146,34 @@ total = int(summary.get("totalTestCount", 0))
 failed = int(summary.get("failedTests", 0))
 skipped = int(summary.get("skippedTests", 0))
 result = summary.get("result", "unknown")
-print(f"==> {label}: {total} test(s) ran, {failed} failed, {skipped} skipped, result={result}, xcodebuild status={run_status}")
+# The suite census: test cases per `<bundle>/<TypeName>`, the type read off the first Test Suite
+# node's nodeIdentifierURL (test://com.apple.xcode/<container>/<bundle>/<Type>/...), because a Swift
+# Testing suite's `name` is its display name. Bounded: every node of the finite tree is pushed once.
+with open(os.environ["TESTS_PATH"], encoding="utf-8") as fh:
+    tree = json.load(fh)
+counts, per_bundle, unparsed = {}, {}, []
+stack = [(node, "", "") for node in tree.get("testNodes", [])]
+while stack:
+    node, bundle, suite = stack.pop()
+    kind = node.get("nodeType", "")
+    if kind == "Unit test bundle":
+        bundle = node.get("name", "")
+    if kind == "Test Suite" and not suite:
+        parts = node.get("nodeIdentifierURL", "").split("/")
+        if len(parts) >= 6 and parts[0] == "test:" and parts[4] and parts[5]:
+            suite = f"{parts[4]}/{parts[5]}"
+        else:
+            # A display name is not a type name (the MeshContent* suites), so no fallback key: say so.
+            unparsed.append(f"{bundle}/{node.get('name', '?')}")
+            suite = f"{bundle}/?"
+    if kind == "Test Case":
+        key = suite or f"{bundle}/?"
+        counts[key] = counts.get(key, 0) + 1
+        per_bundle[bundle] = per_bundle.get(bundle, 0) + 1
+        continue
+    stack.extend((child, bundle, suite) for child in node.get("children", []) or [])
+split = " + ".join(f"{name} {n}" for name, n in sorted(per_bundle.items())) or "no test case"
+print(f"==> {label}: {total} test(s) ran ({split}), {failed} failed, {skipped} skipped, result={result}, xcodebuild status={run_status}")
 problems = []
 if run_status != 0:
     problems.append(f"xcodebuild exited {run_status}")
@@ -131,8 +188,22 @@ if failed > 0 or result != "Passed":
 if total < floor:
     problems.append(
         f"only {total} test(s) ran but the floor is {floor} — a selector matched nothing "
-        "(misspelled, renamed or deleted suite, or a file name where a @Suite struct was meant), "
+        "(misspelled, renamed or deleted suite, a file name where a @Suite struct was meant, "
+        "or a suite named in the wrong target), "
         "or a battery shrank; raise the floor deliberately, never lower it in passing"
+    )
+if unparsed:
+    problems.append(
+        "the result bundle's tests tree has Test Suite nodes with no parseable nodeIdentifierURL ("
+        + ", ".join(sorted(set(unparsed))[:5]) + "): this xcresulttool's format is not the one measured on "
+        "Xcode 26.5, so the suite census cannot read it — fix the census, never pass the line around it"
+    )
+unrun = [s for s in os.environ["SELECTORS"].split() if counts.get(s, 0) == 0]
+if unrun and not unparsed:
+    problems.append(
+        "named but ran no test case: " + ", ".join(unrun) + " — a selector of the wrong target (a suite "
+        "that moved bundles), a scheme that lost a testable, or a suite that matched nothing; a mixed "
+        "line's total can hide it, this cannot"
     )
 if problems:
     print("::error::" + label + ": " + "; ".join(problems))

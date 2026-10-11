@@ -268,7 +268,7 @@ of the offending code line). An entry with neither narrows to the whole file —
 Scripts/power-of-10-scan.py               # violations by rule; exit 1 on any
 Scripts/power-of-10-scan.py --advisory    # + the review lists (every while, _ =, @discardableResult, static var, recursion guesses)
 Scripts/power-of-10-scan.py --json        # machine-readable
-xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet \
+xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet \
   -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests/PowerOfTenBoundaryTests
 ```
 

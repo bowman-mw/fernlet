@@ -33,10 +33,15 @@
 # overrides, after proving that a planted `import UIKit` fails it.
 #
 # Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
-# refuses a green run that executed fewer tests than the step's floor: `-only-testing:` matches
-# suite names exactly and matches NOTHING on a misspelling, so a bare xcodebuild line can name a
-# suite that no longer exists and stay green forever. Tests/FernletTests/CIGateSelectorBoundaryTests
-# is the static half (every named suite is declared; every mesh battery is named).
+# refuses a green run that executed fewer tests than the step's floor, or in which a named suite ran
+# no test: `-only-testing:` matches suite names exactly and matches NOTHING on a misspelling, so a
+# bare xcodebuild line can name a suite that no longer exists and stay green forever. A selector is a
+# FernletTests suite's bare name or, since ProximityKit plan step A0.8, `ProximityKitTests/<Suite>`
+# for a suite of ProximityKit's own package test target; one run may name both, and its floor counts
+# both bundles. The build and every run go through Fernlet.xcworkspace, the one container in which
+# the Fernlet scheme can see a package test target. Tests/FernletTests/CIGateSelectorBoundaryTests is
+# the static half (every named suite is declared in its target; every mesh battery and golden is
+# named; Tests/suite-inventory.tsv holds every suite's target, file and lines).
 #
 # Make this a REQUIRED status check in branch protection so the wall cannot be merged around.
 
@@ -137,14 +142,17 @@ jobs:
         # requires the clean case to pass — a negative alone proves nothing about the mechanism.
         #   * spm-wall-selftest.sh plants a forbidden cross-wall import into the walled AIProviders
         #     target and requires the compiler wall to reject it (WI-3), then re-runs the wall check
-        #     on the clean tree.
+        #     on the clean tree. The check builds Fernlet.xcworkspace's Fernlet scheme (plan step
+        #     A0.8), whose packages resolve from FernletKit/Package.resolved.
         #   * run-gated-suites-selftest.sh (P10 item 5 (c)) stubs `xcodebuild` and `xcrun` on PATH
         #     and requires run-gated-suites.sh to refuse a green-LOOKING run whose output carries
         #     `Restarting after unexpected exit, crash, or test timeout`. Until this existed the
         #     restart guard was executed only at its `--check-log` seam — a SECOND code path — so a
         #     refactor that dropped the `tee`, renamed `$RUN_LOG` or moved the grep would have left
-        #     the seam green and every floor on this workflow inflated by re-run suites. It needs no
-        #     Simulator and no build: the stubs are what the gate reads.
+        #     the seam green and every floor on this workflow inflated by re-run suites. Since plan
+        #     step A0.8 it also requires the runner to go through the workspace, to read exactly the
+        #     two selector shapes, and to refuse a suite named twice and a named suite that ran no
+        #     test case. It needs no Simulator and no build: the stubs are what the gate reads.
         # Neither line names Scripts/run-gated-suites.sh as a word, so CIGateSelectorBoundaryTests'
         # `gatedSteps` parses no step here and no measured suite-name count moves.
         run: |
