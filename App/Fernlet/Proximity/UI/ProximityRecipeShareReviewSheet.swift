@@ -1,6 +1,7 @@
 import ProximityKit
 import SwiftUI
 import FernletDomainModel
+import FernletSocial
 import FernletUI
 
 /// The receiving side of a proximity recipe share: review what arrived, then import or decline.

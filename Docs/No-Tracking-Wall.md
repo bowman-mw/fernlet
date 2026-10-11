@@ -81,7 +81,7 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 
 | Test | What it forbids | How it fails |
 |---|---|---|
-| `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, all 25 package modules, all three extensions, and both test targets. | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
+| `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, every package module, all three extensions, and every test target (the app's two and, since ProximityKit plan step A0.8, the package's under `FernletKit/Tests`). | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
 | `thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage` | Any package dependency other than CryptoSwift, in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
 | `hardcodedNetworkDestinationsAreExactlyTheAllowlist` | Any hardcoded host in shipping code outside the §3 allowlist — **and** any stale allowlist entry the code no longer uses. | `URL(string: "https://telemetry.fernlet.com/v1/events")`. |
 | `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the three pinned fetchers (the two web importers and the Open Food Facts client) and the session factory they share — and, per file, any hardcoded host other than that file's own exact set (DuckDuckGo's two hosts in the product importer, `world.openfoodfacts.org` in the Open Food Facts client, none elsewhere). | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close; or an allowlisted host drifting into a client it was never reviewed for. |
@@ -433,14 +433,17 @@ A privacy claim that overstates itself is worse than none. Specifically:
 ## 7. Running it, and the numbers it sees today
 
 ```
-xcodebuild test-without-building -project App/Fernlet.xcodeproj -scheme Fernlet \
+xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:FernletTests/NoTrackingBoundaryTests
 ```
 
 (Corrected 2026-09-24: this block had no `-project` — there is no project at the repo root since the
 2026-08-12 restructure — and used the disk path `Tests/FernletTests/…`, which `-only-testing:` matches
-to nothing, so the run "passed" having executed zero tests. `Docs/Verifiability.md` §2 explains both.)
+to nothing, so the run "passed" having executed zero tests. `Docs/Verifiability.md` §2 explains both.
+Since ProximityKit plan step A0.8 the root holds `Fernlet.xcworkspace`, which the block above names
+with `-workspace`; `-project App/Fernlet.xcodeproj` still builds the app but cannot see a package
+test target.)
 
 It runs as part of `FernletTests`, needs no simulator state, and should be a **required status
 check** alongside [`.github/workflows/s3-wall.yml`](../.github/workflows/s3-wall.yml) — the same

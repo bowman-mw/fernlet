@@ -4,6 +4,7 @@ import CryptoKit
 import FernletDomainModel
 import FernletExchange
 @testable import ProximityKit
+import FernletSocial
 @testable import Fernlet
 
 /// Multipart recipes on every wire (2026-09-24). A multipart recipe rides `fernlet.recipe` VERSION 1:

@@ -597,11 +597,12 @@ coordinator's audits arrive converted from ProximityKit's own `ProximitySessionA
 FernletConnections' one conversion, while the vault builds its block, revoke and report rows itself
 and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
 the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
-names two of these types, and only on the lines `ProximityNamespaceBoundaryTests` allowlists:
-``PayloadType`` in the typed doors the recipe profile retires (A0.7) and ``ProximityMode`` in the
-coordinator's alias the connection profiles replace (A0.7 and C5); ``ProximityCapability``,
+names one of these types, and only on the one line `ProximityNamespaceBoundaryTests` allowlists:
+``ProximityMode`` in the coordinator's alias, which generalizes at plan step C5 into the session
+policy the coach profile brings; ``PayloadType``, ``ProximityCapability``,
 ``ProximityTrustedPeerRecord``, ``ItemNameModeration``, `TrainerAuditEvent` and
-`ConnectionSessionLog` it names nowhere. Fernlet's own modules name them freely: `FernletSocial`'s
+`ConnectionSessionLog` it names nowhere (Fernlet's typed view of the signed envelope's token, which
+reads ``PayloadType``, is FernletConnections'). Fernlet's own modules name them freely: `FernletSocial`'s
 presence, heart dead-drop and session hearts read ``ProximityTrustedPeerRecord``, its mesh features
 register and send their payloads under ``PayloadType`` tokens and advertise and check
 ``ProximityCapability`` tokens, the dead-drop titles its envelope with a ``PayloadType`` token,

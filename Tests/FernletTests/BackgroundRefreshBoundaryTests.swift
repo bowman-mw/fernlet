@@ -232,8 +232,8 @@ struct BackgroundRefreshBoundaryTests {
     /// The permitted set, derived so the reasons and the filter can never drift apart.
     static let permittedModules: Set<String> = Set(permittedModuleReasons.keys)
 
-    /// Every FernletKit target (and the package's one external dependency) that the refresh handler
-    /// may NOT import, with the one-line reason. Read against `FernletKit/Package.swift` by
+    /// Every FernletKit target (ProximityKit's test target too, since plan step A0.8, and the package's
+    /// one external dependency) that the refresh handler may NOT import, with the one-line reason. Read against `FernletKit/Package.swift` by
     /// ``everyFernletKitModuleIsClassifiedForTheRefreshHandler()``, so a module added to the package
     /// fails this wall until somebody decides which side of it the refresh handler is on.
     static let forbiddenModuleReasons: [String: String] = [
@@ -263,7 +263,8 @@ struct BackgroundRefreshBoundaryTests {
         "FernletConnections": "Fernlet's connection rules over the mesh, starting with its wire identity — a refresh that names them is one step from a radio, §17.2's first prohibition.",
         "FernletSocial": "Fernlet's social features over the proximity stack (the mesh composition that owns the mesh engine, with the session's photos, chat and hearts, the clothing shop, activities and the moderation and friend-state exchanges; moderation's ban store and ledger, closeness, friend state, the heart dead-drop, whose sync reaches CloudKit, and presence's radio manager) — the refresh handler reads none of them, and a refresh that names the module is one step from the radios they ride, §17.2's first prohibition.",
         "FernletCrypto": "the sealing primitives; the handler seals nothing — the widget snapshot is the benign mirror by design.",
-        "CryptoSwift": "FernletLock's Scrypt KDF, the package's one external dependency; nothing here derives a key."
+        "CryptoSwift": "FernletLock's Scrypt KDF, the package's one external dependency; nothing here derives a key.",
+        "ProximityKitTests": "ProximityKit's test bundle (plan step A0.8): no product links it, so nothing the refresh handler builds can import it; recorded because the manifest walk reads every name."
     ]
 
     /// Apple frameworks named by §17.2 (or adjacent to it) that the allowlist already excludes,
@@ -354,6 +355,7 @@ struct BackgroundRefreshBoundaryTests {
         Spelling(token: "ProximityCoordinator", why: "the proximity fan-out"),
         Spelling(token: "PresenceManager", why: "the presence listener"),
         Spelling(token: "ProximityRecipeShareManager", why: "the recipe-share listener"),
+        Spelling(token: "ProximityPairSession", why: "the recipe-share listener's radio owner"),
         Spelling(token: "MeshContinuationDriver", why: "the continuation claim; a refresh task is not a continuation task", isAppDeclaration: true),
         Spelling(token: "MeshContinuationTaskHost", why: "the continuation's scheduler half", isAppDeclaration: true),
         Spelling(token: "BGContinuedProcessingTask", why: "the mesh's task class — the refresh uses `BGAppRefreshTask`"),
@@ -500,7 +502,12 @@ struct BackgroundRefreshBoundaryTests {
     /// **85 at ProximityKit plan step A0.5.5**, which added `meshFeatures`: the store's mesh
     /// composition (FernletSocial's `FernletMeshFeatures`), which builds and owns the mesh manager, so
     /// it hands out the radio manager exactly as `meshNetworkManager`, now a read of it, does.
-    static let measuredSpellingCount = 85
+    ///
+    /// **86 at ProximityKit plan step A0.7.3**, which added `ProximityPairSession`: ProximityKit's
+    /// one-to-one pair session, which owns the recipe-share listener's radio, identity and pairings
+    /// beneath FernletSocial's recipe-share manager, so a refresh file that named it would reach the
+    /// listener without naming the manager.
+    static let measuredSpellingCount = 86
 
     /// MEASURED count of the ``forbiddenSpellings`` rows that name a declaration under
     /// `App/Fernlet/`, pinned for the same reason the verb count is: the drift cell derives its set

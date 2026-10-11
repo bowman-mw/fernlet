@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletProximityStorage``, where the app keeps its proximity files, `Application Support/Fernlet`; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletProximityStorage``, where the app keeps its proximity files, `Application Support/Fernlet`; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`; Fernlet's recipe profile for ProximityKit's pair session, `ProximityPairProfile.recipeShare(in:)`; Fernlet's typed view of the signed envelope's payload token (`payloadType`, `isUnknownPayloadType`, a typed initializer and a typed `signed`), over ProximityKit's raw token; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
 
 ## Overview
 
@@ -46,8 +46,9 @@ identities from the store's `makeProximityIdentity()`, which answers the app's f
 **How the app supplies it.** ProximityKit's `ProximityHost` requires a
 `proximityNamespace` and gives it no default, so the app is what hands `.fernlet` over: the
 `FernletStore` adapter (`App/Fernlet/ProximityHostAdapter.swift`) answers `.fernlet`, `nonisolated`
-because it is inert value data. The mesh, presence and recipe-share managers read it once at
-construction, keep their own copy and build their radio from it, and take their default identity from
+because it is inert value data. The mesh and presence managers and the recipe share's pair session
+read it once at construction, keep their own copy and build their radio from it (the pair session
+under the recipe profile below, read off the same namespace), and take their default identity from
 the store's `makeProximityIdentity()`; that identity and every other `IdentityService` the app builds
 (the sealed-backup, own-photo, duress-recovery and launch paths, the readout, the DEBUG probe and the
 heart-drop service's) come from the app's one factory, `IdentityService.fernletApp(keychainService:)`,
@@ -182,7 +183,7 @@ characters of it once sanitized (`ItemNameModeration.maxNameLength`, the cap Fer
 share, read rather than respelled so the two keep one spelling), and "A friend" for a name with
 nothing displayable left. ProximityKit sanitizes a peer's name with its own copy of the generic
 sanitizer and applies the cap and the floor of the namespace each reader holds (its mesh and
-recipe-share managers, the envelope's two sender reads and the name display, and, through its
+recipe pair session, the envelope's two sender reads and the name display, and, through its
 public coercion, `FernletSocial`'s presence and mesh features), and caps the recipe radio's
 advertised name at the same cap. Its soundness rules hold the
 cap to at most 63 characters and at least a key fingerprint's 16 and the mesh instance-name prefix's
@@ -262,8 +263,8 @@ ProximityKit:
   proximity is the authorization, so every peer is trusted and only a blocked key is refused (a
   revoked-only, "Removed", peer may handshake again in person). ProximityKit's `ProximityHost`
   requires `makeProximityTrustPolicy()` with no default, and the app's adapter answers a fresh one
-  over the store's vault for every connection the mesh, presence and recipe-share managers open;
-  each manager keeps it beside the connection, because the coordinator holds its policy `weak`.
+  over the store's vault for every connection the mesh and presence managers and the recipe share's
+  pair session open; each keeps it beside the connection, because the coordinator holds its policy `weak`.
   Every test double answers the same.
 - ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` (`CoachSessionTrustPolicy.swift`): the
   coach channel's remembered, mode-scoped trust (only an unrevoked, unblocked `.trainer` record whose
@@ -304,17 +305,41 @@ The protocols the policies and the vault answer (`ProximityTrustPolicy`, `Proxim
 audit type the coordinator reports in (`ProximitySessionAudit`), the roster entry and the coordinator
 stay ProximityKit's.
 
+**Pair profiles.** ProximityKit's one-to-one `ProximityPairSession` runs under a
+`ProximityPairProfile` its host builds from its own namespace: the radio it runs on, the TXT `mode` it
+advertises and believes, and the area its own audit events go under. Fernlet's recipe profile is
+`ProximityPairProfile.recipeShare(in:)` (`FernletPairProfiles.swift`): the namespace's recipe-share
+radio row (`_fernlet-recipe2._udp` / `fernlet-recipe-v1` under `.fernlet`), the mode `recipe` and the
+area `recipeShare`, the values the recipe radio and its manager spelled before the profile existed,
+byte for byte, read off the host's own namespace, as the radio always read its row. `FernletSocial`'s
+recipe-share manager builds its pair session over it; the session checks a profile against its
+namespace and refuses one that is not of it, so no host's profile runs a radio on a row soundness
+never vetted. `FernletFeatureGoldenTests` 31f pins the profile, and the test target's restored
+recipe-share seam initializer builds it, as `init(store:)` does, on its host's own namespace.
+
+**The envelope's typed view.** ProximityKit's `FernletIdentityEnvelope` carries its payload token
+raw (`payloadTypeToken`, the `payloadType` key on the wire): `verify` parks a token outside its
+namespace's `payloads.known`, and the engine reads and signs the raw token. Fernlet's features read
+and sign through a typed view of that token, a `nonisolated extension` here
+(`FernletIdentityEnvelope+PayloadType.swift`): `payloadType`, the `PayloadType` case the token
+spells, or `nil` when Fernlet has none; `isUnknownPayloadType`; a typed initializer that delegates to
+the raw one with the case's raw value; and a typed `signed` (`@MainActor`) that delegates to the raw
+factory. Every byte an envelope minted through the view carries is the raw form's for that raw value.
+The extension is `nonisolated` against this module's main-actor default isolation, like the
+`nonisolated` wire value it extends, so a typed read or a typed envelope is reachable from any
+isolation (a nonisolated test suite builds them synchronously). `FernletSocial`'s presence, heart
+dead-drop, clothing shop and recipe sharing, and the tests, read and sign through it with their
+spellings unchanged, each file importing this module.
+
 **What joins it later.** Nothing here stands in for the coordinator's display name or a per-mode
 service type: ProximityKit has neither, every caller passing the host's resolved name and the
 radios owning discovery on the namespace's service types. ProximityKit still names
-FernletDomainModel's `PayloadType` and `ProximityMode` only on the lines
-`ProximityNamespaceBoundaryTests` allowlists: the typed doors only the recipe-share manager and
-Fernlet's features go through (the envelope's typed view of its token and the coordinator's typed
-send), which leave with the recipe profile (A0.7), and the coordinator's session-mode alias, which
-the connection profiles replace (A0.7, C5). The heart-drop and presence pair secrets derive through the door under the two
+FernletDomainModel's `ProximityMode` on the one line `ProximityNamespaceBoundaryTests` allowlists,
+the coordinator's session-mode alias, which generalizes at C5 into the session policy the coach
+profile brings, the first other than friend. The heart-drop and presence pair secrets derive through the door under the two
 salts declared here, from `FernletSocial`. C1
 adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
-connection profiles (friend mesh, presence, recipe, coach), app identities with per-app allow lists,
+coach's connection profile beside the recipe profile (C5), app identities with per-app allow lists,
 coach relationship records and the coach link signing purposes; FernletCrypto's 40 twins of these
 labels then retire.
 
@@ -329,8 +354,8 @@ FernletKit after ProximityKit leaves for its own repository (plan A1), consuming
 `FernletCrypto`, for `DeviceBindingID`, which the binding adapter delegates to; on
 `FernletFoundation` (Layer 0, which `FernletAuditLog` lives in), for the audit bridge; and on
 `FernletDomainModel`, for the payload vocabulary and the session rules: `PayloadType` and
-`ProximityCapability`, whose raw values the vocabulary reads (and the audit conversion reads
-`PayloadType` too), `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the
+`ProximityCapability`, whose raw values the vocabulary reads (and the audit conversion and the
+envelope's typed view read `PayloadType` too), `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the
 policies and the review read and the vault builds and keeps (the audit conversion builds
 `TrainerAuditEvent`), and `ItemNameModeration`, whose name cap the peer-name policy reads. It imports
 nothing else but Foundation, Observation (the vault is `@Observable`) and Security. Through ProximityKit it reaches
@@ -354,7 +379,9 @@ for the same reason: ProximityKit's `nonisolated` stores call it synchronously, 
 conformance would not allow. ``FriendMintingReview``, ``TrainerExportPayload`` and
 ``CoachSessionContract`` are `nonisolated` pure values, and ``FernletProximityStorage`` a
 `nonisolated` caseless namespace over a location, read by the store's initializers and by
-`FernletSocial`'s nonisolated heart-drop scope. The name placeholders' extension is
+`FernletSocial`'s nonisolated heart-drop scope. The envelope's typed view is a `nonisolated`
+extension of a `nonisolated` wire value (only its `signed`, which signs with the main-actor
+identity, is `@MainActor`). The name placeholders' extension is
 `nonisolated`, as the `PeerNameDisplay` it extends is (its `Placeholder` with it), and so is the
 `FernletConnectionsCopy.Peer` group it reads: a resolved display string has no actor to protect,
 and `Bundle.module` is itself nonisolated. ``FriendSessionTrustPolicy`` and

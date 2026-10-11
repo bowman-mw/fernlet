@@ -28,6 +28,7 @@ import Foundation
 import Testing
 @testable import FernletCrypto
 import FernletDomainModel
+import FernletConnections
 @testable import FernletSocial
 @testable import ProximityKit
 @testable import Fernlet

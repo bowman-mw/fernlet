@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 import ProximityKit

@@ -274,11 +274,13 @@ struct PrivacyWipeCoverageTests {
         )
     ]
 
-    /// The three managers whose live in-memory identity caches must die with the keychain rows.
+    /// The three identity holders whose live in-memory identity caches must die with the keychain
+    /// rows: the mesh manager, the presence manager and the recipe pair session (whose owner, the
+    /// recipe-share manager, forwards the store's wipe to it).
     private static let identitySeamFiles = [
         "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
         "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift",
+        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift",
     ]
 
     /// The functions that together ARE the wipe path, keyed by a unique substring of their

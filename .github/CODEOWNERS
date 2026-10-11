@@ -52,6 +52,12 @@
 /.github/workflows/s3-wall.yml                @bowman-mw
 /.github/workflows/power-of-10.yml            @bowman-mw
 /.github/CODEOWNERS                           @bowman-mw
+# What the strict build compiles (the workspace and the scheme's testables, plan step A0.8)
+/Fernlet.xcworkspace/                         @bowman-mw
+/App/Fernlet.xcodeproj/xcshareddata/xcschemes/Fernlet.xcscheme @bowman-mw
+# The suite inventory the selector wall holds to the tree (plan step A0.8): a row deleted there is a test leaving
+# CI's sight
+/Tests/suite-inventory.tsv                    @bowman-mw
 
 # The stated guarantees
 /Docs/No-Tracking-Wall.md                     @bowman-mw
@@ -117,6 +123,12 @@
 # FernletSocial's presence tags: the presence pair secret and the rotating epoch tag every friend pair
 # advertises and matches by — changing a byte here makes every pair of friends invisible to each other
 /FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
+
+# FernletSocial's recipe share: the recipe payload's wire format (its JSON, format token and version)
+# and the summary signed into every recipe envelope, over ProximityKit's pair session — changing a byte
+# here breaks every recipe share between devices on different builds
+/FernletKit/Sources/FernletSocial/Wire/RecipeSharePayloads.swift          @bowman-mw
+/FernletKit/Sources/FernletSocial/RecipeSharing/                        @bowman-mw
 
 # The sealed-backup escrow: the app's escrow key (its content-addressed iCloud Keychain rows, the one
 # synchronizable key, its HKDF derivations, and the order it promotes a previous build's key before a

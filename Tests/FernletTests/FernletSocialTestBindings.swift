@@ -14,8 +14,12 @@
 // THE RULE, the same one that file states. A binding restores a call SHAPE, never a value: it passes
 // `ProximityNamespace.fernlet`, exactly the value FernletConnections ships and the app hands
 // ProximityKit, so a suite that goes through one sees the bytes it always saw, and nothing here may
-// pass anything else or compute a label, a row or a name of its own. A test that PINS a value does
-// not lean on a binding: it names `.fernlet` explicitly, so what it pins is visibly Fernlet's.
+// pass anything else or compute a label, a row or a name of its own, with one stated exception: the
+// recipe-share manager's restored seam initializer, which builds its pair session over the recipe
+// profile on its host's own namespace, as the shape it restores (the manager's
+// `init(store:makeSession:identity:)`) did and as the production `init(store:)` does. A test that PINS
+// a value does not lean on a binding: it names `.fernlet` explicitly, so what it pins is visibly
+// Fernlet's.
 
 import FernletConnections
 import Foundation
@@ -140,5 +144,123 @@ extension ProximityHost {
     /// rows under the double's own namespace.
     var meshRoutedTypeEntries: [MeshRoutedTypeEntry] {
         FernletRoutedTypes.entries(proximityNamespace.family.vocabulary.routedTypes)
+    }
+}
+
+// MARK: - The recipe-share manager's pair session (plan step A0.7)
+//
+// The recipe-share manager left ProximityKit for FernletSocial at plan step A0.7.3, its mechanism
+// staying behind as ProximityKit's `ProximityPairSession`, which owns the radio, the identity and every
+// test seam the suites drive. The manager's seam initializer and its seams come back here, each a
+// forwarder to the session's own, so the suites keep the spelling they were written against. The
+// initializer is THE RULE's one stated exception: it builds the pair session over FernletConnections'
+// recipe profile on the host's OWN namespace, as `init(store:)` does, which is not `.fernlet` when the
+// host is foreign. A golden that pins a value builds the session explicitly instead.
+
+/// The recipe-share manager in the shapes the suites were written against (plan step A0.7.3). It
+/// inherits the manager's main-actor isolation, as the members it restores had.
+extension ProximityRecipeShareManager {
+
+    /// The seam the suites were written against: the manager over a radio of the test's and an
+    /// identity of its own, through the pair session that owns both, under the recipe profile on the
+    /// host's own namespace, exactly as `init(store:)` builds it.
+    convenience init(
+        store: any ProximityHost, makeSession: (() -> any RecipeShareRadioSession)?,
+        identity: IdentityService? = nil
+    ) {
+        self.init(pairSession: ProximityPairSession(
+            host: store, profile: .recipeShare(in: store.proximityNamespace),
+            makeRadio: makeSession, identity: identity))
+    }
+
+    /// `pairSession.makeRetainedConnectionCoordinatorForTesting(peer:transport:ranging:)`.
+    func makeRetainedConnectionCoordinatorForTesting(
+        peer: PeerHandle, transport: any PeerTransport, ranging: any RangingProvider
+    ) -> ProximityCoordinator {
+        pairSession.makeRetainedConnectionCoordinatorForTesting(peer: peer, transport: transport, ranging: ranging)
+    }
+
+    /// `pairSession.radioForTesting`.
+    var radioForTesting: any RecipeShareRadioSession { pairSession.radioForTesting }
+
+    /// `pairSession.connectionCountForTesting`.
+    var connectionCountForTesting: Int { pairSession.connectionCountForTesting }
+
+    /// `pairSession.isRunningForTesting`.
+    var isRunningForTesting: Bool { pairSession.isRunningForTesting }
+
+    /// `pairSession.markRunningForTesting()`.
+    func markRunningForTesting() {
+        pairSession.markRunningForTesting()
+    }
+
+    /// `pairSession.shouldAcceptDialerForTesting(_:)`.
+    func shouldAcceptDialerForTesting(_ peer: PeerHandle) -> Bool {
+        pairSession.shouldAcceptDialerForTesting(peer)
+    }
+
+    /// `pairSession.resolveDialerForTesting(_:)`.
+    func resolveDialerForTesting(_ sessionID: String) -> PeerHandle? {
+        pairSession.resolveDialerForTesting(sessionID)
+    }
+
+    /// `pairSession.checkCoordinatorStatesForTesting()`.
+    func checkCoordinatorStatesForTesting() {
+        pairSession.checkCoordinatorStatesForTesting()
+    }
+
+    /// `pairSession.transferForTesting`.
+    var transferForTesting: RecipeShareTransfer? { pairSession.transferForTesting }
+
+    /// `pairSession.finishShareForTesting(_:token:)`.
+    func finishShareForTesting(_ result: ProximityPairSendOutcome.Result, token: UUID?) {
+        pairSession.finishShareForTesting(result, token: token)
+    }
+
+    /// `pairSession.beginTransferForTesting(recipientID:)`.
+    func beginTransferForTesting(recipientID: UUID) {
+        pairSession.beginTransferForTesting(recipientID: recipientID)
+    }
+
+    /// `pairSession.applyTransferForTesting(_:)`.
+    @discardableResult
+    func applyTransferForTesting(_ event: RecipeShareTransfer.Event) -> Bool {
+        pairSession.applyTransferForTesting(event)
+    }
+
+    /// `pairSession.applyTransferForTesting(_:token:)`.
+    @discardableResult
+    func applyTransferForTesting(_ event: RecipeShareTransfer.Event, token: UUID?) -> Bool {
+        pairSession.applyTransferForTesting(event, token: token)
+    }
+
+    /// `pairSession.applyDiscoveryGateForTesting(_:)`.
+    @discardableResult
+    func applyDiscoveryGateForTesting(_ event: RecipeShareDiscoveryGate.Event) -> RecipeShareDiscoveryGate.Verdict {
+        pairSession.applyDiscoveryGateForTesting(event)
+    }
+
+    /// `pairSession.discoveryInfoForTesting`.
+    var discoveryInfoForTesting: [String: String] { pairSession.discoveryInfoForTesting }
+
+    /// `pairSession.shouldAdmitChannel(for:)`.
+    func shouldAdmitChannel(for peer: PeerHandle) -> Bool {
+        pairSession.shouldAdmitChannel(for: peer)
+    }
+
+    /// `pairSession.channelAdmission(for:)`.
+    func channelAdmission(for peer: PeerHandle) -> ProximityPairSession.ChannelAdmission {
+        pairSession.channelAdmission(for: peer)
+    }
+
+    /// `pairSession.sweepParkedConnections(now:)`.
+    func sweepParkedConnections(now: Date) {
+        pairSession.sweepParkedConnections(now: now)
+    }
+
+    /// `pairSession.connectTimeoutSeconds`, read and written.
+    var connectTimeoutSeconds: TimeInterval {
+        get { pairSession.connectTimeoutSeconds }
+        set { pairSession.connectTimeoutSeconds = newValue }
     }
 }

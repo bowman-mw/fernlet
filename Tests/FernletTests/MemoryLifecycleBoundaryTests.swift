@@ -39,7 +39,8 @@
 //       itself a call: `MeshNetworkManager(store: makeTestStore(), …)` gives the manager a host that
 //       dies at the end of the expression (invariant HP0), which is a dangling `unowned` from birth.
 //       The mesh composition's two constructions, `FernletMeshFeatures(host:` and the test rig's
-//       `FernletMeshRig.features(store:`, are held to the same rule.
+//       `FernletMeshRig.features(store:`, and the recipe pair session's, `ProximityPairSession(host:`,
+//       are held to the same rule.
 //
 // Every scan discovers its inputs from the file system and carries a hard FLOOR (a moved root or a
 // broken enumerator must fail loudly, never pass vacuously — the S3BoundaryTests house rule), every
@@ -71,9 +72,10 @@ struct MemoryLifecycleBoundaryTests {
     /// Files with a block-based observer today; a wall that finds fewer has stopped looking.
     static let minimumObserverFiles = 2
 
-    /// Files holding an `unowned` `ProximityHost` today, five: the four proximity managers (the mesh
-    /// and recipe-share managers in ProximityKit, presence and the activity manager in FernletSocial)
-    /// and, since ProximityKit plan step A0.5.5, the mesh features' `FernletMeshHost`; presence and the
+    /// Files holding an `unowned` `ProximityHost` today, five: the mesh manager and the recipe pair
+    /// session in ProximityKit (FernletSocial's recipe-share manager holds none: its session does),
+    /// presence and the activity manager in FernletSocial, and, since ProximityKit plan step A0.5.5,
+    /// the mesh features' `FernletMeshHost`; presence and the
     /// holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10. Pinned at today's
     /// count (plan step A0.5.13): a matcher that finds fewer has stopped looking, or a holder has left
     /// the scan, and either fails here; a new holder raises the count, and is found and held to ML4.
@@ -87,10 +89,13 @@ struct MemoryLifecycleBoundaryTests {
     /// has stopped looking, or a holder has left the scan, and either fails here.
     static let minimumMeshHostHoldingFiles = 10
 
-    /// The test root ML5 scans (308 files at the time of writing).
-    static let testRoot = "Tests/FernletTests"
+    /// The test roots ML5 scans: the app's unit tests (308 files when the scan was written) and, since
+    /// ProximityKit plan step A0.8, the package's under `FernletKit/Tests`. Each must yield at least one
+    /// file (``TestTreeScan/filesScannedPerRoot``): the sum's floor alone would not notice the package
+    /// root going dark beside the app's hundreds.
+    static let testRoots = ["Tests/FernletTests", "FernletKit/Tests"]
 
-    /// Floor for the ML5 test-tree scan.
+    /// Floor for the ML5 test-tree scan, over every root together.
     static let minimumTestFilesScanned = 200
 
     /// This file — the ONE file the ML5 scan skips, because its planted-token fixtures spell out the
@@ -195,11 +200,17 @@ struct MemoryLifecycleBoundaryTests {
         }
     }
 
-    /// ML5's scan of the test tree: how many files it read, and every place a proximity manager was
-    /// built over a host expression nobody holds.
+    /// ML5's scan of the test tree: how many files it read, in all and per root, and every place a
+    /// proximity manager was built over a host expression nobody holds.
     struct TestTreeScan: Sendable {
+        /// Files read across every root of ``MemoryLifecycleBoundaryTests/testRoots``.
         var filesScanned = 0
+        /// Files read under each root, keyed by the root as ``MemoryLifecycleBoundaryTests/testRoots``
+        /// spells it; a root that yields none is a scan silently narrower than it claims.
+        var filesScannedPerRoot: [String: Int] = [:]
+        /// `path:line` of every inline-host construction ML5 forbids.
         var violations: [String] = []
+        /// Files the scan could not read.
         var unreadable: [String] = []
     }
 
@@ -235,18 +246,25 @@ struct MemoryLifecycleBoundaryTests {
         return holders
     }
 
-    /// Scans the test tree for ML5. Never throws or traps: unreadable files are listed for the
-    /// enforcement test to fail on. ``wallFile`` is skipped — its fixtures spell out the violation.
+    /// Scans every root of ``testRoots`` for ML5. Never throws or traps: unreadable files are listed
+    /// for the enforcement test to fail on. ``wallFile`` is skipped — its fixtures spell out the
+    /// violation.
     static func scanTestTree(repoRoot: URL) -> TestTreeScan {
         var result = TestTreeScan()
-        for path in PowerOfTenBoundaryTests.swiftFiles(under: testRoot, repoRoot: repoRoot) {
-            guard let source = try? String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8) else {
-                result.unreadable.append(path)
-                continue
+        // R2: bounded by the two test roots.
+        for root in testRoots {
+            result.filesScannedPerRoot[root] = 0
+            // R2: bounded by the Swift files under the root.
+            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot) {
+                guard let source = try? String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8) else {
+                    result.unreadable.append(path)
+                    continue
+                }
+                result.filesScanned += 1
+                result.filesScannedPerRoot[root, default: 0] += 1
+                guard path != wallFile else { continue }
+                result.violations.append(contentsOf: inlineHostViolations(in: source).map { "\(path):\($0)" })
             }
-            result.filesScanned += 1
-            guard path != wallFile else { continue }
-            result.violations.append(contentsOf: inlineHostViolations(in: source).map { "\(path):\($0)" })
         }
         return result
     }
@@ -308,11 +326,13 @@ struct MemoryLifecycleBoundaryTests {
     /// `MeshNetworkManager(store: makeTestStore(), …)` trips; `MeshNetworkManager(store: store)` and
     /// `PresenceManager(store: host, ledger: ledger)` pass. The mesh composition is held the same way
     /// (ProximityKit plan step A0.5.5): `FernletMeshFeatures(host: makeTestStore())` and
-    /// `FernletMeshRig.features(store: makeTestStore())` trip. Known narrowness, stated on purpose: a
+    /// `FernletMeshRig.features(store: makeTestStore())` trip, and so does the recipe pair session,
+    /// which holds the host the manager over it does not: `ProximityPairSession(host: makeTestStore(),
+    /// …)`. Known narrowness, stated on purpose: a
     /// multi-line call with `store:` on its own line is not matched — this covers the one shape that
     /// has ever occurred in the tree, and ML5 is a ratchet on a repaired site, not a proof.
     static let inlineHostPattern =
-        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\(|FernletMeshFeatures\(\s*host:\s*\w+\(|FernletMeshRig\.features\(\s*store:\s*\w+\("#
+        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\(|ProximityPairSession\(\s*host:\s*\w+\(|FernletMeshFeatures\(\s*host:\s*\w+\(|FernletMeshRig\.features\(\s*store:\s*\w+\("#
 
     /// Whether `line` constructs a `Task`. `///` documentation lines are excluded (the helper's own
     /// doc comment quotes the literal it replaces), as is a match that sits after a `//` on the line.
@@ -437,7 +457,7 @@ struct MemoryLifecycleBoundaryTests {
         #expect(violations.isEmpty, """
             ML1: these files store a Task<…> handle but neither cancel it in a deinit / isolated deinit \
             nor state an allowlisted invariant. Add `isolated deinit { <handle>?.cancel() }` (the pattern \
-            MeshNetworkManager / PresenceManager / ProximityRecipeShareManager use), or add an Exemption \
+            MeshNetworkManager / PresenceManager / ProximityPairSession use), or add an Exemption \
             naming the invariant that makes the missing cancel safe:
             \(violations.joined(separator: "\n"))
             """)
@@ -536,7 +556,13 @@ struct MemoryLifecycleBoundaryTests {
         let scan = Self.sharedTestTreeScan
         #expect(scan.unreadable.isEmpty, "Unreadable test files: \(scan.unreadable)")
         #expect(scan.filesScanned >= Self.minimumTestFilesScanned,
-                "Scanned only \(scan.filesScanned) test files (floor \(Self.minimumTestFilesScanned)) — the test root stopped resolving")
+                "Scanned only \(scan.filesScanned) test files (floor \(Self.minimumTestFilesScanned)) — the test roots \(Self.testRoots) stopped resolving")
+        // Per-root floor, as the no-tracking wall's: one root going dark must not be masked by the
+        // other's hundreds of files. R2: bounded by the two test roots.
+        for root in Self.testRoots {
+            let count = scan.filesScannedPerRoot[root] ?? 0
+            #expect(count > 0, "ML5 scanned zero Swift files under '\(root)' — the root moved and ML5 is silently narrower")
+        }
         #expect(scan.violations.isEmpty, """
             ML5: these build a proximity manager over a host expression that dies at the end of the \
             expression, so the manager is born with a dangling unowned host (invariant HP0). Hoist the \

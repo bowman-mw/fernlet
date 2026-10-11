@@ -1,9 +1,9 @@
 import Foundation
 
-// MARK: - RecipeShareFailure
+// MARK: - ProximityPairSendFailure
 
-/// Why one recipe share did not go out, or did not finish going out: the frozen cause the share
-/// sheet turns into its own localized sentence.
+/// Why one send over a one-to-one pairing (a recipe share) did not go out, or did not finish going
+/// out: the frozen cause the share sheet turns into its own localized sentence.
 ///
 /// ## Tokens, not copy
 ///
@@ -14,29 +14,29 @@ import Foundation
 ///
 /// ## Two different facts
 ///
-/// Six of the seven cases mean **nothing left this device**: the share was refused, or it ended
+/// Six of the seven cases mean **nothing left this device**: the send was refused, or it ended
 /// before the sealed payload was handed to the transport. ``sendIncomplete`` is the odd one out. The
 /// payload had started going out when the send failed or was cut off, so the other person **may**
 /// have it. The copy must never merge the two, which is what ``mayHaveReachedRecipient`` is for.
 ///
-/// There is deliberately no "delivered", "received", "accepted" or "queued" case. The recipe radio
-/// has no application receipt (the receiver's Import/Decline sends nothing back) and no routed or
-/// held path (recipe sharing is strictly one pairing at a time, in person), so this module can never
-/// know any of those things.
-public nonisolated enum RecipeShareFailure: CaseIterable, Equatable, Sendable {
+/// There is deliberately no "delivered", "received", "accepted" or "queued" case. A pair session has
+/// no application receipt (a recipe share's receiver's Import/Decline sends nothing back) and no
+/// routed or held path (a pair session links two devices at a time, in person), so this module can
+/// never know any of those things.
+public nonisolated enum ProximityPairSendFailure: CaseIterable, Equatable, Sendable {
 
-    /// This device is already paired with a DIFFERENT Fernlet, and recipe sharing links two
-    /// Fernlets at a time. Refused before anything was attempted.
+    /// This device is already paired with a DIFFERENT device, and a pair session links two devices
+    /// at a time. Refused before anything was attempted.
     case pairedWithAnother
 
-    /// A connection attempt to a different Fernlet was already in flight. Refused before anything
+    /// A connection attempt to a different device was already in flight. Refused before anything
     /// was attempted.
     case connectingToAnother
 
-    /// The picked Fernlet was no longer discoverable when the share began.
+    /// The picked device was no longer discoverable when the send began.
     case recipientUnavailable
 
-    /// The pre-connect timer ran out: the other Fernlet never answered the dial (the usual reason is
+    /// The pre-connect timer ran out: the other device never answered the dial (the usual reason is
     /// that it is busy with its own pairing, locked, or closed).
     case noAnswer
 
@@ -65,19 +65,20 @@ public nonisolated enum RecipeShareFailure: CaseIterable, Equatable, Sendable {
     }
 }
 
-// MARK: - RecipeShareOutcome
+// MARK: - ProximityPairSendOutcome
 
-/// How one recipe share ended, published by ``ProximityRecipeShareManager/lastShareOutcome`` so the
-/// share sheet can say so plainly instead of silently clearing.
+/// How one send over a one-to-one pairing (a recipe share) ended, published by
+/// ``ProximityPairSession/lastSendOutcome`` so an owner's sheet can say so plainly instead of
+/// silently clearing.
 ///
-/// ## Why this exists beside `SendState`
+/// ## Why this exists beside `status`
 ///
-/// ``ProximityRecipeShareManager/SendState`` is display copy for a status line: its failure arm is
-/// an English sentence composed in this module, and every terminal state is reset to `.idle` 2.5 s
-/// later. Neither property is usable for a confirmation that has to stay on screen until the user
+/// ``ProximityPairSession/status`` is a status line: its owner renders it as display copy (Fernlet's
+/// recipe share sheet shows an English sentence), and every terminal state is reset to `.idle` 2.5 s
+/// later. Neither is usable for a confirmation that has to stay on screen until the user
 /// dismisses it and has to be translated. This value is the record: a frozen cause
-/// (``RecipeShareFailure``), the names it happened to, and a fresh ``id`` per publication, so two
-/// identical failures in a row are still two changes an observer can see.
+/// (``ProximityPairSendFailure``), the names it happened to, and a fresh ``id`` per publication, so
+/// two identical failures in a row are still two changes an observer can see.
 ///
 /// ## What `sent` means, exactly
 ///
@@ -89,8 +90,8 @@ public nonisolated enum RecipeShareFailure: CaseIterable, Equatable, Sendable {
 /// Nothing is ever sent back. Copy built on this value must say "sent", never "delivered".
 ///
 /// Identity-free by construction apart from the two names the user already saw on screen (the row
-/// they tapped and the recipe they picked). No fingerprint, key or payload body rides it.
-public nonisolated struct RecipeShareOutcome: Equatable, Identifiable, Sendable {
+/// they tapped and the ``subject`` they picked). No fingerprint, key or payload body rides it.
+public nonisolated struct ProximityPairSendOutcome: Equatable, Identifiable, Sendable {
 
     /// The two ways a share can end.
     public nonisolated enum Result: Equatable, Sendable {
@@ -100,23 +101,24 @@ public nonisolated struct RecipeShareOutcome: Equatable, Identifiable, Sendable 
         case sent
 
         /// The share did not go out, or did not finish going out, for the given reason.
-        case notSent(RecipeShareFailure)
+        case notSent(ProximityPairSendFailure)
     }
 
     /// Fresh per publication, so an observer sees every outcome, including a repeat of the last one.
     public let id: UUID
 
-    /// The picker row the user tapped (``ProximityRecipeShareRecipient/id``).
+    /// The picker row the user tapped (``ProximityPairPeer/id``).
     public let recipientID: UUID
 
     /// The name that row showed when the user tapped it.
     public let recipientName: String
 
-    /// The recipe's title as the payload carries it.
-    public let recipeTitle: String
+    /// What the send was, in the words its owner gave it: for a recipe share, the recipe's title as
+    /// the payload carries it. Never sent.
+    public let subject: String
 
     /// The Fernlet this device is already paired with. Set only for
-    /// ``RecipeShareFailure/pairedWithAnother``, so the sheet can name who is holding the link.
+    /// ``ProximityPairSendFailure/pairedWithAnother``, so the sheet can name who is holding the link.
     public let otherPeerName: String?
 
     /// How the share ended.
@@ -129,21 +131,21 @@ public nonisolated struct RecipeShareOutcome: Equatable, Identifiable, Sendable 
     ///     make a second outcome invisible to an observer comparing by value.
     ///   - recipientID: The picker row the share was for.
     ///   - recipientName: The name that row showed.
-    ///   - recipeTitle: The recipe's title.
-    ///   - otherPeerName: The already-paired Fernlet, for ``RecipeShareFailure/pairedWithAnother``.
+    ///   - subject: What the send was, in its owner's words (a recipe's title).
+    ///   - otherPeerName: The already-paired Fernlet, for ``ProximityPairSendFailure/pairedWithAnother``.
     ///   - result: How the share ended.
     public init(
         id: UUID = UUID(),
         recipientID: UUID,
         recipientName: String,
-        recipeTitle: String,
+        subject: String,
         otherPeerName: String? = nil,
         result: Result
     ) {
         self.id = id
         self.recipientID = recipientID
         self.recipientName = recipientName
-        self.recipeTitle = recipeTitle
+        self.subject = subject
         self.otherPeerName = otherPeerName
         self.result = result
     }

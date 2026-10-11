@@ -2,8 +2,6 @@ import ProximityKit
 import Testing
 import Foundation
 import Combine
-import FernletDomainModel
-@testable import Fernlet
 
 @Suite(.serialized) @MainActor
 struct NearbyRangingSessionTests {

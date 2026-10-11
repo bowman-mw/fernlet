@@ -27,6 +27,7 @@ import Testing
 import CryptoKit
 import FernletFoundation
 import FernletDomainModel
+import FernletConnections
 @testable import Fernlet
 
 @MainActor
@@ -502,7 +503,7 @@ struct SealedIntroductionTests {
         // Heart delivered end-to-end over the verified sealed connection.
         let heart = HeartPayload(sentAtDayKey: "2026-07-11")
         try await coordA.sendPayload(
-            type: .friendHeart,
+            payloadTypeToken: PayloadType.friendHeart.rawValue,
             summary: PayloadSummary(title: "Good vibes"),
             payload: try JSONEncoder().encode(heart),
             sealed: true)

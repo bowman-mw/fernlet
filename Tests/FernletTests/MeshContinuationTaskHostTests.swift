@@ -584,10 +584,18 @@ struct MeshContinuationTaskHostWallTests {
     /// What the reaper's file may never name in its code (lexed: comments dropped, literals emptied),
     /// each as a whole identifier: ActivityKit's `request`, however the call is spelled
     /// (`Activity.request`, `Activity<…>.request`, through a type alias, unapplied, or bare inside an
-    /// `extension Activity`), and the app's generic requester and the run-state protocol it requests for,
-    /// which raise a Live Activity from a file that never spells `request`. Shared with
+    /// `extension Activity`); the app's generic requester and the run-state protocol it requests for,
+    /// which raise a Live Activity from a file that never spells `request`; and `typealias`, since an
+    /// alias declared here for the attributes or for `Activity` lets another app file request one without
+    /// naming the attributes type, which needle (3) of cell (g) is all that refuses. Shared with
     /// `FernletFeatureGoldenTests`' reaper cell.
-    static let reaperRequestSpellings = ["request", "LiveActivityStarter", "LiveActivityRunReflectable"]
+    static let reaperRequestSpellings = ["request", "LiveActivityStarter", "LiveActivityRunReflectable", "typealias"]
+
+    /// How many times `code` names `identifier` as a whole identifier, never inside a longer name.
+    static func wholeIdentifierCount(of identifier: String, in code: String) throws -> Int {
+        let regex = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])"# + identifier + #"(?![A-Za-z0-9_])"#)
+        return regex.numberOfMatches(in: code, range: NSRange(code.startIndex..., in: code))
+    }
 
     /// The ``reaperRequestSpellings`` that `source`'s code names as whole identifiers (lexed: comments
     /// dropped, literals emptied), in that list's order.
@@ -746,7 +754,7 @@ struct MeshContinuationTaskHostWallTests {
     ///
     /// Cell (e) pinned the mesh's door. This pins the half P8 left open — the coordinator's
     /// DEFAULT anchor, which three shipping construction sites take by omitting the argument
-    /// (`ProximityRecipeShareManager.handleChannelReady`, and `FernletSocial`'s `PresenceManager`'s
+    /// (`ProximityPairSession.handleChannelReady`, and `FernletSocial`'s `PresenceManager`'s
     /// heart door and its teardown seam). Until P9 that default was the ActivityKit conformer, whose
     /// every request was doomed: the attributes type was internal to ProximityKit and
     /// `App/FernletWidgets/FernletWidgetsBundle.swift` declares no `ActivityConfiguration` for it,
@@ -755,12 +763,14 @@ struct MeshContinuationTaskHostWallTests {
     ///
     /// Five independently reddenable needles: re-adding a request to the reaper's file, in any spelling
     /// ``reaperRequestSpellings`` reads (ActivityKit's `request` as a whole identifier, specialised,
-    /// aliased, unapplied or bare, or the app's `LiveActivityStarter` and its
-    /// `LiveActivityRunReflectable`) — or moving the enumeration out of the reaper's own brace-matched
-    /// body — reddens (1); naming the retired class, a request through `Activity` (its generic argument
-    /// inferred or written out), ActivityKit in any form (an import of any kind, a `canImport`, a
-    /// qualified name) or the attributes type from ANY file under ProximityKit or `FernletSocial`
-    /// reddens (2); naming the attributes type from any app file but the reaper's own reddens (3);
+    /// aliased, unapplied or bare, the app's `LiveActivityStarter` and its `LiveActivityRunReflectable`,
+    /// or a `typealias`) — or moving the enumeration out of the reaper's own brace-matched body, or
+    /// naming the attributes type in the file's code outside that body anywhere but its declaration (a
+    /// stored value, a metatype, a factory) — reddens (1); naming the retired class, a request through
+    /// `Activity` (its generic argument inferred or written out), ActivityKit in any form (an import of
+    /// any kind, a `canImport`, a qualified name) or the attributes type from ANY file under ProximityKit
+    /// or `FernletSocial` reddens (2); naming the attributes type from any app file but the reaper's own
+    /// reddens (3);
     /// restoring the `#if canImport` default reddens (4); declaring a proximity configuration in the
     /// widget bundle reddens (5) — which is the honest signal that "retire" has been reversed and this
     /// cell must be rewritten rather than deleted.
@@ -789,6 +799,20 @@ struct MeshContinuationTaskHostWallTests {
             "the once-per-launch orphan reaper's body is gone from \(Self.reaperPath)")
         #expect(reaper.contains("Activity<ProximityConnectionActivityAttributes>.activities"),
                 "the orphan reaper stays — it is the one remaining reader of the attributes type")
+        // Outside the reaper's body the file's code names the attributes type once, in its declaration:
+        // a value, a metatype, a factory or an extension spelled beside it would let another app file
+        // raise one without naming the type, which needle (3) is all that refuses.
+        let lexed = SwiftSourceLexer.lex(reaperSource).code
+        let lexedReaper = try #require(
+            MeshRoutedSourceScan.bracedBody(after: "static func endOrphans() async {", in: lexed),
+            "the once-per-launch orphan reaper's body is gone from \(Self.reaperPath)'s code")
+        let attributes = "ProximityConnectionActivityAttributes"
+        let outside = try Self.wholeIdentifierCount(of: attributes, in: lexed)
+            - Self.wholeIdentifierCount(of: attributes, in: lexedReaper)
+        #expect(outside == 1, """
+            \(Self.reaperFile) names `\(attributes)` \(outside) times outside the reaper's body; only its \
+            declaration may: a stored value, metatype or factory there raises one from another file
+            """)
 
         // (2) ProximityKit and `FernletSocial`, WALKED (the suite's own `codeSources`/`homes`,
         // comment-stripped, and lexed for the patterns), not hand-listed: since plan step A0.6 neither

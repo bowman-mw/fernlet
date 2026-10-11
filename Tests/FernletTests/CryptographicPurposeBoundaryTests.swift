@@ -1,6 +1,7 @@
 import Foundation
 import FernletCrypto
 import FernletDomainModel
+import FernletConnections
 import FernletSocial
 import Testing
 @testable import ProximityKit

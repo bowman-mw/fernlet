@@ -72,9 +72,10 @@ enum MeshP9Acceptance {
     /// The recipe radio, which also declares ``RecipeSharePosture`` (item 3 pass 2).
     static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkRecipeShareSession.swift"
 
-    /// The recipe manager.
-    static let recipeManagerPath =
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityRecipeShareManager.swift"
+    /// The recipe radio's owner: ProximityKit's pair session (the recipe-share manager's mechanism
+    /// until plan step A0.7.3, when the manager left for FernletSocial over it).
+    static let recipePairSessionPath =
+        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
 
     /// The transport factory: the one file that decides which mesh radio a shipping launch builds.
     static let transportSelectionPath =
@@ -817,8 +818,8 @@ struct MeshP9RecipeSwapAcceptanceTests {
                     "`\(retired)` is still declared — no radio has advertised it since pass 2 crossed")
         }
         let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
-        #expect(session.contains("alpn = namespace.family.radios.recipeShare.alpn"),
-                "the session reads its ALPN off the host's namespace, from its own radio's field")
+        #expect(session.contains("alpn = profile.radio.alpn"),
+                "the session reads its ALPN off its pair profile's radio, the host namespace's recipe row")
         #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
         #expect(NetworkRecipeShareSession.maxTunnels == 1,
                 "the shipped 2-device cap is what the pause/resume contract exists to preserve")
@@ -830,13 +831,13 @@ struct MeshP9RecipeSwapAcceptanceTests {
     /// The containment pairing, not text proximity: `occurrences(verb) == 1` alone stayed green when
     /// the call was moved OUT of `applyDiscoveryGate`, so the whole-file count is paired with the
     /// count inside the function's brace-matched body. And the unit is the SUBTREE, not one file —
-    /// an `extension ProximityRecipeShareManager` in a new file reintroduces every needle without
-    /// reddening a scan of the manager alone.
+    /// an `extension ProximityPairSession` in a new file reintroduces every needle without
+    /// reddening a scan of the session alone.
     ///
     /// Rule 7 for item 3: `RecipeShareRadioSession` / `NetworkRecipeShareSession` in the manager are
     /// false at `79f6b15` and true at `ba34491`.
     @Test func discoveryMovesThroughTheGateAloneAndNoRecipeFileNamesTheRetiredRadio() throws {
-        let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeManagerPath))
+        let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipePairSessionPath))
         let gate = try #require(
             MeshRoutedSourceScan.bracedBody(after: "private func applyDiscoveryGate(", in: manager),
             "applyDiscoveryGate is gone — the discovery contract has no door")
@@ -851,28 +852,30 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(manager.contains("NetworkRecipeShareSession"), "whose production conformer it builds")
 
         // The BIRTH SEED has one mint site (item 9's fix review, FIX 3). `beginTransferForTesting`
-        // is what every cell of this battery and of `RecipeShareTransferTests` drives;
-        // `sendRecipeShare` is what ships, and nothing at tier 1 executes it — so while the seed
-        // was spelled twice, item 3 pass 1's own defect (`radioIsQuiet: false` on the shipping
-        // line) could be restored with the whole tree green. Containment, not proximity: the
-        // shipping door's brace-matched body must call the helper, and the record may be
-        // constructed in exactly one place.
+        // is what every cell of this battery and of `RecipeShareTransferTests` drives; the pair
+        // session's `send(_:to:)` is what ships, and no cell of either executes it (one golden does,
+        // `FernletFeatureGoldenTests`' recipe pairing, which reads the bytes, not the seed) — so
+        // while the seed was spelled twice, item 3 pass 1's own defect (`radioIsQuiet: false` on
+        // the shipping line) could be restored with the whole tree green. Containment, not
+        // proximity: the shipping door's brace-matched body must call the helper, and the record
+        // may be constructed in exactly one place.
         let send = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "public func sendRecipeShare(", in: manager),
-            "the recipe share's shipping door is gone")
+            MeshRoutedSourceScan.bracedBody(after: "public func send(", in: manager),
+            "the pair session's shipping send is gone")
         #expect(send.contains("mintTransfer(for: recipient.id)"), """
-            sendRecipeShare mints its exchange record somewhere other than the one seeded helper — \
+            the pair session's send mints its exchange record somewhere other than the one seeded helper — \
             which is how the shipping seed and the seed every test drives came apart before
             """)
         let mints = manager.components(separatedBy: "RecipeShareTransfer(recipientID:").count - 1
         #expect(mints == 1, "the exchange record is constructed in \(mints) places; the helper is the one")
 
         let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/RecipeSharing")
-        // Four since 2026-09-29: `RecipeShareOutcome.swift` (the share's frozen outcome tokens) was
-        // added and read against the needle walk below, which it passes — it names no radio at all.
+        // Four since 2026-09-29: `ProximityPairSendOutcome.swift` (the send's frozen outcome tokens,
+        // added as `RecipeShareOutcome.swift`) was read against the needle walk below, which it
+        // passes — it names no radio at all.
         #expect(subtree.count == 4, """
             the RecipeSharing subtree holds \(subtree.count) files, not the four it held when this \
-            was measured (the manager, the advertisement, the transfer record and the share \
+            was measured (the pair session, the advertisement, the transfer record and the send \
             outcome). A fifth is a file this cell's retired-radio walk has never been read against; \
             a fourth gone is a scan that lost its root. EXACT on purpose — `>= 4` was satisfied by \
             the tree it was written against and by every tree that could ever follow it

@@ -673,22 +673,26 @@ struct KeyCustodyBoundaryTests {
     /// A participant-less identity on a device a pre-migration build left in provisioning Case 3 would
     /// mint over the synced key-agreement row
     /// without promoting it into the escrow, destroying the user's backup key. Each manager keeps its
-    /// identity private, so it is read by reflection: a manager that stops keeping one under that name
-    /// fails here by name.
+    /// identity private, so it is read by reflection: the mesh's and presence's in their own stored
+    /// `identity`, and the recipe-share manager's in its pair session's (its stored `pairSession`, then
+    /// that session's `identity`, two hops); a manager that stops keeping one under that path fails
+    /// here by name.
     @MainActor
     @Test func theStoresManagersHoldIdentitiesCarryingTheEscrowKey() throws {
         let store = makeTestStore()
         let host: any ProximityHost = store
         #expect(host.makeProximityIdentity().provisioningParticipant is SealedBackupEscrowKey,
                 "the store's host door answers an identity without the sealed-backup escrow key")
-        let managers: [(name: String, manager: AnyObject)] = [
-            ("mesh", store.meshNetworkManager), ("recipe-share", store.recipeShareManager),
-            ("presence", store.presenceManager)
+        let managers: [(name: String, manager: AnyObject, path: [String])] = [
+            ("mesh", store.meshNetworkManager, ["identity"]),
+            ("recipe-share", store.recipeShareManager, ["pairSession", "identity"]),
+            ("presence", store.presenceManager, ["identity"])
         ]
         var participants: Set<ObjectIdentifier> = []
         // R2: bounded by the three managers.
-        for (name, manager) in managers {
-            let identity = try #require(Self.heldIdentity(of: manager), "the \(name) manager keeps no `identity`")
+        for (name, manager, path) in managers {
+            let identity = try #require(Self.heldIdentity(of: manager, through: path),
+                                        "the \(name) manager keeps no `\(path.joined(separator: "."))`")
             let participant = try #require(identity.provisioningParticipant as? SealedBackupEscrowKey,
                                            "the \(name) manager's identity does not carry the sealed-backup escrow key")
             participants.insert(ObjectIdentifier(participant))
@@ -696,10 +700,15 @@ struct KeyCustodyBoundaryTests {
         #expect(participants.count == managers.count, "two managers' identities share one escrow key")
     }
 
-    /// The `IdentityService` a manager keeps in its stored `identity` property, read by reflection, or
-    /// nil when it keeps none under that name.
-    private static func heldIdentity(of manager: AnyObject) -> IdentityService? {
-        Mirror(reflecting: manager).children.first { $0.label == "identity" }?.value as? IdentityService
+    /// The `IdentityService` a manager keeps at `path`, its stored properties' labels hop by hop (its
+    /// own `identity`, or its pair session's), read by reflection, or nil when it keeps none there.
+    private static func heldIdentity(of manager: AnyObject, through path: [String]) -> IdentityService? {
+        var value: Any? = manager
+        // R2: bounded by the path's labels.
+        for label in path {
+            value = value.flatMap { held in Mirror(reflecting: held).children.first { $0.label == label }?.value }
+        }
+        return value as? IdentityService
     }
 
     // MARK: Fixtures: prove both matchers actually fire on planted violations (and stay quiet on

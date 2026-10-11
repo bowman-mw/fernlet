@@ -18,8 +18,10 @@
 #      (Docs/No-Tracking-Wall.md), whose dependency and destination allowlists a project-file edit can
 #      silently widen. Since the strict build also enforces Power-of-10 rule 10 (warnings are errors,
 #      package warnings un-suppressed — Docs/Power-of-10-Swift.md §R10), every Swift file in the tree is
-#      wall-relevant too: the widgets, the share extension, and BOTH test targets can each introduce a
-#      warning.
+#      wall-relevant too: the widgets, the share extension, and every test target can each introduce a
+#      warning. Since ProximityKit plan step A0.8 the build goes through Fernlet.xcworkspace, so the
+#      workspace, the shared schemes (whose testables decide what it compiles) and the package's own
+#      test folder, FernletKit/Tests/, are wall-relevant too.
 #   3. The macOS build check (Scripts/macos-build-check.sh: ProximityKit's closure built for native
 #      macOS 26 with warnings as errors, plan step A0.6) runs ONLY when the push touches what that build
 #      reads: the package manifest, the closure's four modules (ProximityKit, FernletCrypto,
@@ -46,7 +48,7 @@ else
   echo "[pre-push] Power-of-10 scan passed."
 fi
 
-wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|App/.*\.swift|Tests/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|.*\.xcprivacy|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
+wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|FernletKit/Tests/|App/.*\.swift|Tests/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|App/Fernlet\.xcodeproj/xcshareddata/xcschemes/|Fernlet\.xcworkspace/|.*\.xcprivacy|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
 macos_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/(ProximityKit|FernletCrypto|FernletDomainModel|FernletFoundation)/|Scripts/macos-build-(check|selftest)\.sh)'
 zero="0000000000000000000000000000000000000000"
 

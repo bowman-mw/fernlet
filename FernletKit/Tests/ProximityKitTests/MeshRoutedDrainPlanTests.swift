@@ -1,5 +1,5 @@
 // MeshRoutedDrainPlanTests.swift
-// FernletTests
+// ProximityKitTests
 //
 // Network migration P5 item 6 (plan §11, §10.3): the pure half of the drain — no manager, no store,
 // no clock. Every cell is a value in and a value out.
@@ -7,7 +7,6 @@
 import Foundation
 import Testing
 @testable import ProximityKit
-@testable import Fernlet
 
 // MARK: - Fixtures
 

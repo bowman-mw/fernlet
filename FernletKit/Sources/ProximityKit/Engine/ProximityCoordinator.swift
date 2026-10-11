@@ -32,8 +32,9 @@ public protocol ProximityInspectorRecording: AnyObject {
 /// dispatches (`payloads.known`) but not one of the coordinator's own session messages (identity
 /// intro/ack, heartbeat); `peer` is the handshake-verified
 /// identity when one exists, else the pending identity — receivers must apply their own
-/// committed/blocked gates. Conformers: ``MeshNetworkManager`` and ``ProximityRecipeShareManager``
-/// here, and FernletSocial's `PresenceManager`. Held `weak` by the coordinator.
+/// committed/blocked gates. Conformers: ``MeshNetworkManager`` here, and FernletSocial's
+/// `PresenceManager` and `ProximityRecipeShareManager` (the one a ``ProximityPairSession`` hands its
+/// pairings' coordinators). Held `weak` by the coordinator.
 @MainActor
 public protocol ProximityPayloadHandling: AnyObject {
     func proximityCoordinator(
@@ -132,8 +133,8 @@ private nonisolated struct SessionHeartbeatPayload: Codable, Sendable {
 /// signed identity exchange and the proximity commit gate to a verified, heartbeat-kept session,
 /// and is the single choke point every inbound envelope passes through.
 ///
-/// One coordinator per peer connection, owned by a manager (mesh slot, recipe pairing, presence
-/// heart connection) that injects the transport, ranging provider, trust policy, payload handler,
+/// One coordinator per peer connection, owned by a manager or session (mesh slot, pair-session
+/// pairing, presence heart connection) that injects the transport, ranging provider, trust policy, payload handler,
 /// and shared ``ReplayCache``. The friend-mode state machine: transport connect →
 /// `awaitingIdentityIntroduction` (signed intro/ack with ranging token + capabilities) →
 /// `awaitingProximityCommit` (UWB 15 cm / 0.8 s dwell) or `awaitingManualCommit` (no UWB) →
@@ -271,9 +272,9 @@ public final class ProximityCoordinator {
         // `ActivityConfiguration` for it, so each call either threw (audited) or spent one of the
         // per-app Live Activity slots a workout or cooking activity needs on something nothing
         // draws. Three shipping construction sites take this default by omitting the argument
-        // (`ProximityRecipeShareManager.handleChannelReady`, and `PresenceManager`'s heart door
+        // (`ProximityPairSession.handleChannelReady`, and `PresenceManager`'s heart door
         // plus its teardown seam), so this one line retires all of them; the mesh's two doors and
-        // the recipe-share test seam pass `NoopProximityForegroundAnchor()` explicitly and are left
+        // the pair session's test seam pass `NoopProximityForegroundAnchor()` explicitly and are left
         // alone. The app's `ProximityLiveActivityReaper.endOrphans()` still runs once per launch.
         self.foregroundAnchor = foregroundAnchor ?? NoopProximityForegroundAnchor()
         self.displayName = displayName
@@ -451,22 +452,27 @@ public final class ProximityCoordinator {
         transition(to: .connected(peer: connectedPeerIdentity ?? identity))
     }
 
-    /// Signs and sends one payload to the connected peer.
+    /// Signs and sends one payload to the confirmed peer under `payloadTypeToken`, a token its host's
+    /// vocabulary names (`payloads.known`): the per-connection send a host's pairing goes through, the
+    /// pair session's pairings and a host's own connections (presence's heart delivery) alike.
     ///
-    /// **`summary` must be built from frozen English literals — never `String(localized:)`.** Every
-    /// caller (recipe share, good vibes, clothing catalog, session goodbye) hands in a
-    /// human-sounding title that is nonetheless a wire token: it is folded into the Ed25519
-    /// canonical bytes AND surfaced in the RECEIVING device's Connection Inspector. The rationale,
-    /// and the receiver-side plan for a localized inspector, live on
+    /// **`summary` must be built from frozen literals — never `String(localized:)`.** Every caller
+    /// hands in a human-sounding title that is nonetheless a wire token: it is folded into the
+    /// envelope's canonical signing bytes AND surfaced in the RECEIVING device's Connection Inspector.
+    /// The rationale, and the receiver-side plan for a localized inspector, live on
     /// `FernletIdentityEnvelope.payloadSummary`.
     ///
-    /// Throws ``CoordinatorError/notConnected`` before it signs anything when no peer is connected;
-    /// with `sealed`, seals to the connected peer's key-agreement key when it has one, in the
-    /// framing the peer's capabilities negotiate.
-    ///
-    /// Package access for FernletSocial until A0.7: presence's heart delivery and the recipe-share
-    /// manager are its shipping callers, and the profile-driven pair session's send replaces it.
-    package func sendPayload(type: PayloadType, summary: PayloadSummary, payload: Data, sealed: Bool = false) async throws {
+    /// Throws ``CoordinatorError/notConnected`` before signing when no transport peer is connected, and
+    /// from ``send(_:)`` when no identity has been confirmed: it sends to a confirmed peer only. The
+    /// envelope names the confirmed peer's fingerprint as recipient and this side's disclosed name as
+    /// sender, and expires five minutes after it is signed. With `sealed`, the payload is sealed to the
+    /// confirmed peer's key-agreement key, framed when that peer supports the namespace's wire2
+    /// capability (it advertised it, or listed none and the namespace assumes it for such peers) and
+    /// unframed otherwise; a peer that presented no key-agreement key gets it unsealed, which a
+    /// receiver whose rules require sealing refuses.
+    public func sendPayload(
+        payloadTypeToken: String, summary: PayloadSummary, payload: Data, sealed: Bool = false
+    ) async throws {
         guard currentTransportPeer != nil else { throw CoordinatorError.notConnected }
         let (finalPayload, encryption) = try sealIfNeeded(payload, sealed: sealed)
         let sentAt = now()
@@ -474,7 +480,7 @@ public final class ProximityCoordinator {
             identityService: identity,
             senderDisplayName: disclosedDisplayName,
             recipientFingerprint: connectedIdentity?.fingerprint,
-            payloadType: type,
+            payloadTypeToken: payloadTypeToken,
             payloadEncryption: encryption,
             payloadSummary: summary,
             payload: finalPayload,
@@ -748,13 +754,11 @@ public final class ProximityCoordinator {
     /// Manual proximity confirmation — works for both non-UWB (awaitingManualCommit)
     /// and UWB devices where the debug Force button overrides the proximity gate.
     ///
-    /// Confirms the identity the coordinator holds at a proximity gate and does nothing in any
-    /// other state.
-    ///
-    /// Package access for FernletSocial until A0.7: presence's heart connections auto-commit
-    /// through it, as the recipe-share manager's pairings do, and the profile-driven pair session's
-    /// commit replaces it.
-    package func commitManualProximity() async {
+    /// Confirms the identity the coordinator holds at a proximity gate (`awaitingManualCommit` or
+    /// `awaitingProximityCommit`) and does nothing in any other state: the programmatic commit a
+    /// host's pairing takes with no user step (the pair session's pairings and presence's heart
+    /// connections), the mesh's slot commit and the debug Force button's. Safe to call repeatedly.
+    public func commitManualProximity() async {
         switch state {
         case .awaitingManualCommit(let peerIdentity), .awaitingProximityCommit(let peerIdentity):
             inspector?.recordCoordinatorEvent("manual proximity commit")
@@ -1306,7 +1310,8 @@ public final class ProximityCoordinator {
             // every device and in every language. Localize on the RECEIVING side by mapping that
             // token to a `String(localized:)` label at render time (a `PayloadType` → label switch in
             // the Inspector view), and keep `summary` as the raw fallback for tokens this build does
-            // not know (`isUnknownPayloadType` — a newer peer's payload type has no local label).
+            // not know (the host's typed view says so, Fernlet's `isUnknownPayloadType` — a newer
+            // peer's payload type has no local label).
             // The sender must keep sending frozen English so signatures and cross-build audit rows
             // stay comparable; nothing here should ever call `String(localized:)`.
             summary: encrypted ? envelope.payloadTypeToken : envelope.payloadSummary.title
