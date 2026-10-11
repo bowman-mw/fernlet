@@ -343,6 +343,18 @@ jobs:
         # iOS 26.5), ran 110 tests in 11 suites; its floor stays the shared `1`. crypto-goldens holds
         # the step's goldens at 355 and mesh-batteries the recipe-share manager's observation cell at
         # 1370, both raised at A0.7.0.
+        #
+        # ProximityKit plan step A0.8.0 (2026-10-10), before any suite moves to ProximityKit's own
+        # package test target, gives the selector wall its suite-inventory and twin cells:
+        # `theSuiteInventoryIsTheTree` holds Tests/suite-inventory.tsv (every one of the 642
+        # FernletTests suites with its file and the lines that name it, and each package suite's
+        # declared tests once one moves) to the tree, and `everyTwinMatchesItsOriginal` holds every
+        # helper both test targets compile identical but for its imports. Its selector reader learns
+        # `ProximityKitTests/<Suite>`, read against that target's own declarations, and its
+        # declaration reader `nonisolated`. 112 tests in 11 suites by declaration count (110 + 2), the
+        # ARITHMETIC CHECK, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
+        # 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`. mesh-batteries, which
+        # runs the wall too, is raised 1370 -> 1372.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -1663,9 +1675,19 @@ jobs:
         # (ProximityRecipeShareCapTests' cell holding the recipe-share manager's observables to the
         # notifications SwiftUI reads, before plan step A0.7.3 makes them its pair session's) = 1370 is
         # the ARITHMETIC CHECK, never the source.
+        # At A0.8.0 no suite joined or left, so the NAME count stays 154; one suite here gained two cells:
+        # RAISED 1370 -> 1372 at A0.8.0, MEASURED on a Mac, 2026-10-10 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: totalTestCount 1372, "Test run with 1372 tests in
+        # 154 suites passed after 182.020 seconds" (CIGateSelectorBoundaryTests 7 -> 9, no other suite
+        # moved), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 1372:
+        # passed. Run once more at 1372 without CIGateSelectorBoundaryTests: 1363 ran and the floor
+        # refused it. 1370 + 2 (the selector wall's suite-inventory cell, holding
+        # Tests/suite-inventory.tsv to the tree, and its twin cell) = 1372 is the ARITHMETIC CHECK,
+        # never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1370 \
+          Scripts/run-gated-suites.sh mesh-batteries 1372 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

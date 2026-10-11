@@ -52,6 +52,9 @@
 /.github/workflows/s3-wall.yml                @bowman-mw
 /.github/workflows/power-of-10.yml            @bowman-mw
 /.github/CODEOWNERS                           @bowman-mw
+# The suite inventory the selector wall holds to the tree (plan step A0.8): a row deleted there is a test leaving
+# CI's sight
+/Tests/suite-inventory.tsv                    @bowman-mw
 
 # The stated guarantees
 /Docs/No-Tracking-Wall.md                     @bowman-mw

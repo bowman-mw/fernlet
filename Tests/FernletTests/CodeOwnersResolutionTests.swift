@@ -103,6 +103,8 @@ struct CodeOwnersResolutionTests {
         "/Scripts/run-gated-suites.sh",
         "/FernletKit/Package.swift",
         "/.github/CODEOWNERS",
+        // The suite inventory CIGateSelectorBoundaryTests holds to the tree (ProximityKit plan step A0.8).
+        "/Tests/suite-inventory.tsv",
         "/.github/workflows/s3-wall.yml",
         "/.github/workflows/power-of-10.yml",
         // All four privacy manifests — the public App Store claim NoTrackingBoundaryTests pins. The
