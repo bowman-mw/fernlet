@@ -16,7 +16,8 @@
 // be), `Tests/suite-inventory.tsv` must be the tree (every suite's target, file and lines, and each
 // package suite's declared tests), the helpers both targets compile must be twins, the strict build
 // and every run go through `Fernlet.xcworkspace`, which resolves the CryptoSwift revision the app
-// project pins (ProximityKit plan step A0.8.1), and this suite gates itself.
+// project pins (ProximityKit plan step A0.8.1), the Fernlet scheme's testables hold the package
+// test target, which depends on ProximityKit alone (A0.8.2), and this suite gates itself.
 
 import Foundation
 import Testing
@@ -310,6 +311,10 @@ import Testing
     /// `ProximityKitTests/<Suite>`, a suite of ProximityKit's own package test target, and counts as
     /// one name, as a bare one does. Which line names which suite is held exactly, beyond this `>=`,
     /// by `Tests/suite-inventory.tsv` (``theSuiteInventoryIsTheTree()``).
+    ///
+    /// At ProximityKit plan step A0.8.2 (2026-10-11) no count moves: two names are re-qualified in
+    /// place, `mesh-batteries`' `PeerHandleIdentityTests` and `FakePeerTransportTests`, now
+    /// `ProximityKitTests/<Suite>` in ProximityKit's package test target.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -636,7 +641,9 @@ import Testing
     /// script reads `ProximityKitTests/<Suite>` selectors and refuses a named suite that ran no test
     /// case, and the workspace and a release archive resolve one CryptoSwift
     /// (``expectTheRunnerReadsTwoTargets(_:)``, ``expectTheBuildAndTheRunsShareTheWorkspace()``,
-    /// ``expectOneCryptoSwiftRevision()``).
+    /// ``expectOneCryptoSwiftRevision()``); since A0.8.2 the Fernlet scheme's testables hold the
+    /// package test target, which depends on ProximityKit alone
+    /// (``expectTheSchemeRunsThePackageTests()``).
     @Test func everyTestStepRunsThroughTheFloorScript() throws {
         let workflow = try RepoRoot.source(Self.workflowPath)
         let code = workflow.components(separatedBy: "\n")
@@ -720,6 +727,7 @@ import Testing
         Self.expectTheRunnerReadsTwoTargets(script)
         try Self.expectTheBuildAndTheRunsShareTheWorkspace()
         try Self.expectOneCryptoSwiftRevision()
+        try Self.expectTheSchemeRunsThePackageTests()
     }
 
     // MARK: - The container, the runner and the resolution (ProximityKit plan step A0.8.1)
@@ -851,6 +859,52 @@ import Testing
         return ([location, revision, version], nil)
     }
 
+    // MARK: - The scheme and the package test target (ProximityKit plan step A0.8.2)
+
+    /// The app project's shared scheme, whose testables the strict build compiles and every run reads.
+    static let schemePath = "App/Fernlet.xcodeproj/xcshareddata/xcschemes/Fernlet.xcscheme"
+
+    /// The package manifest that declares ``packageTarget``.
+    static let manifestPath = "FernletKit/Package.swift"
+
+    /// The Fernlet scheme's `<Testables>` hold ``packageTarget`` in the FernletKit container, and the
+    /// manifest declares ``packageTarget`` once, depending on ProximityKit alone. Without the testable
+    /// the strict build compiles none of the package's tests and every `ProximityKitTests/<Suite>`
+    /// selector is refused (xcodebuild exits 70); Xcode may drop the reference on save when the project
+    /// is opened alone. One dependency added to the test target would re-open the app's modules, and
+    /// Fernlet's namespace, to the package's tests: dependency validation refuses only an import outside
+    /// the DECLARED dependencies. Each fact is read into a `Bool` before it is expected.
+    private static func expectTheSchemeRunsThePackageTests() throws {
+        let scheme = try RepoRoot.source(schemePath)
+        let testables = scheme.components(separatedBy: "<Testables>").dropFirst().first?
+            .components(separatedBy: "</Testables>").first ?? ""
+        let holdsTestable = testables.contains("BlueprintName = \"\(packageTarget)\"")
+            && testables.contains("ReferencedContainer = \"container:../FernletKit\"")
+        #expect(holdsTestable, """
+            \(schemePath)'s <Testables> no longer hold \(packageTarget) in `container:../FernletKit`: \
+            the strict build would compile none of the package's tests, and every \
+            ProximityKitTests/<Suite> selector would be refused. Restore the TestableReference.
+            """)
+        let lists = try packageTestTargetDependencies(in: try RepoRoot.source(manifestPath))
+        let onlyProximityKit = lists == [["ProximityKit"]]
+        #expect(onlyProximityKit, """
+            \(manifestPath) declares \(lists.count) `.testTarget(name: "\(packageTarget)"` with the \
+            dependencies \(lists): exactly one, depending on ProximityKit alone, keeps the app's modules \
+            and Fernlet's namespace out of the package's tests
+            """)
+    }
+
+    /// The quoted names of every `.testTarget(name: "ProximityKitTests", dependencies: [...])`
+    /// dependency list in a manifest's text, one list per declaration, in order.
+    static func packageTestTargetDependencies(in manifest: String) throws -> [[String]] {
+        let declaration = try NSRegularExpression(
+            pattern: #"\.testTarget\(\s*name:\s*"ProximityKitTests"\s*,\s*dependencies:\s*\[([^\]]*)\]"#)
+        let quoted = try NSRegularExpression(pattern: #""([^"]*)""#)
+        return ProximityPlatformBoundaryTests.captures(of: declaration, in: manifest).map {
+            ProximityPlatformBoundaryTests.captures(of: quoted, in: $0)
+        }
+    }
+
     /// The one device every test line runs on is named once, is the same device the scripts default
     /// to, and has NO fallback (plan §17.2.3 finding 6; §28.3's "three UI residuals" row).
     ///
@@ -971,14 +1025,18 @@ import Testing
 
     /// The MEASURED rows per target (rule I2). MEASURED at ProximityKit plan step A0.8.0 (2026-10-10):
     /// the 642 suites of a full run of FernletTests at `ba1675f0` (7034 tests, on an iPhone 17
-    /// simulator, iOS 26.5), before any suite moved; ProximityKit's package test target holds none. A
+    /// simulator, iOS 26.5), before any suite moved; ProximityKit's package test target held none. A
     /// move changes both entries in the same commit, argued and measured; a suite deleted with its row
     /// lowers its target's entry with the retirement argued, the ``measuredSuiteNameCounts`` rule.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 642, "ProximityKitTests": 0]
+    /// MOVED at plan step A0.8.2 (2026-10-11): 642 → 640 and 0 → 2, for `PeerHandleIdentityTests` and
+    /// `FakePeerTransportTests` (`PeerTransportNeutralityTests.swift`), measured in the package's
+    /// bundle on `mesh-batteries` at their FernletTests counts.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 640, "ProximityKitTests": 2]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
-    /// plan step A0.8.0 (2026-10-10): no suite has moved.
-    static let measuredPackageCells = 0
+    /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
+    /// `PeerHandleIdentityTests` 5 + `FakePeerTransportTests` 10, each its count in FernletTests.
+    static let measuredPackageCells = 15
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1024,7 +1082,8 @@ import Testing
 
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
     /// the line's exact trimmed text, and the invariant that makes it safe. A row whose line is gone
-    /// is a failure, so the list only shrinks. Empty at plan step A0.8.0: no suite has moved.
+    /// is a failure, so the list only shrinks. Empty: no code line of the package's files stands on a
+    /// needle (plan step A0.8.2).
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = []
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
@@ -1403,12 +1462,17 @@ import Testing
     /// The helper files both test targets compile, each a whole file present in both and held
     /// identical but for its import lines by ``everyTwinMatchesItsOriginal()``: (the package copy, the
     /// FernletTests copy), repo-relative. A test target cannot import another, so a helper a moved
-    /// suite and a staying one both use lives twice. None at plan step A0.8.0: no suite has moved.
-    static let twins: [(package: String, fernlet: String)] = []
+    /// suite and a staying one both use lives twice: the fake peer transport fabric
+    /// (`VirtualClock`, `FakePeerNetwork`, `FakePeerTransport`) since plan step A0.8.2, which
+    /// `FakePeerTransportTests` uses in the package and 22 FernletTests files use in the app's target.
+    static let twins: [(package: String, fernlet: String)] = [
+        (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
+         fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift")
+    ]
 
-    /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10). Each twin added or
-    /// retired changes it in the same commit.
-    static let measuredTwinCount = 0
+    /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10); 1 at A0.8.2
+    /// (2026-10-11), the fake peer transport. Each twin added or retired changes it in the same commit.
+    static let measuredTwinCount = 1
 
     /// A twin's comparable body: its lines, in order, minus every line whose trimmed text starts
     /// `import `, `@testable import ` or `@preconcurrency import ` (a package copy cannot import the

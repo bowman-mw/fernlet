@@ -2,11 +2,12 @@
 import PackageDescription
 
 // FernletKit — the local Swift package for the SPM module carve-up (plan §6).
-// The layered DAG below (28 targets, one umbrella product) IS the S3 privacy
-// wall: the walled AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) targets
-// have no dependency edge to the sealed `Private*` stores, and the build runs
-// with `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import
-// is a hard build error (see Scripts/spm-wall-check.sh).
+// The layered DAG below (28 targets and ProximityKit's test target, one
+// umbrella product) IS the S3 privacy wall: the walled AI (`AIProviders`) and
+// iCloud-sync (`CloudKitSync`) targets have no dependency edge to the sealed
+// `Private*` stores, and the build runs with
+// `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import is a
+// hard build error (see Scripts/spm-wall-check.sh).
 //
 // `defaultIsolation(MainActor.self)` is set per target up front: MainActor
 // isolation is NOT inherited from the app target's SWIFT_DEFAULT_ACTOR_ISOLATION
@@ -568,6 +569,25 @@ let package = Package(
             dependencies: ["ProximityKit", "FernletConnections", "FernletCrypto", "FernletDomainModel", "FernletFoundation", "PrivateMediaStore"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
+            ]
+        ),
+        // ProximityKit's own tests (plan step A0.8): the suites that need nothing but ProximityKit and its
+        // closure, moved out of the app's FernletTests so they travel with the package at plan step A1. The
+        // Fernlet scheme runs them as a second, unhosted test bundle (the simulator's xctest agent: no keychain
+        // entitlement, no ProximityAudit sink) through Fernlet.xcworkspace, the one container in which the
+        // scheme can see a package test target, so Scripts/spm-wall-check.sh builds them strict;
+        // Tests/FernletTests/CIGateSelectorBoundaryTests holds them to Tests/suite-inventory.tsv and pins this
+        // target's dependencies to ProximityKit alone. Swift 6 language mode (the package default) with no
+        // default isolation and the three upcoming features FernletTests builds with
+        // (SWIFT_APPROACHABLE_CONCURRENCY's two, and member import visibility), so a suite keeps the isolation,
+        // executor semantics and name lookup it had there.
+        .testTarget(
+            name: "ProximityKitTests",
+            dependencies: ["ProximityKit"],
+            swiftSettings: [
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+                .enableUpcomingFeature("InferIsolatedConformances"),
+                .enableUpcomingFeature("MemberImportVisibility"),
             ]
         ),
     ]

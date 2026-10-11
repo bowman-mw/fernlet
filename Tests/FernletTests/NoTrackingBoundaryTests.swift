@@ -58,7 +58,8 @@ struct NoTrackingBoundaryTests {
     // MARK: - Scan roots & floors
 
     /// Every root holding Swift source in this repo — app, package modules, all three extensions, and
-    /// BOTH test targets. Test code is included deliberately: an analytics SDK linked "only for tests"
+    /// every test target: the app's two and, since ProximityKit plan step A0.8, the package's under
+    /// `FernletKit/Tests`. Test code is included deliberately: an analytics SDK linked "only for tests"
     /// is still a dependency in the project file and still a thing a contributor can promote later.
     ///
     /// `App/FernletMessagesExtension` joined on 2026-09-23. It had shipped since `a814ac4` outside
@@ -72,6 +73,7 @@ struct NoTrackingBoundaryTests {
         "App/FernletShareExtension",
         "App/FernletMessagesExtension",
         "Tests/FernletTests",
+        "FernletKit/Tests",
         "Tests/FernletUITests"
     ]
 

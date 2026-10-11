@@ -50,7 +50,8 @@
 # local package's test target. As a scheme testable it is absent from the build graph, and
 # build-for-testing exits 0 without compiling it (measured 2026-10-10). Fernlet.xcworkspace holds
 # FernletKit as a root beside the app project, the one container in which the Fernlet scheme can see
-# a package test target. Its packages resolve from FernletKit/Package.resolved.
+# a package test target; the scheme's ProximityKitTests testable is compiled here, strict. Its
+# packages resolve from FernletKit/Package.resolved.
 # Scripts/run-gated-suites.sh runs through the same workspace: a build and a run through different
 # containers land in different derived data.
 #
@@ -86,5 +87,5 @@ if [ $CODE -ne 0 ]; then
   exit $CODE
 fi
 echo "WALL CHECK PASSED — the FernletKit dependency DAG is honest under enforcement, and the tree"
-echo "                    (app, extensions, tests, and every FernletKit package target) built with"
-echo "                    zero warnings."
+echo "                    (app, extensions, the FernletTests, FernletUITests and ProximityKitTests"
+echo "                    bundles, and every FernletKit package target) built with zero warnings."

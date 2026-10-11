@@ -126,7 +126,6 @@ FernletTests	ExchangeMultipartRecipeTests	Tests/FernletTests/ExchangeMultipartRe
 FernletTests	ExerciseHistoryScreenTests	Tests/FernletTests/ExerciseHistoryScreenTests.swift	-	-
 FernletTests	ExerciseLastTimeTests	Tests/FernletTests/ExerciseLastTimeTests.swift	-	-
 FernletTests	FDADailyValuesTests	Tests/FernletTests/FDADailyValuesTests.swift	-	-
-FernletTests	FakePeerTransportTests	Tests/FernletTests/PeerTransportNeutralityTests.swift	mesh-batteries	-
 FernletTests	FernletAIGateTests	Tests/FernletTests/FernletAIGateTests.swift	-	-
 FernletTests	FernletAnnouncerTests	Tests/FernletTests/FernletAnnouncerTests.swift	-	-
 FernletTests	FernletDismissalWindowTests	Tests/FernletTests/FernletAnnouncerTests.swift	-	-
@@ -490,7 +489,6 @@ FernletTests	OwnPhotoKeyBindingTests	Tests/FernletTests/OwnPhotoKeyBindingTests.
 FernletTests	PastDayJournalScrubMigrationTests	Tests/FernletTests/PastDayJournalScrubMigrationTests.swift	-	-
 FernletTests	PastDayJournalSealingTests	Tests/FernletTests/PastDayJournalSealingTests.swift	-	-
 FernletTests	PasteboardBoundaryTests	Tests/FernletTests/PasteboardBoundaryTests.swift	-	-
-FernletTests	PeerHandleIdentityTests	Tests/FernletTests/PeerTransportNeutralityTests.swift	mesh-batteries	-
 FernletTests	PeerHandleWireGoldenTests	Tests/FernletTests/PeerHandleWireGoldenTests.swift	mesh-batteries	-
 FernletTests	PeerNameDisplayTests	Tests/FernletTests/PeerNameDisplayTests.swift	mesh-features	-
 FernletTests	PendingNarrativeBufferFormatCensusTests	Tests/FernletTests/PendingNarrativeBufferFormatCensusTests.swift	-	-
@@ -652,3 +650,5 @@ FernletTests	WorkoutRecoveryTests	Tests/FernletTests/WorkoutRecoveryTests.swift	
 FernletTests	WorryBoxRepositoryTests	Tests/FernletTests/WorryBoxTests.swift	-	-
 FernletTests	WorryBoxServiceTests	Tests/FernletTests/WorryBoxTests.swift	-	-
 FernletTests	ZoomablePixelCanvasGestureTests	Tests/FernletTests/ZoomablePixelCanvasGestureTests.swift	-	-
+ProximityKitTests	FakePeerTransportTests	FernletKit/Tests/ProximityKitTests/PeerTransportNeutralityTests.swift	mesh-batteries	10
+ProximityKitTests	PeerHandleIdentityTests	FernletKit/Tests/ProximityKitTests/PeerTransportNeutralityTests.swift	mesh-batteries	5
