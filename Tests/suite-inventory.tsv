@@ -255,7 +255,6 @@ FernletTests	MeshCustodyReceiptVerifierTests	Tests/FernletTests/MeshCustodyRecei
 FernletTests	MeshDeliveryTargetTests	Tests/FernletTests/MeshDeliveryTargetTests.swift	mesh-features	-
 FernletTests	MeshDepartureMergeLawTests	Tests/FernletTests/MeshDepartureRecoveryTests.swift	-	-
 FernletTests	MeshDepartureRecoveryTests	Tests/FernletTests/MeshDepartureRecoveryTests.swift	-	-
-FernletTests	MeshDerivedRosterTests	Tests/FernletTests/MeshMembershipRecordsTests.swift	-	-
 FernletTests	MeshDevelopReviewUnderGiveUpTests	Tests/FernletTests/MeshLastMemberPhotoReviewTests.swift	mesh-features	-
 FernletTests	MeshDevelopmentPlanTests	Tests/FernletTests/MeshTerminationPartitionTests.swift	-	-
 FernletTests	MeshDialPolicyManagerTests	Tests/FernletTests/MeshDialPolicyTests.swift	-	-
@@ -295,9 +294,7 @@ FernletTests	MeshLegacyGoodbyeInteropTests	Tests/FernletTests/MeshMembershipEven
 FernletTests	MeshLinkAdvertisementTests	Tests/FernletTests/NetworkMeshTransportTests.swift	mesh-batteries	-
 FernletTests	MeshLinkTableTests	Tests/FernletTests/NetworkMeshTransportTests.swift	mesh-batteries	-
 FernletTests	MeshMemberRemovalFrameTests	Tests/FernletTests/MeshMembershipEventWireTests.swift	-	-
-FernletTests	MeshMembershipBoundsTests	Tests/FernletTests/MeshMembershipRecordsTests.swift	-	-
 FernletTests	MeshMembershipEventGoldenTests	Tests/FernletTests/MeshMembershipEventWireTests.swift	crypto-goldens	-
-FernletTests	MeshMembershipMergeTests	Tests/FernletTests/MeshMembershipRecordsTests.swift	-	-
 FernletTests	MeshMembershipRecordVerifierTests	Tests/FernletTests/MeshMembershipEventWireTests.swift	-	-
 FernletTests	MeshMergeExchangeTests	Tests/FernletTests/MeshMergeExchangeTests.swift	-	-
 FernletTests	MeshMergeOfferTests	Tests/FernletTests/MeshMergePathTests.swift	-	-
@@ -398,7 +395,6 @@ FernletTests	MeshRoutedDrainAnswerShapeTests	Tests/FernletTests/MeshRoutedDrainA
 FernletTests	MeshRoutedDrainAnswerSigningTests	Tests/FernletTests/MeshRoutedDrainAnswerTests.swift	-	-
 FernletTests	MeshRoutedDrainAnswerVerifierTests	Tests/FernletTests/MeshRoutedDrainAnswerTests.swift	-	-
 FernletTests	MeshRoutedDrainConvergenceTests	Tests/FernletTests/MeshRoutedDrainConvergenceTests.swift	mesh-batteries	-
-FernletTests	MeshRoutedDrainPlanTests	Tests/FernletTests/MeshRoutedDrainPlanTests.swift	-	-
 FernletTests	MeshRoutedDrainTests	Tests/FernletTests/MeshRoutedDrainTests.swift	mesh-batteries	-
 FernletTests	MeshRoutedDrainWallTests	Tests/FernletTests/MeshRoutedDrainTests.swift	mesh-batteries	-
 FernletTests	MeshRoutedHeartBodyTests	Tests/FernletTests/MeshRoutedHeartTests.swift	mesh-batteries	-
@@ -473,7 +469,6 @@ FernletTests	ModerationTests	Tests/FernletTests/ModerationTests.swift	mesh-featu
 FernletTests	MonthGridWeekStartTests	Tests/FernletTests/LocaleCorrectnessTests.swift	-	-
 FernletTests	MoveRefactorTests	Tests/FernletTests/MoveRefactorTests.swift	-	-
 FernletTests	MultiDeviceSyncWarningTests	Tests/FernletTests/MultiDeviceSyncWarningTests.swift	-	-
-FernletTests	NearbyRangingSessionTests	Tests/FernletTests/NearbyRangingSessionTests.swift	-	-
 FernletTests	NetworkMeshSessionTests	Tests/FernletTests/NetworkMeshTransportTests.swift	mesh-batteries	-
 FernletTests	NetworkMeshWireTests	Tests/FernletTests/NetworkMeshTransportTests.swift	mesh-batteries	-
 FernletTests	NoTrackingBoundaryTests	Tests/FernletTests/NoTrackingBoundaryTests.swift	no-tracking	-
@@ -576,7 +571,6 @@ FernletTests	RecipeSourceURLMatcherTests	Tests/FernletTests/RecipeSourceURLTests
 FernletTests	RecipeStepsTests	Tests/FernletTests/RecipeStepsTests.swift	-	-
 FernletTests	RecipeWebImageTests	Tests/FernletTests/RecipeWebImageTests.swift	-	-
 FernletTests	RecipeWebImporterTests	Tests/FernletTests/RecipeWebImporterTests.swift	-	-
-FernletTests	ReplayCacheTests	Tests/FernletTests/ReplayCacheTests.swift	-	-
 FernletTests	RetiredLockWrapFormatTests	Tests/FernletTests/FernletLockServiceTests.swift	-	-
 FernletTests	ReviewHostsExportFailureSourceWallTests	Tests/FernletTests/PhotoSaveFailureAcknowledgementTests.swift	-	-
 FernletTests	RewrapStagingSweepTests	Tests/FernletTests/FernletLockServiceTests.swift	-	-
@@ -651,4 +645,10 @@ FernletTests	WorryBoxRepositoryTests	Tests/FernletTests/WorryBoxTests.swift	-	-
 FernletTests	WorryBoxServiceTests	Tests/FernletTests/WorryBoxTests.swift	-	-
 FernletTests	ZoomablePixelCanvasGestureTests	Tests/FernletTests/ZoomablePixelCanvasGestureTests.swift	-	-
 ProximityKitTests	FakePeerTransportTests	FernletKit/Tests/ProximityKitTests/PeerTransportNeutralityTests.swift	mesh-batteries	10
+ProximityKitTests	MeshDerivedRosterTests	FernletKit/Tests/ProximityKitTests/MeshMembershipRecordsTests.swift	proximitykit	9
+ProximityKitTests	MeshMembershipBoundsTests	FernletKit/Tests/ProximityKitTests/MeshMembershipRecordsTests.swift	proximitykit	9
+ProximityKitTests	MeshMembershipMergeTests	FernletKit/Tests/ProximityKitTests/MeshMembershipRecordsTests.swift	proximitykit	6
+ProximityKitTests	MeshRoutedDrainPlanTests	FernletKit/Tests/ProximityKitTests/MeshRoutedDrainPlanTests.swift	proximitykit	10
+ProximityKitTests	NearbyRangingSessionTests	FernletKit/Tests/ProximityKitTests/NearbyRangingSessionTests.swift	proximitykit	9
 ProximityKitTests	PeerHandleIdentityTests	FernletKit/Tests/ProximityKitTests/PeerTransportNeutralityTests.swift	mesh-batteries	5
+ProximityKitTests	ReplayCacheTests	FernletKit/Tests/ProximityKitTests/ReplayCacheTests.swift	proximitykit	1

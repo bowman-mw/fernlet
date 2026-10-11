@@ -1867,3 +1867,33 @@ jobs:
             MeshRoutedDrainAnswerGoldenTests \
             MeshRoutedInventoryGoldenTests \
             PeerHandleWireGoldenTests
+
+      - name: ProximityKit's own tests (FernletKit/Tests/ProximityKitTests)
+        # ProximityKit plan step A0.8.3 (2026-10-11): the suites of ProximityKit's own package test target
+        # that ride no other line. The target is unhosted (the simulator's xctest agent: no keychain
+        # entitlement, no ProximityAudit sink), Swift 6 with no default isolation, and depends on
+        # ProximityKit alone; the Fernlet scheme runs it through Fernlet.xcworkspace. Two of its suites stay
+        # on the line they ran on before they moved (mesh-batteries: PeerHandleIdentityTests and
+        # FakePeerTransportTests); these six ran on no line and join this one, so CI runs every suite the
+        # package holds (Tests/suite-inventory.tsv's I10). Every selector here is ProximityKitTests/<Suite>,
+        # so the run starts the package bundle alone.
+        # NEW at A0.8.3, MEASURED on a Mac, 2026-10-11 (iPhone 17 simulator, iOS 26.5): this exact
+        # six-name list run at floor 1 through Fernlet.xcworkspace after the strict build-for-testing (WALL
+        # CHECK PASSED), read off its own result bundle: totalTestCount 44 (ProximityKitTests 44, "Test run
+        # with 44 tests in 6 suites passed after 0.036 seconds": MeshDerivedRosterTests 9,
+        # MeshMembershipMergeTests 6, MeshMembershipBoundsTests 9, MeshRoutedDrainPlanTests 10,
+        # NearbyRangingSessionTests 9 and ReplayCacheTests 1, each its count in FernletTests before the
+        # move), 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent.
+        # Re-run AT 44: passed. Run once more at 44 without ProximityKitTests/MeshDerivedRosterTests: 35 ran
+        # and the floor refused it; and without ProximityKitTests/ReplayCacheTests: 43 ran and the floor
+        # refused it. 9 + 6 + 9 + 10 + 9 + 1 = 44 is the ARITHMETIC CHECK, never the source. RAISE it when
+        # a suite here gains a cell; never lower it in passing.
+        run: |
+          set -euo pipefail
+          Scripts/run-gated-suites.sh proximitykit 44 \
+            ProximityKitTests/MeshDerivedRosterTests \
+            ProximityKitTests/MeshMembershipMergeTests \
+            ProximityKitTests/MeshMembershipBoundsTests \
+            ProximityKitTests/MeshRoutedDrainPlanTests \
+            ProximityKitTests/NearbyRangingSessionTests \
+            ProximityKitTests/ReplayCacheTests

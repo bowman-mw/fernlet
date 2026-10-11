@@ -315,6 +315,14 @@ import Testing
     /// At ProximityKit plan step A0.8.2 (2026-10-11) no count moves: two names are re-qualified in
     /// place, `mesh-batteries`' `PeerHandleIdentityTests` and `FakePeerTransportTests`, now
     /// `ProximityKitTests/<Suite>` in ProximityKit's package test target.
+    ///
+    /// NEW at ProximityKit plan step A0.8.3 (2026-10-11): `proximitykit` (6), the six suites of
+    /// ProximityKit's package test target that rode no line before they moved there
+    /// (`MeshDerivedRosterTests`, `MeshMembershipMergeTests`, `MeshMembershipBoundsTests`,
+    /// `MeshRoutedDrainPlanTests`, `NearbyRangingSessionTests`, `ReplayCacheTests`), each named
+    /// `ProximityKitTests/<Suite>`. A line of its own, so CI runs every suite the package holds
+    /// (`Tests/suite-inventory.tsv`'s I10) and no existing line's floor or history moves. Counted
+    /// off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -331,7 +339,8 @@ import Testing
         "recipe-wire": 1,
         "food-search": 13,
         "mesh-batteries": 154,
-        "mesh-features": 48
+        "mesh-features": 48,
+        "proximitykit": 6
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -515,7 +524,7 @@ import Testing
         for root in Self.testRoots {
             declared[root.target] = try Self.declarations(inTarget: root.target)
         }
-        #expect(steps.count >= 16, "the workflow lost test steps — \(steps.count) floor-script invocations found")
+        #expect(steps.count >= 17, "the workflow lost test steps — \(steps.count) floor-script invocations found")
         var undeclared: [String] = []
         // R2: bounded by the step count × the selector count.
         for step in steps {
@@ -1030,13 +1039,20 @@ import Testing
     /// lowers its target's entry with the retirement argued, the ``measuredSuiteNameCounts`` rule.
     /// MOVED at plan step A0.8.2 (2026-10-11): 642 → 640 and 0 → 2, for `PeerHandleIdentityTests` and
     /// `FakePeerTransportTests` (`PeerTransportNeutralityTests.swift`), measured in the package's
-    /// bundle on `mesh-batteries` at their FernletTests counts.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 640, "ProximityKitTests": 2]
+    /// bundle on `mesh-batteries` at their FernletTests counts. MOVED at plan step A0.8.3
+    /// (2026-10-11): 640 → 634 and 2 → 8, for the six suites that rode no line
+    /// (`MeshMembershipRecordsTests.swift`'s three, `MeshRoutedDrainPlanTests`,
+    /// `NearbyRangingSessionTests`, `ReplayCacheTests`), measured in the package's bundle on the new
+    /// `proximitykit` line at their FernletTests counts.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 634, "ProximityKitTests": 8]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
-    /// `PeerHandleIdentityTests` 5 + `FakePeerTransportTests` 10, each its count in FernletTests.
-    static let measuredPackageCells = 15
+    /// `PeerHandleIdentityTests` 5 + `FakePeerTransportTests` 10, each its count in FernletTests; 59
+    /// at A0.8.3 (2026-10-11): 15 + `MeshDerivedRosterTests` 9 + `MeshMembershipMergeTests` 6 +
+    /// `MeshMembershipBoundsTests` 9 + `MeshRoutedDrainPlanTests` 10 + `NearbyRangingSessionTests` 9 +
+    /// `ReplayCacheTests` 1, each its count in FernletTests.
+    static let measuredPackageCells = 59
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1083,7 +1099,7 @@ import Testing
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
     /// the line's exact trimmed text, and the invariant that makes it safe. A row whose line is gone
     /// is a failure, so the list only shrinks. Empty: no code line of the package's files stands on a
-    /// needle (plan step A0.8.2).
+    /// needle (plan steps A0.8.2 and A0.8.3).
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = []
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
@@ -1464,15 +1480,24 @@ import Testing
     /// FernletTests copy), repo-relative. A test target cannot import another, so a helper a moved
     /// suite and a staying one both use lives twice: the fake peer transport fabric
     /// (`VirtualClock`, `FakePeerNetwork`, `FakePeerTransport`) since plan step A0.8.2, which
-    /// `FakePeerTransportTests` uses in the package and 22 FernletTests files use in the app's target.
+    /// `FakePeerTransportTests` uses in the package and 22 FernletTests files use in the app's target;
+    /// and since A0.8.3 the ranging mock (`MockRangingProvider`), which `NearbyRangingSessionTests`
+    /// uses in the package and 29 FernletTests files use, and the membership fixtures
+    /// (`MeshMembershipFixtures`, extracted from `MeshMembershipRecordsTests.swift`), which its three
+    /// suites use in the package and six FernletTests files use.
     static let twins: [(package: String, fernlet: String)] = [
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
-         fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift")
+         fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/Mocks/MockRangingProvider.swift",
+         fernlet: "Tests/FernletTests/Mocks/MockRangingProvider.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/MeshMembershipFixtures.swift",
+         fernlet: "Tests/FernletTests/MeshMembershipFixtures.swift")
     ]
 
     /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10); 1 at A0.8.2
-    /// (2026-10-11), the fake peer transport. Each twin added or retired changes it in the same commit.
-    static let measuredTwinCount = 1
+    /// (2026-10-11), the fake peer transport; 3 at A0.8.3 (2026-10-11), with the ranging mock and the
+    /// membership fixtures. Each twin added or retired changes it in the same commit.
+    static let measuredTwinCount = 3
 
     /// A twin's comparable body: its lines, in order, minus every line whose trimmed text starts
     /// `import `, `@testable import ` or `@preconcurrency import ` (a package copy cannot import the
