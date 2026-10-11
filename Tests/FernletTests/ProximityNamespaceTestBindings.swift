@@ -942,7 +942,7 @@ extension ProximityHost {
 //   default scopes are the namespace's production rows, exactly what they were there before. A double
 //   on a root of its own that opens a store states both scopes on test services
 //   (`MeshRoutedStoreIsolationTests`' scratch-root needle holds every one to that), and the doubles get
-//   scratch roots and test services of their own before any of them runs on a Mac (plan step A0.8),
+//   scratch roots and test services of their own before any of them runs on a Mac (plan step A1),
 //   where this folder would be the developer's own. The cells that pin Fernlet's root run on
 //   `FernletStore`, which answers its own.
 

@@ -364,6 +364,22 @@ jobs:
         # ARITHMETIC CHECK, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
         # 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`. mesh-batteries, which
         # runs the wall too, is raised 1370 -> 1372.
+        #
+        # ProximityKit plan step A0.8 (2026-10-11), sort the tests, gives ProximityKit its own package
+        # test target, FernletKit/Tests/ProximityKitTests: unhosted, Swift 6 with no default isolation,
+        # depending on ProximityKit alone, built strict and run by the Fernlet scheme through
+        # Fernlet.xcworkspace. It holds the eight suites (59 tests) that need nothing but ProximityKit
+        # and its closure, moved there with their cells and assertions unchanged; three helpers live in
+        # both test targets, held identical but for imports by the selector wall's twin cell, and
+        # Tests/suite-inventory.tsv holds every suite to one target, one file and its lines. No
+        # existing line changed membership: mesh-batteries 1372 counts a ProximityKitTests share of
+        # 15 (PeerHandleIdentityTests 5, FakePeerTransportTests 10), and the new `proximitykit` line,
+        # the last step, runs the other six (44). crypto-goldens stays 355, all FernletTests:
+        # ProximityNamespaceSoundnessTests, which needs nothing but ProximityKit too, stays there with
+        # its five framing byte pins until plan step A1 moves it with the package (an owner
+        # decision). No cell was added to this line after A0.8.0, and the line, MEASURED on a Mac at
+        # A0.8.4 (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its floor stays the
+        # shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

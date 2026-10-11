@@ -259,27 +259,46 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
 - `RecipeShareRadioSession` (`NetworkRecipeShareSession.swift:22`) is already a generic protocol.
 
 **A0.8 Sort the tests.**
-- **73 core suites move into an in-tree ProximityKit package test target**, then travel with the
-  package:
-  - 44 are self-contained;
-  - 13 swap `makeTestStore` for a `ProximityHost` test double;
-  - 19 read repo files through `RepoRoot`.
-
-  The helpers they need move with them (Mocks, the routed fixture clock, the proximity directory
-  and keychain helpers).
-- **11 feature suites follow the features.**
-- **83 integration suites and 2 Fernlet walls stay.**
-- **Acceptance batteries:** `MeshP9AcceptanceTests` behaviour suites can move, but its suites that
-  read Fernlet docs and workflows stay. The same applies to the P7, P8 and P10 acceptance files.
+- **ProximityKit's own package test target,** `FernletKit/Tests/ProximityKitTests`: unhosted (the
+  simulator's `xctest` agent, so no keychain entitlement and no audit sink), Swift 6 with no default
+  isolation and the three upcoming features Fernlet's tests build with, depending on ProximityKit
+  alone. The `Fernlet` scheme builds it strict and runs it through the root `Fernlet.xcworkspace`, the
+  one container in which a scheme sees a package test target.
+- **It holds the eight suites (59 tests) that need nothing but ProximityKit and its closure,** and
+  they travel with the package: the in-memory transport fabric and the peer handle (on the
+  mesh-batteries CI line), and the membership records' three suites, the routed drain plan, the commit
+  detector and ranging fallback, and the replay cache (on a new `proximitykit` line, so every suite
+  the package holds rides a line).
+- **Helpers live twice:** a test target cannot import another, so the fake peer transport, the ranging
+  mock and the membership fixtures, which staying Fernlet suites use too, are in both targets, held
+  identical but for imports by `CIGateSelectorBoundaryTests`.
+- **`Tests/suite-inventory.tsv`** holds every suite to one target, one file and its CI lines; CI names
+  a package suite `ProximityKitTests/<Suite>`.
+- **`ProximityNamespaceSoundnessTests` stays in `FernletTests` until A1** (owner decision): it needs
+  nothing but ProximityKit, but its five framing byte pins stay beside Fernlet's goldens on the
+  crypto-goldens line.
+- **Everything else waits for A1 or stays.** A suite that needs Fernlet's namespace (`.fernlet`) or
+  the app's identity custody, the app's store or a feature module, a manager or identity that reaches
+  the keychain, ProximityKit's audit lines, or repo files read through `RepoRoot` waits for what A1.1
+  brings first. Feature suites stay with their features, in this repository. Integration suites, the
+  Fernlet walls, the byte goldens that pin `.fernlet` and the acceptance batteries stay; each P9 suite
+  holds a cell that reads Fernlet's docs or the app, and the P3–P6 behaviour runs on the
+  `FernletStore` rig, so their ProximityKit-only cells are re-declared in a package acceptance suite at
+  A1, after the rigs are re-hosted.
 
 ### A1. Move to the `proximitykit` repo
 
 **A1.1 Create the repo.**
-- Split `FernletKit/Sources/ProximityKit` plus its package tests out with history (`git filter-repo`
-  or a subtree split).
-- Root `Package.swift`: tools 6.2; iOS 26 and macOS 26; `defaultIsolation(MainActor.self)` as today.
+- Split `FernletKit/Sources/ProximityKit` plus its package tests (`FernletKit/Tests/ProximityKitTests`)
+  out with history (`git filter-repo` or a subtree split), with `ProximityNamespaceSoundnessTests` and
+  its five framing byte pins joining them (owner decision). The inventory's `ProximityKitTests` rows
+  become the package repo's to hold.
+- Root `Package.swift`: tools 6.2; iOS 26 and macOS 26; `defaultIsolation(MainActor.self)` as today
+  for the sources; the test target keeps Swift 6 with no default isolation and its three upcoming
+  features.
 - Apache-2.0 `LICENSE`/`NOTICE` and the DocC catalog.
-- **CI** (`swift test` / `xcodebuild` on an iOS simulator and macOS) running its own walls:
+- **CI** (`swift test` / `xcodebuild` on an iOS simulator and macOS; the first CI run of the package's
+  tests on macOS) running its own walls:
   - no tracking SDKs and no `URLSession` at all;
   - local-link APIs only in the radio files;
   - the Power-of-10 scanner with the 3 ProximityKit allowlist entries (`power-of-10-allowlist.json:51, :56, :61`);
@@ -287,6 +306,11 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
   - the CloudKit half of the S3 pair;
   - golden bytes;
   - a protected label registry, mirroring the `FernletCrypto/` CODEOWNERS rule.
+- **Before more suites move** (the blockers A0.8 recorded): a test namespace in place of `.fernlet`; a
+  `ProximityHost` test double on a scratch root with `.test.` keychain services; a bundle-installed
+  audit sink; an answer for the keychain (an unhosted bundle gets `errSecMissingEntitlement`); a
+  package-rooted file locator whose markers hold in both repositories; and twins of the fixtures
+  declared in staying files.
 - Tag `0.1.0`.
 
 **A1.2 Prove "drop-in for anything".** Add a tiny example app in the package repo that uses a
@@ -308,16 +332,30 @@ umbrella entry:
   `TransportNeutralityBoundaryTests`, `MemoryLifecycleBoundaryTests` and
   `PhotoSaveFailureAcknowledgementTests`.
 - **`s3-wall.yml`:** re-scope key-custody and crypto-goldens, re-measure the mesh-batteries floor
-  after the moved suites leave, and update `CIGateSelectorBoundaryTests` with it.
-- **Docs:** split `Docs/FileIndex.md` (122 mentions) and `Docs/ProximityFunctionIndex.md`, and
-  update CLAUDE.md and AGENTS.md (the S3 wall paragraph names the Proximity subtree).
+  after the moved suites leave, and update `CIGateSelectorBoundaryTests` with it. The `proximitykit`
+  line and its `CIGateSelectorBoundaryTests` entry go; crypto-goldens loses
+  `ProximityNamespaceSoundnessTests` (43 tests) and mesh-batteries its two `ProximityKitTests` suites
+  (15), each line re-measured.
+- **The in-tree test target (A0.8):** remove the `Fernlet` scheme's `ProximityKitTests` testable (keep
+  `Fernlet.xcworkspace` for A1.5's local override, or retire it); `CIGateSelectorBoundaryTests`'
+  second root, its `ProximityKitTests/<Suite>` reading and its scheme, test-target-dependency and
+  resolution pins; `Scripts/run-gated-suites.sh`'s second selector shape; the inventory's package rows,
+  pins and hazard list; the twin status of the three helpers' `FernletTests` halves (they become
+  ordinary files); the `FernletKit/Tests` roots of `NoTrackingBoundaryTests` and
+  `MemoryLifecycleBoundaryTests`, and `BackgroundRefreshBoundaryTests`' row. Widen or relocate the
+  `#filePath` store-isolation walls and the acceptance batteries' test-tree scans before any suite they
+  look for leaves.
+- **Docs:** split `Docs/FileIndex.md` (122 mentions) and `Docs/ProximityFunctionIndex.md`; the owner
+  updates the local, untracked CLAUDE.md and AGENTS.md (the S3 wall paragraph names the Proximity
+  subtree; both are gitignored).
 
-**A1.4 `@testable` across repos.** 116 Fernlet test files use `@testable import ProximityKit`.
-Verify early that the remote dependency's Debug build allows it. If not, expose what integration
+**A1.4 `@testable` across repos.** 122 Fernlet test files use `@testable import ProximityKit` (after
+A0.8; recount then). A0.8 showed it works from a package test target under the strict build; whether a
+remote dependency's Debug build allows it is still open. Verify early. If not, expose what integration
 tests need with `@_spi(Testing)`, or use test doubles.
 
 **A1.5 Developing across repos.** Develop with a local package override (a sibling checkout dragged
-into the workspace). Never commit the override, and CI always builds the tag.
+into the root `Fernlet.xcworkspace`). Never commit the override, and CI always builds the tag.
 
 ### A2. Releases and wire compatibility
 
@@ -852,7 +890,7 @@ engine generalized in ProximityKit), and the item design app as the second famil
 9. **Font licensing:** OFL texts (task filed).
 10. **Crafted fernlet.com links:** someone can make the site display text they chose. Mitigated by
     text-only rendering, no clickable links, and a label saying the app checks who sent it.
-11. **`@testable` across repos** (A1.4): 116 Fernlet test files rely on it. Check this before the
+11. **`@testable` across repos** (A1.4): 122 Fernlet test files rely on it. Check this before the
     move.
 
 ---
