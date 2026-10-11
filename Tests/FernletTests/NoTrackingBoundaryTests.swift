@@ -474,7 +474,7 @@ struct NoTrackingBoundaryTests {
                     "\(url.lastPathComponent) names tracking symbol(s) \(symbols). Advertising identifiers and the ATT prompt are forbidden — see Docs/No-Tracking-Wall.md."
                 )
             }
-            // Per-root floor: one broken root must not be masked by the other five still finding files.
+            // Per-root floor: one broken root must not be masked by the other roots still finding files.
             #expect(scannedInRoot > 0, "Scanned zero Swift files under '\(root)' — the root moved and the no-tracking scan is silently narrower.")
         }
         #expect(

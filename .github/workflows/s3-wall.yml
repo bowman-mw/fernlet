@@ -153,7 +153,9 @@ jobs:
         #     the seam green and every floor on this workflow inflated by re-run suites. Since plan
         #     step A0.8 it also requires the runner to go through the workspace, to read exactly the
         #     two selector shapes, and to refuse a suite named twice and a named suite that ran no
-        #     test case. It needs no Simulator and no build: the stubs are what the gate reads.
+        #     test case (per suite, since A0.8.5, beside a tree it cannot read, a non-ASCII selector
+        #     and a missing log at the seam). It needs no Simulator and no build: the stubs are what
+        #     the gate reads. CIGateSelectorBoundaryTests pins that this step runs it (A0.8.5).
         # Neither line names Scripts/run-gated-suites.sh as a word, so CIGateSelectorBoundaryTests'
         # `gatedSteps` parses no step here and no measured suite-name count moves.
         run: |
@@ -377,9 +379,12 @@ jobs:
         # the last step, runs the other six (44). crypto-goldens stays 355, all FernletTests:
         # ProximityNamespaceSoundnessTests, which needs nothing but ProximityKit too, stays there with
         # its five framing byte pins until plan step A1 moves it with the package (an owner
-        # decision). No cell was added to this line after A0.8.0, and the line, MEASURED on a Mac at
-        # A0.8.4 (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its floor stays the
-        # shared `1`.
+        # decision), after the mesh-message spelling helper its file declares, which three staying
+        # suites build their fixtures with, moves to a file of its own. No cell was added to this line
+        # after A0.8.0, and the line, MEASURED on a Mac at A0.8.4 (iPhone 17 simulator, iOS 26.5), ran
+        # 112 tests in 11 suites; its floor stays the shared `1`. A0.8.5's review fixes added no cell
+        # either (the selector wall's new checks ride its existing ones), and the line, MEASURED again on
+        # that tree, ran 112.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

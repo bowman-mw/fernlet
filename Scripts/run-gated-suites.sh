@@ -33,7 +33,9 @@
 #                      shown red without a Mac, a simulator or a build.
 #
 # Env:    FERNLET_DESTINATION    xcodebuild -destination (default: the iPhone 17 simulator)
-#         FERNLET_DERIVED_DATA   xcodebuild -derivedDataPath (default: Xcode's shared one)
+#         FERNLET_DERIVED_DATA   xcodebuild -derivedDataPath (default: Xcode's shared one, where
+#                                Scripts/spm-wall-check.sh builds; that script takes no such path, so
+#                                set this only to the derived data of a build made with the same one)
 #         FERNLET_RESULT_DIR     where the result bundle AND the run log are written
 #                                (default: $TMPDIR or /tmp)
 #
@@ -52,6 +54,12 @@ RESTART_MARKER='Restarting after unexpected exit, crash, or test timeout'
 if [[ "${1:-}" == "--check-log" ]]; then
     if [[ $# -ne 2 ]]; then
         echo "usage: Scripts/run-gated-suites.sh --check-log <xcodebuild-log>" >&2
+        exit 2
+    fi
+    # A log that is not there, or not a readable file, records nothing: grep's file error would read
+    # as "no match", so it is refused before the grep rather than passed.
+    if [[ ! -f "$2" || ! -r "$2" ]]; then
+        echo "::error::--check-log: cannot read $2 — a log that is not there proves no run was clean" >&2
         exit 2
     fi
     if grep -qF "$RESTART_MARKER" "$2"; then
@@ -86,8 +94,8 @@ rm -rf "$BUNDLE"
 rm -f "$RUN_LOG"
 
 # Through the workspace: -project cannot see ProximityKit's package test target (a selector naming it
-# exits 70), and Scripts/spm-wall-check.sh builds through the same workspace, so this run finds what
-# that build made.
+# exits 70), and Scripts/spm-wall-check.sh builds through the same workspace, so a run with the default
+# derived data finds what that build made.
 # Seeded non-empty on purpose: macOS ships bash 3.2, where expanding an EMPTY array under
 # `set -u` is an unbound-variable error.
 ARGS=(-workspace Fernlet.xcworkspace -scheme Fernlet -destination "$DESTINATION" -resultBundlePath "$BUNDLE")
@@ -96,7 +104,10 @@ if [[ -n "${FERNLET_DERIVED_DATA:-}" ]]; then
 fi
 # Two shapes: a bare FernletTests suite, or ProximityKitTests/<Suite>. Every other shape, and a suite
 # named twice on one line (it would run twice and inflate the floor), is refused before xcodebuild
-# runs. Bounded: one pass over the arguments.
+# runs. Bounded: one pass over the arguments. The identifier class is spelled out, not ranged: under
+# macOS's default UTF-8 locale, bash 3.2's `A-Z` admits accented letters, which
+# CIGateSelectorBoundaryTests' ASCII-only reader refuses (ProximityKit plan step A0.8.5).
+IDENTIFIER_CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_'
 SELECTORS=""
 for selector in "$@"; do
     case "$selector" in
@@ -104,7 +115,7 @@ for selector in "$@"; do
         *) target="FernletTests"; suite="$selector" ;;
     esac
     case "$suite" in
-        *[!A-Za-z0-9_]*|"")
+        *[!$IDENTIFIER_CHARS]*|"")
             echo "a selector is a FernletTests suite's bare name or ProximityKitTests/<Suite>, got '$selector'" >&2
             exit 2 ;;
     esac
@@ -147,8 +158,12 @@ failed = int(summary.get("failedTests", 0))
 skipped = int(summary.get("skippedTests", 0))
 result = summary.get("result", "unknown")
 # The suite census: test cases per `<bundle>/<TypeName>`, the type read off the first Test Suite
-# node's nodeIdentifierURL (test://com.apple.xcode/<container>/<bundle>/<Type>/...), because a Swift
-# Testing suite's `name` is its display name. Bounded: every node of the finite tree is pushed once.
+# node's nodeIdentifierURL (test://com.apple.xcode/<container>/<bundle>/<Type>), because a Swift
+# Testing suite's `name` is its display name. A top-level suite whose URL is not exactly that shape,
+# with <bundle> the enclosing bundle's name, and a test case outside any suite, are unparsed: a changed
+# tree format is named as such, never read as a selector that ran nothing (ProximityKit plan step
+# A0.8.5; every tree measured on Xcode 26.5 reads with none). Bounded: every node of the finite tree is
+# pushed once.
 with open(os.environ["TESTS_PATH"], encoding="utf-8") as fh:
     tree = json.load(fh)
 counts, per_bundle, unparsed = {}, {}, []
@@ -160,13 +175,15 @@ while stack:
         bundle = node.get("name", "")
     if kind == "Test Suite" and not suite:
         parts = node.get("nodeIdentifierURL", "").split("/")
-        if len(parts) >= 6 and parts[0] == "test:" and parts[4] and parts[5]:
+        if len(parts) == 6 and parts[0] == "test:" and parts[4] == bundle and parts[5]:
             suite = f"{parts[4]}/{parts[5]}"
         else:
             # A display name is not a type name (the MeshContent* suites), so no fallback key: say so.
             unparsed.append(f"{bundle}/{node.get('name', '?')}")
             suite = f"{bundle}/?"
     if kind == "Test Case":
+        if not suite:
+            unparsed.append(f"{bundle}/{node.get('name', '?')} (a test case outside any suite)")
         key = suite or f"{bundle}/?"
         counts[key] = counts.get(key, 0) + 1
         per_bundle[bundle] = per_bundle.get(bundle, 0) + 1
@@ -194,7 +211,8 @@ if total < floor:
     )
 if unparsed:
     problems.append(
-        "the result bundle's tests tree has Test Suite nodes with no parseable nodeIdentifierURL ("
+        "the result bundle's tests tree has Test Suite nodes with no parseable nodeIdentifierURL, or "
+        "test cases outside any suite ("
         + ", ".join(sorted(set(unparsed))[:5]) + "): this xcresulttool's format is not the one measured on "
         "Xcode 26.5, so the suite census cannot read it — fix the census, never pass the line around it"
     )

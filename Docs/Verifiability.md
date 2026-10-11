@@ -68,10 +68,11 @@ xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet 
 > - **`-project App/Fernlet.xcodeproj` was missing.** The 2026-08-12 repo restructure moved the
 >   sources under `App/` and the tests under `Tests/`; there is no `.xcodeproj` at the repo root any
 >   more, so a bare `xcodebuild -scheme Fernlet` from the root finds no project. Same invocation
->   shape as `Scripts/spm-wall-check.sh` and the build/test commands in `CLAUDE.md` (since
->   ProximityKit plan step A0.8 the root holds `Fernlet.xcworkspace`, which the commands above name
->   with `-workspace`; `-project App/Fernlet.xcodeproj` still builds the app but cannot see a
->   package test target).
+>   shape as `Scripts/spm-wall-check.sh` (since ProximityKit plan step A0.8 the root holds
+>   `Fernlet.xcworkspace`, which the commands above and that script name with `-workspace`;
+>   `-project App/Fernlet.xcodeproj` still builds the app but cannot see a package test target, and
+>   the build/test pair in `CLAUDE.md`, which is untracked and the owner's, names it until the owner
+>   switches it).
 > - **`-only-testing:` takes a TEST-TARGET path, not a filesystem path.** The old commands read
 >   `-only-testing:Tests/FernletTests/<Suite>`, which mirrors where the file lives on disk.
 >   `xcodebuild` wants `<TestTarget>/<Suite>`, and the target is named **`FernletTests`** — so it is

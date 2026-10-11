@@ -17,7 +17,8 @@
 // package suite's declared tests), the helpers both targets compile must be twins, the strict build
 // and every run go through `Fernlet.xcworkspace`, which resolves the CryptoSwift revision the app
 // project pins (ProximityKit plan step A0.8.1), the Fernlet scheme's testables hold the package
-// test target, which depends on ProximityKit alone (A0.8.2), and this suite gates itself.
+// test target, which declares ProximityKit as its one dependency (A0.8.2) and whose files import
+// nothing of ProximityKit's closure that holds Fernlet's values (A0.8.5), and this suite gates itself.
 
 import Foundation
 import Testing
@@ -439,10 +440,16 @@ import Testing
 
     /// The modifiers a selector-visible declaration may carry before its keyword, each read past at
     /// most once: `nonisolated` (25 column-0 declarations at plan step A0.8.0, one of them a suite,
-    /// `FormatMigratorTests`, which the reader missed before) and the two that leave it visible to a
-    /// selector. `private` and `fileprivate` are not here: such a type is file-scoped, no selector can
-    /// name it, and the test tree repeats such names (five `private final class AuditCapture`).
-    private static let visibleModifiers = ["nonisolated ", "public ", "internal "]
+    /// `FormatMigratorTests`, which the reader missed before), the four access levels that leave it
+    /// visible to a selector, and `final` and `indirect`, which may stand before an access level
+    /// (`final public class X`). `package`, `open`, `final` and `indirect` joined at plan step A0.8.5,
+    /// when no column-0 declaration of either test target carried one, so no name moved; until then a
+    /// package suite declared `package struct` counted its tests toward no type. `private` and
+    /// `fileprivate` are not here: such a type is file-scoped, no selector can name it, and the test
+    /// tree repeats such names (five `private final class AuditCapture`).
+    private static let visibleModifiers = [
+        "nonisolated ", "public ", "internal ", "package ", "open ", "final ", "indirect "
+    ]
 
     /// The type keywords a suite or a helper type is declared with.
     private static let typeKeywords = ["struct ", "final class ", "class ", "actor ", "enum "]
@@ -649,10 +656,11 @@ import Testing
     /// A0.8.1 the floor script and the strict build both go through `Fernlet.xcworkspace`, the floor
     /// script reads `ProximityKitTests/<Suite>` selectors and refuses a named suite that ran no test
     /// case, and the workspace and a release archive resolve one CryptoSwift
-    /// (``expectTheRunnerReadsTwoTargets(_:)``, ``expectTheBuildAndTheRunsShareTheWorkspace()``,
+    /// (``expectTheRunnerReadsTwoTargets(_:workflow:)``, ``expectTheBuildAndTheRunsShareTheWorkspace()``,
     /// ``expectOneCryptoSwiftRevision()``); since A0.8.2 the Fernlet scheme's testables hold the
     /// package test target, which depends on ProximityKit alone
-    /// (``expectTheSchemeRunsThePackageTests()``).
+    /// (``expectTheSchemeRunsThePackageTests()``); since A0.8.5 the runner's selector emission is
+    /// pinned as code and the enforcement step runs the runner's self-test.
     @Test func everyTestStepRunsThroughTheFloorScript() throws {
         let workflow = try RepoRoot.source(Self.workflowPath)
         let code = workflow.components(separatedBy: "\n")
@@ -700,7 +708,8 @@ import Testing
                 && gated.contains("MeshContinuationTaskHostWallTests"),
                 "P8's two source walls with no compiler half are gated")
         // The one wall among P9 item 6's fourteen: `MeshRoutedStoreIsolationTests` source-scans the
-        // test tree for a `MeshRoutedStore(` that names no scope of its own, pins the production
+        // test tree for a routed store's construction that names no scope of its own (its raw scan
+        // reads this file too, so the constructor is not spelled here), pins the production
         // scope unreachable from tests, and pins the one construction site of
         // `MeshCustodyDurabilityWitness` — uncompiled source counts that run nowhere else, the
         // `MeshRoutedDrainWallTests` argument. Without this line the thirteen behaviour suites
@@ -721,19 +730,21 @@ import Testing
         #expect(gated.contains("TransportNeutralityBoundaryTests"),
                 "the MultipeerConnectivity permit wall is gated")
         let script = try RepoRoot.source(Self.floorScript)
-        #expect(script.contains("totalTestCount") && script.contains("-resultBundlePath"),
-                "the floor script no longer reads the result bundle's own count")
+        let readsCount = script.contains("totalTestCount") && script.contains("-resultBundlePath")
+        #expect(readsCount, "the floor script no longer reads the result bundle's own count")
         // NOTE-4 of P9 item 6's fix review: a restart re-runs suites, so `totalTestCount` counts
         // some cells twice and every floor above it becomes unreadable — 13 of the mesh step's
         // suites are held by that floor alone. The guard is a grep in a shell script with no
-        // compiler half, so it is pinned here, beside the bundle-count pin it protects.
-        #expect(script.contains("Restarting after unexpected exit, crash, or test timeout"),
-                "the floor script no longer refuses a run xcodebuild restarted")
+        // compiler half, so it is pinned here, beside the bundle-count pin it protects. Read into a
+        // `Bool` first (ProximityKit plan step A0.8.5): a failing expectation prints its source, and
+        // one that spelled the marker would be read back by the floor script as a restart.
+        let guardsRestart = script.contains(Self.restartMarker)
+        #expect(guardsRestart, "the floor script no longer refuses a run xcodebuild restarted")
         // ProximityKit plan step A0.8.1: a package test target is visible only through the workspace,
         // a build and a run through different containers land in different derived data, and a
         // mixed line's total can hide a selector of the wrong target. Each pin is a shell or JSON
         // fact with no compiler half, read here so it reds with no simulator.
-        Self.expectTheRunnerReadsTwoTargets(script)
+        Self.expectTheRunnerReadsTwoTargets(script, workflow: workflow)
         try Self.expectTheBuildAndTheRunsShareTheWorkspace()
         try Self.expectOneCryptoSwiftRevision()
         try Self.expectTheSchemeRunsThePackageTests()
@@ -772,16 +783,36 @@ import Testing
             .joined(separator: "\n")
     }
 
-    /// ``floorScript`` runs through the workspace and never `-project`, emits a target-qualified
-    /// selector for a package suite, reads the result bundle's tests tree, and refuses both a named
-    /// suite that ran no test case and a tree whose suites it cannot read (the suite census). Each
-    /// fact is read into a `Bool` before it is expected, so a failure never prints the script: its
-    /// text holds the restart marker, which the floor script would read back as a restart.
-    private static func expectTheRunnerReadsTwoTargets(_ script: String) {
+    /// The line xcodebuild prints when it restarts a test run, which ``floorScript`` refuses. It is
+    /// only ever expected through a `Bool`, so no failure here prints it, and it is joined from two
+    /// pieces, so this file's text never spells it whole: a wall that prints a test file's source on a
+    /// failure would otherwise trip the floor script's restart guard too.
+    private static let restartMarker = ["Restarting after unexpected exit,", "crash, or test timeout"]
+        .joined(separator: " ")
+
+    /// The workflow step that runs the enforcement self-tests, by its `- name:`.
+    private static let enforcementStepName =
+        "Enforcement self-tests (prove the wall AND the test gate are load-bearing) + clean-tree check"
+
+    /// The runner's self-test, which the enforcement step must run as a line of its own.
+    private static let runnerSelfTest = "Scripts/run-gated-suites-selftest.sh"
+
+    /// ``floorScript`` runs through the workspace and never `-project`; reads a
+    /// `ProximityKitTests/<Suite>` selector into its target and emits every selector in its own
+    /// target (`-only-testing:$target/$suite`, the code line itself, since A0.8.5: the bare text
+    /// `ProximityKitTests/` also stands in its refusal message); refuses a suite named twice; reads
+    /// the result bundle's tests tree, and refuses both a named suite that ran no test case and a tree
+    /// whose suites it cannot read (the suite census). And the workflow's enforcement step runs its
+    /// self-test, which holds each of those on the script's live branch. Each fact is read into a
+    /// `Bool` before it is expected, so a failure never prints the script: its text holds the restart
+    /// marker, which the floor script would read back as a restart.
+    private static func expectTheRunnerReadsTwoTargets(_ script: String, workflow: String) {
         let code = shellCode(script)
         let pins: [(needle: String, why: String)] = [
             ("-workspace Fernlet.xcworkspace", "runs through the workspace the strict build uses"),
-            ("ProximityKitTests/", "reads a ProximityKitTests/<Suite> selector"),
+            (#"ProximityKitTests/*) target="ProximityKitTests""#, "reads a ProximityKitTests/<Suite> selector into its target"),
+            (#"ARGS+=("-only-testing:$target/$suite")"#, "emits every selector in its own target"),
+            ("is named twice on this line", "refuses a suite named twice on one line"),
             ("xcresulttool get test-results tests", "reads the result bundle's tests tree"),
             ("named but ran no test case", "refuses a named suite that ran no test case"),
             ("no parseable nodeIdentifierURL", "refuses a tests tree whose suites it cannot read")
@@ -799,6 +830,13 @@ import Testing
         #expect(!throughProject, """
             \(floorScript) runs through `-project`: that container cannot see a package test target, \
             and \(wallCheckScript) builds through the workspace, so a run there reads other derived data
+            """)
+        let enforcement = stepBody(named: enforcementStepName, in: workflow).components(separatedBy: "\n")
+        let runsSelfTest = enforcement.contains(runnerSelfTest)
+        #expect(runsSelfTest, """
+            the workflow's "\(enforcementStepName)" step no longer runs `\(runnerSelfTest)` as a line of \
+            its own: the census, the selector shapes and the restart guard on the runner's live branch \
+            are held by nothing that runs
             """)
     }
 
@@ -882,7 +920,11 @@ import Testing
     /// selector is refused (xcodebuild exits 70); Xcode may drop the reference on save when the project
     /// is opened alone. One dependency added to the test target would re-open the app's modules, and
     /// Fernlet's namespace, to the package's tests: dependency validation refuses only an import outside
-    /// the DECLARED dependencies. Each fact is read into a `Bool` before it is expected.
+    /// the declared dependencies and their closure (a package test may import `FernletDomainModel`
+    /// through ProximityKit, which rule I11 refuses instead). Since plan step A0.8.5 the list must be a
+    /// literal nothing extends: the target's name is spelled once in the manifest's code and no code
+    /// line reaches a target's `.dependencies`, so neither `["ProximityKit"] + [...]` nor a mutation
+    /// after the declaration adds one unseen. Each fact is read into a `Bool` before it is expected.
     private static func expectTheSchemeRunsThePackageTests() throws {
         let scheme = try RepoRoot.source(schemePath)
         let testables = scheme.components(separatedBy: "<Testables>").dropFirst().first?
@@ -894,20 +936,28 @@ import Testing
             the strict build would compile none of the package's tests, and every \
             ProximityKitTests/<Suite> selector would be refused. Restore the TestableReference.
             """)
-        let lists = try packageTestTargetDependencies(in: try RepoRoot.source(manifestPath))
-        let onlyProximityKit = lists == [["ProximityKit"]]
+        let manifest = try RepoRoot.source(manifestPath)
+        let lists = try packageTestTargetDependencies(in: manifest)
+        let code = manifest.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        let namings = code.components(separatedBy: "\"\(packageTarget)\"").count - 1
+        let mutates = code.contains(".dependencies")
+        let onlyProximityKit = lists == [["ProximityKit"]] && namings == 1 && !mutates
         #expect(onlyProximityKit, """
-            \(manifestPath) declares \(lists.count) `.testTarget(name: "\(packageTarget)"` with the \
-            dependencies \(lists): exactly one, depending on ProximityKit alone, keeps the app's modules \
-            and Fernlet's namespace out of the package's tests
+            \(manifestPath) declares \(lists.count) `.testTarget(name: "\(packageTarget)"` with a literal \
+            dependency list \(lists), spells "\(packageTarget)" \(namings) time(s) in code, and \
+            \(mutates ? "reaches" : "does not reach") a target's `.dependencies`: exactly one declaration, \
+            depending on ProximityKit alone by a literal nothing extends or mutates, keeps the app's \
+            modules and Fernlet's namespace out of the package's tests
             """)
     }
 
     /// The quoted names of every `.testTarget(name: "ProximityKitTests", dependencies: [...])`
-    /// dependency list in a manifest's text, one list per declaration, in order.
+    /// dependency list in a manifest's text, one list per declaration, in order. A list must close
+    /// before a `,` or a `)`, so one extended by `+` is not read as a list at all (plan step A0.8.5).
     static func packageTestTargetDependencies(in manifest: String) throws -> [[String]] {
         let declaration = try NSRegularExpression(
-            pattern: #"\.testTarget\(\s*name:\s*"ProximityKitTests"\s*,\s*dependencies:\s*\[([^\]]*)\]"#)
+            pattern: #"\.testTarget\(\s*name:\s*"ProximityKitTests"\s*,\s*dependencies:\s*\[([^\]]*)\]\s*[,)]"#)
         let quoted = try NSRegularExpression(pattern: #""([^"]*)""#)
         return ProximityPlatformBoundaryTests.captures(of: declaration, in: manifest).map {
             ProximityPlatformBoundaryTests.captures(of: quoted, in: $0)
@@ -1056,10 +1106,18 @@ import Testing
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
-    /// `FernletKit/Tests/ProximityKitTests`, whether or not a target compiles the folder yet. The
-    /// keychain needles name every closure file that calls `SecItem` or `KeychainItem` directly and
-    /// the constructors and statics known to reach one: a needle list, not a call-graph closure, so an
-    /// indirect path it misses fails loudly with -34018 on the simulator gate, before any Mac run.
+    /// `FernletKit/Tests/ProximityKitTests`, whether or not a target compiles the folder yet
+    /// (``packageHazardNeedles(onLine:)``). The keychain needles name the keychain calls themselves
+    /// (`SecItem`, `KeychainItem`), the statics known to call one directly, and the types whose
+    /// construction or statics reach one; since plan step A0.8.5 each such type by its bare name, so
+    /// `Type(`, `Type.init(`, `let x: Type = .init(` and its statics are all held, the two seal keys'
+    /// `wipe(service:)` among them. It is a needle list, not a call-graph closure: a path it misses
+    /// fails with -34018 on the simulator gate only where the failure surfaces, and a delete through
+    /// `ProximityKeychainItem.deleteAll` audits its failure to a sink this bundle lacks, so it passes
+    /// silently. The location needles are every platform directory
+    /// `ProximityPlatformBoundaryTests.directoryNeedles` names but the temporary ones, which are
+    /// scratch a test may use, and the process-shared defaults and main bundle (A0.8.5; Documents,
+    /// Caches, the home folder and a defaults suite were missing before).
     static let packageHazards: [(needle: String, reason: String)] = {
         let audit = """
             the unhosted bundle installs no ProximityAuditSink, so ProximityKit's audit lines never reach \
@@ -1080,13 +1138,15 @@ import Testing
             the package has no file locator whose markers hold in both repositories until plan step A1, \
             and a relative path read from the unhosted agent has no defined base
             """
-        let keychainNeedles = ["SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService(",
+        let keychainNeedles = ["SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService",
                                "DeviceBindingID", "StoragePreferences", "ColumnCrypto", "ProtectedSidecar",
-                               ".forSeal(", ".forOpen(", "wipeForDeleteAll(", "MeshNetworkManager(",
-                               "ProximityPairSession(", "ProximityCoordinator("]
-        let storeNeedles = ["MeshRoutedStore(", "MeshSessionStore(", ".production("]
-        let locationNeedles = ["applicationSupportDirectory", "homeDirectoryForCurrentUser",
-                               "UserDefaults.standard", "Bundle.main"]
+                               ".forSeal(", ".forOpen(", "wipeForDeleteAll(", "MeshSessionSealKey",
+                               "MeshRoutedSealKey", "MeshNetworkManager", "ProximityPairSession",
+                               "ProximityCoordinator"]
+        let storeNeedles = ["MeshRoutedStore", "MeshSessionStore", ".production("]
+        let scratch: Set<String> = ["temporaryDirectory", "NSTemporaryDirectory"]
+        let locationNeedles = ProximityPlatformBoundaryTests.directoryNeedles.map(\.token)
+            .filter { !scratch.contains($0) } + ["UserDefaults", "Bundle.main"]
         let repoNeedles = ["RepoRoot", "#filePath", "\"App/", "\"Docs/", "\"Tests/", "\".github/",
                            "\"FernletKit/", "\"Scripts/"]
         return [(needle: "addCaptureHandler", reason: audit)]
@@ -1170,8 +1230,9 @@ import Testing
     /// The suite inventory is the tree: every suite either test target held at plan step A0.8.0 is a
     /// row naming its target, its file and the lines that run it, declared exactly there and in no
     /// other target; every selector is a row; every package row's cells are its declared tests and it
-    /// rides a line; a line naming a package suite carries a measured floor; and the package holds
-    /// nothing its unhosted bundle cannot serve. It is count conservation's static half: a move that
+    /// rides a line; a line naming a package suite carries a measured floor; the package holds
+    /// nothing its unhosted bundle cannot serve; and, since plan step A0.8.5, it imports nothing that
+    /// would not travel with it (I11). It is count conservation's static half: a move that
     /// loses, doubles, mis-targets or mis-lines a suite, or drops a test, is red here before any
     /// simulator runs.
     @Test func theSuiteInventoryIsTheTree() throws {
@@ -1199,7 +1260,8 @@ import Testing
             ("I6, each suite's lines", Self.inventoryLineProblems(read.rows, steps: steps)),
             ("I7, the package's declared tests", try Self.packageCellProblems(read.rows)),
             ("I8 and I10, the package's lines", Self.packageLineProblems(read.rows, steps: steps)),
-            ("I9, what the unhosted bundle cannot serve", try Self.packageHazardProblems())
+            ("I9, what the unhosted bundle cannot serve", try Self.packageHazardProblems()),
+            ("I11, the package's imports", try Self.packageImportProblems())
         ]
         // R2: bounded by the rule list.
         for rule in rules {
@@ -1270,54 +1332,54 @@ import Testing
         return problems
     }
 
-    /// I7: each package row's declared tests (``declaredTestCounts(in:)`` of its suite in its file)
-    /// are its cells and sum to ``measuredPackageCells``; every type a package file declares a test
-    /// for is a package row (the package holds no unlisted suite, and no FernletTests suite is split
-    /// into it by an extension); and no package line is a free `@Test` at column 0.
+    /// I7: each package row's declared tests (``declaredTestCounts(in:)`` of its suite, summed over
+    /// every package file, so an extension in a second file counts toward its suite: plan step
+    /// A0.8.5) are its cells and sum to ``measuredPackageCells``; every type a package file declares
+    /// a test for is a package row (the package holds no unlisted suite, and no FernletTests suite is
+    /// split into it by an extension); no test counts toward no type (a test before any declaration
+    /// the reader names, indented or not); and no package line is a free `@Test` at column 0.
     private static func packageCellProblems(_ rows: [InventoryRow]) throws -> [String] {
         let packageRows = rows.filter { $0.target == packageTarget }
-        var problems: [String] = []
-        var sum = 0
-        // R2: bounded by the package row count.
-        for row in packageRows {
-            guard FileManager.default.fileExists(atPath: RepoRoot.url(row.file).path) else {
-                problems.append("I7: \(row.file), `\(row.suite)`'s file, does not exist")
-                continue
-            }
-            let counted = declaredTestCounts(in: try RepoRoot.source(row.file))[row.suite] ?? 0
-            sum += counted
-            if counted != row.cells {
-                problems.append("I7: `\(row.suite)` declares \(counted) test(s) in \(row.file); its row says \(row.cells ?? 0)")
-            }
-        }
-        if sum != measuredPackageCells {
-            problems.append("I7: the package rows' declared tests sum to \(sum); \(measuredPackageCells) were measured")
-        }
         let listed = Set(packageRows.map(\.suite))
+        var declared: [String: Int] = [:]
+        var problems: [String] = []
         // R2: bounded by the package's file count × each file's tested types.
         for file in PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url) {
             let source = try RepoRoot.source(file)
-            for (type, count) in declaredTestCounts(in: source).sorted(by: { $0.key < $1.key })
-            where !type.isEmpty && !listed.contains(type) {
-                problems.append("I7: \(file) declares \(count) test(s) for `\(type)`, which is no \(packageTarget) row")
+            for (type, count) in declaredTestCounts(in: source).sorted(by: { $0.key < $1.key }) {
+                declared[type, default: 0] += count
+                if type.isEmpty {
+                    problems.append("I7: \(file) declares \(count) test(s) before any declaration the reader can name, so no suite holds them")
+                } else if !listed.contains(type) {
+                    problems.append("I7: \(file) declares \(count) test(s) for `\(type)`, which is no \(packageTarget) row")
+                }
             }
             for line in freeTestLines(in: source) {
                 problems.append("I7: \(file):\(line) is a free `@Test` at column 0, which no suite holds")
             }
         }
+        var sum = 0
+        // R2: bounded by the package row count.
+        for row in packageRows {
+            let counted = declared[row.suite] ?? 0
+            sum += counted
+            if counted != row.cells {
+                problems.append("I7: `\(row.suite)` declares \(counted) test(s) across \(rootPath(of: packageTarget)); its row says \(row.cells ?? 0)")
+            }
+        }
+        if sum != measuredPackageCells {
+            problems.append("I7: the package rows' declared tests sum to \(sum); \(measuredPackageCells) were measured")
+        }
         return problems
     }
 
-    /// The 1-based numbers of a source's lines that hold a `@Test` at column 0 outside any type
-    /// declaration (a free test function), which the inventory cannot pin to a suite.
+    /// The 1-based numbers of a source's code lines (``codeLines(of:)``, so a multi-line literal's
+    /// lines are not code) that hold a `@Test` at column 0 outside any type declaration (a free test
+    /// function), which the inventory cannot pin to a suite.
     private static func freeTestLines(in source: String) -> [Int] {
-        var found: [Int] = []
-        // R2: bounded by the source's line count.
-        for (offset, line) in source.components(separatedBy: "\n").enumerated() where line.hasPrefix("@") {
-            guard attributionName(line) == nil, testAttributeCount(in: codePart(of: line).code) > 0 else { continue }
-            found.append(offset + 1)
-        }
-        return found
+        codeLines(of: source).filter { line in
+            line.text.hasPrefix("@") && attributionName(line.text) == nil && testAttributeCount(in: line.code) > 0
+        }.map(\.number)
     }
 
     /// I8 and I10: a line naming any package selector carries a measured floor (above the shared `1`,
@@ -1361,7 +1423,7 @@ import Testing
                     allowed.insert(row)
                     continue
                 }
-                for hazard in packageHazards where trimmed.contains(hazard.needle) {
+                for hazard in packageHazardNeedles(onLine: trimmed) {
                     problems.append("I9: \(file): `\(trimmed)` holds `\(hazard.needle)`: \(hazard.reason)")
                 }
             }
@@ -1371,6 +1433,57 @@ import Testing
             problems.append("I9: the allowlist row \(row.file), `\(row.line)` matches no line; delete it with its invariant (\(row.invariant))")
         }
         return problems
+    }
+
+    /// The ``packageHazards`` a code line's text holds, each as a substring (rule I9).
+    static func packageHazardNeedles(onLine line: String) -> [(needle: String, reason: String)] {
+        packageHazards.filter { line.contains($0.needle) }
+    }
+
+    /// The modules a package file may import (rule I11, ProximityKit plan step A0.8.5): ProximityKit,
+    /// the test target's one declared dependency, and the system modules its files use. ProximityKit's
+    /// closure (`FernletCrypto`, `FernletDomainModel`, `FernletFoundation`) is not here, though
+    /// dependency validation lets a test import it: those modules hold Fernlet's own values (its
+    /// crypto purposes' labels, its payload types' tokens) and stay in this repository at plan step
+    /// A1, so a package test that imported one could pin a Fernlet byte and could not travel.
+    static let packageImportAllowlist: Set<String> = [
+        "ProximityKit", "Foundation", "Testing", "Combine", "simd", "Synchronization"
+    ]
+
+    /// I11: every module a package file imports is in ``packageImportAllowlist``.
+    private static func packageImportProblems() throws -> [String] {
+        var problems: [String] = []
+        // R2: bounded by the package's file count × each file's imports.
+        for file in PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url) {
+            for module in importedModules(in: try RepoRoot.source(file)) where !packageImportAllowlist.contains(module) {
+                problems.append("I11: \(file) imports `\(module)`, which does not travel with ProximityKit's tests: \(packageImportAllowlist.sorted()) may be imported")
+            }
+        }
+        return problems
+    }
+
+    /// The modules a Swift source imports, in order: the first path component after `import` on every
+    /// line whose trimmed text is not a `//` comment, past leading attributes (`@testable`,
+    /// `@preconcurrency`), an access level (`internal import X`) and an import kind
+    /// (`import struct X.Y`).
+    static func importedModules(in source: String) -> [String] {
+        let levels: Set<String> = ["public", "package", "internal", "fileprivate", "private", "open"]
+        let kinds: Set<String> = ["struct", "class", "enum", "protocol", "typealias", "func", "var", "let", "actor"]
+        var modules: [String] = []
+        // R2: bounded by the source's line count.
+        for line in source.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("//") else { continue }
+            var tokens = ArraySlice(trimmed.split(separator: " ").map(String.init))
+            tokens = tokens.drop { $0.hasPrefix("@") }
+            if let first = tokens.first, levels.contains(first) { tokens = tokens.dropFirst() }
+            guard tokens.first == "import" else { continue }
+            tokens = tokens.dropFirst()
+            if let first = tokens.first, kinds.contains(first) { tokens = tokens.dropFirst() }
+            guard let path = tokens.first, let module = path.split(separator: ".").first else { continue }
+            modules.append(String(module))
+        }
+        return modules
     }
 
     // MARK: - Declared tests (rule I7)
@@ -1387,10 +1500,37 @@ import Testing
     /// `""`; a type with no test has no key.
     static func declaredTestCounts(in source: String) -> [String: Int] {
         var counts: [String: Int] = [:]
+        // R2: bounded by the source's line count.
+        for line in codeLines(of: source) {
+            let found = testAttributeCount(in: line.code) + (isXCTestMethod(line.code) ? 1 : 0)
+            if found > 0 { counts[line.type, default: 0] += found }
+        }
+        return counts
+    }
+
+    /// One code line of a Swift source as the declared-test reader walks it (rule I7).
+    struct CodeLine {
+        /// The line's 1-based number.
+        let number: Int
+        /// The line's whole text.
+        let text: String
+        /// Its code (``codePart(of:)``): literals blanked, a trailing comment cut.
+        let code: String
+        /// The type its tests count toward: the last column-0 declaration's, or `""` before any.
+        let type: String
+    }
+
+    /// The code lines of a Swift source, in order, each with the type its tests count toward: a line
+    /// whose trimmed text starts `//` is not one, nor is a line inside a multi-line literal (from the
+    /// line after the one that opens `"""` up to and including the one that closes it), so neither
+    /// the declared-test reader nor the free-test reader reads a literal's lines as code (one walker
+    /// for both since plan step A0.8.5).
+    static func codeLines(of source: String) -> [CodeLine] {
+        var lines: [CodeLine] = []
         var current = ""
         var inMultilineString = false
         // R2: bounded by the source's line count.
-        for line in source.components(separatedBy: "\n") {
+        for (offset, line) in source.components(separatedBy: "\n").enumerated() {
             guard !inMultilineString else {
                 inMultilineString = !line.contains("\"\"\"")
                 continue
@@ -1399,10 +1539,9 @@ import Testing
             let read = codePart(of: line)
             inMultilineString = read.opensMultilineString
             if let name = attributionName(line) { current = name }
-            let found = testAttributeCount(in: read.code) + (isXCTestMethod(read.code) ? 1 : 0)
-            if found > 0 { counts[current, default: 0] += found }
+            lines.append(CodeLine(number: offset + 1, text: line, code: read.code, type: current))
         }
-        return counts
+        return lines
     }
 
     /// A line's code: each string literal's contents blanked (its quotes kept), a trailing `//`
@@ -1511,9 +1650,10 @@ import Testing
     }
 
     /// The non-private top-level declaration keys one test target holds (rule T3), each with the
-    /// repo-relative files declaring it: a type ``topLevelTypeName(_:)`` reads, `extension <Type>`,
-    /// or a column-0 `func`, `let` or `var` name. `private` and `fileprivate` declarations are
-    /// file-scoped and have no key.
+    /// repo-relative files declaring it: a type ``topLevelTypeName(_:)`` reads, a `protocol` or a
+    /// `typealias` by its bare name (it shares a type's name space; plan step A0.8.5),
+    /// `extension <Type>`, or a column-0 `func`, `let` or `var` name. `private` and `fileprivate`
+    /// declarations are file-scoped and have no key.
     static func declarationKeys(inTarget target: String) throws -> [String: [String]] {
         var keys: [String: [String]] = [:]
         // R2: bounded by the file count under the target's folder.
@@ -1533,9 +1673,11 @@ import Testing
         if let type = typeName(rest) { return type }
         if let extended = extendedTypeName(rest) { return "extension " + extended }
         // R2: bounded by the keyword list.
-        for keyword in ["func ", "let ", "var "] where rest.hasPrefix(keyword) {
+        for keyword in ["protocol ", "typealias ", "func ", "let ", "var "] where rest.hasPrefix(keyword) {
             let name = rest.dropFirst(keyword.count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-            return name.isEmpty ? nil : keyword + String(name)
+            guard !name.isEmpty else { return nil }
+            let namesAType = keyword == "protocol " || keyword == "typealias "
+            return namesAType ? String(name) : keyword + String(name)
         }
         return nil
     }
@@ -1543,7 +1685,8 @@ import Testing
     /// The helpers both test targets compile are twins, and nothing else is declared in both: T1 the
     /// twin list holds the measured count; T2 each pair's two files exist and their bodies
     /// (``twinBody(_:)``) are equal; T3 every non-private top-level declaration key present in both
-    /// targets (a type, `extension <Type>`, or a column-0 `func`, `let` or `var`) is declared only in
+    /// targets (a type, a protocol or a typealias, `extension <Type>`, or a column-0 `func`, `let` or
+    /// `var`) is declared only in
     /// the two halves of one listed pair, so a helper copied outside a pair, by type or by extension,
     /// is red; T4 the comparator itself: an import-only difference is equal, a code difference is not.
     @Test func everyTwinMatchesItsOriginal() throws {
@@ -1605,7 +1748,7 @@ import Testing
     /// floor and several selectors, a package selector among them, and ignores everything else; and
     /// the selector, declaration, declared-test and inventory readers each read their fixtures
     /// (ProximityKit plan step A0.8.0).
-    @Test func theParserReadsContinuationJoinedInvocations() {
+    @Test func theParserReadsContinuationJoinedInvocations() throws {
         let sample = """
             run: |
               set -euo pipefail
@@ -1636,8 +1779,10 @@ import Testing
         Self.expectDeclarationReaderFixtured()
         Self.expectSelectorReaderFixtured()
         Self.expectDeclaredTestReaderFixtured()
+        Self.expectLiteralAndFreeTestReadersFixtured()
         Self.expectInventoryReaderFixtured()
         Self.expectResolutionReaderFixtured()
+        try Self.expectPackageReadersFixtured()
         let steps2 = """
               - name: Other step
                 run: echo other
@@ -1667,6 +1812,12 @@ import Testing
                 "a nonisolated suite is a selector (FormatMigratorTests, which the reader missed before plan step A0.8.0)")
         #expect(topLevelTypeName("public final class Visible {") == "Visible")
         #expect(topLevelTypeName("private struct FileScoped {") == nil, "a file-scoped type is no selector's")
+        #expect(topLevelTypeName("@Suite package struct PackageScoped {") == "PackageScoped")
+        #expect(topLevelTypeName("final public class FinalFirst {") == "FinalFirst")
+        #expect(topLevelTypeName("open class Open {") == "Open")
+        #expect(declarationKey("protocol Shared {") == "Shared", "a protocol shares a type's name space")
+        #expect(declarationKey("public typealias Shared = Int") == "Shared")
+        #expect(declarationKey("indirect enum Tree {") == "Tree")
         #expect(declarationKey("extension ProximityNamespace.MeshMessages {") == "extension ProximityNamespace.MeshMessages")
         #expect(declarationKey("extension FakePeerTransport: Sendable {") == "extension FakePeerTransport")
         #expect(declarationKey("@MainActor func makeRig() -> Rig {") == "func makeRig")
@@ -1725,6 +1876,30 @@ import Testing
                 "a free test at column 0 is found, a suite's declaration is not")
     }
 
+    /// The two readers share one walker (plan step A0.8.5): a multi-line literal's lines are not
+    /// code, so a column-0 `@Test` or `struct` inside one is neither counted, nor a free test, nor
+    /// the current type; and a test before any declaration the reader names, indented or not,
+    /// counts toward `""`, which rule I7 reports.
+    private static func expectLiteralAndFreeTestReadersFixtured() {
+        let literal = """
+            @Suite struct M {
+                @Test func one() {
+                    let text = \"\"\"
+            @Test func notATest() {}
+            struct NotAType {
+            \"\"\"
+                    #expect(!text.isEmpty)
+                }
+                @Test func two() {}
+            }
+            """
+        #expect(declaredTestCounts(in: literal) == ["M": 2], "a multi-line literal's lines are not code")
+        #expect(freeTestLines(in: literal).isEmpty, "a column-0 `@Test` inside a literal is not a free test")
+        let unnamed = "    @Test func indented() {}\n@Suite package struct P {\n    @Test func a() {}\n}"
+        #expect(declaredTestCounts(in: unnamed) == ["": 1, "P": 1],
+                "an indented test before any declaration counts toward no type, and `package struct` is read")
+    }
+
     /// The inventory reader: comments skipped, the header read, one row per target kept, and a row
     /// with four fields reported and left out.
     private static func expectInventoryReaderFixtured() {
@@ -1766,5 +1941,36 @@ import Testing
             #expect(cryptoSwiftPin(inResolved: data, path: "b").problem != nil, "a resolved file the pin cannot read was read")
         }
         #expect(shellCode("# a comment\nARGS=(-workspace X)\n    # indented -project\necho done") == "ARGS=(-workspace X)\necho done")
+    }
+
+    /// The package readers (plan step A0.8.5): I9 holds a keychain type however it is constructed or
+    /// reached, a seal key's wipe, and every platform directory but the temporary ones; I11 reads a
+    /// module past attributes, an access level and an import kind; and the dependency pin reads no list
+    /// that `+` extends.
+    private static func expectPackageReadersFixtured() throws {
+        let hazardous = [
+            "let id = IdentityService.init(namespace: ns)", "let s: MeshSessionStore = .init(scope: scope)",
+            "MeshSessionSealKey.wipe(service: service)", "MeshRoutedSealKey.wipe(service: service)",
+            "let root = URL.documentsDirectory.appending(path: \"scratch\")", "let home = NSHomeDirectory()",
+            "FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)", "let home = URL.homeDirectory",
+            "let defaults = UserDefaults(suiteName: \"x\")"
+        ]
+        // R2: bounded by the fixed list.
+        for line in hazardous {
+            #expect(!packageHazardNeedles(onLine: line).isEmpty, "I9 holds no needle on `\(line)`")
+        }
+        // R2: bounded by the fixed list.
+        for line in ["let cache = ReplayCache(maxEntries: 3)", "let scratch = FileManager.default.temporaryDirectory"] {
+            #expect(packageHazardNeedles(onLine: line).isEmpty, "I9 holds a needle on `\(line)`")
+        }
+        let imports = "import Foundation\n@testable import ProximityKit\ninternal import FernletDomainModel\n"
+            + "@preconcurrency import struct FernletCrypto.FernletCryptoPurpose\n// import FernletFoundation\nlet x = 1"
+        #expect(importedModules(in: imports) == ["Foundation", "ProximityKit", "FernletDomainModel", "FernletCrypto"])
+        let extended = #".testTarget(name: "ProximityKitTests", dependencies: ["ProximityKit"] + ["FernletConnections"],"#
+        let literal = #".testTarget(name: "ProximityKitTests", dependencies: ["ProximityKit"])"#
+        let extendedLists = try packageTestTargetDependencies(in: extended)
+        #expect(extendedLists.isEmpty, "a list `+` extends is not a list")
+        let literalLists = try packageTestTargetDependencies(in: literal)
+        #expect(literalLists == [["ProximityKit"]])
     }
 }

@@ -1450,7 +1450,9 @@ private enum BravoApp {
 /// Builds a namespace's thirty mesh messages from one spelling rule, so a fixture names thirty
 /// distinct tokens in one line: this suite's two apps, the goldens' foreign and renamed namespaces
 /// (`ProximityNamespaceGoldenTests`, `ProximityVocabularyGoldenTests`) and the runtime gate's app
-/// (`ProximityNamespaceGateTests`). It holds no app's values, so it moves with this suite.
+/// (`ProximityNamespaceGateTests`). It holds no app's values, but those three suites stay in
+/// `FernletTests`, so before this suite moves with the package at plan step A1 the extension moves
+/// verbatim into a file of its own, a twin while both test targets hold it.
 extension ProximityNamespace.MeshMessages {
 
     /// The thirty mesh messages' field names in declaration order, each the last component of its

@@ -260,12 +260,14 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
 
 **A0.8 Sort the tests.**
 - **ProximityKit's own package test target,** `FernletKit/Tests/ProximityKitTests`: unhosted (the
-  simulator's `xctest` agent, so no keychain entitlement and no audit sink), Swift 6 with no default
-  isolation and the three upcoming features Fernlet's tests build with, depending on ProximityKit
-  alone. The `Fernlet` scheme builds it strict and runs it through the root `Fernlet.xcworkspace`, the
-  one container in which a scheme sees a package test target.
-- **It holds the eight suites (59 tests) that need nothing but ProximityKit and its closure,** and
-  they travel with the package: the in-memory transport fabric and the peer handle (on the
+  simulator's `xctest` agent, so no keychain entitlement and no audit sink), Swift 6 language mode
+  with no default isolation and three upcoming features (`FernletTests` builds in Swift 5 mode with
+  six; Swift 6 implies the other three), declaring ProximityKit as its one dependency. The `Fernlet`
+  scheme builds it strict and runs it through the root `Fernlet.xcworkspace`, the one container in
+  which a scheme sees a package test target.
+- **It holds the eight suites (59 tests) that need nothing but ProximityKit,** and they travel with
+  the package (its files import ProximityKit and system modules only, never the closure's Fernlet
+  modules): the in-memory transport fabric and the peer handle (on the
   mesh-batteries CI line), and the membership records' three suites, the routed drain plan, the commit
   detector and ranging fallback, and the replay cache (on a new `proximitykit` line, so every suite
   the package holds rides a line).
@@ -291,8 +293,12 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
 **A1.1 Create the repo.**
 - Split `FernletKit/Sources/ProximityKit` plus its package tests (`FernletKit/Tests/ProximityKitTests`)
   out with history (`git filter-repo` or a subtree split), with `ProximityNamespaceSoundnessTests` and
-  its five framing byte pins joining them (owner decision). The inventory's `ProximityKitTests` rows
-  become the package repo's to hold.
+  its five framing byte pins joining them (owner decision). Its file also declares the mesh-message
+  spelling helper (the `ProximityNamespace.MeshMessages` extension's `fieldNames`, `tokens(_:)` and
+  `spelled(_:)`), which `ProximityNamespaceGoldenTests`, `ProximityVocabularyGoldenTests` and
+  `ProximityNamespaceGateTests` build their fixtures with, and those stay: before the suite moves, the
+  helper moves verbatim into a file of its own, a twin while both targets hold it. The inventory's
+  `ProximityKitTests` rows become the package repo's to hold.
 - Root `Package.swift`: tools 6.2; iOS 26 and macOS 26; `defaultIsolation(MainActor.self)` as today
   for the sources; the test target keeps Swift 6 with no default isolation and its three upcoming
   features.
@@ -336,15 +342,32 @@ umbrella entry:
   line and its `CIGateSelectorBoundaryTests` entry go; crypto-goldens loses
   `ProximityNamespaceSoundnessTests` (43 tests) and mesh-batteries its two `ProximityKitTests` suites
   (15), each line re-measured.
-- **The in-tree test target (A0.8):** remove the `Fernlet` scheme's `ProximityKitTests` testable (keep
-  `Fernlet.xcworkspace` for A1.5's local override, or retire it); `CIGateSelectorBoundaryTests`'
-  second root, its `ProximityKitTests/<Suite>` reading and its scheme, test-target-dependency and
-  resolution pins; `Scripts/run-gated-suites.sh`'s second selector shape; the inventory's package rows,
-  pins and hazard list; the twin status of the three helpers' `FernletTests` halves (they become
-  ordinary files); the `FernletKit/Tests` roots of `NoTrackingBoundaryTests` and
-  `MemoryLifecycleBoundaryTests`, and `BackgroundRefreshBoundaryTests`' row. Widen or relocate the
-  `#filePath` store-isolation walls and the acceptance batteries' test-tree scans before any suite they
-  look for leaves.
+- **The in-tree test target (A0.8):** remove the `Fernlet` scheme's `ProximityKitTests` testable;
+  `CIGateSelectorBoundaryTests`' second root, its `ProximityKitTests/<Suite>` reading and its scheme
+  and test-target-dependency pins; `Scripts/run-gated-suites.sh`'s second selector shape, and its
+  self-test's two-target assertions and their `both.json` tree; README's
+  `-only-testing:ProximityKitTests` and its sentences on the package test target; the inventory's
+  package rows, pins, hazard list and import allowlist; the twin status of the three helpers'
+  `FernletTests` halves (they become ordinary files); the `FernletKit/Tests` roots of
+  `NoTrackingBoundaryTests` and `MemoryLifecycleBoundaryTests`, and `BackgroundRefreshBoundaryTests`'
+  row. Widen or relocate the `#filePath` store-isolation walls and the acceptance batteries' test-tree
+  scans before any suite they look for leaves.
+- **The fake transport's check:** `FakePeerTransportTests` leaves mesh-batteries with the package, and
+  the twin wall that held Fernlet's copy of the fabric to the copy it tests goes with it, while
+  Fernlet's acceptance batteries keep building on their own `FakePeerTransport.swift`. So Fernlet
+  keeps a `FernletTests` copy of `FakePeerTransportTests` on mesh-batteries, its floor re-measured,
+  for as long as they do: a fake nobody checks is a source of false confidence.
+- **The container:** keep `Fernlet.xcworkspace` for A1.5's local override, and with it the selector
+  wall's resolution pin, extended to every pin the two resolved files share (`proximitykit` beside
+  `cryptoswift` once Fernlet depends on the tag): CI builds through the workspace and a release
+  archive through `-project`, and the pin is what keeps the two on one revision. Or retire the
+  workspace, and the pin with it; then everything A0.8.1 moved to `-workspace` returns to
+  `-project App/Fernlet.xcodeproj`: `Scripts/spm-wall-check.sh`, `Scripts/run-gated-suites.sh` and
+  its self-test's workspace assertion, `CIGateSelectorBoundaryTests`' container pins (the strict
+  build's and the runner's `-workspace`, the workspace's roots), the `/Fernlet.xcworkspace/` rows of
+  CODEOWNERS and `CodeOwnersResolutionTests`, the pre-push hook's relevance pattern, and the
+  documented commands (README, `Docs/Verifiability.md`, `Docs/No-Tracking-Wall.md`,
+  `Docs/Power-of-10-Swift.md`, `Scripts/branded-catalog/README.md`).
 - **Docs:** split `Docs/FileIndex.md` (122 mentions) and `Docs/ProximityFunctionIndex.md`; the owner
   updates the local, untracked CLAUDE.md and AGENTS.md (the S3 wall paragraph names the Proximity
   subtree; both are gitignored).

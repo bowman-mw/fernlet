@@ -29,10 +29,14 @@
 #     passing summary whose `totalTestCount` is ABOVE the floor, so the floor never decides an
 #     assertion here, and `xcresulttool get test-results tests` with the tree in
 #     `$FERNLET_SELFTEST_TREE`: `fernlet-only.json` (one FernletTests suite) or `both.json` (that
-#     suite and one ProximityKitTests suite), in the shape measured on Xcode 26.5. A stub that
-#     under-counted would pass this self-test for the wrong reason, which is why assertion 2 runs the
-#     same stubs with the marker removed and requires exit 0. Any other `xcrun` call is a loud
-#     refusal rather than a silent `{}`.
+#     suite and one ProximityKitTests suite), in the shape measured on Xcode 26.5, or
+#     `extra-segment.json`, a tree in a shape that was never measured. The FernletTests suite's display
+#     name is not its type name, as a Swift Testing suite's need not be, so a census that keyed suites
+#     by name would refuse assertions 2 and 3. A stub that under-counted would pass this self-test for
+#     the wrong reason, which is why assertion 2 runs the same stubs with the marker removed and
+#     requires exit 0. Any other `xcrun` call is a loud refusal rather than a silent `{}`.
+#   * Every gate runs under the UTF-8 locale macOS defaults to, in which bash's ranged classes admit
+#     accented letters, so assertion 5's non-ASCII selector is refused for the runner's own reason.
 #
 # Eight assertions, in the order that makes each one mean something:
 #   1. LIVE NEGATIVE  — marker in the run output                    -> the gate must exit non-zero
@@ -41,16 +45,24 @@
 #                       both in the tree                            -> 0, through the workspace,
 #                                                                      each selector in its target
 #   4. SUITE CENSUS   — the same selectors, the package suite
-#                       absent from the tree                        -> non-zero, naming it
+#                       absent from the tree                        -> non-zero, naming it; a FernletTests
+#                       suite absent beside one its bundle ran      -> non-zero, naming it alone (the
+#                                                                      census is per suite, not per bundle);
+#                       a tree in an unmeasured shape               -> non-zero, naming the unread tree,
+#                                                                      not a suite that ran nothing
 #   5. REFUSED SHAPES — FernletTests/<Suite>, another target, a
-#                       second slash, an empty suite                -> exit 2 each, xcodebuild never runs
+#                       second slash, an empty suite, a non-ASCII
+#                       one                                         -> exit 2 each, xcodebuild never runs
 #   6. DUPLICATE      — one suite named twice                       -> exit 2, xcodebuild never runs
-#   7. SEAM NEGATIVE  — --check-log over a log with the marker      -> non-zero
+#   7. SEAM NEGATIVE  — --check-log over a log with the marker, and
+#                       over a log that is not there                -> non-zero each
 #   8. SEAM POSITIVE  — --check-log over a log without it           -> 0
 # 1 without 2 would pass on any broken stub, and 4 without 3 on a census that refuses everything;
-# 7 and 8 are cheap and keep both restart paths in one place.
+# 7 and 8 are cheap and keep both restart paths in one place. Assertion 4's second and third cases,
+# the display name, 5's non-ASCII selector and 7's missing log joined at ProximityKit plan step A0.8.5.
 #
-# Every step is a fixed, bounded command; the one loop walks assertion 5's fixed four-item list.
+# Every step is a fixed, bounded command; the loops walk assertion 5's fixed five-item list and 7's two
+# logs.
 #
 # USAGE:  Scripts/run-gated-suites-selftest.sh
 set -euo pipefail
@@ -104,16 +116,23 @@ chmod +x "$WORK/bin/xcodebuild" "$WORK/bin/xcrun"
 cat > "$WORK/fernlet-only.json" <<'TREE'
 {"testNodes":[{"nodeType":"Test Plan","name":"Fernlet","children":[
  {"nodeType":"Unit test bundle","name":"FernletTests","children":[
-  {"nodeType":"Test Suite","name":"S3BoundaryTests","nodeIdentifierURL":"test://com.apple.xcode/Fernlet/FernletTests/S3BoundaryTests","children":[
+  {"nodeType":"Test Suite","name":"S3 boundary","nodeIdentifierURL":"test://com.apple.xcode/Fernlet/FernletTests/S3BoundaryTests","children":[
    {"nodeType":"Test Case","name":"aCase()","result":"Passed"}]}]}]}]}
 TREE
 cat > "$WORK/both.json" <<'TREE'
 {"testNodes":[{"nodeType":"Test Plan","name":"Fernlet","children":[
  {"nodeType":"Unit test bundle","name":"FernletTests","children":[
-  {"nodeType":"Test Suite","name":"S3BoundaryTests","nodeIdentifierURL":"test://com.apple.xcode/Fernlet/FernletTests/S3BoundaryTests","children":[
+  {"nodeType":"Test Suite","name":"S3 boundary","nodeIdentifierURL":"test://com.apple.xcode/Fernlet/FernletTests/S3BoundaryTests","children":[
    {"nodeType":"Test Case","name":"aCase()","result":"Passed"}]}]},
  {"nodeType":"Unit test bundle","name":"ProximityKitTests","children":[
   {"nodeType":"Test Suite","name":"PeerHandleIdentityTests","nodeIdentifierURL":"test://com.apple.xcode/FernletKit/ProximityKitTests/PeerHandleIdentityTests","children":[
+   {"nodeType":"Test Case","name":"aCase()","result":"Passed"}]}]}]}]}
+TREE
+# A shape never measured: one path segment more before the bundle.
+cat > "$WORK/extra-segment.json" <<'TREE'
+{"testNodes":[{"nodeType":"Test Plan","name":"Fernlet","children":[
+ {"nodeType":"Unit test bundle","name":"FernletTests","children":[
+  {"nodeType":"Test Suite","name":"S3 boundary","nodeIdentifierURL":"test://com.apple.xcode/Fernlet/Extra/FernletTests/S3BoundaryTests","children":[
    {"nodeType":"Test Case","name":"aCase()","result":"Passed"}]}]}]}]}
 TREE
 
@@ -134,6 +153,7 @@ run_gate() {
   shift 2
   : > "$WORK/args.log"
   env PATH="$WORK/bin:$PATH" \
+      LC_ALL=en_US.UTF-8 \
       FERNLET_SELFTEST_MARKER="$marker" \
       FERNLET_SELFTEST_TREE="$tree" \
       FERNLET_SELFTEST_ARGS="$WORK/args.log" \
@@ -190,7 +210,8 @@ if ! passed_arg "-workspace" || ! passed_arg "Fernlet.xcworkspace" || passed_arg
 fi
 echo "    exit 0, through Fernlet.xcworkspace, each selector in its own target."
 
-echo "==> 4/8 SUITE CENSUS: the same selectors with the package suite absent from the tree must NOT pass"
+echo "==> 4/8 SUITE CENSUS: a package suite, or one FernletTests suite of two, absent from the tree, and a"
+echo "    tree in an unmeasured shape, must NOT pass"
 CODE="$(run_gate "" "$WORK/fernlet-only.json" S3BoundaryTests ProximityKitTests/PeerHandleIdentityTests)"
 if [ "$CODE" -eq 0 ]; then
   tail -12 "$WORK/gate.log"
@@ -205,11 +226,27 @@ if ! grep -q "named but ran no test case" "$WORK/gate.log" \
   echo "ProximityKitTests/PeerHandleIdentityTests as a named suite that ran no test case."
   exit 1
 fi
-echo "    exit $CODE, and the census names the suite that ran nothing."
+CODE="$(run_gate "" "$WORK/fernlet-only.json" S3BoundaryTests NoTrackingBoundaryTests)"
+if [ "$CODE" -eq 0 ] || ! grep -q "named but ran no test case: FernletTests/NoTrackingBoundaryTests —" "$WORK/gate.log"; then
+  tail -12 "$WORK/gate.log"
+  echo "SELF-TEST FAILED: a FernletTests suite that ran nothing beside one its bundle ran gave exit $CODE"
+  echo "without naming FernletTests/NoTrackingBoundaryTests alone. A census per bundle, or one that"
+  echo "reads only package selectors, cannot see it."
+  exit 1
+fi
+CODE="$(run_gate "" "$WORK/extra-segment.json" S3BoundaryTests)"
+if [ "$CODE" -eq 0 ] || ! grep -q "no parseable nodeIdentifierURL" "$WORK/gate.log" \
+  || grep -q "named but ran no test case" "$WORK/gate.log"; then
+  tail -12 "$WORK/gate.log"
+  echo "SELF-TEST FAILED: a tree in a shape never measured gave exit $CODE without being named as a"
+  echo "tree the census cannot read, or was read as a selector that ran nothing."
+  exit 1
+fi
+echo "    exit non-zero each: the census names each suite that ran nothing, and a tree it cannot read."
 
 echo "==> 5/8 REFUSED SHAPES: every other selector shape exits 2 before xcodebuild runs"
-# R2: bounded by the fixed four-item list.
-for shape in FernletTests/S3BoundaryTests OtherTests/S3BoundaryTests ProximityKitTests/A/B ProximityKitTests/; do
+# R2: bounded by the fixed five-item list.
+for shape in FernletTests/S3BoundaryTests OtherTests/S3BoundaryTests ProximityKitTests/A/B ProximityKitTests/ CaféTests; do
   CODE="$(run_gate "" "$WORK/both.json" "$shape")"
   if [ "$CODE" -ne 2 ] || [ -s "$WORK/args.log" ]; then
     tail -6 "$WORK/gate.log"
@@ -231,14 +268,17 @@ if [ "$CODE" -ne 2 ] || [ -s "$WORK/args.log" ]; then
 fi
 echo "    exit 2, and xcodebuild never ran."
 
-echo "==> 7/8 SEAM NEGATIVE: --check-log over a log that records a restart"
+echo "==> 7/8 SEAM NEGATIVE: --check-log over a log that records a restart, and over one that is not there"
 printf 'Test Suite started\n%s\n** TEST EXECUTE SUCCEEDED **\n' "$MARKER" > "$WORK/with.log"
-if Scripts/run-gated-suites.sh --check-log "$WORK/with.log" > "$WORK/seam.log" 2>&1; then
-  cat "$WORK/seam.log"
-  echo "SELF-TEST FAILED: --check-log passed a log that records a restart."
-  exit 1
-fi
-echo "    exit non-zero."
+# R2: bounded by the two logs.
+for log in "$WORK/with.log" "$WORK/no-such.log"; do
+  if Scripts/run-gated-suites.sh --check-log "$log" > "$WORK/seam.log" 2>&1; then
+    cat "$WORK/seam.log"
+    echo "SELF-TEST FAILED: --check-log passed $log, which records a restart or does not exist."
+    exit 1
+  fi
+done
+echo "    exit non-zero each."
 
 echo "==> 8/8 SEAM POSITIVE: --check-log over a clean log"
 printf 'Test Suite started\n** TEST EXECUTE SUCCEEDED **\n' > "$WORK/without.log"
@@ -252,5 +292,5 @@ echo "    exit 0."
 echo
 echo "RUN-GATED-SUITES SELF-TEST PASSED — the restart guard fires on the LIVE branch and at the"
 echo "                                    seam, neither refuses an honest run, and the runner reads"
-echo "                                    exactly the two selector shapes, refuses a duplicate and a"
-echo "                                    named suite that ran nothing."
+echo "                                    exactly the two selector shapes, refuses a duplicate, a"
+echo "                                    named suite that ran nothing and a tree it cannot read."

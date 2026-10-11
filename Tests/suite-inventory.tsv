@@ -4,8 +4,8 @@
 # 2026-10-10); held to the tree by Tests/FernletTests/CIGateSelectorBoundaryTests (theSuiteInventoryIsTheTree).
 # Columns, tab-separated: target; suite (the type a selector names); file (repo-relative, the file whose column-0 line
 # declares it); lines (the workflow labels whose selectors name it, sorted, comma-joined, or -); cells (a
-# ProximityKitTests row's declared test count, which the wall counts in its file; - for a FernletTests row, whose
-# count the lines' floors and the full runs hold).
+# ProximityKitTests row's declared test count, which the wall counts across the package's files, an extension's
+# included; - for a FernletTests row, whose count the lines' floors and the full runs hold).
 # Rows sorted by target, then suite. A suite that moves, is renamed or deleted, or joins or leaves a line edits its
 # row in the same commit; the wall's per-target row counts change only with an argued, measured change. A new
 # FernletTests suite needs a row only when a line names it; a new ProximityKitTests suite always needs one.
