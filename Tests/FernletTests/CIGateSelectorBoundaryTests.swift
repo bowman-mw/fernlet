@@ -383,9 +383,16 @@ import Testing
     /// `mesh-batteries` 153 → 152 in the same step, for `MeshRoutedCustodyHandoffWallTests`, whose nine
     /// cells all read ProximityKit's sources and are the package's copy of that suite now (no Fernlet
     /// half). This is the retirement argued. Counted off the lines.
+    ///
+    /// RE-MEASURED at the Open Food Facts deadline fix (2026-10-11, landed after plan step A1.3):
+    /// `no-tracking` 1 → 2, for `OpenFoodFactsLookupTests`, which holds the conditions
+    /// Docs/No-Tracking-Wall.md §3 attaches to `world.openfoodfacts.org` beyond its host pin: no request
+    /// without the web-nutrition-lookup consent, the exact request, the cap, the deadline, no retries
+    /// and the audit line at dispatch. Each compiles clean when it breaks, and it ran on no line. The
+    /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
-        "no-tracking": 1,
+        "no-tracking": 2,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
@@ -419,7 +426,7 @@ import Testing
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
                     "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
-        "no-tracking": ["NoTrackingBoundaryTests"],
+        "no-tracking": ["NoTrackingBoundaryTests", "OpenFoodFactsLookupTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
         "key-custody": ["KeyCustodyBoundaryTests", "ColumnCryptoDeviceBindingTests",

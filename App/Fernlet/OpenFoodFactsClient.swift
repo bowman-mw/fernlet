@@ -109,7 +109,13 @@ nonisolated enum OpenFoodFactsClient {
     /// Runs `operation`, failing with ``OpenFoodFactsTransportError/timedOut`` once `seconds` pass.
     ///
     /// Two children race; the first to finish decides and the other is cancelled — which cancels
-    /// the URL task, since `URLSession`'s async API honours task cancellation.
+    /// the URL task, since `URLSession`'s async API honours task cancellation. The group still waits
+    /// for the cancelled child to return, so the deadline bounds the lookup only because the
+    /// transport honours cancellation. `URLSession`'s does, even mid-body: against a localhost server
+    /// that sent no headers, stalled mid-body or trickled a byte a second, the transport returned
+    /// within 8 ms of a 0.5 s deadline firing and the server saw its connection closed (iOS 26.5
+    /// simulator, 2026-10-11). An operation that ignores cancellation holds the group until it
+    /// finishes on its own.
     static func withDeadline<Value: Sendable>(
         seconds: TimeInterval,
         _ operation: @escaping @Sendable () async throws -> Value

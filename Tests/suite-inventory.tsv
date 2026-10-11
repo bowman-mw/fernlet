@@ -472,7 +472,7 @@ NutritionPlausibilityTests	Tests/FernletTests/NutritionPlausibilityTests.swift	-
 NutritionTargetOverrideTests	Tests/FernletTests/NutritionTargetOverrideTests.swift	-
 ObservationLoopLifecycleTests	Tests/FernletTests/MemoryLifecycleTests.swift	-
 OnboardingIntimacyChoiceTests	Tests/FernletTests/OnboardingIntimacyChoiceTests.swift	-
-OpenFoodFactsLookupTests	Tests/FernletTests/OpenFoodFactsLookupTests.swift	-
+OpenFoodFactsLookupTests	Tests/FernletTests/OpenFoodFactsLookupTests.swift	no-tracking
 OwnPhotoKeyBindingTests	Tests/FernletTests/OwnPhotoKeyBindingTests.swift	-
 PastDayJournalScrubMigrationTests	Tests/FernletTests/PastDayJournalScrubMigrationTests.swift	-
 PastDayJournalSealingTests	Tests/FernletTests/PastDayJournalSealingTests.swift	-
