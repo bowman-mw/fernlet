@@ -920,7 +920,7 @@ import Testing
     /// selector is refused (xcodebuild exits 70); Xcode may drop the reference on save when the project
     /// is opened alone. One dependency added to the test target would re-open the app's modules, and
     /// Fernlet's namespace, to the package's tests: dependency validation refuses only an import outside
-    /// the declared dependencies and their closure (a package test may import `FernletDomainModel`
+    /// the declared dependencies and their closure (a package test may import `FernletCrypto`
     /// through ProximityKit, which rule I11 refuses instead). Since plan step A0.8.5 the list must be a
     /// literal nothing extends: the target's name is spelled once in the manifest's code and no code
     /// line reaches a target's `.dependencies`, so neither `["ProximityKit"] + [...]` nor a mutation
@@ -1441,11 +1441,12 @@ import Testing
     }
 
     /// The modules a package file may import (rule I11, ProximityKit plan step A0.8.5): ProximityKit,
-    /// the test target's one declared dependency, and the system modules its files use. ProximityKit's
-    /// closure (`FernletCrypto`, `FernletDomainModel`, `FernletFoundation`) is not here, though
-    /// dependency validation lets a test import it: those modules hold Fernlet's own values (its
-    /// crypto purposes' labels, its payload types' tokens) and stay in this repository at plan step
-    /// A1, so a package test that imported one could pin a Fernlet byte and could not travel.
+    /// the test target's one declared dependency, and the system modules its files use. No Fernlet
+    /// module is here: not ProximityKit's closure (`FernletCrypto`, until plan step A1.0 cuts that edge
+    /// too), though dependency validation lets a test import it, nor `FernletDomainModel` or
+    /// `FernletFoundation`, which left the closure at A1.0. They hold Fernlet's own values (its crypto
+    /// purposes' labels, its payload types' tokens) and stay in this repository at plan step A1, so a
+    /// package test that imported one could pin a Fernlet byte and could not travel.
     static let packageImportAllowlist: Set<String> = [
         "ProximityKit", "Foundation", "Testing", "Combine", "simd", "Synchronization"
     ]

@@ -604,11 +604,12 @@ struct BackgroundRefreshBoundaryTests {
             "parsed only \(declared.count) `name:` entries out of FernletKit/Package.swift — the manifest's shape changed and this walk now reads almost nothing"
         )
 
-        // `FernletKit` is the package and the umbrella library; no target carries that name, so
-        // nothing can import it and it needs no disposition.
+        // `FernletKit` is the package and the umbrella library, and `MacReady` the library product
+        // the macOS build check builds (ProximityKit plan step A1.0.1); no target carries either
+        // name, so nothing can import them and they need no disposition.
         let classified = Self.permittedModules
             .union(Self.forbiddenModuleReasons.keys)
-            .union(["FernletKit"])
+            .union(["FernletKit", "MacReady"])
         let unclassified = declared.subtracting(classified)
         #expect(
             unclassified.isEmpty,

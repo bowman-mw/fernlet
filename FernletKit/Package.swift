@@ -25,12 +25,13 @@ import PackageDescription
 let package = Package(
     name: "FernletKit",
     defaultLocalization: "en",
-    // macOS 26 is declared package-wide, which is how SwiftPM declares a platform. ProximityKit's
-    // closure (ProximityKit, FernletCrypto, FernletDomainModel, FernletFoundation) builds for it, and
-    // Scripts/macos-build-check.sh builds exactly that on every push (plan step A0.6); since plan step
-    // A0.8.2 ProximityKit's own test target, ProximityKitTests, builds and runs natively on macOS too,
-    // though no CI lane runs it there before plan step A1. Every other target is iOS-only until a plan
-    // step says otherwise (FernletUI: workstream B).
+    // macOS 26 is declared package-wide, which is how SwiftPM declares a platform. The Mac-ready set
+    // builds for it: ProximityKit and the three modules a Mac host of Fernlet's will need below it
+    // (FernletFoundation, FernletCrypto and FernletDomainModel), each named in the `MacReady` product,
+    // which Scripts/macos-build-check.sh builds on every push (plan step A0.6); since plan step A0.8.2
+    // ProximityKit's own test target, ProximityKitTests, builds and runs natively on macOS too, though
+    // no CI lane runs it there before plan step A1. Every other target is iOS-only until a plan step
+    // says otherwise (FernletUI: workstream B).
     platforms: [
         .iOS(.v26),
         .macOS(.v26),
@@ -40,11 +41,16 @@ let package = Package(
         // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
         .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
-        // ProximityKit on its own: the only scheme xcodebuild offers that builds exactly ProximityKit's
-        // closure, which Scripts/macos-build-check.sh builds for macOS. No app target links it; the app
-        // links the umbrella. It is the product the package exports from its own repository at plan
-        // step A1.
+        // ProximityKit on its own: the product the package exports from its own repository at plan
+        // step A1. No app target links it; the app links the umbrella.
         .library(name: "ProximityKit", targets: ["ProximityKit"]),
+        // The Mac-ready set, each module named: ProximityKit, and FernletFoundation, FernletCrypto and
+        // FernletDomainModel, which a Mac host of Fernlet's (workstream B, the Coach app) needs. They
+        // are named rather than reached through ProximityKit's dependencies, which plan step A1.0 cuts,
+        // so none of their Mac builds rides on an edge. Scripts/macos-build-check.sh builds this
+        // product's scheme for native macOS on every push, and ProximityPlatformBoundaryTests pins this
+        // line. No app target links it.
+        .library(name: "MacReady", targets: ["ProximityKit", "FernletFoundation", "FernletCrypto", "FernletDomainModel"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
@@ -395,27 +401,28 @@ let package = Package(
         // depending on this module,
         // never the reverse. "Outward edges only": the files with backward edges to the app
         // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
-        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps:
-        // FernletCrypto (the `CryptographicPurpose` signing overloads its identity keeps, which
+        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps: one edge,
+        // FernletCrypto, for the `CryptographicPurpose` signing overloads its identity keeps, which
         // FernletSocial's feature labels and the app's duress and probe signatures sign through until
-        // C1; it names no FernletCryptoPurpose) + FernletDomainModel (Fernlet's session mode, which it
-        // names only on the one line ProximityNamespaceBoundaryTests allowlists, until C5; Fernlet's
-        // typed view of the envelope's payload token is FernletConnections'); no FernletFoundation
-        // and no PrivateMediaStore edge: the session hearts' day key and the session photos' wall and
-        // pending corpus are FernletSocial's. ProximityNamespaceBoundaryTests
-        // pins this list, and also refuses any type that left it for FernletSocial or the app, declared,
-        // extended or aliased here again. No FernletUI edge and no SwiftUI view: the review sheets
+        // plan step A1.0 replaces them with a host label mint (it names no FernletCryptoPurpose). No
+        // FernletDomainModel edge: the session mode is its own `ProximitySessionMode`, which Fernlet
+        // converts to the `ProximityMode` it persists, and Fernlet's typed view of the envelope's
+        // payload token is FernletConnections'; no FernletFoundation and no PrivateMediaStore edge: the
+        // session hearts' day key and the session photos' wall and pending corpus are FernletSocial's.
+        // ProximityNamespaceBoundaryTests pins this list (a literal, which its reader requires), and
+        // also refuses any type that left it for FernletSocial or the app, declared, extended or
+        // aliased here again. No FernletUI edge and no SwiftUI view: the review sheets
         // moved to FernletProximityUI (below). MainActor default: the managers are @Observable
         // @MainActor, and the wire values and pure crypto statics are nonisolated within. It builds
         // for iOS 26 and native macOS 26 (plan step A0.6): its two platform seams compile only where
         // their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's
         // protected-data retry under `#if canImport(UIKit)`), and Scripts/macos-build-check.sh builds
-        // its closure for macOS on every push, the compiler half; ProximityPlatformBoundaryTests, which
-        // holds its imports, device-name reads, directories and host defaults to exact rows, is the
-        // source half.
+        // it, in the MacReady product, for macOS on every push, the compiler half;
+        // ProximityPlatformBoundaryTests, which holds its imports, device-name reads, directories and
+        // host defaults to exact rows, is the source half.
         .target(
             name: "ProximityKit",
-            dependencies: ["FernletCrypto", "FernletDomainModel"],
+            dependencies: ["FernletCrypto"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
                 // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).
@@ -480,9 +487,9 @@ let package = Package(
         // literals Fernlet shipped; FernletDeviceBindingAdapter
         // (the install binding) and FernletAuditBridge (the audit sink); Fernlet's session rules
         // (FriendSessionTrustPolicy, CoachSessionTrustPolicy and CoachSessionContract,
-        // FriendMintingReview, TrainerExportPayload, and the one conversion of ProximityKit's session
-        // audit into TrainerAuditEvent); ProximityTrustVault, Fernlet's trusted-peer records and
-        // audit rows; and the name placeholders, its extension of ProximityKit's PeerNameDisplay
+        // FriendMintingReview, TrainerExportPayload, and the conversions of ProximityKit's session
+        // audit into TrainerAuditEvent and of its session mode into ProximityMode); ProximityTrustVault,
+        // Fernlet's trusted-peer records and audit rows; and the name placeholders, its extension of ProximityKit's PeerNameDisplay
         // (`Placeholder`, `shown`, `firstName`, `text(for:)`, over the identifier filter that stays
         // ProximityKit's), whose two phrases resolve against this module's own Localizable.xcstrings
         // (FernletConnectionsCopy, `bundle: .module`). ProximityKit can never name it: the edge runs
@@ -501,8 +508,8 @@ let package = Package(
         // keeps and the policies and the review read). MainActor default: the vault and the two trust
         // policies are main-actor classes, like the main-actor protocols, coordinator, managers and
         // store they serve, beside nonisolated value data and stateless seams (the namespace and its
-        // vocabulary, the adapter, the bridge, the review, the export body, the audit conversion, the
-        // envelope's typed view and the name placeholders).
+        // vocabulary, the adapter, the bridge, the review, the export body, the audit and mode
+        // conversions, the envelope's typed view and the name placeholders).
         .target(
             name: "FernletConnections",
             dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],

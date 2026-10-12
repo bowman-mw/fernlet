@@ -231,8 +231,8 @@ cannot statically follow — prefer an `enum` switch.
   command, which does reach the synthesized package targets. There are two, CI runs both on every
   push, and the pre-push hook runs each when a push touches what it builds:
   `Scripts/spm-wall-check.sh`, the app's iOS `build-for-testing` (via `spm-wall-selftest.sh` in CI),
-  and, since ProximityKit plan step A0.6.5, `Scripts/macos-build-check.sh`, ProximityKit's closure
-  built for native macOS (via `macos-build-selftest.sh` in CI), so a warning only a macOS build
+  and, since ProximityKit plan step A0.6.5, `Scripts/macos-build-check.sh`, the Mac-ready set
+  (ProximityKit, FernletFoundation, FernletCrypto, FernletDomainModel) built for native macOS (via `macos-build-selftest.sh` in CI), so a warning only a macOS build
   reports fails too. Locally, the same three overrides on any `xcodebuild build-for-testing`
   reproduce the strict build. The SwiftPM command line does not: `swift build` inside `FernletKit/`
   leaves the package's string catalogs unprocessed, so the catalog-bearing modules get no

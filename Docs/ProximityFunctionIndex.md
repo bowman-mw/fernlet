@@ -44,7 +44,7 @@ stays as the pair session (A0.7.3).
 
 **2026-10-11 (ProximityKit plan step A0.8):** ProximityKit has its own package test target,
 `ProximityKitTests` (`FernletKit/Tests/ProximityKitTests`), holding the eight suites that need nothing
-but ProximityKit and its closure (the fake transport fabric and the peer handle, the membership
+but ProximityKit (the fake transport fabric and the peer handle, the membership
 records, the routed drain plan, the commit detector and ranging fallback, the replay cache); its
 landing page's "Its tests" says how it runs and what waits for A1. "The test target" in this index
 still means the app's `FernletTests`, where the bindings, the host doubles and every other ProximityKit
@@ -142,13 +142,13 @@ not crash, it just stops matching itself in a language nobody on the team reads.
 
 | Function | What It Does |
 | --- | --- |
-| `ProximityInspectorRecording` default methods | Provide no-op inspector hooks so coordinator callers can implement only the diagnostics they need. Every requirement takes this module's own report types (`ProximityInspectorEnvelope`, `ProximityInspectorDistanceSample`, `ProximityInspectorPeer`, `ProximityInspectorTransportEvent` in `Engine/ProximityInspectorReport.swift`; `ProximityRole`, `ProximityRangingMode` in `Engine/ProximitySessionEnums.swift`), never a host's log type: the app's `ConnectionInspector` converts them into `ConnectionSessionLog`. |
+| `ProximityInspectorRecording` default methods | Provide no-op inspector hooks so coordinator callers can implement only the diagnostics they need. Every requirement takes this module's own report types (`ProximityInspectorEnvelope`, `ProximityInspectorDistanceSample`, `ProximityInspectorPeer`, `ProximityInspectorTransportEvent` in `Engine/ProximityInspectorReport.swift`; `ProximityRole`, `ProximityRangingMode` and the session mode, `ProximitySessionMode`, in `Engine/ProximitySessionEnums.swift`), never a host's log type: the app's `ConnectionInspector` converts them into `ConnectionSessionLog`. |
 | `ProximityInspectorEventRecorder.recordCoordinatorEvent(_:)` | Stores coordinator event strings for lightweight tests or diagnostics. |
 | `init(identity:transport:ranging:inspector:payloadHandler:trustPolicy:replayCache:foregroundAnchor:displayName:capabilities:sealedIntroductionPeerKeyAgreementKey:timeoutSeconds:now:)` | Wires identity, transport, ranging, diagnostics, trust policy, replay cache, foreground anchoring, timeouts, and tap/proximity detectors. `displayName` has no default: the engine has no name of its own, and every caller passes its host's resolved name. |
 | `trustPolicy?.recordSessionAudit(_:)` (ten sites) | The session audit: `prepareSession`, `send`, `handleInbound`'s rejection, `rejectsOversizedTrainerBlob`, `isRejectedByTrustPolicy`, `recordVerifiedInbound`, `transition`, `fail`, `end` and the connection-phase timeout each record a `ProximitySessionAudit` (ProximityKit's own type; the envelope's token as carried, `payloadTypeToken`), never a host's record. The policy converts it into its own row: Fernlet's, a `TrainerAuditEvent` in the vault. |
 | `deinit` | Cancels timeout and heartbeat tasks. |
 | `attachPayloadHandler(_:)` | Attaches or replaces the payload receiver after construction. |
-| `begin(role:mode:)` | Resets transport, prepares identity/session state, starts advertising or browsing, and transitions to discovery. |
+| `begin(role:mode:)` | Resets transport, prepares identity/session state, starts advertising or browsing, and transitions to discovery. The mode is `Mode`, ProximityKit's own `ProximitySessionMode` (trainer or friend; frozen raw values, the one written into the pairing-started audit). |
 | `beginFriendJoin()` | Friend-specific entry point that advertises and browses at the same time. |
 | `prepareSession(role:mode:)` | Provisions identity, initializes coordinator state, resets counters/detectors, records audit, and arms the session timeout. |
 | `acceptPendingInvite()` | Accepts an inbound invite, stores the transport peer, and either sends a friend identity intro or enters trainer tap confirmation. |
@@ -1570,12 +1570,13 @@ the bytes of Fernlet's features over ProximityKit, in `FernletSocial`, in the ap
 `Namespace/`, `FernletCryptoPurpose` out of ProximityKit's code altogether, every remaining `fernlet`
 literal to an allowlist naming its exit step (the DEBUG test-hook names, until A1), Fernlet's domain
 vocabulary and records (`PayloadType`, `ProximityCapability`, `ProximityMode`, `ItemNameModeration` and
-the persisted proximity records) to the one line that leaves with the session mode (C5; Fernlet's
-typed view of the envelope's token is FernletConnections'), `package` to the doors its list names (the presence radio's seam, its QUIC
+the persisted proximity records) out of its code, its list of lines empty (the coordinator's session
+mode is ProximityKit's own `ProximitySessionMode`, and Fernlet's typed view of the envelope's token
+is FernletConnections'), `package` to the doors its list names (the presence radio's seam, its QUIC
 conformer, the peer channel, the epoch posture and the TXT vocabulary until A1), and every
 type that left ProximityKit for `FernletSocial` or the app out of it (the recipe share's among them),
-with the recipe share's three public values it renamed for the one-to-one send: none is declared, extended or aliased there again. It holds ProximityKit's target to exactly two dependencies too: FernletCrypto (the
-`CryptographicPurpose` signing overloads, until C1) and FernletDomainModel (the session mode, until C5).
+with the recipe share's three public values it renamed for the one-to-one send: none is declared, extended or aliased there again. It holds ProximityKit's target to exactly one dependency too: FernletCrypto (the
+`CryptographicPurpose` signing overloads, until plan step A1.0 replaces them with a host label mint).
 The exact per-file lists in `ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`

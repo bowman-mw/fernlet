@@ -1,6 +1,6 @@
 # ``FernletConnections``
 
-Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletProximityStorage``, where the app keeps its proximity files, `Application Support/Fernlet`; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, and the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`; Fernlet's recipe profile for ProximityKit's pair session, `ProximityPairProfile.recipeShare(in:)`; Fernlet's typed view of the signed envelope's payload token (`payloadType`, `isUnknownPayloadType`, a typed initializer and a typed `signed`), over ProximityKit's raw token; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
+Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `ProximityNamespace.fernlet`, Fernlet's protocol identity on the wire, in the keychain and on disk, with its payload vocabulary, the app's peer-name policy and the two feature salts ProximityKit's pair-secret door derives under (``FernletFeaturePurposes``); `FernletDeviceBindingAdapter`, Fernlet's install binding for ProximityKit's column seal; ``FernletProximityStorage``, where the app keeps its proximity files, `Application Support/Fernlet`; ``FernletAuditBridge``, the sink that sends ProximityKit's audit lines to `FernletAuditLog`; ``ProximityTrustVault``, Fernlet's trusted-peer records and audit rows, which answers ProximityKit's trust questions; Fernlet's session rules: ``FriendSessionTrustPolicy``, the policy the app hands ProximityKit for every connection, ``CoachSessionTrustPolicy`` and ``CoachSessionContract`` for the coach channel, ``FriendMintingReview`` for the keep-as-friend review, ``TrainerExportPayload``, the coach channel's export body, the one conversion from the session audit ProximityKit's coordinator reports to Fernlet's persisted `TrainerAuditEvent`, and the one from its session mode to the persisted `ProximityMode`; Fernlet's recipe profile for ProximityKit's pair session, `ProximityPairProfile.recipeShare(in:)`; Fernlet's typed view of the signed envelope's payload token (`payloadType`, `isUnknownPayloadType`, a typed initializer and a typed `signed`), over ProximityKit's raw token; and the name placeholders the app's in-person surfaces show when ProximityKit's `PeerNameDisplay` refuses a name, this module's extension of that type, over its own string catalog.
 
 ## Overview
 
@@ -289,6 +289,13 @@ ProximityKit:
   parked. Both policies and the app's `FernletStore` record through it, and
   `ProximityVocabularyGoldenTests` holds a converted audit to the frozen row's JSON, byte for byte,
   and each kind to the token its row persists under.
+- `ProximityMode.init(_:)` (`ProximityMode+SessionMode.swift`): the one conversion from the session
+  mode ProximityKit's coordinator runs under, a `ProximitySessionMode`, to the FernletDomainModel
+  `ProximityMode` the vault's trusted-peer records and the app's session logs persist, case for case
+  by an exhaustive switch, so a mode ProximityKit adds fails to compile instead of being persisted as
+  another. The vault's `trust(_:mode:)` and the app's `ConnectionInspector` convert through it, and
+  `ProximityVocabularyGoldenTests` holds both enums, and the conversion, to the frozen spellings
+  `trainer` and `friend`.
 - ``ProximityTrustVault`` (`ProximityTrustVault.swift`): Fernlet's records of the people its radios
   meet, in FernletDomainModel's persisted types: kept friends, revoked ("Removed") peers, blocked keys
   and reported sellers, keyed on the full signing key, and the audit trail, capped at 500 rows. It
@@ -333,10 +340,11 @@ spellings unchanged, each file importing this module.
 
 **What joins it later.** Nothing here stands in for the coordinator's display name or a per-mode
 service type: ProximityKit has neither, every caller passing the host's resolved name and the
-radios owning discovery on the namespace's service types. ProximityKit still names
-FernletDomainModel's `ProximityMode` on the one line `ProximityNamespaceBoundaryTests` allowlists,
-the coordinator's session-mode alias, which generalizes at C5 into the session policy the coach
-profile brings, the first other than friend. The heart-drop and presence pair secrets derive through the door under the two
+radios owning discovery on the namespace's service types. The coordinator's session mode is
+ProximityKit's own `ProximitySessionMode`, which generalizes at C5 into the session policy the coach
+profile brings, the first other than friend; this module converts it, case for case, to the
+FernletDomainModel `ProximityMode` the trust vault and the app's session log persist
+(`ProximityMode.init(_:)`, in `ProximityMode+SessionMode.swift`). The heart-drop and presence pair secrets derive through the door under the two
 salts declared here, from `FernletSocial`. C1
 adds the Coach app's installation (`fernletCoach`, beside `.fernletApp` and sharing its family), the
 coach's connection profile beside the recipe profile (C5), app identities with per-app allow lists,
@@ -357,7 +365,7 @@ FernletKit after ProximityKit leaves for its own repository (plan A1), consuming
 `ProximityCapability`, whose raw values the vocabulary reads (and the audit conversion and the
 envelope's typed view read `PayloadType` too), `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the
 policies and the review read and the vault builds and keeps (the audit conversion builds
-`TrainerAuditEvent`), and `ItemNameModeration`, whose name cap the peer-name policy reads. It imports
+`TrainerAuditEvent`, and the mode conversion `ProximityMode`), and `ItemNameModeration`, whose name cap the peer-name policy reads. It imports
 nothing else but Foundation, Observation (the vault is `@Observable`) and Security. Through ProximityKit it reaches
 `PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and

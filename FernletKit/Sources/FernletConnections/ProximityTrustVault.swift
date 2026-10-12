@@ -122,7 +122,7 @@ public final class ProximityTrustVault: ProximityTrustStore {
             trustedPeers[index].displayName = peer.displayNameOrFingerprint
             trustedPeers[index].fingerprint = fingerprint
             trustedPeers[index].keyAgreementPublicKey = peer.keyAgreementPublicKey
-            trustedPeers[index].mode = mode
+            trustedPeers[index].mode = ProximityMode(mode)
             trustedPeers[index].lastSeenAt = Date()
             trustedPeers[index].revokedAt = nil
             trustedPeers[index].blockedAt = nil
@@ -132,7 +132,7 @@ public final class ProximityTrustVault: ProximityTrustStore {
                 fingerprint: fingerprint,
                 signingPublicKey: peer.signingPublicKey,
                 keyAgreementPublicKey: peer.keyAgreementPublicKey,
-                mode: mode
+                mode: ProximityMode(mode)
             ))
         }
         onChange()

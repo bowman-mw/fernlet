@@ -645,7 +645,7 @@ struct PowerOfTenBoundaryTests {
         }
     }
 
-    /// R10: `Scripts/macos-build-check.sh`, the second strict build (ProximityKit's closure for native
+    /// R10: `Scripts/macos-build-check.sh`, the second strict build (the Mac-ready set for native
     /// macOS, plan step A0.6.5), builds strict too: it holds exactly one `xcodebuild build` command, read
     /// joined across its `\` continuations through `ProximityPlatformBoundaryTests.xcodebuildBuildCommands(in:action:)`,
     /// and that command carries all three overrides as whole words. An `echo` of the flags, or a

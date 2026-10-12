@@ -31,7 +31,7 @@
 # runs it on CI's s3-grep line; this script covers the compiler-enforced half of the wall.
 #
 # POWER-OF-10 RULE 10 (Docs/Power-of-10-Swift.md §R10) RIDES ON THIS BUILD TOO. It is the iOS one
-# of the two strict builds CI runs (Scripts/macos-build-check.sh, ProximityKit's closure built for
+# of the two strict builds CI runs (Scripts/macos-build-check.sh, the Mac-ready set built for
 # native macOS, is the other), so it also carries the warnings-are-errors overrides:
 #
 #     SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES

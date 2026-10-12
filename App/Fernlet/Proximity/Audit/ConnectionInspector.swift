@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import SwiftUI
 import FernletDomainModel
+import FernletConnections
 
 /// The proximity subsystem's diagnostic recorder: builds one `ConnectionSessionLog` per
 /// coordinator session and keeps a capped, persisted history for the debug inspector UI.
@@ -18,7 +19,9 @@ import FernletDomainModel
 ///   `ProximityInspectorDistanceSample`, `ProximityInspectorPeer`,
 ///   `ProximityInspectorTransportEvent`, `ProximityRole`, `ProximityRangingMode`); this class
 ///   converts each into the persisted `ConnectionSessionLog`'s own nested types, field for field and
-///   case for case (the converters at the end of this file). A transport state change sets the
+///   case for case (the converters at the end of this file). Its session mode, ProximityKit's
+///   `ProximitySessionMode`, becomes the log's FernletDomainModel `ProximityMode` through
+///   FernletConnections' one conversion, the trust vault's too. A transport state change sets the
 ///   state, keeps the session's FIRST connected stamp and takes each disconnected stamp, all on the
 ///   coordinator's clock; a round trip joins the latest 50.
 /// - Recording is gated on `FernletSettings.connectionInspectorMode != .disabled`, checked at
@@ -88,7 +91,7 @@ final class ConnectionInspector: ProximityInspectorRecording {
         liveLog = ConnectionSessionLog(
             startedAt: now(),
             role: ConnectionSessionLog.Role(role),
-            mode: mode,
+            mode: ProximityMode(mode),
             localFingerprint: localFingerprint,
             ranging: ConnectionSessionLog.RangingInfo(mode: .none)
         )

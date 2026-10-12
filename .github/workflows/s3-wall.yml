@@ -28,9 +28,10 @@
 # behind -suppress-warnings for local packages — fails the build. The Swift grep-wall port of the
 # Power-of-10 mechanical checks (PowerOfTenBoundaryTests) runs below next to the other grep-walls;
 # the Python scanner itself runs in power-of-10.yml on a cheap runner. Since 2026-10-09 (ProximityKit
-# plan step A0.6.5) a second strict build runs too: Scripts/macos-build-selftest.sh builds
-# ProximityKit's closure for native macOS 26 through Scripts/macos-build-check.sh, with the same
-# overrides, after proving that a planted `import UIKit` fails it.
+# plan step A0.6.5) a second strict build runs too: Scripts/macos-build-selftest.sh builds the
+# Mac-ready set (ProximityKit, FernletFoundation, FernletCrypto, FernletDomainModel) for native macOS
+# 26 through Scripts/macos-build-check.sh, with the same overrides, after proving that a planted
+# `import UIKit` fails it.
 #
 # Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
 # refuses a green run that executed fewer tests than the step's floor, or in which a named suite ran
@@ -165,15 +166,17 @@ jobs:
 
       - name: ProximityKit on native macOS (Scripts/macos-build-selftest.sh)
         # ProximityKit builds for iOS 26 and native macOS 26 (plan step A0.6). This step builds the
-        # ProximityKit product's closure (ProximityKit, FernletCrypto, FernletDomainModel,
-        # FernletFoundation) for generic/platform=macOS, arm64 and x86_64, with warnings as errors, after
-        # proving the check is a macOS build: a planted `import UIKit` must fail it with "unable to
-        # resolve module dependency: 'UIKit'", the explicit-module scanner's wording for a module the
-        # platform lacks (xcodebuild never prints the CLI compiler's "no such module"). xcodebuild, not
-        # `swift build`: the SwiftPM CLI leaves the closure's string catalogs unprocessed. The Xcode
-        # floor above (iOS 26.5 SDK) brings a macOS 26 SDK. generic/platform=macOS also matches the Mac
-        # Catalyst variant ("Using the first of multiple matching destinations"), so the check requires
-        # native macOS products after its build. A build, not a test: it names no suite and no floor,
+        # MacReady product, which names the Mac-ready set (ProximityKit, FernletFoundation,
+        # FernletCrypto, FernletDomainModel: the three a Mac host of Fernlet's needs are named, not
+        # reached through ProximityKit's dependencies, since plan step A1.0.1), for
+        # generic/platform=macOS, arm64 and x86_64, with warnings as errors, after proving the check is
+        # a macOS build: a planted `import UIKit` must fail it with "unable to resolve module dependency:
+        # 'UIKit'", the explicit-module scanner's wording for a module the platform lacks (xcodebuild
+        # never prints the CLI compiler's "no such module"). xcodebuild, not `swift build`: the SwiftPM
+        # CLI leaves the set's string catalogs (FernletFoundation's and FernletDomainModel's)
+        # unprocessed. The Xcode floor above (iOS 26.5 SDK) brings a macOS 26 SDK.
+        # generic/platform=macOS also matches the Mac Catalyst variant ("Using the first of multiple
+        # matching destinations"), so the check requires native macOS products after its build. A build, not a test: it names no suite and no floor,
         # so CIGateSelectorBoundaryTests does not parse it, and ProximityPlatformBoundaryTests pins that
         # this step's body runs the self-test and that no `if:` or `continue-on-error:` sits on this
         # step or on its job (plan step A0.6.8), and that nothing but `run: |` and `set -euo pipefail`
@@ -385,6 +388,21 @@ jobs:
         # 112 tests in 11 suites; its floor stays the shared `1`. A0.8.5's review fixes added no cell
         # either (the selector wall's new checks ride its existing ones), and the line, MEASURED again on
         # that tree, ran 112.
+        #
+        # ProximityKit plan step A1.0.1 (2026-10-11), the first commit of plan step A1.0 (ProximityKit
+        # stands alone), drops ProximityKit's FernletDomainModel dependency: the coordinator's session
+        # mode is ProximityKit's own `ProximitySessionMode`, which Fernlet converts to the `ProximityMode`
+        # it persists. `ProximityNamespaceBoundaryTests`' rule 4 holds no row (its `sessionMode` reason
+        # and its C5 exit step went with the last one), its matcher counts the coordinator's own alias
+        # among the neighbours it must not read, and its manifest pin holds ProximityKit's target to
+        # exactly FernletCrypto; `ProximityPlatformBoundaryTests`' baseline drops FernletDomainModel, and
+        # W6 pins the `MacReady` product, which names the Mac-ready set the macOS check now builds by
+        # name (ProximityKit, FernletFoundation, FernletCrypto, FernletDomainModel), and the check's
+        # `-scheme MacReady`; `BackgroundRefreshBoundaryTests` needs no disposition for that product,
+        # which no target carries. No suite joined or left a line and no cell was added, and the line,
+        # MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its
+        # floor stays the shared `1`. crypto-goldens stays 355 (the vocabulary golden's group 4 gains two
+        # rows and its twin check inside an existing cell), and power-of-10 34.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

@@ -3,8 +3,9 @@
 // Proximity/Trust/TrainerAuditLog.swift so the persistence layer can reference them without an
 // upward edge. FernletConnections converts ProximityKit's session audits into TrainerAuditEvent
 // rows (TrainerAuditEvent+SessionAudit.swift). ProximityTrustedPeerRecord's
-// `mode` field uses the canonical DomainModel enum ProximityMode (the app-side
-// ProximityCoordinator.Mode is a typealias to it). Codable identity is unchanged.
+// `mode` field uses the canonical DomainModel enum ProximityMode, converted from ProximityKit's
+// `ProximitySessionMode` (the coordinator's `Mode`) by FernletConnections. Codable identity is
+// unchanged.
 
 import Foundation
 

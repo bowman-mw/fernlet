@@ -22,5 +22,5 @@ echo "Active hooks:"
 ls -1 Scripts/git-hooks
 echo
 echo "The pre-push hook runs Scripts/spm-wall-check.sh when wall-relevant files change, and"
-echo "Scripts/macos-build-check.sh when ProximityKit's macOS closure, the manifest or the macOS scripts change."
+echo "Scripts/macos-build-check.sh when the Mac-ready set, the manifest or the macOS scripts change."
 echo "Bypass one leg once with: SKIP_S3_WALL_CHECK=1 git push, or SKIP_MACOS_BUILD_CHECK=1 git push"

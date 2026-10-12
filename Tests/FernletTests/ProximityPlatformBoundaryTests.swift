@@ -8,8 +8,9 @@
 // host's to state, each a `ProximityHost` requirement with no default, and the module keeps only the
 // two mechanism seams a platform needs, each compiled only where its framework is usable. Two halves
 // hold it there. The compiler half is `Scripts/macos-build-selftest.sh`, on every push: it builds
-// ProximityKit's closure for native macOS, which refuses any symbol native macOS lacks wherever it
-// stands outside its guard, after proving that build fails on a planted `import UIKit`. This suite is
+// ProximityKit for native macOS, with the three modules a Mac host of Fernlet's needs beside it
+// (the `MacReady` product), which refuses any symbol native macOS lacks wherever it stands outside
+// its guard, after proving that build fails on a planted `import UIKit`. This suite is
 // the source half, because the iOS compiler sees none of it and the macOS compiler not all of it: a
 // UIKit, NearbyInteraction or ActivityKit import, a read of the device's name, a platform directory
 // and a default for a fact only the host may state all compile clean on iOS and pass every other
@@ -42,16 +43,17 @@
 //      host's `makeProximityRangingProvider()`, once, naming no provider of its own, and
 //      `NIRangingSession` is named in ProximityKit code only in its own file;
 //   5. ProximityKit's macOS build is a compiled fact on every push: the package manifest declares
-//      macOS 26 and ProximityKit's own product, the CI workflow runs on every push and pull request to
-//      `main` with no path or branch filter, and its macOS step, with no `if:` or `continue-on-error:`
-//      on it or on its job and nothing but its preamble (`run: |`, `set -euo pipefail`) before its run
-//      line, runs `Scripts/macos-build-selftest.sh`
+//      macOS 26, ProximityKit's own product and the `MacReady` product, which names ProximityKit,
+//      FernletFoundation, FernletCrypto and FernletDomainModel, the CI workflow runs on every push
+//      and pull request to `main` with no path or branch filter, and its macOS step, with no `if:` or
+//      `continue-on-error:` on it or on its job and nothing but its preamble (`run: |`,
+//      `set -euo pipefail`) before its run line, runs `Scripts/macos-build-selftest.sh`
 //      (whose negative leg plants an `import UIKit` in ProximityKit and greps the failure only a native
 //      macOS build gives, and whose positive leg builds the clean tree), `Scripts/macos-build-check.sh`
-//      holds the one `xcodebuild build` command for that product and native macOS, and the pre-push
-//      hook runs it, its leg on unless a person skips it and relevant to a change of the manifest or a
-//      ProximityKit source; each read from what runs, never from a step's title, an `echo` or a comment,
-//      its readers fixtured both ways in the same cell.
+//      holds the one `xcodebuild build` command for the `MacReady` product and native macOS, and the
+//      pre-push hook runs it, its leg on unless a person skips it and relevant to a change of the
+//      manifest or a ProximityKit source; each read from what runs, never from a step's title, an
+//      `echo` or a comment, its readers fixtured both ways in the same cell.
 //
 // The first three rules are exact both ways: a new use fails, and a use that goes away fails too,
 // until its row is deleted. Every row is permanent: `ProtectedSidecar.swift`'s guarded UIKit import
@@ -182,11 +184,12 @@ import Testing
     }
 
     /// The modules any ProximityKit file may import or test for: exactly the set it imports outside the
-    /// seams, each one available on iOS and macOS alike. `FernletCrypto` and `FernletDomainModel` are the
-    /// target's two package dependencies (`ProximityNamespaceBoundaryTests.proximityKitDependencies`).
+    /// seams, each one available on iOS and macOS alike. `FernletCrypto` is the target's one package
+    /// dependency (`ProximityNamespaceBoundaryTests.proximityKitDependencies`); no other Fernlet module
+    /// is here, so an import of one fails this wall as well as the strict build.
     static let baselineModules: Set<String> = [
         "Foundation", "Combine", "Observation", "CryptoKit", "Security", "Network", "os", "Synchronization",
-        "Dispatch", "Compression", "simd", "FernletCrypto", "FernletDomainModel"
+        "Dispatch", "Compression", "simd", "FernletCrypto"
     ]
 
     /// Every platform module a ProximityKit file imports, exactly, and both rows are permanent:
@@ -602,8 +605,14 @@ import Testing
     /// The manifest's platforms, exactly: iOS 26 and, since plan step A0.6.5, native macOS 26.
     static let manifestPlatforms: Set<String> = [".iOS(.v26)", ".macOS(.v26)"]
 
-    /// ProximityKit's own product: the one scheme `xcodebuild` offers that builds exactly its closure.
+    /// ProximityKit's own product, the one the package exports from its own repository at plan step A1.
     static let proximityKitProduct = #".library(name: "ProximityKit", targets: ["ProximityKit"])"#
+
+    /// The product the macOS check builds, its four modules named, so none of them leaves the Mac build
+    /// unseen: ProximityKit, and FernletFoundation, FernletCrypto and FernletDomainModel, which a Mac
+    /// host of Fernlet's needs and which ProximityKit's dependencies no longer reach (plan step A1.0).
+    static let macReadyProduct =
+        #".library(name: "MacReady", targets: ["ProximityKit", "FernletFoundation", "FernletCrypto", "FernletDomainModel"])"#
 
     /// The CI workflow step that runs the macOS self-test, by its `- name:`.
     static let macOSStepName = "ProximityKit on native macOS (Scripts/macos-build-selftest.sh)"
@@ -625,11 +634,12 @@ import Testing
     /// The check, whose one `xcodebuild build` command W6 and rule 10's pin read.
     static let checkScriptPath = "Scripts/macos-build-check.sh"
 
-    /// What the check's command carries so that it builds ProximityKit's closure, for native macOS, into
-    /// its own derived data, with the dependency DAG enforced. Rule 10's three warnings-as-errors flags
-    /// are `PowerOfTenBoundaryTests.r10MacOSBuildCheckScriptBuildsStrict()`'s to pin.
+    /// What the check's command carries so that it builds the `MacReady` product's four modules, for
+    /// native macOS, into its own derived data, with the dependency DAG enforced. Rule 10's three
+    /// warnings-as-errors flags are `PowerOfTenBoundaryTests.r10MacOSBuildCheckScriptBuildsStrict()`'s
+    /// to pin.
     static let checkCommandFlags = [
-        "-scheme ProximityKit", "-destination 'generic/platform=macOS'", "-derivedDataPath",
+        "-scheme MacReady", "-destination 'generic/platform=macOS'", "-derivedDataPath",
         "DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR"
     ]
 
@@ -649,16 +659,18 @@ import Testing
 
     /// **W6.** ProximityKit's macOS build is a compiled fact on every push, each piece read from what
     /// RUNS, never from a step's title, an `echo` or a comment, any of which can name a script nothing
-    /// runs: the manifest declares exactly iOS 26 and macOS 26 and ProximityKit's own product; the
+    /// runs: the manifest declares exactly iOS 26 and macOS 26, ProximityKit's own product and the
+    /// `MacReady` product with its four modules, each line once; the
     /// workflow runs on every push and every pull request to `main`, its `on:` block filtering neither by
     /// path nor by branch, and declares its macOS step once, with no `if:` or `continue-on-error:` on the
     /// step or on its job (either keeps a declared step from running or from failing the run), and that
     /// step's body runs the self-test right after its preamble (``stepPreamble``), with no other line
     /// before it to exit, guard it or continue onto it; the self-test plants its probe in
     /// ProximityKit, captures the check, greps the failure only a native macOS build gives, and runs the
-    /// check again on the clean tree; the check holds one `xcodebuild build` command, for that product,
-    /// native macOS, its own derived data and the dependency flag; and the pre-push hook runs the check,
-    /// its leg on by default and relevant to a change of the manifest or a ProximityKit source. Its
+    /// check again on the clean tree; the check holds one `xcodebuild build` command, for the
+    /// `MacReady` product, native macOS, its own derived data and the dependency flag; and the pre-push
+    /// hook runs the check, its leg on by default and relevant to a change of the manifest or a
+    /// ProximityKit source. Its
     /// readers are fixtured both ways. Each verdict is computed before its `#expect`, so a failure prints
     /// the verdict and its message, never a whole file: the workflow's own text names the floor script's
     /// restart line, which an echoed copy would trip.
@@ -668,9 +680,12 @@ import Testing
         let exactPlatforms = platforms.map { $0.count == Self.manifestPlatforms.count && Set($0) == Self.manifestPlatforms }
         #expect(exactPlatforms == true,
                 "\(Self.manifestPath) declares the platforms \(platforms ?? []), not \(Self.manifestPlatforms.sorted())")
-        let products = Self.nonCommentLines(manifest, commentPrefix: "//")
-            .filter { Self.droppingTrailingComma($0) == Self.proximityKitProduct }.count
-        #expect(products == 1, "\(Self.manifestPath) declares `\(Self.proximityKitProduct)` \(products) times")
+        let manifestLines = Self.nonCommentLines(manifest, commentPrefix: "//").map(Self.droppingTrailingComma)
+        // R2: bounded by the two pinned products.
+        for product in [Self.proximityKitProduct, Self.macReadyProduct] {
+            let declared = manifestLines.count(where: { $0 == product })
+            #expect(declared == 1, "\(Self.manifestPath) declares `\(product)` \(declared) times")
+        }
         let workflow = try RepoRoot.source(".github/workflows/s3-wall.yml")
         let stepRunsTheSelfTest = Self.stepRuns(Self.macOSStepRun, step: Self.macOSStepName, in: workflow)
         #expect(stepRunsTheSelfTest, """
@@ -800,7 +815,7 @@ import Testing
                 "flags in an echo were read as the command's")
         let split = #"""
             # xcodebuild build -scheme Commented
-            xcodebuild build -scheme ProximityKit -destination 'generic/platform=macOS' \
+            xcodebuild build -scheme MacReady -destination 'generic/platform=macOS' \
               -derivedDataPath "$DERIVED" \
               DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR SUPPRESS_WARNINGS=NO
             xcodebuild build-for-testing -scheme Fernlet

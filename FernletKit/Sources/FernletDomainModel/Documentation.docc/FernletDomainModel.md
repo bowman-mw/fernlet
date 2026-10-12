@@ -590,19 +590,19 @@ what actually happened.
 
 Fernlet's proximity vocabulary and records. ``PayloadType`` and ``ProximityCapability`` are the
 tokens FernletConnections reads into `ProximityNamespace.fernlet`'s vocabulary, which is where
-ProximityKit's core takes every token from; ``ProximityMode`` is the session mode the coordinator's
-`Mode` aliases; ``ProximityTrustedPeerRecord`` and ``TrainerAuditEvent`` are the trust records and
+ProximityKit's core takes every token from; ``ProximityMode`` is the session mode Fernlet persists on
+its trust records and session logs, converted case for case by FernletConnections from the
+coordinator's own `ProximitySessionMode`, whose frozen raw values it shares; ``ProximityTrustedPeerRecord`` and ``TrainerAuditEvent`` are the trust records and
 audit rows Fernlet's `ProximityTrustVault` (FernletConnections) keeps and the snapshot persists: a
 coordinator's audits arrive converted from ProximityKit's own `ProximitySessionAudit` by
 FernletConnections' one conversion, while the vault builds its block, revoke and report rows itself
 and the app builds the row for a pasted coach plan (`CoachPlanImporter`); and ``ConnectionSessionLog`` is
 the session log the app's inspector builds from ProximityKit's own inspector values. ProximityKit
-names one of these types, and only on the one line `ProximityNamespaceBoundaryTests` allowlists:
-``ProximityMode`` in the coordinator's alias, which generalizes at plan step C5 into the session
-policy the coach profile brings; ``PayloadType``, ``ProximityCapability``,
+names none of these types and does not depend on this module, and `ProximityNamespaceBoundaryTests`
+holds it there: ``PayloadType``, ``ProximityCapability``, ``ProximityMode``,
 ``ProximityTrustedPeerRecord``, ``ItemNameModeration``, `TrainerAuditEvent` and
-`ConnectionSessionLog` it names nowhere (Fernlet's typed view of the signed envelope's token, which
-reads ``PayloadType``, is FernletConnections'). Fernlet's own modules name them freely: `FernletSocial`'s
+`ConnectionSessionLog` are named nowhere in its code (Fernlet's typed view of the signed envelope's
+token, which reads ``PayloadType``, is FernletConnections'). Fernlet's own modules name them freely: `FernletSocial`'s
 presence, heart dead-drop and session hearts read ``ProximityTrustedPeerRecord``, its mesh features
 register and send their payloads under ``PayloadType`` tokens and advertise and check
 ``ProximityCapability`` tokens, the dead-drop titles its envelope with a ``PayloadType`` token,

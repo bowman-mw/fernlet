@@ -25,8 +25,10 @@
 //    characters) by driving it; the legacy default (no list means photos alone) where the
 //    coordinator and the mesh's seats decide it; `wire2`'s role, framing sealed bodies; and the
 //    coordinator and the mesh reading all of it off the namespace they hold.
-// 4. **Session enums.** `ProximityMode`, `ProximityRole` and `ProximityRangingMode`, both ways, and
-//    the session log's own copies of the last two, which spell the same values.
+// 4. **Session enums.** ProximityKit's `ProximitySessionMode`, `ProximityRole` and
+//    `ProximityRangingMode`, and FernletDomainModel's `ProximityMode`, the session mode Fernlet
+//    persists, each both ways; FernletConnections' conversion of the one mode into the other, case for
+//    case; and the session log's own copies of the role and ranging mode, which spell the same values.
 // 5. **Membership record kinds.** The 4 tokens, the digest's kind-first order and one known-answer
 //    inventory digest over a ledger of one record per kind; and the digest, an identity's signed
 //    digest and a verifier's own tagging records with the record kinds of the family they hold.
@@ -179,13 +181,13 @@ struct ProximityVocabularyGoldenTests {
     }
 
     /// The tables hold every value once, in the shape the design counts: 55 payload tokens, 9
-    /// capabilities, 7 session-enum values, 4 record kinds, 4 routed types, 7 presentation strings,
+    /// capabilities, 9 session-enum values, 4 record kinds, 4 routed types, 7 presentation strings,
     /// the trainer format and the name floor, and ten numbers.
     @Test func theTablesHoldEveryValueOnce() {
         let counts = [Self.payloadRows.count, Self.capabilityRows.count, Self.sessionEnumRows.count,
                       Self.recordKindRows.count, Self.routedTypeRows.count, Self.presentationRows.count,
                       Self.trainerExportRows.count, Self.moderationRows.count]
-        #expect(counts == [55, 9, 7, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
+        #expect(counts == [55, 9, 9, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
         #expect(Self.allNumbers.count == 10, "the number tables hold \(Self.allNumbers.count) rows")
         let fields = Self.allRows.map(\.field) + Self.allNumbers.map(\.field)
         #expect(Set(fields).count == fields.count, "a field appears twice")
@@ -759,13 +761,20 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 4 — the session enums
 
-    /// `ProximityMode`, persisted in the trust vault and the session log; and ProximityKit's
-    /// `ProximityRole` and `ProximityRangingMode`, which the session log persists as copies of its own
-    /// (held to these spellings below), the ranging mode also signed into every introduction's body.
+    /// `ProximityMode`, persisted in the trust vault and the session log; ProximityKit's own session
+    /// mode, `ProximitySessionMode`, the coordinator's `Mode` since plan step A1.0, whose raw value the
+    /// coordinator writes into the pairing-started audit Fernlet persists and which Fernlet converts to
+    /// `ProximityMode` (both held to the same spellings); and ProximityKit's `ProximityRole` and
+    /// `ProximityRangingMode`, which the session log persists as copies of its own (held to these
+    /// spellings below), the ranging mode also signed into every introduction's body.
     static var sessionEnumRows: [VocabularyGoldenRow] {
         [
             VocabularyGoldenRow(field: "mode.trainer", frozen: "trainer", today: ProximityMode.trainer.rawValue),
             VocabularyGoldenRow(field: "mode.friend", frozen: "friend", today: ProximityMode.friend.rawValue),
+            VocabularyGoldenRow(field: "sessionMode.trainer", frozen: "trainer",
+                                today: ProximitySessionMode.trainer.rawValue),
+            VocabularyGoldenRow(field: "sessionMode.friend", frozen: "friend",
+                                today: ProximitySessionMode.friend.rawValue),
             VocabularyGoldenRow(field: "role.advertiser", frozen: "advertiser", today: ProximityRole.advertiser.rawValue),
             VocabularyGoldenRow(field: "role.browser", frozen: "browser", today: ProximityRole.browser.rawValue),
             VocabularyGoldenRow(field: "rangingMode.uwb", frozen: "uwb", today: ProximityRangingMode.uwb.rawValue),
@@ -774,11 +783,25 @@ struct ProximityVocabularyGoldenTests {
         ]
     }
 
-    /// Every value both ways: the case spells the literal, and the literal decodes to the case.
+    /// Every value both ways: the case spells the literal, and the literal decodes to the case. And
+    /// the session mode Fernlet persists is ProximityKit's, case for case: FernletConnections'
+    /// `ProximityMode.init(_:)` maps each `ProximitySessionMode` to the `ProximityMode` that spells the
+    /// same frozen literal, so a converted mode persists the bytes it always did.
     @Test func everySessionEnumIsItsFrozenSpellingBothWays() {
-        #expect(Self.expectFrozen(Self.sessionEnumRows) == 7)
+        #expect(Self.expectFrozen(Self.sessionEnumRows) == 9)
         #expect(ProximityMode(rawValue: Self.frozen("mode.trainer")) == .trainer)
         #expect(ProximityMode(rawValue: Self.frozen("mode.friend")) == .friend)
+        #expect(ProximitySessionMode(rawValue: Self.frozen("sessionMode.trainer")) == .trainer)
+        #expect(ProximitySessionMode(rawValue: Self.frozen("sessionMode.friend")) == .friend)
+        let modes: [(ProximitySessionMode, ProximityMode, String)] = [
+            (.trainer, .trainer, "mode.trainer"), (.friend, .friend, "mode.friend")
+        ]
+        // R2: bounded by the two session modes.
+        for (session, persisted, field) in modes {
+            #expect(ProximityMode(session) == persisted, "\(field): the conversion maps \(session) elsewhere")
+            #expect(ProximityMode(session).rawValue == Self.frozen(field), "the converted \(field) moved")
+            #expect(session.rawValue == persisted.rawValue, "\(field): the two enums spell it apart")
+        }
         #expect(ProximityRole(rawValue: Self.frozen("role.advertiser")) == .advertiser)
         #expect(ProximityRole(rawValue: Self.frozen("role.browser")) == .browser)
         #expect(ProximityRangingMode(rawValue: Self.frozen("rangingMode.uwb")) == .uwb)
