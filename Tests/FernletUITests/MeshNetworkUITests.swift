@@ -13,9 +13,9 @@ import FernletDomainModel
 //   Admission behavior      – pending request sheet appears; Allow/Decline each dismiss it
 //
 // Environment variables (set in launchEnvironment before launch):
-//   FERNLET_UI_TEST_MESH_OPEN      – inject a pre-built open mesh into MeshNetworkManager
-//   FERNLET_UI_TEST_MESH_CLOSED    – inject a pre-built closed mesh into MeshNetworkManager
-//   FERNLET_UI_TEST_MESH_ADMISSION – inject an open mesh + one pending admission request
+//   PROXIMITYKIT_UI_TEST_MESH_OPEN      – inject a pre-built open mesh into MeshNetworkManager
+//   PROXIMITYKIT_UI_TEST_MESH_CLOSED    – inject a pre-built closed mesh into MeshNetworkManager
+//   PROXIMITYKIT_UI_TEST_MESH_ADMISSION – inject an open mesh + one pending admission request
 //
 // Launch arguments:
 //   -completeOnboarding  – skip onboarding and land on the main screen
@@ -293,9 +293,9 @@ final class MeshNetworkUITests: XCTestCase {
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-completeOnboarding"]
-        if meshOpen  { app.launchEnvironment["FERNLET_UI_TEST_MESH_OPEN"]      = "1" }
-        if meshClosed { app.launchEnvironment["FERNLET_UI_TEST_MESH_CLOSED"]   = "1" }
-        if admission  { app.launchEnvironment["FERNLET_UI_TEST_MESH_ADMISSION"] = "1" }
+        if meshOpen  { app.launchEnvironment["PROXIMITYKIT_UI_TEST_MESH_OPEN"]      = "1" }
+        if meshClosed { app.launchEnvironment["PROXIMITYKIT_UI_TEST_MESH_CLOSED"]   = "1" }
+        if admission  { app.launchEnvironment["PROXIMITYKIT_UI_TEST_MESH_ADMISSION"] = "1" }
         app.launch()
         navigateToMeshes(app)
         return app

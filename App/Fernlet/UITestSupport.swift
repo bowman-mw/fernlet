@@ -173,7 +173,8 @@ enum UITestSupport {
 
     /// True when a test harness owns this process: an XCTest runner is attached (the unit-test
     /// host app), or the app was launched by a UI test (`XCTestSessionIdentifier`, the
-    /// `-completeOnboarding`/`-resetOnboarding` arguments, or any `FERNLET_UI_TEST_*` hook).
+    /// `-completeOnboarding`/`-resetOnboarding` arguments, or any `FERNLET_UI_TEST_*` hook or
+    /// ProximityKit `PROXIMITYKIT_UI_TEST_*` hook, the mesh manager's canned-mesh flags).
     ///
     /// Consumed by `FernletApp` to suppress the one-time backup-exclusion launch gate
     /// (`BackupExclusionLaunchGate`): an unanswered launch alert would deadlock every UI test,
@@ -187,7 +188,7 @@ enum UITestSupport {
             || arguments.contains("-completeOnboarding")
             || arguments.contains("-resetOnboarding")
             || arguments.contains("-uitestSeedHeldSessionPhotos")
-            || env.keys.contains { $0.hasPrefix("FERNLET_UI_TEST_") }
+            || env.keys.contains { $0.hasPrefix("FERNLET_UI_TEST_") || $0.hasPrefix("PROXIMITYKIT_UI_TEST_") }
     }
     #else
     static var shouldSeedDemoContent: Bool { false }

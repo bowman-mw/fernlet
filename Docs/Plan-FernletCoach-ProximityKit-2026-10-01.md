@@ -329,9 +329,15 @@ end:
   field-path labels soundness and the goldens name follow the field (`family.radios.pair.*`: diagnostic
   labels, never bytes); every frozen recipe token stays, and `ProximityNamespaceBoundaryTests` rule 6
   refuses the old names.
-- **The DEBUG test-hook keys (owner decision: `PROXIMITYKIT_*`).** The four `FERNLET_UI_TEST_MESH_*`
-  and three `FERNLET_MESH_*` launch-environment keys are renamed `PROXIMITYKIT_*`; the UI tests,
-  `MeshRejectionMatrixHarness` and the feasibility runbook follow.
+- **The DEBUG test-hook keys (owner decision: `PROXIMITYKIT_*`).** The six launch-environment keys
+  ProximityKit reads carry its own name: `PROXIMITYKIT_UI_TEST_MESH_OPEN`, `_CLOSED` and `_ADMISSION`
+  (the mesh manager's canned mesh for the UI tests) and `PROXIMITYKIT_MESH_CONSOLE_LOG`,
+  `PROXIMITYKIT_MESH_CHAOS` and `PROXIMITYKIT_MESH_CHAOS_BARRED` (the transport's console mirror and
+  chaos seam). The UI tests, `MeshRejectionMatrixHarness`'s banner, `UITestSupport`'s harness check
+  and the feasibility runbook use them; the app's own `FERNLET_*` hooks keep their names.
+  `TestHookBoundaryTests` walls them as two families of their own, and
+  `ProximityNamespaceBoundaryTests`' list of `fernlet` literals is empty, so no Fernlet string is
+  left in ProximityKit's code; what A1 still settles is the presence radio's `package` doors.
 
 **A1.1 Create the repo.**
 - Split `FernletKit/Sources/ProximityKit` plus its package tests (`FernletKit/Tests/ProximityKitTests`)
@@ -375,6 +381,9 @@ umbrella entry:
   - keep the Bonjour classification app-side.
 - **`S3BoundaryTests`:** move the ProximityKit/CloudKit pair (:216–241) to the new repo.
 - **Power-of-10:** delete the 3 moved allowlist entries.
+- **`TestHookBoundaryTests`:** ProximityKit's two hook families leave the shipping roots with its
+  sources: drop `PROXIMITYKIT_UI_TEST_` and its floor, and lower `PROXIMITYKIT_MESH`'s to the app
+  banner's two reads; the package walls its own keys.
 - **`LocalizationBoundaryTests`:** drop the moved catalog and keys (:2749, :2525, :2578, :2614), plus
   the matching `sync-string-catalogs.sh:88` line.
 - **Re-point:** `PrivacyWipeCoverageTests:270–272` with 9 `PrivacyWipeCoverage.md` rows,

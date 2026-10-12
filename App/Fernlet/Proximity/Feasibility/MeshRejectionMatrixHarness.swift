@@ -166,9 +166,11 @@ enum MeshMatrixDebugOptions {
         // `transport=quic` is a constant since the deletion round (2026-09-22): the selection seam
         // and its `FERNLET_MESH_TRANSPORT` read went with the MultipeerConnectivity radio, so the
         // token names the one radio the build contains rather than echoing a variable nothing reads.
+        // `chaos` and `chaosBarred` echo ProximityKit's own two chaos keys, which its internal
+        // `MeshIntroductionChaos` reads, so the banner spells them.
         return "label=\(label) transport=quic "
-            + "chaos=\(environment["FERNLET_MESH_CHAOS"] ?? "off") "
-            + "chaosBarred=\(environment["FERNLET_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
+            + "chaos=\(environment["PROXIMITYKIT_MESH_CHAOS"] ?? "off") "
+            + "chaosBarred=\(environment["PROXIMITYKIT_MESH_CHAOS_BARRED"] == nil ? "none" : "set") "
             + "flows=\(flows.isEmpty ? "none" : flows.map(\.rawValue).joined(separator: "+")) "
             + "flowsAfter=\(flowsAfterPolls) "
             + "hearts=\(allowsHearts ? "on" : "off") "

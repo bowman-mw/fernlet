@@ -20,9 +20,10 @@
 //   1. no namespace, namespace group or purpose is built in ProximityKit outside `Namespace/`;
 //   2. `FernletCryptoPurpose` is named nowhere in ProximityKit code: every label it reads is its host
 //      namespace's, and every feature label is its feature's module's;
-//   3. every remaining string literal in ProximityKit code that contains `fernlet` (any case) is on an
-//      exact per-file allowlist that names why it is still there and the plan step that removes it
-//      (7 literals on 6 lines in 2 files: the DEBUG test-hook names, until A1);
+//   3. a string literal in ProximityKit code that contains `fernlet` (any case) is only on an exact
+//      per-file allowlist that names why it is still there and the plan step that removes it, which
+//      is empty: no literal spells it (the DEBUG launch-environment keys ProximityKit reads are its
+//      own, `PROXIMITYKIT_*`, since plan step A1.0, so their old `FERNLET_` spellings fail here);
 //   4. Fernlet's domain vocabulary and records, FernletDomainModel's `PayloadType`,
 //      `ProximityCapability`, `ProximityMode`, `ItemNameModeration`, `ProximityTrustedPeerRecord`,
 //      `TrainerAuditEvent` and `ConnectionSessionLog`, are named in ProximityKit code only on an exact
@@ -54,14 +55,13 @@
 // FernletFoundation's or PrivateMediaStore's, which only Fernlet's features needed.
 //
 // Rules 3 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// lowered or deleted. So rule 3 only shrinks, to nothing, as A1 lands, rule 4's list is already
-// empty, and a `package` door's row lives exactly as long as the door. Rule 2 lists nothing: any use
-// fails.
+// lowered or deleted. So rule 3's list and rule 4's are already empty, and a `package` door's row
+// lives exactly as long as the door. Rule 2 lists nothing: any use fails.
 // Rule 6 only grows: a feature that came back under its old name with no Fernlet string, no registry
 // label and no domain type of its own would pass rules 2 to 4, so each step that moves features out
 // adds the types it took, and a step that renames a type or a public member for its generic use
-// adds the old name. Between them they hold what ProximityKit still takes from Fernlet rather than
-// from its host: the DEBUG test-hook names (until A1). No row names a domain type, a presentation
+// adds the old name. Between them they hold nothing ProximityKit still takes from Fernlet rather
+// than from its host: no row names a DEBUG launch-environment key, a domain type, a presentation
 // string, a membership record kind, a routed-type token or a coach-channel format, and no rule lists
 // a line of a feature that left (the heart dead-drop, presence, moderation's ban store and report relay,
 // closeness, friend state, the parked chat payload, the mesh's capability list and vouch-list
@@ -543,12 +543,15 @@ private extension UInt8 {
     /// presentation strings the radios and the name display read and the membership record kinds the
     /// inventory digest hashes; the routed types the mesh registers are the host's rows, and the
     /// formats of the features' payloads are their own modules', while the coach channel's
-    /// trainer-export body is FernletConnections'. What is left is spelled in place for a reason each
-    /// row names, with the plan step that takes it out: DEBUG test-hook names (A1); the recipe
-    /// share's copy and format are FernletSocial's. A new Fernlet string fails here: it belongs in the host's
-    /// namespace, or in the feature's own module. A row whose literal is gone fails until it is
-    /// deleted, so the list stays the exact set (7 literals on 6 lines in 2 files). The scan reads
-    /// literals only: comments may say Fernlet freely.
+    /// trainer-export body is FernletConnections'; the recipe share's copy and format are
+    /// FernletSocial's; and the DEBUG launch-environment keys the module reads are its own,
+    /// `PROXIMITYKIT_*` (plan step A1.0). Nothing is left, so the list is empty and a new Fernlet
+    /// string fails here on its first literal, with its file and lines: it belongs in the host's
+    /// namespace, or in the feature's own module. The six keys' old `FERNLET_` spellings need no list
+    /// of retired literals of their own: each spells `fernlet`, so this rule refuses it in any
+    /// literal. The list stays exact both ways for a literal a later step must carry: a row whose
+    /// literal is gone fails until it is deleted. The scan reads literals only: comments may say
+    /// Fernlet freely.
     @Test func everyFernletLiteralIsAllowlistedWithItsReasonAndExitStep() throws {
         let sources = try Self.proximitySources()
         var found: [String: [String: [Int]]] = [:]
@@ -602,15 +605,8 @@ private extension UInt8 {
         }
     }
 
-    /// Every `fernlet` literal still in ProximityKit code, by file.
-    static let fernletLiterals: [FernletLiteral] = [
-        FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_OPEN", 1, .uiTestHook),
-        FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_ADMISSION", 2, .uiTestHook),
-        FernletLiteral("Mesh/MeshNetworkManager.swift", "FERNLET_UI_TEST_MESH_CLOSED", 1, .uiTestHook),
-        FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CONSOLE_LOG", 1, .meshDebugHook),
-        FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS", 1, .meshDebugHook),
-        FernletLiteral("Transport/MeshTransportDebugHooks.swift", "FERNLET_MESH_CHAOS_BARRED", 1, .meshDebugHook)
-    ]
+    /// Every `fernlet` literal still in ProximityKit code, by file: none.
+    static let fernletLiterals: [FernletLiteral] = []
 
     /// `found`'s literals with the lines each is on, sorted, for a failure message.
     private static func describe(_ found: [String: [Int]]) -> String {
@@ -1344,10 +1340,9 @@ private extension UInt8 {
 
     /// The plan step that takes a value out of ProximityKit.
     enum ExitStep: String, Sendable {
-        /// The package leaves Fernlet's tree (A1): the DEBUG test-hook names are settled then, and so
-        /// are the presence radio's `package` doors (rule 5): its seam, its QUIC conformer, the peer
-        /// channel the seam names, the epoch posture and the TXT vocabulary, published as mechanism
-        /// or wrapped by a presence engine.
+        /// The package leaves Fernlet's tree (A1): the presence radio's `package` doors (rule 5) are
+        /// settled then: its seam, its QUIC conformer, the peer channel the seam names, the epoch
+        /// posture and the TXT vocabulary, published as mechanism or wrapped by a presence engine.
         case a1 = "A1"
     }
 
@@ -1363,20 +1358,6 @@ private extension UInt8 {
 // MARK: - The reasons
 
 extension ProximityNamespaceBoundaryTests.Reason {
-
-    // Rule 3: the DEBUG test hooks (A1).
-
-    /// A UI-test launch-environment key.
-    static let uiTestHook = Self(exit: .a1, why: """
-        a DEBUG-only UI-test launch-environment key (TestHookBoundaryTests' FERNLET_UI_TEST_ family): \
-        the engine keeps its test seams, so the name is settled when the package leaves Fernlet's tree
-        """)
-    /// A mesh diagnostic launch-environment key.
-    static let meshDebugHook = Self(exit: .a1, why: """
-        a DEBUG-only mesh diagnostic launch-environment key (TestHookBoundaryTests' FERNLET_MESH \
-        family): it stays with the transport, so the name is settled when the package leaves Fernlet's \
-        tree
-        """)
 
     // Rule 5: the package doors (A1).
 

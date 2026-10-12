@@ -5,8 +5,9 @@
 // memory-lifecycle walls:
 //
 //  TH1  Every non-comment source line in a shipping root that reads a launch hook from any of the
-//       four families in `hookTokens` — `FERNLET_UI_TEST_`, `FERNLET_SKIP_`, `FERNLET_MESH`,
-//       `FERNLET_PROBE` — must sit inside an open `#if DEBUG` region.
+//       six families in `hookTokens` — Fernlet's `FERNLET_UI_TEST_`, `FERNLET_SKIP_`, `FERNLET_MESH`,
+//       `FERNLET_PROBE` and ProximityKit's `PROXIMITYKIT_UI_TEST_`, `PROXIMITYKIT_MESH` — must sit
+//       inside an open `#if DEBUG` region.
 //  TH2  `UITestSupport`'s `#else` block must define a no-op for every `static var` its `#if DEBUG`
 //       block declares, so a flag added to only one half cannot break the Release build (or, worse,
 //       be silently missing while the file's header claims completeness).
@@ -22,14 +23,21 @@
 // The `FERNLET_MESH_*` / `FERNLET_PROBE_*` families joined the wall in P2 item 14. They arrived
 // (items 0/8/9) with `#if DEBUG` as their ONLY guard, which is the same "correct today, unenforced
 // tomorrow" position the UI-test flags were in before TH1 existed — and they are the more dangerous
-// half: `FERNLET_MESH_TRANSPORT` selects a whole radio, `FERNLET_MESH_CHAOS` makes this device
-// misbehave during a signed handshake, `FERNLET_MESH_CHAOS_BARRED` writes the roster's barred set,
-// and `FERNLET_MESH_MATRIX*` seeds a synthetic mesh descriptor and joins it at launch. All fourteen
+// half: `FERNLET_MESH_TRANSPORT` selected a whole radio until the deletion round, the chaos keys make
+// this device misbehave during a signed handshake and write the roster's barred set, and
+// `FERNLET_MESH_MATRIX*` seeds a synthetic mesh descriptor and joins it at launch. All fourteen
 // reads were already inside `#if DEBUG` when the wall was widened; the point of widening is that the
 // fifteenth cannot be added outside one.
 //
+// ProximityKit's keys are two families of their own since plan step A1.0, when the package took its
+// own name for them: `PROXIMITYKIT_UI_TEST_`, the three flags its mesh manager seeds a canned mesh
+// from (`PROXIMITYKIT_UI_TEST_MESH_OPEN`, `_CLOSED`, `_ADMISSION`), and `PROXIMITYKIT_MESH`, its
+// transport's console mirror and the two chaos keys (`PROXIMITYKIT_MESH_CONSOLE_LOG`,
+// `PROXIMITYKIT_MESH_CHAOS`, `PROXIMITYKIT_MESH_CHAOS_BARRED`), which the app's rejection-matrix
+// banner echoes. TH1 holds them to the same rule over the same shipping roots.
+//
 // The scan discovers its inputs from the file system and carries hard FLOORS — global and PER
-// FAMILY, so a matcher that stops seeing one family cannot hide behind the other three (a moved root
+// FAMILY, so a matcher that stops seeing one family cannot hide behind the others (a moved root
 // or a broken matcher must fail loudly, never pass vacuously — the S3BoundaryTests house rule) — and
 // the checker must trip on a planted token from every family.
 
@@ -52,30 +60,40 @@ struct TestHookBoundaryTests {
     /// Floor for the shipping scan (367 files at the time of writing); a root that stops resolving trips it.
     static let minimumShippingFilesScanned = 300
 
-    /// Real (non-comment) hook reads today: **67** across all four families (P6 item 10 added three
-    /// mesh ones; the deletion round, 2026-09-22, retired `FERNLET_MESH_TRANSPORT`'s one). A wall
-    /// that finds fewer has stopped looking — comment stripping or the token matcher has broken.
+    /// Real (non-comment) hook reads today: **70** across the six families (measured 2026-10-11, when
+    /// plan step A1.0 moved eight of them to ProximityKit's two families and added or removed none).
+    /// A wall that finds fewer has stopped looking — comment stripping or the token matcher has broken.
     static let minimumHookLines = 40
 
-    /// The tokens that name a debug/test launch hook.
+    /// The tokens that name a debug/test launch hook: Fernlet's four families, then ProximityKit's two.
     ///
-    /// The two mesh families are matched WITHOUT a trailing underscore (`FERNLET_MESH`, not
-    /// `FERNLET_MESH_`) so a bare future `FERNLET_MESH` cannot slip past the prefix. That is safe
-    /// against double-counting because `hookReads` records one read per LINE however many tokens
-    /// match, and it is deliberate that `FERNLET_UI_TEST_MESH_*` — three real flags — score to
-    /// `FERNLET_UI_TEST_`, the first token in this list, rather than to the mesh family.
-    static let hookTokens = ["FERNLET_UI_TEST_", "FERNLET_SKIP_", "FERNLET_MESH", "FERNLET_PROBE"]
+    /// The mesh families are matched WITHOUT a trailing underscore (`FERNLET_MESH` and
+    /// `PROXIMITYKIT_MESH`, not `FERNLET_MESH_`) so a bare future `FERNLET_MESH` cannot slip past the
+    /// prefix. That is safe against double-counting because `hookReads` records one read per LINE
+    /// however many tokens match, to the first family in this list it names, and it is deliberate
+    /// that `PROXIMITYKIT_UI_TEST_MESH_*` — three real flags — score to `PROXIMITYKIT_UI_TEST_` rather
+    /// than to a mesh family. The one line that names two families, `UITestSupport`'s harness check
+    /// over both UI-test prefixes, counts once, toward `FERNLET_UI_TEST_`.
+    static let hookTokens = [
+        "FERNLET_UI_TEST_", "FERNLET_SKIP_", "FERNLET_MESH", "FERNLET_PROBE",
+        "PROXIMITYKIT_UI_TEST_", "PROXIMITYKIT_MESH"
+    ]
 
-    /// Per-family floors, each comfortably below today's real count (39 / 8 / 17 / 3 — the mesh
-    /// family measured 18 on 2026-09-12 and lost `FERNLET_MESH_TRANSPORT`'s declaration in the
-    /// deletion round, 2026-09-22). The floors themselves do not move for an ADDED hook — only for
-    /// a removed family.
+    /// Per-family floors. Fernlet's are each comfortably below today's real count (39 / 8 / 12 / 3,
+    /// measured 2026-10-11: plan step A1.0 moved ProximityKit's three UI-test flags and its five
+    /// console and chaos reads, the app banner's two among them, to its own families, 42 - 3 and
+    /// 17 - 5; the mesh family measured 18 on 2026-09-12 and lost `FERNLET_MESH_TRANSPORT`'s
+    /// declaration in the deletion round, 2026-09-22), and they do not move for an ADDED hook — only
+    /// for a removed family. ProximityKit's are its measured counts (3 / 5): its six keys are a
+    /// closed set the package named at plan step A1.0, so a read that leaves the shipping roots, or a
+    /// key renamed away, fails here by family until its floor is lowered in the same commit.
     ///
     /// The global floor above cannot catch a matcher that loses one family: drop every mesh and
-    /// probe read and 47 remain, comfortably past it. These are what make each family's membership
+    /// probe read and 50 remain, comfortably past it. These are what make each family's membership
     /// in the wall load-bearing rather than decorative.
     static let hookTokenFloors: [String: Int] = [
-        "FERNLET_UI_TEST_": 25, "FERNLET_SKIP_": 5, "FERNLET_MESH": 7, "FERNLET_PROBE": 2
+        "FERNLET_UI_TEST_": 25, "FERNLET_SKIP_": 5, "FERNLET_MESH": 7, "FERNLET_PROBE": 2,
+        "PROXIMITYKIT_UI_TEST_": 3, "PROXIMITYKIT_MESH": 5
     ]
 
     /// `UITestSupport`, whose two halves TH2 pins against each other.
@@ -186,7 +204,7 @@ struct TestHookBoundaryTests {
 
     /// Every family still contributes. A token that stops matching — renamed hooks, a prefix edited
     /// to something no source line carries — would otherwise leave that family silently unwalled
-    /// while the global floor stayed green on the other three.
+    /// while the global floor stayed green on the others.
     @Test func everyHookFamilyStillMatches() {
         let byToken = Dictionary(grouping: Self.sharedScan.reads, by: \.token)
         for token in Self.hookTokens {
@@ -210,7 +228,8 @@ struct TestHookBoundaryTests {
             .map { "\($0.path):\($0.line): \($0.text)" }
         #expect(violations.isEmpty, """
             TH1: these lines read a FERNLET_UI_TEST_* / FERNLET_SKIP_* / FERNLET_MESH_* / \
-            FERNLET_PROBE_* launch hook outside any `#if DEBUG` region, so the hook — and whatever \
+            FERNLET_PROBE_* / PROXIMITYKIT_UI_TEST_* / PROXIMITYKIT_MESH_* launch hook outside any \
+            `#if DEBUG` region, so the hook — and whatever \
             mock, canned result, skipped guard, alternate radio or handshake misbehaviour it selects \
             — ships in Release. Wrap the BODY (never a `public func` signature crossing the \
             app/package boundary), and keep any hoisted `let environment` binding inside the region \
@@ -273,10 +292,10 @@ struct TestHookBoundaryTests {
         // constant, and an inline environment read.
         let meshKey = "static let key = \"FERNLET_MESH_TRANSPORT\"\n"
         let probeRead = "let x = ProcessInfo.processInfo.environment[\"FERNLET_PROBE_AUTOSTART\"]\n"
-        let meshGuarded = "#if DEBUG\nstatic let key = \"FERNLET_MESH_CHAOS\"\n#endif\n"
-        // A near-miss the widened matcher must NOT reassign: these are UI-test flags whose names
-        // contain MESH, and they belong to the FERNLET_UI_TEST_ family.
-        let uiTestMesh = "#if DEBUG\nlet x = environment[\"FERNLET_UI_TEST_MESH_OPEN\"]\n#endif\n"
+        let meshGuarded = "#if DEBUG\nstatic let key = \"FERNLET_MESH_MATRIX\"\n#endif\n"
+        // A near-miss the widened matcher must NOT reassign: a UI-test flag whose name contains
+        // MESH belongs to the FERNLET_UI_TEST_ family.
+        let uiTestMesh = "#if DEBUG\nlet x = environment[\"FERNLET_UI_TEST_MESH_X\"]\n#endif\n"
 
         // Evaluated into locals rather than inline: `contains`/`allSatisfy` are `rethrows`, and the
         // #expect macro expands them as throwing calls inside a non-throwing test.
@@ -307,5 +326,38 @@ struct TestHookBoundaryTests {
         #expect(meshGuardedOutsideDebug.isEmpty, "a DEBUG-guarded mesh hook must not be reported")
         #expect(uiTestMeshReads.map(\.token) == ["FERNLET_UI_TEST_"],
                 "FERNLET_UI_TEST_MESH_* is a UI-test flag, and must score to that family exactly once")
+        Self.expectProximityKitFamiliesTrip()
+    }
+
+    /// ProximityKit's two families, fixtured the same way as Fernlet's, each in the exact shape its
+    /// real hooks take (the transport's key constants, the mesh manager's inline reads), with the
+    /// two near-misses its names make: a UI-test flag whose name contains MESH scores to the UI-test
+    /// family, and a line naming both UI-test prefixes counts once, toward Fernlet's.
+    static func expectProximityKitFamiliesTrip() {
+        let meshKey = "static let behaviourKey = \"PROXIMITYKIT_MESH_CHAOS\"\n"
+        let uiTestRead = "if env[\"PROXIMITYKIT_UI_TEST_MESH_CLOSED\"] == \"1\" {\n"
+        let meshGuarded = "#if DEBUG\nstatic let enabledKey = \"PROXIMITYKIT_MESH_CONSOLE_LOG\"\n#endif\n"
+        let uiTestMesh = "#if DEBUG\nif env[\"PROXIMITYKIT_UI_TEST_MESH_OPEN\"] == \"1\" {\n#endif\n"
+        let bothPrefixes = "#if DEBUG\nlet any = keys.contains { $0.hasPrefix(\"FERNLET_UI_TEST_\") "
+            + "|| $0.hasPrefix(\"PROXIMITYKIT_UI_TEST_\") }\n#endif\n"
+
+        let meshKeyReported = hookReads(for: "k.swift", source: meshKey).filter { !$0.insideDebug }
+        let uiTestReadReported = hookReads(for: "l.swift", source: uiTestRead).filter { !$0.insideDebug }
+        let meshGuardedReads = hookReads(for: "m.swift", source: meshGuarded)
+        let meshGuardedOutsideDebug = meshGuardedReads.filter { !$0.insideDebug }
+        let uiTestMeshReads = hookReads(for: "n.swift", source: uiTestMesh)
+        let bothPrefixesReads = hookReads(for: "o.swift", source: bothPrefixes)
+
+        #expect(meshKeyReported.map(\.token) == ["PROXIMITYKIT_MESH"],
+                "an unguarded PROXIMITYKIT_MESH_* key constant must be reported, in its own family")
+        #expect(uiTestReadReported.map(\.token) == ["PROXIMITYKIT_UI_TEST_"],
+                "an unguarded PROXIMITYKIT_UI_TEST_* read must be reported, in its own family")
+        #expect(meshGuardedReads.map(\.token) == ["PROXIMITYKIT_MESH"],
+                "a DEBUG-guarded ProximityKit mesh hook is still read, in its own family")
+        #expect(meshGuardedOutsideDebug.isEmpty, "a DEBUG-guarded ProximityKit mesh hook must not be reported")
+        #expect(uiTestMeshReads.map(\.token) == ["PROXIMITYKIT_UI_TEST_"],
+                "PROXIMITYKIT_UI_TEST_MESH_* is a UI-test flag, and must score to that family exactly once")
+        #expect(bothPrefixesReads.map(\.token) == ["FERNLET_UI_TEST_"],
+                "a line naming both UI-test prefixes is one read, counted toward the first family listed")
     }
 }

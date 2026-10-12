@@ -878,7 +878,7 @@ How to run it — no UI navigation, no Start button, nothing persisted:
 xcrun simctl install <udid> <path>/Fernlet.app
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=<run-name> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<uuid> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<base64-key,base64-key> \
@@ -893,17 +893,24 @@ being today's behaviour exactly, not a near-equivalent:
 | `FERNLET_MESH_MATRIX` | `MeshMatrixDebugOptions` (app target) | Nothing is seeded and no radio is started. |
 | `FERNLET_MESH_MATRIX_LABEL` | same | The run is named `unlabelled` in the transcript. |
 | `FERNLET_MESH_MATRIX_MESH_ID` / `_MEMBERS` | same | No descriptor: the roster is empty, which is the state a device with no mesh is genuinely in. |
-| `FERNLET_MESH_CONSOLE_LOG` | `MeshTransportConsoleLog` (ProximityKit) | The radio's `Logger` lines are not mirrored to stdout. Nothing else changes. |
-| `FERNLET_MESH_CHAOS` | `MeshIntroductionChaos` (ProximityKit) | Fresh nonce every hello, signature goes out as signed. |
-| `FERNLET_MESH_CHAOS_BARRED` | same | The roster's barred set is whatever the derived roster says (P3 item 7) — no extra keys. |
+| `PROXIMITYKIT_MESH_CONSOLE_LOG` | `MeshTransportConsoleLog` (ProximityKit) | The radio's `Logger` lines are not mirrored to stdout. Nothing else changes. |
+| `PROXIMITYKIT_MESH_CHAOS` | `MeshIntroductionChaos` (ProximityKit) | Fresh nonce every hello, signature goes out as signed. |
+| `PROXIMITYKIT_MESH_CHAOS_BARRED` | same | The roster's barred set is whatever the derived roster says (P3 item 7) — no extra keys. |
 
-`FERNLET_MESH_CHAOS` is the only misbehaviour switch. It takes frozen tokens (`frozenNonce`,
+`PROXIMITYKIT_MESH_CHAOS` is the only misbehaviour switch. It takes frozen tokens (`frozenNonce`,
 `tamperSignature`) and **damages this side's own outbound introduction**, so it can only ever cause
-the *peer* to refuse us. `FERNLET_MESH_CHAOS_BARRED` only ever adds keys to the roster's barred set,
+the *peer* to refuse us. `PROXIMITYKIT_MESH_CHAOS_BARRED` only ever adds keys to the roster's barred set,
 and barred wins over member, so it too can only turn an accept into a refusal. Neither direction can
 admit a peer that would otherwise be refused. In a Release build the whole environment-reading half
 is compiled out — the members are constants a compiler can fold — so no launch environment a shipped
 app could see can reach any of it.
+
+> **Dated correction, 2026-10-11 (ProximityKit plan step A1.0).** The three keys ProximityKit reads
+> carry its own name, `PROXIMITYKIT_MESH_CONSOLE_LOG`, `PROXIMITYKIT_MESH_CHAOS` and
+> `PROXIMITYKIT_MESH_CHAOS_BARRED`, in every recipe and record in this runbook; the app harness's
+> `FERNLET_MESH_*` keys keep theirs. A build from before that step reads the same three with the
+> `FERNLET_` prefix in place of `PROXIMITYKIT_`, so a bisect across it sets both spellings (a Simulator
+> ignores a child variable nothing reads).
 
 #### The rejection matrix
 
@@ -919,10 +926,10 @@ up the responder (and, because hellos are exchanged before either is judged, usu
 | 1. Unknown identity (no roster at all) | **Observed** — neither device holds a descriptor, so every peer verdicts stranger | `refused unknownIdentity as responder: mesh=00000000-…-000000000000 epoch="" rosterMembers=0 rosterBarred=0` → `A QUIC tunnel was refused: The peer is not a member of this mesh.` |
 | 1a. **Provisional stranger** — the same launch shape as row 1 with the join doors open (2026-09-22, the deletion round's item 0) | **Observed — ACCEPTED, both directions.** Since D-4.3 an empty roster no longer refuses: `admitsStrangersProvisionally` admits the stranger to a *tunnel*, and membership is decided at the three doors above the transport. Row 1's refusal is now the CLOSED-doors answer (`isAdmittingNewPeers && isSessionOpen` false), pinned at tier 1 in `MeshIntroductionAuthorityRosterTests` | audit `mesh.introductionAuthority.legacyRosterFallback members=0` on both, then `[mesh-quic] accepted fb795f343c2954da sid=B6453553-…: tunnel activated, tunnels=1` on A and `accepted 1b4fd5b9e6f123e5 sid=7B49DC16-…` on B — see "Lane C — the deletion round's item 0" below for the founding and the double-mint re-dial that followed |
 | 2. Non-roster member (valid identity, absent from THIS roster) | **Observed** — same mesh id on both sides, each roster holds two members and neither holds the peer | `refused unknownIdentity as responder: mesh=11111111-…-555555555555 epoch="" rosterMembers=2 rosterBarred=0`. Row 1 and row 2 are the same *rejection* and different *situations*; `rosterMembers` is what tells them apart, which is why the console line carries it. |
-| 3. Hard-departed / removed member | **Observed as `barredMember`** | `refused barredMember as responder: … rosterMembers=2 rosterBarred=1` → `The peer has departed, been removed, or been blocked.` **P3 item 7 made this the shipping authority's own answer.** `MeshNetworkManager.roster` is now the derived roster (`admitted − departed − removed`), and `SignedAdmissionRecord` keeps the admitted member's signing key inside the record — so a verified removal or departure names a *key* and fills `barred` for real (walled at tier 1 in `MeshIntroductionAuthorityTests`). What is still owed on a radio is a removal produced by a real quorum, which needs ≥ 3 nodes (⌊|roster|/2⌋ + 1 votes): until loop item 9's 3-node lane, a two-Simulator run still reaches the branch with `FERNLET_MESH_CHAOS_BARRED`. |
+| 3. Hard-departed / removed member | **Observed as `barredMember`** | `refused barredMember as responder: … rosterMembers=2 rosterBarred=1` → `The peer has departed, been removed, or been blocked.` **P3 item 7 made this the shipping authority's own answer.** `MeshNetworkManager.roster` is now the derived roster (`admitted − departed − removed`), and `SignedAdmissionRecord` keeps the admitted member's signing key inside the record — so a verified removal or departure names a *key* and fills `barred` for real (walled at tier 1 in `MeshIntroductionAuthorityTests`). What is still owed on a radio is a removal produced by a real quorum, which needs ≥ 3 nodes (⌊|roster|/2⌋ + 1 votes): until loop item 9's 3-node lane, a two-Simulator run still reaches the branch with `PROXIMITYKIT_MESH_CHAOS_BARRED`. |
 | 4. Ended / foreign meshID | **Observed, both sub-cases** | *Ended*: the device that left names the unbound all-zero mesh id and still refuses for the mesh reason, not the roster reason — `refused foreignMesh as responder: mesh=00000000-…-000000000000 … rosterMembers=0` — which is the mesh gate firing ahead of the roster gate, live. *Foreign*: two real, different mesh ids — `refused foreignMesh as responder: mesh=11111111-…` against a peer naming `99999999-…`. |
 | 5. Introduction failure (tampered signature) | **Observed** | `refused signatureInvalid as responder at the signed introduction` → `The peer's channel-introduction signature did not verify.` The initiator saw only `A QUIC channel introduction did not complete: … MeshTransportError error 2` — **the responder never signed for a peer it had already refused**, so there was no second frame to read. The ordering property, observed rather than asserted. |
-| 6. Replayed nonce | **Observed** | With `FERNLET_MESH_CHAOS=frozenNonce` and empty rosters, attempt 1 logs `refused unknownIdentity` (the nonce is admitted to the cache before the roster is consulted) and attempts 2–3 log `refused replayedNonce as responder: …` → `The peer replayed a channel-introduction nonce.` The three-attempt dial budget is what supplies the second introduction. |
+| 6. Replayed nonce | **Observed** | With `PROXIMITYKIT_MESH_CHAOS=frozenNonce` and empty rosters, attempt 1 logs `refused unknownIdentity` (the nonce is admitted to the cache before the roster is consulted) and attempts 2–3 log `refused replayedNonce as responder: …` → `The peer replayed a channel-introduction nonce.` The three-attempt dial budget is what supplies the second introduction. |
 
 Rows not in the matrix — `malformedHello`, `unsupportedProtocolVersion`, `divergentEpoch`,
 `selfIntroduction`, `malformedIntroduction`, `channelBindingMismatch`, `missingPeerHello` — are
@@ -1050,7 +1057,7 @@ entry points the UI calls (`sendTempMessage`, `addPhoto`), echoing what each sid
 ```
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<uuid> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<base64-key,base64-key> \
 SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit,capabilities,chat,photo,shop \
@@ -1217,7 +1224,7 @@ xcrun simctl launch --console-pty <udid> MBO.Fernlet -completeOnboarding
 # 2. the run — identical environment on all three, ~3 s apart, a FRESH log path per node
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=threeNode-<A|B|C> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=33333333-3333-3333-3333-333333333333 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<keyA>,<keyB>,<keyC> \
@@ -1623,7 +1630,7 @@ compiles the environment reads, the seams and the echoes to nothing.
 # 2. the pair, launched ~3 s apart, a FRESH log path per node
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=<run>-<A|B> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=44444444-4444-4444-4444-444444444444 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<keyA>,<keyB> \
@@ -1647,7 +1654,7 @@ the gossiped descriptor, which is what every Lane C run before this one was doin
 | 1 | **Admission across a live roster** | **Proven** (runs 1, 2, 3) | A: `founder armed=true ledger=present derived=1 …` → `admitting fb795f343c2954da` → `membership ledger=present derived=2 barred=0 status=active`. B: `requesting admission asked=true` → `membershipRecord fernlet.mesh.member-admission.v1 accepted` → `membership ledger=present derived=2`. Both nodes' rosters are **derived**, not descriptor: `ledger=present` is the flag |
 | 2 | **Rotation crossing a tunnel** | **Proven** (runs 1, 2, 3) | Both nodes converge on the *same* head within one poll of the admission — run 2: `epochRef=1.ba90f6b015431d40e21496274e6e348f.d996bc564a17da2d` on A **and** on B; run 3: `1.c7ab028f2fb754ee6b136d685ecf9971.d996bc564a17da2d` on both. A (the lower fingerprint) is the coordinator named inside the ref, so A minted and B adopted — the key crossed the real QUIC tunnel, since B's head cannot be derived without the key it wraps |
 | 3 | **Clean departure → `member-departure.v1`** | **Proven, but INTERMITTENT — see the finding** | Run 2, B: `leaving via leaveSessionAfterNotifyingPeers …` → `[mesh-quic] membershipFrame sent fernlet.mesh.member-departure.v1 slots=1 recipients=all`. A: `[mesh-quic] membershipRecord fernlet.mesh.member-departure.v1 accepted` → `membership ledger=present derived=1 barred=1 status=active` → `epochRef=2.f60d0277d6c2fe0cb69287ccaf4b5233.d996bc564a17da2d` — the roster moved 2→1, B moved into `barred`, and the `.membership` rotation to epoch 2 happened with B necessarily excluded (it is barred and disconnected). **Run 1 lost it**: same steps, and A's roster never left `derived=2` |
-| 4 | **Removal ejecting a peer at its next connect** | **Proven** (run 3) | A at t+40 s: `removal filed=true target=fb795f343c2954da ledger=present derived=1 barred=1`. B relaunched at t+73 s: A logs, three times, `[mesh-quic] refused barredMember as responder: mesh=55555555-… epoch="1.c7ab…" rosterMembers=1 rosterBarred=1` and `A QUIC tunnel was refused: The peer has departed, been removed, or been blocked.` B logs `tunnelEnded introductionFailed unverified live=false … The outbound QUIC tunnel failed its signed channel introduction.` The run's own banner reads `chaosBarred=none`: **this is the shipping derived roster's answer, with `FERNLET_MESH_CHAOS_BARRED` unset** — matrix row 3 no longer needs the chaos hook on a pair |
+| 4 | **Removal ejecting a peer at its next connect** | **Proven** (run 3) | A at t+40 s: `removal filed=true target=fb795f343c2954da ledger=present derived=1 barred=1`. B relaunched at t+73 s: A logs, three times, `[mesh-quic] refused barredMember as responder: mesh=55555555-… epoch="1.c7ab…" rosterMembers=1 rosterBarred=1` and `A QUIC tunnel was refused: The peer has departed, been removed, or been blocked.` B logs `tunnelEnded introductionFailed unverified live=false … The outbound QUIC tunnel failed its signed channel introduction.` The run's own banner reads `chaosBarred=none`: **this is the shipping derived roster's answer, with `PROXIMITYKIT_MESH_CHAOS_BARRED` unset** — matrix row 3 no longer needs the chaos hook on a pair |
 
 #### Finding — a clean departure can be lost in the teardown that follows it
 
@@ -1777,7 +1784,7 @@ Session 1 environment (both nodes, plus the two `LEAVE_AFTER`s):
 
 ```
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic  SIMCTL_CHILD_FERNLET_MESH_MATRIX=1
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=77777777-7777-7777-7777-777777777781
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<KA>,<KB>
 SIMCTL_CHILD_FERNLET_MESH_ROLE=founder|joiner
@@ -1826,7 +1833,7 @@ ready-made spec; note in passing that the moderation **vote** never needed the t
 Two Simulators, **A** = `iPhone 17` (fp `3afcbe8b61420864`), **B** = `iPhone 17 Pro`
 (fp `fb795f343c2954da`), app installed from the P8 DerivedData build of `main` at `526d0e1` — no
 rebuild. Every launch carried `FERNLET_MESH_TRANSPORT=quic FERNLET_MESH_MATRIX=1
-FERNLET_MESH_CONSOLE_LOG=1`, a seeded two-member descriptor, `FLOWS=commit,capabilities`, `STAGGER=1`
+PROXIMITYKIT_MESH_CONSOLE_LOG=1`, a seeded two-member descriptor, `FLOWS=commit,capabilities`, `STAGGER=1`
 (3 s), a fresh log directory, and a per-sim audit stream started **before** the launch:
 
 ```
@@ -1960,7 +1967,7 @@ member list:
 
 ```
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic  SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1   SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=p9item0-<run>-<n> \
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1   SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=p9item0-<run>-<n> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<uuid> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<KA>[,<KB>…] \
 SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit,capabilities \
@@ -2283,7 +2290,7 @@ the OTHER side would race the yield (its `armFounderLedgerForHarness()` guard is
 
 ```
 # founder (the LOWER fingerprint) — no MESH_ID, no MEMBERS
-SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=unseeded1-founder \
 SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit SIMCTL_CHILD_FERNLET_MESH_ROLE=founder \
 xcrun simctl launch --console-pty <A-udid> MBO.Fernlet -completeOnboarding
@@ -2512,7 +2519,7 @@ Simulator side:
 ```
 SIMCTL_CHILD_FERNLET_MESH_TRANSPORT=quic \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 \
-SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 \
+SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=laneD-wifi \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MESH_ID=<mesh-uuid> \
 SIMCTL_CHILD_FERNLET_MESH_MATRIX_MEMBERS=<device-key>,<sim-key> \
@@ -2528,7 +2535,7 @@ child process; Xcode sets them on the device process directly):
 | --- | --- |
 | `FERNLET_MESH_TRANSPORT` | `quic` |
 | `FERNLET_MESH_MATRIX` | `1` |
-| `FERNLET_MESH_CONSOLE_LOG` | `1` |
+| `PROXIMITYKIT_MESH_CONSOLE_LOG` | `1` |
 | `FERNLET_MESH_MATRIX_LABEL` | `laneD-wifi` |
 | `FERNLET_MESH_MATRIX_MESH_ID` | `<mesh-uuid>` — identical to the Simulator's |
 | `FERNLET_MESH_MATRIX_MEMBERS` | `<device-key>,<sim-key>` — identical to the Simulator's |
@@ -2731,11 +2738,11 @@ the Simulator the side that is frozen. Phone side (the Xcode-scheme step, withou
 
 ```
 xcrun devicectl device process launch --device <coredevice-uuid> --terminate-existing --activate --console \
-  --environment-variables '{"OS_ACTIVITY_DT_MODE":"YES","FERNLET_MESH_MATRIX":"1","FERNLET_MESH_CONSOLE_LOG":"1",
+  --environment-variables '{"OS_ACTIVITY_DT_MODE":"YES","FERNLET_MESH_MATRIX":"1","PROXIMITYKIT_MESH_CONSOLE_LOG":"1",
                             "FERNLET_MESH_MATRIX_LABEL":"hw-run1b-founder","FERNLET_MESH_FLOWS":"commit","FERNLET_MESH_ROLE":"founder"}' \
   MBO.Fernlet -- -completeOnboarding
 # Simulator, 3 s later: the same five FERNLET_ variables under SIMCTL_CHILD_, LABEL=hw-run1b-joiner, ROLE=joiner
-SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_FERNLET_MESH_CONSOLE_LOG=1 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=hw-run1b-joiner \
+SIMCTL_CHILD_FERNLET_MESH_MATRIX=1 SIMCTL_CHILD_PROXIMITYKIT_MESH_CONSOLE_LOG=1 SIMCTL_CHILD_FERNLET_MESH_MATRIX_LABEL=hw-run1b-joiner \
 SIMCTL_CHILD_FERNLET_MESH_FLOWS=commit SIMCTL_CHILD_FERNLET_MESH_ROLE=joiner \
 xcrun simctl launch --console-pty <sim-udid> MBO.Fernlet -completeOnboarding
 ```

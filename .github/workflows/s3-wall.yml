@@ -430,6 +430,17 @@ jobs:
         # ran 112 tests in 11 suites; its floor stays the shared `1`. crypto-goldens stays 356: the
         # goldens' field-path row labels follow the field (`family.radios.pair.*`, diagnostic labels),
         # every frozen value unchanged.
+        #
+        # ProximityKit plan step A1.0.4 (2026-10-11), the last commit of plan step A1.0, gives the six
+        # DEBUG launch-environment keys ProximityKit reads its own name, `PROXIMITYKIT_*` (the mesh
+        # manager's three UI-test flags, the transport's console mirror and its two chaos keys), with
+        # the UI tests, the app's rejection-matrix banner and harness check, and the runbook.
+        # `ProximityNamespaceBoundaryTests`' rule 3 holds no row (its two DEBUG-hook reasons went with
+        # the six), so no literal in ProximityKit's code spells `fernlet` and the keys' old spellings
+        # fail there; `TestHookBoundaryTests`, which rides no line of this workflow, walls the keys as
+        # two families of their own. No suite joined or left a line and no cell was added, and the
+        # line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11
+        # suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
