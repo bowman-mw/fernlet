@@ -417,6 +417,19 @@ jobs:
         # was added to this one, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
         # 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`. crypto-goldens is raised
         # 355 -> 356 for the namespace golden's host-signature-label cell (see its step).
+        #
+        # ProximityKit plan step A1.0.3 (2026-10-11), the third commit of plan step A1.0, gives the pair
+        # session's mechanism its pair names: the nine recipe-named types (the transfer record, the
+        # discovery gate, the advertised name, the advertisement, the dial hello, the posture, the radio
+        # seam, the QUIC radio and its private transfer claim) are `ProximityPair*`, `NetworkPairSession`
+        # and `PairTransferClaim`, the folder `PairSession/`, and the namespace's public radio field
+        # `Radios.pair`. `ProximityNamespaceBoundaryTests`' rule 6 refuses the nine old names (96 names)
+        # and, inside its existing cells, the field's old name as any whole identifier in ProximityKit
+        # code, its matcher fixtured beside the moved-type matcher. No suite joined or left a line and no
+        # cell was added, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5),
+        # ran 112 tests in 11 suites; its floor stays the shared `1`. crypto-goldens stays 356: the
+        # goldens' field-path row labels follow the field (`family.radios.pair.*`, diagnostic labels),
+        # every frozen value unchanged.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

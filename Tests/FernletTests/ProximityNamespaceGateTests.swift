@@ -141,7 +141,7 @@ struct ProximityNamespaceGateTests {
     /// `recipe.quic.namespaceUnsound` at `start`, and nothing else, before it mints a posture.
     @Test func theRecipeShareRadioRefusesToStartUnderAnUnsoundNamespace() {
         let unsound = GateFixtureApp.unsound()
-        let radio = NetworkRecipeShareSession(namespace: unsound, profile: .recipeShare(in: unsound))
+        let radio = NetworkPairSession(namespace: unsound, profile: .recipeShare(in: unsound))
         defer { radio.stop() }
         #expect(radio.namespaceSoundness == .unsound(GateFixtureApp.unsoundViolations),
                 "the recipe-share radio keeps \(radio.namespaceSoundness), not its namespace's verdict")
@@ -404,7 +404,7 @@ struct ProximityNamespaceGateTests {
         let radios = store.proximityNamespace.family.radios
         let profiles = [
             ProximityPairProfile(auditArea: "recipeShare", radio: radios.mesh, advertisementMode: "recipe"),
-            ProximityPairProfile(auditArea: "recipeShare", radio: radios.recipeShare, advertisementMode: "")
+            ProximityPairProfile(auditArea: "recipeShare", radio: radios.pair, advertisementMode: "")
         ]
         // R2: bounded by the two profiles.
         for profile in profiles {
@@ -664,9 +664,9 @@ struct ProximityNamespaceGateTests {
     /// start runs passes that verdict without a line; the refusal cells above prove the starts run it.
     @Test func aSoundNamespacePassesTheRadiosDoors() throws {
         let sound = GateFixtureApp.sound()
-        let recipe = NetworkRecipeShareSession(namespace: sound, profile: .recipeShare(in: sound))
+        let recipe = NetworkPairSession(namespace: sound, profile: .recipeShare(in: sound))
         defer { recipe.stop() }
-        var posture: RecipeSharePosture?
+        var posture: ProximityPairPosture?
         let recipeLines = try GateAuditLines.delivered { posture = try recipe.runWithoutRadiosForTesting() }
         #expect(posture != nil && recipe.isRunning, "the recipe-share radio of a sound namespace did not start")
         #expect(recipeLines.allSatisfy { !$0.event.hasSuffix(".namespaceUnsound") }, "it wrote \(recipeLines)")
@@ -937,7 +937,7 @@ private enum GateFixtureApp {
             radios: ProximityNamespace.Radios(
                 mesh: ProximityNamespace.Radio(serviceType: "_gate-mesh._udp", alpn: "gate-mesh-v1"),
                 presence: ProximityNamespace.Radio(serviceType: "_gate-near._udp", alpn: "gate-near-v1"),
-                recipeShare: ProximityNamespace.Radio(serviceType: "_gate-recipe._udp", alpn: "gate-recipe-v1"),
+                pair: ProximityNamespace.Radio(serviceType: "_gate-recipe._udp", alpn: "gate-recipe-v1"),
                 meshHeartbeat: Data("gate-heartbeat".utf8),
                 meshInstanceNamePrefix: "gate-link-", presenceInstanceNamePrefix: "gt-", tlsCommonName: "gate-link"),
             verifyQR: ProximityNamespace.VerifyQR(urlScheme: "gate"),

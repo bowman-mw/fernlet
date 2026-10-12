@@ -355,10 +355,10 @@ struct ProximityNamespaceGoldenTests {
                                today: .text(ProximityNamespace.fernlet.family.radios.presence.serviceType)),
             NamespaceGoldenRow(.radio, "family.radios.presence.alpn", frozen: "fernlet-near-v1",
                                today: .text(ProximityNamespace.fernlet.family.radios.presence.alpn)),
-            NamespaceGoldenRow(.radio, "family.radios.recipeShare.serviceType", frozen: "_fernlet-recipe2._udp",
-                               today: .text(ProximityNamespace.fernlet.family.radios.recipeShare.serviceType)),
-            NamespaceGoldenRow(.radio, "family.radios.recipeShare.alpn", frozen: "fernlet-recipe-v1",
-                               today: .text(ProximityNamespace.fernlet.family.radios.recipeShare.alpn)),
+            NamespaceGoldenRow(.radio, "family.radios.pair.serviceType", frozen: "_fernlet-recipe2._udp",
+                               today: .text(ProximityNamespace.fernlet.family.radios.pair.serviceType)),
+            NamespaceGoldenRow(.radio, "family.radios.pair.alpn", frozen: "fernlet-recipe-v1",
+                               today: .text(ProximityNamespace.fernlet.family.radios.pair.alpn)),
             NamespaceGoldenRow(.radio, "family.radios.meshHeartbeat", frozen: "fernlet-mesh-heartbeat",
                                today: .bytes(ProximityNamespace.fernlet.family.radios.meshHeartbeat))
         ]
@@ -553,7 +553,7 @@ struct ProximityNamespaceGoldenTests {
         let radios = [
             "FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift",
             "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift",
-            "FernletKit/Sources/ProximityKit/Transport/NetworkRecipeShareSession.swift"
+            "FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift"
         ]
         // R2: bounded by the three radios.
         for path in radios {
@@ -1045,8 +1045,8 @@ struct ProximityNamespaceGoldenTests {
             "family.radios.mesh.alpn": radios.mesh.alpn,
             "family.radios.presence.serviceType": radios.presence.serviceType,
             "family.radios.presence.alpn": radios.presence.alpn,
-            "family.radios.recipeShare.serviceType": radios.recipeShare.serviceType,
-            "family.radios.recipeShare.alpn": radios.recipeShare.alpn,
+            "family.radios.pair.serviceType": radios.pair.serviceType,
+            "family.radios.pair.alpn": radios.pair.alpn,
             "family.verifyQR.urlScheme": namespace.family.verifyQR.urlScheme,
             "installation.keychain.identity.service": keychain.identity.service,
             "installation.keychain.identity.signingPrivateKey": keychain.identity.signingPrivateKey,
@@ -2492,14 +2492,14 @@ struct ProximityNamespaceGoldenTests {
     @Test func theRadiosReadTheirValuesOffTheNamespace() {
         let mesh = NetworkMeshSession(namespace: .fernlet)
         let presence = NetworkPresenceSession(namespace: .fernlet)
-        let recipe = NetworkRecipeShareSession(namespace: .fernlet, profile: .recipeShare(in: .fernlet))
+        let recipe = NetworkPairSession(namespace: .fernlet, profile: .recipeShare(in: .fernlet))
         let read: [(field: String, bytes: Data)] = [
             ("family.radios.mesh.serviceType", Data(mesh.serviceType.utf8)),
             ("family.radios.mesh.alpn", Data(mesh.alpn.utf8)),
             ("family.radios.presence.serviceType", Data(presence.serviceType.utf8)),
             ("family.radios.presence.alpn", Data(presence.alpn.utf8)),
-            ("family.radios.recipeShare.serviceType", Data(recipe.serviceType.utf8)),
-            ("family.radios.recipeShare.alpn", Data(recipe.alpn.utf8)),
+            ("family.radios.pair.serviceType", Data(recipe.serviceType.utf8)),
+            ("family.radios.pair.alpn", Data(recipe.alpn.utf8)),
             ("family.radios.meshHeartbeat", mesh.heartbeatDatagram),
             ("family.purposes.keyDerivation.meshTLSExporterV1", mesh.tlsExporterLabel.data)
         ]
@@ -2516,12 +2516,12 @@ struct ProximityNamespaceGoldenTests {
         let radios = foreign.family.radios
         let foreignMesh = NetworkMeshSession(namespace: foreign)
         let foreignPresence = NetworkPresenceSession(namespace: foreign)
-        let foreignRecipe = NetworkRecipeShareSession(namespace: foreign, profile: .recipeShare(in: foreign))
+        let foreignRecipe = NetworkPairSession(namespace: foreign, profile: .recipeShare(in: foreign))
         #expect([foreignMesh.serviceType, foreignPresence.serviceType, foreignRecipe.serviceType]
-                == [radios.mesh.serviceType, radios.presence.serviceType, radios.recipeShare.serviceType],
+                == [radios.mesh.serviceType, radios.presence.serviceType, radios.pair.serviceType],
                 "a radio built from another app's namespace advertises a service type of its own")
         #expect([foreignMesh.alpn, foreignPresence.alpn, foreignRecipe.alpn]
-                == [radios.mesh.alpn, radios.presence.alpn, radios.recipeShare.alpn],
+                == [radios.mesh.alpn, radios.presence.alpn, radios.pair.alpn],
                 "a radio built from another app's namespace negotiates an ALPN of its own")
         #expect(foreignMesh.heartbeatDatagram == radios.meshHeartbeat, "the heartbeat is not the namespace's")
         #expect(foreignMesh.tlsExporterLabel == foreign.family.purposes.keyDerivation.meshTLSExporterV1,
@@ -3985,7 +3985,7 @@ private enum ForeignAppNamespace {
                 radios: ProximityNamespace.Radios(
                     mesh: ProximityNamespace.Radio(serviceType: "_acme-mesh._udp", alpn: "acme-mesh-v1"),
                     presence: ProximityNamespace.Radio(serviceType: "_acme-near._udp", alpn: "acme-near-v1"),
-                    recipeShare: ProximityNamespace.Radio(serviceType: "_acme-recipe._udp", alpn: "acme-recipe-v1"),
+                    pair: ProximityNamespace.Radio(serviceType: "_acme-recipe._udp", alpn: "acme-recipe-v1"),
                     meshHeartbeat: Data("acme-mesh-heartbeat".utf8),
                     meshInstanceNamePrefix: "acme-link-", presenceInstanceNamePrefix: "ac-",
                     tlsCommonName: "acme-link"),

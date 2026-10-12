@@ -31,7 +31,7 @@
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step (36 lines in 4 files: the presence
 //      radio's, until A1);
-//   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (87 names:
+//   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (96 names:
 //      the heart dead-drop's, presence's, moderation's (the report relay's among them), closeness's
 //      and friend state's types, the parked chat payload, the clothing shop's, the activity manager's
 //      with its payloads and the two domain types its signing extends, the live-session chat's with
@@ -40,9 +40,12 @@
 //      preferences, the review batch and its answer, the routed photo body and the JSON sidecar, the
 //      deleted support layout and camera's copy vault, the sealed-backup escrow's, the Live Activity
 //      reaper and its attributes, the app's since plan step A0.6, the recipe-share manager, its
-//      diagnostics ring and its wire types, FernletSocial's since plan step A0.7, and the three public
-//      values plan step A0.7 renamed, so no compatibility alias brings a recipe name back) is declared,
-//      extended or aliased in ProximityKit code again.
+//      diagnostics ring and its wire types, FernletSocial's since plan step A0.7, the three public
+//      values plan step A0.7 renamed, and the nine recipe-named types of the pair session's mechanism
+//      plan step A1.0 renamed with pair names, so no compatibility alias brings a recipe name back) is
+//      declared, extended or aliased in ProximityKit code again, and no renamed public member's old
+//      name (`recipeShare`, the namespace's pair-session radio, `Radios.pair` since plan step A1.0) is
+//      named in its code at all.
 //
 // And ProximityKit's target in `FernletKit/Package.swift` depends on nothing (plan step A1.0), so an
 // edge it dropped cannot come back unseen: FernletCrypto's (its identity signs and verifies only under
@@ -56,11 +59,11 @@
 // fails.
 // Rule 6 only grows: a feature that came back under its old name with no Fernlet string, no registry
 // label and no domain type of its own would pass rules 2 to 4, so each step that moves features out
-// adds the types it took, and a step that renames a public value for its generic use adds the old
-// name. Between them they hold what ProximityKit still takes from Fernlet rather than from its host:
-// the DEBUG test-hook names (until A1). No row names a domain type, a presentation string, a
-// membership record kind, a routed-type token or a coach-channel format, and no rule lists a line of
-// a feature that left (the heart dead-drop, presence, moderation's ban store and report relay,
+// adds the types it took, and a step that renames a type or a public member for its generic use
+// adds the old name. Between them they hold what ProximityKit still takes from Fernlet rather than
+// from its host: the DEBUG test-hook names (until A1). No row names a domain type, a presentation
+// string, a membership record kind, a routed-type token or a coach-channel format, and no rule lists
+// a line of a feature that left (the heart dead-drop, presence, moderation's ban store and report relay,
 // closeness, friend state, the parked chat payload, the mesh's capability list and vouch-list
 // content, the clothing shop, activities, the live-session chat, the session hearts and heart
 // ledger, the session photos and their review, the sealed-backup escrow, the Live Activity reaper
@@ -464,7 +467,7 @@ private extension UInt8 {
     /// ``everyConstructionPatternSeesItsFormAndNoNeighbour()`` holds every pattern to missing (its
     /// doc names each). Each is lexed first, as the module's files are.
     private static let constructionNeighbours = [
-        "let gate = RecipeShareDiscoveryGate.Radio(isRunning: true, isPaused: false)",
+        "let gate = ProximityPairDiscoveryGate.Radio(isRunning: true, isPaused: false)",
         "MeshTransportConsoleLog.echo(Self.refusalDetail(rejection, role: role, authority: authority))",
         "return try await settle(exchange, role: role, signed: signed, over: stream)",
         "tunnels[key] = Tunnel(peer: channel.peer, channel: channel, role: .initiator)",
@@ -977,7 +980,9 @@ private extension UInt8 {
     /// copy holds, were deleted; and (plan step A0.7) the recipe share, its manager, its diagnostics
     /// ring and its wire types, left for FernletSocial over the pair session that stayed, and its three
     /// public values were renamed in place for the one-to-one send, so their old names are refused here
-    /// too, against a compatibility alias. Rules 2 to 4 cannot see one come back: a feature
+    /// too, against a compatibility alias, as are (plan step A1.0) the old names of the nine
+    /// recipe-named types of the pair session's mechanism, renamed with pair names before the package
+    /// left Fernlet's tree. Rules 2 to 4 cannot see one come back: a feature
     /// re-declared here under its old name, with no Fernlet string, no registry label and no domain
     /// type of its own, compiles clean and passes them and every other test, and two declarations of
     /// one name in two modules the app imports compile until a caller names it. So each name is
@@ -987,9 +992,14 @@ private extension UInt8 {
     /// Only code counts: comments and literals may name a moved type freely, as the docs that say where
     /// it went do. The same matcher over types that stay (``declarationFloorNames``) must find each of
     /// them, so a matcher gone blind cannot pass the module vacuously.
+    /// A public member renamed in place has no declaration keyword the type matcher reads, so its old
+    /// name (``renamedMemberNames``) is refused as any whole identifier in code, read by
+    /// ``renamedMemberMatcherPattern(for:)``: a stored property, an initializer label and a read bring
+    /// it back alike.
     @Test func noMovedTypeIsDeclaredExtendedOrAliasedInProximityKit() throws {
         let moved = try NSRegularExpression(pattern: Self.movedTypeMatcherPattern(for: Self.movedTypeNames))
         let floor = try NSRegularExpression(pattern: Self.movedTypeMatcherPattern(for: Self.declarationFloorNames))
+        let renamed = try NSRegularExpression(pattern: Self.renamedMemberMatcherPattern(for: Self.renamedMemberNames))
         let sources = try Self.proximitySources()
         var violations: [String] = []
         var floorSeen: Set<String> = []
@@ -997,6 +1007,9 @@ private extension UInt8 {
         for source in sources {
             violations += Self.lineCaptures(of: moved, in: source.lexed.code).map {
                 "\(source.path):\($0.line): \($0.name)"
+            }
+            violations += Self.lineCaptures(of: renamed, in: source.lexed.code).map {
+                "\(source.path):\($0.line): \($0.name) (a renamed member's old name)"
             }
             floorSeen.formUnion(Self.lineCaptures(of: floor, in: source.lexed.code).map { $0.name })
         }
@@ -1008,11 +1021,12 @@ private extension UInt8 {
             pass every file vacuously
             """)
         #expect(violations.isEmpty, """
-            ProximityKit declares, extends or aliases a type that left it: \(violations). Fernlet's \
-            features live in FernletSocial and its sealed-backup escrow in the app, which depend on \
-            ProximityKit, never the reverse. Mechanism a feature needs belongs here under a name of its \
-            own, as public API with its contract or, while a named later step reshapes it, as a \
-            `package` door on rule 5's list; the feature itself goes back to its module.
+            ProximityKit declares, extends or aliases a type that left it, or names a renamed member's \
+            old name: \(violations). Fernlet's features live in FernletSocial and its sealed-backup \
+            escrow in the app, which depend on ProximityKit, never the reverse. Mechanism a feature \
+            needs belongs here under a name of its own, as public API with its contract or, while a \
+            named later step reshapes it, as a `package` door on rule 5's list; the feature itself goes \
+            back to its module, and a renamed type or member keeps its new name, with no alias.
             """)
     }
 
@@ -1027,7 +1041,8 @@ private extension UInt8 {
     /// radio's TXT vocabulary, the prekey store's alias for the bundle), a name that begins or ends
     /// with a moved name, a use of one as a type or a value, a class method that returns one, a host
     /// extension, and a comment and a literal that name one. Every sample is lexed first, as the
-    /// module's files are.
+    /// module's files are. The renamed-member matcher is fixtured beside it
+    /// (``expectTheRenamedMemberMatcherSeesEveryFormAndNoNeighbour()``).
     @Test func theMovedTypeMatcherSeesEveryFormAndNoNeighbour() throws {
         let matcher = try NSRegularExpression(pattern: Self.movedTypeMatcherPattern(for: Self.movedTypeNames))
         let read = { (source: String) in Self.lineCaptures(of: matcher, in: SwiftSourceLexer.lex(source).code) }
@@ -1081,6 +1096,29 @@ private extension UInt8 {
         for source in neighbours {
             #expect(read(source).isEmpty, "the moved-type matcher read \(read(source)) in: \(source)")
         }
+        try Self.expectTheRenamedMemberMatcherSeesEveryFormAndNoNeighbour()
+    }
+
+    /// The renamed-member matcher, fixtured both ways: it sees every listed old name as a stored
+    /// property, an initializer label, an assignment through `self` and a read off the namespace, each
+    /// on its line under its own name, and none of a longer name that begins or ends with it, a comment
+    /// or a literal that spells it (the field paths a diagnostic names).
+    /// Every sample is lexed first, as the module's files are.
+    static func expectTheRenamedMemberMatcherSeesEveryFormAndNoNeighbour() throws {
+        let matcher = try NSRegularExpression(pattern: Self.renamedMemberMatcherPattern(for: Self.renamedMemberNames))
+        let read = { (source: String) in Self.lineCaptures(of: matcher, in: SwiftSourceLexer.lex(source).code) }
+        // R2: bounded by the member list and four forms each way.
+        for name in Self.renamedMemberNames {
+            for form in ["public let \(name): Radio", "init(mesh: Radio, \(name): Radio) {",
+                         "self.\(name) = radio", "let radio = namespace.family.radios.\(name)"] {
+                #expect(read(form).map { $0.line } == [1] && read(form).map { $0.name } == [name],
+                        "the renamed-member matcher read \(read(form)) in: \(form)")
+            }
+            for form in ["let \(name)Listening = true", "let legacy\(name) = radio", "/// radios.\(name)",
+                         #"let field = "family.radios.\#(name).alpn""#] {
+                #expect(read(form).isEmpty, "the renamed-member matcher read \(read(form)) in: \(form)")
+            }
+        }
     }
 
     /// Every type that left ProximityKit for Fernlet's own modules, by its name. FernletSocial's: the
@@ -1108,8 +1146,12 @@ private extension UInt8 {
     /// its five wire types: the payload, the shared recipe and its kind, the saved recipe's payload and
     /// a pending inbound share). Renamed in place, since plan step A0.7: the three public values of the
     /// one-to-one send, the recipe share's outcome, its failure and its picker row, named
-    /// `ProximityPairSendOutcome`, `ProximityPairSendFailure` and `ProximityPairPeer`, so no
-    /// compatibility alias brings a recipe name back.
+    /// `ProximityPairSendOutcome`, `ProximityPairSendFailure` and `ProximityPairPeer`, and, since plan
+    /// step A1.0, the nine recipe-named types of the pair session's mechanism, named
+    /// `ProximityPairTransfer`, `ProximityPairDiscoveryGate`, `ProximityPairAdvertisedName`,
+    /// `ProximityPairAdvertisement`, `ProximityPairDialHello`, `ProximityPairPosture`,
+    /// `ProximityPairRadioSession`, `NetworkPairSession` and the radio's private `PairTransferClaim`, so
+    /// no compatibility alias brings a recipe name back.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -1135,8 +1177,17 @@ private extension UInt8 {
         "RecipeShareOutcome", "RecipeShareFailure", "ProximityRecipeShareRecipient",
         "ProximityRecipeShareManager", "ProximityRecipeShareDiagnosticEvent", "ProximityRecipeShareDiagnostics",
         "ProximityRecipeSharePayload", "ProximitySharedRecipeKind", "ProximitySharedRecipe",
-        "SharedSavedRecipePayload", "PendingProximityRecipeShare"
+        "SharedSavedRecipePayload", "PendingProximityRecipeShare",
+        "RecipeShareTransfer", "RecipeShareDiscoveryGate", "RecipeShareAdvertisedName", "RecipeShareAdvertisement",
+        "RecipeShareDialHello", "RecipeSharePosture", "RecipeShareRadioSession", "NetworkRecipeShareSession",
+        "RecipeShareTransferClaim"
     ]
+
+    /// Every public member renamed in place, by its old name, which ProximityKit code names nowhere:
+    /// `recipeShare`, the namespace's pair-session radio (`ProximityNamespace.Radios.recipeShare` and its
+    /// `Radios.init` label), named `pair` since plan step A1.0. A host builds its namespace through that
+    /// label, so the old name back as a field, a label or a read would be a compatibility door.
+    static let renamedMemberNames = ["recipeShare"]
 
     /// Types that stay in ProximityKit, each declared or extended there, which rule 6's matcher must
     /// find: its floor against a blind matcher.
@@ -1156,6 +1207,14 @@ private extension UInt8 {
         let aliased = #"typealias\s+[A-Za-z_][A-Za-z0-9_]*\s*(?:<[^>\n]*>\s*)?=\s*"# + qualifier
         let alternatives = names.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
         return #"(?<![A-Za-z0-9_.])(?:"# + declared + "|" + aliased + ")(" + alternatives + #")(?![A-Za-z0-9_])"#
+    }
+
+    /// Rule 6's renamed-member matcher over lexed code, for `names`: any whole identifier that is one
+    /// of them (no identifier character on either side), so a declaration, a label and a read are
+    /// seen alike and a longer name is not; the name is capture group 1.
+    static func renamedMemberMatcherPattern(for names: [String]) -> String {
+        let alternatives = names.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        return #"(?<![A-Za-z0-9_])("# + alternatives + #")(?![A-Za-z0-9_])"#
     }
 
     // MARK: ProximityKit's package dependencies

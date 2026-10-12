@@ -24,7 +24,7 @@
 // 2 and 3 are two-pass by shape (a value, then the radio wearing it), and pass 1 changed nothing on
 // the air. Every clause below therefore carries at least one needle that is FALSE at the pass-1
 // commit and true at the pass-2 one: the manager naming `NetworkPresenceSession` /
-// `NetworkRecipeShareSession` and no `serviceType` at all; the QUIC service type declared in
+// `NetworkPairSession` and no `serviceType` at all; the QUIC service type declared in
 // `Info.plist`; the radio advertising the posture's OWN bytes; `makeSession:` existing to inject a
 // fake through. A needle satisfied by a rename alone is named as such in `GATES.md` and is not one.
 //
@@ -69,13 +69,13 @@ enum MeshP9Acceptance {
     /// FernletSocial's, and drives ProximityKit's presence radio from there.
     static let presenceManagerPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
 
-    /// The recipe radio, which also declares ``RecipeSharePosture`` (item 3 pass 2).
-    static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkRecipeShareSession.swift"
+    /// The recipe radio, which also declares ``ProximityPairPosture`` (item 3 pass 2).
+    static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift"
 
     /// The recipe radio's owner: ProximityKit's pair session (the recipe-share manager's mechanism
     /// until plan step A0.7.3, when the manager left for FernletSocial over it).
     static let recipePairSessionPath =
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
+        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
 
     /// The transport factory: the one file that decides which mesh radio a shipping launch builds.
     static let transportSelectionPath =
@@ -291,7 +291,7 @@ struct MeshP9EphemeralPostureAcceptanceTests {
     /// `PresenceEpochPosture.systemEntropy` / `.hexadecimal` as byte helpers, so the ban is on the
     /// posture's own MINT and on the epoch clock, not on the type's name.
     ///
-    /// Rule 7: `RecipeSharePosture` and its three mint sites exist only because pass 2 landed.
+    /// Rule 7: `ProximityPairPosture` and its three mint sites exist only because pass 2 landed.
     @Test func theTwoRadiosWearDifferentPosturesByDecisionAndNeitherWearsTheOthers() throws {
         let posture = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.posturePath))
         #expect(posture.contains("IdentityService.presenceEpochStart(at: now)"),
@@ -314,14 +314,14 @@ struct MeshP9EphemeralPostureAcceptanceTests {
             MeshRoutedSourceScan.bracedBody(
                 after: "func start(advertisement: [String: String]) throws {", in: session),
             "the recipe radio's start door is gone")
-        #expect(started.contains("RecipeSharePosture.minted("), "a fresh posture per start()")
+        #expect(started.contains("ProximityPairPosture.minted("), "a fresh posture per start()")
         let resumed = try #require(
             MeshRoutedSourceScan.bracedBody(after: "func resumeDiscovery() {", in: session),
             "the recipe radio's resume door is gone")
-        #expect(resumed.contains("RecipeSharePosture.minted("), "and a fresh one per resume()")
+        #expect(resumed.contains("ProximityPairPosture.minted("), "and a fresh one per resume()")
 
-        let one = try RecipeSharePosture.minted(now: MeshP9Acceptance.epochAnchor)
-        let two = try RecipeSharePosture.minted(now: MeshP9Acceptance.epochAnchor)
+        let one = try ProximityPairPosture.minted(now: MeshP9Acceptance.epochAnchor)
+        let two = try ProximityPairPosture.minted(now: MeshP9Acceptance.epochAnchor)
         #expect(one.instanceName != two.instanceName, "two mints at ONE instant share no name")
         #expect(one.sessionID != two.sessionID, "no session id")
         #expect(one.tlsIdentity.certificateDER != two.tlsIdentity.certificateDER,
@@ -334,12 +334,12 @@ struct MeshP9EphemeralPostureAcceptanceTests {
     /// for the keychain, a file or `UserDefaults` would owe a `Docs/PrivacyWipeCoverage.md` row and
     /// delete-all wiring that do not exist. Widened past the unit suite's presence-only cell to the
     /// recipe posture, which has no cell of its own, and restricted to the value declarations —
-    /// `NetworkRecipeShareSession` as a whole legitimately holds tasks.
+    /// `NetworkPairSession` as a whole legitimately holds tasks.
     @Test func neitherPostureIsPersistedAndTheValuesScheduleNothing() throws {
         let posture = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.posturePath))
         let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
         let recipePosture = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "nonisolated struct RecipeSharePosture {", in: session),
+            MeshRoutedSourceScan.bracedBody(after: "nonisolated struct ProximityPairPosture {", in: session),
             "the recipe posture's declaration is gone")
         // The vendor-identifier symbol is deliberately not spelled: `NoTrackingBoundaryTests` bans
         // it repo-wide including comments, so naming it here would only indict this suite.
@@ -348,15 +348,15 @@ struct MeshP9EphemeralPostureAcceptanceTests {
         // R2: bounded by the forbidden list × the two sources.
         for marker in forbidden {
             #expect(!posture.contains(marker), "PresenceEpochPosture reaches for '\(marker)'")
-            #expect(!recipePosture.contains(marker), "RecipeSharePosture reaches for '\(marker)'")
+            #expect(!recipePosture.contains(marker), "ProximityPairPosture reaches for '\(marker)'")
         }
         // R2: bounded by the three scheduling spellings.
         for marker in ["Task", "Timer", "sleep"] {
             #expect(!posture.contains(marker), "a value schedules nothing: PresenceEpochPosture '\(marker)'")
-            #expect(!recipePosture.contains(marker), "nor does RecipeSharePosture: '\(marker)'")
+            #expect(!recipePosture.contains(marker), "nor does ProximityPairPosture: '\(marker)'")
         }
         let wipe = try RepoRoot.source("Docs/PrivacyWipeCoverage.md")
-        #expect(!wipe.contains("PresenceEpochPosture") && !wipe.contains("RecipeSharePosture"), """
+        #expect(!wipe.contains("PresenceEpochPosture") && !wipe.contains("ProximityPairPosture"), """
             a posture has gained a wipe row, which means it gained a persisted surface — P9's \
             decision was "no new persisted surface", and a row here without a delete-all writer \
             beside it reads as coverage
@@ -434,9 +434,9 @@ struct MeshP9PresenceSwapAcceptanceTests {
         let radios = ProximityNamespace.fernlet.family.radios
         #expect(radios.presence.serviceType == "_fernlet-near2._udp")
         #expect(radios.presence.serviceType != radios.mesh.serviceType)
-        #expect(radios.presence.serviceType != radios.recipeShare.serviceType)
+        #expect(radios.presence.serviceType != radios.pair.serviceType)
         #expect(radios.presence.alpn != radios.mesh.alpn)
-        #expect(radios.presence.alpn != radios.recipeShare.alpn)
+        #expect(radios.presence.alpn != radios.pair.alpn)
         // PARSED, not grepped (item 9's fix review, NOTE 3): `declaredBonjourServiceTypes()` reads
         // `NSBonjourServices` as a plist array, so a type declared under a different key, in a
         // comment, or as a substring of a longer string is not mistaken for a declaration — and
@@ -583,7 +583,7 @@ enum MeshP9GateExpectation {
         /// Two — over the cap, and the reading a re-entrant register produces.
         case two
 
-        /// The `Int` the shipped ``RecipeShareDiscoveryGate/Radio`` takes.
+        /// The `Int` the shipped ``ProximityPairDiscoveryGate/Radio`` takes.
         var count: Int {
             switch self {
             case .none: return 0
@@ -598,7 +598,7 @@ enum MeshP9GateExpectation {
     /// Note what is NOT consulted: `isRunning`. A register arrives from `registerConnection`, which
     /// only runs on a radio that is up; refusing it on a dark manager would be a second owner for
     /// the same fact. The asymmetry with ``evicted(_:_:_:)`` below is real and is pinned here.
-    static func registered(_ running: Bool, _ paused: Bool, _ held: Held) -> RecipeShareDiscoveryGate.Verdict {
+    static func registered(_ running: Bool, _ paused: Bool, _ held: Held) -> ProximityPairDiscoveryGate.Verdict {
         switch (running, paused, held) {
         case (true, false, .none): return .unchanged
         case (true, false, .one): return .pause
@@ -619,7 +619,7 @@ enum MeshP9GateExpectation {
     ///
     /// `isRunning` IS consulted here, because a resume over a stopped radio would put a Bonjour
     /// registration and a QUIC listener back up behind a manager that believes it is dark.
-    static func evicted(_ running: Bool, _ paused: Bool, _ held: Held) -> RecipeShareDiscoveryGate.Verdict {
+    static func evicted(_ running: Bool, _ paused: Bool, _ held: Held) -> ProximityPairDiscoveryGate.Verdict {
         switch (running, paused, held) {
         case (true, true, .none): return .resume
         case (true, true, .one): return .unchanged
@@ -640,14 +640,14 @@ enum MeshP9GateExpectation {
     /// `refreshRequested`, `transportErrorWhileListening` and `stopped` all resolve through the
     /// radio's own `stop()` / `start()`, which clears the paused flag in the transport. Routing one
     /// through the gate too would give one state two owners.
-    static func stationary(_ running: Bool, _ paused: Bool, _ held: Held) -> RecipeShareDiscoveryGate.Verdict {
+    static func stationary(_ running: Bool, _ paused: Bool, _ held: Held) -> ProximityPairDiscoveryGate.Verdict {
         .unchanged
     }
 
     /// This expectation's verdict for one event against one reading.
     static func verdict(
-        _ event: RecipeShareDiscoveryGate.Event, _ running: Bool, _ paused: Bool, _ held: Held
-    ) -> RecipeShareDiscoveryGate.Verdict {
+        _ event: ProximityPairDiscoveryGate.Event, _ running: Bool, _ paused: Bool, _ held: Held
+    ) -> ProximityPairDiscoveryGate.Verdict {
         switch event {
         case .connectionRegistered: return registered(running, paused, held)
         case .connectionsEvicted: return evicted(running, paused, held)
@@ -672,7 +672,7 @@ struct MeshP9RecipeSwapAcceptanceTests {
     /// exactly the kind of behaviour a transport swap loses silently — the bytes still flow, the
     /// share still lands, and the only symptom is a third device that can suddenly see a paired one.
     @Test func theWholeDiscoveryGateProductAgreesWithThisBatterysOwnExpectation() {
-        let events: [RecipeShareDiscoveryGate.Event] = [
+        let events: [ProximityPairDiscoveryGate.Event] = [
             .connectionRegistered, .connectionsEvicted, .refreshRequested,
             .transportErrorWhileListening, .stopped
         ]
@@ -683,9 +683,9 @@ struct MeshP9RecipeSwapAcceptanceTests {
             for running in [true, false] {
                 for paused in [true, false] {
                     for held in MeshP9GateExpectation.Held.allCases {
-                        let radio = RecipeShareDiscoveryGate.Radio(
+                        let radio = ProximityPairDiscoveryGate.Radio(
                             isRunning: running, isPaused: paused, connectionCount: held.count)
-                        let shipped = RecipeShareDiscoveryGate.verdict(for: event, radio: radio)
+                        let shipped = ProximityPairDiscoveryGate.verdict(for: event, radio: radio)
                         let expected = MeshP9GateExpectation.verdict(event, running, paused, held)
                         #expect(shipped == expected, """
                             \(event) on running=\(running) paused=\(paused) held=\(held.count): \
@@ -753,7 +753,7 @@ struct MeshP9RecipeSwapAcceptanceTests {
         // The exactly-once oracle, on the value: `completionCount` can only be 0 or 1, and is 1
         // exactly when the phase is `.sent`. `apply` is mutating, so each call is bound to a `let`
         // first — `#expect` cannot hold a mutating call.
-        var transfer = RecipeShareTransfer(recipientID: UUID(), radioIsQuiet: true)
+        var transfer = ProximityPairTransfer(recipientID: UUID(), radioIsQuiet: true)
         let verified = transfer.apply(.peerVerified)
         let began = transfer.apply(.sendBegan(wireByteCount: 64))
         let completed = transfer.apply(.sendCompleted)
@@ -773,7 +773,7 @@ struct MeshP9RecipeSwapAcceptanceTests {
     /// that left `isDiscoveryPaused` set would bring the radio back up dark on the next visit, with
     /// nothing in the manager's state to explain it.
     @Test func aResumeMintsAWhollyFreshPostureAndAStopKeepsNoPause() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let first = try radio.runWithoutRadiosForTesting()
         radio.pauseDiscovery()
         #expect(radio.isDiscoveryPaused)
@@ -803,14 +803,14 @@ struct MeshP9RecipeSwapAcceptanceTests {
     /// observable state.
     @Test func theRecipeRadioIsItsOwnServiceAndItsPredecessorIsOffTheAir() throws {
         let radios = ProximityNamespace.fernlet.family.radios
-        #expect(radios.recipeShare.serviceType == "_fernlet-recipe2._udp")
-        #expect(radios.recipeShare.alpn == "fernlet-recipe-v1")
-        #expect(radios.recipeShare.serviceType != radios.mesh.serviceType)
-        #expect(radios.recipeShare.serviceType != radios.presence.serviceType)
-        #expect(radios.recipeShare.alpn != radios.mesh.alpn)
+        #expect(radios.pair.serviceType == "_fernlet-recipe2._udp")
+        #expect(radios.pair.alpn == "fernlet-recipe-v1")
+        #expect(radios.pair.serviceType != radios.mesh.serviceType)
+        #expect(radios.pair.serviceType != radios.presence.serviceType)
+        #expect(radios.pair.alpn != radios.mesh.alpn)
         // Parsed, not grepped — the same reader clause (b) and clause (d) use (NOTE 3).
         let declared = try NoTrackingBoundaryTests.declaredBonjourServiceTypes()
-        #expect(declared.contains(radios.recipeShare.serviceType),
+        #expect(declared.contains(radios.pair.serviceType),
                 "the QUIC recipe type is declared — without it discovery dies silently on device")
         // R2: bounded by the retired recipe pair.
         for retired in ["_fernlet-recipe._tcp", "_fernlet-recipe._udp"] {
@@ -821,7 +821,7 @@ struct MeshP9RecipeSwapAcceptanceTests {
         #expect(session.contains("alpn = profile.radio.alpn"),
                 "the session reads its ALPN off its pair profile's radio, the host namespace's recipe row")
         #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
-        #expect(NetworkRecipeShareSession.maxTunnels == 1,
+        #expect(NetworkPairSession.maxTunnels == 1,
                 "the shipped 2-device cap is what the pause/resume contract exists to preserve")
     }
 
@@ -834,8 +834,9 @@ struct MeshP9RecipeSwapAcceptanceTests {
     /// an `extension ProximityPairSession` in a new file reintroduces every needle without
     /// reddening a scan of the session alone.
     ///
-    /// Rule 7 for item 3: `RecipeShareRadioSession` / `NetworkRecipeShareSession` in the manager are
-    /// false at `79f6b15` and true at `ba34491`.
+    /// Rule 7 for item 3: the seam and its conformer in the manager (`ProximityPairRadioSession` /
+    /// `NetworkPairSession`, spelled `RecipeShareRadioSession` / `NetworkRecipeShareSession` until plan
+    /// step A1.0) are false at `79f6b15` and true at `ba34491`.
     @Test func discoveryMovesThroughTheGateAloneAndNoRecipeFileNamesTheRetiredRadio() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipePairSessionPath))
         let gate = try #require(
@@ -848,8 +849,8 @@ struct MeshP9RecipeSwapAcceptanceTests {
             #expect(whole == 1, "\(verb) is called \(whole) times; the gate is the one door")
             #expect(inside == whole, "\(verb) is called outside applyDiscoveryGate's own body")
         }
-        #expect(manager.contains("RecipeShareRadioSession"), "the manager drives the QUIC seam")
-        #expect(manager.contains("NetworkRecipeShareSession"), "whose production conformer it builds")
+        #expect(manager.contains("ProximityPairRadioSession"), "the manager drives the QUIC seam")
+        #expect(manager.contains("NetworkPairSession"), "whose production conformer it builds")
 
         // The BIRTH SEED has one mint site (item 9's fix review, FIX 3). `beginTransferForTesting`
         // is what every cell of this battery and of `RecipeShareTransferTests` drives; the pair
@@ -866,15 +867,15 @@ struct MeshP9RecipeSwapAcceptanceTests {
             the pair session's send mints its exchange record somewhere other than the one seeded helper — \
             which is how the shipping seed and the seed every test drives came apart before
             """)
-        let mints = manager.components(separatedBy: "RecipeShareTransfer(recipientID:").count - 1
+        let mints = manager.components(separatedBy: "ProximityPairTransfer(recipientID:").count - 1
         #expect(mints == 1, "the exchange record is constructed in \(mints) places; the helper is the one")
 
-        let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/RecipeSharing")
+        let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/PairSession")
         // Four since 2026-09-29: `ProximityPairSendOutcome.swift` (the send's frozen outcome tokens,
         // added as `RecipeShareOutcome.swift`) was read against the needle walk below, which it
         // passes — it names no radio at all.
         #expect(subtree.count == 4, """
-            the RecipeSharing subtree holds \(subtree.count) files, not the four it held when this \
+            the PairSession subtree holds \(subtree.count) files, not the four it held when this \
             was measured (the pair session, the advertisement, the transfer record and the send \
             outcome). A fifth is a file this cell's retired-radio walk has never been read against; \
             a fourth gone is a scan that lost its root. EXACT on purpose — `>= 4` was satisfied by \

@@ -210,7 +210,9 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
   - heart-drop derivations (:316–372) and presence tags (:373–446) become generic
     `pairSecret(purpose:)` and `epochTag(purpose:)` in the core, called with Fernlet's purposes.
 - **Stays in core:** the one-to-one mechanism pieces of `RecipeSharing/` (`RecipeShareTransfer`,
-  `RecipeShareAdvertisement`, `RecipeShareOutcome`), generalized in A0.7. Feature-only date helpers
+  `RecipeShareAdvertisement`, `RecipeShareOutcome`), generalized in A0.7 and renamed at A1.0 (the
+  folder `PairSession/`, `ProximityPairTransfer`, `ProximityPairAdvertisement`,
+  `ProximityPairSendOutcome`). Feature-only date helpers
   (`FernletDate.dayKey`, `MonotonicClock`) move out with the features.
 
 **A0.5 Split the routed mesh manager** (`MeshNetworkManager.swift`, 16,579 lines).
@@ -257,7 +259,8 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
 
 **A0.7 Generalize the one-to-one radio** into a profile-driven pair session.
 - The recipe profile reproduces today's bytes. The coach profile is added in C5.
-- `RecipeShareRadioSession` (`NetworkRecipeShareSession.swift:22`) is already a generic protocol.
+- `RecipeShareRadioSession` (`NetworkRecipeShareSession.swift:22`) is already a generic protocol
+  (`ProximityPairRadioSession`, in `Transport/NetworkPairSession.swift`, since A1.0).
 
 **A0.8 Sort the tests.**
 - **ProximityKit's own package test target,** `FernletKit/Tests/ProximityKitTests`: unhosted (the
@@ -323,8 +326,9 @@ end:
   `ProximityPairPosture` and `ProximityPairRadioSession`; the radio `NetworkPairSession` (file
   `Transport/NetworkPairSession.swift`); the private `PairTransferClaim`; the folder `PairSession/`;
   and the namespace's public field `Radios.pair` (one field; a coach row can join at C5). The
-  field-path labels `family.radios.recipeShare.*` relabel with the field; every frozen recipe token
-  stays.
+  field-path labels soundness and the goldens name follow the field (`family.radios.pair.*`: diagnostic
+  labels, never bytes); every frozen recipe token stays, and `ProximityNamespaceBoundaryTests` rule 6
+  refuses the old names.
 - **The DEBUG test-hook keys (owner decision: `PROXIMITYKIT_*`).** The four `FERNLET_UI_TEST_MESH_*`
   and three `FERNLET_MESH_*` launch-environment keys are renamed `PROXIMITYKIT_*`; the UI tests,
   `MeshRejectionMatrixHarness` and the feasibility runbook follow.

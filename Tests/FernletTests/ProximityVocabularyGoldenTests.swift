@@ -1451,7 +1451,7 @@ struct ProximityVocabularyGoldenTests {
     /// identity sits on a throwaway service it never writes.
     static func presentationReadings(of namespace: ProximityNamespace) throws -> PresentationReadings {
         let mesh = NetworkMeshSession(namespace: namespace)
-        let recipe = NetworkRecipeShareSession(namespace: namespace, profile: .recipeShare(in: namespace))
+        let recipe = NetworkPairSession(namespace: namespace, profile: .recipeShare(in: namespace))
         let recipePosture = try recipe.runWithoutRadiosForTesting()
         recipe.stop()
         let host = PresentationNamespaceHost(namespace: namespace)
@@ -1483,7 +1483,7 @@ struct ProximityVocabularyGoldenTests {
             family: ProximityNamespace.Family(
                 purposes: fernlet.family.purposes,
                 radios: ProximityNamespace.Radios(
-                    mesh: radios.mesh, presence: radios.presence, recipeShare: radios.recipeShare,
+                    mesh: radios.mesh, presence: radios.presence, pair: radios.pair,
                     meshHeartbeat: radios.meshHeartbeat, meshInstanceNamePrefix: "golden-link-",
                     presenceInstanceNamePrefix: "gl-", tlsCommonName: "golden-link"),
                 verifyQR: fernlet.family.verifyQR,
@@ -1956,7 +1956,7 @@ struct ProximityVocabularyGoldenTests {
             let instanceName = namespace.family.radios.meshInstanceNamePrefix + "0123456789ab"
             #expect(PeerNameDisplay.personName(instanceName, fingerprint: nil, in: namespace) == nil, note)
             #expect(PeerNameDisplay.personName("a1b2c3d4e5f60718", fingerprint: nil, in: namespace) == nil, note)
-            #expect(RecipeShareAdvertisedName.publishable(long, in: namespace) == capped, note)
+            #expect(ProximityPairAdvertisedName.publishable(long, in: namespace) == capped, note)
             let transcript = Self.transcriptNames(of: ["fp-long": long, "fp-blank": invisible], in: namespace)
             #expect(transcript == ["fp-long": capped, "fp-blank": policy.floor], note)
         }
@@ -1979,7 +1979,7 @@ struct ProximityVocabularyGoldenTests {
             #expect(names.voucher == policy.floor, "and filed the voucher as \(names.voucher ?? "nothing")")
             let host = PresentationNamespaceHost(namespace: namespace, displayName: long)
             let advertised = withExtendedLifetime(host) {   // the manager's `store` is `unowned`
-                Self.recipeAdvertisedFields(host: host)[RecipeShareAdvertisement.nameKey]
+                Self.recipeAdvertisedFields(host: host)[ProximityPairAdvertisement.nameKey]
             }
             #expect(advertised == capped, "a recipe-share manager under a cap of \(policy.maxLength) advertised \(advertised ?? "nothing")")
         }
@@ -2132,7 +2132,7 @@ struct ProximityVocabularyGoldenTests {
     static let radioFieldsTheNamespaceGoldenPins: Set<String> = [
         "family.radios.mesh.serviceType", "family.radios.mesh.alpn",
         "family.radios.presence.serviceType", "family.radios.presence.alpn",
-        "family.radios.recipeShare.serviceType", "family.radios.recipeShare.alpn",
+        "family.radios.pair.serviceType", "family.radios.pair.alpn",
         "family.radios.meshHeartbeat"
     ]
 
@@ -2521,15 +2521,15 @@ struct ProximityVocabularyGoldenTests {
 
     /// The radio a recipe-share manager over `host` builds: since plan step A0.7.3 its pair session's,
     /// `ProximityRecipeShareManager(store: host).pairSession.radioForTesting`; until then the manager's own.
-    static func recipeManagerRadio(host: any ProximityHost) -> any RecipeShareRadioSession {
+    static func recipeManagerRadio(host: any ProximityHost) -> any ProximityPairRadioSession {
         ProximityRecipeShareManager(store: host).pairSession.radioForTesting
     }
 
     /// The recipe radio for `namespace`, built explicitly: since plan step A0.7.3
-    /// `NetworkRecipeShareSession(namespace:profile:)` under Fernlet's recipe profile on `namespace`,
-    /// FernletConnections' `recipeShare(in:)`; until then `NetworkRecipeShareSession(namespace:)`.
-    static func recipeRadio(namespace: ProximityNamespace) -> NetworkRecipeShareSession {
-        NetworkRecipeShareSession(namespace: namespace, profile: .recipeShare(in: namespace))
+    /// `NetworkPairSession(namespace:profile:)` under Fernlet's recipe profile on `namespace`,
+    /// FernletConnections' `recipeShare(in:)`; until then the radio's own `init(namespace:)`.
+    static func recipeRadio(namespace: ProximityNamespace) -> NetworkPairSession {
+        NetworkPairSession(namespace: namespace, profile: .recipeShare(in: namespace))
     }
 
     /// The canonical bytes of 15b's recipe envelope, schema 2 under `.fernlet`'s labels: 336 bytes,
@@ -2601,12 +2601,13 @@ struct ProximityVocabularyGoldenTests {
     /// 15a's spellings: the record's keys, its version and its entry bound as frozen literals, and the
     /// dial hello's keys exactly the record's `sid` and `v`.
     static func expectRecipeKeySpellings() throws {
-        let spellings = [RecipeShareAdvertisement.versionKey, RecipeShareAdvertisement.sessionIDKey,
-                         RecipeShareAdvertisement.nameKey, RecipeShareAdvertisement.modeKey,
-                         RecipeShareAdvertisement.version]
+        let spellings = [ProximityPairAdvertisement.versionKey, ProximityPairAdvertisement.sessionIDKey,
+                         ProximityPairAdvertisement.nameKey, ProximityPairAdvertisement.modeKey,
+                         ProximityPairAdvertisement.version]
         #expect(spellings == ["v", "sid", "name", "mode", "1"], "the record's keys and version are \(spellings)")
-        #expect(RecipeShareAdvertisement.maxEntryByteCount == 255, "an entry may hold \(RecipeShareAdvertisement.maxEntryByteCount) bytes")
-        let hello = try RecipeShareDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
+        #expect(ProximityPairAdvertisement.maxEntryByteCount == 255,
+                "an entry may hold \(ProximityPairAdvertisement.maxEntryByteCount) bytes")
+        let hello = try ProximityPairDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
         let object = try #require(try JSONSerialization.jsonObject(with: hello) as? [String: Any], "the hello is no JSON object")
         #expect(Set(object.keys) == ["sid", "v"], "the hello's keys are \(object.keys.sorted())")
     }
@@ -2615,7 +2616,7 @@ struct ProximityVocabularyGoldenTests {
     /// browses the recipe row's service type and binds its ALPN.
     static func expectRecipeRadioRow() {
         let host = PresentationNamespaceHost(namespace: .fernlet, displayName: "Alex")
-        let radio = recipeManagerRadio(host: host) as? NetworkRecipeShareSession
+        let radio = recipeManagerRadio(host: host) as? NetworkPairSession
         #expect(radio?.serviceType == "_fernlet-recipe2._udp", "the manager's radio browses \(radio?.serviceType ?? "nothing")")
         #expect(radio?.alpn == "fernlet-recipe-v1", "the manager's radio binds \(radio?.alpn ?? "nothing")")
     }

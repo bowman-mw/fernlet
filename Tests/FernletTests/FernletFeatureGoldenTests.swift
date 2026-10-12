@@ -4458,9 +4458,9 @@ struct FernletFeatureGoldenTests {
         #expect(connectTimeout == 12, "the connect timeout is \(connectTimeout) s")
         #expect(Self.recipeProfile(in: .fernlet) == Self.frozenRecipeProfile,
                 "Fernlet's recipe profile is \(Self.recipeProfile(in: .fernlet))")
-        #expect(NetworkRecipeShareSession.maxTunnels == 1, "the recipe radio holds \(NetworkRecipeShareSession.maxTunnels) tunnels")
-        #expect(NetworkRecipeShareSession.maxPendingInbound == 2,
-                "the recipe radio holds \(NetworkRecipeShareSession.maxPendingInbound) pending inbound connections")
+        #expect(NetworkPairSession.maxTunnels == 1, "the recipe radio holds \(NetworkPairSession.maxTunnels) tunnels")
+        #expect(NetworkPairSession.maxPendingInbound == 2,
+                "the recipe radio holds \(NetworkPairSession.maxPendingInbound) pending inbound connections")
         // R2: bounded by the rows.
         for row in Self.recipeConstantsPaths {
             let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(row.path))
@@ -5646,7 +5646,7 @@ extension FernletFeatureGoldenTests {
 
     /// The file that holds the recipe pairing's channel-ready door and the pair session's constants:
     /// since plan step A0.7.3 ProximityKit's pair session; until then the recipe-share manager there.
-    static let recipeDoorPath = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
+    static let recipeDoorPath = "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
 
     /// The file that holds the recipe share's own constants (the inbound queue and rate limit, the
     /// signed summary and the payload's encoder): since plan step A0.7.3 FernletSocial's recipe-share

@@ -553,7 +553,7 @@ import Testing
     static let channelReadyDoors = [
         Door(path: "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
              signature: "private func handleChannelReady("),
-        Door(path: "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift",
+        Door(path: "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift",
              signature: "private func handleChannelReady("),
         Door(path: "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
              signature: "private func handleHeartChannelReady(")

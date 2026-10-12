@@ -280,7 +280,7 @@ struct PrivacyWipeCoverageTests {
     private static let identitySeamFiles = [
         "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
         "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift",
+        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift",
     ]
 
     /// The functions that together ARE the wipe path, keyed by a unique substring of their

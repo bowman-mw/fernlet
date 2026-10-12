@@ -8,7 +8,7 @@
 // earns.
 //
 // No cell here starts Bonjour — the unit-test invariant for proximity. The session cells run the
-// real `NetworkRecipeShareSession` with its framework objects suppressed
+// real `NetworkPairSession` with its framework objects suppressed
 // (`runWithoutRadiosForTesting`), so every decision around the listener runs; the manager cells
 // drive it over `FakeRecipeShareRadioSession`, the in-memory conformer of the seam pass 2 added.
 
@@ -30,7 +30,7 @@ import AIProviders
 /// `RecipeShareTransferTests` drive the manager through it too, because pass 2 replaced the
 /// never-started MultipeerConnectivity session those cells used to poke.
 @MainActor
-final class FakeRecipeShareRadioSession: RecipeShareRadioSession, NetworkChannelHost {
+final class FakeRecipeShareRadioSession: ProximityPairRadioSession, NetworkChannelHost {
     var onPeerDiscovered: ((PeerHandle) -> Void)?
     var onPeerLost: ((PeerHandle) -> Void)?
     var onPeerChannelReady: ((NetworkPeerChannel) -> Void)?
@@ -168,11 +168,11 @@ struct RecipeShareOverQUICTests {
     private func peer(advertisingSessionID sessionID: String, name: String = "Blair") -> PeerHandle {
         makePeer(
             named: "fernlet-mesh-\(UUID().uuidString.prefix(12))",
-            advertising: RecipeShareAdvertisement.publishedFields(
+            advertising: ProximityPairAdvertisement.publishedFields(
                 from: [
-                    RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
-                    RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode,
-                    RecipeShareAdvertisement.nameKey: name
+                    ProximityPairAdvertisement.versionKey: ProximityPairAdvertisement.version,
+                    ProximityPairAdvertisement.modeKey: ProximityPairAdvertisement.mode,
+                    ProximityPairAdvertisement.nameKey: name
                 ],
                 sessionID: sessionID
             )
@@ -195,26 +195,26 @@ struct RecipeShareOverQUICTests {
     /// that reused the retired transport's device-name identity would compile, would advertise, and
     /// would look exactly like this from the outside.
     @Test func theRadioAdvertisesAFreshPostureBesideTheOwnersFields() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let owner = [
-            RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
-            RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode,
-            RecipeShareAdvertisement.nameKey: "Alex"
+            ProximityPairAdvertisement.versionKey: ProximityPairAdvertisement.version,
+            ProximityPairAdvertisement.modeKey: ProximityPairAdvertisement.mode,
+            ProximityPairAdvertisement.nameKey: "Alex"
         ]
         let posture = try radio.runWithoutRadiosForTesting(advertisement: owner)
 
         let fields = radio.advertisedFieldsForTesting
-        #expect(fields[RecipeShareAdvertisement.versionKey] == "1")
-        #expect(fields[RecipeShareAdvertisement.modeKey] == "recipe")
-        #expect(fields[RecipeShareAdvertisement.nameKey] == "Alex")
-        #expect(fields[RecipeShareAdvertisement.sessionIDKey] == posture.sessionID,
+        #expect(fields[ProximityPairAdvertisement.versionKey] == "1")
+        #expect(fields[ProximityPairAdvertisement.modeKey] == "recipe")
+        #expect(fields[ProximityPairAdvertisement.nameKey] == "Alex")
+        #expect(fields[ProximityPairAdvertisement.sessionIDKey] == posture.sessionID,
                 "the sid on the air is the radio's own, not a copy the owner kept")
         #expect(radio.advertisedSessionID == posture.sessionID)
         #expect(radio.advertisedInstanceNameForTesting == posture.instanceName)
         #expect(posture.instanceName.hasPrefix(ProximityNamespace.fernlet.family.radios.meshInstanceNamePrefix),
                 "the name is the mesh's random shape, never a device name")
 
-        let second = NetworkRecipeShareSession()
+        let second = NetworkPairSession()
         let other = try second.runWithoutRadiosForTesting(advertisement: owner)
         #expect(other.instanceName != posture.instanceName)
         #expect(other.sessionID != posture.sessionID)
@@ -230,18 +230,18 @@ struct RecipeShareOverQUICTests {
     /// record's worst case is asserted rather than assumed.
     @Test func everyAdvertisedEntryFitsTheTXTLimit() throws {
         let longest = String(repeating: "a", count: MeshLinkAdvertisement.maxFieldValueLength)
-        let fields = RecipeShareAdvertisement.publishedFields(
+        let fields = ProximityPairAdvertisement.publishedFields(
             from: [
-                RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
-                RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode,
-                RecipeShareAdvertisement.nameKey: longest
+                ProximityPairAdvertisement.versionKey: ProximityPairAdvertisement.version,
+                ProximityPairAdvertisement.modeKey: ProximityPairAdvertisement.mode,
+                ProximityPairAdvertisement.nameKey: longest
             ],
             sessionID: UUID().uuidString
         )
         #expect(fields.count == 4)
-        #expect(RecipeShareAdvertisement.entriesFitTheTXTLimit(fields))
-        #expect(!RecipeShareAdvertisement.entriesFitTheTXTLimit(
-            ["t": String(repeating: "x", count: RecipeShareAdvertisement.maxEntryByteCount)]
+        #expect(ProximityPairAdvertisement.entriesFitTheTXTLimit(fields))
+        #expect(!ProximityPairAdvertisement.entriesFitTheTXTLimit(
+            ["t": String(repeating: "x", count: ProximityPairAdvertisement.maxEntryByteCount)]
         ), "the bound is a bound — an over-long entry must fail it")
     }
 
@@ -249,18 +249,18 @@ struct RecipeShareOverQUICTests {
     /// direction: a presence or mesh registration browsed on the wrong service type, or a peer that
     /// publishes `sid` with no `mode`, must not resolve a dialer.
     @Test func onlyAVersionOneRecipeAdvertisementCarriesASessionID() {
-        let good = RecipeShareAdvertisement.publishedFields(
+        let good = ProximityPairAdvertisement.publishedFields(
             from: [
-                RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
-                RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode
+                ProximityPairAdvertisement.versionKey: ProximityPairAdvertisement.version,
+                ProximityPairAdvertisement.modeKey: ProximityPairAdvertisement.mode
             ],
             sessionID: "abc"
         )
-        #expect(RecipeShareAdvertisement.sessionID(from: good) == "abc")
-        #expect(RecipeShareAdvertisement.sessionID(from: ["sid": "abc"]) == nil)
-        #expect(RecipeShareAdvertisement.sessionID(from: ["v": "2", "mode": "recipe", "sid": "abc"]) == nil)
-        #expect(RecipeShareAdvertisement.sessionID(from: ["v": "1", "mode": "near", "sid": "abc"]) == nil)
-        #expect(RecipeShareAdvertisement.sessionID(from: nil) == nil)
+        #expect(ProximityPairAdvertisement.sessionID(from: good) == "abc")
+        #expect(ProximityPairAdvertisement.sessionID(from: ["sid": "abc"]) == nil)
+        #expect(ProximityPairAdvertisement.sessionID(from: ["v": "2", "mode": "recipe", "sid": "abc"]) == nil)
+        #expect(ProximityPairAdvertisement.sessionID(from: ["v": "1", "mode": "near", "sid": "abc"]) == nil)
+        #expect(ProximityPairAdvertisement.sessionID(from: nil) == nil)
     }
 
     // MARK: - The dial hello
@@ -271,13 +271,13 @@ struct RecipeShareOverQUICTests {
     /// synthesized `Codable` emitted them the other way round on this toolchain, which is exactly
     /// the kind of thing a golden vector is supposed to catch before a peer does.
     @Test func theDialHelloIsAGoldenFrame() throws {
-        let encoded = try RecipeShareDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
+        let encoded = try ProximityPairDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
         #expect(String(data: encoded, encoding: .utf8) ==
                 #"{"sid":"550e8400-e29b-41d4-a716-446655440000","v":"1"}"#)
-        #expect(encoded.count <= RecipeShareDialHello.maxEncodedBytes)
-        let decoded = try #require(RecipeShareDialHello.decoded(encoded))
+        #expect(encoded.count <= ProximityPairDialHello.maxEncodedBytes)
+        let decoded = try #require(ProximityPairDialHello.decoded(encoded))
         #expect(decoded.sessionID == "550e8400-e29b-41d4-a716-446655440000")
-        #expect(decoded.version == RecipeShareAdvertisement.version)
+        #expect(decoded.version == ProximityPairAdvertisement.version)
     }
 
     /// The decoder's half of the rejection matrix: every malformed shape answers nil, which the
@@ -292,15 +292,15 @@ struct RecipeShareOverQUICTests {
             ("over-long sid", Data(
                 "{\"v\":\"1\",\"sid\":\"\(String(repeating: "x", count: MeshLinkAdvertisement.maxFieldValueLength + 1))\"}".utf8
             )),
-            ("oversize frame", Data(count: RecipeShareDialHello.maxEncodedBytes + 1))
+            ("oversize frame", Data(count: ProximityPairDialHello.maxEncodedBytes + 1))
         ]
         for (label, wire) in cases {
-            #expect(RecipeShareDialHello.decoded(wire) == nil, "\(label) was believed")
+            #expect(ProximityPairDialHello.decoded(wire) == nil, "\(label) was believed")
         }
         // And the encoder refuses to WRITE a frame it would refuse to read.
         #expect(throws: MeshTransportError.self) {
-            _ = try RecipeShareDialHello.encoded(
-                sessionID: String(repeating: "y", count: RecipeShareDialHello.maxEncodedBytes)
+            _ = try ProximityPairDialHello.encoded(
+                sessionID: String(repeating: "y", count: ProximityPairDialHello.maxEncodedBytes)
             )
         }
     }
@@ -309,25 +309,25 @@ struct RecipeShareOverQUICTests {
     /// refused as a self-dial, a `sid` no browsed peer carries is refused, and a resolved peer the
     /// owner declines is refused too. Only the last row admits.
     @Test func anInboundDialerResolvesOnlyToABrowsedPeerTheOwnerAccepts() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let posture = try radio.runWithoutRadiosForTesting()
         let friend = peer(advertisingSessionID: "friend-sid")
 
         // Fail closed: nothing wired at all.
-        #expect(radio.resolveInboundForTesting(RecipeShareDialHello(sessionID: "friend-sid")) == nil,
+        #expect(radio.resolveInboundForTesting(ProximityPairDialHello(sessionID: "friend-sid")) == nil,
                 "a radio nobody has wired must resolve nobody")
 
         radio.resolveDialer = { $0 == "friend-sid" ? friend : nil }
         radio.shouldAcceptDialer = { _ in false }
-        #expect(radio.resolveInboundForTesting(RecipeShareDialHello(sessionID: "friend-sid")) == nil,
+        #expect(radio.resolveInboundForTesting(ProximityPairDialHello(sessionID: "friend-sid")) == nil,
                 "the owner's cap gate said no and the connection was admitted anyway")
 
         radio.shouldAcceptDialer = { _ in true }
-        #expect(radio.resolveInboundForTesting(RecipeShareDialHello(sessionID: "nobody")) == nil,
+        #expect(radio.resolveInboundForTesting(ProximityPairDialHello(sessionID: "nobody")) == nil,
                 "a sid no browse result carries must not resolve")
-        #expect(radio.resolveInboundForTesting(RecipeShareDialHello(sessionID: posture.sessionID)) == nil,
+        #expect(radio.resolveInboundForTesting(ProximityPairDialHello(sessionID: posture.sessionID)) == nil,
                 "our own sid is an echo or a replay, never a peer")
-        #expect(radio.resolveInboundForTesting(RecipeShareDialHello(sessionID: "friend-sid"))?.id == friend.id)
+        #expect(radio.resolveInboundForTesting(ProximityPairDialHello(sessionID: "friend-sid"))?.id == friend.id)
     }
 
     // MARK: - Pause, resume, stop
@@ -339,7 +339,7 @@ struct RecipeShareOverQUICTests {
     /// bracket a pairing, so coming back under the same name hands any scanner in the room "the
     /// device that went quiet is the device that came back".
     @Test func aResumeReopensDiscoveryUnderAWhollyNewPosture() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let first = try radio.runWithoutRadiosForTesting()
         #expect(!radio.isDiscoveryPaused)
 
@@ -358,7 +358,7 @@ struct RecipeShareOverQUICTests {
     /// A pause is idempotent, a resume over an unpaused radio is a no-op, and neither touches a
     /// radio that was never started.
     @Test func pauseAndResumeAreRefusedOnARadioThatIsNotUp() {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         radio.pauseDiscovery()
         #expect(!radio.isDiscoveryPaused, "a stopped radio has no discovery to stand down")
         radio.resumeDiscovery()
@@ -367,14 +367,14 @@ struct RecipeShareOverQUICTests {
 
     /// **`stop()` clears the radio's OWN pause flag.**
     ///
-    /// ``RecipeShareDiscoveryGate``'s three "unchanged" rows — `refreshRequested`,
+    /// ``ProximityPairDiscoveryGate``'s three "unchanged" rows — `refreshRequested`,
     /// `transportErrorWhileListening` and `stopped` — say discovery is resolved by the radio's own
     /// `stop()`/`start()` rather than by the gate. That is only true if the flag resets here: a
     /// pause that survived a stop would leave the next `start()` advertising behind a radio that
     /// believes it is closed, and the gate would never reopen it because `connectionsEvicted`
     /// requires `isPaused` to be *this* radio's paused, not a stale one's.
     @Test func stoppingClearsTheRadiosOwnPauseFlag() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         radio.pauseDiscovery()
         #expect(radio.isDiscoveryPaused)
@@ -398,7 +398,7 @@ struct RecipeShareOverQUICTests {
     /// reaches the owner's START-failure door and stands the WHOLE radio down — here, in the
     /// middle of the user tapping a recipient whose Bonjour registration happened to lapse.
     @Test func aDialForAPeerWithNoBrowsedEndpointRefusesTheDialAndNotTheRadio() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let posture = try radio.runWithoutRadiosForTesting()
         var reported: [String] = []
         radio.onTransportError = { reported.append($0) }
@@ -419,8 +419,8 @@ struct RecipeShareOverQUICTests {
     /// connection, so each side's own dial dies at the far end too. The rule is the mesh's
     /// `MeshTunnelConvergence` over the two advertised instance names.
     @Test func simultaneousDialsCollapseToOneConnectionTheSameWayOnBothDevices() throws {
-        let alice = NetworkRecipeShareSession()
-        let bob = NetworkRecipeShareSession()
+        let alice = NetworkPairSession()
+        let bob = NetworkPairSession()
         let alicePosture = try alice.runWithoutRadiosForTesting()
         let bobPosture = try bob.runWithoutRadiosForTesting()
 
@@ -449,7 +449,7 @@ struct RecipeShareOverQUICTests {
     /// channel-ready gate answers "already connected" for a device it still holds a record for, so
     /// a silent yield would leave a coordinator waiting on a dead connection.
     @Test func aYieldEndsTheHeldTunnelAndTellsTheOwner() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let posture = try radio.runWithoutRadiosForTesting()
         let key = MeshLinkKey("peer-endpoint")
         radio.noteBrowsedNameForTesting(key, instanceName: outranking(posture.instanceName))
@@ -462,14 +462,14 @@ struct RecipeShareOverQUICTests {
 
         #expect(radio.admitInboundForTesting(at: key), "the peer must not be refused")
         #expect(radio.tunnelCountForTesting == 0, "our own dial was collapsed to make room")
-        #expect(disconnects == [NetworkRecipeShareSession.redundantTunnelCloseReason])
+        #expect(disconnects == [NetworkPairSession.redundantTunnelCloseReason])
         #expect(reported.isEmpty, "a collapse is not a transport failure")
     }
 
     /// And when our connection is the survivor, the arriving one is dropped and nothing we hold is
     /// disturbed — including the hard cap, which refuses a SECOND device outright.
     @Test func anInboundThatLosesTheTieBreakLeavesTheHeldTunnelAloneAndAThirdDeviceIsCapped() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let posture = try radio.runWithoutRadiosForTesting()
         let key = MeshLinkKey("peer-endpoint")
         radio.noteBrowsedNameForTesting(key, instanceName: outranked(posture.instanceName))
@@ -483,7 +483,7 @@ struct RecipeShareOverQUICTests {
         #expect(disconnects.isEmpty, "and the owner hears nothing, because nothing of its own ended")
 
         // The cap's radio-level floor: recipe sharing links two Fernlets at a time.
-        #expect(NetworkRecipeShareSession.maxTunnels == 1)
+        #expect(NetworkPairSession.maxTunnels == 1)
         #expect(!radio.admitInboundForTesting(at: MeshLinkKey("third-device")),
                 "a second device must never be seated, however the owner is wired")
     }
@@ -491,7 +491,7 @@ struct RecipeShareOverQUICTests {
     /// The connecting window: a dial in flight is a connecting peer until its control stream
     /// arrives, and the peer it is for is not "besides" itself.
     @Test func aDialInFlightCountsAsAConnectingPeerUntilItActivates() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         #expect(!radio.hasConnectingPeers(besides: nil))
 
@@ -517,7 +517,7 @@ struct RecipeShareOverQUICTests {
     /// The gate is wired the shape `ProximityPairSession` wires it, ending in
     /// `hasConnectingPeers(besides:)`, because that is where the question is actually asked.
     @Test func theOnlyInboundDialInFlightIsAdmitted() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         let browsed = MeshLinkKey("friend-endpoint")
         radio.noteBrowsedNameForTesting(browsed, instanceName: "fernlet-mesh-friendname")
@@ -533,7 +533,7 @@ struct RecipeShareOverQUICTests {
         #expect(radio.pendingInboundCountForTesting == 1, "booked before the hello, as the radio books it")
 
         let admitted = radio.adjudicateInboundForTesting(
-            RecipeShareDialHello(sessionID: "friend-sid"), pendingKey: pending
+            ProximityPairDialHello(sessionID: "friend-sid"), pendingKey: pending
         )
         #expect(admitted == browsed, """
             the inbound dial was refused with nothing else in flight — the connecting window \
@@ -545,7 +545,7 @@ struct RecipeShareOverQUICTests {
     /// And its sibling, which is the half the exclusion must not cost: a SECOND dialer arriving
     /// while one is still mid-hello is refused, so two devices cannot race past the cap.
     @Test func aSecondDialerArrivingWhileOneIsMidHelloIsRefused() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         let browsed = MeshLinkKey("friend-endpoint")
         radio.noteBrowsedNameForTesting(browsed, instanceName: "fernlet-mesh-friendname")
@@ -562,7 +562,7 @@ struct RecipeShareOverQUICTests {
         radio.bookPendingInboundForTesting(second)
 
         #expect(radio.adjudicateInboundForTesting(
-            RecipeShareDialHello(sessionID: "friend-sid"), pendingKey: first
+            ProximityPairDialHello(sessionID: "friend-sid"), pendingKey: first
         ) == nil, "a second connection mid-hello is a connecting peer and the cap must hold")
         #expect(radio.pendingInboundCountForTesting == 2, "a refusal does not drop the OTHER connection")
     }
@@ -606,9 +606,9 @@ struct RecipeShareOverQUICTests {
         let nameless = makePeer(
             named: "fernlet-mesh-3f2a9c81b4de",
             advertising: [
-                RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
-                RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode,
-                RecipeShareAdvertisement.sessionIDKey: "friend-sid"
+                ProximityPairAdvertisement.versionKey: ProximityPairAdvertisement.version,
+                ProximityPairAdvertisement.modeKey: ProximityPairAdvertisement.mode,
+                ProximityPairAdvertisement.sessionIDKey: "friend-sid"
             ]
         )
         radio.onPeerDiscovered?(nameless)
@@ -669,7 +669,7 @@ struct RecipeShareOverQUICTests {
     /// The radio's own classification of a browser failure: the browser is stood down and audited,
     /// and the radio stays up.
     @Test func aBrowserFailureStandsTheBrowserDownAndNotTheRadio() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         var reported: [String] = []
         radio.onTransportError = { reported.append($0) }
@@ -685,7 +685,7 @@ struct RecipeShareOverQUICTests {
     /// exact shape: this radio publishes once per `start()`/resume and owns no timer, so a silent
     /// `.remove` leaves nothing on the air with `isListening` still answering yes, forever.
     @Test func aWithdrawnRegistrationRepublishesUnderAFreshPosture() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         let first = try radio.runWithoutRadiosForTesting()
         var reported: [String] = []
         radio.onTransportError = { reported.append($0) }
@@ -720,10 +720,10 @@ struct RecipeShareOverQUICTests {
     /// own, and gives the slot back when it finishes.
     ///
     /// The route is projected by size alone through the same table the mesh's photo path uses, so
-    /// the projection `RecipeShareTransfer.route` reports and the pipe the radio actually takes
+    /// the projection `ProximityPairTransfer.route` reports and the pipe the radio actually takes
     /// cannot drift apart.
     @Test func aPictureRecipeEarnsATransferStreamAndATextRecipeDoesNot() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         let key = MeshLinkKey("peer-endpoint")
         radio.bookTunnelForTesting(key, role: .initiator)
@@ -745,7 +745,7 @@ struct RecipeShareOverQUICTests {
     /// `MeshTransferStreamTable.maxConcurrentInbound` streams, and a stream for a tunnel this radio
     /// does not hold is refused before a byte is read.
     @Test func theInboundTransferBudgetIsBoundedAndAnUnknownTunnelIsRefused() throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         let key = MeshLinkKey("peer-endpoint")
         radio.bookTunnelForTesting(key, role: .responder)
@@ -760,7 +760,7 @@ struct RecipeShareOverQUICTests {
 
     /// A frame above the shared wire ceiling is refused by the sender, before any stream is opened.
     @Test func anOversizedFrameIsRefusedBeforeItIsWritten() async throws {
-        let radio = NetworkRecipeShareSession()
+        let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
         let key = MeshLinkKey("peer-endpoint")
         radio.bookTunnelForTesting(key, role: .initiator)
@@ -768,14 +768,14 @@ struct RecipeShareOverQUICTests {
 
         await #expect(throws: PeerTransportError.self) {
             try await radio.send(
-                Data(count: NetworkRecipeShareSession.maxInboundWireBytes + 1),
+                Data(count: NetworkPairSession.maxInboundWireBytes + 1),
                 to: peer,
                 mode: .reliable
             )
         }
-        #expect(NetworkRecipeShareSession.maxInboundWireBytes == NetworkMeshSession.maxInboundWireBytes,
+        #expect(NetworkPairSession.maxInboundWireBytes == NetworkMeshSession.maxInboundWireBytes,
                 "all three transports must refuse identically")
-        #expect(ProximityRecipeSharePayload.maxWireBytes < NetworkRecipeShareSession.maxInboundWireBytes,
+        #expect(ProximityRecipeSharePayload.maxWireBytes < NetworkPairSession.maxInboundWireBytes,
                 "an honest recipe must fit the ceiling with room to seal")
     }
 
@@ -946,7 +946,7 @@ struct RecipeShareOverQUICTests {
         // `typealias`, reintroduces every needle above without reddening a scan of this one. The
         // subtree is, and `displayHint` joins the list — under QUIC the hint is empty, so a reader
         // that still prefers it renders nothing where a name belongs.
-        for (path, other) in try Self.recipeSharingSources() where path != Self.managerPath {
+        for (path, other) in try Self.pairSessionSources() where path != Self.managerPath {
             let otherCode = MeshRoutedSourceScan.codeOnly(other)
             for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",
                            "displayHint"] {
@@ -955,9 +955,9 @@ struct RecipeShareOverQUICTests {
         }
         #expect(!code.contains("displayHint"),
                 "a user-visible line names a peer by the transport hint again — see displayName(for peer:)")
-        #expect(code.contains("RecipeShareRadioSession"), "and it drives the QUIC recipe radio's seam")
-        #expect(code.contains("NetworkRecipeShareSession"), "whose production conformer it builds")
-        #expect(code.contains("RecipeShareAdvertisement"), "through the recipe TXT vocabulary")
+        #expect(code.contains("ProximityPairRadioSession"), "and it drives the QUIC recipe radio's seam")
+        #expect(code.contains("NetworkPairSession"), "whose production conformer it builds")
+        #expect(code.contains("ProximityPairAdvertisement"), "through the recipe TXT vocabulary")
 
         // Comments get the narrower rule the presence retirement drew: a framework API TYPE name in
         // prose describes machinery this file no longer has, while the framework's NAME describes
@@ -975,14 +975,14 @@ struct RecipeShareOverQUICTests {
     /// listener.
     @Test func theRecipeServiceTypeIsItsOwnAndIsDeclared() throws {
         let radios = ProximityNamespace.fernlet.family.radios
-        #expect(radios.recipeShare.serviceType == "_fernlet-recipe2._udp")
-        #expect(radios.recipeShare.alpn == "fernlet-recipe-v1")
-        #expect(radios.recipeShare.serviceType != radios.mesh.serviceType)
-        #expect(radios.recipeShare.serviceType != radios.presence.serviceType)
-        #expect(radios.recipeShare.alpn != radios.mesh.alpn)
-        #expect(radios.recipeShare.alpn != radios.presence.alpn)
+        #expect(radios.pair.serviceType == "_fernlet-recipe2._udp")
+        #expect(radios.pair.alpn == "fernlet-recipe-v1")
+        #expect(radios.pair.serviceType != radios.mesh.serviceType)
+        #expect(radios.pair.serviceType != radios.presence.serviceType)
+        #expect(radios.pair.alpn != radios.mesh.alpn)
+        #expect(radios.pair.alpn != radios.presence.alpn)
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
-        #expect(plist.contains("<string>\(radios.recipeShare.serviceType)</string>"))
+        #expect(plist.contains("<string>\(radios.pair.serviceType)</string>"))
         let session = try Self.sessionSource()
         #expect(session.contains("alpn = profile.radio.alpn"),
                 "the session reads its ALPN off its pair profile's radio, the host namespace's recipe row")
@@ -1008,28 +1008,28 @@ struct RecipeShareOverQUICTests {
     /// The recipe radio's owner, ProximityKit's pair session (the recipe-share manager's mechanism
     /// until plan step A0.7.3, when the manager left for FernletSocial over it).
     private static let managerPath =
-        "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
+        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
 
     private static func managerSource() throws -> String {
         try RepoRoot.source(managerPath)
     }
 
-    /// Every Swift file under `RecipeSharing/`, plus any file ANYWHERE in ProximityKit that
+    /// Every Swift file under `PairSession/`, plus any file ANYWHERE in ProximityKit that
     /// extends the pair session — the unit the rule-7 scan has to cover, because one file is not it.
-    private static func recipeSharingSources() throws -> [(String, String)] {
+    private static func pairSessionSources() throws -> [(String, String)] {
         let root = "FernletKit/Sources/ProximityKit"
         let directory = RepoRoot.url(root)
         let names = try FileManager.default
-            .contentsOfDirectory(atPath: directory.appendingPathComponent("RecipeSharing").path)
+            .contentsOfDirectory(atPath: directory.appendingPathComponent("PairSession").path)
             .filter { $0.hasSuffix(".swift") }
             .sorted()
-        #expect(names.count >= 3, "the RecipeSharing directory moved or emptied — the scan would pass vacuously")
+        #expect(names.count >= 3, "the PairSession directory moved or emptied — the scan would pass vacuously")
         var sources = try names.prefix(64).map {
-            ("\(root)/RecipeSharing/\($0)", try RepoRoot.source("\(root)/RecipeSharing/\($0)"))
+            ("\(root)/PairSession/\($0)", try RepoRoot.source("\(root)/PairSession/\($0)"))
         }
         let all = FileManager.default.enumerator(atPath: directory.path)?
             .compactMap { $0 as? String }.filter { $0.hasSuffix(".swift") } ?? []
-        for relative in all.sorted().prefix(512) where !relative.hasPrefix("RecipeSharing/") {
+        for relative in all.sorted().prefix(512) where !relative.hasPrefix("PairSession/") {
             let source = try RepoRoot.source("\(root)/\(relative)")
             guard source.contains("extension ProximityPairSession") else { continue }
             sources.append(("\(root)/\(relative)", source))
@@ -1038,6 +1038,6 @@ struct RecipeShareOverQUICTests {
     }
 
     private static func sessionSource() throws -> String {
-        try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkRecipeShareSession.swift")
+        try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift")
     }
 }
