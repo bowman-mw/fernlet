@@ -1575,16 +1575,19 @@ mode is ProximityKit's own `ProximitySessionMode`, and Fernlet's typed view of t
 is FernletConnections'), `package` to the doors its list names (the presence radio's seam, its QUIC
 conformer, the peer channel, the epoch posture and the TXT vocabulary until A1), and every
 type that left ProximityKit for `FernletSocial` or the app out of it (the recipe share's among them),
-with the recipe share's three public values it renamed for the one-to-one send: none is declared, extended or aliased there again. It holds ProximityKit's target to exactly one dependency too: FernletCrypto (the
-`CryptographicPurpose` signing overloads, until plan step A1.0 replaces them with a host label mint).
+with the recipe share's three public values it renamed for the one-to-one send: none is declared, extended or aliased there again. It holds ProximityKit's target to no dependency at all too (a literal `dependencies: []`, plan step
+A1.0): its identity signs and verifies only under its own `ProximityCryptographicPurpose`, a host's
+own signature labels minted with `featureSignature(_:framing:)`.
 The exact per-file lists in `ProximityNamespaceBoundaryTests` are the one place those numbers live.
 
 ### `Namespace/ProximityCryptographicPurpose.swift`
 
 | Function | What It Does |
 | --- | --- |
-| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers and `featureKeyDerivationSalt(_:)` call it, so every label is a source literal. `ProximityNamespaceBoundaryTests` refuses a call anywhere else in ProximityKit. |
-| `featureKeyDerivationSalt(_:)` (public) | The one host-callable mint: a host feature's HKDF salt from a `StaticString`, in the `.keyDerivationSalt` role. It reaches `IdentityService.pairSecret(with:purpose:)` only when the host's namespace declares it (`FeaturePurposes`), so the soundness verdict judges it with every protocol label; `ProximityNamespaceBoundaryTests` refuses a call to it in ProximityKit outside `Namespace/`. |
+| `init(_:role:)` (internal) | Mints a purpose from a `StaticString` with the role its namespace field fixes; only the group initializers and the two host mints, `featureKeyDerivationSalt(_:)` and `featureSignature(_:framing:)`, call it, so every label is a source literal. `ProximityNamespaceBoundaryTests` refuses a call anywhere else in ProximityKit. |
+| `featureKeyDerivationSalt(_:)` (public) | A host-callable mint: a host feature's HKDF salt from a `StaticString`, in the `.keyDerivationSalt` role. It reaches `IdentityService.pairSecret(with:purpose:)` only when the host's namespace declares it (`FeaturePurposes`), so the soundness verdict judges it with every protocol label; `ProximityNamespaceBoundaryTests` refuses a call to it in ProximityKit outside `Namespace/`. |
+| `featureSignature(_:framing:)` (public) | The other host-callable mint (plan step A1.0): a host feature's signature label from a `StaticString` and a `FeatureSignatureFraming`, `.lengthPrefixed` or `.rawPrefix` (the type has no `.absent`, so no run-time refusal), in the matching `.signature` role, which `IdentityService`'s `sign` and `verify` treat like any writable namespace signature label. Declared in no namespace, so the soundness verdict does not judge it: the host keeps it apart from other labels. Fernlet's six: `FernletFeatureSignatures` (FernletSocial) and the app's `DuressRecoveryTranscript.requestPurpose`/`replyPurpose` and `MeshProbeConstants.channelIntroductionPurpose`, each the twin of a FernletCrypto entry until C1. `ProximityNamespaceBoundaryTests` refuses a call to it in ProximityKit outside `Namespace/`. |
+| `FeatureSignatureFraming` | `.rawPrefix` or `.lengthPrefixed`, the two framings a live write format puts a label in: the only argument a host states about its own signature label. |
 | `data` | `Data(rawValue.utf8)`, no terminator, no normalization. |
 | `prefixBytes` | What the consumer writes first: `data` (raw prefix, and every role taking the label whole), the 8-byte big-endian count then `data` (length-prefixed), or nothing (`.absent`). |
 | `signingBytes(_:)` | The transcript unchanged when the role is a signature role and the transcript begins with `prefixBytes`, else nil: FernletCrypto's positional rule, refusing every non-signature role. |
@@ -1920,9 +1923,8 @@ same rule, so the core bindings file never imports the app.
 | `localFingerprint` | Returns fingerprint of current signing public key, or empty string before provisioning. |
 | `localSigningPublicKey` | Returns raw Ed25519 public key, or empty data before provisioning. |
 | `localKeyAgreementPublicKey` | Returns raw X25519 public key, or empty data before provisioning. |
-| `sign(_:purpose:)` with a `CryptographicPurpose` | Signs an already domain-tagged transcript after the registry purpose's positional `signingBytes` check, throwing `invalidKeyData` when it is misframed. Transitional since A0.2.3: it stays for FernletCrypto's registry until C1 — FernletSocial's activity join token, roster snapshot and moderation report labels, the app's duress and probe purposes, and the tests that name them; every core label's builder signs through the namespace overload since A0.2.5. No deprecation attribute (warnings are errors). |
-| `sign(_:purpose:)` with a `ProximityCryptographicPurpose` | The same Ed25519 boundary under a namespace label (A0.2.3). Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
-| `verify(_:of:by:purpose:)` with a `CryptographicPurpose` or a `ProximityCryptographicPurpose` | Verifies an Ed25519 signature over a transcript framed for the purpose (`signingBytes`). Under a namespace label a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. The registry overload is transitional, like its `sign`. |
+| `sign(_:purpose:)` | The one raw Ed25519 signing boundary, under a `ProximityCryptographicPurpose` alone (since plan step A1.0 no overload takes FernletCrypto's `CryptographicPurpose`): a namespace signature label or a host's own, minted with `featureSignature(_:framing:)`. Throws `invalidKeyData` for a misframed transcript, a verify-only `.signature(.absent)` label and any non-signature role; `signsUnder(_:)` decides the role, exhaustively over `Role`. |
+| `verify(_:of:by:purpose:)` | Verifies an Ed25519 signature over a transcript framed for the `ProximityCryptographicPurpose` (`signingBytes`): a non-signature role verifies nothing and the verify-only legacy pair accepts every transcript. |
 | `seal(_:to:)` | Pairwise-seals payload using ephemeral X25519 ECDH, HKDF-SHA256, and ChaChaPoly; since A0.2.6 the salt is the identity's `purposes.keyDerivation.proximityTransportV1` and the AAD `purposes.aead.proximityTransportV2` ‖ sender. |
 | `open(_:from:)` | Opens payloads created by `seal(_:to:)`. Requires the `FPT2` marker since crypto-standardization Phase 4 deleted the pre-marker read (which selected a bare static-key AAD): bytes without it throw `IdentityError.legacyWireFormat` — a peer on an old build, not a forger — rather than being opened under no typed purpose. |
 | `encryptGroupKey(_:for:)` | Wraps a 32-byte mesh group key for one recipient with ephemeral X25519 and AES-GCM; since A0.2.6 the salt and AAD are the identity's `purposes.keyDerivation.meshGroupKeyWrapV1` and `purposes.aead.meshGroupKeyWrapV2`. It needs no provisioned key, so it refuses an unsound namespace itself, first: throws `ProximityNamespaceError` and audits `identity.namespace.unsound` (at `groupKeyWrap`). |
@@ -3116,13 +3118,15 @@ run. Its own state is the diagnostics ring and the inbound queue.
 
 The canonical signing bytes of Fernlet's mesh features, each under its own FernletCrypto domain tag and
 written with ProximityKit's public `CanonicalByteWriter`, whose encodings the engine's goldens freeze;
-signed and verified through `IdentityService`'s `CryptographicPurpose` overloads. Signing INPUT only.
-Each overload is told apart from the serializer's by its parameter type alone.
+the three signed ones signed and verified through `IdentityService` under their host labels,
+`FernletFeatureSignatures`. Signing INPUT only. Each overload is told apart from the serializer's by
+its parameter type alone.
 
 | Function | What It Does |
 | --- | --- |
 | `canonicalBytes(for: ActivityDescriptor)` / `(for: ActivityJoinToken)` / `(for: ActivityRosterSnapshot)` | The three Group-Activity signed types. All include the signed `schemaVersion`, so `verify` gates on one encoder rather than dual-verifying forever. |
 | `canonicalBytes(for: ModerationLedgerEntry)` | Bytes for a moderation report row (Phase 3b). |
+| `FernletFeatureSignatures.activityJoinTokenV2`, `.activityRosterSnapshotV2`, `.moderationReportV2` | The labels the join token, the roster snapshot and the report row are signed and verified under, each minted with `ProximityCryptographicPurpose.featureSignature(_:framing:)`, length-prefixed, from the spelling of its FernletCrypto twin, the registry entry its domain tag reads (plan step A1.0). `ProximityNamespaceGoldenTests` holds each pair to the same bytes until C1. |
 
 ### `FernletSocial/Wire/MessagePayloads.swift`
 

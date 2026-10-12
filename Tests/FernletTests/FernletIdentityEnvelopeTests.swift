@@ -6,7 +6,7 @@
 
 import ProximityKit
 import Foundation
-import FernletCrypto
+import CryptoKit
 import FernletFoundation
 import Testing
 import FernletDomainModel
@@ -711,14 +711,54 @@ struct FernletIdentityEnvelopeTests {
         data.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// A not-yet-updated (pre-WI-6) in-field peer, as raw CryptoKit keys: the signer of the legacy
+    /// formats the dual verify still reads.
+    ///
+    /// ProximityKit's identity signs under no verify-only label (its `sign` refuses
+    /// `.signature(.absent)`, which accepts every transcript), so no `IdentityService` can mint a
+    /// legacy signature any more. Such a peer signed with its Ed25519 key over the legacy bytes as they
+    /// stand, and so does this fixture: over exactly the bytes `.fernlet`'s verify-only legacy label
+    /// passes on, which are the transcript unchanged.
+    private struct LegacyPeer {
+        /// The peer's Ed25519 signing key.
+        let signingKey = Curve25519.Signing.PrivateKey()
+        /// The peer's X25519 key-agreement key, carried in its envelopes.
+        let keyAgreementKey = Curve25519.KeyAgreement.PrivateKey()
+
+        /// The signing key's raw public bytes, as an envelope or token carries them.
+        var signingPublicKey: Data { signingKey.publicKey.rawRepresentation }
+        /// The key-agreement key's raw public bytes.
+        var keyAgreementPublicKey: Data { keyAgreementKey.publicKey.rawRepresentation }
+        /// The peer's fingerprint, as `IdentityService` computes it from the signing key.
+        var fingerprint: String { IdentityService.fingerprint(of: signingPublicKey) }
+
+        /// Signs a legacy transcript as such a peer did.
+        ///
+        /// - Parameters:
+        ///   - transcript: The legacy canonical bytes.
+        ///   - label: `.fernlet`'s verify-only legacy label for the format, which must pass the
+        ///     transcript on.
+        /// - Returns: The Ed25519 signature over the bytes `label` passes on.
+        func sign(_ transcript: Data, under label: ProximityCryptographicPurpose?) throws -> Data {
+            let bytes = try #require(label?.signingBytes(transcript), "no legacy label passes the transcript on")
+            return try signingKey.signature(for: bytes)
+        }
+    }
+
+    /// `.fernlet`'s verify-only legacy pair: the labels the dual verify reads schema-v1 envelopes and
+    /// pre-WI-6 admission tokens under.
+    private static var legacyLabels: ProximityNamespace.LegacyV1 {
+        ProximityNamespace.fernlet.family.purposes.signature.legacyV1
+    }
+
     /// Builds a v1 (pre-WI-6) signed envelope: signs over the LEGACY canonical bytes and stamps the
     /// legacy schema version, exactly as a not-yet-updated in-field peer would.
-    private func legacySignedEnvelope(sender: IdentityService, payload: Data) throws -> FernletIdentityEnvelope {
+    private func legacySignedEnvelope(sender: LegacyPeer, payload: Data) throws -> FernletIdentityEnvelope {
         var env = FernletIdentityEnvelope(
             schemaVersion: FernletIdentityEnvelope.legacySchemaVersion,
             envelopeID: UUID(),
-            senderSigningPublicKey: sender.localSigningPublicKey,
-            senderKeyAgreementPublicKey: sender.localKeyAgreementPublicKey,
+            senderSigningPublicKey: sender.signingPublicKey,
+            senderKeyAgreementPublicKey: sender.keyAgreementPublicKey,
             senderDisplayName: "Legacy Sender",
             recipientFingerprint: nil,
             payloadType: .inspectorEcho,
@@ -729,8 +769,7 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try sender.sign(legacyCanonicalBytes(for: env),
-                                        purpose: FernletCryptoPurpose.Signature.identityEnvelopeLegacyV1)
+        env.signature = try sender.sign(legacyCanonicalBytes(for: env), under: Self.legacyLabels.identityEnvelopeV1)
         return env
     }
 
@@ -785,8 +824,9 @@ struct FernletIdentityEnvelopeTests {
         #expect(newEnv.schemaVersion == FernletIdentityEnvelope.currentSchemaVersion)
         #expect(try newEnv.verify(identityService: bob, replayCache: ReplayCache()) == Data("hello".utf8))
 
-        // Legacy (v1) — minted with the old encoder — still verifies (no in-field peer cut off).
-        let legacyEnv = try legacySignedEnvelope(sender: alice, payload: Data("hello".utf8))
+        // Legacy (v1) — minted with the old encoder by a not-yet-updated peer — still verifies (no
+        // in-field peer cut off).
+        let legacyEnv = try legacySignedEnvelope(sender: LegacyPeer(), payload: Data("hello".utf8))
         #expect(legacyEnv.schemaVersion == FernletIdentityEnvelope.legacySchemaVersion)
         #expect(try legacyEnv.verify(identityService: bob, replayCache: ReplayCache()) == Data("hello".utf8))
     }
@@ -814,24 +854,26 @@ struct FernletIdentityEnvelopeTests {
                             expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
                             now: grantedAt.addingTimeInterval(60))
 
-        // Legacy — signed over the old canonical bytes — still verifies via the legacy fallback.
+        // Legacy — signed over the old canonical bytes by a not-yet-updated admitter — still verifies
+        // via the legacy fallback.
+        let legacyAdmitter = LegacyPeer()
         var legacyToken = MeshAdmissionToken(
             meshID: meshID,
             joinerFingerprint: joiner.localFingerprint,
             joinerSigningPublicKey: joiner.localSigningPublicKey,
-            admitterFingerprint: admitter.localFingerprint,
+            admitterFingerprint: legacyAdmitter.fingerprint,
             grantedAt: grantedAt,
             expiresAt: expiresAt,
-            admitterSigningPublicKey: admitter.localSigningPublicKey,
+            admitterSigningPublicKey: legacyAdmitter.signingPublicKey,
             admitterSignature: Data()
         )
-        legacyToken.admitterSignature = try admitter.sign(
+        legacyToken.admitterSignature = try legacyAdmitter.sign(
             legacyCanonicalBytes(for: legacyToken),
-            purpose: FernletCryptoPurpose.Signature.meshAdmissionTokenLegacyV1
+            under: Self.legacyLabels.meshAdmissionTokenV1
         )
         try legacyToken.verify(joinerSigningPublicKey: joiner.localSigningPublicKey,
                                expectedMeshID: meshID,
-                               expectedAdmitterSigningPublicKey: admitter.localSigningPublicKey,
+                               expectedAdmitterSigningPublicKey: legacyAdmitter.signingPublicKey,
                                now: grantedAt.addingTimeInterval(60))
     }
 
@@ -911,8 +953,9 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try sender.sign(canonicalBytes(for: env),
-                                        purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2)
+        env.signature = try sender.sign(
+            canonicalBytes(for: env), purpose: ProximityNamespace.fernlet.family.purposes.signature.identityEnvelopeV2
+        )
         return env
     }
 
@@ -1017,16 +1060,15 @@ struct FernletIdentityEnvelopeTests {
     /// token this build doesn't know must also verify: the legacy canonical bytes re-encode the
     /// envelope, and the custom Codable emits the raw token exactly as the old enum encoding did.
     @Test func phase1_legacySchemaUnknownTypeEnvelopeVerifies() throws {
-        let (alice, aid) = try makeIdentity()
-        defer { cleanup(aid) }
+        let alice = LegacyPeer()
         let (bob, bid) = try makeIdentity()
         defer { cleanup(bid) }
 
         var env = FernletIdentityEnvelope(
             schemaVersion: FernletIdentityEnvelope.legacySchemaVersion,
             envelopeID: UUID(),
-            senderSigningPublicKey: alice.localSigningPublicKey,
-            senderKeyAgreementPublicKey: alice.localKeyAgreementPublicKey,
+            senderSigningPublicKey: alice.signingPublicKey,
+            senderKeyAgreementPublicKey: alice.keyAgreementPublicKey,
             senderDisplayName: "Future Legacy Sender",
             recipientFingerprint: nil,
             payloadTypeToken: "fernlet.future.sparkle.v1",
@@ -1037,8 +1079,7 @@ struct FernletIdentityEnvelopeTests {
             expiresAt: nil,
             signature: Data()
         )
-        env.signature = try alice.sign(legacyCanonicalBytes(for: env),
-                                       purpose: FernletCryptoPurpose.Signature.identityEnvelopeLegacyV1)
+        env.signature = try alice.sign(legacyCanonicalBytes(for: env), under: Self.legacyLabels.identityEnvelopeV1)
 
         #expect(try env.verify(identityService: bob, replayCache: ReplayCache()) == Data())
     }

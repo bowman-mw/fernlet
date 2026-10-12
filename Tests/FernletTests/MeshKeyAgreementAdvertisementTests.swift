@@ -26,7 +26,7 @@
 // membership golden shares, rather than to `MeshRoutedFixtureClock`: nothing under test here reads
 // a clock, and nothing here has an expiry, a deadline or a settle path for a wall clock to overtake.
 
-import FernletCrypto
+import FernletConnections
 import FernletFoundation
 import Foundation
 import Testing
@@ -1004,7 +1004,7 @@ extension SignedKeyAgreementAdvertisement {
         )
         return unsigned.with(signature: try identity.sign(
             canonicalBytes(for: unsigned),
-            purpose: FernletCryptoPurpose.Signature.meshKeyAgreementV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshKeyAgreementV1
         ))
     }
 }

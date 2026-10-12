@@ -591,7 +591,7 @@ struct MeshRoutedInventorySigningTests {
         #expect(IdentityService.verify(
             payload.signature, of: canonicalBytes(for: payload),
             by: advertiser.localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshRoutedInventoryDigestV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRoutedInventoryDigestV1
         ))
         #expect(MeshRoutedInventoryVerifier(meshID: rig.meshID, ledger: rig.ledger).verify(payload) == nil)
     }
@@ -696,7 +696,7 @@ struct MeshRoutedInventorySigningTests {
             #expect(IdentityService.verify(
                 signed.signature, of: canonicalBytes(for: signed),
                 by: advertiser.localSigningPublicKey,
-                purpose: FernletCryptoPurpose.Signature.meshRoutedInventoryDigestV1
+                purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRoutedInventoryDigestV1
             ), "a re-mint must verify on its own signature, never by ==")
         }
     }

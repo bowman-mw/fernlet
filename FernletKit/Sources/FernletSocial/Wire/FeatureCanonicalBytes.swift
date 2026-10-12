@@ -5,9 +5,11 @@
 // `canonicalBytes(for:)` overload, written with ProximityKit's public `CanonicalByteWriter`, whose
 // encodings the engine's goldens freeze — the activity feature's three (Phase 6: the descriptor its
 // params hash is taken over, the join token and the roster snapshot), beside the activity manager
-// and its payloads, and the moderation report row's (Phase 3b), beside the report relay.
-// ProximityKit's canonical serializer (`CanonicalSignatureSerializer.swift`) holds no feature
-// domain: every one it writes is its host namespace's.
+// and its payloads, and the moderation report row's (Phase 3b), beside the report relay — and the
+// host labels the three signed ones are signed and verified under through ProximityKit's identity
+// (`FernletFeatureSignatures`). ProximityKit's canonical serializer
+// (`CanonicalSignatureSerializer.swift`) holds no feature domain: every one it writes is its host
+// namespace's.
 //
 // This is signing INPUT only, as the serializer's is: never the wire format, never persisted, never
 // transmitted. Each overload is told apart from the serializer's by its parameter type alone.
@@ -32,6 +34,39 @@ private nonisolated let canonicalActivityRosterSnapshotDomain = FernletCryptoPur
 // Moderation report row (Phase 3b). Distinct tag so a report signature can never cross-validate any
 // other signed type.
 private nonisolated let canonicalModerationReportDomain = FernletCryptoPurpose.Signature.moderationReportV2.data
+
+// MARK: - Signature labels
+
+/// The labels FernletSocial's three signed feature transcripts are signed and verified under through
+/// ProximityKit's `IdentityService`: the activity join token, the roster snapshot and the moderation
+/// report row.
+///
+/// ProximityKit's identity signs and verifies only under a `ProximityCryptographicPurpose`, so each is
+/// minted with its host mint, `ProximityCryptographicPurpose.featureSignature(_:framing:)`, from a
+/// source literal, `.lengthPrefixed` because `CanonicalByteWriter` writes the domain as the
+/// transcript's first length-prefixed field. Each is spelled and framed exactly as the FernletCrypto
+/// registry entry its transcript's domain tag above reads, its twin until plan step C1 retires the
+/// twins: `ProximityNamespaceGoldenTests` holds each pair to the same spelling, framing and accepted
+/// bytes. The spellings and framings are frozen protocol data: a changed byte orphans every token,
+/// roster and report a peer holds. The activity descriptor's label has no entry here: its bytes are
+/// hashed, never signed.
+///
+/// `nonisolated` against the module's `defaultIsolation(MainActor.self)`: inert `Sendable` value data,
+/// read from the nonisolated verifiers.
+public nonisolated enum FernletFeatureSignatures {
+    /// The activity join token's label, `fernlet.canonical.activity-join-token.v2`, length-prefixed:
+    /// the twin of `FernletCryptoPurpose.Signature.activityJoinTokenV2`.
+    public nonisolated static let activityJoinTokenV2 = ProximityCryptographicPurpose.featureSignature(
+        "fernlet.canonical.activity-join-token.v2", framing: .lengthPrefixed)
+    /// The activity roster snapshot's label, `fernlet.canonical.activity-roster-snapshot.v2`,
+    /// length-prefixed: the twin of `FernletCryptoPurpose.Signature.activityRosterSnapshotV2`.
+    public nonisolated static let activityRosterSnapshotV2 = ProximityCryptographicPurpose.featureSignature(
+        "fernlet.canonical.activity-roster-snapshot.v2", framing: .lengthPrefixed)
+    /// The moderation report row's label, `fernlet.canonical.moderation-report.v2`, length-prefixed: the
+    /// twin of `FernletCryptoPurpose.Signature.moderationReportV2`.
+    public nonisolated static let moderationReportV2 = ProximityCryptographicPurpose.featureSignature(
+        "fernlet.canonical.moderation-report.v2", framing: .lengthPrefixed)
+}
 
 // MARK: - Group Activities (Phase 6)
 

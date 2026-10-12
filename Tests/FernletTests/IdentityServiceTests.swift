@@ -6,7 +6,7 @@
 // so tests never touch each other's state and never reach the production service.
 
 import ProximityKit
-import FernletCrypto
+import FernletConnections
 import Foundation
 import FernletFoundation
 import Testing
@@ -82,7 +82,7 @@ struct IdentityServiceTests {
     /// `CanonicalByteWriter` with the domain as a LENGTH-PREFIXED field, not a raw prefix. A
     /// hand-concatenated transcript under that purpose is mis-framed, and the guard at the signing
     /// boundary is supposed to reject it — see `signRefusesAMisframedTranscript`.
-    private static let rawPrefixedPurpose = FernletCryptoPurpose.Signature.proximityQRResponseV1
+    private static let rawPrefixedPurpose = ProximityNamespace.fernlet.family.purposes.signature.proximityQRResponseV1
 
     @Test func signAndVerifyRoundTrip() throws {
         let (svc, id) = makeService()
@@ -130,7 +130,7 @@ struct IdentityServiceTests {
     /// The signing boundary refuses bytes that do not carry their purpose in that purpose's own
     /// framing — the property that makes `sign` something other than an unscoped signing oracle.
     ///
-    /// Pinned here, at the boundary, as well as inside `CryptographicPurpose`: the check is only
+    /// Pinned here, at the boundary, as well as inside `ProximityCryptographicPurpose`: the check is only
     /// worth anything if it is actually wired into `sign`/`verify`. The transcript below is the
     /// mistake that is easy to make — the domain concatenated raw under a purpose whose serializer
     /// length-prefixes it — and it must throw rather than sign.
@@ -139,7 +139,7 @@ struct IdentityServiceTests {
         defer { cleanup(id) }
         try svc.ensureProvisioned()
 
-        let canonical = FernletCryptoPurpose.Signature.identityEnvelopeV2
+        let canonical = ProximityNamespace.fernlet.family.purposes.signature.identityEnvelopeV2
         let misframed = canonical.data + Data("hello world".utf8)
 
         #expect(throws: IdentityError.invalidKeyData) {

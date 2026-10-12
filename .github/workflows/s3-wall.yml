@@ -403,6 +403,20 @@ jobs:
         # MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its
         # floor stays the shared `1`. crypto-goldens stays 355 (the vocabulary golden's group 4 gains two
         # rows and its twin check inside an existing cell), and power-of-10 34.
+        #
+        # ProximityKit plan step A1.0.2 (2026-10-11), the second commit of plan step A1.0, drops
+        # ProximityKit's last FernletKit dependency, FernletCrypto: its identity signs and verifies only
+        # under its own `ProximityCryptographicPurpose`, and a host's own signature labels are minted
+        # with `ProximityCryptographicPurpose.featureSignature(_:framing:)` (FernletSocial's activity and
+        # moderation labels and the app's duress and probe labels, each the twin of a FernletCrypto entry
+        # until C1). `ProximityNamespaceBoundaryTests`' rule 1 refuses the new mint outside `Namespace/`
+        # (its pattern fixtured against two forms and three neighbours), and its manifest pin holds
+        # ProximityKit's target to no dependency, a literal `dependencies: []`;
+        # `ProximityPlatformBoundaryTests`' baseline drops FernletCrypto, so no Fernlet module is
+        # among the modules a ProximityKit file may import. No suite joined or left a line and no cell
+        # was added to this one, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
+        # 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`. crypto-goldens is raised
+        # 355 -> 356 for the namespace golden's host-signature-label cell (see its step).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -833,9 +847,18 @@ jobs:
         # payload's JSON, the pairing's frames through the production door, its persisted audit rows,
         # its status sentences by path, its copy templates, and its constants and spellings) = 355 is
         # the ARITHMETIC CHECK, never the source.
+        # RAISED 355 -> 356 at A1.0.2, MEASURED on a Mac, 2026-10-11 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: "356 tests in 8 suites" (6 + 13 + 19 + 105 + 43 + 55
+        # + 17 + 98), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT 356:
+        # passed. Run once more at 356 without ProximityNamespaceGoldenTests: 251 ran and the floor
+        # refused it. 355 + 1 (the namespace golden's cell holding the six signature labels Fernlet
+        # mints with ProximityKit's `featureSignature(_:framing:)` to their frozen spellings and
+        # framings and to their FernletCrypto twins, the same bytes handed on for every fixed
+        # transcript) = 356 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 355 \
+          Scripts/run-gated-suites.sh crypto-goldens 356 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \

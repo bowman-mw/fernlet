@@ -93,13 +93,21 @@ public nonisolated struct CryptographicPurpose: Hashable, Sendable {
 /// `ProximityNamespaceGoldenTests` pins each to its `.fernlet` field (the same spelling and bytes,
 /// and for a signature the same acceptance), and `CryptographicDomainSeparationTests` keeps them in
 /// its all-pairs checks. Where a note below names a ProximityKit consumer, that consumer reads the
-/// twin. ProximityKit names no entry here; its identity keeps the `CryptographicPurpose` signing
-/// overloads callers hand entries to (until C1). FernletSocial names it for the heart dead-drop's
-/// sealing salt, day-tag prefix and sidecar authenticated data, for presence's epoch-tag prefix, for
-/// the ban evidence's reporter tag and for the 4 feature labels of the activities and the moderation
-/// report, which frame its canonical bytes and its signatures through ProximityKit's identity; the
-/// app names the sealed-backup escrow's two (its `SealedBackupEscrowKey`), and the app's duress and
-/// probe signatures still sign through ProximityKit's identity under entries here.
+/// twin. ProximityKit names no entry here and has no FernletCrypto edge (plan step A1.0): its
+/// identity signs and verifies only under its own purpose type.
+///
+/// **6 more are twins** of the signature labels Fernlet mints with ProximityKit's
+/// `ProximityCryptographicPurpose.featureSignature(_:framing:)`, the labels its identity signs and
+/// verifies them under: FernletSocial's activity join token, roster snapshot and moderation report
+/// (`FernletFeatureSignatures`), and the app's duress recovery request and reply
+/// (`DuressRecoveryTranscript`) and DEBUG probe introduction (`MeshProbeConstants`), each spelled and
+/// framed identically until the twins retire (plan step C1). `ProximityNamespaceGoldenTests` holds
+/// each pair to the same spelling, framing and accepted bytes. FernletSocial names this registry for
+/// the heart dead-drop's sealing salt, day-tag prefix and sidecar authenticated data, for presence's
+/// epoch-tag prefix, for the ban evidence's reporter tag and for the 4 feature labels of the
+/// activities and the moderation report, which frame its canonical bytes; the app names the
+/// sealed-backup escrow's two (its `SealedBackupEscrowKey`) and frames its duress and probe
+/// transcripts under entries here.
 public nonisolated enum FernletCryptoPurpose {
     /// Domains embedded in Ed25519 signature transcripts.
     ///

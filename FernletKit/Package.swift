@@ -46,10 +46,10 @@ let package = Package(
         .library(name: "ProximityKit", targets: ["ProximityKit"]),
         // The Mac-ready set, each module named: ProximityKit, and FernletFoundation, FernletCrypto and
         // FernletDomainModel, which a Mac host of Fernlet's (workstream B, the Coach app) needs. They
-        // are named rather than reached through ProximityKit's dependencies, which plan step A1.0 cuts,
-        // so none of their Mac builds rides on an edge. Scripts/macos-build-check.sh builds this
-        // product's scheme for native macOS on every push, and ProximityPlatformBoundaryTests pins this
-        // line. No app target links it.
+        // are named because ProximityKit's dependencies reach none of them (it depends on nothing in
+        // FernletKit since plan step A1.0), so their Mac builds ride on no edge.
+        // Scripts/macos-build-check.sh builds this product's scheme for native macOS on every push, and
+        // ProximityPlatformBoundaryTests pins this line. No app target links it.
         .library(name: "MacReady", targets: ["ProximityKit", "FernletFoundation", "FernletCrypto", "FernletDomainModel"]),
     ],
     dependencies: [
@@ -401,14 +401,15 @@ let package = Package(
         // depending on this module,
         // never the reverse. "Outward edges only": the files with backward edges to the app
         // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
-        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps: one edge,
-        // FernletCrypto, for the `CryptographicPurpose` signing overloads its identity keeps, which
-        // FernletSocial's feature labels and the app's duress and probe signatures sign through until
-        // plan step A1.0 replaces them with a host label mint (it names no FernletCryptoPurpose). No
-        // FernletDomainModel edge: the session mode is its own `ProximitySessionMode`, which Fernlet
-        // converts to the `ProximityMode` it persists, and Fernlet's typed view of the envelope's
-        // payload token is FernletConnections'; no FernletFoundation and no PrivateMediaStore edge: the
-        // session hearts' day key and the session photos' wall and pending corpus are FernletSocial's.
+        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps: none, nothing
+        // in FernletKit (plan step A1.0). No FernletCrypto edge: its identity signs and verifies only
+        // under its own `ProximityCryptographicPurpose`, and a host's own signature labels (FernletSocial's
+        // activity and moderation labels, the app's duress and probe labels) are minted with its
+        // `featureSignature(_:framing:)`; no FernletDomainModel edge: the session mode is its own
+        // `ProximitySessionMode`, which Fernlet converts to the `ProximityMode` it persists, and Fernlet's
+        // typed view of the envelope's payload token is FernletConnections'; no FernletFoundation and no
+        // PrivateMediaStore edge: the session hearts' day key and the session photos' wall and pending
+        // corpus are FernletSocial's.
         // ProximityNamespaceBoundaryTests pins this list (a literal, which its reader requires), and
         // also refuses any type that left it for FernletSocial or the app, declared, extended or
         // aliased here again. No FernletUI edge and no SwiftUI view: the review sheets
@@ -422,7 +423,7 @@ let package = Package(
         // host defaults to exact rows, is the source half.
         .target(
             name: "ProximityKit",
-            dependencies: ["FernletCrypto"],
+            dependencies: [],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
                 // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).
@@ -535,7 +536,8 @@ let package = Package(
         // shares, and its wire types). The edge runs FernletSocial → ProximityKit, never the
         // reverse. Deps:
         // ProximityKit (`IdentityService` with its fingerprint, pair-secret door, static key agreement,
-        // `CryptographicPurpose` signing overloads and presence epoch clock, the envelope, the protected
+        // signing and verification under the host labels `ProximityCryptographicPurpose`'s
+        // `featureSignature(_:framing:)` mints and presence epoch clock, the envelope, the protected
         // sidecar, sealed-payload framing, the prekey bundle and the mesh storage scopes; the mesh engine
         // and its seams — the payload token door, the captured-slot feature send, the origination door,
         // the projection-handler and ledger-judge registrations, the session observer, the capability-list
@@ -555,7 +557,8 @@ let package = Package(
         // (`FernletCryptoPurpose`: the ban-evidence reporter-tag domain the ban store hashes under, the
         // sealed drop's salt, the day-tag prefix and the sidecar's authenticated data the heart dead-drop
         // hands CryptoKit, the presence epoch-tag prefix, and the activities' and the moderation report's
-        // four labels, under which their canonical bytes are framed and signed) + FernletDomainModel (the
+        // four labels, under which their canonical bytes are framed, the three signed ones signed under
+        // their host-label twins, `FernletFeatureSignatures`) + FernletDomainModel (the
         // moderation, closeness, friend-state, companion and heart value types the stores keep, the friend
         // records the dead-drop, presence and the session hearts read, the dead-drop's transport seam, the
         // payload types and capabilities the features register, send and check, and the activity,
@@ -582,7 +585,7 @@ let package = Package(
         ),
         // ProximityKit's own tests (plan step A0.8): the suites that need nothing but ProximityKit, moved out
         // of the app's FernletTests so they travel with the package at plan step A1 (their files import
-        // nothing of ProximityKit's closure, which stays in this repository). The
+        // no FernletKit module but ProximityKit, which depends on none). The
         // Fernlet scheme runs them as a second, unhosted test bundle (the simulator's xctest agent: no keychain
         // entitlement, no ProximityAudit sink) through Fernlet.xcworkspace, the one container in which the
         // scheme can see a package test target, so Scripts/spm-wall-check.sh builds them strict;

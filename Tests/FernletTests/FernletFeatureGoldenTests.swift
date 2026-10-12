@@ -74,7 +74,8 @@
 //     name, sent half a second past a whole second, each framed by production as its frozen bytes,
 //     which are its frozen JSON after its length, and decoded back to its inputs.
 // 19. **The canonical signing transcripts** of the activity and moderation features: the four
-//     FernletCrypto labels as the length-prefixed fields `signingBytes` hands CryptoKit, four activity
+//     FernletCrypto labels as the length-prefixed fields `signingBytes` hands CryptoKit, the three
+//     signed ones' host labels (`FernletFeatureSignatures`) handing on the same bytes, four activity
 //     descriptors' canonical bytes and params hashes (a fractional, a pre-1970, two saturating and an
 //     infinite date among them), the join token's and a two-member roster's transcripts with frozen
 //     RFC 8032 signatures production's verify accepts and byte-flipped twins it refuses, the roster
@@ -375,15 +376,21 @@ struct FeatureGoldenNumberRow: Sendable {
 }
 
 /// One FernletCrypto label a moving feature's canonical transcript opens with: the bytes its framing
-/// requires a transcript to begin with, FROZEN, and the purpose production reads.
+/// requires a transcript to begin with, FROZEN, and the purposes production reads: the registry entry
+/// its canonical bytes are framed with, and for a signed transcript the host label it is signed under.
 struct FeatureGoldenTranscriptLabelRow: Sendable {
     /// The registry entry, as `Group.name`.
     let field: String
     /// The prefix, written by hand from the A0.5 vectors: the spelling's UTF-8 byte count as 8 big-endian
     /// bytes, then those bytes, in hex. Never computed from a constant; never edited.
     let frozenPrefix: String
-    /// The purpose production names: **the only column a commit that moves the label may re-point.**
+    /// The registry purpose production frames the transcript with: **with `signedUnder`, the only
+    /// columns a commit that moves the label may re-point.**
     let today: CryptographicPurpose
+    /// The host label production signs and verifies the transcript under through ProximityKit's
+    /// identity, minted with its `featureSignature(_:framing:)`, the twin of `today`; `nil` for the
+    /// descriptor, whose bytes are hashed, never signed.
+    let signedUnder: ProximityCryptographicPurpose?
 }
 
 // MARK: - The suite
@@ -1645,29 +1652,34 @@ struct FernletFeatureGoldenTests {
                 field: "Signature.activityDescriptorV2",
                 frozenPrefix: "0000000000000028"
                     + "6665726e6c65742e63616e6f6e6963616c2e61637469766974792d64657363726970746f722e7632",
-                today: FernletCryptoPurpose.Signature.activityDescriptorV2),
+                today: FernletCryptoPurpose.Signature.activityDescriptorV2,
+                signedUnder: nil),
             FeatureGoldenTranscriptLabelRow(
                 field: "Signature.activityJoinTokenV2",
                 frozenPrefix: "0000000000000028"
                     + "6665726e6c65742e63616e6f6e6963616c2e61637469766974792d6a6f696e2d746f6b656e2e7632",
-                today: FernletCryptoPurpose.Signature.activityJoinTokenV2),
+                today: FernletCryptoPurpose.Signature.activityJoinTokenV2,
+                signedUnder: FernletFeatureSignatures.activityJoinTokenV2),
             FeatureGoldenTranscriptLabelRow(
                 field: "Signature.activityRosterSnapshotV2",
                 frozenPrefix: "000000000000002d"
                     + "6665726e6c65742e63616e6f6e6963616c2e61637469766974792d726f737465722d736e617073686f742e7632",
-                today: FernletCryptoPurpose.Signature.activityRosterSnapshotV2),
+                today: FernletCryptoPurpose.Signature.activityRosterSnapshotV2,
+                signedUnder: FernletFeatureSignatures.activityRosterSnapshotV2),
             FeatureGoldenTranscriptLabelRow(
                 field: "Signature.moderationReportV2",
                 frozenPrefix: "0000000000000026"
                     + "6665726e6c65742e63616e6f6e6963616c2e6d6f6465726174696f6e2d7265706f72742e7632",
-                today: FernletCryptoPurpose.Signature.moderationReportV2)
+                today: FernletCryptoPurpose.Signature.moderationReportV2,
+                signedUnder: FernletFeatureSignatures.moderationReportV2)
         ]
     }
 
     /// Each label is a length-prefixed field. Its purpose hands CryptoKit a transcript that is exactly
     /// the frozen prefix, unmodified. It refuses its own raw spelling, which only a positional check can.
     /// Each frozen transcript below begins with its own label's prefix and no other's, so `signingBytes`
-    /// passes it on unchanged under its label and refuses it under the other three. The bytes CryptoKit
+    /// passes it on unchanged under its label and refuses it under the other three, and the host label
+    /// a signed row is signed under hands on exactly what its registry twin hands on. The bytes CryptoKit
     /// signs and verifies are the transcript itself.
     @Test func theFourTranscriptLabelsAreLengthPrefixedFields() {
         let rows = Self.transcriptLabelRows
@@ -1691,6 +1703,9 @@ struct FernletFeatureGoldenTests {
                 let handed = row.today.signingBytes(transcript)
                 #expect(handed == (row.field == field ? transcript : nil),
                         "\(row.field) hands CryptoKit \(handed.map { Self.hex($0) } ?? "nothing") for \(field)'s transcript")
+                guard let signing = row.signedUnder else { continue }
+                #expect(signing.signingBytes(transcript) == handed,
+                        "\(row.field)'s signing label and its registry twin hand on different bytes for \(field)'s transcript")
             }
         }
     }
@@ -1937,7 +1952,8 @@ struct FernletFeatureGoldenTests {
     /// `.rosterTooLarge` although its frozen signature is valid over its canonical bytes, because the cap
     /// runs before the members' bounds and the signature.
     @Test func theRosterCapVerifiesTwelveMembersAndRefusesThirteen() throws {
-        let label = try #require(Self.todayLabel("Signature.activityRosterSnapshotV2"), "the table holds no roster label")
+        let label = try #require(Self.todaySigningLabel("Signature.activityRosterSnapshotV2"),
+                                 "the table holds no roster signing label")
         let twelve = Self.roster(version: 12, members: Self.rosterMembers(12), issuedAt: 780_001_200,
                                  signature: Self.bytes(fromHex: Self.rosterR12SignatureHex))
         let thirteen = Self.roster(version: 13, members: Self.rosterMembers(13), issuedAt: 780_001_200,
@@ -2051,19 +2067,19 @@ struct FernletFeatureGoldenTests {
              Self.moderationReportFlippedSignatureHex),
             ("Signature.moderationReportV2", Self.moderationRetractHex, Self.moderationRetractSignatureHex, nil)
         ]
-        let labels = Self.transcriptLabelRows.filter { $0.field != "Signature.activityDescriptorV2" }
+        let labels = Self.transcriptLabelRows.compactMap { row in row.signedUnder.map { (field: row.field, label: $0) } }
         #expect(labels.count == 3, "the table holds \(labels.count) signature labels")
         // R2: bounded by four signatures times three labels.
         for frozen in signed {
             let transcript = Self.bytes(fromHex: frozen.transcript)
             for row in labels {
                 let verified = Self.verifies(Self.bytes(fromHex: frozen.signature), over: transcript,
-                                             by: Self.aliceSigningPub, under: row.today)
+                                             by: Self.aliceSigningPub, under: row.label)
                 #expect(verified == (row.field == frozen.field),
                         "\(frozen.field)'s frozen signature verifies \(verified) under \(row.field)")
                 guard let flipped = frozen.flipped else { continue }
                 #expect(!Self.verifies(Self.bytes(fromHex: flipped), over: transcript, by: Self.aliceSigningPub,
-                                       under: row.today), "\(frozen.field)'s flipped signature verifies under \(row.field)")
+                                       under: row.label), "\(frozen.field)'s flipped signature verifies under \(row.field)")
             }
         }
     }
@@ -4753,10 +4769,11 @@ extension FernletFeatureGoldenTests {
         FernletSocial.canonicalBytes(for: entry)
     }
 
-    /// Whether `signature` verifies over `transcript` by `key` under a registry label: the one raw
-    /// Ed25519 check every transcript here reaches. Today `IdentityService.verify(_:of:by:purpose:)`, its
-    /// `CryptographicPurpose` overload.
-    static func verifies(_ signature: Data, over transcript: Data, by key: Data, under label: CryptographicPurpose) -> Bool {
+    /// Whether `signature` verifies over `transcript` by `key` under a signing label: the one raw
+    /// Ed25519 check every transcript here reaches. Today `IdentityService.verify(_:of:by:purpose:)`,
+    /// under the host label a row's `signedUnder` column names.
+    static func verifies(_ signature: Data, over transcript: Data, by key: Data,
+                         under label: ProximityCryptographicPurpose) -> Bool {
         IdentityService.verify(signature, of: transcript, by: key, purpose: label)
     }
 
@@ -5957,10 +5974,10 @@ extension FernletFeatureGoldenTests {
     /// and carried by groups 20 and 22's payloads and ledger.
     static var activityID: UUID { uuid("A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D") }
 
-    /// The purpose production reads for the transcript label row `field`; nil for a field no row holds,
-    /// which fails what reads it.
-    static func todayLabel(_ field: String) -> CryptographicPurpose? {
-        transcriptLabelRows.first { $0.field == field }?.today
+    /// The host label production signs the transcript label row `field` under; nil for a field no row
+    /// holds or a row that is never signed, which fails what reads it.
+    static func todaySigningLabel(_ field: String) -> ProximityCryptographicPurpose? {
+        transcriptLabelRows.first { $0.field == field }?.signedUnder
     }
 
     /// A descriptor of alice's activity: its id, her fingerprint and signing key, and the title, type

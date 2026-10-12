@@ -6,9 +6,9 @@
 #
 # WHAT IT CHECKS: the Mac-ready set (ProximityKit, FernletFoundation, FernletCrypto and
 # FernletDomainModel) compiles for `generic/platform=macOS`, arm64 and x86_64, with warnings as errors.
-# The three Fernlet modules are named, not reached through ProximityKit's dependencies, which plan
-# step A1.0 cuts: a Mac host of Fernlet's (workstream B, the Coach app) needs all three, so each keeps
-# its macOS build whatever ProximityKit depends on. Nothing in the set may name an API native macOS
+# The three Fernlet modules are named, not reached through ProximityKit's dependencies, which hold
+# none of them since plan step A1.0: a Mac host of Fernlet's (workstream B, the Coach app) needs all
+# three, so each keeps its macOS build whatever ProximityKit depends on. Nothing in the set may name an API native macOS
 # lacks: ProximityKit takes such facts from its host, and its two platform seams compile only where
 # their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's protected-data
 # retry under `#if canImport(UIKit)`). Nothing on iOS can see that hold or break: a UIKit,

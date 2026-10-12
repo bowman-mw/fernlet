@@ -101,6 +101,20 @@ enum DuressRecoveryTranscript {
     /// Domain separator for the custodian → primary reply. Distinct from ``requestDomain`` so a
     /// signature over one can never be replayed as a signature over the other.
     static let replyDomain = FernletCryptoPurpose.Signature.duressRecoveryReplyV1.data
+    /// The label the requester signs the ``request`` transcript under through its identity, and the
+    /// custodian verifies it under: `fernlet.duress.recovery.request.v1`, raw prefix, minted with
+    /// ProximityKit's `featureSignature(_:framing:)` (its identity signs under nothing else). Spelled
+    /// and framed as the registry entry ``requestDomain`` reads, its twin until plan step C1, which
+    /// `ProximityNamespaceGoldenTests` holds to the same accepted bytes. Frozen: a device whose byte
+    /// differs neither answers nor is answered by its enrolled custodian.
+    static let requestPurpose = ProximityCryptographicPurpose.featureSignature(
+        "fernlet.duress.recovery.request.v1", framing: .rawPrefix)
+    /// The label the custodian signs the ``reply`` transcript under, and the requester verifies it
+    /// under: `fernlet.duress.recovery.reply.v1`, raw prefix, the twin of the registry entry
+    /// ``replyDomain`` reads, like ``requestPurpose``, and distinct from it for the same reason as the
+    /// two domains.
+    static let replyPurpose = ProximityCryptographicPurpose.featureSignature(
+        "fernlet.duress.recovery.reply.v1", framing: .rawPrefix)
     /// Nonce length, matching `ProximityVerifySignature.nonceByteCount`.
     static let nonceByteCount = ProximityVerifySignature.nonceByteCount
     /// Raw Curve25519 public-key length, matching `ProximityVerifySignature.publicKeyByteCount`.
@@ -530,7 +544,7 @@ final class DuressRecoveryCoordinator {
             custodianKeyAgreementPublicKey: round.peerKeyAgreementPublicKey,
             recoveryBlob: blob
         )
-        guard let signature = try? identity.sign(transcript, purpose: FernletCryptoPurpose.Signature.duressRecoveryRequestV1) else {
+        guard let signature = try? identity.sign(transcript, purpose: DuressRecoveryTranscript.requestPurpose) else {
             throw DuressRecoveryError.cryptoFailed
         }
         let request = DuressRecoveryRequest(
@@ -605,7 +619,7 @@ final class DuressRecoveryCoordinator {
             contentKey: reply.contentKey
         )
         guard IdentityService.verify(reply.signature, of: transcript, by: enrolledSigning,
-                                     purpose: FernletCryptoPurpose.Signature.duressRecoveryReplyV1) else {
+                                     purpose: DuressRecoveryTranscript.replyPurpose) else {
             FernletAuditLog.log("mesh.verifyQR.badReplySignature")
             throw DuressRecoveryError.signatureRejected
         }
@@ -677,7 +691,7 @@ final class DuressRecoveryCoordinator {
             recoveryBlob: request.recoveryBlob
         )
         guard IdentityService.verify(request.signature, of: transcript, by: request.requesterSigningPublicKey,
-                                     purpose: FernletCryptoPurpose.Signature.duressRecoveryRequestV1) else {
+                                     purpose: DuressRecoveryTranscript.requestPurpose) else {
             FernletAuditLog.log("mesh.verifyQR.badPayloadSignature")
             throw DuressRecoveryError.signatureRejected
         }
@@ -719,7 +733,7 @@ final class DuressRecoveryCoordinator {
             decision: decision,
             contentKey: contentKey
         )
-        guard let signature = try? identity.sign(transcript, purpose: FernletCryptoPurpose.Signature.duressRecoveryReplyV1) else {
+        guard let signature = try? identity.sign(transcript, purpose: DuressRecoveryTranscript.replyPurpose) else {
             throw DuressRecoveryError.cryptoFailed
         }
         let reply = DuressRecoveryReply(

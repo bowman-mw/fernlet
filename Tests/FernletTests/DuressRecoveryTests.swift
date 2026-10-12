@@ -26,7 +26,6 @@ import CryptoKit
 import Foundation
 import Security
 import Testing
-import FernletCrypto
 import FernletFoundation
 import PrivateStoreCore
 import ProximityKit
@@ -1152,7 +1151,7 @@ struct DuressRecoveryCeremonyTests {
             recoveryBlob: legacyBlob,
             signature: try pair.fixture.primaryIdentity.sign(
                 transcript,
-                purpose: FernletCryptoPurpose.Signature.duressRecoveryRequestV1
+                purpose: DuressRecoveryTranscript.requestPurpose
             )
         )
         _ = try pair.custodian.openRecoveryRequest(

@@ -29,6 +29,7 @@
 import CryptoKit
 import Foundation
 @testable import FernletCrypto
+import FernletConnections
 import FernletDomainModel
 import FernletFoundation
 import Testing
@@ -488,7 +489,7 @@ struct MeshCustodyReceiptSigningTests {
         let unsigned = manifest.replacing(signature: Data())
         let signature = try origin.sign(
             canonicalBytes(for: unsigned),
-            purpose: FernletCryptoPurpose.Signature.meshRoutedManifestV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRoutedManifestV1
         )
         return unsigned.replacing(signature: signature)
     }

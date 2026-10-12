@@ -105,9 +105,9 @@ path, and each of those sites, to it.
 feature labels that a ProximityKit door consumes: `heartDropPairV1` (`fernlet.heartdrop.v1`) and
 `presencePairV1` (`fernlet.presence.tag.v1`), the heart dead-drop's and presence's pair-secret salts,
 each minted with ProximityKit's `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)`, the one
-role a host mints for itself. `ProximityNamespace.FeaturePurposes.fernlet` declares the same two
-values, in that order, and `Purposes.fernlet` carries it as its `feature` group, so `.fernlet`'s one
-soundness verdict judges both salts with the 39 protocol labels (each is a row of `labelRows`, at
+key-derivation role a host mints for itself. `ProximityNamespace.FeaturePurposes.fernlet` declares the
+same two values, in that order, and `Purposes.fernlet` carries it as its `feature` group, so
+`.fernlet`'s one soundness verdict judges both salts with the 39 protocol labels (each is a row of `labelRows`, at
 `family.purposes.feature.<name>`, after the hash rows). ProximityKit's
 `IdentityService.pairSecret(with:purpose:)` derives a pair secret only under a salt its identity's
 namespace declares and refuses any other purpose (`IdentityError.undeclaredPurpose`), so a caller

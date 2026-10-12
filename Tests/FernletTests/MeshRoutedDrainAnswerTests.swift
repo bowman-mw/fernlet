@@ -301,7 +301,7 @@ struct MeshRoutedDrainAnswerSigningTests {
         #expect(IdentityService.verify(
             payload.signature, of: canonicalBytes(for: payload),
             by: sender.localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshRoutedDrainAnswerV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRoutedDrainAnswerV1
         ))
         #expect(MeshRoutedDrainAnswerVerifier(meshID: rig.meshID, ledger: rig.ledger)
             .verify(payload) == nil)

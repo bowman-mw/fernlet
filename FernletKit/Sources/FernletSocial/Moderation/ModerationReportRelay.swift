@@ -11,7 +11,6 @@
 // its one audit line goes to `FernletAuditLog`.
 
 import Foundation
-import FernletCrypto
 import FernletDomainModel
 import FernletFoundation
 import ProximityKit
@@ -100,7 +99,7 @@ public enum ModerationReportRelay {
             .prefix(ModerationReportPayload.maxReports)
             .compactMap { entry in
                 guard let signature = try? identity.sign(
-                    canonicalBytes(for: entry), purpose: FernletCryptoPurpose.Signature.moderationReportV2) else { return nil }
+                    canonicalBytes(for: entry), purpose: FernletFeatureSignatures.moderationReportV2) else { return nil }
                 return SignedModerationReport(entry: entry, signature: signature)
             }
         return ModerationReportPayload(reports: signed)
@@ -133,7 +132,7 @@ public enum ModerationReportRelay {
             guard IdentityService.verify(signed.signature,
                                          of: canonicalBytes(for: entry),
                                          by: senderSigningKey,
-                                         purpose: FernletCryptoPurpose.Signature.moderationReportV2) else { return nil }
+                                         purpose: FernletFeatureSignatures.moderationReportV2) else { return nil }
             var row = entry
             row.id = ModerationLedgerEntry.rowID(kind: entry.kind, reporterFingerprint: senderFingerprint, contentHash: row.contentHash)
             if row.createdAt > now { row.createdAt = now }

@@ -39,7 +39,7 @@
 
 import Foundation
 import Testing
-@testable import FernletCrypto
+import FernletConnections
 import FernletDomainModel
 @testable import ProximityKit
 @testable import Fernlet
@@ -670,12 +670,12 @@ struct MeshQuorumSignatureTests {
         #expect(IdentityService.verify(
             vote.signature, of: canonicalBytes(for: proposal),
             by: members[1].localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshRemovalProposalV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRemovalProposalV1
         ) == false)
         #expect(IdentityService.verify(
             proposal.signature, of: canonicalBytes(for: vote),
             by: members[0].localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshRemovalVoteV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRemovalVoteV1
         ) == false)
     }
 }

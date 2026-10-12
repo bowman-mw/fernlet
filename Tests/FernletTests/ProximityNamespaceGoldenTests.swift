@@ -38,6 +38,10 @@
 //    signature twins accept the same transcripts, no label of the registry's 81 and its 41 together
 //    is a byte prefix of another (CDST's sealed-backup pair aside), and reflection finds no label
 //    field `labelRows` leaves out, the feature group's declared salts listed after the fixed ones.
+//    And the six signature labels Fernlet mints outside its namespace with ProximityKit's
+//    `featureSignature(_:framing:)` (FernletSocial's activity and moderation labels, the app's duress
+//    and probe labels) are each their frozen spelling and framing and their registry twin's, handing
+//    the signing boundary the same bytes for every fixed transcript.
 // 6. **Every hash and transcript consumer against its field's role.** The bytes each production
 //    consumer writes begin with that field's `prefixBytes`: 19 signed transcripts, 8 hash preimages
 //    and the 2 authenticated-data builders, one cell each.
@@ -48,9 +52,10 @@
 //    ProximityVocabularyGoldenTests pins.
 // 8. **The supply path.** `IdentityService(namespace:)` takes its keychain service from the
 //    namespace it is handed (Fernlet's frozen service for `.fernlet`, another app's for another
-//    app's, an explicit service over either), and its namespace overloads of `sign` and `verify`
-//    treat each label by its role: the 19 writable signature labels sign and verify, the verify-only
-//    legacy pair verifies and never signs, and no other label does either.
+//    app's, an explicit service over either), and its `sign` and `verify` treat each label by its
+//    role: the 19 writable signature labels sign and verify, the verify-only legacy pair verifies and
+//    never signs, and no other label does either; each signature verifies under its FernletCrypto
+//    twin too, checked with CryptoKit under the twin's bytes.
 // 9. **The signed transcripts read the namespace they are handed.** The labels the test bindings pass
 //    are `.fernlet`'s own; the membership inventory digest is hashed over its field's prefix; a
 //    schema-v1 envelope and a pre-WI-6 admission token still verify under `.fernlet`, whose family
@@ -111,6 +116,7 @@ import CryptoKit
 import FernletConnections
 import FernletDomainModel
 import FernletFoundation
+import FernletSocial
 import Foundation
 import os
 import Security
@@ -1265,6 +1271,76 @@ struct ProximityNamespaceGoldenTests {
         #expect(compared == 21, "\(compared) signature twins compared; the design has 17 + 2 + the legacy pair")
     }
 
+    /// One host signature label's row: its frozen spelling and framing, the constant production signs
+    /// and verifies under, and the FernletCrypto registry entry it twins.
+    typealias HostSignatureTwin = (spelling: String, framing: ProximityCryptographicPurpose.Framing,
+                                   label: ProximityCryptographicPurpose, twin: CryptographicPurpose)
+
+    /// The six signature labels Fernlet mints outside its namespace with ProximityKit's
+    /// `featureSignature(_:framing:)`, each beside its frozen spelling, the framing its transcripts are
+    /// written in and the FernletCrypto registry entry it twins: FernletSocial's activity join token,
+    /// roster snapshot and moderation report labels, the app's duress recovery request and reply
+    /// labels and its DEBUG mesh probe's introduction label.
+    ///
+    /// The spellings and framings are written by hand, from the registry as it stood when the labels
+    /// were minted; the `label` column is the constant production signs and verifies under.
+    static var hostSignatureTwins: [HostSignatureTwin] {
+        typealias Signature = FernletCryptoPurpose.Signature
+        return [
+            ("fernlet.canonical.activity-join-token.v2", .lengthPrefixed,
+             FernletFeatureSignatures.activityJoinTokenV2, Signature.activityJoinTokenV2),
+            ("fernlet.canonical.activity-roster-snapshot.v2", .lengthPrefixed,
+             FernletFeatureSignatures.activityRosterSnapshotV2, Signature.activityRosterSnapshotV2),
+            ("fernlet.canonical.moderation-report.v2", .lengthPrefixed,
+             FernletFeatureSignatures.moderationReportV2, Signature.moderationReportV2),
+            ("fernlet.duress.recovery.request.v1", .rawPrefix,
+             DuressRecoveryTranscript.requestPurpose, Signature.duressRecoveryRequestV1),
+            ("fernlet.duress.recovery.reply.v1", .rawPrefix,
+             DuressRecoveryTranscript.replyPurpose, Signature.duressRecoveryReplyV1),
+            ("fernlet.mesh.probe.channel-introduction.v1", .rawPrefix,
+             MeshProbeConstants.channelIntroductionPurpose, Signature.meshProbeChannelIntroductionV1)
+        ]
+    }
+
+    /// Each host signature label is its frozen spelling and its FernletCrypto twin's, byte for byte, in
+    /// the writable signature role of its frozen framing, and hands the signing boundary exactly what
+    /// its twin hands it for every fixed transcript: `lp(label) ‖ body`, `label ‖ body`, `body` and the
+    /// empty input, the first two accepted unchanged under the framing's promise and the last two
+    /// refused. The twins retire at plan step C1; until then a drift in either side is red here.
+    @Test func everyHostSignatureLabelHandsTheBoundaryWhatItsFernletCryptoTwinHands() {
+        let twins = Self.hostSignatureTwins
+        #expect(twins.count == 6 && Set(twins.map(\.spelling)).count == 6, "\(twins.count) host labels listed")
+        let body = Data("golden transcript body".utf8)
+        // R2: bounded by the six host labels.
+        for entry in twins {
+            let label = entry.label
+            #expect(label.rawValue == entry.spelling && label.data == Data(entry.spelling.utf8),
+                    "\(entry.spelling) is minted as \(label.rawValue)")
+            #expect(entry.twin.rawValue == entry.spelling && entry.twin.data == label.data,
+                    "\(entry.spelling)'s FernletCrypto twin is \(entry.twin.rawValue)")
+            #expect(label.role == .signature(entry.framing), "\(entry.spelling) has the role \(label.role)")
+            let inputs = [Self.lengthPrefixed(label.data) + body, label.data + body, body, Data()]
+            let handed = inputs.map { label.signingBytes($0) }
+            let twinHanded = inputs.map { entry.twin.signingBytes($0) }
+            let accepted = handed.map { $0 != nil }
+            #expect(handed == twinHanded, """
+                \(entry.spelling) hands on \(accepted) of [lp+body, label+body, body, empty]; its twin \
+                \(twinHanded.map { $0 != nil })
+                """)
+            let promised: [Bool]
+            switch entry.framing {
+            case .lengthPrefixed: promised = [true, false, false, false]
+            case .rawPrefix: promised = [false, true, false, false]
+            case .absent: promised = [true, true, true, true]
+            }
+            #expect(accepted == promised, "\(entry.spelling) (\(entry.framing)) accepts \(accepted), its framing promises \(promised)")
+            // R2: bounded by the four inputs.
+            for (input, bytes) in zip(inputs, handed) where bytes != nil {
+                #expect(bytes == input, "\(entry.spelling) changed the bytes it accepted")
+            }
+        }
+    }
+
     /// No label of FernletCrypto's 81 and `.fernlet`'s 41 together, deduplicated by bytes, is a byte
     /// prefix of another, but for the one pair CDST already argues safe (the two sealed-backup HKDF
     /// `info` labels). A ProximityKit label and an app label meet at every shared consumer from A0.2's
@@ -1762,7 +1838,7 @@ struct ProximityNamespaceGoldenTests {
             #expect(IdentityService.verify(signature, of: transcript, by: key, purpose: row.purpose),
                     "\(row.field) does not verify the signature it made")
             let twin = try #require(twins[row.field], "\(row.field) has no FernletCrypto twin")
-            #expect(IdentityService.verify(signature, of: transcript, by: key, purpose: twin),
+            #expect(try Self.verifiesUnderTwin(signature, of: transcript, by: key, twin: twin),
                     "\(row.field)'s signature does not verify under its FernletCrypto twin")
             #expect(throws: IdentityError.invalidKeyData, "\(row.field) signed a transcript framed for no label") {
                 _ = try identity.sign(body, purpose: row.purpose)
@@ -1776,9 +1852,10 @@ struct ProximityNamespaceGoldenTests {
         #expect(refused == expectedRefusals, "sign refused \(refused); the design refuses \(expectedRefusals)")
     }
 
-    /// `verify` under a namespace label answers as the `CryptographicPurpose` overload answers under
-    /// the label's FernletCrypto twin, for a genuine signature over `lp(label) ‖ body`, `label ‖ body`
-    /// and `body`: each writable label accepts only its own framing and each legacy label all three.
+    /// `verify` under a namespace label answers as an Ed25519 check under the label's FernletCrypto
+    /// twin answers (``verifiesUnderTwin(_:of:by:twin:)``), for a genuine signature over
+    /// `lp(label) ‖ body`, `label ‖ body` and `body`: each writable label accepts only its own framing
+    /// and each legacy label all three.
     /// A label in a non-signature role verifies nothing at all — where its registry twin, which has
     /// no role, still accepts the raw-framed transcript.
     @Test func theNamespaceVerifyAcceptsWhatItsFernletCryptoTwinAccepts() throws {
@@ -1802,8 +1879,8 @@ struct ProximityNamespaceGoldenTests {
             }
             compared += 1
             let twin = try #require(twins[row.field], "\(row.field) has no FernletCrypto twin")
-            let twinAccepted = zip(inputs, signatures).map {
-                IdentityService.verify($1, of: $0, by: publicKey, purpose: twin)
+            let twinAccepted = try zip(inputs, signatures).map {
+                try Self.verifiesUnderTwin($1, of: $0, by: publicKey, twin: twin)
             }
             #expect(accepted == twinAccepted,
                     "\(row.field) verifies \(accepted) of [lp+body, label+body, body]; its twin \(twinAccepted)")
@@ -3404,6 +3481,25 @@ struct ProximityNamespaceGoldenTests {
     /// `count` bytes counting up from `start` — the fixed key material every vector here is built on.
     static func sequence(from start: UInt8, count: Int = 32) -> Data {
         Data((0..<count).map { start &+ UInt8($0) })
+    }
+
+    /// Whether `signature` verifies over `transcript` by `publicKeyData` under a FernletCrypto registry
+    /// twin: CryptoKit's Ed25519 check over the bytes the twin's positional `signingBytes` passes on,
+    /// and `false` when it passes none. ProximityKit's identity verifies under its own labels only, so
+    /// the twin side of a twin cell is checked here, the way a registry label is consumed.
+    ///
+    /// - Parameters:
+    ///   - signature: The Ed25519 signature to check.
+    ///   - transcript: The bytes it claims to cover.
+    ///   - publicKeyData: The signer's raw Ed25519 public key.
+    ///   - twin: The registry twin `transcript` is checked under.
+    /// - Returns: Whether the signature is valid over the bytes the twin passes on.
+    /// - Throws: CryptoKit's error for a public key that is not 32 bytes, a broken fixture.
+    static func verifiesUnderTwin(_ signature: Data, of transcript: Data, by publicKeyData: Data,
+                                  twin: CryptographicPurpose) throws -> Bool {
+        let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+        guard let bytes = twin.signingBytes(transcript) else { return false }
+        return publicKey.isValidSignature(signature, for: bytes)
     }
 
     /// `bytes` behind their 8-byte big-endian count, written here rather than by the production

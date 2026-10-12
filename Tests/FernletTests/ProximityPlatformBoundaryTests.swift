@@ -184,12 +184,13 @@ import Testing
     }
 
     /// The modules any ProximityKit file may import or test for: exactly the set it imports outside the
-    /// seams, each one available on iOS and macOS alike. `FernletCrypto` is the target's one package
-    /// dependency (`ProximityNamespaceBoundaryTests.proximityKitDependencies`); no other Fernlet module
-    /// is here, so an import of one fails this wall as well as the strict build.
+    /// seams, each a system module available on iOS and macOS alike. The target has no package
+    /// dependency (`ProximityNamespaceBoundaryTests.proximityKitDependencies` is empty since plan step
+    /// A1.0), so no Fernlet module is here, and an import of one fails this wall as well as the strict
+    /// build.
     static let baselineModules: Set<String> = [
         "Foundation", "Combine", "Observation", "CryptoKit", "Security", "Network", "os", "Synchronization",
-        "Dispatch", "Compression", "simd", "FernletCrypto"
+        "Dispatch", "Compression", "simd"
     ]
 
     /// Every platform module a ProximityKit file imports, exactly, and both rows are permanent:
