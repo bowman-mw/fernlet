@@ -43,13 +43,14 @@ protected sidecar; presence's radio (until A1) stays where it was, and the recip
 stays as the pair session (A0.7.3).
 
 **2026-10-11 (ProximityKit plan step A0.8):** ProximityKit has its own package test target,
-`ProximityKitTests` (`FernletKit/Tests/ProximityKitTests`), holding the eight suites that need nothing
+`ProximityKitTests` (`FernletKit/Tests/ProximityKitTests`), holding the suites that need nothing
 but ProximityKit (the fake transport fabric and the peer handle, the membership
-records, the routed drain plan, the commit detector and ranging fallback, the replay cache); its
+records, the routed drain plan, the commit detector and ranging fallback, the replay cache, and since
+plan step A1.1.2 the namespace's soundness rules, `ProximityNamespaceSoundnessTests`); its
 landing page's "Its tests" says how it runs and what waits for A1. "The test target" in this index
 still means the app's `FernletTests`, where the bindings, the host doubles and every other ProximityKit
-suite run until A1, `ProximityNamespaceSoundnessTests` among them. The fake peer transport, the ranging
-mock and the membership fixtures live in both targets, held identical but for imports.
+suite run until A1. The fake peer transport, the ranging mock, the membership fixtures and the
+mesh-message spelling helper live in both targets, held identical but for imports.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
@@ -1562,7 +1563,7 @@ the moderation ban store's are FernletSocial's too. ProximityKit refuses an unso
 time (`Support/ProximityNamespaceGate.swift`, below). The host hands it in
 (`ProximityHost.proximityNamespace`) beside its install binding and audit sink; the column seal and the
 keychain mechanism are ProximityKit's own copies. ProximityKit holds no instance and offers no default.
-`ProximityNamespaceSoundnessTests` (in `FernletTests` until plan step A1, with its five framing byte
+`ProximityNamespaceSoundnessTests` (in ProximityKit's package test target, with its five framing byte
 pins over a literal namespace) covers every rule below; `ProximityNamespaceGoldenTests` and
 `ProximityVocabularyGoldenTests` pin Fernlet's value and every reader, and `FernletFeatureGoldenTests`
 the bytes of Fernlet's features over ProximityKit, in `FernletSocial`, in the app and in ProximityKit;

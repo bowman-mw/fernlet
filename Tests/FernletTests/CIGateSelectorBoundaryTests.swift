@@ -324,6 +324,10 @@ import Testing
     /// `ProximityKitTests/<Suite>`. A line of its own, so CI runs every suite the package holds
     /// (`Tests/suite-inventory.tsv`'s I10) and no existing line's floor or history moves. Counted
     /// off the line.
+    ///
+    /// At ProximityKit plan step A1.1.2 (2026-10-13) no count moves: one name is re-qualified in
+    /// place, `crypto-goldens`' `ProximityNamespaceSoundnessTests`, now
+    /// `ProximityKitTests/ProximityNamespaceSoundnessTests` in ProximityKit's package test target.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -1093,16 +1097,19 @@ import Testing
     /// (2026-10-11): 640 → 634 and 2 → 8, for the six suites that rode no line
     /// (`MeshMembershipRecordsTests.swift`'s three, `MeshRoutedDrainPlanTests`,
     /// `NearbyRangingSessionTests`, `ReplayCacheTests`), measured in the package's bundle on the new
-    /// `proximitykit` line at their FernletTests counts.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 634, "ProximityKitTests": 8]
+    /// `proximitykit` line at their FernletTests counts. MOVED at plan step A1.1.2 (2026-10-13):
+    /// 634 → 633 and 8 → 9, for `ProximityNamespaceSoundnessTests`, measured in the package's bundle
+    /// on `crypto-goldens` at its FernletTests count.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 633, "ProximityKitTests": 9]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
     /// `PeerHandleIdentityTests` 5 + `FakePeerTransportTests` 10, each its count in FernletTests; 59
     /// at A0.8.3 (2026-10-11): 15 + `MeshDerivedRosterTests` 9 + `MeshMembershipMergeTests` 6 +
     /// `MeshMembershipBoundsTests` 9 + `MeshRoutedDrainPlanTests` 10 + `NearbyRangingSessionTests` 9 +
-    /// `ReplayCacheTests` 1, each its count in FernletTests.
-    static let measuredPackageCells = 59
+    /// `ReplayCacheTests` 1, each its count in FernletTests. MOVED at A1.1.2 (2026-10-13): 102 = 59 +
+    /// `ProximityNamespaceSoundnessTests` 43, its count in FernletTests.
+    static let measuredPackageCells = 102
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1157,10 +1164,19 @@ import Testing
     }()
 
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
-    /// the line's exact trimmed text, and the invariant that makes it safe. A row whose line is gone
-    /// is a failure, so the list only shrinks. Empty: no code line of the package's files stands on a
-    /// needle (plan steps A0.8.2 and A0.8.3).
-    static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = []
+    /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
+    /// an invariant a reviewer can check against the line it names, and a row whose line is gone or
+    /// changed is a failure, so no row outlives the line it excuses. Empty at plan steps A0.8.2 and
+    /// A0.8.3; one row since A1.1.2 (2026-10-13), the soundness suite's storage cell, which reads
+    /// `URL.applicationSupportDirectory` as a value.
+    static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
+        (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
+         line: "for base in [URL.applicationSupportDirectory, scratch] {",
+         invariant: """
+            anInstallationsFolderIsItsNameUnderTheBaseItsHostPicks builds a URL value under each base \
+            with Storage.directory(under:) and compares it; nothing is read, written or created there
+            """)
+    ]
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has five
@@ -1625,20 +1641,28 @@ import Testing
     /// and since A0.8.3 the ranging mock (`MockRangingProvider`), which `NearbyRangingSessionTests`
     /// uses in the package and 29 FernletTests files use, and the membership fixtures
     /// (`MeshMembershipFixtures`, extracted from `MeshMembershipRecordsTests.swift`), which its three
-    /// suites use in the package and six FernletTests files use.
+    /// suites use in the package and six FernletTests files use; and since A1.1.2 the mesh-message
+    /// spelling helper (`extension ProximityNamespace.MeshMessages` in
+    /// `ProximityNamespaceMeshMessagesSpelling.swift`, extracted from
+    /// `ProximityNamespaceSoundnessTests.swift` at A1.1.1), which `ProximityNamespaceSoundnessTests`
+    /// uses in the package and the namespace and vocabulary goldens and the runtime gate
+    /// (`ProximityNamespaceGateTests`) use in FernletTests.
     static let twins: [(package: String, fernlet: String)] = [
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
          fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift"),
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/MockRangingProvider.swift",
          fernlet: "Tests/FernletTests/Mocks/MockRangingProvider.swift"),
         (package: "FernletKit/Tests/ProximityKitTests/MeshMembershipFixtures.swift",
-         fernlet: "Tests/FernletTests/MeshMembershipFixtures.swift")
+         fernlet: "Tests/FernletTests/MeshMembershipFixtures.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceMeshMessagesSpelling.swift",
+         fernlet: "Tests/FernletTests/ProximityNamespaceMeshMessagesSpelling.swift")
     ]
 
     /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10); 1 at A0.8.2
     /// (2026-10-11), the fake peer transport; 3 at A0.8.3 (2026-10-11), with the ranging mock and the
-    /// membership fixtures. Each twin added or retired changes it in the same commit.
-    static let measuredTwinCount = 3
+    /// membership fixtures; 4 at A1.1.2 (2026-10-13), with the mesh-message spelling helper. Each
+    /// twin added or retired changes it in the same commit.
+    static let measuredTwinCount = 4
 
     /// A twin's comparable body: its lines, in order, minus every line whose trimmed text starts
     /// `import `, `@testable import ` or `@preconcurrency import ` (a package copy cannot import the
