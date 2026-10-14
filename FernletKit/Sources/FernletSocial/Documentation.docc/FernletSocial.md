@@ -121,9 +121,12 @@ engine through its public seams.
   and matches a browsed peer's tags against every eligible friend's over the epoch before and after
   its own, so kept friends recognize each other nearby without connecting; three self-exclusion
   layers drop this device's own ghost advertisements, and a 45-second lost grace smooths a friend's
-  epoch restart. The radio it drives wears ProximityKit's `PresenceEpochPosture`, an instance name
-  and a TLS identity replaced whole at every 900-second boundary by the manager's one timer, and
-  nothing about it is persisted. Hearts: a send dials the tag-matched peer, runs the one-round-trip
+  epoch restart. It drives ProximityKit's presence engine, `ProximityPresenceSession`, which builds
+  the radio, wears its epoch posture (an instance name and a TLS identity replaced whole at every
+  900-second boundary, when the manager's one timer asks), speaks its TXT record and drops this
+  device's ghosts by name; the tags, the matching, the other two self-exclusion layers, the posture
+  mint's once-per-epoch budget and its audit row stay here, and nothing about any of it is
+  persisted. Hearts: a send dials the tag-matched peer, runs the one-round-trip
   friend handshake under the sealed-introduction rule (the introduction and its acknowledgement are
   sealed to the intended friend's key-agreement key, so a tag-replay forger learns nothing),
   auto-commits, verifies the connected identity is that friend and still heart-eligible, sends one
@@ -368,12 +371,13 @@ through, the name display `PeerNameDisplay` (its identifier filter, which `Fernl
 `firstName` runs first). A heart
 connection sends and commits through the coordinator's public per-connection API: its token send,
 `sendPayload(payloadTypeToken:summary:payload:sealed:)`, under `PayloadType.friendHeart`'s raw value,
-and its manual commit, `commitManualProximity()`. The `package` doors, each of which
-`ProximityNamespaceBoundaryTests` lists with its exit: the presence radio's seam
-(`PresenceRadioSession`), its QUIC conformer (`NetworkPresenceSession`), the peer channel a heart
-connection runs over (`NetworkPeerChannel`), the epoch posture (`PresenceEpochPosture`) and the TXT
-vocabulary (`PresenceAdvertisement`), until A1, when the seam is published as mechanism or wrapped by
-a presence engine.
+and its manual commit, `commitManualProximity()`. Presence reaches the air through ProximityKit's
+public presence engine, `ProximityPresenceSession` (plan step A1.1): its six hooks, the posture
+rotation and epoch, start and republish with this manager's tags, stop, the dial with a hello tag and
+the disconnect, and the `ProximityPeerChannel` it hands a heart connection, whose `notifyConnected()`
+the heart door calls once the connection's coordinator has begun. No `package` door is left:
+the radio, its seam, the peer channel's concrete type, the posture and the TXT vocabulary are
+internal to ProximityKit.
 
 **Recipe sharing.** ``ProximityRecipeShareManager`` (`RecipeSharing/ProximityRecipeShareManager.swift`)
 is Fernlet's recipe share over ProximityKit's `ProximityPairSession`, which it builds at construction

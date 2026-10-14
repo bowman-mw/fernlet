@@ -542,12 +542,11 @@ let package = Package(
         // and its seams — the payload token door, the captured-slot feature send, the origination door,
         // the projection-handler and ledger-judge registrations, the session observer, the capability-list
         // provider and the vouch-list exchange — with the routed rows' column types, the body framing and
-        // the generic content union; for presence the host seam, the session coordinator with its public
-        // token send and manual commit, ranging, the namespace gate, the observation loop and the
-        // peer-name coercion; for recipe sharing the pair session with its profile, status, events,
-        // peer row and send outcome; and `package` doors: the presence radio's seam, QUIC conformer, peer
-        // channel, epoch posture and TXT vocabulary until A1; `JSONSidecarFile`, the
-        // ledgers' sidecar, is this module's own) + FernletConnections (`FernletFeaturePurposes`' two
+        // the generic content union; for presence the host seam, the presence engine with its peer
+        // channel, the session coordinator with its public token send and manual commit, ranging, the
+        // namespace gate, the observation loop and the peer-name coercion; for recipe sharing the pair
+        // session with its profile, status, events, peer row and send outcome; no `package` door;
+        // `JSONSidecarFile`, the ledgers' sidecar, is this module's own) + FernletConnections (`FernletFeaturePurposes`' two
         // declared salts, which the heart-drop and presence pair secrets derive under,
         // `ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory
         // and whose routed types FernletRoutedTypes reads, the name placeholders,

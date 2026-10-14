@@ -39,7 +39,7 @@ a moved member as the manager's moved with it. "Mesh" indexes the engine's seams
 the payload token door, `sendFeatureEnvelope`, `originateRoutedItem`, the routed projection handler and
 ledger judge, the session observer, the vouch-list exchange and the routed-type rows a host declares
 (`ProximityHost.meshRoutedTypeEntries`). ProximityKit's "Hearts" keeps the prekey bundle and the
-protected sidecar; presence's radio (until A1) stays where it was, and the recipe-share manager's mechanism
+protected sidecar; presence's radio stays where it was, wrapped by its public presence engine (A1.1), and the recipe-share manager's mechanism
 stays as the pair session (A0.7.3).
 
 **2026-10-11 (ProximityKit plan step A0.8):** ProximityKit has its own package test target,
@@ -1423,11 +1423,9 @@ lock its re-link out until the claimant's tunnel ended.
 listener registered under the current `PresenceEpochPosture`'s instance name and presenting its TLS
 identity, one browser, and up to four short-lived pairwise tunnels. It owns **no timer** — presence's
 one timer is the manager's epoch tick — and no roster, dial budget, heartbeat or transfer stream.
-`PresenceRadioSession`, the seam the manager drives it through, the class with `init(namespace:)` and
-its twelve witnesses, and the channel it vends (`NetworkPeerChannel`, with `peer`,
-`notifyConnected()` and its `PeerTransport` witnesses) are `package` (rule 5, until A1): Fernlet's
-presence manager drives them, and before ProximityKit leaves FernletKit the seam is published as
-mechanism or wrapped by a presence engine.
+`PresenceRadioSession`, the seam the presence engine (`ProximityPresenceSession`, under "Presence And
+Nearby Friends") drives it through, the class and the channel it vends (`NetworkPeerChannel`, which a
+host holds as the public `ProximityPeerChannel`) are internal (plan step A1.1).
 
 | Function | What It Does |
 | --- | --- |
@@ -1574,8 +1572,8 @@ allowlist naming its exit step, which is empty (its DEBUG launch-environment key
 vocabulary and records (`PayloadType`, `ProximityCapability`, `ProximityMode`, `ItemNameModeration` and
 the persisted proximity records) out of its code, its list of lines empty (the coordinator's session
 mode is ProximityKit's own `ProximitySessionMode`, and Fernlet's typed view of the envelope's token
-is FernletConnections'), `package` to the doors its list names (the presence radio's seam, its QUIC
-conformer, the peer channel, the epoch posture and the TXT vocabulary until A1), and every
+is FernletConnections'), `package` out of its code, its list empty (the presence radio's doors closed
+behind its public presence engine at A1.1), and every
 type that left ProximityKit for `FernletSocial` or the app out of it (the recipe share's among them),
 with the recipe share's three public values it renamed for the one-to-one send and the nine recipe-named types of the pair
 session's mechanism renamed with pair names at plan step A1.0: none is declared, extended or aliased there again, and the
@@ -1789,7 +1787,7 @@ holds each radio to the namespace it is built from (group 12).
 | `NetworkMeshSession.channelBindingHash(for:exporterLabel:)` | SHA-256 of the connection's TLS exporter secret under the label it is handed, whole (role `.tlsExporterLabel`); its one caller hands it the radio's `tlsExporterLabel`. |
 | `NetworkPresenceSession.init(namespace:)` / `NetworkPairSession.init(namespace:profile:)` | Keep `serviceType` and `alpn` from `family.radios.presence` / the profile's `radio` (Fernlet's recipe profile: `family.radios.pair`), the recipe radio also the profile's `advertisementMode`, `namespaceSoundness`, and a private instance `Logger`. |
 | `NetworkMeshSession.start(discoveryInfo:)` / `NetworkPresenceSession.start(posture:discoveryInfo:)` / `NetworkPairSession.start(advertisement:)` | Refuse first under an unsound namespace: `ProximityNamespaceGate.refuseUnsound(namespaceSoundness, …, at: .start)` throws and audits `mesh.quic.namespaceUnsound` / `presence.quic.namespaceUnsound` / `recipe.quic.namespaceUnsound` before anything is minted, listened on or advertised. |
-| `MeshNetworkManager.init` / `ProximityPairSession.init` / `PresenceManager.makeSession` | Build their radio from the stored `namespace` (the pair session with its profile); presence's `makeSession` is set in `init`, a closure capturing the `Sendable` value. |
+| `MeshNetworkManager.init` / `ProximityPairSession.init` / `ProximityPresenceSession.makeRadio` | Build their radio from the stored `namespace` (the pair session with its profile); the presence engine's `makeRadio` is set in its `init`, a closure capturing the `Sendable` value. |
 
 ### At rest: names, rows and scopes
 
@@ -1904,6 +1902,7 @@ file never imports FernletSocial.
 | `MeshRoutedTypeRegistry.increment1(_:)` / `increment1`, `MeshRoutedAckStageTable.increment1(_:)` / `increment1` | The shipping registry and its ack-stage projection as values over Fernlet's host rows (`FernletRoutedTypes.entries`), over the routed types handed in or `.fernlet`'s. |
 | `MeshSessionChat.allowIncomingRoutedText(_:from:)` with a manifest | The chat's per-origin message budget in the manifest shape the cells were written against, counted against `MeshRoutedOriginQuotaKey(manifest)`. |
 | `ProximityHost.meshRoutedTypeEntries` (a test-only extension) | The host doubles' routed-type rows, which the requirement does not default: Fernlet's host rows over the double's own namespace's routed types. The app's `FernletStore` answers for itself. |
+| `PresenceManager.makeSession` / `postureMint` / `presencePosture` / `discoveryInfoForTesting()` / `registerOwnEphemeralPeerNameForTesting(_:)` / `handleDiscoveredPeerForTesting(_:)` / `simulateHeartConnectionTeardownForTesting(peer:ranging:)` / `evaluateConnectedCoordinatorForTesting(_:peer:trustPolicy:intendedFriend:)` | The presence manager's seams that reached what moved into its presence engine at plan step A1.1, each a forwarder to the engine's own (`makeRadio`, `postureMint`, `posture`, `advertisedFields(for:)` over the manager's tags, `registerOwnInstanceNameForTesting(_:)`, `noteDiscoveredForTesting(_:)`, and the manager's two heart seams over `channelForTesting(_:)`). |
 | `ProximityRecipeShareManager.init(store:makeSession:identity:)` and one forwarder per pair-session test seam (`makeRetainedConnectionCoordinatorForTesting`, `radioForTesting`, `markRunningForTesting()`, `checkCoordinatorStatesForTesting()`, `transferForTesting`, `finishShareForTesting(_:token:)`, `applyTransferForTesting`, `applyDiscoveryGateForTesting(_:)`, `discoveryInfoForTesting`, `shouldAdmitChannel(for:)`, `channelAdmission(for:)`, `sweepParkedConnections(now:)`, `connectTimeoutSeconds` and the rest) | The recipe-share manager's seam shape over a `ProximityPairSession` built with the test's radio and identity under the recipe profile on the host's OWN namespace, as `init(store:)` builds it: the rule's one stated exception. Each forwarder is the session's own seam. |
 
 ### The test target's App bindings (`Tests/FernletTests/FernletAppTestBindings.swift`)
@@ -2437,11 +2436,33 @@ The durability primitive behind FernletSocial's heart ledger and heart-drop side
 
 ## Presence And Nearby Friends
 
-The standing `_fernlet-near2._udp` radio's mechanism: its epoch posture and its TXT vocabulary (the QUIC
-conformer and its seam are under "Transport And Ranging"). The manager that drives it, `PresenceManager`,
+The standing `_fernlet-near2._udp` radio's mechanism: its public presence engine, its epoch posture and
+its TXT vocabulary (the QUIC conformer and its seam are under "Transport And Ranging"). The manager that
+drives the engine, `PresenceManager`,
 its tags, and the two device-local ledgers its sightings and hearts feed, closeness and friend state, are
 FernletSocial's (see "FernletSocial" below). Everything here is opt-in and device-local; none of it is
 ever in the synced snapshot.
+
+### `Presence/ProximityPresenceSession.swift`
+
+ProximityKit plan step A1.1. The presence radio as one public engine, `ProximityPresenceSession`
+(`@MainActor`, built for its host's namespace, starting and minting nothing): it builds the radio, wears
+the epoch posture the radio advertises under, encodes its host's tags into the TXT record and decodes a
+sighting's back, and drops this device's own ghosts by name, so a host advertises and reads tags and never
+a record, a posture or a radio. It owns **no timer and no task**: its host asks it to rotate from a tick
+of its own. `ProximityPeerChannel`, the public protocol refining `PeerTransport` that the radio's
+`NetworkPeerChannel` conforms to, is how a tunnel reaches the host.
+
+| Function Or Property | What It Does |
+| --- | --- |
+| `init(namespace:)` | Keeps the namespace; sets the radio factory (`NetworkPresenceSession(namespace:)`) and the posture mint (the posture's production `rotated`/`minted` under the namespace's presence instance-name prefix and TLS common name). |
+| `rotatePosture(at:)` / `postureEpoch` | Wears the posture for the epoch containing `now` and answers that epoch: a no-op inside the worn epoch, a whole fresh mint with none worn or across a boundary, its instance name remembered for self-exclusion. A failed mint leaves NO posture and rethrows; how often to retry, and what to log, is the host's. |
+| `start(tags:)` / `republish(tags:)` / `stop()` | `start` builds a fresh radio, wires its six hooks to the engine's, keeps it, and starts it under the worn posture with the record for `tags` (throws with no posture worn, or whatever the radio throws; a second start while up is ignored). `republish` re-advertises `tags` under the worn posture (nothing with none worn or no radio up). `stop` stands the radio down, drops it and drops the posture; the own-name ring survives. |
+| `dial(_:helloTag:)` / `disconnectPeer(_:)` | The radio's dial with a hello tag and its owner-requested tunnel end, no-ops with no radio up. |
+| `onPeerDiscovered` / `onPeerLost` / `resolveDialer` / `onPeerChannelReady` / `onPeerDisconnected` / `onTransportError` | The host's hooks. A sighting reaches `onPeerDiscovered` with its decoded tags only when it is a version-1 presence record under a name the engine never wore (the record check and self-exclusion by name, both before any host side effect); `resolveDialer` fails closed when unwired; `onPeerChannelReady` hands up a `ProximityPeerChannel`. |
+| `advertisedFields(for:)` (internal, `static`) | The record for a tag set: `PresenceAdvertisement.publishedFields(tags:)` over the sorted set. |
+| `ProximityPeerChannel.peer` / `.notifyConnected()` | The peer a channel carries, and its `.connected` signal, to be published once, after the host's coordinator over the channel has begun. |
+| `makeRadio` / `postureMint` / `posture` / `registerOwnInstanceNameForTesting(_:)` / `noteDiscoveredForTesting(_:)` / `channelForTesting(_:)` | Internal test seams, reached through `@testable import`: the radio factory and the posture mint (settable), the worn posture, the own-name ring, one sighting through the filter, and a channel built as the live path builds one. |
 
 ### `Presence/PresenceEpochPosture.swift`
 
@@ -2449,13 +2470,13 @@ ever in the synced snapshot.
 epoch, as a pure value: no radio, no task, no timer, no manager reference, no persistence — the
 clock reading and the entropy source are both injected. Over MC the posture came free from
 `MCPeerID` semantics; over QUIC it has to be reproduced explicitly, and it is the privacy claim of
-the whole presence feature. The type, `epoch`, `instanceName` and the production `minted` and
-`rotated` are `package` (rule 5, until A1), with the presence radio's seam that takes the posture.
+the whole presence feature. Internal, with every member: the presence engine mints, rotates and wears
+it, and its host sees only its epoch (`ProximityPresenceSession.postureEpoch`).
 
 | Function Or Property | What It Does |
 | --- | --- |
 | `epoch` / `instanceName` / `tlsIdentity` | The three things a posture answers for one epoch: the presence epoch (`IdentityService.presenceEpoch(at:)` — the ONE presence clock, not a second counter), the service instance name to advertise, and the TLS identity to present. |
-| `minted(at:instanceNamePrefix:entropy:mintIdentity:)` / `minted(at:instanceNamePrefix:commonName:)` | Mints a posture for the epoch containing `now`, its name under the host's presence prefix (FernletSocial's `PresenceManager`'s posture mint passes its namespace's `family.radios.presenceInstanceNamePrefix` and `tlsCommonName`). The production form uses the system CSPRNG and `EphemeralMeshTLSIdentity.mint(commonName:now:)` — the module's single certificate path, so no new cryptographic purpose and no second crypto path exist here. The certificate is minted at `IdentityService.presenceEpochStart(at: now)`, **never at `now`**: the mint writes its instant into the certificate as `notBefore`/`notAfter` at 1 s resolution and the validator accepts any certificate, so an instant-anchored window would advertise the second this radio came up and single the device out for the rest of the epoch. |
+| `minted(at:instanceNamePrefix:entropy:mintIdentity:)` / `minted(at:instanceNamePrefix:commonName:)` | Mints a posture for the epoch containing `now`, its name under the host's presence prefix (the presence engine's posture mint passes its namespace's `family.radios.presenceInstanceNamePrefix` and `tlsCommonName`). The production form uses the system CSPRNG and `EphemeralMeshTLSIdentity.mint(commonName:now:)` — the module's single certificate path, so no new cryptographic purpose and no second crypto path exist here. The certificate is minted at `IdentityService.presenceEpochStart(at: now)`, **never at `now`**: the mint writes its instant into the certificate as `notBefore`/`notAfter` at 1 s resolution and the validator accepts any certificate, so an instant-anchored window would advertise the second this radio came up and single the device out for the rest of the epoch. |
 | `rotated(at:…)` | `self` while `now` is still inside `epoch`; an entirely fresh posture the moment it is not, under the prefix (and common name) handed in again. There is no partial rotation and no carried field, which is what makes "nothing survives a boundary" total rather than approximate. |
 | `instanceName(prefix:entropy:)` / `instanceNameLength(prefix:)` | The host's presence prefix (its separator included; Fernlet's is `fn-`) + `instanceNameEntropyByteCount` drawn bytes as lowercase hex, and nothing else — no counter, no epoch index, no timestamp, no device byte. The prefix is a frozen service token every device of the family carries identically; the length (the prefix's plus 16) is therefore a constant and encodes nothing. A short entropy draw is refused (`PresencePostureError.entropyUnavailable`), never padded. |
 | `systemEntropy(_:)` / `hexadecimal(_:)` | The production CSPRNG draw (bounded by `maxEntropyByteCount`, R2) and the fixed-width encoding. |
@@ -2476,8 +2497,8 @@ name.
 ### `Presence/PresenceAdvertisement.swift`
 
 **P9 item 2 pass 2.** The TXT vocabulary as pure functions, and the dialer's opening frame.
-`PresenceAdvertisement` and its three functions below are `package` (rule 5, until A1), with the
-presence radio's seam; the keys, the bounds and the dial hello stay internal.
+Internal, with every member: the presence engine encodes its host's tags and decodes a sighting's with
+`PresenceAdvertisement`, and the radio writes and reads the dial hello.
 
 | Function Or Property | What It Does |
 | --- | --- |
@@ -2498,7 +2519,7 @@ its public seams (the payload token door, the captured-slot feature send, the ro
 the projection handlers and ledger judge it registers, the session observer and the vouch-list exchange
 it installs) and reads the host through `FernletSocialHost`, ProximityKit's `ProximityHost` refined with
 the three requirements only these features read. Presence drives ProximityKit's presence radio through
-its `package` doors. Every record is device-local and never synced; a sealed heart drop is the one thing
+its public presence engine. Every record is device-local and never synced; a sealed heart drop is the one thing
 that leaves the device.
 
 The heart dead-drop (`HeartSharing/`), shipped in the bitchat-adoptions round (Increment 3) and hardened
@@ -2927,25 +2948,27 @@ credits almost nothing, and the reboot-gap credit is capped). It is deliberately
 
 The presence radio's owner: KEPT friends recognize each other nearby without connecting, and hearts are
 delivered over on-demand pairwise connections formed on that recognition. It drives ProximityKit's
-presence radio (see "Presence And Nearby Friends" above) through the `package` doors that close at A1
-(`PresenceRadioSession`, `NetworkPresenceSession`, `NetworkPeerChannel`, `PresenceEpochPosture`,
-`PresenceAdvertisement`) and builds each heart connection's `ProximityCoordinator`, whose public token
+presence radio (see "Presence And Nearby Friends" above) through its public presence engine,
+`ProximityPresenceSession` (`presenceSession`, built in `init`, its hooks wired there once), and builds
+each heart connection's `ProximityCoordinator` over the `ProximityPeerChannel` the engine hands up,
+marking the channel connected once the coordinator has begun, and calls the coordinator's public token
 send (under `PayloadType.friendHeart`'s raw value) and manual commit it calls; its two own audit lines,
 `presence.identity.provisionFailed` and `presence.posture.mintFailed`, go to `FernletAuditLog`.
 
 Privacy posture is the design centre, and it is worth reading before touching anything here. The
 advertisement carries ONLY rotating pairwise-DH tags (truncated HMACs of the 15-minute epoch under
 per-friend-pair static-static X25519 secrets — `IdentityService.presenceTag`, below), the advertised
-instance name and TLS identity are a `PresenceEpochPosture` replaced whole at every boundary, and
+instance name and TLS identity are an epoch posture the engine wears, replaced whole at every boundary, and
 all state (nearby set, connections, diagnostics) is
 memory-only with no identities in any log line. Matching spans ±1 epoch; three self-exclusion layers
-drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch advertiser restart.
+drop our own ghost advertisements (the first, by name, is the engine's); a 45 s lost-grace debounce
+smooths the epoch advertiser restart.
 
 | Function Or Property | What It Does |
 | --- | --- |
 | `start()` / `stop()` | Lifecycle, owned by the app (opt-in setting + scene/tab/lock state) — not by this type. `start()` refuses first, with `presence.identity.namespaceMismatch` (at `start`), when `init(store:ledger:identity:)` was handed an identity of another namespace (audited at `construction`): it mints no posture and starts no radio. |
 | `spawnHostPinned(_:)` | The mandatory spawn idiom for this manager (P5 item 1a, invariant HP1): reads the `unowned` host synchronously on the main actor and holds it for the operation's own lifetime, so a detached task can never resume against a destroyed host. Spawns whose handle the manager STORES are exempt and stay plain `Task { … }` with a `// host-pin: timer — <reason>` marker — a task-lifetime pin there is a permanent `store → manager → handle → store` cycle (HP2). Enforced by `MemoryLifecycleBoundaryTests` rule ML4. |
-| `presencePosture` / `rotateEpochIfNeeded()` | The one source of this radio's epoch index, advertised instance name and TLS identity (`PresenceEpochPosture`), minted through `postureMint`, whose default `init` builds over the namespace's presence instance-name prefix and TLS common name. Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock, since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. The radio starts and re-publishes under it (`start(posture:discoveryInfo:)`, `republish(posture:discoveryInfo:)`): its QUIC listener's instance name and `sec_identity_t` ARE the posture, so no posture means nothing advertised. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. |
+| `rotatePosture(at:)` / `rotateEpochIfNeeded()` | The radio's epoch index, advertised instance name and TLS identity are the posture the engine wears, rotated through `presenceSession.rotatePosture(at:)`. Minted when the radio comes up, re-minted WHOLE at every 900 s boundary by the rotation tick the manager already runs — no new timer and no second clock (the engine owns none), since every caller hands the rotation `nowProvider()` and the epoch is always `IdentityService.presenceEpoch(at:)` — and dropped by `stop()`, so a stood-down radio keeps no name and no certificate to come back up under. The engine starts and re-publishes the radio under it (`start(tags:)`, `republish(tags:)`): its QUIC listener's instance name and `sec_identity_t` ARE the posture, so no posture means nothing advertised. Fail-soft, NAMED (`presence.posture.mintFailed`) and BUDGETED: a mint that fails leaves NO posture rather than a stale one, tag derivation is untouched because the epoch still comes from the same clock, and the failed epoch is remembered so the six `refreshRoster()` call sites cannot turn one failure into a keygen and an audit row per refresh — one attempt and one row per epoch, then the boundary retries. |
 | `refreshRoster()` | Re-derives the advertised/matched tag set from the current trusted-friend roster — **through** the posture, so a refresh that lands after a boundary rotates the name and the identity with the tags rather than advertising fresh tags under an old identifier. |
 | `isReachable(fingerprint:)` | Whether a friend is currently tag-matched nearby. |
 | `sendHeart(to:)` | The full in-person send: invite the tag-matched peer, run the 1-RTT friend handshake under the SEALED-INTRODUCTION rule (intro and ack sealed to the intended friend's vault key-agreement key, so a tag-replay forger learns nothing), auto-commit, verify the connected identity IS that friend and is heart-eligible, deliver one sealed `.friendHeart`, then tear down. The teardown is load-bearing: zombie connections must never accumulate toward the radio's eight-peer link cap. |

@@ -454,6 +454,18 @@ jobs:
         # simulator, iOS 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`.
         # crypto-goldens is HELD at 356, the suite named
         # ProximityKitTests/ProximityNamespaceSoundnessTests in place (see its step).
+        #
+        # ProximityKit plan step A1.1.3 (2026-10-13) closes the presence radio's 36 `package` lines
+        # behind ProximityKit's public presence engine, `ProximityPresenceSession`, which FernletSocial's
+        # presence manager drives. `ProximityNamespaceBoundaryTests`' rule 5 holds no row (its
+        # `presenceRadioSeam` reason and the A1 exit step went with the last one), so ProximityKit's
+        # code declares `package` nowhere and a new `package` line fails, and its `ExitStep` is
+        # uninhabited with a row's exit optional, as `ProximityPlatformBoundaryTests`' is. No suite
+        # joined or left a line and no cell was added, and the line, MEASURED on a Mac on that tree
+        # (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`.
+        # mesh-batteries stays 1372: the two orders the engine's move kept (the engine wires a radio's
+        # hooks before it starts it, the manager marks a heart channel connected only after its
+        # coordinator has begun) are rows inside MeshP9PresenceSwapAcceptanceTests' existing source cell.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \

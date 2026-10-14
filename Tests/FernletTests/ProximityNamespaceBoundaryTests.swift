@@ -30,8 +30,8 @@
 //      per-file, per-type allowlist of the lines a named later step removes, which is empty: no line
 //      names one (the coordinator's session mode is ProximityKit's own `ProximitySessionMode`);
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
-//      later step reshapes or closes, each row with that step (36 lines in 4 files: the presence
-//      radio's, until A1);
+//      later step reshapes or closes, each row with that step, which is empty: no line declares it
+//      (the presence radio's doors closed at plan step A1.1, behind its public presence engine);
 //   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (96 names:
 //      the heart dead-drop's, presence's, moderation's (the report relay's among them), closeness's
 //      and friend state's types, the parked chat payload, the clothing shop's, the activity manager's
@@ -55,8 +55,8 @@
 // FernletFoundation's or PrivateMediaStore's, which only Fernlet's features needed.
 //
 // Rules 3 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// lowered or deleted. So rule 3's list and rule 4's are already empty, and a `package` door's row
-// lives exactly as long as the door. Rule 2 lists nothing: any use fails.
+// lowered or deleted. So rule 3's, rule 4's and rule 5's lists are already empty, and a row added
+// for a later step's debt lives exactly as long as that debt. Rule 2 lists nothing: any use fails.
 // Rule 6 only grows: a feature that came back under its old name with no Fernlet string, no registry
 // label and no domain type of its own would pass rules 2 to 4, so each step that moves features out
 // adds the types it took, and a step that renames a type or a public member for its generic use
@@ -68,12 +68,11 @@
 // content, the clothing shop, activities, the live-session chat, the session hearts and heart
 // ledger, the session photos and their review, the sealed-backup escrow, the Live Activity reaper
 // and the recipe share), which rule 6 keeps out. Rule 5 holds the
-// other direction, the doors ProximityKit opens to Fernlet's own modules while a later step reshapes
-// what is behind them:
-// the presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch posture
-// and the TXT vocabulary, which FernletSocial's presence manager drives (until A1). The coordinator's
-// per-connection send and manual commit, which the pair session's pairings and presence's heart
-// connections go through, are public.
+// other direction, the doors ProximityKit would open to Fernlet's own modules, and it opens none:
+// FernletSocial's presence manager drives the presence radio through the public presence engine,
+// `ProximityPresenceSession` (plan step A1.1), whose radio, epoch posture and TXT vocabulary are
+// internal, and the coordinator's per-connection send and manual commit, which the pair session's
+// pairings and presence's heart connections go through, are public.
 
 import Foundation
 import Testing
@@ -617,7 +616,7 @@ private extension UInt8 {
     /// `file`'s allowlist rows with their counts and exit steps, for a failure message.
     private static func describeRows(of file: String) -> String {
         let rows = fernletLiterals.filter { $0.file == file }
-            .map { "\"\($0.text)\" ×\($0.count) (until \($0.reason.exit.rawValue))" }
+            .map { "\"\($0.text)\" ×\($0.count) (until \(Self.exitText($0.reason.exit)))" }
         return rows.isEmpty ? "none" : rows.joined(separator: ", ")
     }
 
@@ -796,7 +795,7 @@ private extension UInt8 {
     /// `file`'s rule-4 rows with their counts and exit steps, for a failure message.
     private static func describeDomainRows(of file: String) -> String {
         let rows = domainTypeLines.filter { $0.file == file }
-            .map { "\($0.type) on \($0.lines) (until \($0.reason.exit.rawValue))" }
+            .map { "\($0.type) on \($0.lines) (until \(Self.exitText($0.reason.exit)))" }
         return rows.isEmpty ? "none" : rows.joined(separator: ", ")
     }
 
@@ -806,17 +805,19 @@ private extension UInt8 {
     /// lists, file by file and count by count, each row with the plan step that closes its doors.
     ///
     /// `package` access reaches every target of FernletKit, and the test target through
-    /// `@testable import`, but never the app: it is the access a Fernlet module inside the package
-    /// uses a ProximityKit declaration through while a named later step (A1) reshapes or
-    /// replaces it, so it is debt with an exit, never a settled seam (a settled seam is `public`, with
-    /// its contract). Nothing else counts that debt: a widened declaration compiles clean wherever it
-    /// is used. So the list is exact both ways, like rules 3 and 4: a new `package` line fails until a
-    /// row names why it is there and its exit, and a line that goes away fails until its row is
-    /// lowered or deleted, so no door outlives its step unnoticed. ProximityKit declares `package` on
-    /// 36 code lines in 4 files: the presence radio's doors (until A1). Every code line on which
-    /// `package` is an access modifier counts, once, however its declaration goes on
-    /// (``packageDeclarationPattern``), a setter's `package(set)` included; comments and literals may
-    /// say `package` freely, and code may use it as a name.
+    /// `@testable import`, but never the app, and never a module of another package: it is the access
+    /// a Fernlet module inside the package would use a ProximityKit declaration through while a named
+    /// later step reshapes or replaces it, so it is debt with an exit, never a settled seam (a settled
+    /// seam is `public`, with its contract). Nothing else counts that debt: a widened declaration
+    /// compiles clean wherever it is used. So the list is exact both ways, like rules 3 and 4: a new
+    /// `package` line fails until a row names why it is there and its exit, and a line that goes away
+    /// fails until its row is lowered or deleted, so no door outlives its step unnoticed. ProximityKit
+    /// declares `package` on no code line: the presence radio's doors, its last, closed at plan step
+    /// A1.1, when FernletSocial's presence manager began driving the radio through the public presence
+    /// engine (`ProximityPresenceSession`). Every code line on which `package` is an access modifier
+    /// counts, once, however its declaration goes on (``packageDeclarationPattern``), a setter's
+    /// `package(set)` included; comments and literals may say `package` freely, and code may use it
+    /// as a name.
     @Test func packageIsDeclaredOnlyOnTheListedLines() throws {
         let matcher = try NSRegularExpression(pattern: Self.packageDeclarationPattern)
         let sources = try Self.proximitySources()
@@ -837,7 +838,7 @@ private extension UInt8 {
             let actual = found[path] ?? 0
             #expect(actual == (allowed?.lines ?? 0), """
                 \(path) declares `package` on \(actual) code lines; the list says \(allowed?.lines ?? 0)\
-                \(allowed.map { ", closing at \($0.reason.exit.rawValue)" } ?? ""). A new `package` door \
+                \(allowed.map { ", closing at \(Self.exitText($0.reason.exit))" } ?? ""). A new `package` door \
                 needs a row naming why a Fernlet module needs it and the plan step that closes it (a \
                 settled seam is `public`, with its contract); a door that closed needs its row lowered \
                 or deleted here, so the list stays exact.
@@ -950,14 +951,9 @@ private extension UInt8 {
     }
 
     /// Every file whose code declares `package`, by path under the module root, each row with the
-    /// step that closes its doors: the presence radio's seam, its QUIC conformer, the peer channel the
-    /// seam names, the epoch posture and the TXT vocabulary (A1).
-    static let packageDeclarationLines: [String: PackageLines] = [
-        "Presence/PresenceAdvertisement.swift": PackageLines(lines: 4, reason: .presenceRadioSeam),
-        "Presence/PresenceEpochPosture.swift": PackageLines(lines: 5, reason: .presenceRadioSeam),
-        "Transport/NetworkMeshSession.swift": PackageLines(lines: 12, reason: .presenceRadioSeam),
-        "Transport/NetworkPresenceSession.swift": PackageLines(lines: 15, reason: .presenceRadioSeam)
-    ]
+    /// step that closes its doors: none, since the presence radio's doors closed behind the public
+    /// presence engine (plan step A1.1).
+    static let packageDeclarationLines: [String: PackageLines] = [:]
 
     // MARK: Rule 6: the moved types stay gone
 
@@ -1338,35 +1334,32 @@ private extension UInt8 {
 
     // MARK: Reasons
 
-    /// The plan step that takes a value out of ProximityKit.
-    enum ExitStep: String, Sendable {
-        /// The package leaves Fernlet's tree (A1): the presence radio's `package` doors (rule 5) are
-        /// settled then: its seam, its QUIC conformer, the peer channel the seam names, the epoch
-        /// posture and the TXT vocabulary, published as mechanism or wrapped by a presence engine.
-        case a1 = "A1"
+    /// The plan step that takes a value out of ProximityKit. A step's case is deleted with its last
+    /// row, as A1's (the presence radio's `package` doors, closed at plan step A1.1 behind the public
+    /// presence engine) was.
+    ///
+    /// No case is left, so rules 3 to 5 list nothing and the enum is uninhabited, as
+    /// `ProximityPlatformBoundaryTests.ExitStep` is: a ``Reason``'s `exit` is optional so the type
+    /// still compiles, and nil would name no step. A later step that adds a row adds its case with its
+    /// step's name as a `String` raw value, the raw type with it, and ``exitText(_:)``'s arm naming it,
+    /// which the compiler then requires.
+    enum ExitStep: Sendable {}
+
+    /// A row's exit step, as a failure message says it: every row of rules 3 to 5 names one, and no
+    /// case is left, so the one arm is the nil a row must never carry. A step that adds a case adds
+    /// the arm that names it.
+    static func exitText(_ exit: ExitStep?) -> String {
+        switch exit {
+        case .none:
+            return "no plan step"
+        }
     }
 
     /// Why a value is still in ProximityKit, and the step that takes it out.
     struct Reason: Sendable {
-        /// The step that removes it.
-        let exit: ExitStep
+        /// The step that removes it; nil only while no step is left to name.
+        let exit: ExitStep?
         /// Why it is still here until then.
         let why: String
     }
-}
-
-// MARK: - The reasons
-
-extension ProximityNamespaceBoundaryTests.Reason {
-
-    // Rule 5: the package doors (A1).
-
-    /// The presence radio's doors.
-    static let presenceRadioSeam = Self(exit: .a1, why: """
-        the presence radio's seam, its QUIC conformer, the peer channel the seam's requirements name \
-        and presence's heart connections build a coordinator over, its epoch posture and its TXT \
-        vocabulary, which FernletSocial's presence manager drives; package access ends when \
-        ProximityKit leaves FernletKit, so by then the seam is published as mechanism or wrapped by a \
-        presence engine
-        """)
 }

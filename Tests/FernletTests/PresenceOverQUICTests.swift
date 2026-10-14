@@ -658,7 +658,8 @@ struct PresenceOverQUICTests {
     // MARK: - The retirement scan
 
     /// `PresenceManager` no longer names MultipeerConnectivity anywhere in its code, and does name
-    /// the radio that replaced it.
+    /// the radio that replaced it: ProximityKit's presence engine (plan step A1.1), which builds that
+    /// radio and speaks its TXT vocabulary.
     ///
     /// The rule-7 gate for a two-pass item: pass 1 changed nothing on the air, so the only
     /// mechanical proof that pass 2 RAN is that the MC path is gone from this file. Pinned in both
@@ -674,9 +675,11 @@ struct PresenceOverQUICTests {
                        "updateDiscoveryInfo", "serviceType", "MultipeerConnectivity"] {
             #expect(!code.contains(needle), "PresenceManager still names `\(needle)` in code")
         }
-        #expect(code.contains("PresenceRadioSession"), "and it drives the QUIC presence radio's seam")
-        #expect(code.contains("NetworkPresenceSession"), "whose production conformer it builds")
-        #expect(code.contains("PresenceAdvertisement"), "through the presence TXT vocabulary")
+        #expect(code.contains("ProximityPresenceSession"), "and it drives the QUIC presence radio's engine")
+        let engine = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift"))
+        #expect(engine.contains("NetworkPresenceSession"), "whose production conformer the engine builds")
+        #expect(engine.contains("PresenceAdvertisement"), "through the presence TXT vocabulary")
 
         // The COMMENTS get a narrower rule, and the line is drawn where it is un-brittle: the
         // framework's API TYPE names describe a mechanism, so a comment carrying one is describing

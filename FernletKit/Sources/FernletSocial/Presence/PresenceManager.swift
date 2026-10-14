@@ -29,13 +29,14 @@
 //    (`IdentityService.presenceTag`), so a passive observer sees an unlinkable value that rotates
 //    every epoch, and only the two members of a pair can derive it. Blocking/removing a friend
 //    drops their tag at the next roster rebuild.
-//  - The radio's advertised identity is a `PresenceEpochPosture` (P9 item 2, plan §17.1): for any
-//    instant it answers the epoch, the service instance name to advertise and the TLS identity to
-//    present, and all three are replaced WHOLE at every 900 s boundary. `presencePosture` below is
-//    the one source of all three, and `NetworkPresenceSession` advertises exactly what it says —
-//    so two sightings 901 seconds apart share no byte, and nothing about the device is derivable
-//    across a boundary. Nothing is persisted: a stood-down radio keeps no name and no certificate
-//    to come back up under.
+//  - The radio's advertised identity is an epoch posture (P9 item 2, plan §17.1): for any instant
+//    it answers the epoch, the service instance name to advertise and the TLS identity to present,
+//    and all three are replaced WHOLE at every 900 s boundary. ProximityKit's presence engine,
+//    `ProximityPresenceSession`, wears it and its radio advertises exactly what it says; this
+//    manager asks the engine to rotate it at every boundary (`rotatePosture(at:)` below) — so two
+//    sightings 901 seconds apart share no byte, and nothing about the device is derivable across a
+//    boundary. Nothing is persisted: a stood-down radio keeps no name and no certificate to come
+//    back up under.
 //  - What a boundary does NOT break, stated plainly: a link-local observer sees one IP address
 //    throughout, and a live heart tunnel opened before the boundary stays open across it. Neither
 //    is a regression and neither is reachable by rotating a name — the tunnel's far end is a
@@ -71,7 +72,7 @@ import ProximityKit
 private struct PresenceHeartConnection: Identifiable {
     let id: UUID
     let peer: PeerHandle
-    let channel: NetworkPeerChannel
+    let channel: any ProximityPeerChannel
     let coordinator: ProximityCoordinator
     let trustPolicy: any ProximityTrustPolicy
     /// The friend this connection is delivering a heart to (outbound). `nil` = an inbound-only
@@ -89,11 +90,11 @@ private struct PresenceHeartConnection: Identifiable {
 /// Privacy posture is the design center: the advertisement carries ONLY rotating pairwise-DH
 /// tags (truncated HMACs of the 15-minute epoch under per-friend-pair static-static X25519
 /// secrets — see `IdentityService.presenceTag`), the epoch's advertised instance name and TLS
-/// identity are a fresh ``PresenceEpochPosture`` that survives no boundary and is what
-/// ``NetworkPresenceSession`` actually advertises, and all state (nearby set, connections,
-/// diagnostics) is memory-only with no identities in any log line. Matching spans ±1 epoch; three self-exclusion
-/// layers drop our own ghost advertisements; a 45 s lost-grace debounce smooths the epoch
-/// advertiser restart.
+/// identity are a fresh epoch posture that survives no boundary, worn by ProximityKit's presence
+/// engine (``ProximityPresenceSession``, whose radio advertises exactly that), and all state (nearby
+/// set, connections, diagnostics) is memory-only with no identities in any log line. Matching spans
+/// ±1 epoch; three self-exclusion layers drop our own ghost advertisements (the first, by name, is
+/// the engine's); a 45 s lost-grace debounce smooths the epoch advertiser restart.
 ///
 /// Hearts (Phase 4b): sends invite the tag-matched peer, run a 1-RTT friend handshake with the
 /// SEALED-INTRODUCTION rule (intro/ack sealed to the intended friend's vault KA key so a
@@ -127,10 +128,10 @@ public final class PresenceManager: ProximityPayloadHandling {
     ///
     /// 24 tags × 12 base64 characters plus separators is 311 bytes, which does **not** fit one
     /// DNS-SD TXT entry (RFC 6763 §6.1 caps one `key=value` string at 255 bytes). It does not have
-    /// to: ``PresenceAdvertisement/publishedFields(tags:)`` chunks the list across `t` and `t1`,
-    /// whose combined capacity is 36 tags, so this roster cap is the one that bites and the wire
-    /// ceiling is never the thing that silently drops a friend. `PresenceAdvertisementTests`
-    /// reddens if this is ever raised past that capacity.
+    /// to: the presence engine's record (``ProximityPresenceSession/start(tags:)``) chunks the list
+    /// across `t` and `t1`, whose combined capacity is 36 tags, so this roster cap is the one that
+    /// bites and the wire ceiling is never the thing that silently drops a friend.
+    /// `PresenceAdvertisementTests` reddens if this is ever raised past that capacity.
     ///
     /// `nonisolated`: an immutable bound the pure TXT vocabulary and its tests read without a hop.
     nonisolated static let maxAdvertisedTags = 24
@@ -163,19 +164,15 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// Total invite attempts before giving up (initial + 2 retries), mirroring the mesh re-invite
     /// pattern the recipe cap uses.
     static let maxHeartInviteAttempts = 3
-    /// R3 cap on the self-exclusion name ring: `start()` runs once per scene/tab/lock toggle, so
-    /// the set is fed by repeated user actions. Only the last few starts can still have a Bonjour
-    /// ghost on the air, so remembering 32 is generous.
-    static let maxRememberedEphemeralNames = 32
     static let heartReinviteDelaySeconds: TimeInterval = 2
 
     @ObservationIgnored private unowned let store: any FernletSocialHost
     /// The host's protocol identity, read once from ``store`` at construction and kept as this
     /// manager's own copy (ProximityKit plan step A0.2.3), so no later read reaches back to the
     /// host. The default identity, the host's `makeProximityIdentity()`, is checked against it, and
-    /// since A0.2.7 the radio is built from it, which reads its service type, ALPN and log subsystem
-    /// off it; the default posture mint takes its presence
-    /// instance-name prefix and TLS common name, and the hearts copy its mesh prefix, which a name
+    /// the presence engine is built for it (``presenceSession``), so the radio reads its service
+    /// type, ALPN and log subsystem off it and the posture is minted under its presence
+    /// instance-name prefix and TLS common name; the hearts copy its mesh prefix, which a name
     /// never begins with. `nonisolated`: inert `Sendable` value data.
     @ObservationIgnored nonisolated let namespace: ProximityNamespace
     @ObservationIgnored private let identity: IdentityService
@@ -191,14 +188,11 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// feed the closeness signal. Set by the app; nil in tests / when closeness isn't wired.
     @ObservationIgnored public var onHeartSent: ((String) -> Void)?
     @ObservationIgnored public var onHeartReceived: ((String) -> Void)?
-    @ObservationIgnored private var session: (any PresenceRadioSession)?
-    /// Test seam: the radio this manager brings up. The production default is the one QUIC
-    /// presence radio and nothing in shipping code writes this — the counterpart of the mesh's
-    /// retired `MeshTransportFactory` seam, for a manager that only ever has one answer. A test
-    /// substitutes an in-memory fake so the advertise, republish, dial and stand-down decisions
-    /// are reachable without starting Bonjour. The default is set in `init`, where it captures
-    /// ``namespace`` when it is made, so every radio it builds speaks the host's wire.
-    @ObservationIgnored var makeSession: () -> any PresenceRadioSession
+    /// ProximityKit's presence engine, built once in `init` for ``namespace``: the radio this manager
+    /// brings up at every ``start()``, the epoch posture it advertises under, the TXT record its tags
+    /// travel in and the by-name self-exclusion. This manager wires its hooks once, in `init`, and
+    /// reaches the air through it alone. Internal so a test reaches the engine's own seams.
+    @ObservationIgnored let presenceSession: ProximityPresenceSession
     @ObservationIgnored private(set) var isRunning = false
 
     /// Live heart connections (outbound sends in flight + inbound accepts). Keyed by peer UUID.
@@ -227,12 +221,6 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// Candidate token → friend fingerprint, spanning epoch −1…+1 for EVERY eligible friend
     /// (matching is uncapped; only the advertised set is capped). Internal for tests.
     @ObservationIgnored private(set) var candidateTokens: [String: String] = [:]
-    /// Display names of the most recent ephemeral peer IDs this manager generated — exact
-    /// recognition of our own previous-start ghost advertisements (self-exclusion layer 1).
-    /// Bounded: see ``rememberOwnEphemeralPeerName(_:)``.
-    @ObservationIgnored private var ownEphemeralPeerNames: Set<String> = []
-    /// Insertion order for `ownEphemeralPeerNames`, so the cap evicts the OLDEST name.
-    @ObservationIgnored private var ownEphemeralPeerNameOrder: [String] = []
 
     /// Matched friend fingerprints per discovered peer (peers currently contributing to the
     /// nearby set — including peers within the lost-grace window).
@@ -243,21 +231,11 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// Peers reported lost, awaiting the debounce grace before removal (re-found cancels).
     @ObservationIgnored private var peerLostAt: [UUID: Date] = [:]
 
+    /// The presence epoch the tags are derived for: the epoch of the posture the engine wears
+    /// (``presenceSession``), minted when the radio comes up, re-minted whole at every 900 s boundary
+    /// by ``rotateEpochIfNeeded()`` and dropped by `stop()` — or, after a failed mint, the epoch the
+    /// clock is in, so tag derivation and matching never wait on a posture.
     @ObservationIgnored private var currentEpoch: UInt64 = 0
-    /// The ephemeral posture for ``currentEpoch`` — the ONE source of this radio's epoch index,
-    /// advertised instance name and TLS identity (plan §17.1, P9 item 2). Minted when the radio
-    /// comes up, re-minted whole at every 900 s boundary by ``rotateEpochIfNeeded()``, and dropped
-    /// by `stop()`: no name and no identity survives a boundary, a stand-down or a launch, and
-    /// none of it is ever written anywhere.
-    ///
-    /// It is read for ``currentEpoch``, and it is what the radio ADVERTISES: every
-    /// ``NetworkPresenceSession`` listener is registered under
-    /// ``PresenceEpochPosture/instanceName`` and presents ``PresenceEpochPosture/tlsIdentity``,
-    /// re-registered whole at each boundary by ``republishAdvertisement()``. That is the rotation
-    /// the retired MultipeerConnectivity advertiser could not do — it minted one random peer ID per
-    /// `start()`, so a radio left up for hours advertised freshly rotating tags under one
-    /// unchanging name, which is the linkability the tag rotation exists to remove.
-    @ObservationIgnored private(set) var presencePosture: PresenceEpochPosture?
     /// The epoch a posture mint last FAILED in — the mint's retry budget, and nothing more.
     ///
     /// A mint is a synchronous P-256 keygen plus a certificate mint on the main actor, and
@@ -291,26 +269,12 @@ public final class PresenceManager: ProximityPayloadHandling {
         try await Task.sleep(for: .seconds($0))
     }
 
-    /// Test seam: the posture mint, as `(posture held now, instant) -> the posture to wear`. The
-    /// production default is ``PresenceEpochPosture``'s own production path — the system CSPRNG
-    /// and ProximityKit's one certificate path — under ``namespace``'s presence instance-name prefix
-    /// and TLS common name, and nothing in shipping code writes this. The default is set in `init`,
-    /// where it captures those two strings when it is made. A test substitutes a failing mint to
-    /// exercise the once-per-epoch budget above.
-    @ObservationIgnored var postureMint: (PresenceEpochPosture?, Date) throws -> PresenceEpochPosture
-
     public init(store: any FernletSocialHost, ledger: ProximityHeartLedger, identity: IdentityService? = nil) {
         self.store = store
         self.ledger = ledger
         let namespace = store.proximityNamespace
         self.namespace = namespace
-        self.makeSession = { NetworkPresenceSession(namespace: namespace) }
-        let prefix = namespace.family.radios.presenceInstanceNamePrefix
-        let commonName = namespace.family.radios.tlsCommonName
-        self.postureMint = { held, now in
-            try held?.rotated(at: now, instanceNamePrefix: prefix, commonName: commonName)
-                ?? PresenceEpochPosture.minted(at: now, instanceNamePrefix: prefix, commonName: commonName)
-        }
+        self.presenceSession = ProximityPresenceSession(namespace: namespace)
         if let identity {
             self.identityIsOfNamespace = ProximityNamespaceGate.checkIdentity(
                 identity, isOf: namespace, event: "presence.identity.namespaceMismatch")
@@ -330,6 +294,33 @@ public final class PresenceManager: ProximityPayloadHandling {
                 )
             }
             self.identity = id
+        }
+        wirePresenceSession()
+    }
+
+    /// Points the presence engine's hooks at this manager, once, before any ``start()``; each
+    /// captures it weakly, since it owns the engine.
+    private func wirePresenceSession() {
+        presenceSession.onPeerDiscovered = { [weak self] peer, tags in
+            self?.handleDiscoveredPeer(peer, tags: tags)
+        }
+        presenceSession.onPeerLost = { [weak self] peer in
+            self?.handleLostPeer(peer)
+        }
+        // Phase 4b — hearts: admit an inbound dialer ONLY when the pairwise tag it claims resolves
+        // to a peer whose advertisement we have already matched to a friend. A pre-discovery-race
+        // dialer is refused; the sender retries (see armHeartConnectTimeout).
+        presenceSession.resolveDialer = { [weak self] tag in
+            self?.resolveHeartDialer(tag: tag)
+        }
+        presenceSession.onPeerChannelReady = { [weak self] channel in
+            self?.handleHeartChannelReady(channel)
+        }
+        presenceSession.onPeerDisconnected = { [weak self] peer, _ in
+            self?.removeHeartConnection(matching: peer)
+        }
+        presenceSession.onTransportError = { [weak self] message in
+            self?.handleTransportError(message)
         }
     }
 
@@ -368,35 +359,14 @@ public final class PresenceManager: ProximityPayloadHandling {
         // otherwise re-run a P-256 keygen and write another audit row on each of them. The mint
         // itself has already booked the one audit row this epoch gets (``rotatePosture(at:)``);
         // `isListening` stays false, which is exactly what the run policy's seam reads.
-        guard let posture = presencePosture else { return }
+        guard presenceSession.postureEpoch != nil else { return }
         isRunning = true
         rebuildTags(epoch: currentEpoch)
 
-        let session = makeSession()
-        session.onPeerDiscovered = { [weak self] peer in
-            self?.handleDiscoveredPeer(peer)
-        }
-        session.onPeerLost = { [weak self] peer in
-            self?.handleLostPeer(peer)
-        }
-        // Phase 4b — hearts: admit an inbound dialer ONLY when the pairwise tag it claims resolves
-        // to a peer whose advertisement we have already matched to a friend. A pre-discovery-race
-        // dialer is refused; the sender retries (see armHeartConnectTimeout).
-        session.resolveDialer = { [weak self] tag in
-            self?.resolveHeartDialer(tag: tag)
-        }
-        session.onPeerChannelReady = { [weak self] channel in
-            self?.handleHeartChannelReady(channel)
-        }
-        session.onPeerDisconnected = { [weak self] peer, _ in
-            self?.removeHeartConnection(matching: peer)
-        }
-        session.onTransportError = { [weak self] message in
-            self?.handleTransportError(message)
-        }
-        self.session = session
+        // The engine builds a fresh radio, wires its hooks to the engine's (whose own this manager
+        // wired in `init`) and starts it under the posture, advertising our tags.
         do {
-            try session.start(posture: posture, discoveryInfo: discoveryInfo())
+            try presenceSession.start(tags: ownTagTokens)
         } catch {
             handleTransportError("The presence radio could not start: \(error)")
             return
@@ -436,16 +406,9 @@ public final class PresenceManager: ProximityPayloadHandling {
         heartObservationTask = nil
         clearHeartStatusTask?.cancel()
         clearHeartStatusTask = nil
-        session?.stop()
-        session = nil
-        matchedFingerprintsByPeer.removeAll()
-        tokensByPeer.removeAll()
-        peerLostAt.removeAll()
-        discoveredPeers.removeAll()
-        ownTagTokens.removeAll()
-        candidateTokens.removeAll()
-        // The posture is ephemeral in the strong sense: a stood-down radio keeps no name and no
-        // TLS identity to come back up under, so a restart is never linkable to what preceded it.
+        // The engine stands its radio down and drops the posture with it. The posture is ephemeral
+        // in the strong sense: a stood-down radio keeps no name and no TLS identity to come back up
+        // under, so a restart is never linkable to what preceded it.
         //
         // The mint's retry budget deliberately does NOT go with it. It is not state about the
         // radio, it is a per-epoch note that a keygen failed, and `start()` is called again on
@@ -453,7 +416,13 @@ public final class PresenceManager: ProximityPayloadHandling {
         // per epoch" into one of each per policy run for the rest of the epoch. It expires by
         // itself — ``rotatePosture(at:)`` only honours it for the epoch it names, and clears it
         // outright when a mint succeeds.
-        presencePosture = nil
+        presenceSession.stop()
+        matchedFingerprintsByPeer.removeAll()
+        tokensByPeer.removeAll()
+        peerLostAt.removeAll()
+        discoveredPeers.removeAll()
+        ownTagTokens.removeAll()
+        candidateTokens.removeAll()
         nearbyFriendFingerprints = []
         heartSendState = .idle
     }
@@ -521,23 +490,17 @@ public final class PresenceManager: ProximityPayloadHandling {
         }
     }
 
-    /// The advertised TXT payload: version + own tags ONLY. No display name, no session id —
-    /// nothing stable or user-identifying (identifier hygiene is the whole point of this radio).
-    /// ``PresenceAdvertisement`` owns the encoding, including the chunking that keeps the tag list
-    /// inside DNS-SD's 255-byte-per-entry ceiling.
-    private func discoveryInfo() -> [String: String] {
-        PresenceAdvertisement.publishedFields(tags: ownTagTokens.sorted())
-    }
-
     /// Re-advertises the current tags under the current posture.
     ///
-    /// The one door from this manager to the radio's advertisement, so a republish can never carry
-    /// fresh tags under a stale name: the posture and the tags are read in the same breath, from
-    /// the same rotation. A radio with no posture has nothing to advertise under and is left alone
-    /// — the next boundary re-mints one.
+    /// The one door from this manager to the radio's advertisement after a start, so a republish
+    /// can never carry fresh tags under a stale name: the engine reads its posture in the same
+    /// breath as it takes the tags, from the same rotation. What goes on the air is the TXT record
+    /// the engine builds from them: version + own tags ONLY. No display name, no session id —
+    /// nothing stable or user-identifying (identifier hygiene is the whole point of this radio).
+    /// A radio with no posture has nothing to advertise under and is left alone — the next
+    /// boundary re-mints one.
     private func republishAdvertisement() {
-        guard let posture = presencePosture else { return }
-        session?.republish(posture: posture, discoveryInfo: discoveryInfo())
+        presenceSession.republish(tags: ownTagTokens)
     }
 
     /// The pairwise tag we advertise for `friend` this epoch — the token a dial hello claims, and
@@ -555,13 +518,11 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     // MARK: - Discovery → nearby set
 
-    private func handleDiscoveredPeer(_ peer: PeerHandle) {
-        guard PresenceAdvertisement.isPresenceAdvertisement(peer.discoveryInfo) else { return }
-        // Self-exclusion layer 1: our own ghost from a previous epoch or a previous start (a stale
-        // Bonjour cache) advertises under one of the posture instance names we minted this launch.
-        guard !ownEphemeralPeerNames.contains(peer.displayHint) else { return }
-
-        let tokens = PresenceAdvertisement.tags(from: peer.discoveryInfo)
+    /// One sighting the engine passed up, with its advertised tags. The engine has already dropped
+    /// anything that is not a presence advertisement of this version and, self-exclusion layer 1,
+    /// our own ghost from a previous epoch or a previous start (a stale Bonjour cache advertising
+    /// under one of the posture instance names the engine has worn this launch).
+    private func handleDiscoveredPeer(_ peer: PeerHandle, tags tokens: Set<String>) {
         var matched: Set<String> = []
         for token in tokens {
             if let fingerprint = candidateTokens[token] { matched.insert(fingerprint) }
@@ -631,18 +592,6 @@ public final class PresenceManager: ProximityPayloadHandling {
             // Peers marked after this task armed are still inside their grace window — re-arm so
             // they expire too, and stop re-arming once no marks remain.
             if !self.peerLostAt.isEmpty { self.scheduleLostSweep() }
-        }
-    }
-
-    /// Records one of our own posture instance names, evicting the oldest past
-    /// ``maxRememberedEphemeralNames`` so repeated starts and rotations cannot grow the set
-    /// unboundedly (R3).
-    private func rememberOwnEphemeralPeerName(_ name: String) {
-        guard ownEphemeralPeerNames.insert(name).inserted else { return }
-        ownEphemeralPeerNameOrder.append(name)
-        while ownEphemeralPeerNameOrder.count > Self.maxRememberedEphemeralNames {
-            let oldest = ownEphemeralPeerNameOrder.removeFirst()
-            ownEphemeralPeerNames.remove(oldest)
         }
     }
 
@@ -759,38 +708,35 @@ public final class PresenceManager: ProximityPayloadHandling {
         reevaluateDiscoveredPeers()
     }
 
-    /// Rotates ``presencePosture`` to the epoch containing `now` and answers that epoch.
+    /// Asks the engine to wear the posture for the epoch containing `now` and answers that epoch.
     ///
-    /// Inside the held posture's epoch this is a no-op returning its epoch; across a boundary it
-    /// mints an entirely fresh one — new instance name, new key pair, new certificate. It has no
-    /// clock of its own: every caller hands it `nowProvider()`, and the epoch is always
-    /// `IdentityService.presenceEpoch(at:)`, the same counter the tags are derived at. It arms
-    /// nothing — the rotation tick above and the roster/start paths are the only callers, so
-    /// presence still owns exactly one timer.
+    /// Inside the worn posture's epoch this is a no-op returning its epoch; across a boundary the
+    /// engine mints an entirely fresh one — new instance name, new key pair, new certificate — and
+    /// remembers its name for self-exclusion layer 1. That is the rotation the retired
+    /// MultipeerConnectivity advertiser could not do: it minted one random peer ID per `start()`, so
+    /// a radio left up for hours advertised freshly rotating tags under one unchanging name, which
+    /// is the linkability the tag rotation exists to remove. It has no clock of its own: every
+    /// caller hands it `nowProvider()`, and the epoch is always `IdentityService.presenceEpoch(at:)`,
+    /// the same counter the tags are derived at. It arms nothing — the rotation tick above and the
+    /// roster/start paths are the only callers, and the engine owns no timer, so presence still
+    /// owns exactly one timer.
     ///
     /// Fail-soft, NAMED (R7) and BUDGETED: a mint that fails leaves NO posture rather than a stale
-    /// one, and the epoch still comes from the same clock, so tag derivation and matching are
-    /// untouched. The failure is remembered for that epoch (``postureMintFailedEpoch``) so the
-    /// next refresh does not re-run a keygen and write another audit row — one attempt and one row
-    /// per epoch, then the boundary retries. It is deliberately not a diagnostic event — the
-    /// connection log is a user-facing surface and this is a developer fault, not a radio
-    /// condition.
+    /// one (the engine drops it and throws), and the epoch still comes from the same clock, so tag
+    /// derivation and matching are untouched. The failure is remembered for that epoch
+    /// (``postureMintFailedEpoch``) so the next refresh does not re-run a keygen and write another
+    /// audit row — one attempt and one row per epoch, then the boundary retries. It is deliberately
+    /// not a diagnostic event — the connection log is a user-facing surface and this is a developer
+    /// fault, not a radio condition.
     private func rotatePosture(at now: Date) -> UInt64 {
         let epoch = IdentityService.presenceEpoch(at: now)
-        if let posture = presencePosture, posture.epoch == epoch { return epoch }
+        if presenceSession.postureEpoch == epoch { return epoch }
         guard postureMintFailedEpoch != epoch else { return epoch }
         do {
-            let rotated = try postureMint(presencePosture, now)
-            presencePosture = rotated
+            let worn = try presenceSession.rotatePosture(at: now)
             postureMintFailedEpoch = nil
-            // Self-exclusion layer 1's feed. Under the retired radio this was a per-start random
-            // peer-ID name; it is now every posture name this launch has worn, because a stale
-            // Bonjour cache can still be carrying the PREVIOUS epoch's registration after a
-            // boundary — a case a filter that only knows the current name cannot see.
-            rememberOwnEphemeralPeerName(rotated.instanceName)
-            return rotated.epoch
+            return worn
         } catch {
-            presencePosture = nil
             postureMintFailedEpoch = epoch
             FernletAuditLog.log(
                 "presence.posture.mintFailed",
@@ -973,7 +919,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         // this same device would make `pendingHeartSend(for:)`'s `first` a coin flip.
         removePendingHeartSend(for: peer)
         pendingHeartSends[peer.id] = (peer, friend, 0)
-        session?.dial(peer, helloTag: tag)
+        presenceSession.dial(peer, helloTag: tag)
         armHeartConnectTimeout(peerID: peer.id, peer: peer, friend: friend)
     }
 
@@ -1012,7 +958,7 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// friend, hearts are enabled, and we're under the connection cap. A pre-discovery-race
     /// inviter (not yet in the match map) is REJECTED — the sender retries.
     /// Resolves an inbound dialer's claimed pairwise tag to the browsed peer it names, for the
-    /// radio's ``NetworkPresenceSession/resolveDialer`` hook.
+    /// presence engine's ``ProximityPresenceSession/resolveDialer`` hook.
     ///
     /// The QUIC replacement for the MC advertiser's `shouldAcceptInvitation`, and deliberately the
     /// SAME decision with one step in front of it: the tag is looked up in our own
@@ -1113,12 +1059,12 @@ public final class PresenceManager: ProximityPayloadHandling {
         return .admit
     }
 
-    private func handleHeartChannelReady(_ channel: NetworkPeerChannel) {
+    private func handleHeartChannelReady(_ channel: any ProximityPeerChannel) {
         switch heartChannelAdmission(for: channel.peer) {
         case .alreadyConnected:
             return
         case .turnAway:
-            session?.disconnectPeer(channel.peer)
+            presenceSession.disconnectPeer(channel.peer)
             return
         case .admit:
             break
@@ -1137,7 +1083,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         guard let expectedFriendKA = expectedFriendKeyAgreementKey(forPeer: channel.peer.id, intended: intended),
               !expectedFriendKA.isEmpty else {
             recordDiagnostic("Refused a heart connection with no friend key.")
-            session?.disconnectPeer(channel.peer)
+            presenceSession.disconnectPeer(channel.peer)
             removePendingHeartSend(for: channel.peer)
             if intended != nil, isHeartSendInProgress {
                 failHeart("Couldn't verify this friend — no heart was sent.")
@@ -1255,7 +1201,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             // host-pin: exempt — coordinator/channel only, no `self`, no host read
             Task { await coordinator.cancel() }
             // A failed handshake never fires a transport disconnect — best-effort kick the zombie.
-            session?.disconnectPeer(connection.peer)
+            presenceSession.disconnectPeer(connection.peer)
             heartConnections.removeAll { $0.id == connection.id }
             removePendingHeartSend(for: connection.peer)
             // A failed heart handshake doesn't mean the peer left presence — keep it if still
@@ -1303,7 +1249,7 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     /// Cancel the coordinator (which disconnects the transport), ask the presence radio to drop the
     /// tunnel as well, and drop the record — so a completed or failed heart never leaves a zombie
-    /// connection counting toward the radio's tunnel cap (`NetworkPresenceSession.maxTunnels`).
+    /// connection counting toward the presence radio's own cap of four tunnels.
     private func teardownHeartConnection(id: UUID) {
         guard let connection = heartConnections.first(where: { $0.id == id }) else { return }
         // Cancel BEFORE the removal: `cancelHeartConnectTimeout(for:)` finds the arming handle
@@ -1313,7 +1259,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         let coordinator = connection.coordinator
         // host-pin: exempt — coordinator/channel only, no `self`, no host read
         Task { await coordinator.cancel() }
-        session?.disconnectPeer(connection.peer)
+        presenceSession.disconnectPeer(connection.peer)
         heartConnections.removeAll { $0.id == id }
         // Only the heart CONNECTION ended — a still-advertising peer stays reachable and sendable
         // (an immediate re-send after the cooldown must not see isReachable==true yet fail
@@ -1408,7 +1354,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         let nextAttempt = pending.attempt + 1
         guard nextAttempt < Self.maxHeartInviteAttempts else {
             removePendingHeartSend(for: peer)
-            session?.disconnectPeer(peer)
+            presenceSession.disconnectPeer(peer)
             failHeart("\(Self.firstName(of: friend.displayName, in: namespace)) didn't answer — try again in a moment.")
             return
         }
@@ -1416,7 +1362,7 @@ public final class PresenceManager: ProximityPayloadHandling {
         // the mesh re-invite pattern the recipe cap uses).
         removePendingHeartSend(for: peer)
         pendingHeartSends[peerID] = (peer, friend, nextAttempt)
-        session?.disconnectPeer(peer)
+        presenceSession.disconnectPeer(peer)
         recordDiagnostic("Retrying heart invite.")
         spawnHostPinned { [weak self] in
             // Cancelled re-invite delay: the send was abandoned, so do not invite (R7).
@@ -1430,7 +1376,7 @@ public final class PresenceManager: ProximityPayloadHandling {
             // Re-derived, never carried: the retry may land in a later epoch than the first
             // attempt, and a stale tag resolves to nobody on the far side.
             guard let tag = self.ownTagToken(for: friend) else { return }
-            self.session?.dial(peer, helloTag: tag)
+            self.presenceSession.dial(peer, helloTag: tag)
             self.armHeartConnectTimeout(peerID: peerID, peer: peer, friend: friend)
         }
     }
@@ -1596,14 +1542,15 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     // MARK: - Test seams (no real radios: unit tests must never start Bonjour)
 
-    /// Puts the manager in the running state WITHOUT starting radios (`session` stays nil; every
-    /// session touch is optional-chained), deriving tags from the live vault.
-    /// Drives the transport-error handler exactly as the session would, without a radio: the
-    /// closure `start()` installs is on a session a unit test never creates.
+    /// Drives the transport-error handler exactly as the engine's hook would, without a radio: the
+    /// engine forwards it only from a radio a unit test never starts.
     func handleTransportErrorForTesting(_ message: String) {
         handleTransportError(message)
     }
 
+    /// Puts the manager in the running state WITHOUT starting radios (the engine builds none; every
+    /// radio touch is a no-op without one), minting the posture and deriving tags from the live
+    /// vault.
     func activateForTesting() {
         guard !isRunning else { return }
         isRunning = true
@@ -1612,16 +1559,12 @@ public final class PresenceManager: ProximityPayloadHandling {
     }
 
     /// Arms the epoch-rotation loop WITHOUT a radio — `start()` is its only other caller and that
-    /// path creates a real `NetworkPresenceSession`, which a unit test must never do.
+    /// path brings the engine's real QUIC radio up, which a unit test must never do.
     ///
     /// The loop is otherwise unobservable: its step length and its wake-by-wake verdict are what
     /// P9 item 2's tier-2 run had to read off two Simulators across a real 900 s boundary.
     func startEpochRotationForTesting() {
         startEpochRotation()
-    }
-
-    func handleDiscoveredPeerForTesting(_ peer: PeerHandle) {
-        handleDiscoveredPeer(peer)
     }
 
     /// Marks the peer lost WITHOUT scheduling the real-time sweep task — tests drive expiry
@@ -1633,14 +1576,6 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     func sweepExpiredPeersForTesting() {
         sweepExpiredPeers()
-    }
-
-    func discoveryInfoForTesting() -> [String: String] {
-        discoveryInfo()
-    }
-
-    func registerOwnEphemeralPeerNameForTesting(_ name: String) {
-        rememberOwnEphemeralPeerName(name)
     }
 
     /// `discoveredPeers.count` — so a test can prove the peer-object map shrinks with the match map
@@ -1709,13 +1644,13 @@ public final class PresenceManager: ProximityPayloadHandling {
     /// an explicit parameter (``heartAffordance(heartsEnabled:presenceEnabled:reachable:awayDeliveryEnabled:)``).
     public var heartsAwayEnabledProvider: (() -> Bool)?
 
-    /// Group-4 seam: registers a heart connection for an already-discovered peer (with an injected
-    /// ranging provider so no real radio starts), then tears it down — exercising the exact
-    /// teardown path a completed/failed send runs. Afterward the peer, if still advertising, must
-    /// remain both reachable and sendable.
-    func simulateHeartConnectionTeardownForTesting(peer: PeerHandle, ranging: any RangingProvider) {
-        let channelSession = session ?? NetworkPresenceSession(namespace: namespace)
-        let channel = channelSession.channel(for: peer)
+    /// Group-4 seam: registers a heart connection for an already-discovered peer over `channel` (with
+    /// an injected ranging provider so no real radio starts), then tears it down — exercising the
+    /// exact teardown path a completed/failed send runs. Afterward the peer, if still advertising,
+    /// must remain both reachable and sendable.
+    func simulateHeartConnectionTeardownForTesting(
+        peer: PeerHandle, channel: any ProximityPeerChannel, ranging: any RangingProvider
+    ) {
         let coordinator = ProximityCoordinator(
             identity: identity,
             transport: channel,
@@ -1735,25 +1670,25 @@ public final class PresenceManager: ProximityPayloadHandling {
     }
 
     /// Registers a live coordinator (already driven to `.connected` by the caller) as an inbound
-    /// heart connection and runs the real trust gate (`checkHeartCoordinatorStates`). Returns
-    /// `true` iff the peer was accepted as an eligible friend (a stranger is torn down → the
+    /// heart connection over `channel` and runs the real trust gate (`checkHeartCoordinatorStates`).
+    /// Returns `true` iff the peer was accepted as an eligible friend (a stranger is torn down → the
     /// connection is dropped → `false`). Mirrors the deleted heart manager's
-    /// `evaluateConnectedCoordinatorForTesting`. The production path is driven by a live
-    /// `NetworkPresenceSession` a unit test cannot fake.
+    /// `evaluateConnectedCoordinatorForTesting`. The production path is driven by a live presence
+    /// radio a unit test cannot fake.
     ///
     /// Deliberately NOT `@discardableResult` (R7): the `Bool` is the accept/reject signal, so a
     /// caller that ignores it is ignoring the trust decision.
     func evaluateConnectedCoordinatorForTesting(
         _ coordinator: ProximityCoordinator,
         peer: PeerHandle,
+        channel: any ProximityPeerChannel,
         trustPolicy: any ProximityTrustPolicy,
-        intendedFriend: ProximityTrustedPeerRecord? = nil
+        intendedFriend: ProximityTrustedPeerRecord?
     ) -> Bool {
-        let channelSession = session ?? NetworkPresenceSession(namespace: namespace)
         heartConnections.append(PresenceHeartConnection(
             id: peer.id,
             peer: peer,
-            channel: channelSession.channel(for: peer),
+            channel: channel,
             coordinator: coordinator,
             trustPolicy: trustPolicy,
             intendedFriend: intendedFriend,

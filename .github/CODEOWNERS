@@ -124,6 +124,12 @@
 # advertises and matches by — changing a byte here makes every pair of friends invisible to each other
 /FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
 
+# ProximityKit's presence engine: the production posture mint (the instance-name prefix and TLS common
+# name every presence posture is minted under), the record its host's tags are advertised in, and the
+# check that drops this device's own ghosts by name before its host hears of a sighting — changing a
+# byte here changes what every device advertises on the presence radio, or what it hears there
+/FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift @bowman-mw
+
 # FernletSocial's recipe share: the recipe payload's wire format (its JSON, format token and version)
 # and the summary signed into every recipe envelope, over ProximityKit's pair session — changing a byte
 # here breaks every recipe share between devices on different builds

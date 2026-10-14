@@ -66,8 +66,12 @@ enum MeshP9Acceptance {
     static let presenceSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift"
 
     /// The presence manager — the file whose MultipeerConnectivity names pass 2 removed. It is
-    /// FernletSocial's, and drives ProximityKit's presence radio from there.
+    /// FernletSocial's, and drives ProximityKit's presence radio from there, through the engine.
     static let presenceManagerPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
+
+    /// ProximityKit's presence engine (plan step A1.1): the one owner of the presence radio, the
+    /// posture it wears and the TXT record it advertises.
+    static let presenceEnginePath = "FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift"
 
     /// The recipe radio, which also declares ``ProximityPairPosture`` (item 3 pass 2).
     static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift"
@@ -524,7 +528,12 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// seam is in it. Pinned in both directions — a file naming neither has been renamed or emptied,
     /// not cleaned — and widened past the unit cell's single file to a walk of the whole package and
     /// of FernletSocial, the manager's module, so an `extension PresenceManager` in a new file of
-    /// either cannot reintroduce a needle silently.
+    /// either cannot reintroduce a needle silently. Since plan step A1.1 the seam is ProximityKit's
+    /// presence engine: the manager names it and none of the radio, posture, channel or TXT types
+    /// behind it, the radio's seam has the engine and the conformer for its two homes, and the posture
+    /// is minted in the engine alone. The two orders the move had to keep are read off the code too:
+    /// the engine wires a radio's hooks before it starts it, and the manager's heart door marks a
+    /// channel connected only after its coordinator has begun.
     @Test func theManagerNamesNoRetiredRadioAndReachesTheAirThroughTheSeamAlone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceManagerPath))
         // R2: bounded by the retired-radio spellings.
@@ -532,9 +541,14 @@ struct MeshP9PresenceSwapAcceptanceTests {
                        "PeerChannelTransport", "updateDiscoveryInfo", "serviceType"] {
             #expect(!manager.contains(needle), "PresenceManager still names `\(needle)` in code")
         }
-        #expect(manager.contains("PresenceRadioSession"), "and it drives the QUIC presence seam")
-        #expect(manager.contains("NetworkPresenceSession"), "whose production conformer it builds")
-        #expect(manager.contains("presencePosture"), "wearing the posture pass 1 built")
+        #expect(manager.contains("ProximityPresenceSession"), "and it drives ProximityKit's presence engine")
+        // R2: bounded by the engine's internal spellings.
+        for needle in ["PresenceRadioSession", "NetworkPresenceSession", "NetworkPeerChannel",
+                       "PresenceEpochPosture", "PresenceAdvertisement"] {
+            #expect(!manager.contains(needle), "PresenceManager reaches past the engine to `\(needle)` in code")
+        }
+        #expect(manager.contains("presenceSession.rotatePosture(at:"), "wearing the posture pass 1 built, through the engine")
+        try Self.expectThePresenceOrdersHold(manager: manager)
 
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
@@ -543,12 +557,33 @@ struct MeshP9PresenceSwapAcceptanceTests {
         // package still clears is a floor that cannot fail. It holds ProximityKit's part of the walk.
         #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
         #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit + social))
-                == ["PresenceManager.swift", "NetworkPresenceSession.swift"], """
-                the presence seam has exactly two homes in the package and FernletSocial — the manager \
+                == ["ProximityPresenceSession.swift", "NetworkPresenceSession.swift"], """
+                the presence seam has exactly two homes in the package and FernletSocial — the engine \
                 that drives it and the conformer that is it. A third is a second owner for one radio
                 """)
-        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["PresenceManager.swift"],
-                "and the posture is minted from one place: the manager's own epoch tick")
+        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["ProximityPresenceSession.swift"],
+                "and the posture is minted from one place: the engine the manager's epoch tick asks")
+    }
+
+    /// The two orders the presence engine's move kept, read off the code: the engine wires a fresh
+    /// radio's hooks before it starts it (so no browse result, tunnel or failure reaches an unwired
+    /// radio), and the manager's heart door publishes a channel's `.connected` only after the
+    /// coordinator built over it has begun (so the coordinator never takes the wrong handshake
+    /// branch). Each spelling occurs exactly once in its file, so the order is the code's.
+    static func expectThePresenceOrdersHold(manager: String) throws {
+        let engine = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceEnginePath))
+        let orders = [
+            (engine, "the engine", "wire(radio)", "try radio.start(posture:"),
+            (manager, "the manager", "await coordinator.begin(role: .browser, mode: .friend)", "channel.notifyConnected()")
+        ]
+        // R2: bounded by the two orders.
+        for (code, file, first, then) in orders {
+            let firsts = code.components(separatedBy: first).count - 1
+            let thens = code.components(separatedBy: then).count - 1
+            #expect(firsts == 1 && thens == 1, "\(file) spells `\(first)` \(firsts) times and `\(then)` \(thens) times")
+            guard let early = code.range(of: first), let late = code.range(of: then) else { continue }
+            #expect(early.upperBound <= late.lowerBound, "\(file) reaches `\(then)` before `\(first)`")
+        }
     }
 }
 
