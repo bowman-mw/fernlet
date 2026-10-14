@@ -543,6 +543,28 @@ jobs:
         # 26.5), ran 102 tests in 11 suites (113 - 12 + 1, the ARITHMETIC CHECK); its floor stays the
         # shared `1`. crypto-goldens stays 357 and its split unchanged (the feature golden reads
         # ProximityKit through `ProximityKitSources` now). proximitykit is raised 85 -> 97 (see its step).
+        #
+        # ProximityKit plan step A1.1.8 (2026-10-14) moves the platform wall's rules over ProximityKit's own
+        # code into ProximityKit's package tests (owner decision O4): W1 to W4 (its imports and platform
+        # branches, device-name reads, platform directories and host-fact defaults, and their readers'
+        # fixtures) and W5 over ProximityKit's two channel-ready doors, with `NIRangingSession`'s one home,
+        # leave `ProximityPlatformBoundaryTests` for `ProximityKitTests/ProximityPlatformNeutralityTests` on
+        # `proximitykit` (five cells), which reads the package's own `Sources/ProximityKit` through
+        # PackageRoot. `ProximityPlatformBoundaryTests` stays on this line with what is Fernlet's, two cells:
+        # W5's presence door in FernletSocial, now a cell of its own, and W6, the Mac build pinned to run; it
+        # keeps the readers `PowerOfTenBoundaryTests` and `CIGateSelectorBoundaryTests` call and the
+        # platform-directory needles rule I9 reads, of which the package suite holds its own copy.
+        # `CIGateSelectorBoundaryTests` gains one cell, `theDirectoryNeedlesMatchTheirPackageCopy`, which
+        # holds the two copies' declarations equal, line for line, and its pins follow, each with a dated
+        # note: the inventory's measured rows are 628 / 19 and the package's declared tests 167,
+        # `proximitykit` names 15 suites and this line still 11, `wallLines` pins the package suite on
+        # `proximitykit`, and `packageHazardAllowlist` holds 54 rows, with the package suite's 18 lines that
+        # spell a keychain or location needle inside a literal, under one invariant. I11 reads a package
+        # file's imports over its code (`SwiftSourceLexer`: comments dropped, literals emptied), because the
+        # package suite's module-reader fixtures spell `import UIKit` inside literals. The line, MEASURED on
+        # a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11 suites (102 - 6 + 2 + 1, the
+        # ARITHMETIC CHECK); its floor stays the shared `1`. proximitykit is raised 97 -> 102, and
+        # mesh-batteries, which runs the selector wall too, 1372 -> 1373 (see their steps).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -1949,9 +1971,20 @@ jobs:
         # skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT 1372:
         # passed. Run once more at 1372 without ProximityKitTests/MeshSessionIDClaimTests: 1365 ran and
         # the floor refused it. 1372 - 7 + 7 = 1372 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.8 no suite joined or left, so the NAME count stays 154; one suite here gained a cell:
+        # RAISED 1372 -> 1373 at A1.1.8, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5):
+        # this exact 154-name list run at the old floor 1372 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 1373
+        # (FernletTests 1351 in 151 suites, "Test run with 1351 tests in 151 suites passed after 171.633
+        # seconds"; ProximityKitTests 22 in 3, "Test run with 22 tests in 3 suites": its three at their
+        # counts), CIGateSelectorBoundaryTests 9 -> 10 and no other suite moved, 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 1373: passed. Run
+        # once more at 1373 without CIGateSelectorBoundaryTests: 1363 ran and the floor refused it. 1372 +
+        # 1 (the selector wall's cell holding the platform-directory needles' two copies equal, its package
+        # suite's and FernletTests') = 1373 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1372 \
+          Scripts/run-gated-suites.sh mesh-batteries 1373 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -2180,9 +2213,25 @@ jobs:
         # census silent. Re-run AT 97: passed. Run once more at 97 without
         # ProximityKitTests/ProximityNamespaceBoundaryTests: 85 ran and the floor refused it.
         # 85 + 12 = 97 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.8 one name joins the line, ProximityPlatformNeutralityTests, the platform wall's rules over
+        # ProximityKit's own code (its imports and platform branches, device-name reads, platform directories
+        # and host-fact defaults, its two channel-ready doors and NIRangingSession's one home), which leave
+        # FernletTests' ProximityPlatformBoundaryTests for ProximityKit's package tests so they travel with
+        # the package, reading the package's own sources through PackageRoot and its code through the
+        # package's copy of the walls' lexer; W1 to W4 move unchanged, and W5 keeps its rows over
+        # ProximityKit's two doors (presence's heart door, Fernlet's, stays in FernletTests in a cell of its
+        # own):
+        # RAISED 97 -> 102 at A1.1.8, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact fifteen-name list run at the old floor 97 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 102
+        # (ProximityKitTests 102, "Test run with 102 tests in 15 suites passed after 0.407 seconds": the
+        # fourteen above at their counts and ProximityPlatformNeutralityTests 5), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 102: passed. Run once
+        # more at 102 without ProximityKitTests/ProximityPlatformNeutralityTests: 97 ran and the floor
+        # refused it. 97 + 5 = 102 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 97 \
+          Scripts/run-gated-suites.sh proximitykit 102 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2196,4 +2245,5 @@ jobs:
             ProximityKitTests/PackageTestSupportTests \
             ProximityKitTests/PackageKeychainStoreTests \
             ProximityKitTests/PackageTestHostTests \
-            ProximityKitTests/ProximityNamespaceBoundaryTests
+            ProximityKitTests/ProximityNamespaceBoundaryTests \
+            ProximityKitTests/ProximityPlatformNeutralityTests

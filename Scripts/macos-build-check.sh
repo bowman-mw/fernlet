@@ -13,8 +13,9 @@
 # their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's protected-data
 # retry under `#if canImport(UIKit)`). Nothing on iOS can see that hold or break: a UIKit,
 # NearbyInteraction or ActivityKit symbol outside its guard compiles clean there. This build is the
-# compiler half; Tests/FernletTests/ProximityPlatformBoundaryTests is the source half, and it pins
-# that this script, its self-test, the CI step and the pre-push leg run.
+# compiler half; the source half is ProximityKit's package test ProximityPlatformNeutralityTests
+# (FernletKit/Tests/ProximityKitTests), and Tests/FernletTests/ProximityPlatformBoundaryTests pins that
+# this script, its self-test, the CI step and the pre-push leg run.
 #
 # WHY XCODEBUILD AND NOT `swift build`: the SwiftPM command line leaves the set's `.xcstrings`
 # catalogs unprocessed, so FernletFoundation and FernletDomainModel get no `Bundle.module`.

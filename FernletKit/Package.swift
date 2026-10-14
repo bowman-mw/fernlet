@@ -419,8 +419,8 @@ let package = Package(
         // their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's
         // protected-data retry under `#if canImport(UIKit)`), and Scripts/macos-build-check.sh builds
         // it, in the MacReady product, for macOS on every push, the compiler half;
-        // ProximityPlatformBoundaryTests, which holds its imports, device-name reads, directories and
-        // host defaults to exact rows, is the source half.
+        // ProximityPlatformNeutralityTests, in its package tests, which holds its imports, device-name
+        // reads, directories and host defaults to exact rows, is the source half.
         .target(
             name: "ProximityKit",
             dependencies: [],

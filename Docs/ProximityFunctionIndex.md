@@ -65,8 +65,13 @@ is a package suite too, on the `proximitykit` line: it reads ProximityKit's sour
 through `PackageRoot` (`Sources/ProximityKit`, `Package.swift`) and code through the package's copy of
 the source walls' lexer, `TestSupport/SwiftSourceLexer.swift`, so it travels with the package; FernletTests
 keeps its own copy of the lexer, held to the same fixtures by `SwiftSourceLexerTests`, and its own walker
-over ProximityKit's sources, `ProximityKitSources`, which the platform wall and the feature golden read
-through. "The test
+over ProximityKit's sources, `ProximityKitSources`, which the feature golden reads through. Since A1.1.8
+the platform wall's rules over ProximityKit's own code are a package suite too,
+`ProximityPlatformNeutralityTests`, on the `proximitykit` line (its imports and platform branches, its
+device-name reads, platform directories and host-fact defaults, its two channel-ready doors and
+`NIRangingSession`'s one home), walking ProximityKit's sources with the namespace wall's walk; Fernlet's
+`ProximityPlatformBoundaryTests` keeps presence's heart door and the Mac build, and its copy of the
+platform-directory needles, which `CIGateSelectorBoundaryTests` holds equal to the package suite's. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'

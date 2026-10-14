@@ -15,9 +15,9 @@ import Testing
 
     /// The lexer reads code, comments and literals as Swift does: Fernlet's source walls (the
     /// key-custody, store-isolation, photo-directory, audit-bridge and continuation task-host walls, the
-    /// platform wall and the feature golden's recipe-copy scan) are only as sharp as it is. The same
-    /// fixtures as the namespace wall's lexer cell in ProximityKit's package tests, which holds the
-    /// package's copy.
+    /// platform wall's presence door and the feature golden's recipe-copy scan) are only as sharp as it
+    /// is. The same fixtures as the namespace wall's lexer cell in ProximityKit's package tests, which
+    /// holds the package's copy.
     ///
     /// Each fixture is a form the module or the test tree writes, chosen where a looser reading goes
     /// wrong: a quote in a comment, a comment inside a comment, an escaped quote, a literal inside an

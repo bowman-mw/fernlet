@@ -360,6 +360,15 @@ import Testing
     /// `ProximityKitTests/ProximityNamespaceBoundaryTests`; and `s3-grep` stays 11: the wall leaves that
     /// line and `SwiftSourceLexerTests`, which holds Fernlet's copy of the walls' lexer to the wall's
     /// lexer fixtures, joins it. Counted off the lines.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.8 (2026-10-14): `proximitykit` 14 → 15, for
+    /// `ProximityPlatformNeutralityTests`, the platform wall's rules over ProximityKit's own code (its
+    /// imports and platform branches, device-name reads, platform directories and host-fact defaults,
+    /// its two channel-ready doors and `NIRangingSession`'s one home), which leave
+    /// `ProximityPlatformBoundaryTests` for ProximityKit's package tests and read ProximityKit's sources
+    /// through `PackageRoot`, named `ProximityKitTests/ProximityPlatformNeutralityTests`; and `s3-grep`
+    /// stays 11: `ProximityPlatformBoundaryTests` keeps its place there with Fernlet's half (presence's
+    /// heart door and the Mac build). Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -377,7 +386,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 154,
         "mesh-features": 48,
-        "proximitykit": 14
+        "proximitykit": 15
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -389,7 +398,10 @@ import Testing
     /// line leaving, or it leaving its line, must red rather than go quiet. Since ProximityKit plan step
     /// A1.1.7 the namespace wall is pinned on `proximitykit`, its line in ProximityKit's package tests,
     /// and `SwiftSourceLexerTests` on `s3-grep` in its place: the fixtures of the lexer every Fernlet
-    /// source wall reads code through, which the namespace wall held until it moved.
+    /// source wall reads code through, which the namespace wall held until it moved. Since A1.1.8 the
+    /// platform wall's rules over ProximityKit's own code, `ProximityPlatformNeutralityTests`, are pinned
+    /// on `proximitykit` too, and `ProximityPlatformBoundaryTests` stays pinned on `s3-grep` with
+    /// Fernlet's half.
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
                     "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
@@ -417,7 +429,7 @@ import Testing
                         "FoodSearchCorrectionCatalogTests", "FoodSearchCorrectionWipeTests",
                         "FoodSearchCorrectionResolverFirewallTests"],
         "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"],
-        "proximitykit": ["ProximityNamespaceBoundaryTests"]
+        "proximitykit": ["ProximityNamespaceBoundaryTests", "ProximityPlatformNeutralityTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -1145,8 +1157,11 @@ import Testing
     /// on `proximitykit`; FernletTests stays 628. MOVED at A1.1.7 (2026-10-14): 628 → 627 and 17 → 18, for
     /// `ProximityNamespaceBoundaryTests`, measured in the package's bundle on `proximitykit` at its
     /// FernletTests count, and FernletTests 627 → 628 again for its NEW `SwiftSourceLexerTests`, measured
-    /// on `s3-grep`: FernletTests stays 628.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 18]
+    /// on `s3-grep`: FernletTests stays 628. RAISED at A1.1.8 (2026-10-14): 18 → 19, for the package's NEW
+    /// `ProximityPlatformNeutralityTests`, the platform wall's rules over ProximityKit's own code, measured
+    /// on `proximitykit`; FernletTests stays 628, since `ProximityPlatformBoundaryTests` keeps its row with
+    /// Fernlet's half.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 19]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
@@ -1160,8 +1175,11 @@ import Testing
     /// the NEW `PackageTestSupportTests` 2. RAISED at A1.1.5 (2026-10-14): 146 = 140 + the NEW
     /// `PackageKeychainStoreTests` 6. RAISED at A1.1.6 (2026-10-14): 150 = 146 + the NEW
     /// `PackageTestHostTests` 4. MOVED at A1.1.7 (2026-10-14): 162 = 150 +
-    /// `ProximityNamespaceBoundaryTests` 12, its count in FernletTests.
-    static let measuredPackageCells = 162
+    /// `ProximityNamespaceBoundaryTests` 12, its count in FernletTests. RAISED at A1.1.8 (2026-10-14):
+    /// 167 = 162 + the NEW `ProximityPlatformNeutralityTests` 5: the platform wall's W1 to W4, and W5 over
+    /// ProximityKit's two doors, which leave `ProximityPlatformBoundaryTests` (it keeps W5's presence
+    /// door, now a cell of its own, and W6).
+    static let measuredPackageCells = 167
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1188,6 +1206,8 @@ import Testing
     /// needles are every platform directory `ProximityPlatformBoundaryTests.directoryNeedles` names but
     /// the temporary ones, which are scratch a test may use, and the process-shared defaults and main
     /// bundle (A0.8.5; Documents, Caches, the home folder and a defaults suite were missing before).
+    /// That list is the one the package's platform wall holds ProximityKit's code to, its copy held
+    /// equal by ``theDirectoryNeedlesMatchTheirPackageCopy()`` (A1.1.8).
     static let packageHazards: [(needle: String, reason: String)] = {
         let keychain = """
             the bundle's keychain is the in-memory store PackageTestEnvironment installs on first touch, \
@@ -1343,6 +1363,45 @@ import Testing
         #""IdentityService", "ProximityHost", "ProximityPrekeyBundle", "PresenceAdvertisement", "ProtectedSidecar""#
     ]
 
+    /// The package's platform wall (rule I9, ProximityKit plan step A1.1.8), whose lines that spell a
+    /// keychain or location needle as data ``packageHazardAllowlist`` lists under
+    /// ``packagePlatformWallInvariant``.
+    static let packagePlatformWallFile = "FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift"
+
+    /// What makes every line of ``packagePlatformWallLines`` safe in the unhosted bundle.
+    static let packagePlatformWallInvariant = """
+        the needle stands only inside a literal the platform wall reads as text and never runs: a \
+        needle's spelling that its third rule matches in ProximityKit's lexed code (a Foundation API for a \
+        platform directory), a line of ProximityKit-shaped source its token readers are fixtured on, a \
+        failure message, or the package-relative path of a ProximityKit file a seam row or a \
+        channel-ready door names, which the wall reads as text through PackageRoot; the code around it \
+        only builds needles, rows and doors and lexes or matches text, so the line reaches no keychain \
+        and reads, writes and creates nothing at any location
+        """
+
+    /// The platform wall's lines that spell a keychain or location needle inside a literal, each exact
+    /// as trimmed (rule I9).
+    static let packagePlatformWallLines = [
+        #"SeamRow(path: "HeartSharing/ProtectedSidecar.swift", module: "UIKit","#,
+        #".identifier("applicationSupportDirectory"), .identifier("documentDirectory"),"#,
+        #".identifier("documentsDirectory"), .identifier("cachesDirectory"), .identifier("libraryDirectory"),"#,
+        #".identifier("temporaryDirectory"), .identifier("NSTemporaryDirectory"), .identifier("NSHomeDirectory"),"#,
+        #".identifier("NSHomeDirectoryForUser"), .identifier("homeDirectory"), .identifier("homeDirectoryForCurrentUser"),"#,
+        #".identifier("NSSearchPathForDirectoriesInDomains"), .identifier("downloadsDirectory"),"#,
+        #".identifier("desktopDirectory"), .identifier("sharedPublicDirectory"), .identifier("applicationDirectory"),"#,
+        #".identifier("userDirectory"), .identifier("moviesDirectory"), .identifier("musicDirectory"),"#,
+        #".identifier("picturesDirectory"), .identifier("trashDirectory"), .identifier("currentDirectory"),"#,
+        #".identifier("currentDirectoryPath"), .identifier("containerURL"),"#,
+        #"let lookup = lexedCode("_ = FileManager.default.urls(for: .cachesDirectory, in: mask)\n")"#,
+        #"#expect(try mentions(of: .call("url", label: "for"), in: lookup) == 0, "urls(for: read as url(for:")"#,
+        #"#expect(try mentions(of: .call("URL", label: "for"), in: lookup) == 0, "urls(for: read as URL(for:")"#,
+        #"#expect(try mentions(of: .call("urls", label: "for"), in: lookup) == 1, "urls(for: was not read")"#,
+        #"let ubiquity = lexedCode("_ = FileManager.default.url(forUbiquityContainerIdentifier: nil)\n")"#,
+        #""url(forUbiquityContainerIdentifier: read as url(for:")"#,
+        #"Door(path: "Sources/ProximityKit/Mesh/MeshNetworkManager.swift","#,
+        #"Door(path: "Sources/ProximityKit/PairSession/ProximityPairSession.swift","#
+    ]
+
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
     /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
     /// an invariant a reviewer can check against the line it names, and a row whose line is gone or
@@ -1355,7 +1414,10 @@ import Testing
     /// share one invariant; 33 since A1.1.6 (2026-10-14), with the host double's three identity lines
     /// (``packageTestHostLines``) and its canary's four (``packageTestHostCanaryLines``), each set under
     /// one invariant; 36 since A1.1.7 (2026-10-14), with the namespace wall's three lines that spell a
-    /// keychain needle inside a literal (``packageNamespaceWallLines``), under one invariant.
+    /// keychain needle inside a literal (``packageNamespaceWallLines``), under one invariant; 54 since
+    /// A1.1.8 (2026-10-14), with the package platform wall's 18 lines that spell a keychain or location
+    /// needle inside a literal (``packagePlatformWallLines``: its directory needles, its token readers'
+    /// fixtures and messages, a seam row's file and its two doors' files), under one invariant.
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
         (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
          line: "for base in [URL.applicationSupportDirectory, scratch] {",
@@ -1386,6 +1448,8 @@ import Testing
         (file: packageTestHostCanaryFile, line: $0, invariant: packageTestHostCanaryInvariant)
     } + packageNamespaceWallLines.map {
         (file: packageNamespaceWallFile, line: $0, invariant: packageNamespaceWallInvariant)
+    } + packagePlatformWallLines.map {
+        (file: packagePlatformWallFile, line: $0, invariant: packagePlatformWallInvariant)
     }
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
@@ -1697,8 +1761,9 @@ import Testing
     /// ProximityKit and the store and never spells a keychain query of its own.
     static let packageTestSupportImportAllowlist: Set<String> = ["Security"]
 
-    /// I11: every module a package file imports is in ``packageImportAllowlist``, or, for a file under
-    /// ``packageTestSupportFolder``, in ``packageTestSupportImportAllowlist``.
+    /// I11: every module a package file imports (``importedModules(in:)``, read over its code) is in
+    /// ``packageImportAllowlist``, or, for a file under ``packageTestSupportFolder``, in
+    /// ``packageTestSupportImportAllowlist``.
     private static func packageImportProblems() throws -> [String] {
         var problems: [String] = []
         // R2: bounded by the package's file count × each file's imports.
@@ -1713,17 +1778,19 @@ import Testing
     }
 
     /// The modules a Swift source imports, in order: the first path component after `import` on every
-    /// line whose trimmed text is not a `//` comment, past leading attributes (`@testable`,
-    /// `@preconcurrency`), an access level (`internal import X`) and an import kind
-    /// (`import struct X.Y`).
+    /// line of its code, past leading attributes (`@testable`, `@preconcurrency`), an access level
+    /// (`internal import X`) and an import kind (`import struct X.Y`). The source is read as
+    /// `SwiftSourceLexer` reads it, comments dropped and literals emptied (since ProximityKit plan step
+    /// A1.1.8), so neither a commented-out import nor a line of a literal is one: the package's platform
+    /// wall fixtures its module reader on literals that spell `import UIKit`, which only a reader of the
+    /// file's text, not of its code, would take for this file's own.
     static func importedModules(in source: String) -> [String] {
         let levels: Set<String> = ["public", "package", "internal", "fileprivate", "private", "open"]
         let kinds: Set<String> = ["struct", "class", "enum", "protocol", "typealias", "func", "var", "let", "actor"]
         var modules: [String] = []
         // R2: bounded by the source's line count.
-        for line in source.components(separatedBy: "\n") {
+        for line in SwiftSourceLexer.lex(source).code.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.hasPrefix("//") else { continue }
             var tokens = ArraySlice(trimmed.split(separator: " ").map(String.init))
             tokens = tokens.drop { $0.hasPrefix("@") }
             if let first = tokens.first, levels.contains(first) { tokens = tokens.dropFirst() }
@@ -1885,9 +1952,13 @@ import Testing
     /// `MeshEpochModelTests.swift`), which its four suites use in the package and three FernletTests
     /// files use, each half minting through its own target's bindings; and since A1.1.7 the source walls'
     /// lexer (`SwiftSourceLexer`, `TestSupport/SwiftSourceLexer.swift` in the package, extracted from
-    /// `ProximityNamespaceBoundaryTests.swift`), which the namespace wall reads ProximityKit through in
-    /// the package and Fernlet's source walls read code through in FernletTests, each half held to the
-    /// same fixtures in its own target (the namespace wall's lexer cell, `SwiftSourceLexerTests`).
+    /// `ProximityNamespaceBoundaryTests.swift`), which the namespace wall (and since A1.1.8 the platform
+    /// wall's rules over ProximityKit's code, `ProximityPlatformNeutralityTests`) reads ProximityKit
+    /// through in the package and Fernlet's source walls read code through in FernletTests, each half
+    /// held to the same fixtures in its own target (the namespace wall's lexer cell,
+    /// `SwiftSourceLexerTests`). The platform-directory needles live in both targets too, as members of
+    /// the two platform suites rather than a twin file; ``theDirectoryNeedlesMatchTheirPackageCopy()``
+    /// holds them equal.
     static let twins: [(package: String, fernlet: String)] = [
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
          fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift"),
@@ -2196,6 +2267,70 @@ import Testing
         return problems
     }
 
+    // MARK: - The directory needles' two copies (ProximityKit plan step A1.1.8)
+
+    /// The platform-directory needle list's two declarations, (the package copy, the FernletTests copy),
+    /// repo-relative. The package's platform wall (`ProximityPlatformNeutralityTests`) holds
+    /// ProximityKit's code to its copy, its third rule; rule I9 reads FernletTests' copy
+    /// (`ProximityPlatformBoundaryTests.directoryNeedles`) as the package tests' location needles. A test
+    /// target cannot import another, so the list lives in each, each a member of its own suite, and a
+    /// directory API added to one copy alone would be refused in ProximityKit's code and allowed in its
+    /// tests, or the other way round.
+    static let directoryNeedleCopies = (
+        package: "FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift",
+        fernlet: "Tests/FernletTests/ProximityPlatformBoundaryTests.swift"
+    )
+
+    /// The line that opens the list's declaration in both copies, exactly.
+    static let directoryNeedlesOpener = "    static let directoryNeedles: [Needle] = ["
+
+    /// The lines of the declaration `opener` opens in `source`: from that line, which must occur exactly
+    /// once, through the first line after it that closes the list at the opener's indentation, both
+    /// included; nil when the opener is absent or repeated, or the list never closes.
+    static func declarationLines(opening opener: String, in source: String) -> [String]? {
+        let lines = source.components(separatedBy: "\n")
+        let closer = String(opener.prefix { $0 == " " }) + "]"
+        guard lines.count(where: { $0 == opener }) == 1, let start = lines.firstIndex(of: opener),
+              let end = lines[start...].firstIndex(of: closer) else { return nil }
+        return Array(lines[start...end])
+    }
+
+    /// The platform-directory needles are one list in two files: the package platform wall's declaration
+    /// and FernletTests' (``directoryNeedleCopies``) are each read exactly once and are equal, line for
+    /// line, and the one read from FernletTests' file spells as many needles as the compiled list rule I9
+    /// reads, so the reader read that list's own declaration. Its reader is fixtured both ways: a
+    /// declaration is read through its closing line, and a repeated or unclosed one is not read.
+    @Test func theDirectoryNeedlesMatchTheirPackageCopy() throws {
+        let copies = Self.directoryNeedleCopies
+        let opener = Self.directoryNeedlesOpener
+        let package = Self.declarationLines(opening: opener, in: try RepoRoot.source(copies.package))
+        let fernlet = Self.declarationLines(opening: opener, in: try RepoRoot.source(copies.fernlet))
+        let readBoth = package != nil && fernlet != nil
+        #expect(readBoth, """
+            the platform-directory needles' declaration (`\(opener.trimmingCharacters(in: .whitespaces))` \
+            through its `]`) is not read exactly once in each of \(copies.package) and \(copies.fernlet)
+            """)
+        let equal = package == fernlet
+        #expect(equal, """
+            \(copies.package) and \(copies.fernlet) declare different platform-directory needles: the \
+            package's platform wall would refuse one list in ProximityKit's code and rule I9 another in its \
+            tests; edit both declarations alike
+            """)
+        let spelled = (fernlet ?? []).joined().components(separatedBy: "(\"").count - 1
+        let compiled = ProximityPlatformBoundaryTests.directoryNeedles.count
+        #expect(spelled == compiled, """
+            the declaration read from \(copies.fernlet) spells \(spelled) needles and the list rule I9 reads \
+            holds \(compiled): the reader read another declaration
+            """)
+        let sample = "struct S {\n" + opener + "\n        .identifier(\"a\")\n    ]\n}"
+        #expect(Self.declarationLines(opening: opener, in: sample) == [opener, "        .identifier(\"a\")", "    ]"],
+                "a declaration was not read through its closing line")
+        #expect(Self.declarationLines(opening: opener, in: sample + "\n" + sample) == nil,
+                "a declaration that opens twice was read as one")
+        #expect(Self.declarationLines(opening: opener, in: opener + "\n        .identifier(\"a\")\n") == nil,
+                "a declaration that never closes was read")
+    }
+
     /// The parser reads the workflow's real shape: a continuation-joined invocation with a label, a
     /// floor and several selectors, a package selector among them, and ignores everything else; and
     /// the selector, declaration, declared-test and inventory readers each read their fixtures
@@ -2397,8 +2532,8 @@ import Testing
 
     /// The package readers (plan step A0.8.5): I9 holds a keychain type however it is constructed or
     /// reached, a seal key's wipe, and every platform directory but the temporary ones; I11 reads a
-    /// module past attributes, an access level and an import kind; and the dependency pin reads no list
-    /// that `+` extends.
+    /// module past attributes, an access level and an import kind, and reads no import a literal or a
+    /// comment spells (A1.1.8); and the dependency pin reads no list that `+` extends.
     private static func expectPackageReadersFixtured() throws {
         let hazardous = [
             "let id = IdentityService.init(namespace: ns)", "let s: MeshSessionStore = .init(scope: scope)",
@@ -2418,6 +2553,9 @@ import Testing
         let imports = "import Foundation\n@testable import ProximityKit\ninternal import FernletDomainModel\n"
             + "@preconcurrency import struct FernletCrypto.FernletCryptoPurpose\n// import FernletFoundation\nlet x = 1"
         #expect(importedModules(in: imports) == ["Foundation", "ProximityKit", "FernletDomainModel", "FernletCrypto"])
+        let fixture = "import Testing\nlet sample = \"\"\"\n    import UIKit\n    @preconcurrency import NearbyInteraction\n"
+            + "    \"\"\"\n/* import FernletFoundation */ let y = \"import FernletCrypto\""
+        #expect(importedModules(in: fixture) == ["Testing"], "a literal's or a block comment's import was read as the file's")
         let extended = #".testTarget(name: "ProximityKitTests", dependencies: ["ProximityKit"] + ["FernletConnections"],"#
         let literal = #".testTarget(name: "ProximityKitTests", dependencies: ["ProximityKit"])"#
         let extendedLists = try packageTestTargetDependencies(in: extended)
