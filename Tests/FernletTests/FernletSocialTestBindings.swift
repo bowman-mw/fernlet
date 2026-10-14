@@ -22,6 +22,7 @@
 // Fernlet's.
 
 import FernletConnections
+import FernletDomainModel
 import Foundation
 @testable import FernletSocial
 @testable import ProximityKit
@@ -262,5 +263,69 @@ extension ProximityRecipeShareManager {
     var connectTimeoutSeconds: TimeInterval {
         get { pairSession.connectTimeoutSeconds }
         set { pairSession.connectTimeoutSeconds = newValue }
+    }
+}
+
+// MARK: - The presence manager's engine (plan step A1.1)
+//
+// The presence manager drives ProximityKit's presence engine, `ProximityPresenceSession`, which owns
+// the radio, the epoch posture, the TXT record and the by-name self-exclusion since plan step A1.1.
+// The manager's seams that reached those (the radio factory, the posture mint and the posture worn,
+// the advertised record, the own-name ring and the discovery door) and the two heart seams that built
+// a channel on a radio come back here, each a forwarder to the engine's own, so the suites keep the
+// spelling they were written against. None passes a value of its own.
+
+/// The presence manager in the shapes the suites were written against (plan step A1.1). It inherits
+/// the manager's main-actor isolation, as the members it restores had.
+extension PresenceManager {
+
+    /// `presenceSession.makeRadio`, read and written: the radio every `start()` brings up.
+    var makeSession: () -> any PresenceRadioSession {
+        get { presenceSession.makeRadio }
+        set { presenceSession.makeRadio = newValue }
+    }
+
+    /// `presenceSession.postureMint`, read and written.
+    var postureMint: (PresenceEpochPosture?, Date) throws -> PresenceEpochPosture {
+        get { presenceSession.postureMint }
+        set { presenceSession.postureMint = newValue }
+    }
+
+    /// `presenceSession.posture`: the posture the engine wears.
+    var presencePosture: PresenceEpochPosture? { presenceSession.posture }
+
+    /// The record the engine advertises for the manager's own tags,
+    /// `ProximityPresenceSession.advertisedFields(for: ownTagTokens)`.
+    func discoveryInfoForTesting() -> [String: String] {
+        ProximityPresenceSession.advertisedFields(for: ownTagTokens)
+    }
+
+    /// `presenceSession.registerOwnInstanceNameForTesting(_:)`.
+    func registerOwnEphemeralPeerNameForTesting(_ name: String) {
+        presenceSession.registerOwnInstanceNameForTesting(name)
+    }
+
+    /// `presenceSession.noteDiscoveredForTesting(_:)`: one sighting through the engine's filter into
+    /// the manager's discovery handler, as the radio's hook delivers it.
+    func handleDiscoveredPeerForTesting(_ peer: PeerHandle) {
+        presenceSession.noteDiscoveredForTesting(peer)
+    }
+
+    /// `simulateHeartConnectionTeardownForTesting(peer:channel:ranging:)` over the engine's channel
+    /// for `peer`, `presenceSession.channelForTesting(_:)`.
+    func simulateHeartConnectionTeardownForTesting(peer: PeerHandle, ranging: any RangingProvider) {
+        simulateHeartConnectionTeardownForTesting(
+            peer: peer, channel: presenceSession.channelForTesting(peer), ranging: ranging)
+    }
+
+    /// `evaluateConnectedCoordinatorForTesting(_:peer:channel:trustPolicy:intendedFriend:)` over the
+    /// engine's channel for `peer`, `presenceSession.channelForTesting(_:)`.
+    func evaluateConnectedCoordinatorForTesting(
+        _ coordinator: ProximityCoordinator, peer: PeerHandle, trustPolicy: any ProximityTrustPolicy,
+        intendedFriend: ProximityTrustedPeerRecord? = nil
+    ) -> Bool {
+        evaluateConnectedCoordinatorForTesting(
+            coordinator, peer: peer, channel: presenceSession.channelForTesting(peer),
+            trustPolicy: trustPolicy, intendedFriend: intendedFriend)
     }
 }

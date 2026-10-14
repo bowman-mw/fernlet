@@ -8,56 +8,6 @@ import Testing
 // clock — every instant here is a value the test states, matching the injected-now idiom the rest
 // of the mesh's deterministic suites use.
 
-/// Fixtures shared by the epoch suites and by `MeshSessionStoreTests`, which persists these.
-enum MeshEpochFixtures {
-
-    /// The mesh every fixture ref is minted against.
-    static let meshID = UUID(uuidString: "1D3F9A0C-0305-4F89-9A0C-0305E82C3301") ?? UUID()
-
-    /// A second mesh, for proving the derivation is mesh-scoped.
-    static let otherMeshID = UUID(uuidString: "2D3F9A0C-0305-4F89-9A0C-0305E82C3302") ?? UUID()
-
-    /// The default coordinator fingerprint: canonical 16-character lowercase hex.
-    static let coordinatorA = "00000000000000aa"
-
-    /// A second coordinator — what a *different partition's* lowest fingerprint looks like.
-    static let coordinatorB = "00000000000000bb"
-
-    /// A ref at `counter`, minted by `coordinator` in `meshID`.
-    ///
-    /// No `!` and no `fatalError` (Power of 10 rule 7): minting *refuses* rather than traps, so the
-    /// fixture records the issue and falls back to the module-internal validated-parts initializer
-    /// with an all-zero id. Every suite below asserts on values whose mint cannot refuse, so the
-    /// fallback is never the value under test — it exists so a broken fixture fails an assertion
-    /// instead of crashing the whole suite.
-    static func ref(
-        _ counter: UInt32,
-        coordinator: String = coordinatorA,
-        meshID: UUID = meshID
-    ) -> MeshEpochRef {
-        guard let minted = MeshEpochRef.minted(
-            counter: counter, coordinatorFingerprint: coordinator, meshID: meshID
-        ) else {
-            Issue.record("fixture could not mint epoch \(counter) for \(coordinator)")
-            return MeshEpochRef(counter: 0, epochID: UUID(), coordinatorFingerprint: coordinatorA)
-        }
-        return minted
-    }
-
-    /// A group key bound to a counter. The bytes are fixture bytes; nothing here is a real key.
-    @MainActor
-    static func key(_ counter: UInt32) -> MeshGroupKey {
-        MeshGroupKey(
-            epoch: Int(counter),
-            keyBytes: Data(repeating: UInt8(truncatingIfNeeded: counter), count: 32),
-            activeSince: base
-        )
-    }
-
-    /// The fixed instant every clock-bearing test measures from.
-    static let base = Date(timeIntervalSince1970: 1_800_000_000)
-}
-
 // MARK: - MeshEpochRefTests
 
 /// The value type: its canonical string, its bounds, and the one property the whole phase rests

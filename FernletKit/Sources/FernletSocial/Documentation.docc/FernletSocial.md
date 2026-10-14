@@ -121,9 +121,12 @@ engine through its public seams.
   and matches a browsed peer's tags against every eligible friend's over the epoch before and after
   its own, so kept friends recognize each other nearby without connecting; three self-exclusion
   layers drop this device's own ghost advertisements, and a 45-second lost grace smooths a friend's
-  epoch restart. The radio it drives wears ProximityKit's `PresenceEpochPosture`, an instance name
-  and a TLS identity replaced whole at every 900-second boundary by the manager's one timer, and
-  nothing about it is persisted. Hearts: a send dials the tag-matched peer, runs the one-round-trip
+  epoch restart. It drives ProximityKit's presence engine, `ProximityPresenceSession`, which builds
+  the radio, wears its epoch posture (an instance name and a TLS identity replaced whole at every
+  900-second boundary, when the manager's one timer asks), speaks its TXT record and drops this
+  device's ghosts by name; the tags, the matching, the other two self-exclusion layers, the posture
+  mint's once-per-epoch budget and its audit row stay here, and nothing about any of it is
+  persisted. Hearts: a send dials the tag-matched peer, runs the one-round-trip
   friend handshake under the sealed-introduction rule (the introduction and its acknowledgement are
   sealed to the intended friend's key-agreement key, so a tag-replay forger learns nothing),
   auto-commits, verifies the connected identity is that friend and still heart-eligible, sends one
@@ -217,8 +220,9 @@ engine through its public seams.
   decodable so an older peer's frame parks by name, and it is the sealing-required control several
   wire suites make their claims against.
 
-Only presence drives a radio itself, through ProximityKit's presence seam (below); the mesh features
-ride the engine the composition builds, which runs the mesh radio. The engine hands every payload
+Only presence brings a radio up itself, through ProximityKit's public presence engine,
+`ProximityPresenceSession` (below); the mesh features ride the engine the composition builds, which
+runs the mesh radio. The engine hands every payload
 and routed item it receives for a feature to the handler, projection handler or ledger judge
 registered for its token, after its own gates; the features hand what the app files (verified
 moderation rows, a friend's state) to the app's closures, and the app files them in these stores. The mesh and presence hand the prekey bundles their introductions carry
@@ -368,12 +372,13 @@ through, the name display `PeerNameDisplay` (its identifier filter, which `Fernl
 `firstName` runs first). A heart
 connection sends and commits through the coordinator's public per-connection API: its token send,
 `sendPayload(payloadTypeToken:summary:payload:sealed:)`, under `PayloadType.friendHeart`'s raw value,
-and its manual commit, `commitManualProximity()`. The `package` doors, each of which
-`ProximityNamespaceBoundaryTests` lists with its exit: the presence radio's seam
-(`PresenceRadioSession`), its QUIC conformer (`NetworkPresenceSession`), the peer channel a heart
-connection runs over (`NetworkPeerChannel`), the epoch posture (`PresenceEpochPosture`) and the TXT
-vocabulary (`PresenceAdvertisement`), until A1, when the seam is published as mechanism or wrapped by
-a presence engine.
+and its manual commit, `commitManualProximity()`. Presence reaches the air through ProximityKit's
+public presence engine, `ProximityPresenceSession` (plan step A1.1): its six hooks, the posture
+rotation and epoch, start and republish with this manager's tags, stop, the dial with a hello tag and
+the disconnect, and the `ProximityPeerChannel` it hands a heart connection, whose `notifyConnected()`
+the heart door calls once the connection's coordinator has begun. No `package` door is left:
+the radio, its seam, the peer channel's concrete type, the posture and the TXT vocabulary are
+internal to ProximityKit.
 
 **Recipe sharing.** ``ProximityRecipeShareManager`` (`RecipeSharing/ProximityRecipeShareManager.swift`)
 is Fernlet's recipe share over ProximityKit's `ProximityPairSession`, which it builds at construction
@@ -402,9 +407,10 @@ and still reads a whole recipe. The "Include notes" strip
 group 31 pins the payload's JSON, the pairing's frames, persisted audit rows and status sentences,
 the copy's templates and the profile and constants.
 
-**What is still in ProximityKit.** The presence radio itself (its seam and QUIC conformer, its epoch
-posture and TXT vocabulary), the mechanism presence drives, the routed mesh engine the mesh features
-ride, and the one-to-one pair session recipe sharing runs over, each for good.
+**What is still in ProximityKit.** The presence engine, `ProximityPresenceSession`, with the radio it
+wraps (its seam and QUIC conformer, its epoch posture and TXT vocabulary), the mechanism presence
+drives, the routed mesh engine the mesh features ride, and the one-to-one pair session recipe sharing
+runs over, each for good.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the

@@ -244,11 +244,16 @@ struct PresenceOverQUICTests {
     /// there is no other way — so a boundary that only re-derived tags would leave the previous
     /// name live beside the new one, and an observer who saw both would have linked them by
     /// construction. And a name that rotated while the certificate did not is the same failure a
-    /// step lower down.
+    /// step lower down. So must the tags: with one friend, the start advertises this epoch's tag for
+    /// that friend and the boundary the next epoch's, never the start's again, read off the very record
+    /// the radio was handed.
     @Test func anEpochBoundaryReAdvertisesUnderAWhollyNewPostureAndRetiresTheOldName() throws {
         let (identity, serviceID) = try makeIdentity()
         defer { KeychainItem.deleteAll(service: serviceID) }
         let host = MockPresenceQUICHost()
+        let friendKA = kaPublic()
+        host.proximityTrustVault.apply(
+            peers: [makeFriend(fingerprint: "f00df00df00df00d", keyAgreementPublicKey: friendKA)], audit: [])
         let radio = FakePresenceRadioSession()
         var clock = baseDate
         let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
@@ -272,6 +277,12 @@ struct PresenceOverQUICTests {
             radio.allAdvertisements.filter { $0.instanceName == first.instanceName }.count == 1,
             "the old name is advertised once, before the boundary, and never again"
         )
+        let tagE = try identity.presenceTag(for: friendKA, epoch: first.epoch).base64EncodedString()
+        let tagE1 = try identity.presenceTag(for: friendKA, epoch: first.epoch + 1).base64EncodedString()
+        #expect(first.fields == PresenceAdvertisement.publishedFields(tags: [tagE]),
+                "the start advertised \(first.fields), not this epoch's tag for the friend")
+        #expect(second.fields == PresenceAdvertisement.publishedFields(tags: [tagE1]),
+                "the boundary re-advertises the next epoch's tags, never the start's")
     }
 
     /// A roster refresh that lands after a boundary re-advertises under the new posture too —
@@ -314,6 +325,58 @@ struct PresenceOverQUICTests {
             .union([PresenceAdvertisement.versionKey])
         #expect(Set(fields.keys).isSubset(of: allowed), "no name, no session id, no fingerprint: \(fields.keys)")
         #expect(PresenceAdvertisement.tags(from: fields).count == friends.count)
+    }
+
+    // MARK: - The engine's hooks
+
+    /// The radio's lost, channel-ready and disconnect hooks reach the manager through the presence
+    /// engine, each to its own effect: a channel the radio hands up for a browsed friend becomes a heart
+    /// connection (not yet published `.connected`, which waits for the coordinator to begin), the
+    /// tunnel's going down removes it, and a lost browse result leaves the friend nearby through the
+    /// grace window and gone after it. A forward dropped or crossed in the engine's or the manager's
+    /// wiring fails one of these, a crossed pair two.
+    @Test func theLossChannelAndDisconnectHooksReachTheManagerThroughTheEngine() throws {
+        let (identity, serviceID) = try makeIdentity()
+        defer { KeychainItem.deleteAll(service: serviceID) }
+        let host = MockPresenceQUICHost()
+        let friendKA = kaPublic()
+        let friend = makeFriend(fingerprint: "f00df00df00df00d", keyAgreementPublicKey: friendKA)
+        host.proximityTrustVault.apply(peers: [friend], audit: [])
+        let radio = FakePresenceRadioSession()
+        var clock = baseDate
+        let manager = PresenceManager(store: host, ledger: makeLedger(), identity: identity)
+        manager.nowProvider = { clock }
+        manager.makeSession = { radio }
+        manager.start()
+
+        let epoch = IdentityService.presenceEpoch(at: baseDate)
+        let ourTag = try identity.presenceTag(for: friendKA, epoch: epoch).base64EncodedString()
+        let theirOther = Data((0..<8).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
+        let browsed = peer(tokens: [ourTag, theirOther])
+        radio.onPeerDiscovered?(browsed)
+        #expect(manager.nearbyFriendFingerprints == [friend.fingerprint], "the friend's sighting did not reach the manager")
+
+        let channel = radio.channel(for: browsed)
+        var states: [PeerTransportState] = []
+        let subscription = channel.state.sink { states.append($0) }
+        defer { subscription.cancel() }
+        radio.onPeerChannelReady?(channel)
+        #expect(manager.heartConnectionCountForTesting == 1, "the channel the radio handed up is no heart connection")
+        let published = states.contains { state in
+            if case .connected = state { return true }
+            return false
+        }
+        #expect(!published, "the channel was published connected before its coordinator began")
+
+        radio.onPeerDisconnected?(browsed, "closed by the peer")
+        #expect(manager.heartConnectionCountForTesting == 0, "the tunnel went down and the heart connection stayed")
+
+        radio.onPeerLost?(browsed)
+        #expect(manager.nearbyFriendFingerprints == [friend.fingerprint], "a lost friend left before the grace window ran out")
+        clock = baseDate.addingTimeInterval(PresenceManager.lostGraceInterval + 1)
+        manager.sweepExpiredPeersForTesting()
+        #expect(manager.nearbyFriendFingerprints.isEmpty, "a friend lost past the grace window is still nearby")
+        manager.stop()
     }
 
     // MARK: - Stand-down
@@ -658,7 +721,8 @@ struct PresenceOverQUICTests {
     // MARK: - The retirement scan
 
     /// `PresenceManager` no longer names MultipeerConnectivity anywhere in its code, and does name
-    /// the radio that replaced it.
+    /// the radio that replaced it: ProximityKit's presence engine (plan step A1.1), which builds that
+    /// radio and speaks its TXT vocabulary.
     ///
     /// The rule-7 gate for a two-pass item: pass 1 changed nothing on the air, so the only
     /// mechanical proof that pass 2 RAN is that the MC path is gone from this file. Pinned in both
@@ -674,9 +738,11 @@ struct PresenceOverQUICTests {
                        "updateDiscoveryInfo", "serviceType", "MultipeerConnectivity"] {
             #expect(!code.contains(needle), "PresenceManager still names `\(needle)` in code")
         }
-        #expect(code.contains("PresenceRadioSession"), "and it drives the QUIC presence radio's seam")
-        #expect(code.contains("NetworkPresenceSession"), "whose production conformer it builds")
-        #expect(code.contains("PresenceAdvertisement"), "through the presence TXT vocabulary")
+        #expect(code.contains("ProximityPresenceSession"), "and it drives the QUIC presence radio's engine")
+        let engine = MeshRoutedSourceScan.codeOnly(
+            try RepoRoot.source("FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift"))
+        #expect(engine.contains("NetworkPresenceSession"), "whose production conformer the engine builds")
+        #expect(engine.contains("PresenceAdvertisement"), "through the presence TXT vocabulary")
 
         // The COMMENTS get a narrower rule, and the line is drawn where it is un-brittle: the
         // framework's API TYPE names describe a mechanism, so a comment carrying one is describing

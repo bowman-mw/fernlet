@@ -30,10 +30,27 @@
 /Tests/FernletTests/IdentityProvisioningReadTests.swift   @bowman-mw
 /Tests/FernletTests/ProximityNamespaceGoldenTests.swift   @bowman-mw
 /Tests/FernletTests/ProximityVocabularyGoldenTests.swift  @bowman-mw
-/Tests/FernletTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /Tests/FernletTests/ProximityNamespaceGateTests.swift     @bowman-mw
 /Tests/FernletTests/FernletFeatureGoldenTests.swift       @bowman-mw
 /Tests/FernletTests/ProximityPlatformBoundaryTests.swift  @bowman-mw
+# Who installs an audit sink: Fernlet's app and ProximityKit's package tests' installer, once each, and
+# nothing else, or every "this event was not logged" check runs on a replaced sink
+/Tests/FernletTests/ProximityAuditBridgeTests.swift       @bowman-mw
+# ProximityKit's namespace wall, one of ProximityKit's package tests since plan step A1.1.7, and what left
+# its file then: the source walls' lexer (a twin, one copy per test target) with Fernlet's copy's fixtures,
+# and FernletTests' walker over ProximityKit's sources. Every source wall reads code through the lexer, so
+# a blind lexer would pass every wall vacuously. Since plan step A1.1.8 the platform wall's rules over
+# ProximityKit's own code are a package test too, the source half of its Mac readiness; and the keychain
+# door's wall, which holds the door to the funnel's `#if DEBUG` branch and its one caller to the package
+# tests' installer, the file that installs both the in-memory keychain store and the audit sink.
+/FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
+/FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw
+/FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift    @bowman-mw
+/Tests/FernletTests/SwiftSourceLexer.swift                                @bowman-mw
+/Tests/FernletTests/SwiftSourceLexerTests.swift                           @bowman-mw
+/Tests/FernletTests/ProximityKitSources.swift                             @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
 # job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned
@@ -82,6 +99,9 @@
 # ProximityKit's copy of ColumnCrypto's V3 seal and its DeviceBindingID seam: the mesh stores' at-rest format, owned like FernletCrypto's originals
 /FernletKit/Sources/ProximityKit/Support/ProximityColumnCrypto.swift   @bowman-mw
 /FernletKit/Sources/ProximityKit/Support/ProximityInstallBinding.swift @bowman-mw
+# ProximityKit's keychain funnel: every identity row's and seal key's query dictionary, the six calls that issue
+# them, and the Debug-only backend door its package tests install an in-memory store through
+/FernletKit/Sources/ProximityKit/Support/ProximityKeychainItem.swift    @bowman-mw
 
 # ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
 /FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw
@@ -123,6 +143,12 @@
 # FernletSocial's presence tags: the presence pair secret and the rotating epoch tag every friend pair
 # advertises and matches by — changing a byte here makes every pair of friends invisible to each other
 /FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
+
+# ProximityKit's presence engine: the production posture mint (the instance-name prefix and TLS common
+# name every presence posture is minted under), the record its host's tags are advertised in, and the
+# check that drops this device's own ghosts by name before its host hears of a sighting — changing a
+# byte here changes what every device advertises on the presence radio, or what it hears there
+/FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift @bowman-mw
 
 # FernletSocial's recipe share: the recipe payload's wire format (its JSON, format token and version)
 # and the summary signed into every recipe envelope, over ProximityKit's pair session — changing a byte

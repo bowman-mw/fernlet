@@ -3,7 +3,7 @@ import FernletSocial
 import Foundation
 import PrivateMediaStore
 import PrivateStoreCore
-import ProximityKit
+@testable import ProximityKit
 import Security
 import Testing
 import FernletFoundation
@@ -29,6 +29,11 @@ import FernletFoundation
 ///   that could mint over a previous build's key-agreement row without first promoting it into the
 ///   escrow. Exact-set in both directions, with planted-violation fixtures and a scan floor, so the
 ///   wall can neither miss a new file nor rot into a stale allowance.
+/// - **ProximityKit's keychain backend** (plan step A1.1): its funnel reaches the keychain through one
+///   backend, and no Fernlet file names the door that replaces it (ProximityKit's own package tests
+///   hold its declaration, compiled in a Debug build only, and its one caller, their installer); a
+///   behavioural cell holds this hosted bundle's funnel on the system keychain, so the attribute checks
+///   above read real rows.
 ///
 /// A future "make sealed data shareable" change would have to flip one of these rows to a
 /// synchronizable or non-device class — and fail here, in the same commit.
@@ -436,6 +441,37 @@ struct KeyCustodyBoundaryTests {
         }
     }
 
+    // MARK: ProximityKit's keychain backend (plan step A1.1). ProximityKit's keychain funnel reaches
+    // the keychain through one backend, and a Debug build has a door that replaces it, which only
+    // ProximityKit's own unhosted package tests use, to install an in-memory store in their process. In
+    // this hosted bundle nothing may replace it: the cell above, which reads a ProximityKit identity's
+    // rows back, and the namespace golden's live round trip would otherwise read a fake.
+
+    /// With no backend installed, ProximityKit's keychain funnel resolves the system keychain in this
+    /// hosted bundle, and a row it stores is the keychain's own: FernletFoundation's `KeychainItem`,
+    /// which calls `SecItem` itself, reads it back, the keychain holds it under the class the funnel
+    /// wrote, and once FernletFoundation deletes it the funnel finds nothing.
+    @Test func proximityKitsKeychainFunnelReachesTheSystemKeychain() {
+        let resolved = ProximityKeychainItem.backend
+        #expect(resolved is ProximityKeychainItem.SystemKeychain, """
+            ProximityKit's keychain funnel resolves \(type(of: resolved)) in the hosted bundle: a backend was \
+            installed, so every ProximityKit row this bundle reads back is that backend's, not the \
+            keychain's. Only ProximityKit's package tests install one, in their own process.
+            """)
+        let service = "com.fernlet.custody.test.backend.\(UUID().uuidString)"
+        defer { KeychainItem.deleteAll(service: service) }
+        let data = Data([0x5A, 0xA5, 0x0F])
+        let deviceOnly = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        #expect(ProximityKeychainItem.store(data, account: "row", service: service, accessibility: deviceOnly) == errSecSuccess)
+        #expect(KeychainItem.load(account: "row", service: service) == data,
+                "FernletFoundation's KeychainItem did not read the row ProximityKit's funnel stored")
+        #expect(rowAttributes(account: "row", service: service)?.accessible == deviceOnly as String,
+                "the keychain does not hold the funnel's row under the class it wrote")
+        #expect(KeychainItem.deleteReportingStatus(account: "row", service: service) == errSecSuccess)
+        #expect(ProximityKeychainItem.load(account: "row", service: service) == nil,
+                "the funnel read a row the keychain no longer holds")
+    }
+
     // MARK: - Grep-walls (shipping source, exact-set in both directions)
 
     /// Shipping-code roots — app, all package modules, and all three extensions. Test targets are
@@ -576,7 +612,7 @@ struct KeyCustodyBoundaryTests {
     }
 
     /// Every shipping Swift file constructs an identity only in ``identityConstructionHomes``, exact
-    /// both ways, read as lexed code (`SwiftSourceLexer`, from `ProximityNamespaceBoundaryTests`), so
+    /// both ways, read as lexed code (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so
     /// a doc comment or a string that spells a construction is not one: a construction in any file, and
     /// a delegating initializer in any file but ``identityDeclarationFile``. Both matchers are held to
     /// their samples and their neighbours first.
@@ -658,6 +694,94 @@ struct KeyCustodyBoundaryTests {
         for neighbour in notDelegations {
             #expect(identityDelegationLines(in: SwiftSourceLexer.lex(neighbour).code).isEmpty,
                     "read a delegation in: \(neighbour)")
+        }
+    }
+
+    // MARK: Wall: no Fernlet file names ProximityKit's keychain backend door (plan step A1.1). The door,
+    // `ProximityKeychainItem.installBackend(_:)`, replaces the keychain under every ProximityKit row for
+    // the whole process, so a call of it in Fernlet would move the identity's and the seal keys' rows out
+    // of the keychain, in a shipping process or in this hosted bundle, without a byte of the funnel
+    // changing. ProximityKit's own package tests hold the door's declaration, in its `#if DEBUG` branch,
+    // and its one caller, their installer (`ProximityKeychainDoorTests`, which travels with the package);
+    // this wall holds the host.
+
+    /// The roots the backend-door wall reads, each with the fewest Swift files it may hold (about four
+    /// fifths of its count when the wall was written: 264, 288 and 485), so a root that stops resolving
+    /// fails rather than reading as clean: the app and its extensions, FernletKit's sources but
+    /// ProximityKit's own (``backendDoorExcludedFolder``), and Fernlet's test targets. ProximityKit's
+    /// sources and its package tests are its own door wall's to read.
+    static let backendDoorRoots: [(root: String, floor: Int)] = [
+        (root: "App", floor: 210), (root: "FernletKit/Sources", floor: 230), (root: "Tests", floor: 385)
+    ]
+
+    /// The folder under ``backendDoorRoots``' `FernletKit/Sources` this wall does not read: ProximityKit's
+    /// own sources, which declare the door and whose wall travels with the package.
+    static let backendDoorExcludedFolder = "FernletKit/Sources/ProximityKit/"
+
+    /// Matcher: the 1-based lines of lexed `code` that spell the door's name, a call however it is
+    /// qualified, a reference with no call (`let door = ProximityKeychainItem.installBackend`), a
+    /// backtick-quoted name or a declaration, one per spelling; or `[-1]`, which no sample expects and no
+    /// file passes, when the pattern does not compile. A longer name holding it (`installBackendCount`,
+    /// `reinstallBackend`) is not one.
+    static func backendDoorLines(in code: String) -> [Int] {
+        let pattern = #"(?<![A-Za-z0-9_])(func\s+)?installBackend(?![A-Za-z0-9_])"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [-1] }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map {
+            text.substring(to: $0.range.location).count(where: { $0 == "\n" }) + 1
+        }
+    }
+
+    /// No Fernlet file names ProximityKit's keychain backend door: no file of the app and its extensions,
+    /// of FernletKit's modules but ProximityKit, or of Fernlet's test targets calls it, refers to it or
+    /// declares a function of its name, so every shipping process, and this hosted bundle's keychain
+    /// cells, reach the system keychain. A host calls none; ProximityKit's own package tests hold the
+    /// declaration and its one caller. Read as lexed code (`SwiftSourceLexer`), so a comment or a string
+    /// that spells the door is not one, over every root at its file floor, with the matcher held to its
+    /// samples and neighbours first.
+    @Test func noFernletFileNamesProximityKitsKeychainBackendDoor() throws {
+        Self.expectTheBackendDoorMatcherSeesItsSamplesAndNoNeighbour()
+        var spellings: [String] = []
+        // R2: bounded by the three roots and each root's finite file list.
+        for (root, floor) in Self.backendDoorRoots {
+            let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
+                .filter { !$0.hasPrefix(Self.backendDoorExcludedFolder) }
+            #expect(files.count >= floor, "the backend-door scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
+            for path in files {
+                let source = try RepoRoot.source(path)
+                guard source.contains("installBackend") else { continue }
+                spellings += Self.backendDoorLines(in: SwiftSourceLexer.lex(source).code).map { "\(path):\($0)" }
+            }
+        }
+        #expect(spellings.isEmpty, """
+            Fernlet names ProximityKit's keychain backend door at \(spellings). A backend installed anywhere \
+            but ProximityKit's own package tests moves every ProximityKit keychain row of its process out of \
+            the keychain: in shipping code, and in Fernlet's hosted tests, nothing installs one, refers to \
+            the door or declares a function of its name.
+            """)
+    }
+
+    /// The door matcher reads every way the door's name is spelled, as a call, a reference, a quoted
+    /// name and a declaration, and none of its nearest neighbours (a longer name, the slot, a comment, a
+    /// string). Each sample is lexed first, as the files are.
+    private static func expectTheBackendDoorMatcherSeesItsSamplesAndNoNeighbour() {
+        let spellings = [
+            "ProximityKeychainItem.installBackend(store)", "Self.installBackend(store)", "installBackend (store)",
+            "ProximityKeychainItem\n    .installBackend(store)", "let door = ProximityKeychainItem.installBackend",
+            "[store].forEach(ProximityKeychainItem.installBackend)", "`installBackend`(store)",
+            "static func installBackend(_ backend: any ProximityKeychainBackend) {", "func  installBackend(_ b: B) {}",
+            "static func installBackend<B: ProximityKeychainBackend>(_ b: B) {}"
+        ]
+        let neither = [
+            "let installBackendCount = 1", "reinstallBackend(store)", "installedBackend.withLock { $0 = backend }",
+            "/// ProximityKeychainItem.installBackend(store)", #"let s = "installBackend(store)""#
+        ]
+        // R2: bounded by the two fixture lists.
+        for sample in spellings {
+            #expect(backendDoorLines(in: SwiftSourceLexer.lex(sample).code).count == 1, "missed the door in: \(sample)")
+        }
+        for neighbour in neither {
+            #expect(backendDoorLines(in: SwiftSourceLexer.lex(neighbour).code).isEmpty, "read the door in: \(neighbour)")
         }
     }
 

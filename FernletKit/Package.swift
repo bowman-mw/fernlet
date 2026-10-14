@@ -419,8 +419,8 @@ let package = Package(
         // their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's
         // protected-data retry under `#if canImport(UIKit)`), and Scripts/macos-build-check.sh builds
         // it, in the MacReady product, for macOS on every push, the compiler half;
-        // ProximityPlatformBoundaryTests, which holds its imports, device-name reads, directories and
-        // host defaults to exact rows, is the source half.
+        // ProximityPlatformNeutralityTests, in its package tests, which holds its imports, device-name
+        // reads, directories and host defaults to exact rows, is the source half.
         .target(
             name: "ProximityKit",
             dependencies: [],
@@ -542,12 +542,11 @@ let package = Package(
         // and its seams — the payload token door, the captured-slot feature send, the origination door,
         // the projection-handler and ledger-judge registrations, the session observer, the capability-list
         // provider and the vouch-list exchange — with the routed rows' column types, the body framing and
-        // the generic content union; for presence the host seam, the session coordinator with its public
-        // token send and manual commit, ranging, the namespace gate, the observation loop and the
-        // peer-name coercion; for recipe sharing the pair session with its profile, status, events,
-        // peer row and send outcome; and `package` doors: the presence radio's seam, QUIC conformer, peer
-        // channel, epoch posture and TXT vocabulary until A1; `JSONSidecarFile`, the
-        // ledgers' sidecar, is this module's own) + FernletConnections (`FernletFeaturePurposes`' two
+        // the generic content union; for presence the host seam, the presence engine with its peer
+        // channel, the session coordinator with its public token send and manual commit, ranging, the
+        // namespace gate, the observation loop and the peer-name coercion; for recipe sharing the pair
+        // session with its profile, status, events, peer row and send outcome; no `package` door;
+        // `JSONSidecarFile`, the ledgers' sidecar, is this module's own) + FernletConnections (`FernletFeaturePurposes`' two
         // declared salts, which the heart-drop and presence pair secrets derive under,
         // `ProximityNamespace.fernlet`, whose sidecar root is the production heart-drop scope's directory
         // and whose routed types FernletRoutedTypes reads, the name placeholders,
@@ -583,19 +582,21 @@ let package = Package(
                 .defaultIsolation(MainActor.self),
             ]
         ),
-        // ProximityKit's own tests (plan step A0.8): the suites that need nothing but ProximityKit, moved out
-        // of the app's FernletTests so they travel with the package at plan step A1 (their files import
-        // no FernletKit module but ProximityKit, which depends on none). The
-        // Fernlet scheme runs them as a second, unhosted test bundle (the simulator's xctest agent: no keychain
-        // entitlement, no ProximityAudit sink) through Fernlet.xcworkspace, the one container in which the
-        // scheme can see a package test target, so Scripts/spm-wall-check.sh builds them strict;
-        // Tests/FernletTests/CIGateSelectorBoundaryTests holds them to Tests/suite-inventory.tsv and pins this
-        // target's dependencies to ProximityKit alone. FernletTests builds in Swift 5 language mode with six
-        // upcoming features (SWIFT_APPROACHABLE_CONCURRENCY's five, and member import visibility); this target
-        // builds in Swift 6 mode (the package default), which implies three of them, with no default isolation
-        // and the other three below, so a suite keeps the isolation, executor semantics and name lookup it had
-        // there. Swift 6 also checks concurrency completely and isolation at run time, which FernletTests does
-        // not, so each move's behaviour is measured on the new target rather than equal by construction.
+        // ProximityKit's own tests (plan step A0.8): the suites that need nothing but ProximityKit and their
+        // own test support (TestSupport/, plan step A1.1), so they travel with the package at plan step A1
+        // (their files import no FernletKit module but ProximityKit, which depends on none). The Fernlet
+        // scheme runs them as a second, unhosted test bundle (the simulator's xctest agent: no keychain
+        // entitlement and no app to install a ProximityAudit sink, so their test support installs an
+        // in-memory keychain store and an audit sink of its own) through Fernlet.xcworkspace, the one
+        // container in which the scheme can see a package test target, so Scripts/spm-wall-check.sh builds
+        // them strict; Tests/FernletTests/CIGateSelectorBoundaryTests holds them to Tests/suite-inventory.tsv
+        // and pins this target's dependencies to ProximityKit alone. FernletTests builds in Swift 5 language
+        // mode with six upcoming features (SWIFT_APPROACHABLE_CONCURRENCY's five, and member import
+        // visibility); this target builds in Swift 6 mode (the package default), which implies three of them,
+        // with no default isolation and the other three below, so a suite keeps the isolation, executor
+        // semantics and name lookup it had there. Swift 6 also checks concurrency completely and isolation at
+        // run time, which FernletTests does not, so each move's behaviour is measured on the new target rather
+        // than equal by construction.
         .testTarget(
             name: "ProximityKitTests",
             dependencies: ["ProximityKit"],

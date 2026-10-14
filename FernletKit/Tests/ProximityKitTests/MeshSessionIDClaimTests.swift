@@ -1,5 +1,5 @@
 // MeshSessionIDClaimTests.swift
-// FernletTests
+// ProximityKitTests
 //
 // 2026-09-23 — a reviewer's note on 31fafd6. The `sid` in the QUIC channel introduction's hello is
 // NOT in the signed transcript, and it is what resolves an inbound tunnel to the browsed
@@ -228,7 +228,7 @@ struct MeshSessionIDClaimTests {
     /// activation records the proof, the inbound path resolves through the claim rule, and the
     /// sweep asks the table rather than comparing `sid`s itself.
     @Test func theRadioAsksTheTableAtAllThreeSites() throws {
-        let source = try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
+        let source = try PackageRoot.source("Sources/ProximityKit/Transport/NetworkMeshSession.swift")
         func body(of header: String) -> Substring? {
             guard let start = source.range(of: header) else { return nil }
             let rest = source[start.upperBound...]

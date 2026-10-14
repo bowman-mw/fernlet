@@ -96,8 +96,14 @@ struct CodeOwnersResolutionTests {
         "/Tests/FernletTests/CIGateSelectorBoundaryTests.swift",
         "/Tests/FernletTests/IdentityProvisioningReadTests.swift",
         // ProximityKit's platform wall and the native-macOS build it rides on (plan step A0.6.5): the
-        // source half, the check and its negative test, named in Docs/Verifiability.md.
+        // source half (a package test since plan step A1.1.8), Fernlet's half that pins the build, the
+        // check and its negative test, named in Docs/Verifiability.md.
+        "/FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift",
         "/Tests/FernletTests/ProximityPlatformBoundaryTests.swift",
+        // ProximityKit's keychain funnel, whose Debug-only backend door its package tests install their
+        // in-memory store through, and the wall that holds that door (plan step A1.1.10).
+        "/FernletKit/Sources/ProximityKit/Support/ProximityKeychainItem.swift",
+        "/FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift",
         "/Scripts/macos-build-check.sh",
         "/Scripts/macos-build-selftest.sh",
         "/Scripts/run-gated-suites.sh",

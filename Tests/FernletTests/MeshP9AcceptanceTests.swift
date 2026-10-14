@@ -23,8 +23,9 @@
 // **Rule 7 — "a row that lands in two passes needs its gate to assert the later pass RAN."** Items
 // 2 and 3 are two-pass by shape (a value, then the radio wearing it), and pass 1 changed nothing on
 // the air. Every clause below therefore carries at least one needle that is FALSE at the pass-1
-// commit and true at the pass-2 one: the manager naming `NetworkPresenceSession` /
-// `NetworkPairSession` and no `serviceType` at all; the QUIC service type declared in
+// commit and true at the pass-2 one: the manager naming its QUIC radio (`NetworkPresenceSession` until
+// ProximityKit plan step A1.1; since then the presence engine, `ProximityPresenceSession`, which builds
+// that radio) / `NetworkPairSession` and no `serviceType` at all; the QUIC service type declared in
 // `Info.plist`; the radio advertising the posture's OWN bytes; `makeSession:` existing to inject a
 // fake through. A needle satisfied by a rename alone is named as such in `GATES.md` and is not one.
 //
@@ -66,8 +67,12 @@ enum MeshP9Acceptance {
     static let presenceSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift"
 
     /// The presence manager — the file whose MultipeerConnectivity names pass 2 removed. It is
-    /// FernletSocial's, and drives ProximityKit's presence radio from there.
+    /// FernletSocial's, and drives ProximityKit's presence radio from there, through the engine.
     static let presenceManagerPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
+
+    /// ProximityKit's presence engine (plan step A1.1): the one owner of the presence radio, the
+    /// posture it wears and the TXT record it advertises.
+    static let presenceEnginePath = "FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift"
 
     /// The recipe radio, which also declares ``ProximityPairPosture`` (item 3 pass 2).
     static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift"
@@ -524,7 +529,12 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// seam is in it. Pinned in both directions — a file naming neither has been renamed or emptied,
     /// not cleaned — and widened past the unit cell's single file to a walk of the whole package and
     /// of FernletSocial, the manager's module, so an `extension PresenceManager` in a new file of
-    /// either cannot reintroduce a needle silently.
+    /// either cannot reintroduce a needle silently. Since plan step A1.1 the seam is ProximityKit's
+    /// presence engine: the manager names it and none of the radio, posture, channel or TXT types
+    /// behind it, the radio's seam has the engine and the conformer for its two homes, and the posture
+    /// is minted in the engine alone. The two orders the move had to keep are read off the code too:
+    /// the engine wires a radio's hooks before it starts it, and the manager's heart door marks a
+    /// channel connected only after its coordinator has begun.
     @Test func theManagerNamesNoRetiredRadioAndReachesTheAirThroughTheSeamAlone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceManagerPath))
         // R2: bounded by the retired-radio spellings.
@@ -532,9 +542,14 @@ struct MeshP9PresenceSwapAcceptanceTests {
                        "PeerChannelTransport", "updateDiscoveryInfo", "serviceType"] {
             #expect(!manager.contains(needle), "PresenceManager still names `\(needle)` in code")
         }
-        #expect(manager.contains("PresenceRadioSession"), "and it drives the QUIC presence seam")
-        #expect(manager.contains("NetworkPresenceSession"), "whose production conformer it builds")
-        #expect(manager.contains("presencePosture"), "wearing the posture pass 1 built")
+        #expect(manager.contains("ProximityPresenceSession"), "and it drives ProximityKit's presence engine")
+        // R2: bounded by the engine's internal spellings.
+        for needle in ["PresenceRadioSession", "NetworkPresenceSession", "NetworkPeerChannel",
+                       "PresenceEpochPosture", "PresenceAdvertisement"] {
+            #expect(!manager.contains(needle), "PresenceManager reaches past the engine to `\(needle)` in code")
+        }
+        #expect(manager.contains("presenceSession.rotatePosture(at:"), "wearing the posture pass 1 built, through the engine")
+        try Self.expectThePresenceOrdersHold(manager: manager)
 
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
@@ -543,12 +558,52 @@ struct MeshP9PresenceSwapAcceptanceTests {
         // package still clears is a floor that cannot fail. It holds ProximityKit's part of the walk.
         #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
         #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit + social))
-                == ["PresenceManager.swift", "NetworkPresenceSession.swift"], """
-                the presence seam has exactly two homes in the package and FernletSocial — the manager \
+                == ["ProximityPresenceSession.swift", "NetworkPresenceSession.swift"], """
+                the presence seam has exactly two homes in the package and FernletSocial — the engine \
                 that drives it and the conformer that is it. A third is a second owner for one radio
                 """)
-        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["PresenceManager.swift"],
-                "and the posture is minted from one place: the manager's own epoch tick")
+        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["ProximityPresenceSession.swift"],
+                "and the posture is minted from one place: the engine the manager's epoch tick asks")
+        let app = try MeshP7Acceptance.sources(under: "App")
+        #expect(MeshP7Acceptance.homes(of: "ProximityPresenceSession(", in: kit + social + app) == ["PresenceManager.swift"],
+                "one presence engine per process: the manager's. A second engine on the same namespace would read the first one's advertisements as a stranger's")
+    }
+
+    /// The two orders the presence engine's move kept, read off the code: the engine wires a fresh
+    /// radio's hooks before it starts it (so no browse result, tunnel or failure reaches an unwired
+    /// radio), and the manager's heart door publishes a channel's `.connected` only after the
+    /// coordinator built over it has begun (so the coordinator never takes the wrong handshake
+    /// branch). Each spelling occurs exactly once in its file and inside the body it belongs to (the
+    /// engine's `start(tags:)`; the closure the heart door spawns), the engine's start defers nothing,
+    /// and the manager's two lines are adjacent, so a call moved out of that body, or a `begin` wrapped
+    /// in a task of its own, reddens.
+    static func expectThePresenceOrdersHold(manager: String) throws {
+        let engine = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceEnginePath))
+        let start = try #require(MeshRoutedSourceScan.bracedBody(after: "public func start(tags:", in: engine),
+                                 "the engine's `start(tags:)` is gone or its braces do not close")
+        let door = try #require(MeshRoutedSourceScan.bracedBody(after: "private func handleHeartChannelReady(", in: manager),
+                                "the manager's heart door is gone or its braces do not close")
+        let spawned = try #require(MeshRoutedSourceScan.bracedBody(after: "spawnHostPinned {", in: door),
+                                   "the manager's heart door spawns no host-pinned closure")
+        let orders = [
+            (engine, start, "the engine", "wire(radio)", "try radio.start(posture:"),
+            (manager, spawned, "the manager", "await coordinator.begin(role: .browser, mode: .friend)", "channel.notifyConnected()")
+        ]
+        // R2: bounded by the two orders.
+        for (code, body, file, first, then) in orders {
+            let firsts = code.components(separatedBy: first).count - 1
+            let thens = code.components(separatedBy: then).count - 1
+            #expect(firsts == 1 && thens == 1, "\(file) spells `\(first)` \(firsts) times and `\(then)` \(thens) times")
+            guard let early = body.range(of: first), let late = body.range(of: then) else {
+                Issue.record("\(file)'s `\(first)` and `\(then)` are not both inside the body they belong to")
+                continue
+            }
+            #expect(early.upperBound <= late.lowerBound, "\(file) reaches `\(then)` before `\(first)`")
+        }
+        #expect(!start.contains("defer"), "the engine's start defers a call, which runs after the radio's start")
+        let adjacent = #"await coordinator\.begin\(role: \.browser, mode: \.friend\)\s*\n\s*channel\.notifyConnected\(\)"#
+        #expect(spawned.range(of: adjacent, options: .regularExpression) != nil,
+                "the manager's `begin` and `notifyConnected()` are not adjacent lines of the spawned closure")
     }
 }
 
@@ -1323,7 +1378,7 @@ struct MeshP9HonestyAcceptanceTests {
     /// `MeshP5AcceptanceTests`, and the gate that runs this battery re-runs the determinism suites,
     /// which is where a moved digest actually reddens.
     @Test func neitherDeterminismDigestMovedNorLeftItsOneHome() throws {
-        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        let tests = try MeshP7Acceptance.testTreeSources()
         #expect(tests.count >= 280, "the test-target scan lost its files (347 when this was measured)")
         #expect(MeshP7Acceptance.homes(of: "ca898" + "bcc", in: tests) == ["MeshP5AcceptanceTests.swift"],
                 "the schedule digest has exactly one home, and this file's split spelling is not a second")
@@ -1485,7 +1540,7 @@ struct MeshP9HonestyAcceptanceTests {
                 deletion would be invisible everywhere else
                 """)
         }
-        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        let tests = try MeshP7Acceptance.testTreeSources()
         #expect(tests.count >= 280, "the test-target scan lost its files (347 when this was measured)")
         // Split so this cell's own literal is not one of the reads it counts.
         let read = ".count(" + "of: "

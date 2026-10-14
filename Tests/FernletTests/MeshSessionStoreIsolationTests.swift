@@ -17,7 +17,8 @@
 //
 // The wall has two halves, because this store's isolation has two:
 //   • the STORE half — every construction in the test tree names a scope, and never the production
-//     one;
+//     one; the test tree is the app's unit tests and, since ProximityKit plan step A1.1.6, ProximityKit's
+//     package tests under FernletKit/Tests, each root held to a file floor (``testRoots``);
 //   • the APP half — `FernletStore.meshSessionStorage` derives BOTH pieces from seams that are
 //     already walled (`proximitySupportRoot`, `heartDropKeychainService`), which is what makes a
 //     test store that is isolated for hearts isolated for mesh-session state for free. If that
@@ -233,16 +234,41 @@ struct MeshSessionStoreIsolationTests {
 
     // MARK: - Scanner
 
-    /// Every `.swift` file under the test root, as `(filename, source)`, minus this file.
+    /// The test roots this wall and its routed twin read, the twin's scratch-root needle among them,
+    /// each with the fewest Swift files it may hold: the app's unit tests and, since ProximityKit plan
+    /// step A1.1.6 (2026-10-14), ProximityKit's package tests, whose host double builds both scopes on a
+    /// scratch root of its own. MEASURED then at 446 and 23 files; each floor is about four fifths of
+    /// that, so a root that stops resolving fails rather than reading as clean, and the package root
+    /// cannot go dark behind the app's hundreds.
+    static let testRoots: [(root: String, floor: Int)] = [
+        (root: "Tests/FernletTests", floor: 356), (root: "FernletKit/Tests", floor: 18)
+    ]
+
+    /// Every `.swift` file under the test roots, as `(filename, source)`, minus this file.
     private static func testSources() throws -> [(String, String)] {
-        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
-        let files = (enumerator?.allObjects as? [URL] ?? [])
-            .filter { $0.pathExtension == "swift" && !excludedFiles.contains($0.lastPathComponent) }
+        try testTreeSources(excluding: excludedFiles)
+    }
+
+    /// Every `.swift` file under ``testRoots``, as `(filename, source)`, minus the files named in
+    /// `excluded`, each root held to its floor.
+    ///
+    /// - Parameter excluded: The file names a wall leaves out: its own, whose scanner literals spell the
+    ///   constructions it refuses.
+    /// - Returns: Each file's name and text, root by root, in path order.
+    static func testTreeSources(excluding excluded: Set<String>) throws -> [(String, String)] {
         var sources: [(String, String)] = []
-        // R2: bounded by the file list.
-        for file in files.sorted(by: { $0.path < $1.path }) {
-            sources.append((file.lastPathComponent, try String(contentsOf: file, encoding: .utf8)))
+        // R2: bounded by the two roots and each root's finite file list.
+        for (root, floor) in testRoots {
+            let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
+            #expect(files.count >= floor, """
+                the store walls read \(files.count) Swift files under \(root), below its floor \(floor): the \
+                root moved, or the reader stopped reading it, and a store or a host double there is unseen
+                """)
+            for path in files {
+                let name = (path as NSString).lastPathComponent
+                guard !excluded.contains(name) else { continue }
+                sources.append((name, try RepoRoot.source(path)))
+            }
         }
         return sources
     }

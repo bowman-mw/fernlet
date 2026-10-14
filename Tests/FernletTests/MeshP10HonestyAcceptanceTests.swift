@@ -100,7 +100,7 @@ struct MeshP10HonestyAcceptanceTests {
     /// UNCHANGED, and a move is a red rather than a re-pin. Each is spelled split here so this file
     /// is not itself a second home, and the last assertion proves that split rather than trusting it.
     @Test func neitherDeterminismDigestMovedNorLeftItsOneHome() throws {
-        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        let tests = try MeshP7Acceptance.testTreeSources()
         #expect(tests.count >= 280, "the test-target scan lost its files (351 when this was measured)")
         #expect(MeshP7Acceptance.homes(of: "ca898" + "bcc", in: tests) == ["MeshP5AcceptanceTests.swift"],
                 "the schedule digest has exactly one home, and this file's split spelling is not a second")
@@ -112,8 +112,9 @@ struct MeshP10HonestyAcceptanceTests {
         #expect(!spellsADigest, "and P10's battery spells neither contiguously")
     }
 
-    /// **The production conformers are built by nothing in the test target, and their device rows
-    /// are recorded as owed.**
+    /// **The production conformers are built by nothing in either test target, and their device rows
+    /// are recorded as owed.** The scan reads the app's unit tests and, since ProximityKit plan step
+    /// A1.1.6, ProximityKit's package tests (`MeshP7Acceptance.testTreeSources()`, each root at its floor).
     ///
     /// This is the honest statement of what tier 1 covers, made MECHANICALLY instead of in prose.
     /// `SystemCompanionRefreshScheduler` and `SystemCompanionRefreshTaskHandle` are the only parts
@@ -128,7 +129,7 @@ struct MeshP10HonestyAcceptanceTests {
     ///
     /// Both needles are spelled split, because this file is inside the directory being scanned.
     @Test func theProductionConformersAreBuiltByNothingHereAndTheirRowsAreOwed() throws {
-        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        let tests = try MeshP7Acceptance.testTreeSources()
         #expect(tests.count >= 280, "the test-target scan lost its files")
         let schedulerCall = "SystemCompanionRefreshScheduler" + "("
         let handleCall = "SystemCompanionRefreshTaskHandle" + "("

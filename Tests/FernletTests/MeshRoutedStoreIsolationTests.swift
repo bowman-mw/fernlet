@@ -3,7 +3,8 @@
 //
 // Grep-wall keeping every test `MeshRoutedStore` on its OWN scope — directory AND keychain service —
 // in the idiom of `MeshSessionStoreIsolationTests` and `PhotoDirectoryIsolationTests`; plus the
-// one-construction-site wall over `MeshCustodyDurabilityWitness`.
+// one-construction-site wall over `MeshCustodyDurabilityWitness`. "Test" means both test targets' trees:
+// the app's unit tests and, since ProximityKit plan step A1.1.6, ProximityKit's package tests.
 //
 // The shared-disk-root flake family is a well-documented cross-suite hazard in this tree: XCTest and
 // Swift Testing suites run in parallel inside ONE process, so anything rooted at a process-global
@@ -150,7 +151,10 @@ struct MeshRoutedStoreIsolationTests {
     /// of its body declares both `meshSessionStorage` and `meshRoutedStorage` there too, but
     /// ``scratchRootExemption``, which never opens a store and must still exist; at least
     /// ``minimumHostDoubles`` doubles must be read, so a broken reader cannot pass on an empty read.
-    /// The reader and the rule are fixtured both ways in ``expectTheScratchRootReaderFixtured()``.
+    /// The reader and the rule are fixtured both ways in ``expectTheScratchRootReaderFixtured()``. Since
+    /// ProximityKit plan step A1.1.6 the sweep reads ProximityKit's package tests too
+    /// (`MeshSessionStoreIsolationTests.testRoots`, each root at its file floor), so their host double,
+    /// `PackageTestHost`, and any store or scope a package suite builds are held here like Fernlet's.
     @Test func noTestReachesTheProductionScope() throws {
         var scanned = 0
         var doubles: [HostDouble] = []
@@ -291,9 +295,11 @@ struct MeshRoutedStoreIsolationTests {
     /// `RootedNamespaceDefaultsHost`, whose cells only read its default scopes and never open a store.
     static let scratchRootExemption = "RootedNamespaceDefaultsHost"
 
-    /// Fewer host doubles than this and the reader is broken, not the tree clean: the test target
-    /// declares seventeen at plan step A0.6.6.
-    static let minimumHostDoubles = 17
+    /// Fewer host doubles than this and the reader is broken, or a test root went dark, not the tree
+    /// clean: the app's test target declares seventeen at plan step A0.6.6, and since ProximityKit plan
+    /// step A1.1.6 (2026-10-14), when this needle began reading the package's tests too, their
+    /// `PackageTestHost` is the eighteenth, MEASURED then at eighteen.
+    static let minimumHostDoubles = 18
 
     /// The scratch-root needle over every double the sweep read: enough were read, the exempt one is
     /// among them, and every other one that states its root states both scopes.
@@ -869,17 +875,10 @@ struct MeshRoutedStoreIsolationTests {
 
     // MARK: - Scanner
 
-    /// Every `.swift` file under the test root, as `(filename, source)`, minus this file.
+    /// Every `.swift` file under both test roots, the app's unit tests and ProximityKit's package tests
+    /// (`MeshSessionStoreIsolationTests.testRoots`, each held to its floor), as `(filename, source)`,
+    /// minus this file.
     private static func testSources() throws -> [(String, String)] {
-        let testsRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        let enumerator = FileManager.default.enumerator(at: testsRoot, includingPropertiesForKeys: nil)
-        let files = (enumerator?.allObjects as? [URL] ?? [])
-            .filter { $0.pathExtension == "swift" && !excludedFiles.contains($0.lastPathComponent) }
-        var sources: [(String, String)] = []
-        // R2: bounded by the file list.
-        for file in files.sorted(by: { $0.path < $1.path }) {
-            sources.append((file.lastPathComponent, try String(contentsOf: file, encoding: .utf8)))
-        }
-        return sources
+        try MeshSessionStoreIsolationTests.testTreeSources(excluding: excludedFiles)
     }
 }

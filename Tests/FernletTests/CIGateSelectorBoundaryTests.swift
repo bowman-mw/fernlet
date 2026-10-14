@@ -14,7 +14,8 @@
 // A0.8), every mesh acceptance battery and wire golden declared in either target must be named by the
 // workflow (the P3/P4/P5 batteries were ungated for three phases because nothing said they had to
 // be), `Tests/suite-inventory.tsv` must be the tree (every suite's target, file and lines, and each
-// package suite's declared tests), the helpers both targets compile must be twins, the strict build
+// package suite's declared tests), the helpers both targets compile must be twins and the package's
+// test bindings a replacement of Fernlet's (ProximityKit plan step A1.1), the strict build
 // and every run go through `Fernlet.xcworkspace`, which resolves the CryptoSwift revision the app
 // project pins (ProximityKit plan step A0.8.1), the Fernlet scheme's testables hold the package
 // test target, which declares ProximityKit as its one dependency (A0.8.2) and whose files import no
@@ -57,7 +58,10 @@ import Testing
 
     /// ProximityKit's own package test target (ProximityKit plan step A0.8), named by a
     /// `ProximityKitTests/<Suite>` selector. Unhosted: it runs in the simulator's `xctest` agent, with
-    /// no keychain entitlement and no ProximityAudit sink, which is what ``packageHazards`` refuses.
+    /// no keychain entitlement and no app to install a ProximityAudit sink, so its test support installs
+    /// an in-memory keychain store and an audit sink of its own on first touch
+    /// (`TestSupport/PackageTestEnvironment.swift`), and ``packageHazards`` refuses what it still
+    /// cannot serve.
     static let packageTarget = "ProximityKitTests"
 
     /// Every test target a selector can name, with its repo-relative folder. A target whose folder
@@ -324,6 +328,55 @@ import Testing
     /// `ProximityKitTests/<Suite>`. A line of its own, so CI runs every suite the package holds
     /// (`Tests/suite-inventory.tsv`'s I10) and no existing line's floor or history moves. Counted
     /// off the line.
+    ///
+    /// At ProximityKit plan step A1.1.2 (2026-10-13) no count moves: one name is re-qualified in
+    /// place, `crypto-goldens`' `ProximityNamespaceSoundnessTests`, now
+    /// `ProximityKitTests/ProximityNamespaceSoundnessTests` in ProximityKit's package test target.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.4 (2026-10-13): `proximitykit` 6 → 11, for the four
+    /// epoch suites that rode no line before they moved into ProximityKit's package test target with
+    /// `MeshEpochModelTests.swift` (`MeshEpochRefTests`, `MeshEpochKeyringTests`,
+    /// `MeshEpochAcceptanceTests`, `MeshFrameReplayWindowTests`) and the new
+    /// `PackageTestSupportTests`, which holds the package tests' namespace sound and their file locator
+    /// to the package's own folder, each named `ProximityKitTests/<Suite>`; and one name is re-qualified
+    /// in place, `mesh-batteries`' `MeshSessionIDClaimTests`, now
+    /// `ProximityKitTests/MeshSessionIDClaimTests`, so that count stays. Counted off the lines.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.5 (2026-10-14): `proximitykit` 11 → 12, for the new
+    /// `PackageKeychainStoreTests`, the canary of the package tests' in-memory keychain store (the
+    /// funnel resolves it, and ProximityKit's identity and seal keys provision, read back, defer and
+    /// wipe through it), named `ProximityKitTests/PackageKeychainStoreTests`. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.6 (2026-10-14): `proximitykit` 12 → 13, for the new
+    /// `PackageTestHostTests`, the canary of the package tests' host double and audit sink (the bundle's
+    /// sink delivers each line to the captures scoped to it, `PackageTestHost` keeps its root and its
+    /// keychain services to itself and states every requirement itself, and a mesh manager built over it
+    /// provisions its identity into the in-memory keychain unhosted), named
+    /// `ProximityKitTests/PackageTestHostTests`. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.7 (2026-10-14): `proximitykit` 13 → 14, for
+    /// `ProximityNamespaceBoundaryTests`, the namespace wall, which joins ProximityKit's package tests and
+    /// reads ProximityKit's sources and manifest through `PackageRoot`, named
+    /// `ProximityKitTests/ProximityNamespaceBoundaryTests`; and `s3-grep` stays 11: the wall leaves that
+    /// line and `SwiftSourceLexerTests`, which holds Fernlet's copy of the walls' lexer to the wall's
+    /// lexer fixtures, joins it. Counted off the lines.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.8 (2026-10-14): `proximitykit` 14 → 15, for
+    /// `ProximityPlatformNeutralityTests`, the platform wall's rules over ProximityKit's own code (its
+    /// imports and platform branches, device-name reads, platform directories and host-fact defaults,
+    /// its two channel-ready doors and `NIRangingSession`'s one home), which leave
+    /// `ProximityPlatformBoundaryTests` for ProximityKit's package tests and read ProximityKit's sources
+    /// through `PackageRoot`, named `ProximityKitTests/ProximityPlatformNeutralityTests`; and `s3-grep`
+    /// stays 11: `ProximityPlatformBoundaryTests` keeps its place there with Fernlet's half (presence's
+    /// heart door and the Mac build). Counted off the lines.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.10 (2026-10-14): `proximitykit` 15 → 17, for
+    /// `ProximityKeychainDoorTests`, the keychain door's wall over ProximityKit's own sources and package
+    /// tests (the door declared once, in the funnel's `#if DEBUG` branch, whose text it pins, and named by
+    /// the package tests' installer alone), which travels with the package, and
+    /// `ProximityPresenceSessionTests`, the presence engine's contract over an in-memory radio, each named
+    /// `ProximityKitTests/<Suite>`; and `mesh-batteries` 154 → 155, for `MeshSessionStoreIsolationTests`,
+    /// the session store's scope-isolation grep-wall, which rode no line. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -339,9 +392,9 @@ import Testing
         "messages-envelope": 5,
         "recipe-wire": 1,
         "food-search": 13,
-        "mesh-batteries": 154,
+        "mesh-batteries": 155,
         "mesh-features": 48,
-        "proximitykit": 6
+        "proximitykit": 17
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -350,10 +403,17 @@ import Testing
     /// swapped for another (the count stays one), and not a line whose last name was deleted: with
     /// no suite left, `gatedSteps` no longer parses it as a step, so nothing counts it at all. Every
     /// suite here is a wall with no compiler half — the `MeshRoutedDrainWallTests` argument — so its
-    /// line leaving, or it leaving its line, must red rather than go quiet.
+    /// line leaving, or it leaving its line, must red rather than go quiet. Since ProximityKit plan step
+    /// A1.1.7 the namespace wall is pinned on `proximitykit`, its line in ProximityKit's package tests,
+    /// and `SwiftSourceLexerTests` on `s3-grep` in its place: the fixtures of the lexer every Fernlet
+    /// source wall reads code through, which the namespace wall held until it moved. Since A1.1.8 the
+    /// platform wall's rules over ProximityKit's own code, `ProximityPlatformNeutralityTests`, are pinned
+    /// on `proximitykit` too, and `ProximityPlatformBoundaryTests` stays pinned on `s3-grep` with
+    /// Fernlet's half. Since A1.1.10 the keychain door's wall over ProximityKit's own code and tests,
+    /// `ProximityKeychainDoorTests`, is pinned on `proximitykit` as well.
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
-                    "ProximityNamespaceBoundaryTests", "ProximityPlatformBoundaryTests"],
+                    "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
@@ -377,7 +437,9 @@ import Testing
                         "TypicalPortionTableTests", "RecipePortionPickerTests", "FoodSearchCorrectionMemoryTests",
                         "FoodSearchCorrectionCatalogTests", "FoodSearchCorrectionWipeTests",
                         "FoodSearchCorrectionResolverFirewallTests"],
-        "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"]
+        "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"],
+        "proximitykit": ["ProximityNamespaceBoundaryTests", "ProximityPlatformNeutralityTests",
+                         "ProximityKeychainDoorTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -717,6 +779,12 @@ import Testing
         // one that reds with no simulator at all when a name leaves the workflow.
         #expect(gated.contains("MeshRoutedStoreIsolationTests"),
                 "the routed store's scope-isolation grep-wall is gated")
+        // Its session twin joins it on the same argument at ProximityKit plan step A1.1.10:
+        // `MeshSessionStoreIsolationTests` holds every test-tree construction of a session store to a
+        // scope of its own, never the production one (both test trees since A1.1.6), and the app's
+        // session scope to the seams already walled — uncompiled source counts that ran on no line.
+        #expect(gated.contains("MeshSessionStoreIsolationTests"),
+                "the session store's scope-isolation grep-wall is gated")
         // P9 item 9 adds the one of its seven newly-gated suites that earns a NAME pin on the
         // existing argument: `TransportNeutralityBoundaryTests` is a source grep-wall with no
         // compiler half — `import MultipeerConnectivity` confined to two files, every framework
@@ -1093,74 +1161,306 @@ import Testing
     /// (2026-10-11): 640 → 634 and 2 → 8, for the six suites that rode no line
     /// (`MeshMembershipRecordsTests.swift`'s three, `MeshRoutedDrainPlanTests`,
     /// `NearbyRangingSessionTests`, `ReplayCacheTests`), measured in the package's bundle on the new
-    /// `proximitykit` line at their FernletTests counts.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 634, "ProximityKitTests": 8]
+    /// `proximitykit` line at their FernletTests counts. MOVED at plan step A1.1.2 (2026-10-13):
+    /// 634 → 633 and 8 → 9, for `ProximityNamespaceSoundnessTests`, measured in the package's bundle
+    /// on `crypto-goldens` at its FernletTests count. MOVED at plan step A1.1.4 (2026-10-13): 633 → 628
+    /// and 9 → 15, for the five suites of `MeshEpochModelTests.swift` and `MeshSessionIDClaimTests.swift`
+    /// (the four epoch suites onto `proximitykit`, `MeshSessionIDClaimTests` still on `mesh-batteries`),
+    /// measured in the package's bundle at their FernletTests counts, and the package's NEW
+    /// `PackageTestSupportTests`, measured on `proximitykit`. RAISED at A1.1.5 (2026-10-14): 15 → 16,
+    /// for the package's NEW `PackageKeychainStoreTests`, measured on `proximitykit`; FernletTests stays
+    /// 628. RAISED at A1.1.6 (2026-10-14): 16 → 17, for the package's NEW `PackageTestHostTests`, measured
+    /// on `proximitykit`; FernletTests stays 628. MOVED at A1.1.7 (2026-10-14): 628 → 627 and 17 → 18, for
+    /// `ProximityNamespaceBoundaryTests`, measured in the package's bundle on `proximitykit` at its
+    /// FernletTests count, and FernletTests 627 → 628 again for its NEW `SwiftSourceLexerTests`, measured
+    /// on `s3-grep`: FernletTests stays 628. RAISED at A1.1.8 (2026-10-14): 18 → 19, for the package's NEW
+    /// `ProximityPlatformNeutralityTests`, the platform wall's rules over ProximityKit's own code, measured
+    /// on `proximitykit`; FernletTests stays 628, since `ProximityPlatformBoundaryTests` keeps its row with
+    /// Fernlet's half. RAISED at A1.1.10 (2026-10-14): 19 → 21, for the package's NEW
+    /// `ProximityKeychainDoorTests` and `ProximityPresenceSessionTests`, measured on `proximitykit`;
+    /// FernletTests stays 628 (`MeshSessionStoreIsolationTests` keeps its row and joins `mesh-batteries`).
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 21]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
     /// `PeerHandleIdentityTests` 5 + `FakePeerTransportTests` 10, each its count in FernletTests; 59
     /// at A0.8.3 (2026-10-11): 15 + `MeshDerivedRosterTests` 9 + `MeshMembershipMergeTests` 6 +
     /// `MeshMembershipBoundsTests` 9 + `MeshRoutedDrainPlanTests` 10 + `NearbyRangingSessionTests` 9 +
-    /// `ReplayCacheTests` 1, each its count in FernletTests.
-    static let measuredPackageCells = 59
+    /// `ReplayCacheTests` 1, each its count in FernletTests. MOVED at A1.1.2 (2026-10-13): 102 = 59 +
+    /// `ProximityNamespaceSoundnessTests` 43, its count in FernletTests. MOVED at A1.1.4 (2026-10-13):
+    /// 140 = 102 + `MeshEpochRefTests` 10 + `MeshEpochKeyringTests` 5 + `MeshEpochAcceptanceTests` 4 +
+    /// `MeshFrameReplayWindowTests` 10 + `MeshSessionIDClaimTests` 7, each its count in FernletTests, +
+    /// the NEW `PackageTestSupportTests` 2. RAISED at A1.1.5 (2026-10-14): 146 = 140 + the NEW
+    /// `PackageKeychainStoreTests` 6. RAISED at A1.1.6 (2026-10-14): 150 = 146 + the NEW
+    /// `PackageTestHostTests` 4. MOVED at A1.1.7 (2026-10-14): 162 = 150 +
+    /// `ProximityNamespaceBoundaryTests` 12, its count in FernletTests. RAISED at A1.1.8 (2026-10-14):
+    /// 167 = 162 + the NEW `ProximityPlatformNeutralityTests` 5: the platform wall's W1 to W4, and W5 over
+    /// ProximityKit's two doors, which leave `ProximityPlatformBoundaryTests` (it keeps W5's presence
+    /// door, now a cell of its own, and W6). RAISED at A1.1.10 (2026-10-14): 173 = 167 + the NEW
+    /// `ProximityKeychainDoorTests` 1 (the keychain door's wall, which leaves `KeyCustodyBoundaryTests`'
+    /// door cell for the package, where it travels) + the NEW `ProximityPresenceSessionTests` 5 (the
+    /// presence engine's own cells).
+    static let measuredPackageCells = 173
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
     /// `FernletKit/Tests/ProximityKitTests`, whether or not a target compiles the folder yet
-    /// (``packageHazardNeedles(onLine:)``). The keychain needles name the keychain calls themselves
-    /// (`SecItem`, `KeychainItem`), the statics known to call one directly, and the types whose
-    /// construction or statics reach one; since plan step A0.8.5 each such type by its bare name, so
-    /// `Type(`, `Type.init(`, `let x: Type = .init(` and its statics are all held, the two seal keys'
-    /// `wipe(service:)` among them. It is a needle list, not a call-graph closure: a path it misses
-    /// fails with -34018 on the simulator gate only where the failure surfaces, and a delete through
-    /// `ProximityKeychainItem.deleteAll` audits its failure to a sink this bundle lacks, so it passes
-    /// silently. The location needles are every platform directory
-    /// `ProximityPlatformBoundaryTests.directoryNeedles` names but the temporary ones, which are
-    /// scratch a test may use, and the process-shared defaults and main bundle (A0.8.5; Documents,
-    /// Caches, the home folder and a defaults suite were missing before).
+    /// (``packageHazardNeedles(onLine:)``), but for ``packageIdentifierStartNeedles``, read only where an
+    /// identifier starts. The keychain needles name the keychain calls themselves (`SecItem`,
+    /// `KeychainItem`), the statics known to call one directly, and the types whose construction or
+    /// statics reach one; since plan step A0.8.5 each such type by its bare name, so `Type(`,
+    /// `Type.init(`, `let x: Type = .init(` and its statics are all held, the two seal keys'
+    /// `wipe(service:)` among them (``packageKeychainNeedles``). Since plan step A1.1.5 the bundle has a
+    /// keychain, an in-memory store its installer (`TestSupport/PackageTestEnvironment.swift`) puts
+    /// behind ProximityKit's keychain funnel on first touch, so what the keychain needles hold is a call
+    /// made before anything touched it, which reaches the system keychain instead. Since A1.1.10 a
+    /// keychain needle stands only in a file on ``packageKeychainFiles`` (or on a
+    /// ``packageHazardAllowlist`` row), each listed file held to the structure its kind names, which keeps
+    /// its every keychain line behind a read of the installer (``packageKeychainFileProblems(_:source:)``);
+    /// and a raw `SecItem` call stands in no file, listed or not, since it bypasses the funnel the store
+    /// answers. It is a needle list, not a call-graph closure: a path it misses fails with -34018 on the
+    /// simulator gate only where the failure surfaces, and a delete through
+    /// `ProximityKeychainItem.deleteAll` only audits its failure, which no cell sees unless it captures
+    /// that line, so it passes silently. Since plan step A1.1.6
+    /// there is no audit needle: the bundle installs its own sink (`PackageTestEnvironment.audit`), every
+    /// `PackageAuditCapture` registers with it as it is built, so no capture reads before the sink is
+    /// installed, and `ProximityAuditBridgeTests` holds every install of a sink to that file and the
+    /// app's `FernletApp.swift`. The location
+    /// needles are every platform directory `ProximityPlatformBoundaryTests.directoryNeedles` names but
+    /// the temporary ones, which are scratch a test may use, and the process-shared defaults and main
+    /// bundle (A0.8.5; Documents, Caches, the home folder and a defaults suite were missing before).
+    /// That list is the one the package's platform wall holds ProximityKit's code to, its copy held
+    /// equal by ``theDirectoryNeedlesMatchTheirPackageCopy()`` (A1.1.8).
     static let packageHazards: [(needle: String, reason: String)] = {
-        let audit = """
-            the unhosted bundle installs no ProximityAuditSink, so ProximityKit's audit lines never reach \
-            a capture and a "was not logged" check passes vacuously (ProximityAudit.swift); plan step A1 \
-            installs a sink first
-            """
         let keychain = """
-            the unhosted bundle gets errSecMissingEntitlement (-34018) on the simulator, and on a Mac the \
-            call would reach the developer's own data-protection keychain; plan step A1 answers the \
-            keychain first
+            the bundle's keychain is the in-memory store PackageTestEnvironment installs on first touch, \
+            and a call made before anything touched it reaches the system keychain: on the simulator it \
+            answers every call errSecMissingEntitlement (-34018), and on a Mac a package test must not reach \
+            it whatever it answers (Apple's TN3137 gives -34018 for a process without keychain \
+            entitlements). A line that reaches the keychain stands only in a file on packageKeychainFiles, \
+            whose kind keeps it behind a read of PackageTestEnvironment.keychain, and a raw SecItem call \
+            stands nowhere
             """
         let stores = """
-            the store isolation walls scan only Tests/FernletTests (their #filePath folders); until plan \
-            step A1 widens or moves them, a construction here would escape them
+            a store seals its files under a seal key it reads from the keychain, so it needs an allowlist \
+            row whose invariant says what reads PackageTestEnvironment.keychain first, and writes them \
+            under its scope's directory, which the store isolation walls hold to a scope of the test's \
+            own, never the production one (they read this folder too since plan step A1.1.6)
             """
         let location = "a production or process-shared location; on an unsandboxed Mac, the developer's own"
         let repo = """
-            the package has no file locator whose markers hold in both repositories until plan step A1, \
-            and a relative path read from the unhosted agent has no defined base
+            a package test reads a file through PackageRoot (TestSupport/PackageRoot.swift), whose markers \
+            hold in both repositories, by a path relative to the package root: RepoRoot and this \
+            repository's paths do not travel with the package, a path computed from a source file's \
+            own location breaks when a layout moves, and a relative path read from the unhosted agent \
+            has no defined base
             """
-        let keychainNeedles = ["SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService",
-                               "DeviceBindingID", "StoragePreferences", "ColumnCrypto", "ProtectedSidecar",
-                               ".forSeal(", ".forOpen(", "wipeForDeleteAll(", "MeshSessionSealKey",
-                               "MeshRoutedSealKey", "MeshNetworkManager", "ProximityPairSession",
-                               "ProximityCoordinator"]
         let storeNeedles = ["MeshRoutedStore", "MeshSessionStore", ".production("]
         let scratch: Set<String> = ["temporaryDirectory", "NSTemporaryDirectory"]
         let locationNeedles = ProximityPlatformBoundaryTests.directoryNeedles.map(\.token)
             .filter { !scratch.contains($0) } + ["UserDefaults", "Bundle.main"]
         let repoNeedles = ["RepoRoot", "#filePath", "\"App/", "\"Docs/", "\"Tests/", "\".github/",
                            "\"FernletKit/", "\"Scripts/"]
-        return [(needle: "addCaptureHandler", reason: audit)]
-            + keychainNeedles.map { (needle: $0, reason: keychain) }
+        return packageKeychainNeedles.map { (needle: $0, reason: keychain) }
             + storeNeedles.map { (needle: $0, reason: stores) }
             + locationNeedles.map { (needle: $0, reason: location) }
             + repoNeedles.map { (needle: $0, reason: repo) }
     }()
 
+    /// The keychain needles of ``packageHazards`` (rule I9): the keychain calls themselves, the statics
+    /// known to call one directly, and the types whose construction or statics reach one.
+    static let packageKeychainNeedles = [
+        "SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService", "DeviceBindingID", "StoragePreferences",
+        "ColumnCrypto", "ProtectedSidecar", ".forSeal(", ".forOpen(", "wipeForDeleteAll(", "MeshSessionSealKey",
+        "MeshRoutedSealKey", "MeshNetworkManager", "ProximityPairSession", "ProximityCoordinator"
+    ]
+
+    /// The needles rule I9 reads only where an identifier starts (ProximityKit plan step A1.1.10):
+    /// `SecItem`, so a Security status that holds it inside its own name (`errSecItemNotFound`) is no
+    /// keychain call, while every raw `SecItem…` call is one. It stands in no package file, a file on
+    /// ``packageKeychainFiles`` included: a raw call bypasses ProximityKit's keychain funnel, so the
+    /// bundle's in-memory store never answers it.
+    static let packageIdentifierStartNeedles: Set<String> = ["SecItem"]
+
+    /// How a file on ``packageKeychainFiles`` keeps every one of its keychain lines behind a read of
+    /// `PackageTestEnvironment.keychain` (rule I9): each kind is a structure
+    /// ``packageKeychainFileProblems(_:source:)`` checks, so a file that loses it fails.
+    enum PackageKeychainFileKind: Equatable {
+        /// A suite file: every keychain line sits in a `@Suite` type whose first stored property reads
+        /// a ready marker (``packageKeychainReadyMarkers``), which Swift Testing evaluates as it builds
+        /// the suite instance for each cell, before the cell runs; and the file runs nothing without an
+        /// instance: no static or free test, no test arguments or traits on a test or a suite, no static
+        /// or global stored property with an initializer, and no keychain line in a static member that
+        /// is not `private`.
+        case suite
+        /// The installer: every keychain line sits in the initializer of its `static let keychain`,
+        /// which is the read.
+        case installer
+        /// A support type's file: every keychain line sits in an instance member of the named type,
+        /// never in a static member or a stored property's initializer, and every initializer of the
+        /// type reads `PackageTestEnvironment.keychain` in its first statement.
+        case readsFirst(type: String)
+    }
+
+    /// One file a keychain needle may stand in (rule I9): the repo-relative file, the structure that keeps
+    /// its keychain lines behind the installer, and the invariant a reviewer checks the file against.
+    struct PackageKeychainFile {
+        /// The repo-relative file.
+        let file: String
+        /// The structure it keeps.
+        let kind: PackageKeychainFileKind
+        /// Why its keychain lines reach the in-memory store, never the system keychain.
+        let invariant: String
+    }
+
+    /// What a ``PackageKeychainFileKind/suite`` file's first stored property reads (rule I9): the
+    /// installer itself, or a package test host, whose initializer reads it first.
+    static let packageKeychainReadyMarkers = ["PackageTestEnvironment.keychain", "PackageTestHost("]
+
+    /// The invariant every ``PackageKeychainFileKind/suite`` file keeps (rule I9).
+    static let packageKeychainSuiteInvariant = """
+        every keychain line of the file sits in a @Suite type whose first stored property reads \
+        PackageTestEnvironment.keychain, or builds a PackageTestHost, whose initializer reads it first, and \
+        Swift Testing evaluates that property as it builds the suite instance for each cell, before the cell \
+        runs; and nothing in the file runs without an instance (no static or free test, no test arguments or \
+        traits, no static or global stored property with an initializer, no keychain line in a static member \
+        another file could call): the installer has put the in-memory store behind ProximityKit's keychain \
+        funnel before the line runs, so a call on it reaches the store, never the system keychain
+        """
+
+    /// The files a keychain needle may stand in (rule I9, ProximityKit plan step A1.1.10): one row per
+    /// file, each with the structure its kind names, which the rule checks, and the rule fails a listed
+    /// file that is gone or holds no keychain line. They replace the per-line rows the installer, the
+    /// keychain canary, the host double and its canary stood on (31 at A1.1.8), which a renamed local
+    /// broke and whose "only its cells call" half nothing checked.
+    static let packageKeychainFiles: [PackageKeychainFile] = [
+        PackageKeychainFile(
+            file: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift", kind: .installer,
+            invariant: """
+                the bundle's installer: its one keychain line installs the in-memory store it has just built as \
+                ProximityKit's keychain backend, inside the initializer of `static let keychain`, which the \
+                runtime runs once, as PackageTestEnvironment.keychain is first read, and makes no keychain call \
+                itself, so every keychain call after it reaches the store
+                """),
+        PackageKeychainFile(
+            file: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestHost.swift",
+            kind: .readsFirst(type: "PackageTestHost"),
+            invariant: """
+                every initializer of PackageTestHost reads PackageTestEnvironment.keychain first and every \
+                keychain line of the file sits in one of its instance members, so none runs before a host \
+                exists and the in-memory store is ProximityKit's keychain backend: the identity the host builds \
+                on its own .test. service reaches the store, never the system keychain; \
+                IdentityService.fingerprint(of:) is a pure function of a key's bytes, and a declaration only \
+                names the type
+                """),
+        PackageKeychainFile(
+            file: "FernletKit/Tests/ProximityKitTests/PackageKeychainStoreTests.swift", kind: .suite,
+            invariant: packageKeychainSuiteInvariant),
+        PackageKeychainFile(
+            file: "FernletKit/Tests/ProximityKitTests/PackageTestHostTests.swift", kind: .suite,
+            invariant: packageKeychainSuiteInvariant)
+    ]
+
+    /// The namespace wall (rule I9, ProximityKit plan step A1.1.7), whose lines that spell a keychain
+    /// needle as data ``packageHazardAllowlist`` lists under ``packageNamespaceWallInvariant``.
+    static let packageNamespaceWallFile = "FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift"
+
+    /// What makes every line of ``packageNamespaceWallLines`` safe in the unhosted bundle.
+    static let packageNamespaceWallInvariant = """
+        the line is data the namespace wall reads as text and never runs: string literals holding a line \
+        of ProximityKit-shaped source, which the wall lexes and holds a matcher to missing (a neighbour of \
+        rule 4's domain-type matcher or of rule 6's moved-type matcher), or the names of types rule 6's \
+        matcher must find declared in ProximityKit's sources (its floor); nothing on it names, builds or \
+        calls a type in code, so it reaches no keychain
+        """
+
+    /// The namespace wall's lines that spell a keychain needle inside a literal, each exact as trimmed
+    /// (rule I9).
+    static let packageNamespaceWallLines = [
+        #""func beginSession(role: ProximityCoordinator.Role, mode: ProximityCoordinator.Mode, localFingerprint: String)","#,
+        #""public final class ProximityCoordinator {","#,
+        #""IdentityService", "ProximityHost", "ProximityPrekeyBundle", "PresenceAdvertisement", "ProtectedSidecar""#
+    ]
+
+    /// The package's platform wall (rule I9, ProximityKit plan step A1.1.8), whose lines that spell a
+    /// keychain or location needle as data ``packageHazardAllowlist`` lists under
+    /// ``packagePlatformWallInvariant``.
+    static let packagePlatformWallFile = "FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift"
+
+    /// What makes every line of ``packagePlatformWallLines`` safe in the unhosted bundle.
+    static let packagePlatformWallInvariant = """
+        the needle stands only inside a literal the platform wall reads as text and never runs: a \
+        needle's spelling that its third rule matches in ProximityKit's lexed code (a Foundation API for a \
+        platform directory), a line of ProximityKit-shaped source its token readers are fixtured on, a \
+        failure message, or the package-relative path of a ProximityKit file a seam row or a \
+        channel-ready door names, which the wall reads as text through PackageRoot; the code around it \
+        only builds needles, rows and doors and lexes or matches text, so the line reaches no keychain \
+        and reads, writes and creates nothing at any location
+        """
+
+    /// The platform wall's lines that spell a keychain or location needle inside a literal, each exact
+    /// as trimmed (rule I9).
+    static let packagePlatformWallLines = [
+        #"SeamRow(path: "HeartSharing/ProtectedSidecar.swift", module: "UIKit","#,
+        #".identifier("applicationSupportDirectory"), .identifier("documentDirectory"),"#,
+        #".identifier("documentsDirectory"), .identifier("cachesDirectory"), .identifier("libraryDirectory"),"#,
+        #".identifier("temporaryDirectory"), .identifier("NSTemporaryDirectory"), .identifier("NSHomeDirectory"),"#,
+        #".identifier("NSHomeDirectoryForUser"), .identifier("homeDirectory"), .identifier("homeDirectoryForCurrentUser"),"#,
+        #".identifier("NSSearchPathForDirectoriesInDomains"), .identifier("downloadsDirectory"),"#,
+        #".identifier("desktopDirectory"), .identifier("sharedPublicDirectory"), .identifier("applicationDirectory"),"#,
+        #".identifier("userDirectory"), .identifier("moviesDirectory"), .identifier("musicDirectory"),"#,
+        #".identifier("picturesDirectory"), .identifier("trashDirectory"), .identifier("currentDirectory"),"#,
+        #".identifier("currentDirectoryPath"), .identifier("containerURL"),"#,
+        #"let lookup = lexedCode("_ = FileManager.default.urls(for: .cachesDirectory, in: mask)\n")"#,
+        #"#expect(try mentions(of: .call("url", label: "for"), in: lookup) == 0, "urls(for: read as url(for:")"#,
+        #"#expect(try mentions(of: .call("URL", label: "for"), in: lookup) == 0, "urls(for: read as URL(for:")"#,
+        #"#expect(try mentions(of: .call("urls", label: "for"), in: lookup) == 1, "urls(for: was not read")"#,
+        #"let ubiquity = lexedCode("_ = FileManager.default.url(forUbiquityContainerIdentifier: nil)\n")"#,
+        #""url(forUbiquityContainerIdentifier: read as url(for:")"#,
+        #"Door(path: "Sources/ProximityKit/Mesh/MeshNetworkManager.swift","#,
+        #"Door(path: "Sources/ProximityKit/PairSession/ProximityPairSession.swift","#
+    ]
+
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
-    /// the line's exact trimmed text, and the invariant that makes it safe. A row whose line is gone
-    /// is a failure, so the list only shrinks. Empty: no code line of the package's files stands on a
-    /// needle (plan steps A0.8.2 and A0.8.3).
-    static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = []
+    /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
+    /// an invariant a reviewer can check against the line it names, and a row whose line is gone or
+    /// changed is a failure, so no row outlives the line it excuses. Empty at plan steps A0.8.2 and
+    /// A0.8.3; one row at A1.1.2 (2026-10-13), the soundness suite's storage cell, which reads
+    /// `URL.applicationSupportDirectory` as a value; two since A1.1.4 (2026-10-13), with the package's
+    /// file locator's one read of its own source's path, from which it walks up to the package root;
+    /// 26 since A1.1.5 (2026-10-14), with the installer's one line, which installs the in-memory keychain
+    /// store, and the 23 distinct lines of the keychain canary (`packageKeychainCanaryLines`), which
+    /// share one invariant; 33 since A1.1.6 (2026-10-14), with the host double's three identity lines
+    /// (`packageTestHostLines`) and its canary's four (`packageTestHostCanaryLines`), each set under
+    /// one invariant; 36 since A1.1.7 (2026-10-14), with the namespace wall's three lines that spell a
+    /// keychain needle inside a literal (``packageNamespaceWallLines``), under one invariant; 54 since
+    /// A1.1.8 (2026-10-14), with the package platform wall's 18 lines that spell a keychain or location
+    /// needle inside a literal (``packagePlatformWallLines``: its directory needles, its token readers'
+    /// fixtures and messages, a seam row's file and its two doors' files), under one invariant; 23 since
+    /// A1.1.10 (2026-10-14), when the per-file rule (``packageKeychainFiles``) replaced the 31 rows of the
+    /// files that reach the keychain: the installer's one line, the keychain canary's 23, the host
+    /// double's three and its canary's four. The rows left spell a needle the per-file rule does not
+    /// cover: a location, the locator's own source path, and the walls' keychain needles inside literals.
+    static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
+        (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
+         line: "for base in [URL.applicationSupportDirectory, scratch] {",
+         invariant: """
+            anInstallationsFolderIsItsNameUnderTheBaseItsHostPicks builds a URL value under each base \
+            with Storage.directory(under:) and compares it; nothing is read, written or created there
+            """),
+        (file: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageRoot.swift",
+         line: "let origin = URL(fileURLWithPath: #filePath)",
+         invariant: """
+            PackageRoot only locates the package root: from its own source's path it walks up to the \
+            first folder holding Package.swift and Sources/ProximityKit, reading, writing and creating \
+            nothing; a package suite reads only Package.swift, Sources/ProximityKit/** and Tests/** \
+            under that root, by a path relative to it
+            """)
+    ] + packageNamespaceWallLines.map {
+        (file: packageNamespaceWallFile, line: $0, invariant: packageNamespaceWallInvariant)
+    } + packagePlatformWallLines.map {
+        (file: packagePlatformWallFile, line: $0, invariant: packagePlatformWallInvariant)
+    }
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has five
@@ -1409,23 +1709,37 @@ import Testing
     }
 
     /// I9: no package file's code line (trimmed text not starting `//`) holds a ``packageHazards``
-    /// needle, except a ``packageHazardAllowlist`` row's exact line; and every allowlist row still
-    /// matches a line. Reads the package folder whether or not a target compiles it yet.
+    /// needle, except a ``packageHazardAllowlist`` row's exact line and a keychain needle in a file on
+    /// ``packageKeychainFiles`` that keeps its kind's structure (``packageKeychainFileProblems(_:source:)``);
+    /// a ``packageIdentifierStartNeedles`` needle (a raw `SecItem` call) stands in no file, listed or not;
+    /// every allowlist row still matches a line; and every listed file still exists. Reads the package
+    /// folder whether or not a target compiles it yet.
     private static func packageHazardProblems() throws -> [String] {
         var problems: [String] = []
         var allowed: Set<Int> = []
+        let files = PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url)
+        // R2: bounded by the listed files.
+        for listed in packageKeychainFiles where !files.contains(listed.file) {
+            problems.append("I9: \(listed.file), a file on packageKeychainFiles, is gone; delete its row with its invariant (\(listed.invariant))")
+        }
         // R2: bounded by the package's file count × each file's line count × the needle list.
-        for file in PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url) {
-            for line in try RepoRoot.source(file).components(separatedBy: "\n") {
+        for file in files {
+            let source = try RepoRoot.source(file)
+            let listed = packageKeychainFiles.first { $0.file == file }
+            for line in source.components(separatedBy: "\n") {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 guard !trimmed.hasPrefix("//") else { continue }
                 if let row = packageHazardAllowlist.firstIndex(where: { $0.file == file && $0.line == trimmed }) {
                     allowed.insert(row)
                     continue
                 }
-                for hazard in packageHazardNeedles(onLine: trimmed) {
+                for hazard in packageHazardNeedles(onLine: trimmed)
+                where listed == nil || !isListedKeychainNeedle(hazard.needle) {
                     problems.append("I9: \(file): `\(trimmed)` holds `\(hazard.needle)`: \(hazard.reason)")
                 }
+            }
+            if let listed {
+                problems += packageKeychainFileProblems(listed, source: source)
             }
         }
         // R2: bounded by the allowlist.
@@ -1435,9 +1749,327 @@ import Testing
         return problems
     }
 
-    /// The ``packageHazards`` a code line's text holds, each as a substring (rule I9).
+    /// The ``packageHazards`` a code line's text holds (rule I9): each as a substring, but each of
+    /// ``packageIdentifierStartNeedles`` only where an identifier starts.
     static func packageHazardNeedles(onLine line: String) -> [(needle: String, reason: String)] {
-        packageHazards.filter { line.contains($0.needle) }
+        packageHazards.filter { hazard in
+            packageIdentifierStartNeedles.contains(hazard.needle)
+                ? startsAnIdentifier(hazard.needle, in: line) : line.contains(hazard.needle)
+        }
+    }
+
+    /// Whether `needle` occurs in `line` with no identifier character (an ASCII letter or digit, or `_`)
+    /// just before it.
+    static func startsAnIdentifier(_ needle: String, in line: String) -> Bool {
+        var rest = line[...]
+        // R2: bounded by the line's length; each pass moves past one occurrence.
+        while let found = rest.range(of: needle) {
+            let preceded = found.lowerBound > line.startIndex
+                && isIdentifierCharacter(line[line.index(before: found.lowerBound)])
+            if !preceded { return true }
+            rest = line[found.upperBound...]
+        }
+        return false
+    }
+
+    /// Whether `character` may stand inside a Swift identifier, as rule I9's readers spell one: an ASCII
+    /// letter or digit, or `_`.
+    private static func isIdentifierCharacter(_ character: Character) -> Bool {
+        character == "_" || (character.isASCII && (character.isLetter || character.isNumber))
+    }
+
+    /// Whether `needle` may stand in a file on ``packageKeychainFiles`` (rule I9): a keychain needle that
+    /// is not read only where an identifier starts, so a raw `SecItem` call stands in no file.
+    static func isListedKeychainNeedle(_ needle: String) -> Bool {
+        packageKeychainNeedles.contains(needle) && !packageIdentifierStartNeedles.contains(needle)
+    }
+
+    /// The 1-based code lines of `source` (trimmed text not starting `//`) that hold a keychain needle a
+    /// file on ``packageKeychainFiles`` may hold, an allowlist row of `file` aside (rule I9).
+    static func packageKeychainLines(in source: String, file: String) -> [Int] {
+        var lines: [Int] = []
+        // R2: bounded by the source's line count.
+        for (offset, line) in source.components(separatedBy: "\n").enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("//"),
+                  !packageHazardAllowlist.contains(where: { $0.file == file && $0.line == trimmed }) else { continue }
+            if packageHazardNeedles(onLine: trimmed).contains(where: { isListedKeychainNeedle($0.needle) }) {
+                lines.append(offset + 1)
+            }
+        }
+        return lines
+    }
+
+    // MARK: - The structure a keychain file keeps (rule I9, ProximityKit plan step A1.1.10)
+
+    /// One declaration rule I9's structure reader reads, over lexed code (`SwiftSourceLexer`: comments
+    /// dropped, literals emptied, lines kept): a type at the top level, or one direct member of a type's
+    /// body. Indices are 0-based lines.
+    struct StructureDeclaration {
+        /// Its first line: an attribute on a line of its own, or the line its keyword stands on.
+        let first: Int
+        /// The line its keyword stands on.
+        let head: Int
+        /// Its last line: where the braces its head line opens close, or its head line when it opens none.
+        let last: Int
+        /// Its keyword (`struct`, `func`, `let`, `init`, …).
+        let keyword: String
+        /// Its first line through its last, joined: attributes, modifiers, signature and body.
+        let text: String
+
+        /// Its first line through its keyword's line, joined: what its attributes and modifiers say.
+        let heading: String
+
+        /// Whether it is a static member: `static`, or `class` before `func`, `var` or `subscript`.
+        var isStatic: Bool {
+            CIGateSelectorBoundaryTests.matchLines(#"(?<![A-Za-z0-9_.])(?:static|class\s+(?:func|var|subscript))(?![A-Za-z0-9_])"#,
+                                                   in: heading).isEmpty == false
+        }
+
+        /// Whether it is `private` or `fileprivate` (`private(set)` is a setter's access, not its own).
+        var isPrivate: Bool {
+            CIGateSelectorBoundaryTests.matchLines(#"(?<![A-Za-z0-9_])(?:private|fileprivate)(?![A-Za-z0-9_(])"#,
+                                                   in: heading).isEmpty == false
+        }
+
+        /// Whether it is a stored property: a `let` or `var` with an initializer before any brace, or with
+        /// no brace at all.
+        var isStoredProperty: Bool {
+            guard keyword == "let" || keyword == "var" else { return false }
+            let beforeBrace = text.prefix { $0 != "{" }
+            return beforeBrace.contains("=") || !text.contains("{")
+        }
+    }
+
+    /// The pattern a declaration's keyword line matches over its trimmed lexed text: attributes, then
+    /// modifiers, then the keyword, captured.
+    private static let declarationKeywordPattern = #"^(?:@[A-Za-z_][A-Za-z0-9_.]*(?:\([^)]*\))?\s+)*"#
+        + #"(?:(?:public|internal|private|fileprivate|package|open|final|static|class|nonisolated|override|"#
+        + #"mutating|nonmutating|lazy|weak|unowned|convenience|required|dynamic|indirect)(?:\([A-Za-z]+\))?\s+)*"#
+        + #"(func|var|let|init|deinit|subscript|struct|class|enum|actor|protocol|extension|typealias|case)(?![A-Za-z0-9_])"#
+
+    /// The keyword a lexed line declares with, or nil for a line that declares nothing.
+    static func declarationKeyword(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard let regex = try? NSRegularExpression(pattern: declarationKeywordPattern) else { return nil }
+        let text = trimmed as NSString
+        guard let match = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: text.length)) else { return nil }
+        return text.substring(with: match.range(at: 1))
+    }
+
+    /// Whether a lexed line holds attributes and nothing else (`@MainActor`, `@Suite`).
+    private static func isAttributeOnly(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("@") && !matchLines(#"^(?:@[A-Za-z_][A-Za-z0-9_.]*(?:\([^)]*\))?\s*)+$"#, in: trimmed).isEmpty
+    }
+
+    /// Each lexed line's brace depth at its start.
+    static func braceDepths(of code: [String]) -> [Int] {
+        var depths: [Int] = []
+        var depth = 0
+        // R2: bounded by the line count.
+        for line in code {
+            depths.append(depth)
+            depth += line.filter { $0 == "{" }.count - line.filter { $0 == "}" }.count
+        }
+        return depths
+    }
+
+    /// The last line of the declaration whose keyword stands on `head`: where the first brace opened at
+    /// or after it closes, or `head` when its line opens no brace.
+    static func declarationEnd(from head: Int, in code: [String]) -> Int {
+        guard code[head].contains("{") else { return head }
+        var depth = 0
+        // R2: bounded by the lines from `head` on.
+        for index in head..<code.count {
+            depth += code[index].filter { $0 == "{" }.count - code[index].filter { $0 == "}" }.count
+            if depth <= 0 { return index }
+        }
+        return code.count - 1
+    }
+
+    /// The declarations among lexed `code`'s lines `range` that stand at brace depth `depth`, each from
+    /// its attribute lines through its end, in order.
+    static func structureDeclarations(in code: [String], range: Range<Int>, depth: Int) -> [StructureDeclaration] {
+        let depths = braceDepths(of: code)
+        var found: [StructureDeclaration] = []
+        var pending: Int?
+        // R2: bounded by the range.
+        for index in range where depths[index] == depth {
+            if isAttributeOnly(code[index]) {
+                pending = pending ?? index
+                continue
+            }
+            defer { pending = nil }
+            guard let keyword = declarationKeyword(code[index]) else { continue }
+            let first = pending ?? index
+            let last = declarationEnd(from: index, in: code)
+            found.append(StructureDeclaration(
+                first: first, head: index, last: last, keyword: keyword,
+                text: code[first...last].joined(separator: "\n"), heading: code[first...index].joined(separator: "\n")))
+        }
+        return found
+    }
+
+    /// The types lexed `code` declares at the top level, each with its name and whether a `@Suite`
+    /// attribute marks it.
+    static func topLevelTypes(in code: [String]) -> [(name: String, isSuite: Bool, declaration: StructureDeclaration)] {
+        let types: Set<String> = ["struct", "class", "enum", "actor"]
+        return structureDeclarations(in: code, range: 0..<code.count, depth: 0)
+            .filter { types.contains($0.keyword) }
+            .compactMap { type in
+                let pattern = #"(?:struct|class|enum|actor)\s+([A-Za-z_][A-Za-z0-9_]*)"#
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+                let head = code[type.head] as NSString
+                guard let match = regex.firstMatch(in: code[type.head], range: NSRange(location: 0, length: head.length)) else {
+                    return nil
+                }
+                let suite = !matchLines(#"@Suite(?![A-Za-z0-9_])"#, in: type.heading).isEmpty
+                return (name: head.substring(with: match.range(at: 1)), isSuite: suite, declaration: type)
+            }
+    }
+
+    /// The direct members of the type `type` declares in lexed `code`, in order.
+    static func structureMembers(of type: StructureDeclaration, in code: [String]) -> [StructureDeclaration] {
+        guard type.last > type.head else { return [] }
+        let depth = braceDepths(of: code)[type.head] + 1
+        return structureDeclarations(in: code, range: (type.head + 1)..<type.last, depth: depth)
+    }
+
+    /// The member among `members` whose lines hold 0-based `line`: the last one starting at or before it
+    /// (the caller holds `line` inside the type the members belong to).
+    static func owningMember(of line: Int, in members: [StructureDeclaration]) -> StructureDeclaration? {
+        members.last { $0.first <= line }
+    }
+
+    /// The 1-based lines of `code` on which `pattern` matches, or `[-1]` when it does not compile.
+    static func matchLines(_ pattern: String, in code: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [-1] }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map {
+            text.substring(to: $0.range.location).count(where: { $0 == "\n" }) + 1
+        }
+    }
+
+    /// The ways a file on ``packageKeychainFiles`` fails the structure its kind names (rule I9), read
+    /// over its lexed code: its keychain lines (``packageKeychainLines(in:file:)``) each sit where its kind
+    /// says, and it holds at least one, since a listed file with none would outlive its need.
+    static func packageKeychainFileProblems(_ listed: PackageKeychainFile, source: String) -> [String] {
+        let code = SwiftSourceLexer.lex(source).code.components(separatedBy: "\n")
+        let keychain = packageKeychainLines(in: source, file: listed.file).map { $0 - 1 }
+        var problems: [String] = keychain.isEmpty ? ["holds no keychain needle; delete its row on packageKeychainFiles"] : []
+        switch listed.kind {
+        case .suite:
+            problems += suiteKeychainProblems(code: code, source: source, keychain: keychain)
+        case .installer:
+            problems += installerKeychainProblems(code: code, keychain: keychain)
+        case .readsFirst(let type):
+            problems += readsFirstKeychainProblems(code: code, type: type, keychain: keychain)
+        }
+        return problems.map { "I9: \(listed.file) \($0)" }
+    }
+
+    /// A suite file's structure (rule I9, ``PackageKeychainFileKind/suite``), its keychain lines 0-based.
+    private static func suiteKeychainProblems(code: [String], source: String, keychain: [Int]) -> [String] {
+        var problems: [String] = []
+        let suites = topLevelTypes(in: code).filter(\.isSuite)
+        if suites.isEmpty {
+            problems.append("declares no @Suite type, so its keychain lines sit in no suite instance")
+        }
+        // R2: bounded by the file's suites.
+        for suite in suites {
+            let first = structureMembers(of: suite.declaration, in: code).first { $0.isStoredProperty && !$0.isStatic }
+            let marked = first.map { member in packageKeychainReadyMarkers.contains { member.text.contains($0) } } ?? false
+            if !marked {
+                problems.append("`\(suite.name)`'s first stored property reads none of \(packageKeychainReadyMarkers), so a cell may reach the keychain before the installer has run")
+            }
+        }
+        // R2: bounded by the file's keychain lines.
+        for line in keychain {
+            guard let suite = suites.first(where: { $0.declaration.first <= line && line <= $0.declaration.last }) else {
+                problems.append("line \(line + 1) reaches the keychain outside every @Suite type")
+                continue
+            }
+            let owner = owningMember(of: line, in: structureMembers(of: suite.declaration, in: code))
+            if let owner, owner.isStatic && !owner.isPrivate {
+                problems.append("line \(line + 1) reaches the keychain in a static member that is not private, which another file can call before any suite instance exists")
+            }
+        }
+        let lexed = code.joined(separator: "\n")
+        let staticTest = #"@Test(?![A-Za-z0-9_])(?:\s*\([^)]*\))?(?:\s+@[A-Za-z_]+(?:\([^)]*\))?)*\s+"#
+            + #"(?:(?:private|fileprivate|internal|public|nonisolated|final)\s+)*(?:static|class)\s+func"#
+        let runsAlone: [(lines: [Int], what: String)] = [
+            (matchLines(staticTest, in: lexed), "declares a static test"),
+            (freeTestLines(in: source), "declares a free test"),
+            (matchLines(#"@(?:Test|Suite)\s*\("#, in: lexed), "hands a test or a suite arguments or traits"),
+            (matchLines(#"(?<![A-Za-z0-9_])static\s+(?:let|var)\s+[A-Za-z_][A-Za-z0-9_]*\s*(?::[^={\n]*)?="#, in: lexed),
+             "declares a static stored property with an initializer"),
+            (structureDeclarations(in: code, range: 0..<code.count, depth: 0)
+                .filter { $0.keyword == "let" || $0.keyword == "var" }.map { $0.head + 1 },
+             "declares a global stored property")
+        ]
+        // R2: bounded by the five rules × their lines.
+        for rule in runsAlone {
+            for line in rule.lines {
+                problems.append("line \(line) \(rule.what), which runs without a suite instance")
+            }
+        }
+        return problems
+    }
+
+    /// The installer's structure (rule I9, ``PackageKeychainFileKind/installer``), its keychain lines
+    /// 0-based: every one inside the initializer of a `static let keychain`.
+    private static func installerKeychainProblems(code: [String], keychain: [Int]) -> [String] {
+        let reads = topLevelTypes(in: code).flatMap { structureMembers(of: $0.declaration, in: code) }
+            .filter { !matchLines(#"static\s+let\s+keychain(?![A-Za-z0-9_])"#, in: $0.heading).isEmpty }
+        guard !reads.isEmpty else { return ["declares no `static let keychain`, the read its keychain lines must sit in"] }
+        return keychain.filter { line in !reads.contains { $0.first <= line && line <= $0.last } }
+            .map { "line \($0 + 1) reaches the keychain outside the initializer of `static let keychain`" }
+    }
+
+    /// A support type's structure (rule I9, ``PackageKeychainFileKind/readsFirst(type:)``), its keychain
+    /// lines 0-based: every initializer of `type` reads `PackageTestEnvironment.keychain` in its first
+    /// statement, and every keychain line sits in an instance member of it that is no stored property.
+    private static func readsFirstKeychainProblems(code: [String], type name: String, keychain: [Int]) -> [String] {
+        guard let type = topLevelTypes(in: code).first(where: { $0.name == name }) else {
+            return ["declares no `\(name)`, the type its keychain lines must sit in"]
+        }
+        var problems: [String] = []
+        let members = structureMembers(of: type.declaration, in: code)
+        let inits = members.filter { $0.keyword == "init" }
+        if inits.isEmpty {
+            problems.append("`\(name)` declares no initializer, so nothing reads PackageTestEnvironment.keychain before its members")
+        }
+        // R2: bounded by the type's initializers.
+        for initializer in inits where !firstStatement(of: initializer, in: code).contains("PackageTestEnvironment.keychain") {
+            problems.append("`\(name)`'s initializer on line \(initializer.head + 1) does not read PackageTestEnvironment.keychain in its first statement")
+        }
+        // R2: bounded by the file's keychain lines.
+        for line in keychain {
+            guard type.declaration.first <= line && line <= type.declaration.last,
+                  let owner = owningMember(of: line, in: members) else {
+                problems.append("line \(line + 1) reaches the keychain outside every member of `\(name)`")
+                continue
+            }
+            if owner.isStatic || owner.isStoredProperty {
+                problems.append("line \(line + 1) reaches the keychain in a static member or a stored property's initializer of `\(name)`, which runs before or without its initializer")
+            }
+        }
+        return problems
+    }
+
+    /// The first statement of the body `declaration` opens, trimmed: the code after its first brace on
+    /// that line, or else the next line that holds code; empty when it opens no body.
+    static func firstStatement(of declaration: StructureDeclaration, in code: [String]) -> String {
+        // R2: bounded by the declaration's lines.
+        for index in declaration.head...declaration.last {
+            guard let brace = code[index].firstIndex(of: "{") else { continue }
+            let rest = code[index][code[index].index(after: brace)...].trimmingCharacters(in: .whitespaces)
+            if !rest.isEmpty { return rest }
+            let next = code[(index + 1)..<(declaration.last + 1)].first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            return next?.trimmingCharacters(in: .whitespaces) ?? ""
+        }
+        return ""
     }
 
     /// The modules a package file may import (rule I11, ProximityKit plan step A0.8.5): ProximityKit,
@@ -1452,31 +2084,50 @@ import Testing
         "ProximityKit", "Foundation", "Testing", "Combine", "simd", "Synchronization"
     ]
 
-    /// I11: every module a package file imports is in ``packageImportAllowlist``.
+    /// The one package file that may also import ``packageSecurityImports`` (rule I11, ProximityKit plan
+    /// step A1.1.5; keyed to its exact path since A1.1.10): the package tests' in-memory keychain store,
+    /// which answers ProximityKit's keychain funnel by the Security keys of the query dictionaries it is
+    /// handed (`kSecClass`, `kSecAttrService`, `kSecMatchLimit`, …) and with Security's statuses. A store
+    /// renamed or moved fails I11 rather than taking the allowance with it.
+    static let packageSecurityImportFile = "FernletKit/Tests/ProximityKitTests/TestSupport/PackageKeychainStore.swift"
+
+    /// The modules ``packageSecurityImportFile`` may import besides ``packageImportAllowlist`` (rule
+    /// I11): Security, a system module, so it travels with the package; held to that one file, so a suite
+    /// or any other support file reads the keychain through ProximityKit and the store and never spells a
+    /// keychain query of its own.
+    static let packageSecurityImports: Set<String> = ["Security"]
+
+    /// I11: every module a package file imports (``importedModules(in:)``, read over its code) is in
+    /// ``packageImportAllowlist``, or, for ``packageSecurityImportFile``, in ``packageSecurityImports``.
     private static func packageImportProblems() throws -> [String] {
         var problems: [String] = []
         // R2: bounded by the package's file count × each file's imports.
         for file in PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url) {
-            for module in importedModules(in: try RepoRoot.source(file)) where !packageImportAllowlist.contains(module) {
-                problems.append("I11: \(file) imports `\(module)`, which does not travel with ProximityKit's tests: \(packageImportAllowlist.sorted()) may be imported")
+            let allowed = file == packageSecurityImportFile
+                ? packageImportAllowlist.union(packageSecurityImports) : packageImportAllowlist
+            for module in importedModules(in: try RepoRoot.source(file)) where !allowed.contains(module) {
+                problems.append("I11: \(file) imports `\(module)`; a file there may import only \(allowed.sorted()) (a Fernlet module does not travel with ProximityKit's tests, and Security is the keychain store's alone)")
             }
         }
         return problems
     }
 
     /// The modules a Swift source imports, in order: the first path component after `import` on every
-    /// line whose trimmed text is not a `//` comment, past leading attributes (`@testable`,
-    /// `@preconcurrency`), an access level (`internal import X`) and an import kind
-    /// (`import struct X.Y`).
+    /// line of its code, past leading attributes (`@testable`, `@preconcurrency`), an access level
+    /// (`internal import X`) and an import kind (`import struct X.Y`), the words split on any whitespace
+    /// (a tab included, since ProximityKit plan step A1.1.10). The source is read as
+    /// `SwiftSourceLexer` reads it, comments dropped and literals emptied (since ProximityKit plan step
+    /// A1.1.8), so neither a commented-out import nor a line of a literal is one: the package's platform
+    /// wall fixtures its module reader on literals that spell `import UIKit`, which only a reader of the
+    /// file's text, not of its code, would take for this file's own.
     static func importedModules(in source: String) -> [String] {
         let levels: Set<String> = ["public", "package", "internal", "fileprivate", "private", "open"]
         let kinds: Set<String> = ["struct", "class", "enum", "protocol", "typealias", "func", "var", "let", "actor"]
         var modules: [String] = []
         // R2: bounded by the source's line count.
-        for line in source.components(separatedBy: "\n") {
+        for line in SwiftSourceLexer.lex(source).code.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.hasPrefix("//") else { continue }
-            var tokens = ArraySlice(trimmed.split(separator: " ").map(String.init))
+            var tokens = ArraySlice(trimmed.split(whereSeparator: \.isWhitespace).map(String.init))
             tokens = tokens.drop { $0.hasPrefix("@") }
             if let first = tokens.first, levels.contains(first) { tokens = tokens.dropFirst() }
             guard tokens.first == "import" else { continue }
@@ -1625,30 +2276,181 @@ import Testing
     /// and since A0.8.3 the ranging mock (`MockRangingProvider`), which `NearbyRangingSessionTests`
     /// uses in the package and 29 FernletTests files use, and the membership fixtures
     /// (`MeshMembershipFixtures`, extracted from `MeshMembershipRecordsTests.swift`), which its three
-    /// suites use in the package and six FernletTests files use.
+    /// suites use in the package and six FernletTests files use; and since A1.1.2 the mesh-message
+    /// spelling helper (`extension ProximityNamespace.MeshMessages` in
+    /// `ProximityNamespaceMeshMessagesSpelling.swift`, extracted from
+    /// `ProximityNamespaceSoundnessTests.swift` at A1.1.1), which `ProximityNamespaceSoundnessTests`
+    /// uses in the package and the namespace and vocabulary goldens and the runtime gate
+    /// (`ProximityNamespaceGateTests`) use in FernletTests; and since A1.1.4 the package tests'
+    /// namespace (`.packageTest`, `TestSupport/PackageTestNamespace.swift` in the package), which the
+    /// package's suites compute under and `ProximityNamespaceGoldenTests` holds disjoint from Fernlet's
+    /// in FernletTests, and the epoch fixtures (`MeshEpochFixtures`, extracted from
+    /// `MeshEpochModelTests.swift`), which its four suites use in the package and three FernletTests
+    /// files use, each half minting through its own target's bindings; and since A1.1.7 the source walls'
+    /// lexer (`SwiftSourceLexer`, `TestSupport/SwiftSourceLexer.swift` in the package, extracted from
+    /// `ProximityNamespaceBoundaryTests.swift`), which the namespace wall (and since A1.1.8 the platform
+    /// wall's rules over ProximityKit's code, `ProximityPlatformNeutralityTests`) reads ProximityKit
+    /// through in the package and Fernlet's source walls read code through in FernletTests, each half
+    /// held to the same fixtures in its own target (the namespace wall's lexer cell,
+    /// `SwiftSourceLexerTests`). The platform-directory needles live in both targets too, as members of
+    /// the two platform suites rather than a twin file; ``theDirectoryNeedlesMatchTheirPackageCopy()``
+    /// holds them equal.
     static let twins: [(package: String, fernlet: String)] = [
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
          fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift"),
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/MockRangingProvider.swift",
          fernlet: "Tests/FernletTests/Mocks/MockRangingProvider.swift"),
         (package: "FernletKit/Tests/ProximityKitTests/MeshMembershipFixtures.swift",
-         fernlet: "Tests/FernletTests/MeshMembershipFixtures.swift")
+         fernlet: "Tests/FernletTests/MeshMembershipFixtures.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceMeshMessagesSpelling.swift",
+         fernlet: "Tests/FernletTests/ProximityNamespaceMeshMessagesSpelling.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestNamespace.swift",
+         fernlet: "Tests/FernletTests/PackageTestNamespace.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/MeshEpochFixtures.swift",
+         fernlet: "Tests/FernletTests/MeshEpochFixtures.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift",
+         fernlet: "Tests/FernletTests/SwiftSourceLexer.swift")
     ]
 
     /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10); 1 at A0.8.2
     /// (2026-10-11), the fake peer transport; 3 at A0.8.3 (2026-10-11), with the ranging mock and the
-    /// membership fixtures. Each twin added or retired changes it in the same commit.
-    static let measuredTwinCount = 3
+    /// membership fixtures; 4 at A1.1.2 (2026-10-13), with the mesh-message spelling helper; 6 at
+    /// A1.1.4 (2026-10-13), with the package tests' namespace and the epoch fixtures; 7 at A1.1.7
+    /// (2026-10-14), with the source walls' lexer. Each twin added or retired changes it in the same
+    /// commit.
+    static let measuredTwinCount = 7
+
+    /// The line prefixes of an import, in every form a test file spells one: `import `, `@testable
+    /// import ` and `@preconcurrency import `.
+    private static let importPrefixes = ["import ", "@testable import ", "@preconcurrency import "]
 
     /// A twin's comparable body: its lines, in order, minus every line whose trimmed text starts
-    /// `import `, `@testable import ` or `@preconcurrency import ` (a package copy cannot import the
-    /// app, so the two copies' imports may differ and nothing else may).
+    /// with one of ``importPrefixes`` (a package copy cannot import the app, so the two copies'
+    /// imports may differ and nothing else may).
     static func twinBody(_ source: String) -> [String] {
-        let imports = ["import ", "@testable import ", "@preconcurrency import "]
-        return source.components(separatedBy: "\n").filter { line in
+        source.components(separatedBy: "\n").filter { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !imports.contains { trimmed.hasPrefix($0) }
+            return !importPrefixes.contains { trimmed.hasPrefix($0) }
         }
+    }
+
+    // MARK: - Replacements (ProximityKit plan step A1.1)
+
+    /// The replacement pairs (rules T5 and T6): (the package file, the FernletTests file, the package's
+    /// token, Fernlet's token), the files repo-relative. A replacement is not a twin: the package file
+    /// restores the FernletTests file's call shapes over the package tests' namespace where the
+    /// FernletTests file restores them over Fernlet's, which the package cannot name, so the two can
+    /// never be one file. Each declaration of the package file is a declaration of the FernletTests
+    /// file, verbatim once the package's token reads Fernlet's, so no shape the package's suites
+    /// compute through can drift from the one the FernletTests suites were written against; and, as
+    /// for a twin, the keys the two declare (rule T3) are declared nowhere else in either target. Since
+    /// A1.1.4 the package's test bindings (`TestSupport/PackageTestBindings.swift`), which replace
+    /// `ProximityNamespaceTestBindings.swift` with `.packageTest` for `.fernlet`.
+    static let replacements: [(package: String, fernlet: String, packageToken: String, fernletToken: String)] = [
+        (package: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestBindings.swift",
+         fernlet: "Tests/FernletTests/ProximityNamespaceTestBindings.swift",
+         packageToken: ".packageTest", fernletToken: ".fernlet")
+    ]
+
+    /// The MEASURED replacement count (rule T5): 1 at plan step A1.1.4 (2026-10-13), the package's
+    /// test bindings. Each replacement added or retired changes it in the same commit.
+    static let measuredReplacementCount = 1
+
+    /// One declaration a replacement file holds (rule T6).
+    struct ReplacementMember: Hashable {
+        /// The declaration it sits in: `extension <Type>` for a member of an extension, `""` for a
+        /// top-level declaration.
+        let container: String
+        /// Its code lines, whole and in order: its comment lines and blank lines are not among them.
+        let lines: [String]
+    }
+
+    /// The declarations a Swift source holds, for the replacement rule (T6), in order: every
+    /// top-level declaration but an import and an extension, and every declaration one level inside an
+    /// extension, each from its first code line (an attribute on a line of its own included) through
+    /// the line on which its braces, parentheses and brackets balance again, counted on each line's
+    /// code (``codePart(of:)``: literals blanked, a trailing comment cut), so a brace in a string or a
+    /// comment counts for nothing. A comment line and a blank line belong to no declaration; a
+    /// multi-line literal's lines belong to the declaration they sit in.
+    static func replacementMembers(of source: String) -> [ReplacementMember] {
+        var members: [ReplacementMember] = []
+        var container = ""
+        var depth = 0
+        var open: (container: String, base: Int, lines: [String])?
+        var nesting = 0
+        var inMultilineString = false
+        // R2: bounded by the source's line count.
+        for line in source.components(separatedBy: "\n") {
+            guard !inMultilineString else {
+                open?.lines.append(line)
+                inMultilineString = !line.contains("\"\"\"")
+                continue
+            }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("//") else { continue }
+            let read = codePart(of: line)
+            inMultilineString = read.opensMultilineString
+            let braces = read.code.filter { $0 == "{" }.count - read.code.filter { $0 == "}" }.count
+            let groups = read.code.filter { "([".contains($0) }.count - read.code.filter { ")]".contains($0) }.count
+            if open == nil {
+                if depth == 0, importPrefixes.contains(where: { trimmed.hasPrefix($0) }) { continue }
+                if depth == 0, let extended = afterAttributes(line, readingPast: visibleModifiers).flatMap(extendedTypeName) {
+                    depth = max(0, braces)
+                    container = depth == 0 ? "" : "extension " + extended
+                    continue
+                }
+                if depth == 1, read.code.trimmingCharacters(in: .whitespaces) == "}" {
+                    depth = 0
+                    container = ""
+                    continue
+                }
+                open = (container: depth == 0 ? "" : container, base: depth, lines: [])
+                nesting = 0
+            }
+            guard var member = open else { continue }
+            member.lines.append(line)
+            depth += braces
+            nesting += groups
+            let attributeOnly = trimmed.hasPrefix("@") && afterAttributes(trimmed, readingPast: [])?.isEmpty == true
+            if depth <= member.base && nesting <= 0 && !attributeOnly {
+                members.append(ReplacementMember(container: member.container, lines: member.lines))
+                depth = member.base
+                open = nil
+            } else {
+                open = member
+            }
+        }
+        return members
+    }
+
+    /// T6: each replacement pair's two files exist, the package file holds at least one declaration
+    /// (``replacementMembers(of:)``), and every one of them, with the pair's package token read as
+    /// Fernlet's on each line, equals a declaration of the FernletTests file in the same container;
+    /// each that equals none is named by its container and first line.
+    private static func replacementProblems() throws -> [String] {
+        var problems: [String] = []
+        // R2: bounded by the replacement list.
+        for pair in replacements {
+            let missing = [pair.package, pair.fernlet].filter { !FileManager.default.fileExists(atPath: RepoRoot.url($0).path) }
+            guard missing.isEmpty else {
+                problems.append("T6: the replacement \(pair.package) / \(pair.fernlet) is missing \(missing.joined(separator: ", "))")
+                continue
+            }
+            let package = replacementMembers(of: try RepoRoot.source(pair.package))
+            let fernlet = Set(replacementMembers(of: try RepoRoot.source(pair.fernlet)))
+            if package.isEmpty {
+                problems.append("T6: \(pair.package) holds no declaration the reader can name, so nothing in it is held to \(pair.fernlet)")
+            }
+            // R2: bounded by the package file's declarations.
+            for member in package {
+                let read = member.lines.map { $0.replacingOccurrences(of: pair.packageToken, with: pair.fernletToken) }
+                guard !fernlet.contains(ReplacementMember(container: member.container, lines: read)) else { continue }
+                let place = member.container.isEmpty ? "at the top level" : "in `\(member.container)`"
+                let first = member.lines.first?.trimmingCharacters(in: .whitespaces) ?? ""
+                problems.append("T6: \(pair.package) declares `\(first)` \(place), which equals no declaration of \(pair.fernlet) with `\(pair.packageToken)` read as `\(pair.fernletToken)`: a replacement restores that file's shapes verbatim over the package tests' namespace, and adds none of its own")
+            }
+        }
+        return problems
     }
 
     /// The non-private top-level declaration keys one test target holds (rule T3), each with the
@@ -1684,27 +2486,81 @@ import Testing
         return nil
     }
 
-    /// The helpers both test targets compile are twins, and nothing else is declared in both: T1 the
-    /// twin list holds the measured count; T2 each pair's two files exist and their bodies
-    /// (``twinBody(_:)``) are equal; T3 every non-private top-level declaration key present in both
-    /// targets (a type, a protocol or a typealias, `extension <Type>`, or a column-0 `func`, `let` or
-    /// `var`) is declared only in
-    /// the two halves of one listed pair, so a helper copied outside a pair, by type or by extension,
-    /// is red; T4 the comparator itself: an import-only difference is equal, a code difference is not.
+    /// The helpers both test targets compile are twins, the package's test bindings a replacement of
+    /// Fernlet's, and nothing else is declared in both: T1 the twin list holds the measured count; T2
+    /// each pair's two files exist and their bodies (``twinBody(_:)``) are equal; T3 every non-private
+    /// top-level declaration key present in both targets (a type, a protocol or a typealias,
+    /// `extension <Type>`, or a column-0 `func`, `let` or `var`) is declared only in the two halves of
+    /// one listed twin or replacement pair, so a helper copied outside a pair, by type or by extension,
+    /// is red; T4 the comparator itself: an import-only difference is equal, a code difference is not;
+    /// T5 the replacement list holds the measured count (ProximityKit plan step A1.1); T6 each
+    /// replacement's package file declares only declarations of its FernletTests file, verbatim once
+    /// the package's token reads Fernlet's; T7 the declaration reader itself, on a fixture.
     @Test func everyTwinMatchesItsOriginal() throws {
         #expect(Self.twins.count == Self.measuredTwinCount, """
             T1: \(Self.twins.count) twin pairs are listed; \(Self.measuredTwinCount) were measured. A twin \
             added or retired changes `measuredTwinCount` in the same commit.
             """)
-        let problems = try Self.twinPairProblems() + Self.sharedDeclarationProblems()
+        #expect(Self.replacements.count == Self.measuredReplacementCount, """
+            T5: \(Self.replacements.count) replacement pairs are listed; \(Self.measuredReplacementCount) \
+            were measured. A replacement added or retired changes `measuredReplacementCount` in the same \
+            commit.
+            """)
+        let problems = try Self.twinPairProblems() + Self.replacementProblems() + Self.sharedDeclarationProblems()
         #expect(problems.isEmpty, """
-            Helpers both test targets declare are not twins:
+            Helpers both test targets declare are not twins or replacements:
             \(problems.joined(separator: "\n"))
             """)
         let original = "import Foundation\n@testable import Fernlet\n\nlet x = 1\n"
         let copy = "@preconcurrency import ProximityKit\n\nlet x = 1\n"
         #expect(Self.twinBody(original) == Self.twinBody(copy), "T4: an import-only difference is equal")
         #expect(Self.twinBody("let x = 1\n") != Self.twinBody("let x = 2\n"), "T4: a code difference is not")
+        Self.expectTheReplacementReaderFixtured()
+    }
+
+    /// T7: the replacement rule's declaration reader on a fixture. An import and an extension's
+    /// opening and closing lines are no declaration; a one-line member, a member whose signature
+    /// spans lines after an attribute on a line of its own, a member whose string and comment hold
+    /// braces, and a top-level function are one each, with their comment and blank lines dropped.
+    private static func expectTheReplacementReaderFixtured() {
+        let fixture = """
+            import Foundation
+            @testable import ProximityKit
+
+            /// The extension.
+            extension Shape {
+
+                /// One line.
+                var one: Int { 1 }
+
+                @MainActor
+                static func two(
+                    first: Int,
+                    second: Int
+                ) -> Int {
+                    // A comment {
+                    first + second
+                }
+
+                func three() -> String { "}{" } // }
+            }
+
+            func four() {
+                _ = [1, 2].map { $0 }
+            }
+            """
+        let expected = [
+            ReplacementMember(container: "extension Shape", lines: ["    var one: Int { 1 }"]),
+            ReplacementMember(container: "extension Shape", lines: [
+                "    @MainActor", "    static func two(", "        first: Int,", "        second: Int",
+                "    ) -> Int {", "        first + second", "    }"
+            ]),
+            ReplacementMember(container: "extension Shape",
+                              lines: ["    func three() -> String { \"}{\" } // }"]),
+            ReplacementMember(container: "", lines: ["func four() {", "    _ = [1, 2].map { $0 }", "}"])
+        ]
+        let read = replacementMembers(of: fixture)
+        #expect(read == expected, "T7: the replacement reader read \(read)")
     }
 
     /// T2: each listed pair's two files exist and their bodies are equal, the first differing line
@@ -1730,20 +2586,85 @@ import Testing
         return problems
     }
 
-    /// T3: every declaration key present in both targets is declared only in one listed pair's two
-    /// halves.
+    /// T3: every declaration key present in both targets is declared only in one listed twin or
+    /// replacement pair's two halves.
     private static func sharedDeclarationProblems() throws -> [String] {
         let packageKeys = try declarationKeys(inTarget: packageTarget)
         let appKeys = try declarationKeys(inTarget: appTarget)
+        let pairs = twins + replacements.map { (package: $0.package, fernlet: $0.fernlet) }
         var problems: [String] = []
-        // R2: bounded by the package's key count × the twin list.
+        // R2: bounded by the package's key count × the pair list.
         for (key, packageFiles) in packageKeys.sorted(by: { $0.key < $1.key }) {
             guard let appFiles = appKeys[key] else { continue }
-            let paired = twins.contains { packageFiles == [$0.package] && appFiles == [$0.fernlet] }
+            let paired = pairs.contains { packageFiles == [$0.package] && appFiles == [$0.fernlet] }
             guard !paired else { continue }
-            problems.append("T3: `\(key)` is declared in both targets (\(packageFiles.joined(separator: ", ")); \(appFiles.joined(separator: ", "))) outside one twin pair's two halves")
+            problems.append("T3: `\(key)` is declared in both targets (\(packageFiles.joined(separator: ", ")); \(appFiles.joined(separator: ", "))) outside one twin or replacement pair's two halves")
         }
         return problems
+    }
+
+    // MARK: - The directory needles' two copies (ProximityKit plan step A1.1.8)
+
+    /// The platform-directory needle list's two declarations, (the package copy, the FernletTests copy),
+    /// repo-relative. The package's platform wall (`ProximityPlatformNeutralityTests`) holds
+    /// ProximityKit's code to its copy, its third rule; rule I9 reads FernletTests' copy
+    /// (`ProximityPlatformBoundaryTests.directoryNeedles`) as the package tests' location needles. A test
+    /// target cannot import another, so the list lives in each, each a member of its own suite, and a
+    /// directory API added to one copy alone would be refused in ProximityKit's code and allowed in its
+    /// tests, or the other way round.
+    static let directoryNeedleCopies = (
+        package: "FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift",
+        fernlet: "Tests/FernletTests/ProximityPlatformBoundaryTests.swift"
+    )
+
+    /// The line that opens the list's declaration in both copies, exactly.
+    static let directoryNeedlesOpener = "    static let directoryNeedles: [Needle] = ["
+
+    /// The lines of the declaration `opener` opens in `source`: from that line, which must occur exactly
+    /// once, through the first line after it that closes the list at the opener's indentation, both
+    /// included; nil when the opener is absent or repeated, or the list never closes.
+    static func declarationLines(opening opener: String, in source: String) -> [String]? {
+        let lines = source.components(separatedBy: "\n")
+        let closer = String(opener.prefix { $0 == " " }) + "]"
+        guard lines.count(where: { $0 == opener }) == 1, let start = lines.firstIndex(of: opener),
+              let end = lines[start...].firstIndex(of: closer) else { return nil }
+        return Array(lines[start...end])
+    }
+
+    /// The platform-directory needles are one list in two files: the package platform wall's declaration
+    /// and FernletTests' (``directoryNeedleCopies``) are each read exactly once and are equal, line for
+    /// line, and the one read from FernletTests' file spells as many needles as the compiled list rule I9
+    /// reads, so the reader read that list's own declaration. Its reader is fixtured both ways: a
+    /// declaration is read through its closing line, and a repeated or unclosed one is not read.
+    @Test func theDirectoryNeedlesMatchTheirPackageCopy() throws {
+        let copies = Self.directoryNeedleCopies
+        let opener = Self.directoryNeedlesOpener
+        let package = Self.declarationLines(opening: opener, in: try RepoRoot.source(copies.package))
+        let fernlet = Self.declarationLines(opening: opener, in: try RepoRoot.source(copies.fernlet))
+        let readBoth = package != nil && fernlet != nil
+        #expect(readBoth, """
+            the platform-directory needles' declaration (`\(opener.trimmingCharacters(in: .whitespaces))` \
+            through its `]`) is not read exactly once in each of \(copies.package) and \(copies.fernlet)
+            """)
+        let equal = package == fernlet
+        #expect(equal, """
+            \(copies.package) and \(copies.fernlet) declare different platform-directory needles: the \
+            package's platform wall would refuse one list in ProximityKit's code and rule I9 another in its \
+            tests; edit both declarations alike
+            """)
+        let spelled = (fernlet ?? []).joined().components(separatedBy: "(\"").count - 1
+        let compiled = ProximityPlatformBoundaryTests.directoryNeedles.count
+        #expect(spelled == compiled, """
+            the declaration read from \(copies.fernlet) spells \(spelled) needles and the list rule I9 reads \
+            holds \(compiled): the reader read another declaration
+            """)
+        let sample = "struct S {\n" + opener + "\n        .identifier(\"a\")\n    ]\n}"
+        #expect(Self.declarationLines(opening: opener, in: sample) == [opener, "        .identifier(\"a\")", "    ]"],
+                "a declaration was not read through its closing line")
+        #expect(Self.declarationLines(opening: opener, in: sample + "\n" + sample) == nil,
+                "a declaration that opens twice was read as one")
+        #expect(Self.declarationLines(opening: opener, in: opener + "\n        .identifier(\"a\")\n") == nil,
+                "a declaration that never closes was read")
     }
 
     /// The parser reads the workflow's real shape: a continuation-joined invocation with a label, a
@@ -1785,6 +2706,7 @@ import Testing
         Self.expectInventoryReaderFixtured()
         Self.expectResolutionReaderFixtured()
         try Self.expectPackageReadersFixtured()
+        Self.expectThePackageKeychainFileReaderFixtured()
         let steps2 = """
               - name: Other step
                 run: echo other
@@ -1945,29 +2867,149 @@ import Testing
         #expect(shellCode("# a comment\nARGS=(-workspace X)\n    # indented -project\necho done") == "ARGS=(-workspace X)\necho done")
     }
 
+    /// The keychain-file structure reader (rule I9, ProximityKit plan step A1.1.10), fixtured both ways. A
+    /// suite whose first stored property reads the installer, with its keychain lines in its instance
+    /// tests and a private static helper, passes, and each way a suite file reaches the keychain without
+    /// an instance is named: no marker, or a marker second; a helper that is not private; a static or a
+    /// free test; test arguments or a suite trait; a static or a global stored property; a keychain line
+    /// outside every suite; and a listed file with no keychain line. An installer passes with its one line
+    /// in `static let keychain` and fails with it outside, or with no such read. A support type passes
+    /// with its lines in instance members behind an initializer that reads the installer first, and fails
+    /// with a late read, a static member, a stored property, a line outside its members, or no such type.
+    private static func expectThePackageKeychainFileReaderFixtured() {
+        expectTheSuiteKeychainFileReaderFixtured()
+        expectTheInstallerAndSupportTypeReadersFixtured()
+    }
+
+    /// The structure reader's problems for a fixture `source` read as a listed file of `kind` (rule I9).
+    private static func fixtureKeychainProblems(_ kind: PackageKeychainFileKind, _ source: String) -> [String] {
+        packageKeychainFileProblems(PackageKeychainFile(file: "F.swift", kind: kind, invariant: ""), source: source)
+    }
+
+    /// The suite-file half of ``expectThePackageKeychainFileReaderFixtured()``.
+    private static func expectTheSuiteKeychainFileReaderFixtured() {
+        let read = fixtureKeychainProblems
+        let suite = """
+            @Suite struct S {
+                let store = PackageTestEnvironment.keychain
+                @Test func a() { _ = ProximityKeychainItem.backend }
+                @MainActor @Test func b() throws { try Self.identity().ensureProvisioned() }
+                @MainActor private static func identity() -> IdentityService {
+                    IdentityService(namespace: .packageTest, keychainService: "s")
+                }
+            }
+            """
+        #expect(read(.suite, suite).isEmpty, "a suite file that keeps its structure was refused: \(read(.suite, suite))")
+        let marker = "    let store = PackageTestEnvironment.keychain"
+        let suites: [(source: String, names: String)] = [
+            (suite.replacingOccurrences(of: marker, with: "    let name = \"x\""), "first stored property reads none"),
+            (suite.replacingOccurrences(of: marker, with: "    let name = \"x\"\n" + marker), "first stored property reads none"),
+            (suite.replacingOccurrences(of: "@MainActor private static", with: "@MainActor static"), "static member that is not private"),
+            (suite.replacingOccurrences(of: "@Test func a()", with: "@Test static func a()"), "declares a static test"),
+            (suite.replacingOccurrences(of: "@Test func a()", with: "@Test(arguments: [1]) func a(v: Int)"), "arguments or traits"),
+            (suite.replacingOccurrences(of: "@Suite struct S {", with: "@Suite(.serialized) struct S {"), "arguments or traits"),
+            (suite.replacingOccurrences(of: marker, with: marker + "\n    private static let cache = 1"),
+             "static stored property"),
+            (suite + "\nlet shared = 1", "global stored property"),
+            (suite + "\n@Test func free() {}", "declares a free test"),
+            (suite + "\nfunc helper() { _ = ProximityKeychainItem.backend }", "outside every @Suite type"),
+            ("@Suite struct S {\n" + marker + "\n    @Test func a() {}\n}", "holds no keychain needle")
+        ]
+        // R2: bounded by the fixed list.
+        for (source, names) in suites {
+            let problems = read(.suite, source)
+            #expect(problems.contains { $0.contains(names) }, "a suite file that \(names) was read as \(problems)")
+        }
+    }
+
+    /// The installer and support-type half of ``expectThePackageKeychainFileReaderFixtured()``.
+    private static func expectTheInstallerAndSupportTypeReadersFixtured() {
+        let read = fixtureKeychainProblems
+        let installer = """
+            enum Environment {
+                static let keychain: Store = {
+                    let store = Store()
+                    ProximityKeychainItem.installBackend(store)
+                    return store
+                }()
+            }
+            """
+        #expect(read(.installer, installer).isEmpty, "an installer that keeps its structure was refused: \(read(.installer, installer))")
+        let installers: [(source: String, names: String)] = [
+            (installer.replacingOccurrences(of: "}()\n}", with: "}()\n    static func again() { ProximityKeychainItem.installBackend(Store()) }\n}"),
+             "outside the initializer of `static let keychain`"),
+            (installer.replacingOccurrences(of: "static let keychain", with: "static let other"), "declares no `static let keychain`")
+        ]
+        // R2: bounded by the fixed list.
+        for (source, names) in installers {
+            let problems = read(.installer, source)
+            #expect(problems.contains { $0.contains(names) }, "an installer whose structure is broken was read as \(problems)")
+        }
+
+        let host = """
+            final class Host {
+                let store: Store
+                init() {
+                    store = PackageTestEnvironment.keychain
+                }
+                func identity() -> IdentityService {
+                    IdentityService(namespace: .packageTest, keychainService: "s")
+                }
+            }
+            """
+        let kind = PackageKeychainFileKind.readsFirst(type: "Host")
+        #expect(read(kind, host).isEmpty, "a support type that keeps its structure was refused: \(read(kind, host))")
+        let identity = "    func identity() -> IdentityService {"
+        let hosts: [(kind: PackageKeychainFileKind, source: String, names: String)] = [
+            (kind, host.replacingOccurrences(of: "    init() {\n", with: "    init() {\n        let x = 1\n"),
+             "does not read PackageTestEnvironment.keychain in its first statement"),
+            (kind, host.replacingOccurrences(of: identity, with: "    static func identity() -> IdentityService {"),
+             "static member or a stored property's initializer"),
+            (kind, host.replacingOccurrences(of: "    let store: Store\n",
+                                             with: "    let store: Store\n    let early = IdentityService(namespace: .packageTest)\n"),
+             "static member or a stored property's initializer"),
+            (kind, host + "\nfunc loose() { _ = IdentityService(namespace: .packageTest) }", "outside every member of `Host`"),
+            (.readsFirst(type: "Other"), host, "declares no `Other`")
+        ]
+        // R2: bounded by the fixed list.
+        for (kind, source, names) in hosts {
+            let problems = read(kind, source)
+            #expect(problems.contains { $0.contains(names) }, "a support type whose structure is broken was read as \(problems)")
+        }
+    }
+
     /// The package readers (plan step A0.8.5): I9 holds a keychain type however it is constructed or
-    /// reached, a seal key's wipe, and every platform directory but the temporary ones; I11 reads a
-    /// module past attributes, an access level and an import kind; and the dependency pin reads no list
-    /// that `+` extends.
+    /// reached, a seal key's wipe, a raw `SecItem` call but not a status that spells it inside its name
+    /// (A1.1.10), and every platform directory but the temporary ones; I11 reads a module past
+    /// attributes, an access level and an import kind, split on any whitespace (A1.1.10), and reads no
+    /// import a literal or a comment spells (A1.1.8); and the dependency pin reads no list that `+`
+    /// extends.
     private static func expectPackageReadersFixtured() throws {
         let hazardous = [
             "let id = IdentityService.init(namespace: ns)", "let s: MeshSessionStore = .init(scope: scope)",
             "MeshSessionSealKey.wipe(service: service)", "MeshRoutedSealKey.wipe(service: service)",
             "let root = URL.documentsDirectory.appending(path: \"scratch\")", "let home = NSHomeDirectory()",
             "FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)", "let home = URL.homeDirectory",
-            "let defaults = UserDefaults(suiteName: \"x\")"
+            "let defaults = UserDefaults(suiteName: \"x\")", "let status = SecItemCopyMatching(query, &result)",
+            "_ = SecItemDelete(query as CFDictionary)"
         ]
         // R2: bounded by the fixed list.
         for line in hazardous {
             #expect(!packageHazardNeedles(onLine: line).isEmpty, "I9 holds no needle on `\(line)`")
         }
         // R2: bounded by the fixed list.
-        for line in ["let cache = ReplayCache(maxEntries: 3)", "let scratch = FileManager.default.temporaryDirectory"] {
+        for line in ["let cache = ReplayCache(maxEntries: 3)", "let scratch = FileManager.default.temporaryDirectory",
+                     "return matched.isEmpty ? errSecItemNotFound : errSecSuccess"] {
             #expect(packageHazardNeedles(onLine: line).isEmpty, "I9 holds a needle on `\(line)`")
         }
         let imports = "import Foundation\n@testable import ProximityKit\ninternal import FernletDomainModel\n"
             + "@preconcurrency import struct FernletCrypto.FernletCryptoPurpose\n// import FernletFoundation\nlet x = 1"
         #expect(importedModules(in: imports) == ["Foundation", "ProximityKit", "FernletDomainModel", "FernletCrypto"])
+        #expect(importedModules(in: "import\tUIKit\n@testable\timport  ProximityKit\n") == ["UIKit", "ProximityKit"],
+                "an import whose words a tab or a run of spaces separates was not read")
+        let fixture = "import Testing\nlet sample = \"\"\"\n    import UIKit\n    @preconcurrency import NearbyInteraction\n"
+            + "    \"\"\"\n/* import FernletFoundation */ let y = \"import FernletCrypto\""
+        #expect(importedModules(in: fixture) == ["Testing"], "a literal's or a block comment's import was read as the file's")
         let extended = #".testTarget(name: "ProximityKitTests", dependencies: ["ProximityKit"] + ["FernletConnections"],"#
         let literal = #".testTarget(name: "ProximityKitTests", dependencies: ["ProximityKit"])"#
         let extendedLists = try packageTestTargetDependencies(in: extended)

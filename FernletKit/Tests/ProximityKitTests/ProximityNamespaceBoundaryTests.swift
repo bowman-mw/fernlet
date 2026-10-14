@@ -1,8 +1,16 @@
 // ProximityNamespaceBoundaryTests.swift
-// FernletTests
+// ProximityKitTests
 //
-// The wall that keeps ProximityKit's split from eroding (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md
-// §4 A0.2 to A0.5). ProximityKit reads every protocol label and radio value, the QR scheme, the
+// The wall that keeps ProximityKit's split from eroding (Fernlet's plan for ProximityKit,
+// Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md in the Fernlet repository, §4 A0.2 to A0.5). It is
+// one of ProximityKit's own package tests (since plan step A1.1.7) and travels with the package: it
+// reads ProximityKit's sources and its manifest through `PackageRoot`, by paths relative to the package
+// root (`Sources/ProximityKit`, `Package.swift`), so it reads the same files inside the Fernlet
+// repository, where the package is the `FernletKit` folder, and at the root of ProximityKit's own
+// repository, and it reads code through the package's own copy of the source walls' lexer
+// (`TestSupport/SwiftSourceLexer.swift`). What it refuses is Fernlet's: the names, strings, labels and
+// types of the app ProximityKit was carved out of, so that none comes back into the module wherever
+// the module lives. ProximityKit reads every protocol label and radio value, the QR scheme, the
 // identity's and the two mesh seal keys' keychain rows, the storage names, the log subsystem, the
 // radios' presentation strings and the payload vocabulary off the namespace its host hands down
 // (`ProximityNamespace`; Fernlet's is `.fernlet`, in FernletConnections), and shows a peer's name
@@ -30,8 +38,8 @@
 //      per-file, per-type allowlist of the lines a named later step removes, which is empty: no line
 //      names one (the coordinator's session mode is ProximityKit's own `ProximitySessionMode`);
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
-//      later step reshapes or closes, each row with that step (36 lines in 4 files: the presence
-//      radio's, until A1);
+//      later step reshapes or closes, each row with that step, which is empty: no line declares it
+//      (the presence radio's doors closed at plan step A1.1, behind its public presence engine);
 //   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (96 names:
 //      the heart dead-drop's, presence's, moderation's (the report relay's among them), closeness's
 //      and friend state's types, the parked chat payload, the clothing shop's, the activity manager's
@@ -48,15 +56,17 @@
 //      name (`recipeShare`, the namespace's pair-session radio, `Radios.pair` since plan step A1.0) is
 //      named in its code at all.
 //
-// And ProximityKit's target in `FernletKit/Package.swift` depends on nothing (plan step A1.0), so an
-// edge it dropped cannot come back unseen: FernletCrypto's (its identity signs and verifies only under
-// its own purposes, FernletSocial's feature labels and the app's duress and probe labels among them,
-// each minted with its feature-signature mint), FernletDomainModel's (the session mode, its own), or
-// FernletFoundation's or PrivateMediaStore's, which only Fernlet's features needed.
+// And ProximityKit's target in its package's manifest (the package root's `Package.swift`:
+// `FernletKit/Package.swift` in the Fernlet repository, the root's own in ProximityKit's) depends on
+// nothing (plan step A1.0), so an edge it dropped cannot come back unseen: FernletCrypto's (its
+// identity signs and verifies only under its own purposes, FernletSocial's feature labels and the
+// app's duress and probe labels among them, each minted with its feature-signature mint),
+// FernletDomainModel's (the session mode, its own), or FernletFoundation's or PrivateMediaStore's,
+// which only Fernlet's features needed.
 //
 // Rules 3 to 5 are ratchets. A new use fails; a use that goes away fails too, until its row is
-// lowered or deleted. So rule 3's list and rule 4's are already empty, and a `package` door's row
-// lives exactly as long as the door. Rule 2 lists nothing: any use fails.
+// lowered or deleted. So rule 3's, rule 4's and rule 5's lists are already empty, and a row added
+// for a later step's debt lives exactly as long as that debt. Rule 2 lists nothing: any use fails.
 // Rule 6 only grows: a feature that came back under its old name with no Fernlet string, no registry
 // label and no domain type of its own would pass rules 2 to 4, so each step that moves features out
 // adds the types it took, and a step that renames a type or a public member for its generic use
@@ -68,230 +78,14 @@
 // content, the clothing shop, activities, the live-session chat, the session hearts and heart
 // ledger, the session photos and their review, the sealed-backup escrow, the Live Activity reaper
 // and the recipe share), which rule 6 keeps out. Rule 5 holds the
-// other direction, the doors ProximityKit opens to Fernlet's own modules while a later step reshapes
-// what is behind them:
-// the presence radio's seam, its QUIC conformer, the peer channel the seam names, the epoch posture
-// and the TXT vocabulary, which FernletSocial's presence manager drives (until A1). The coordinator's
-// per-connection send and manual commit, which the pair session's pairings and presence's heart
-// connections go through, are public.
+// other direction, the doors ProximityKit would open to Fernlet's own modules, and it opens none:
+// FernletSocial's presence manager drives the presence radio through the public presence engine,
+// `ProximityPresenceSession` (plan step A1.1), whose radio, epoch posture and TXT vocabulary are
+// internal, and the coordinator's per-connection send and manual commit, which the pair session's
+// pairings and presence's heart connections go through, are public.
 
 import Foundation
 import Testing
-
-// MARK: - The lexer
-
-/// A small Swift lexer for the source walls. It tells code from comments and string literals the way
-/// the compiler does, so a wall can read code without the prose about it, and literals without the
-/// code around them.
-///
-/// It knows line comments, nested block comments, and every string-literal form ProximityKit and the
-/// test tree write: single-line and multi-line, raw (`#"…"#`, any number of `#`), escapes, and
-/// interpolations, which may hold literals of their own. It does not know regex literals: neither tree
-/// writes one that holds a quote. It reads UTF-8 bytes, because every delimiter it looks for is ASCII
-/// and no byte of a multi-byte UTF-8 sequence is.
-enum SwiftSourceLexer {
-
-    /// One outermost string literal.
-    struct Literal: Equatable, Sendable {
-        /// The 1-based line its opening delimiter is on.
-        let line: Int
-        /// Its text between the delimiters, exactly as written, escapes and interpolations included.
-        let text: String
-    }
-
-    /// A file, lexed.
-    struct Lexed: Sendable {
-        /// The source with every comment removed and every literal emptied, line breaks kept so line
-        /// numbers still match the file. A literal reads `""`, with its interpolations' code, each in
-        /// its parentheses, between the two quotes.
-        let code: String
-        /// Every outermost literal, in source order. A literal inside an interpolation is part of the
-        /// text of the literal that holds it.
-        let literals: [Literal]
-    }
-
-    /// Lexes Swift source.
-    ///
-    /// - Parameter source: A Swift file's text.
-    /// - Returns: Its code and its literals.
-    static func lex(_ source: String) -> Lexed {
-        var lexer = SwiftByteLexer(bytes: Array(source.utf8))
-        lexer.run()
-        return Lexed(code: String(decoding: lexer.code, as: UTF8.self), literals: lexer.literals)
-    }
-}
-
-/// `SwiftSourceLexer`'s state, one byte at a time.
-private struct SwiftByteLexer {
-
-    /// A string literal still open; the innermost is last.
-    struct Open {
-        /// The `#` count of its delimiters (0 for an ordinary literal).
-        let hashes: Int
-        /// Whether its delimiters are `"""`.
-        let multiline: Bool
-        /// The index of its first byte of text.
-        let textStart: Int
-        /// The line its opening delimiter is on.
-        let line: Int
-        /// The parenthesis depth of the interpolation open inside it, or nil while reading its text.
-        var interpolation: Int?
-    }
-
-    let bytes: [UInt8]
-    var index = 0
-    var line = 1
-    var code: [UInt8] = []
-    var literals: [SwiftSourceLexer.Literal] = []
-    var open: [Open] = []
-
-    init(bytes: [UInt8]) {
-        self.bytes = bytes
-    }
-
-    /// Lexes every byte.
-    mutating func run() {
-        // R2: every step consumes at least one byte of a finite array.
-        while index < bytes.count {
-            if let innermost = open.last, innermost.interpolation == nil {
-                stepInLiteral(innermost)
-            } else {
-                stepInCode()
-            }
-        }
-    }
-
-    /// One step through code: top-level code, or an interpolation's.
-    private mutating func stepInCode() {
-        let byte = bytes[index]
-        if byte == .slash, at(index + 1) == .slash { return skipLineComment() }
-        if byte == .slash, at(index + 1) == .star { return skipBlockComment() }
-        if byte == .hash || byte == .quote, let hashes = literalOpening() { return openLiteral(hashes: hashes) }
-        if byte == .newline { line += 1 }
-        if byte == .leftParenthesis || byte == .rightParenthesis { trackInterpolation(byte) }
-        code.append(byte)
-        index += 1
-    }
-
-    /// One step through the text of the innermost open literal.
-    private mutating func stepInLiteral(_ innermost: Open) {
-        let byte = bytes[index]
-        if byte == .backslash, hashesFollow(index + 1, count: innermost.hashes) {
-            return escape(at: index + 1 + innermost.hashes)
-        }
-        if byte == .quote, let length = closingLength(of: innermost) { return close(innermost, length: length) }
-        if byte == .newline {
-            line += 1
-            code.append(.newline)
-        }
-        index += 1
-    }
-
-    /// The byte at `position`, or nil past the end.
-    private func at(_ position: Int) -> UInt8? {
-        position < bytes.count ? bytes[position] : nil
-    }
-
-    /// Whether `count` `#` bytes start at `position`.
-    private func hashesFollow(_ position: Int, count: Int) -> Bool {
-        guard position + count <= bytes.count else { return false }
-        return bytes[position..<position + count].allSatisfy { $0 == .hash }
-    }
-
-    /// The `#` count of a literal opening at `index`, or nil when no literal opens there.
-    private func literalOpening() -> Int? {
-        var position = index
-        // R2: bounded by the remaining bytes.
-        while at(position) == .hash { position += 1 }
-        return at(position) == .quote ? position - index : nil
-    }
-
-    /// Opens a literal whose delimiter starts at `index` with `hashes` `#` bytes.
-    private mutating func openLiteral(hashes: Int) {
-        let quote = index + hashes
-        let multiline = at(quote + 1) == .quote && at(quote + 2) == .quote
-        let textStart = quote + (multiline ? 3 : 1)
-        open.append(Open(hashes: hashes, multiline: multiline, textStart: textStart, line: line))
-        code.append(.quote)
-        index = textStart
-    }
-
-    /// The length of the closing delimiter of `literal` at `index`, or nil when it does not close here.
-    private func closingLength(of literal: Open) -> Int? {
-        let quotes = literal.multiline ? 3 : 1
-        guard (0..<quotes).allSatisfy({ at(index + $0) == .quote }) else { return nil }
-        return hashesFollow(index + quotes, count: literal.hashes) ? quotes + literal.hashes : nil
-    }
-
-    /// Closes the innermost literal, recording it when it is outermost.
-    private mutating func close(_ literal: Open, length: Int) {
-        open.removeLast()
-        if open.isEmpty {
-            let text = String(decoding: bytes[literal.textStart..<index], as: UTF8.self)
-            literals.append(SwiftSourceLexer.Literal(line: literal.line, text: text))
-        }
-        code.append(.quote)
-        index += length
-    }
-
-    /// Reads the escape whose escaped byte is at `position`: an interpolation opens on `(`.
-    private mutating func escape(at position: Int) {
-        if at(position) == .leftParenthesis {
-            open[open.count - 1].interpolation = 1
-            code.append(.leftParenthesis)
-        } else if at(position) == .newline {
-            line += 1
-            code.append(.newline)
-        }
-        index = position + 1
-    }
-
-    /// Follows an interpolation's parentheses; the one that balances its `\(` returns to the text.
-    private mutating func trackInterpolation(_ byte: UInt8) {
-        guard let depth = open.last?.interpolation else { return }
-        let next = byte == .leftParenthesis ? depth + 1 : depth - 1
-        open[open.count - 1].interpolation = next == 0 ? nil : next
-    }
-
-    /// Skips a line comment, leaving its line break to the code.
-    private mutating func skipLineComment() {
-        // R2: bounded by the remaining bytes.
-        while index < bytes.count, bytes[index] != .newline { index += 1 }
-    }
-
-    /// Skips a block comment and every block comment nested in it, keeping its line breaks.
-    private mutating func skipBlockComment() {
-        var depth = 0
-        // R2: bounded by the remaining bytes; each pass consumes at least one.
-        while index < bytes.count {
-            if bytes[index] == .slash, at(index + 1) == .star {
-                depth += 1
-                index += 2
-            } else if bytes[index] == .star, at(index + 1) == .slash {
-                depth -= 1
-                index += 2
-                if depth == 0 { return }
-            } else {
-                if bytes[index] == .newline {
-                    line += 1
-                    code.append(.newline)
-                }
-                index += 1
-            }
-        }
-    }
-}
-
-private extension UInt8 {
-    static let newline: UInt8 = 0x0A
-    static let quote: UInt8 = 0x22
-    static let hash: UInt8 = 0x23
-    static let leftParenthesis: UInt8 = 0x28
-    static let rightParenthesis: UInt8 = 0x29
-    static let star: UInt8 = 0x2A
-    static let slash: UInt8 = 0x2F
-    static let backslash: UInt8 = 0x5C
-}
 
 // MARK: - The wall
 
@@ -302,8 +96,8 @@ private extension UInt8 {
 /// its list names (none).
 @Suite struct ProximityNamespaceBoundaryTests {
 
-    /// The module, from the repository root.
-    private static let moduleRoot = "FernletKit/Sources/ProximityKit"
+    /// The module, from the package root (``PackageRoot``), in either repository.
+    private static let moduleRoot = "Sources/ProximityKit"
 
     /// The one folder that may build a namespace, its groups and its purposes.
     private static let namespaceFolder = "Namespace/"
@@ -617,7 +411,7 @@ private extension UInt8 {
     /// `file`'s allowlist rows with their counts and exit steps, for a failure message.
     private static func describeRows(of file: String) -> String {
         let rows = fernletLiterals.filter { $0.file == file }
-            .map { "\"\($0.text)\" ×\($0.count) (until \($0.reason.exit.rawValue))" }
+            .map { "\"\($0.text)\" ×\($0.count) (until \(Self.exitText($0.reason.exit)))" }
         return rows.isEmpty ? "none" : rows.joined(separator: ", ")
     }
 
@@ -796,7 +590,7 @@ private extension UInt8 {
     /// `file`'s rule-4 rows with their counts and exit steps, for a failure message.
     private static func describeDomainRows(of file: String) -> String {
         let rows = domainTypeLines.filter { $0.file == file }
-            .map { "\($0.type) on \($0.lines) (until \($0.reason.exit.rawValue))" }
+            .map { "\($0.type) on \($0.lines) (until \(Self.exitText($0.reason.exit)))" }
         return rows.isEmpty ? "none" : rows.joined(separator: ", ")
     }
 
@@ -806,17 +600,20 @@ private extension UInt8 {
     /// lists, file by file and count by count, each row with the plan step that closes its doors.
     ///
     /// `package` access reaches every target of FernletKit, and the test target through
-    /// `@testable import`, but never the app: it is the access a Fernlet module inside the package
-    /// uses a ProximityKit declaration through while a named later step (A1) reshapes or
-    /// replaces it, so it is debt with an exit, never a settled seam (a settled seam is `public`, with
-    /// its contract). Nothing else counts that debt: a widened declaration compiles clean wherever it
-    /// is used. So the list is exact both ways, like rules 3 and 4: a new `package` line fails until a
-    /// row names why it is there and its exit, and a line that goes away fails until its row is
-    /// lowered or deleted, so no door outlives its step unnoticed. ProximityKit declares `package` on
-    /// 36 code lines in 4 files: the presence radio's doors (until A1). Every code line on which
-    /// `package` is an access modifier counts, once, however its declaration goes on
-    /// (``packageDeclarationPattern``), a setter's `package(set)` included; comments and literals may
-    /// say `package` freely, and code may use it as a name.
+    /// `@testable import`, but never the app, and never a module of another package: it is the access
+    /// a Fernlet module inside the package would use a ProximityKit declaration through while a named
+    /// later step reshapes or replaces it, so it is debt with an exit, never a settled seam (a settled
+    /// seam is `public`, with its contract). Nothing else counts that debt: a widened declaration
+    /// compiles clean wherever it is used. So the list is exact both ways, like rules 3 and 4: a new
+    /// `package` line fails until a row names why it is there and its exit, and a line that goes away
+    /// fails until its row is lowered or deleted, so no door outlives its step unnoticed. ProximityKit
+    /// declares `package` on no code line: the presence radio's doors, its last, closed at plan step
+    /// A1.1, when FernletSocial's presence manager began driving the radio through the public presence
+    /// engine (`ProximityPresenceSession`). Every code line on which `package` is an access modifier
+    /// counts, once, however its declaration goes on (``packageDeclarationPattern``), a setter's
+    /// `package(set)` included; comments and literals may say `package` freely, and code may use it
+    /// as a name. Every row of rules 3 to 5 names the plan step that closes it: a row whose `exit` is
+    /// nil fails here, whichever of the three lists it is on.
     @Test func packageIsDeclaredOnlyOnTheListedLines() throws {
         let matcher = try NSRegularExpression(pattern: Self.packageDeclarationPattern)
         let sources = try Self.proximitySources()
@@ -837,12 +634,20 @@ private extension UInt8 {
             let actual = found[path] ?? 0
             #expect(actual == (allowed?.lines ?? 0), """
                 \(path) declares `package` on \(actual) code lines; the list says \(allowed?.lines ?? 0)\
-                \(allowed.map { ", closing at \($0.reason.exit.rawValue)" } ?? ""). A new `package` door \
+                \(allowed.map { ", closing at \(Self.exitText($0.reason.exit))" } ?? ""). A new `package` door \
                 needs a row naming why a Fernlet module needs it and the plan step that closes it (a \
                 settled seam is `public`, with its contract); a door that closed needs its row lowered \
                 or deleted here, so the list stays exact.
                 """)
         }
+        // R2: bounded by the three lists.
+        let unnamed = Self.fernletLiterals.filter { $0.reason.exit == nil }.count
+            + Self.domainTypeLines.filter { $0.reason.exit == nil }.count
+            + Self.packageDeclarationLines.values.filter { $0.reason.exit == nil }.count
+        #expect(unnamed == 0, """
+            \(unnamed) rows of rules 3 to 5 name no plan step: every row names the step that closes it; nil is \
+            the platform wall's 'permanent', never a debt row's
+            """)
     }
 
     /// Rule 5's matcher, fixtured both ways, because the matcher is the wall: it sees `package`
@@ -950,14 +755,9 @@ private extension UInt8 {
     }
 
     /// Every file whose code declares `package`, by path under the module root, each row with the
-    /// step that closes its doors: the presence radio's seam, its QUIC conformer, the peer channel the
-    /// seam names, the epoch posture and the TXT vocabulary (A1).
-    static let packageDeclarationLines: [String: PackageLines] = [
-        "Presence/PresenceAdvertisement.swift": PackageLines(lines: 4, reason: .presenceRadioSeam),
-        "Presence/PresenceEpochPosture.swift": PackageLines(lines: 5, reason: .presenceRadioSeam),
-        "Transport/NetworkMeshSession.swift": PackageLines(lines: 12, reason: .presenceRadioSeam),
-        "Transport/NetworkPresenceSession.swift": PackageLines(lines: 15, reason: .presenceRadioSeam)
-    ]
+    /// step that closes its doors: none, since the presence radio's doors closed behind the public
+    /// presence engine (plan step A1.1).
+    static let packageDeclarationLines: [String: PackageLines] = [:]
 
     // MARK: Rule 6: the moved types stay gone
 
@@ -1215,9 +1015,10 @@ private extension UInt8 {
 
     // MARK: ProximityKit's package dependencies
 
-    /// ProximityKit's target in `FernletKit/Package.swift` depends on exactly
-    /// ``proximityKitDependencies``, compared as a sorted list, so a dependency added, dropped or listed
-    /// twice fails.
+    /// ProximityKit's target in its package's manifest, the package root's `Package.swift` (``PackageRoot``:
+    /// `FernletKit/Package.swift` in the Fernlet repository, the root's own in ProximityKit's), depends on
+    /// exactly ``proximityKitDependencies``, compared as a sorted list, so a dependency added, dropped or
+    /// listed twice fails.
     ///
     /// An edge leaves with the last code that reads its module, and none may come back unseen: an edge
     /// restored in the manifest compiles clean, and so does every file that then imports the module
@@ -1228,10 +1029,12 @@ private extension UInt8 {
     /// purposes, a host's feature labels minted with its feature-signature mint (plan step A1.0). The
     /// manifest is read as text: the `dependencies:` array of the one target declared
     /// `name: "ProximityKit"`, each quoted name in it, so the target keeps a literal `dependencies: []`.
-    /// A manifest whose ProximityKit target the reader cannot find, or whose list is not a literal,
-    /// fails rather than passing on an empty list.
+    /// The reader needs nothing else of the manifest, so it reads either repository's alike: the target
+    /// declared `name: "ProximityKit", dependencies: [...]`, once (a product or a test target of a longer
+    /// name is not it). A manifest whose ProximityKit target the reader cannot find, or whose list is not
+    /// a literal, fails rather than passing on an empty list.
     @Test func proximityKitDependsOnExactlyItsListedTargets() throws {
-        let manifest = try RepoRoot.source("FernletKit/Package.swift")
+        let manifest = try PackageRoot.source("Package.swift")
         let target = try NSRegularExpression(pattern: #"name:\s*"ProximityKit"\s*,\s*dependencies:\s*\[([^\]]*)\]"#)
         let text = manifest as NSString
         let matches = target.matches(in: manifest, range: NSRange(location: 0, length: text.length))
@@ -1250,13 +1053,15 @@ private extension UInt8 {
     }
 
     /// ProximityKit's target dependencies, exactly: none. It depends on nothing in FernletKit (plan
-    /// step A1.0), the state the package leaves this repository in.
+    /// step A1.0), the state the package left the Fernlet repository in.
     static let proximityKitDependencies: [String] = []
 
     // MARK: The lexer, fixtured
 
-    /// The lexer reads code, comments and literals as Swift does: the walls above and the isolation
-    /// walls' shorthand scan are only as sharp as it is.
+    /// The lexer reads code, comments and literals as Swift does: the rules above are only as sharp as
+    /// it is. This is the package's own copy (`TestSupport/SwiftSourceLexer.swift`, a twin of the one
+    /// Fernlet's source walls read through, which Fernlet's `SwiftSourceLexerTests` holds to the same
+    /// fixtures).
     ///
     /// Each fixture is a form the module or the test tree writes, chosen where a looser reading goes
     /// wrong: a quote in a comment, a comment inside a comment, an escaped quote, a literal inside an
@@ -1286,10 +1091,10 @@ private extension UInt8 {
 
     /// ProximityKit's Swift files, each by its path under the module root and lexed, sorted by path.
     ///
-    /// Shared with `ProximityPlatformBoundaryTests` (plan step A0.6): one ProximityKit walker, so the
-    /// namespace wall and the platform wall can never read two different trees.
+    /// Read through ``PackageRoot``, so the walk is the module's own folder in either repository; each
+    /// rule that walks it floors the files it read, so a walk that found nothing fails.
     static func proximitySources() throws -> [(path: String, lexed: SwiftSourceLexer.Lexed)] {
-        let root = RepoRoot.url(moduleRoot)
+        let root = PackageRoot.url(moduleRoot)
         let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
         let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
         var sources: [(path: String, lexed: SwiftSourceLexer.Lexed)] = []
@@ -1301,10 +1106,10 @@ private extension UInt8 {
         return sources
     }
 
-    /// `file`'s path under the module root, read off the path's own `FernletKit/Sources/ProximityKit/`
-    /// component so a symlinked checkout (`/tmp` and `/private/tmp`) resolves alike; the full path if
-    /// the file is somehow outside it, which then matches no allowlist row and fails loudly. Shared
-    /// with `ProximityPlatformBoundaryTests`, whose rows name files by the same path.
+    /// `file`'s path under the module root, read off the path's own `Sources/ProximityKit/` component
+    /// (its last) so a symlinked checkout (`/tmp` and `/private/tmp`) resolves alike, inside the Fernlet
+    /// repository and at ProximityKit's own root; the full path if the file is somehow outside it, which
+    /// then matches no allowlist row and fails loudly. Every row above names its file by this path.
     static func relativePath(of file: URL) -> String {
         let path = file.path
         guard let range = path.range(of: "/" + moduleRoot + "/", options: .backwards) else { return path }
@@ -1338,35 +1143,33 @@ private extension UInt8 {
 
     // MARK: Reasons
 
-    /// The plan step that takes a value out of ProximityKit.
-    enum ExitStep: String, Sendable {
-        /// The package leaves Fernlet's tree (A1): the presence radio's `package` doors (rule 5) are
-        /// settled then: its seam, its QUIC conformer, the peer channel the seam names, the epoch
-        /// posture and the TXT vocabulary, published as mechanism or wrapped by a presence engine.
-        case a1 = "A1"
+    /// The plan step that takes a value out of ProximityKit. A step's case is deleted with its last
+    /// row, as A1's (the presence radio's `package` doors, closed at plan step A1.1 behind the public
+    /// presence engine) was.
+    ///
+    /// No case is left, so rules 3 to 5 list nothing and the enum is uninhabited, as
+    /// `ProximityPlatformNeutralityTests.ExitStep` is: a ``Reason``'s `exit` is optional so the type
+    /// still compiles, and nil would name no step, so rule 5's cell refuses a row of rules 3 to 5 that
+    /// carries it. A later step that adds a row adds its case with its step's name as a `String` raw
+    /// value, the raw type with it, and ``exitText(_:)``'s arm naming it, which the compiler then
+    /// requires.
+    enum ExitStep: Sendable {}
+
+    /// A row's exit step, as a failure message says it: every row of rules 3 to 5 names one, and no
+    /// case is left, so the one arm is the nil a row must never carry. A step that adds a case adds
+    /// the arm that names it.
+    static func exitText(_ exit: ExitStep?) -> String {
+        switch exit {
+        case .none:
+            return "no plan step"
+        }
     }
 
     /// Why a value is still in ProximityKit, and the step that takes it out.
     struct Reason: Sendable {
-        /// The step that removes it.
-        let exit: ExitStep
+        /// The step that removes it; nil only while no step is left to name.
+        let exit: ExitStep?
         /// Why it is still here until then.
         let why: String
     }
-}
-
-// MARK: - The reasons
-
-extension ProximityNamespaceBoundaryTests.Reason {
-
-    // Rule 5: the package doors (A1).
-
-    /// The presence radio's doors.
-    static let presenceRadioSeam = Self(exit: .a1, why: """
-        the presence radio's seam, its QUIC conformer, the peer channel the seam's requirements name \
-        and presence's heart connections build a coordinator over, its epoch posture and its TXT \
-        vocabulary, which FernletSocial's presence manager drives; package access ends when \
-        ProximityKit leaves FernletKit, so by then the seam is published as mechanism or wrapped by a \
-        presence engine
-        """)
 }
