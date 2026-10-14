@@ -1,12 +1,13 @@
 #!/bin/bash
 #
 # macos-build-selftest.sh — prove Scripts/macos-build-check.sh is LOAD-BEARING: that it really builds
-# ProximityKit for native macOS, not merely that it exits 0 (plan step A0.6, Mac readiness). It plants
-# a throwaway file holding `import UIKit` inside ProximityKit, runs the check, and asserts it FAILS on
-# that import: native macOS has no UIKit, so only a native macOS build can fail there, while an iOS
-# build, a Mac Catalyst build (Catalyst has UIKit), a build of the wrong scheme or a build of nothing
-# would pass it. It then removes the probe and asserts the clean tree passes. The probe is ALWAYS
-# cleaned up (trap), even on Ctrl-C.
+# the Mac-ready set for native macOS, not merely that it exits 0 (plan step A0.6, Mac readiness). It
+# plants a throwaway file holding `import UIKit` inside ProximityKit, one of the four modules the
+# check's `MacReady` product names (ProximityPlatformBoundaryTests pins the other three beside it),
+# runs the check, and asserts it FAILS on that import: native macOS has no UIKit, so only a native
+# macOS build can fail there, while an iOS build, a Mac Catalyst build (Catalyst has UIKit), a build of
+# the wrong scheme or a build of nothing would pass it. It then removes the probe and asserts the clean
+# tree passes. The probe is ALWAYS cleaned up (trap), even on Ctrl-C.
 #
 # THE FAILURE TEXT: with explicit modules (Xcode 26's default), xcodebuild's dependency scan reports a
 # module the platform does not have as "error: unable to resolve module dependency: 'UIKit'" (some

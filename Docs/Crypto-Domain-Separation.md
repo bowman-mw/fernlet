@@ -22,8 +22,9 @@ which is why several of the notes below read as archaeology rather than design.
 
 **ProximityKit's own labels are not read from this registry** since its plan step A0.2
 (2026-10-02): they are fields of the namespace its host supplies, with roles ProximityKit fixes. §8
-says how that relates to the registry, which keeps 38 twins of them, and twins of the two feature
-salts Fernlet's namespace declares, until they retire.
+says how that relates to the registry, which keeps 38 twins of them, twins of the two feature
+salts Fernlet's namespace declares, and, since plan step A1.0, twins of the six signature labels
+Fernlet mints for its own features with ProximityKit's host mint, until they retire.
 
 ---
 
@@ -686,13 +687,16 @@ labels.
 
 - **Labels are host-supplied source literals.** A namespace's labels are
   `ProximityCryptographicPurpose` values, minted only by the namespace's group initializers from
-  `StaticString` arguments, or by `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)`, the
-  one host-callable mint, also from a `StaticString`, for the one role a host may mint itself (see
-  the feature salts below). So, as with this registry's `fileprivate` initializer (§1), every label
+  `StaticString` arguments, or by the two host-callable mints, also from a `StaticString`:
+  `ProximityCryptographicPurpose.featureKeyDerivationSalt(_:)`, for the one key-derivation role a host
+  may mint itself (see the feature salts below), and
+  `ProximityCryptographicPurpose.featureSignature(_:framing:)`, for a signature a host's own feature
+  makes (see the host signature labels below). So, as with this registry's `fileprivate`
+  initializer (§1), every label
   is a reviewed literal in somebody's source: none is assembled at run time, and none arrives over
   the wire (no public initializer, no `Codable`, no decoding path). `ProximityNamespaceBoundaryTests`
-  holds ProximityKit itself to building no namespace, group or purpose, and minting no feature salt,
-  outside `Namespace/`.
+  holds ProximityKit itself to building no namespace, group or purpose, and minting no feature salt
+  or feature signature label, outside `Namespace/`.
 - **Roles are fixed by ProximityKit.** The field a label fills decides how ProximityKit consumes
   it — a length-prefixed or raw-prefix signature transcript, a verify-only legacy label, a
   length-prefixed or raw hash preimage, an HKDF salt, a column seal, an AEAD prefix, a TLS exporter
@@ -736,6 +740,25 @@ labels.
   and `FernletFeatureGoldenTests` the door's known answers under Fernlet's two salts. Only a salt a
   ProximityKit door consumes is declared: the feature labels Fernlet's features hand CryptoKit
   themselves stay entries here.
+- **A host's own signature labels are minted, and ProximityKit's identity signs under nothing
+  else.** A transcript a host's feature writes and signs through ProximityKit's `IdentityService`
+  needs a label the protocol has no field for. The host mints it with
+  `featureSignature(_:framing:)` from a `StaticString` and the one fact it states, the framing its
+  serializer writes: `.lengthPrefixed` or `.rawPrefix`, the only cases of the framing type the mint
+  takes, so a host can never mint the accept-everything `.absent`. The label's role is the
+  matching writable signature role, so the identity's `sign` and `verify` treat it as they treat
+  a namespace signature label (§4's positional check, no other role). They take no other type: since
+  plan step A1.0 ProximityKit has no FernletCrypto edge and its identity has no overload that takes
+  this registry's `CryptographicPurpose`. Such a label is declared in no namespace, so the
+  soundness verdict does not judge it: keeping it distinct from every other label, and no byte
+  prefix of one, is §6's review in the host's own module. Fernlet mints six:
+  `FernletFeatureSignatures` in FernletSocial (`activityJoinTokenV2`, `activityRosterSnapshotV2`,
+  `moderationReportV2`, length-prefixed) and, in the app, `DuressRecoveryTranscript`'s
+  `requestPurpose` and `replyPurpose` and `MeshProbeConstants.channelIntroductionPurpose` (raw
+  prefix), each spelled and framed exactly as the registry entry it was copied from, its twin
+  here until plan step C1. `ProximityNamespaceGoldenTests` holds each pair to the same spelling,
+  framing and accepted bytes over every fixed transcript, so a drift on either side is red, and
+  the twins keep the six inside this registry's all-pairs and prefix checks.
 - **Fernlet's namespace is `.fernlet`, in FernletConnections.** `ProximityNamespace.fernlet`
   (`FernletKit/Sources/FernletConnections/FernletProtocolNamespace.swift`) spells the 39 labels
   byte for byte as they shipped, and declares the two feature salts beside them. It lives in a
@@ -774,15 +797,17 @@ labels.
   the ban store's evidence reporter tag. And its mesh features frame their canonical bytes under
   four (`FeatureCanonicalBytes.swift`): the activities' three (the descriptor the params hash is
   taken over, the join token and the roster snapshot) and the moderation report's, the last three
-  signed and verified through ProximityKit's `IdentityService` and its `CryptographicPurpose`
-  overloads. The app names the sealed-backup escrow's two (`SealedBackupEscrowKey`, the provisioning
+  signed and verified through ProximityKit's `IdentityService` under their host-label twins (above).
+  The app names the sealed-backup escrow's two (`SealedBackupEscrowKey`, the provisioning
   participant of every identity the app builds), a prefix pair no namespace can declare (§7's one
   exception). ProximityKit names none: `ProximityNamespaceBoundaryTests` fails any
-  `FernletCryptoPurpose` in its code. The app's duress and probe signatures sign through the same
-  `CryptographicPurpose` overloads, which stay until C1.
+  `FernletCryptoPurpose` in its code, and depends on no FernletKit module. The app frames its duress
+  and probe transcripts under their entries here and signs them under their host-label twins.
 
 Adding a ProximityKit protocol label is therefore a namespace change, not a registry change: a field
 in a `Namespace/` group (which fixes its role), the host's literal in `.fernlet`, and a golden row in
 `ProximityNamespaceGoldenTests`. A salt a ProximityKit door derives a Fernlet feature's key under is a
 host feature salt: a `featureKeyDerivationSalt` literal declared in `.fernlet`'s feature group, with
-its golden row. §6's review questions apply unchanged.
+its golden row. A label a Fernlet feature signs its own transcript under through ProximityKit's
+identity is a host signature label: a `featureSignature` literal in the feature's module, with its
+golden row. §6's review questions apply unchanged.

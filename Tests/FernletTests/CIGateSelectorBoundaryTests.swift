@@ -17,8 +17,8 @@
 // package suite's declared tests), the helpers both targets compile must be twins, the strict build
 // and every run go through `Fernlet.xcworkspace`, which resolves the CryptoSwift revision the app
 // project pins (ProximityKit plan step A0.8.1), the Fernlet scheme's testables hold the package
-// test target, which declares ProximityKit as its one dependency (A0.8.2) and whose files import
-// nothing of ProximityKit's closure that holds Fernlet's values (A0.8.5), and this suite gates itself.
+// test target, which declares ProximityKit as its one dependency (A0.8.2) and whose files import no
+// Fernlet module (A0.8.5; ProximityKit depends on none since A1.0), and this suite gates itself.
 
 import Foundation
 import Testing
@@ -920,9 +920,9 @@ import Testing
     /// selector is refused (xcodebuild exits 70); Xcode may drop the reference on save when the project
     /// is opened alone. One dependency added to the test target would re-open the app's modules, and
     /// Fernlet's namespace, to the package's tests: dependency validation refuses only an import outside
-    /// the declared dependencies and their closure (a package test may import `FernletDomainModel`
-    /// through ProximityKit, which rule I11 refuses instead). Since plan step A0.8.5 the list must be a
-    /// literal nothing extends: the target's name is spelled once in the manifest's code and no code
+    /// the declared dependencies and their closure, and ProximityKit's closure holds no Fernlet module
+    /// since plan step A1.0 (rule I11 refuses one by name besides). Since plan step A0.8.5 the list must
+    /// be a literal nothing extends: the target's name is spelled once in the manifest's code and no code
     /// line reaches a target's `.dependencies`, so neither `["ProximityKit"] + [...]` nor a mutation
     /// after the declaration adds one unseen. Each fact is read into a `Bool` before it is expected.
     private static func expectTheSchemeRunsThePackageTests() throws {
@@ -1441,11 +1441,13 @@ import Testing
     }
 
     /// The modules a package file may import (rule I11, ProximityKit plan step A0.8.5): ProximityKit,
-    /// the test target's one declared dependency, and the system modules its files use. ProximityKit's
-    /// closure (`FernletCrypto`, `FernletDomainModel`, `FernletFoundation`) is not here, though
-    /// dependency validation lets a test import it: those modules hold Fernlet's own values (its
-    /// crypto purposes' labels, its payload types' tokens) and stay in this repository at plan step
-    /// A1, so a package test that imported one could pin a Fernlet byte and could not travel.
+    /// the test target's one declared dependency, and the system modules its files use. No Fernlet
+    /// module is here. ProximityKit depends on none since plan step A1.0 (`FernletCrypto`,
+    /// `FernletDomainModel` and `FernletFoundation` all left its closure), so dependency validation
+    /// already refuses a package test that imports one; this rule names the refusal for what it is.
+    /// They hold Fernlet's own values (its crypto purposes' labels, its payload types' tokens) and stay
+    /// in this repository at plan step A1, so a package test that imported one could pin a Fernlet byte
+    /// and could not travel.
     static let packageImportAllowlist: Set<String> = [
         "ProximityKit", "Foundation", "Testing", "Combine", "simd", "Synchronization"
     ]

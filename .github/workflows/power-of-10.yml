@@ -10,7 +10,7 @@
 # Rule 10 (warnings are errors, package warnings un-suppressed) is NOT here — it needs a real
 # build, and lives on the two strict builds s3-wall.yml already runs: Scripts/spm-wall-check.sh
 # (the app's iOS build, through Scripts/spm-wall-selftest.sh) and Scripts/macos-build-check.sh
-# (ProximityKit's closure on native macOS, through Scripts/macos-build-selftest.sh). The Swift
+# (the Mac-ready set on native macOS, through Scripts/macos-build-selftest.sh). The Swift
 # grep-wall port of these same checks, PowerOfTenBoundaryTests, runs in the normal test suite (and
 # in s3-wall.yml) so a regression fails locally too.
 #

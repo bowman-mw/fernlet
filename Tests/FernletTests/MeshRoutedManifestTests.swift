@@ -590,7 +590,8 @@ struct MeshRoutedManifestSigningTests {
     private func resigned(_ manifest: MeshRoutedManifest, by identity: IdentityService) throws -> MeshRoutedManifest {
         let unsigned = manifest.replacing(signature: Data())
         let signature = try identity.sign(
-            canonicalBytes(for: unsigned), purpose: FernletCryptoPurpose.Signature.meshRoutedManifestV1
+            canonicalBytes(for: unsigned),
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRoutedManifestV1
         )
         return unsigned.replacing(signature: signature)
     }

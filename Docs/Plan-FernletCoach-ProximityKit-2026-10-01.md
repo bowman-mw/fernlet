@@ -168,7 +168,7 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
   the `"Fernlet"` display default and user-facing copy.
 - **Copied into ProximityKit:**
   - its own purpose type with a host-callable initializer (today's `CryptographicPurpose` init is
-    fileprivate);
+    fileprivate; the host's signature labels get their mint at A1.0);
   - `ColumnCrypto`, byte for byte (used by the mesh session and routed stores);
   - the `KeychainItem` mechanism (not Fernlet's `Account` enum).
 - **Injected by the host:**
@@ -180,7 +180,8 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
 
 **A0.3 Inject the vocabulary and rules (O3).**
 - ProximityKit gets generic token types and protocols. `FernletConnections` supplies Fernlet's:
-  - `PayloadType` (78 references in 13 files), `ProximityCapability` and `ProximityMode`;
+  - `PayloadType` (78 references in 13 files), `ProximityCapability` and `ProximityMode` (the
+    coordinator's session mode is ProximityKit's own from A1.0, and Fernlet converts);
   - `sealingRequiredTypes`;
   - display-name moderation (`ItemNameModeration`, 46 references);
   - the Friend and Coach session trust policies and `FriendMintingReview`;
@@ -209,7 +210,9 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
   - heart-drop derivations (:316–372) and presence tags (:373–446) become generic
     `pairSecret(purpose:)` and `epochTag(purpose:)` in the core, called with Fernlet's purposes.
 - **Stays in core:** the one-to-one mechanism pieces of `RecipeSharing/` (`RecipeShareTransfer`,
-  `RecipeShareAdvertisement`, `RecipeShareOutcome`), generalized in A0.7. Feature-only date helpers
+  `RecipeShareAdvertisement`, `RecipeShareOutcome`), generalized in A0.7 and renamed at A1.0 (the
+  folder `PairSession/`, `ProximityPairTransfer`, `ProximityPairAdvertisement`,
+  `ProximityPairSendOutcome`). Feature-only date helpers
   (`FernletDate.dayKey`, `MonotonicClock`) move out with the features.
 
 **A0.5 Split the routed mesh manager** (`MeshNetworkManager.swift`, 16,579 lines).
@@ -256,7 +259,8 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
 
 **A0.7 Generalize the one-to-one radio** into a profile-driven pair session.
 - The recipe profile reproduces today's bytes. The coach profile is added in C5.
-- `RecipeShareRadioSession` (`NetworkRecipeShareSession.swift:22`) is already a generic protocol.
+- `RecipeShareRadioSession` (`NetworkRecipeShareSession.swift:22`) is already a generic protocol
+  (`ProximityPairRadioSession`, in `Transport/NetworkPairSession.swift`, since A1.0).
 
 **A0.8 Sort the tests.**
 - **ProximityKit's own package test target,** `FernletKit/Tests/ProximityKitTests`: unhosted (the
@@ -289,6 +293,51 @@ Each step lands separately with the mesh batteries green (CI mesh line: 155 suit
   A1, after the rigs are re-hosted.
 
 ### A1. Move to the `proximitykit` repo
+
+**A1.0 ProximityKit stands alone** (in this tree, before the split; owner decisions 2026-10-11).
+After A0, ProximityKit still depended on two FernletKit modules, and A1.1 to A1.3 have no step that
+cuts them, so this pre-step does, with the renames the package should be tagged with. One gated
+commit at a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged. At its
+end:
+- **ProximityKit depends on nothing in FernletKit** (O2). Its target in `FernletKit/Package.swift`
+  declares `dependencies: []`, the literal list `ProximityNamespaceBoundaryTests` pins, and
+  `ProximityPlatformBoundaryTests` allows no Fernlet module among its imports. Both edges leave here,
+  not at C1 and C5:
+  - **The session mode.** The coordinator's `Mode` is ProximityKit's own `ProximitySessionMode`
+    (`trainer`, `friend`). Its raw values are frozen: the coordinator writes them into an audit
+    message Fernlet persists. Fernlet's records and logs keep FernletDomainModel's `ProximityMode`,
+    converted case for case in FernletConnections, and the vocabulary golden holds both enums to the
+    same spellings. C5 still generalizes the mode into a session policy, inside the package. The
+    five dead `import FernletDomainModel` lines go too.
+  - **The signing overloads (owner decision: a host label mint).** `ProximityCryptographicPurpose`
+    gains a public mint taking a literal (`StaticString`) label and a framing (`.lengthPrefixed` or
+    `.rawPrefix` only). `IdentityService`'s two `CryptographicPurpose` overloads and its
+    `import FernletCrypto` go; the 12 production call sites (FernletSocial's activity and moderation
+    labels, the app's duress and probe labels) switch type, the test sites follow, and the three
+    tests that sign under a legacy `.absent` label get a raw CryptoKit key fixture. FernletCrypto's
+    entries stay as golden-pinned twins until C1.
+- **The Mac build keeps its coverage.** `Scripts/macos-build-check.sh` builds the `MacReady` product,
+  which names ProximityKit, FernletFoundation, FernletCrypto and FernletDomainModel, so the three
+  modules a Mac host of Fernlet's needs still build for native macOS on every push once ProximityKit
+  no longer reaches them.
+- **The rename pass (owner decision: `ProximityPair*`).** What still says recipe in the pair
+  session's mechanism takes the pair names: `ProximityPairTransfer`, `ProximityPairDiscoveryGate`,
+  `ProximityPairAdvertisedName`, `ProximityPairAdvertisement`, `ProximityPairDialHello`,
+  `ProximityPairPosture` and `ProximityPairRadioSession`; the radio `NetworkPairSession` (file
+  `Transport/NetworkPairSession.swift`); the private `PairTransferClaim`; the folder `PairSession/`;
+  and the namespace's public field `Radios.pair` (one field; a coach row can join at C5). The
+  field-path labels soundness and the goldens name follow the field (`family.radios.pair.*`: diagnostic
+  labels, never bytes); every frozen recipe token stays, and `ProximityNamespaceBoundaryTests` rule 6
+  refuses the old names.
+- **The DEBUG test-hook keys (owner decision: `PROXIMITYKIT_*`).** The six launch-environment keys
+  ProximityKit reads carry its own name: `PROXIMITYKIT_UI_TEST_MESH_OPEN`, `_CLOSED` and `_ADMISSION`
+  (the mesh manager's canned mesh for the UI tests) and `PROXIMITYKIT_MESH_CONSOLE_LOG`,
+  `PROXIMITYKIT_MESH_CHAOS` and `PROXIMITYKIT_MESH_CHAOS_BARRED` (the transport's console mirror and
+  chaos seam). The UI tests, `MeshRejectionMatrixHarness`'s banner, `UITestSupport`'s harness check
+  and the feasibility runbook use them; the app's own `FERNLET_*` hooks keep their names.
+  `TestHookBoundaryTests` walls them as two families of their own, and
+  `ProximityNamespaceBoundaryTests`' list of `fernlet` literals is empty, so no Fernlet string is
+  left in ProximityKit's code; what A1 still settles is the presence radio's `package` doors.
 
 **A1.1 Create the repo.**
 - Split `FernletKit/Sources/ProximityKit` plus its package tests (`FernletKit/Tests/ProximityKitTests`)
@@ -332,6 +381,9 @@ umbrella entry:
   - keep the Bonjour classification app-side.
 - **`S3BoundaryTests`:** move the ProximityKit/CloudKit pair (:216–241) to the new repo.
 - **Power-of-10:** delete the 3 moved allowlist entries.
+- **`TestHookBoundaryTests`:** ProximityKit's two hook families leave the shipping roots with its
+  sources: drop `PROXIMITYKIT_UI_TEST_` and its floor, and lower `PROXIMITYKIT_MESH`'s to the app
+  banner's two reads; the package walls its own keys.
 - **`LocalizationBoundaryTests`:** drop the moved catalog and keys (:2749, :2525, :2578, :2614), plus
   the matching `sync-string-catalogs.sh:88` line.
 - **Re-point:** `PrivacyWipeCoverageTests:270–272` with 9 `PrivacyWipeCoverage.md` rows,
@@ -541,6 +593,9 @@ generalized in A).
      - The coach's device sends nothing to a peer that is neither paired nor accepted.
   5. **Unlocking:** ending the session, or "Let someone else connect", unlocks it for the next
      coachee.
+- **Session policy:** the coordinator's session mode (ProximityKit's `ProximitySessionMode`, trainer
+  or friend, since A1.0) generalizes into the session policy each profile brings, the coach's the
+  first other than friend. Its raw values stay frozen.
 - **Admission:** the coach accepts or refuses the dialer after the identity handshake, not from a
   browse-resolved hello. That replaces the recipe radio's inbound check, which can't work for a
   listener that never browses.
@@ -854,7 +909,8 @@ trader status is needed while it's free and US-only.
   doesn't wait for the move.
 
 **P2: the move.**
-- A1: ProximityKit moves to its repo, tagged 0.1.0, with the example app.
+- A1: ProximityKit first stands alone in this tree (A1.0: no FernletKit dependency, the pair names,
+  the `PROXIMITYKIT_*` hook keys), then moves to its repo, tagged 0.1.0, with the example app.
 - FernletKit depends on it, and the mesh test batteries stay green.
 
 **P3: in parallel**

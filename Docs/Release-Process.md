@@ -51,8 +51,8 @@ On `main`, enable branch protection with:
 
 Local complement: every clone runs `Scripts/install-git-hooks.sh` once, so the committed
 `pre-push` hook runs `Scripts/spm-wall-check.sh` before wall-touching pushes, and
-`Scripts/macos-build-check.sh` before pushes that touch ProximityKit's macOS closure, the package
-manifest or the macOS scripts.
+`Scripts/macos-build-check.sh` before pushes that touch the Mac-ready set (ProximityKit,
+FernletCrypto, FernletDomainModel, FernletFoundation), the package manifest or the macOS scripts.
 
 ## 2. Per-release checklist
 

@@ -61,7 +61,7 @@ struct ProximityRecipeShareCapTests {
     /// `makeReturningDevice`.
     /// A browsed recipe peer, named the way the QUIC radio names one: in the TXT record.
     ///
-    /// `displayHint` is EMPTY because that is what `NetworkRecipeShareSession.handle(for:)` mints
+    /// `displayHint` is EMPTY because that is what `NetworkPairSession.handle(for:)` mints
     /// — under MultipeerConnectivity the hint was `UIDevice.current.name` and every fixture here
     /// leaned on it, which is how a manager reading the hint could print a random Bonjour instance
     /// name into the picker and keep a green suite.
@@ -69,11 +69,11 @@ struct ProximityRecipeShareCapTests {
         PeerHandle(
             id: UUID(),
             displayHint: "",
-            discoveryInfo: RecipeShareAdvertisement.publishedFields(
+            discoveryInfo: ProximityPairAdvertisement.publishedFields(
                 from: [
-                    RecipeShareAdvertisement.versionKey: RecipeShareAdvertisement.version,
-                    RecipeShareAdvertisement.modeKey: RecipeShareAdvertisement.mode,
-                    RecipeShareAdvertisement.nameKey: name
+                    ProximityPairAdvertisement.versionKey: ProximityPairAdvertisement.version,
+                    ProximityPairAdvertisement.modeKey: ProximityPairAdvertisement.mode,
+                    ProximityPairAdvertisement.nameKey: name
                 ],
                 sessionID: UUID().uuidString
             ),

@@ -165,7 +165,7 @@ extension ProximityRecipeShareManager {
     /// identity of its own, through the pair session that owns both, under the recipe profile on the
     /// host's own namespace, exactly as `init(store:)` builds it.
     convenience init(
-        store: any ProximityHost, makeSession: (() -> any RecipeShareRadioSession)?,
+        store: any ProximityHost, makeSession: (() -> any ProximityPairRadioSession)?,
         identity: IdentityService? = nil
     ) {
         self.init(pairSession: ProximityPairSession(
@@ -181,7 +181,7 @@ extension ProximityRecipeShareManager {
     }
 
     /// `pairSession.radioForTesting`.
-    var radioForTesting: any RecipeShareRadioSession { pairSession.radioForTesting }
+    var radioForTesting: any ProximityPairRadioSession { pairSession.radioForTesting }
 
     /// `pairSession.connectionCountForTesting`.
     var connectionCountForTesting: Int { pairSession.connectionCountForTesting }
@@ -210,7 +210,7 @@ extension ProximityRecipeShareManager {
     }
 
     /// `pairSession.transferForTesting`.
-    var transferForTesting: RecipeShareTransfer? { pairSession.transferForTesting }
+    var transferForTesting: ProximityPairTransfer? { pairSession.transferForTesting }
 
     /// `pairSession.finishShareForTesting(_:token:)`.
     func finishShareForTesting(_ result: ProximityPairSendOutcome.Result, token: UUID?) {
@@ -224,19 +224,19 @@ extension ProximityRecipeShareManager {
 
     /// `pairSession.applyTransferForTesting(_:)`.
     @discardableResult
-    func applyTransferForTesting(_ event: RecipeShareTransfer.Event) -> Bool {
+    func applyTransferForTesting(_ event: ProximityPairTransfer.Event) -> Bool {
         pairSession.applyTransferForTesting(event)
     }
 
     /// `pairSession.applyTransferForTesting(_:token:)`.
     @discardableResult
-    func applyTransferForTesting(_ event: RecipeShareTransfer.Event, token: UUID?) -> Bool {
+    func applyTransferForTesting(_ event: ProximityPairTransfer.Event, token: UUID?) -> Bool {
         pairSession.applyTransferForTesting(event, token: token)
     }
 
     /// `pairSession.applyDiscoveryGateForTesting(_:)`.
     @discardableResult
-    func applyDiscoveryGateForTesting(_ event: RecipeShareDiscoveryGate.Event) -> RecipeShareDiscoveryGate.Verdict {
+    func applyDiscoveryGateForTesting(_ event: ProximityPairDiscoveryGate.Event) -> ProximityPairDiscoveryGate.Verdict {
         pairSession.applyDiscoveryGateForTesting(event)
     }
 

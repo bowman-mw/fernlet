@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import CryptoKit
-import FernletDomainModel
 
 // MARK: - MeshNetworkManager
 
@@ -14246,8 +14245,10 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
     // would be unused, and warnings are errors on every target.
     #endif
 
-    /// Seeds a canned mesh (and, optionally, a pending admission request) from `FERNLET_UI_TEST_MESH_*`
-    /// so the UI suites can drive the mesh surfaces without a second device.
+    /// Seeds a canned mesh (and, optionally, a pending admission request) from the DEBUG launch
+    /// environment keys `PROXIMITYKIT_UI_TEST_MESH_OPEN`, `PROXIMITYKIT_UI_TEST_MESH_CLOSED` and
+    /// `PROXIMITYKIT_UI_TEST_MESH_ADMISSION`, so the UI suites can drive the mesh surfaces without a
+    /// second device.
     ///
     /// The BODY is `#if DEBUG`, not the signature: a configuration skew between the app target and
     /// this local package would turn a wrapped signature into a hard "cannot find member" error,
@@ -14260,7 +14261,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
         let now = Date()
         let hostFP = "aa:bb:cc:dd:00:11:test"
 
-        if env["FERNLET_UI_TEST_MESH_OPEN"] == "1" || env["FERNLET_UI_TEST_MESH_ADMISSION"] == "1" {
+        if env["PROXIMITYKIT_UI_TEST_MESH_OPEN"] == "1" || env["PROXIMITYKIT_UI_TEST_MESH_ADMISSION"] == "1" {
             currentMesh = MeshDescriptor(
                 meshID: Self.uiTestOpenMeshID,
                 name: "Sunrise Meadow",
@@ -14278,7 +14279,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             )
         }
 
-        if env["FERNLET_UI_TEST_MESH_CLOSED"] == "1" {
+        if env["PROXIMITYKIT_UI_TEST_MESH_CLOSED"] == "1" {
             currentMesh = MeshDescriptor(
                 meshID: Self.uiTestClosedMeshID,
                 name: "Closed Test Mesh",
@@ -14296,7 +14297,7 @@ public final class MeshNetworkManager: ProximityPayloadHandling {
             )
         }
 
-        if env["FERNLET_UI_TEST_MESH_ADMISSION"] == "1", let mesh = currentMesh {
+        if env["PROXIMITYKIT_UI_TEST_MESH_ADMISSION"] == "1", let mesh = currentMesh {
             pendingAdmissionRequests = [MeshAdmissionRequestPayload(
                 meshID: mesh.meshID,
                 requesterFingerprint: "bb:cc:dd:ee:ff:test",

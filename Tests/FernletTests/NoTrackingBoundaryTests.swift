@@ -338,9 +338,9 @@ struct NoTrackingBoundaryTests {
         // PresenceEpochPosture that is replaced whole at every 900 s epoch boundary.
         "NetworkPresenceSession.swift",
         // ProximityKit's QUIC recipe-share radio (plan §17.1): the same three, advertising under a
-        // RecipeSharePosture minted per start and per resume, and standing the listener AND the
+        // ProximityPairPosture minted per start and per resume, and standing the listener AND the
         // browser down for as long as a pairing is held.
-        "NetworkRecipeShareSession.swift",
+        "NetworkPairSession.swift",
         // The DEBUG-only feasibility spike, compiled out of Release entirely.
         "NetworkMeshFeasibilityProbe.swift"
     ]

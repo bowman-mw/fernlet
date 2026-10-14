@@ -1,12 +1,13 @@
 // ProximityCoordinatorEnums.swift
-// SPM carve-up: the session's mode, a pure String/Codable enum formerly nested inside
-// ProximityCoordinator, as a top-level public enum here so the audit/trust DTOs
-// (ConnectionSessionLog, ProximityTrustedPeerRecord) can reference it without an upward edge.
-// ProximityCoordinator keeps `typealias Mode = ProximityMode` so every existing
-// `ProximityCoordinator.Mode` / bare `Mode` reference across the proximity subtree compiles
-// unchanged. The session's role and ranging mode are ProximityKit's own (`ProximityRole`,
-// `ProximityRangingMode`); ConnectionSessionLog keeps nested copies with the same raw values.
-// Codable identity is by rawValue — renaming/relocating the type does NOT change the JSON.
+// SPM carve-up: the session's mode as Fernlet persists it, a pure String/Codable enum formerly
+// nested inside ProximityCoordinator, as a top-level public enum here so the audit/trust DTOs
+// (ConnectionSessionLog, ProximityTrustedPeerRecord) can reference it without an upward edge. The
+// coordinator's own session mode is ProximityKit's `ProximitySessionMode` (its `Mode` typealias),
+// with the same frozen raw values; FernletConnections converts it to this enum case for case
+// (`ProximityMode.init(_:)`, ProximityMode+SessionMode.swift) wherever a record stores it. The
+// session's role and ranging mode are ProximityKit's too (`ProximityRole`, `ProximityRangingMode`);
+// ConnectionSessionLog keeps nested copies with the same raw values. Codable identity is by rawValue —
+// renaming/relocating the type does NOT change the JSON.
 
 import Foundation
 

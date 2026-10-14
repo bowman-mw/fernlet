@@ -29,6 +29,14 @@ enum MeshProbeConstants {
     static let signingKeyByteCount = 32
     static let signatureByteCount = 64
     static let channelBindingByteCount = 32
+    /// The label the probe's channel introduction is signed and verified under through ProximityKit's
+    /// identity: `fernlet.mesh.probe.channel-introduction.v1`, raw prefix, minted with ProximityKit's
+    /// `featureSignature(_:framing:)` (its identity signs under nothing else). Spelled and framed as the
+    /// registry entry the introduction's signing bytes open with, its twin until plan step C1, which
+    /// `ProximityNamespaceGoldenTests` holds to the same accepted bytes. Distinct from the production
+    /// channel introduction's label, so the DEBUG spike can never sign bytes a shipping peer accepts.
+    static let channelIntroductionPurpose = ProximityCryptographicPurpose.featureSignature(
+        "fernlet.mesh.probe.channel-introduction.v1", framing: .rawPrefix)
 }
 
 /// A signed identity hello carried on the prototype's reliable control stream.
@@ -92,7 +100,7 @@ struct MeshProbeChannelIntroduction: Codable, Equatable {
             signature,
             of: canonicalSigningBytes,
             by: signingPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshProbeChannelIntroductionV1
+            purpose: MeshProbeConstants.channelIntroductionPurpose
         )
     }
 
@@ -1126,7 +1134,7 @@ final class NetworkMeshFeasibilityProbe {
         )
         introduction.signature = try identity.sign(
             introduction.canonicalSigningBytes,
-            purpose: FernletCryptoPurpose.Signature.meshProbeChannelIntroductionV1
+            purpose: MeshProbeConstants.channelIntroductionPurpose
         )
         return introduction
     }

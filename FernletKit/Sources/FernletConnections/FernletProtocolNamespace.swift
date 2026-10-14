@@ -183,7 +183,7 @@ nonisolated extension ProximityNamespace.Radios {
     public nonisolated static let fernlet = ProximityNamespace.Radios(
         mesh: ProximityNamespace.Radio(serviceType: "_fernlet-mesh2._udp", alpn: "fernlet-mesh-v1"),
         presence: ProximityNamespace.Radio(serviceType: "_fernlet-near2._udp", alpn: "fernlet-near-v1"),
-        recipeShare: ProximityNamespace.Radio(serviceType: "_fernlet-recipe2._udp", alpn: "fernlet-recipe-v1"),
+        pair: ProximityNamespace.Radio(serviceType: "_fernlet-recipe2._udp", alpn: "fernlet-recipe-v1"),
         meshHeartbeat: Data("fernlet-mesh-heartbeat".utf8),
         meshInstanceNamePrefix: "fernlet-mesh-",
         presenceInstanceNamePrefix: "fn-",

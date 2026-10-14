@@ -21,7 +21,6 @@
 
 import Foundation
 import CryptoKit
-import FernletCrypto
 import FernletDomainModel
 import ProximityKit
 
@@ -193,7 +192,7 @@ extension ActivityJoinToken {
             hostSignature: Data()
         )
         token.hostSignature = try hostIdentity.sign(
-            canonicalBytes(for: token), purpose: FernletCryptoPurpose.Signature.activityJoinTokenV2)
+            canonicalBytes(for: token), purpose: FernletFeatureSignatures.activityJoinTokenV2)
         return token
     }
 
@@ -226,7 +225,7 @@ extension ActivityJoinToken {
             IdentityService.fingerprint(of: hostSigningPublicKey), hostFingerprint
         ) else { throw VerifyError.fingerprintMismatch }
         guard IdentityService.verify(hostSignature, of: canonicalBytes(for: self), by: hostSigningPublicKey,
-                                     purpose: FernletCryptoPurpose.Signature.activityJoinTokenV2) else {
+                                     purpose: FernletFeatureSignatures.activityJoinTokenV2) else {
             throw VerifyError.signatureInvalid
         }
     }
@@ -273,7 +272,7 @@ extension ActivityRosterSnapshot {
             hostSignature: Data()
         )
         snapshot.hostSignature = try hostIdentity.sign(
-            canonicalBytes(for: snapshot), purpose: FernletCryptoPurpose.Signature.activityRosterSnapshotV2)
+            canonicalBytes(for: snapshot), purpose: FernletFeatureSignatures.activityRosterSnapshotV2)
         return snapshot
     }
 
@@ -296,7 +295,7 @@ extension ActivityRosterSnapshot {
             else { throw VerifyError.participantFieldTooLarge }
         }
         guard IdentityService.verify(hostSignature, of: canonicalBytes(for: self), by: hostSigningPublicKey,
-                                     purpose: FernletCryptoPurpose.Signature.activityRosterSnapshotV2) else {
+                                     purpose: FernletFeatureSignatures.activityRosterSnapshotV2) else {
             throw VerifyError.signatureInvalid
         }
     }

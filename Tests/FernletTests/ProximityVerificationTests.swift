@@ -11,7 +11,6 @@ import Foundation
 import Testing
 import CryptoKit
 import FernletConnections
-import FernletCrypto
 @testable import ProximityKit
 import FernletDomainModel
 import FernletFoundation
@@ -104,7 +103,7 @@ struct ProximityVerificationTests {
             challengeNonce: challengeNonce,
             qrNonce: qrNonce
         )
-        let purpose = FernletCryptoPurpose.Signature.proximityQRResponseV1
+        let purpose = ProximityNamespace.fernlet.family.purposes.signature.proximityQRResponseV1
         let signature = try displayer.sign(message, purpose: purpose)
         #expect(IdentityService.verify(signature, of: message, by: displayer.localSigningPublicKey, purpose: purpose))
 
@@ -422,7 +421,7 @@ struct ProximityVerificationTests {
             scannerKeyAgreementPublicKey: manager.localKeyAgreementPublicKey,
             challengeNonce: challengeNonce,
             qrNonce: bobQR.nonce
-        ), purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1)
+        ), purpose: ProximityNamespace.fernlet.family.purposes.signature.proximityQRResponseV1)
         try deliverResponse(to: manager, on: bobSlot.coordinator, from: bob,
                             challengeNonce: challengeNonce, signature: signature)
         await waitForCommit(bobSlot.coordinator)
@@ -457,7 +456,7 @@ struct ProximityVerificationTests {
             scannerKeyAgreementPublicKey: manager.localKeyAgreementPublicKey,
             challengeNonce: challengeNonce,
             qrNonce: bobQR.nonce
-        ), purpose: FernletCryptoPurpose.Signature.proximityQRResponseV1)
+        ), purpose: ProximityNamespace.fernlet.family.purposes.signature.proximityQRResponseV1)
         try deliverResponse(to: manager, on: bobSlot.coordinator, from: bob,
                             challengeNonce: challengeNonce, signature: signature)
         await settle()

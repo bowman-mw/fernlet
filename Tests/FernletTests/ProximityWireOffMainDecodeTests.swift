@@ -23,7 +23,6 @@
 import ProximityKit
 import FernletSocial
 import Foundation
-import FernletCrypto
 import FernletFoundation
 import Testing
 import FernletDomainModel
@@ -100,7 +99,7 @@ struct ProximityWireOffMainDecodeTests {
                 decoded.signature,
                 of: canon,
                 by: signerKey,
-                purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2
+                purpose: ProximityNamespace.fernlet.family.purposes.signature.identityEnvelopeV2
             )
         }.value
 
@@ -145,7 +144,7 @@ struct ProximityWireOffMainDecodeTests {
                 decoded.signature,
                 of: canonicalBytes(for: decoded),
                 by: signerKey,
-                purpose: FernletCryptoPurpose.Signature.identityEnvelopeV2
+                purpose: ProximityNamespace.fernlet.family.purposes.signature.identityEnvelopeV2
             )
         }.value
 

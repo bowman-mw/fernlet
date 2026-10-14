@@ -108,7 +108,11 @@ engine through its public seams.
   ledger that holds them, the photo reassembly's hash validation, the
   gates re-run at the receiving member as a view filter over an unmutated union, and the heart receipt.
 - `Wire/FeatureCanonicalBytes.swift`: the activities' and the moderation report's canonical signing
-  bytes, written with ProximityKit's public `CanonicalByteWriter` under their FernletCrypto domains.
+  bytes, written with ProximityKit's public `CanonicalByteWriter` under their FernletCrypto domains,
+  and `FernletFeatureSignatures`, the three host labels the join token, the roster snapshot and the
+  report row are signed and verified under through ProximityKit's identity, minted with its
+  `ProximityCryptographicPurpose.featureSignature(_:framing:)`, each the twin of its registry
+  domain until C1.
 
 **Presence and the dead-drop.**
 
@@ -303,8 +307,9 @@ session-message suites, and the mesh suites on the `mesh-features` line, hold th
 values itself: the heart-drop and moderation keychain services are the prekey store's and the ban
 store's, the heart-drop and presence pair secrets pass `.fernlet`'s declared salts, the dead-drop,
 presence and the ban store name FernletCrypto's sealing salt, day-tag prefix, sidecar authenticated
-data, epoch-tag prefix and reporter-tag domain, the activities and the moderation report frame and
-sign their canonical bytes under FernletCrypto's four feature labels, the mesh features register, send and gate by FernletDomainModel's
+data, epoch-tag prefix and reporter-tag domain, the activities and the moderation report frame
+their canonical bytes under FernletCrypto's four feature labels and sign the three signed ones under
+their host-label twins (`FernletFeatureSignatures`), the mesh features register, send and gate by FernletDomainModel's
 `PayloadType` and `ProximityCapability` cases and mint under ``FernletRoutedTypes``' rows over
 `.fernlet`'s routed types, and presence checks the heart payload's `fernlet.proximity.heart` format on
 receipt and advertises Fernlet's hearts capability beside the namespace's wire2 token. The
@@ -336,8 +341,9 @@ audit bridge forwards to the same log.
 **What it builds on in ProximityKit.** Public API: `IdentityService` — its `fingerprint(of:)`, by
 which the ledger buckets reporters and the ban store names a peer's ban, its generic
 `pairSecret(with:purpose:)` for the dead-drop and presence, the `staticKeyAgreement(withEphemeralPublicKey:)`
-the sealer's static-key fallback opens through, the `CryptographicPurpose` signing overloads the
-activities and the moderation report sign and verify through (until C1), the presence epoch clock,
+the sealer's static-key fallback opens through, its `sign` and `verify` under the host labels the
+activities and the moderation report mint with `ProximityCryptographicPurpose.featureSignature(_:framing:)`,
+the presence epoch clock,
 its key-agreement public key, provisioning and wipe; the signed `FernletIdentityEnvelope` with its
 `PayloadSummary`; `SealedPayloadFraming`; `ProtectedSidecar` and `SidecarSeal`; the
 `ProximityPrekeyBundle` wire type; the two mesh storage scopes the derivation extends; the mesh
@@ -411,7 +417,7 @@ reads, the name placeholders,
 delegates to, and the signed envelope's typed view (`payloadType`, the typed initializer and the typed
 `signed`), which the heart dead-drop signs and reads through and presence, the clothing shop and
 recipe sharing read through; on `FernletCrypto`, for the dead-drop's, presence's and the ban store's
-registry labels and the activities' and the moderation report's four signing labels; on
+registry labels and the activities' and the moderation report's four canonical-bytes domains; on
 `FernletDomainModel`, for the heart, moderation, closeness, friend-state and companion value types the stores keep, the friend
 records the dead-drop, presence and the session hearts read, the dead-drop's transport seam, the
 payload types and capabilities the features register, send and check, the activity, clothing,
@@ -421,8 +427,8 @@ photo-session and friend-state values the mesh features carry, and the recipe pa
 session heart carries; and on `PrivateMediaStore`, for the session photos' friend wall and sealed
 pending corpus, their keychain key providers and the capture's resize. It imports nothing else but
 Foundation, Observation, Security, CryptoKit and UIKit, whose `UIImage` the capture's resize reads.
-So it builds for iOS alone: the native macOS build plan step A0.6 added covers ProximityKit's closure,
-not this module, whose photo path (and `PrivateMediaStore`'s encoders under it) would need a UIKit-free
+So it builds for iOS alone: the native macOS build plan step A0.6 added covers the Mac-ready set
+(ProximityKit, FernletFoundation, FernletCrypto and FernletDomainModel), not this module, whose photo path (and `PrivateMediaStore`'s encoders under it) would need a UIKit-free
 twin, with goldens of its own, before a Mac host could link it.
 Its `PrivateMediaStore` edge puts it on the protected side of the S3 wall, as ProximityKit is: the walled
 `AIProviders` and `CloudKitSync` targets have no edge to it, and
@@ -505,6 +511,7 @@ decode or a derivation never hops an actor.
 - ``ActivityJoinGrantPayload``
 - ``ActivityRosterSnapshotPayload``
 - ``ActivitySyncPayload``
+- ``FernletFeatureSignatures``
 
 ### Presence and in-person hearts
 

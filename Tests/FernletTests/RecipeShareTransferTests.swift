@@ -9,7 +9,7 @@
 // was — the payload crosses as one sealed frame — so "preserving pause/resume semantics" means
 // preserving the RADIO's pause/resume, the shipped behaviour that closes this Fernlet to a third
 // device while a pairing is held and reopens it when the pairing's record is evicted. The two bare
-// calls that used to carry it are now one total table (`RecipeShareDiscoveryGate`), and the one that
+// calls that used to carry it are now one total table (`ProximityPairDiscoveryGate`), and the one that
 // a transport swap would most plausibly get wrong — "pause" meaning "stand the connection down" —
 // is refused by construction: a discovery pause is accepted in every phase of an exchange and moves
 // none of them.
@@ -75,7 +75,7 @@ struct RecipeShareTransferTests {
     /// cross-product of the radio's three facts. A table the production function is re-derived from
     /// would prove nothing, so this one names its expectation per row.
     @Test func discoveryGateAnswersTheWholeCrossProduct() {
-        let events: [RecipeShareDiscoveryGate.Event] = [
+        let events: [ProximityPairDiscoveryGate.Event] = [
             .connectionRegistered, .connectionsEvicted,
             .refreshRequested, .transportErrorWhileListening, .stopped
         ]
@@ -84,11 +84,11 @@ struct RecipeShareTransferTests {
             for isRunning in [true, false] {
                 for isPaused in [true, false] {
                     for count in [0, 1, 2] {
-                        let radio = RecipeShareDiscoveryGate.Radio(
+                        let radio = ProximityPairDiscoveryGate.Radio(
                             isRunning: isRunning, isPaused: isPaused, connectionCount: count
                         )
                         let expected = Self.expectedVerdict(event, isRunning, isPaused, count)
-                        let actual = RecipeShareDiscoveryGate.verdict(for: event, radio: radio)
+                        let actual = ProximityPairDiscoveryGate.verdict(for: event, radio: radio)
                         if actual != expected {
                             wrong.append("\(event) run=\(isRunning) paused=\(isPaused) n=\(count): \(actual) ≠ \(expected)")
                         }
@@ -101,11 +101,11 @@ struct RecipeShareTransferTests {
 
     /// The contract, spelled independently: discovery moves at exactly two moments.
     private static func expectedVerdict(
-        _ event: RecipeShareDiscoveryGate.Event,
+        _ event: ProximityPairDiscoveryGate.Event,
         _ isRunning: Bool,
         _ isPaused: Bool,
         _ count: Int
-    ) -> RecipeShareDiscoveryGate.Verdict {
+    ) -> ProximityPairDiscoveryGate.Verdict {
         switch event {
         case .connectionRegistered:
             return (count > 0 && !isPaused) ? .pause : .unchanged
@@ -119,27 +119,27 @@ struct RecipeShareTransferTests {
     /// Resume is keyed on RECORD eviction, and a radio that is not running never comes back up: the
     /// two rules the table exists to freeze, asserted on their own so a regression names itself.
     @Test func resumeIsRefusedForAStoppedRadioAndWhileASecondPairingIsHeld() {
-        let stopped = RecipeShareDiscoveryGate.Radio(isRunning: false, isPaused: true, connectionCount: 0)
-        #expect(RecipeShareDiscoveryGate.verdict(for: .connectionsEvicted, radio: stopped) == .unchanged)
+        let stopped = ProximityPairDiscoveryGate.Radio(isRunning: false, isPaused: true, connectionCount: 0)
+        #expect(ProximityPairDiscoveryGate.verdict(for: .connectionsEvicted, radio: stopped) == .unchanged)
 
-        let stillPaired = RecipeShareDiscoveryGate.Radio(isRunning: true, isPaused: true, connectionCount: 1)
-        #expect(RecipeShareDiscoveryGate.verdict(for: .connectionsEvicted, radio: stillPaired) == .unchanged)
+        let stillPaired = ProximityPairDiscoveryGate.Radio(isRunning: true, isPaused: true, connectionCount: 1)
+        #expect(ProximityPairDiscoveryGate.verdict(for: .connectionsEvicted, radio: stillPaired) == .unchanged)
 
-        let evicted = RecipeShareDiscoveryGate.Radio(isRunning: true, isPaused: true, connectionCount: 0)
-        #expect(RecipeShareDiscoveryGate.verdict(for: .connectionsEvicted, radio: evicted) == .resume)
+        let evicted = ProximityPairDiscoveryGate.Radio(isRunning: true, isPaused: true, connectionCount: 0)
+        #expect(ProximityPairDiscoveryGate.verdict(for: .connectionsEvicted, radio: evicted) == .resume)
     }
 
     /// A register while already paused is a no-op, and a register holding nothing is refused rather
     /// than closing a radio with no pairing to protect.
     @Test func pauseIsIdempotentAndNeverClosesARadioHoldingNothing() {
-        let alreadyPaused = RecipeShareDiscoveryGate.Radio(isRunning: true, isPaused: true, connectionCount: 1)
-        #expect(RecipeShareDiscoveryGate.verdict(for: .connectionRegistered, radio: alreadyPaused) == .unchanged)
+        let alreadyPaused = ProximityPairDiscoveryGate.Radio(isRunning: true, isPaused: true, connectionCount: 1)
+        #expect(ProximityPairDiscoveryGate.verdict(for: .connectionRegistered, radio: alreadyPaused) == .unchanged)
 
-        let empty = RecipeShareDiscoveryGate.Radio(isRunning: true, isPaused: false, connectionCount: 0)
-        #expect(RecipeShareDiscoveryGate.verdict(for: .connectionRegistered, radio: empty) == .unchanged)
+        let empty = ProximityPairDiscoveryGate.Radio(isRunning: true, isPaused: false, connectionCount: 0)
+        #expect(ProximityPairDiscoveryGate.verdict(for: .connectionRegistered, radio: empty) == .unchanged)
 
-        let paired = RecipeShareDiscoveryGate.Radio(isRunning: true, isPaused: false, connectionCount: 1)
-        #expect(RecipeShareDiscoveryGate.verdict(for: .connectionRegistered, radio: paired) == .pause)
+        let paired = ProximityPairDiscoveryGate.Radio(isRunning: true, isPaused: false, connectionCount: 1)
+        #expect(ProximityPairDiscoveryGate.verdict(for: .connectionRegistered, radio: paired) == .pause)
     }
 
     // MARK: - The exchange's state table
@@ -157,12 +157,12 @@ struct RecipeShareTransferTests {
         #expect(Self.applied([.cancelled]).phase == .cancelled)
 
         // The refusals.
-        var connecting = RecipeShareTransfer(recipientID: UUID())
+        var connecting = ProximityPairTransfer(recipientID: UUID())
         #expect(connecting.apply(.sendBegan(wireByteCount: 64)) == false)
         #expect(connecting.apply(.sendCompleted) == false)
         #expect(connecting.phase == .connecting)
 
-        var verified = RecipeShareTransfer(recipientID: UUID())
+        var verified = ProximityPairTransfer(recipientID: UUID())
         verified.apply(.peerVerified)
         #expect(verified.apply(.sendCompleted) == false)
         #expect(verified.phase == .verified)
@@ -175,12 +175,12 @@ struct RecipeShareTransferTests {
     /// Every terminal phase refuses every phase event — a finished share cannot be restarted,
     /// re-completed or re-failed by a late callback.
     @Test func terminalPhasesRefuseEveryPhaseEvent() {
-        let terminals: [[RecipeShareTransfer.Event]] = [
+        let terminals: [[ProximityPairTransfer.Event]] = [
             [.peerVerified, .sendBegan(wireByteCount: 64), .sendCompleted],
             [.sendFailed],
             [.cancelled]
         ]
-        let events: [RecipeShareTransfer.Event] = [
+        let events: [ProximityPairTransfer.Event] = [
             .peerVerified, .sendBegan(wireByteCount: 64), .sendCompleted, .sendFailed, .cancelled
         ]
         for path in terminals {
@@ -198,7 +198,7 @@ struct RecipeShareTransferTests {
     /// flight. A pass-2 session that stood the connection down on a pause would break a send the
     /// retired MultipeerConnectivity radio kept alive, and nothing above the transport would say so.
     @Test func discoveryPauseAndResumeNeverMoveTheExchange() {
-        let paths: [[RecipeShareTransfer.Event]] = [
+        let paths: [[ProximityPairTransfer.Event]] = [
             [],
             [.peerVerified],
             [.peerVerified, .sendBegan(wireByteCount: 900_000)],
@@ -239,7 +239,7 @@ struct RecipeShareTransferTests {
     /// state hides a table that passes through an inconsistent one — `.sent` with no completion, or
     /// a completion with the phase somewhere else — and then lands consistent by luck.
     @Test func exchangeCompletesAtMostOnceOverEveryEventSequenceUpToFour() {
-        let alphabet: [RecipeShareTransfer.Event] = [
+        let alphabet: [ProximityPairTransfer.Event] = [
             .peerVerified, .sendBegan(wireByteCount: 4_096), .sendCompleted,
             .sendFailed, .cancelled, .discoveryPaused, .discoveryResumed
         ]
@@ -249,7 +249,7 @@ struct RecipeShareTransferTests {
                 for third in alphabet {
                     for fourth in alphabet {
                         let path = [first, second, third, fourth]
-                        var transfer = RecipeShareTransfer(recipientID: UUID())
+                        var transfer = ProximityPairTransfer(recipientID: UUID())
                         for (step, event) in path.enumerated() {
                             transfer.apply(event)
                             let consistent = (transfer.phase == .sent) == (transfer.completionCount == 1)
@@ -269,7 +269,7 @@ struct RecipeShareTransferTests {
     /// floor and earns a stream of its own — which is why a QUIC recipe radio needs the
     /// per-transfer-stream acceptor the presence radio deliberately has none of.
     @Test func routeIsUnknownBeforeTheSendAndSplitsAtTheBulkFloor() {
-        let fresh = RecipeShareTransfer(recipientID: UUID())
+        let fresh = ProximityPairTransfer(recipientID: UUID())
         #expect(fresh.route == nil)
 
         let text = Self.applied([.peerVerified, .sendBegan(wireByteCount: 4_096)])
@@ -297,14 +297,14 @@ struct RecipeShareTransferTests {
     /// value rather than truncating it, and a 24-Character name is not a 64-byte one.
     @Test func advertisedNameIsBoundedInBytesNotCharacters() {
         let cjk = String(repeating: "健", count: 24)
-        #expect(cjk.utf8.count > RecipeShareAdvertisedName.maxByteCount)
-        let publishable = RecipeShareAdvertisedName.publishable(cjk)
+        #expect(cjk.utf8.count > ProximityPairAdvertisedName.maxByteCount)
+        let publishable = ProximityPairAdvertisedName.publishable(cjk)
         #expect(publishable.isEmpty == false)
-        #expect(publishable.utf8.count <= RecipeShareAdvertisedName.maxByteCount)
+        #expect(publishable.utf8.count <= ProximityPairAdvertisedName.maxByteCount)
 
         let emoji = String(repeating: "👩‍👩‍👧‍👦", count: 24)
-        let boundedEmoji = RecipeShareAdvertisedName.publishable(emoji)
-        #expect(boundedEmoji.utf8.count <= RecipeShareAdvertisedName.maxByteCount)
+        let boundedEmoji = ProximityPairAdvertisedName.publishable(emoji)
+        #expect(boundedEmoji.utf8.count <= ProximityPairAdvertisedName.maxByteCount)
 
         // Trimmed on grapheme boundaries: the result survives a UTF-8 round trip unchanged, which a
         // byte-sliced string would not.
@@ -312,10 +312,10 @@ struct RecipeShareTransferTests {
         #expect(roundTripped == boundedEmoji)
         #expect(boundedEmoji.contains("\u{FFFD}") == false)
 
-        #expect(RecipeShareAdvertisedName.publishable("Alex") == "Alex")
-        #expect(RecipeShareAdvertisedName.publishable("") == "")
-        #expect(RecipeShareAdvertisedName.publishable("Ali\u{200B}ce") == "Alice")
-        #expect(RecipeShareAdvertisedName.maxByteCount == MeshLinkAdvertisement.maxFieldValueLength)
+        #expect(ProximityPairAdvertisedName.publishable("Alex") == "Alex")
+        #expect(ProximityPairAdvertisedName.publishable("") == "")
+        #expect(ProximityPairAdvertisedName.publishable("Ali\u{200B}ce") == "Alice")
+        #expect(ProximityPairAdvertisedName.maxByteCount == MeshLinkAdvertisement.maxFieldValueLength)
     }
 
     /// The bound the mesh advertiser publishes under is the bound this name is held to, so a name
@@ -327,8 +327,8 @@ struct RecipeShareTransferTests {
             "Ali\u{200B}ce\n\n Bob", String(repeating: "é", count: 50)
         ]
         for sample in samples {
-            let name = RecipeShareAdvertisedName.publishable(sample)
-            #expect(name.utf8.count <= RecipeShareAdvertisedName.maxByteCount, "\(sample.prefix(8)) overflows")
+            let name = ProximityPairAdvertisedName.publishable(sample)
+            #expect(name.utf8.count <= ProximityPairAdvertisedName.maxByteCount, "\(sample.prefix(8)) overflows")
             #expect(name.count <= ProximityNamespace.fernlet.installation.peerNames.maxLength)
         }
     }
@@ -363,7 +363,7 @@ struct RecipeShareTransferTests {
         let manager = ProximityRecipeShareManager(store: host, makeSession: { radio })
         manager.markRunningForTesting()
         radio.pauseDiscovery()
-        for event: RecipeShareDiscoveryGate.Event in [.refreshRequested, .transportErrorWhileListening, .stopped] {
+        for event: ProximityPairDiscoveryGate.Event in [.refreshRequested, .transportErrorWhileListening, .stopped] {
             #expect(manager.applyDiscoveryGateForTesting(event) == .unchanged, "\(event) moved discovery")
             #expect(radio.isDiscoveryPaused, "\(event) reopened a paused radio")
         }
@@ -440,8 +440,8 @@ struct RecipeShareTransferTests {
     @Test func anUnpublishableNameIsOmittedAndTheReceiverFallsBackToTheHint() {
         let overWide = "e" + String(repeating: "\u{0301}", count: 40)
         #expect(overWide.count == 1, "the sample is not one grapheme cluster")
-        #expect(overWide.utf8.count > RecipeShareAdvertisedName.maxByteCount)
-        #expect(RecipeShareAdvertisedName.publishable(overWide).isEmpty, "the bound found something to publish")
+        #expect(overWide.utf8.count > ProximityPairAdvertisedName.maxByteCount)
+        #expect(ProximityPairAdvertisedName.publishable(overWide).isEmpty, "the bound found something to publish")
 
         // ML5 (invariant HP0): the host is hoisted so it outlives the manager's `unowned` store.
         let host = NamedTransferTestHost(name: overWide)
@@ -452,9 +452,9 @@ struct RecipeShareTransferTests {
         #expect(fields["mode"] == "recipe")
 
         // The receive-side half: absent and empty both fall back, a real name does not.
-        #expect(RecipeShareAdvertisedName.received(nil, hint: "fernlet-ab12") == "fernlet-ab12")
-        #expect(RecipeShareAdvertisedName.received("", hint: "fernlet-ab12") == "fernlet-ab12")
-        #expect(RecipeShareAdvertisedName.received("Alex", hint: "fernlet-ab12") == "Alex")
+        #expect(ProximityPairAdvertisedName.received(nil, hint: "fernlet-ab12") == "fernlet-ab12")
+        #expect(ProximityPairAdvertisedName.received("", hint: "fernlet-ab12") == "fernlet-ab12")
+        #expect(ProximityPairAdvertisedName.received("Alex", hint: "fernlet-ab12") == "Alex")
         // What a bare `??` would have rendered instead, and why the fallback is not cosmetic.
         #expect(ItemNameModeration.moderatedPeerDisplayName("") != "fernlet-ab12")
     }
@@ -468,7 +468,7 @@ struct RecipeShareTransferTests {
         #expect(manager.discoveryInfoForTesting["name"] == "Alex")
 
         let rendered = ItemNameModeration.moderatedPeerDisplayName(
-            RecipeShareAdvertisedName.received(manager.discoveryInfoForTesting["name"], hint: "fernlet-ab12")
+            ProximityPairAdvertisedName.received(manager.discoveryInfoForTesting["name"], hint: "fernlet-ab12")
         )
         #expect(rendered == "Alex")
     }
@@ -482,7 +482,7 @@ struct RecipeShareTransferTests {
         #expect(fields["mode"] == "recipe")
         let name = fields["name"] ?? ""
         #expect(name.isEmpty == false)
-        #expect(name.utf8.count <= RecipeShareAdvertisedName.maxByteCount)
+        #expect(name.utf8.count <= ProximityPairAdvertisedName.maxByteCount)
     }
 
     // MARK: - Rule-7 needles for pass 2
@@ -515,15 +515,15 @@ struct RecipeShareTransferTests {
     /// must not come back beside it.
     @Test func theAdvertisementNameHasNoCharacterCap() throws {
         let source = try Self.managerSource()
-        #expect(source.contains("RecipeShareAdvertisedName.publishable(displayName, in: namespace)"))
+        #expect(source.contains("ProximityPairAdvertisedName.publishable(displayName, in: namespace)"))
         #expect(source.contains("displayName.prefix(") == false,
                 "a Character cap is back on the advertised name")
     }
 
     // MARK: - Helpers
 
-    private static func applied(_ events: [RecipeShareTransfer.Event]) -> RecipeShareTransfer {
-        var transfer = RecipeShareTransfer(recipientID: UUID())
+    private static func applied(_ events: [ProximityPairTransfer.Event]) -> ProximityPairTransfer {
+        var transfer = ProximityPairTransfer(recipientID: UUID())
         for event in events { transfer.apply(event) }
         return transfer
     }
@@ -531,7 +531,7 @@ struct RecipeShareTransferTests {
     /// The recipe radio's owner's source: ProximityKit's pair session (the recipe-share manager's
     /// mechanism until plan step A0.7.3, when the manager left for FernletSocial over it).
     private static func managerSource() throws -> String {
-        let path = "FernletKit/Sources/ProximityKit/RecipeSharing/ProximityPairSession.swift"
+        let path = "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
         return try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
     }
 

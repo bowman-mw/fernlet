@@ -3,10 +3,11 @@ import simd
 
 // Carved DOWN into the FernletDomainModel module (whole file is a pure DTO) so the persistence layer
 // can reference it without an upward edge. The session's mode is the canonical DomainModel
-// ProximityMode, not the app-side ProximityCoordinator.Mode typealias; its role and ranging mode are
-// this record's own nested Role and RangingMode, copies of ProximityKit's ProximityRole and
-// ProximityRangingMode with the same raw values (ProximityKit sits above this module, so the record
-// cannot name them, and the app's ConnectionInspector converts). Codable identity is by raw value, so
+// ProximityMode, converted from ProximityKit's ProximitySessionMode (the coordinator's `Mode`) by
+// FernletConnections; its role and ranging mode are this record's own nested Role and RangingMode,
+// copies of ProximityKit's ProximityRole and ProximityRangingMode with the same raw values
+// (ProximityKit sits above this module, so the record cannot name them, and the app's
+// ConnectionInspector converts). Codable identity is by raw value, so
 // the JSON is unchanged.
 
 /// The persisted audit record of one proximity session: peer, ranging, transport, events,

@@ -396,14 +396,14 @@ import Testing
     @Test func aDuplicateRadioValueIsRefusedByName() {
         expectOnly(
             [.duplicateRadioValue(field: "family.radios.mesh.serviceType",
-                                  otherField: "family.radios.recipeShare.serviceType")],
+                                  otherField: "family.radios.pair.serviceType")],
             family: AlphaApp.family(radios: AlphaApp.radios(
-                recipeShare: .init(serviceType: "_alpha-mesh._udp", alpn: "alpha-recipe-v1")))
+                pair: .init(serviceType: "_alpha-mesh._udp", alpn: "alpha-recipe-v1")))
         )
         expectOnly(
-            [.duplicateRadioValue(field: "family.radios.presence.alpn", otherField: "family.radios.recipeShare.alpn")],
+            [.duplicateRadioValue(field: "family.radios.presence.alpn", otherField: "family.radios.pair.alpn")],
             family: AlphaApp.family(radios: AlphaApp.radios(
-                recipeShare: .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-near-v1")))
+                pair: .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-near-v1")))
         )
         expectSound(family: AlphaApp.family(radios: AlphaApp.radios(
             mesh: .init(serviceType: "_alpha-mesh._udp", alpn: "_alpha-near._udp"))))
@@ -870,7 +870,7 @@ import Testing
                 hash: BravoApp.hash(meshEpochIDV1: "alpha.mesh.epoch.v1.extended"),
                 radios: BravoApp.radios(
                     mesh: .init(serviceType: "_alpha-near._udp", alpn: "bravo-mesh-v1"),
-                    recipeShare: .init(serviceType: "_bravo-recipe._udp", alpn: "alpha-recipe-v1"),
+                    pair: .init(serviceType: "_bravo-recipe._udp", alpn: "alpha-recipe-v1"),
                     meshHeartbeat: Data("alpha-heartbeat".utf8)
                 ),
                 urlScheme: "ALPHA"
@@ -882,7 +882,7 @@ import Testing
             Overlap("family.purposes.aead.meshRoutedItemV1", "family.purposes.aead.meshRoutedItemV1", .prefix),
             Overlap("family.purposes.hash.meshEpochIDV1", "family.purposes.hash.meshEpochIDV1", .prefix),
             Overlap("family.radios.presence.serviceType", "family.radios.mesh.serviceType", .equal),
-            Overlap("family.radios.recipeShare.alpn", "family.radios.recipeShare.alpn", .equal),
+            Overlap("family.radios.pair.alpn", "family.radios.pair.alpn", .equal),
             Overlap("family.radios.meshHeartbeat", "family.radios.meshHeartbeat", .equal),
             Overlap("family.verifyQR.urlScheme", "family.verifyQR.urlScheme", .equal)
         ]
@@ -1150,13 +1150,13 @@ private enum AlphaApp {
     static func radios(
         mesh: ProximityNamespace.Radio = .init(serviceType: "_alpha-mesh._udp", alpn: "alpha-mesh-v1"),
         presence: ProximityNamespace.Radio = .init(serviceType: "_alpha-near._udp", alpn: "alpha-near-v1"),
-        recipeShare: ProximityNamespace.Radio = .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-recipe-v1"),
+        pair: ProximityNamespace.Radio = .init(serviceType: "_alpha-recipe._udp", alpn: "alpha-recipe-v1"),
         meshHeartbeat: Data = Data("alpha-heartbeat".utf8),
         meshInstanceNamePrefix: String = "alpha-mesh-",
         presenceInstanceNamePrefix: String = "an-",
         tlsCommonName: String = "alpha-mesh"
     ) -> ProximityNamespace.Radios {
-        ProximityNamespace.Radios(mesh: mesh, presence: presence, recipeShare: recipeShare, meshHeartbeat: meshHeartbeat,
+        ProximityNamespace.Radios(mesh: mesh, presence: presence, pair: pair, meshHeartbeat: meshHeartbeat,
                                   meshInstanceNamePrefix: meshInstanceNamePrefix,
                                   presenceInstanceNamePrefix: presenceInstanceNamePrefix, tlsCommonName: tlsCommonName)
     }
@@ -1398,13 +1398,13 @@ private enum BravoApp {
 
     static func radios(
         mesh: ProximityNamespace.Radio = .init(serviceType: "_bravo-mesh._udp", alpn: "bravo-mesh-v1"),
-        recipeShare: ProximityNamespace.Radio = .init(serviceType: "_bravo-recipe._udp", alpn: "bravo-recipe-v1"),
+        pair: ProximityNamespace.Radio = .init(serviceType: "_bravo-recipe._udp", alpn: "bravo-recipe-v1"),
         meshHeartbeat: Data = Data("bravo-heartbeat".utf8)
     ) -> ProximityNamespace.Radios {
         ProximityNamespace.Radios(
             mesh: mesh,
             presence: .init(serviceType: "_bravo-near._udp", alpn: "bravo-near-v1"),
-            recipeShare: recipeShare,
+            pair: pair,
             meshHeartbeat: meshHeartbeat,
             meshInstanceNamePrefix: "bravo-mesh-",
             presenceInstanceNamePrefix: "bn-",

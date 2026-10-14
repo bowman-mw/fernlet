@@ -25,7 +25,6 @@
 
 import Foundation
 import Testing
-@testable import FernletCrypto
 import FernletDomainModel
 import FernletConnections
 import FernletFoundation
@@ -111,7 +110,8 @@ struct MeshChunkerTests {
     private func resigned(_ chunk: MeshChunk, by identity: IdentityService) throws -> MeshChunk {
         let unsigned = chunk.replacing(signature: Data())
         let signature = try identity.sign(
-            canonicalBytes(for: unsigned), purpose: FernletCryptoPurpose.Signature.meshRoutedChunkV1
+            canonicalBytes(for: unsigned),
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRoutedChunkV1
         )
         return unsigned.replacing(signature: signature)
     }

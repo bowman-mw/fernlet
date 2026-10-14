@@ -425,7 +425,7 @@ struct MeshRecipientReceiptSigningTests {
         #expect(IdentityService.verify(
             receipt.signature, of: canonicalBytes(for: receipt),
             by: rig.custodian.localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshRecipientReceiptV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRecipientReceiptV1
         ))
     }
 
@@ -645,7 +645,7 @@ struct MeshRecipientReceiptSigningTests {
             #expect(IdentityService.verify(
                 signed.signature, of: canonicalBytes(for: signed),
                 by: rig.custodian.localSigningPublicKey,
-                purpose: FernletCryptoPurpose.Signature.meshRecipientReceiptV1
+                purpose: ProximityNamespace.fernlet.family.purposes.signature.meshRecipientReceiptV1
             ), "a re-mint must verify on its own signature, never by ==")
         }
     }

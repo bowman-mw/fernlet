@@ -25,8 +25,10 @@
 //    characters) by driving it; the legacy default (no list means photos alone) where the
 //    coordinator and the mesh's seats decide it; `wire2`'s role, framing sealed bodies; and the
 //    coordinator and the mesh reading all of it off the namespace they hold.
-// 4. **Session enums.** `ProximityMode`, `ProximityRole` and `ProximityRangingMode`, both ways, and
-//    the session log's own copies of the last two, which spell the same values.
+// 4. **Session enums.** ProximityKit's `ProximitySessionMode`, `ProximityRole` and
+//    `ProximityRangingMode`, and FernletDomainModel's `ProximityMode`, the session mode Fernlet
+//    persists, each both ways; FernletConnections' conversion of the one mode into the other, case for
+//    case; and the session log's own copies of the role and ranging mode, which spell the same values.
 // 5. **Membership record kinds.** The 4 tokens, the digest's kind-first order and one known-answer
 //    inventory digest over a ledger of one record per kind; and the digest, an identity's signed
 //    digest and a verifier's own tagging records with the record kinds of the family they hold.
@@ -179,13 +181,13 @@ struct ProximityVocabularyGoldenTests {
     }
 
     /// The tables hold every value once, in the shape the design counts: 55 payload tokens, 9
-    /// capabilities, 7 session-enum values, 4 record kinds, 4 routed types, 7 presentation strings,
+    /// capabilities, 9 session-enum values, 4 record kinds, 4 routed types, 7 presentation strings,
     /// the trainer format and the name floor, and ten numbers.
     @Test func theTablesHoldEveryValueOnce() {
         let counts = [Self.payloadRows.count, Self.capabilityRows.count, Self.sessionEnumRows.count,
                       Self.recordKindRows.count, Self.routedTypeRows.count, Self.presentationRows.count,
                       Self.trainerExportRows.count, Self.moderationRows.count]
-        #expect(counts == [55, 9, 7, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
+        #expect(counts == [55, 9, 9, 4, 4, 7, 1, 1], "the tables hold \(counts) rows")
         #expect(Self.allNumbers.count == 10, "the number tables hold \(Self.allNumbers.count) rows")
         let fields = Self.allRows.map(\.field) + Self.allNumbers.map(\.field)
         #expect(Set(fields).count == fields.count, "a field appears twice")
@@ -759,13 +761,20 @@ struct ProximityVocabularyGoldenTests {
 
     // MARK: Group 4 — the session enums
 
-    /// `ProximityMode`, persisted in the trust vault and the session log; and ProximityKit's
-    /// `ProximityRole` and `ProximityRangingMode`, which the session log persists as copies of its own
-    /// (held to these spellings below), the ranging mode also signed into every introduction's body.
+    /// `ProximityMode`, persisted in the trust vault and the session log; ProximityKit's own session
+    /// mode, `ProximitySessionMode`, the coordinator's `Mode` since plan step A1.0, whose raw value the
+    /// coordinator writes into the pairing-started audit Fernlet persists and which Fernlet converts to
+    /// `ProximityMode` (both held to the same spellings); and ProximityKit's `ProximityRole` and
+    /// `ProximityRangingMode`, which the session log persists as copies of its own (held to these
+    /// spellings below), the ranging mode also signed into every introduction's body.
     static var sessionEnumRows: [VocabularyGoldenRow] {
         [
             VocabularyGoldenRow(field: "mode.trainer", frozen: "trainer", today: ProximityMode.trainer.rawValue),
             VocabularyGoldenRow(field: "mode.friend", frozen: "friend", today: ProximityMode.friend.rawValue),
+            VocabularyGoldenRow(field: "sessionMode.trainer", frozen: "trainer",
+                                today: ProximitySessionMode.trainer.rawValue),
+            VocabularyGoldenRow(field: "sessionMode.friend", frozen: "friend",
+                                today: ProximitySessionMode.friend.rawValue),
             VocabularyGoldenRow(field: "role.advertiser", frozen: "advertiser", today: ProximityRole.advertiser.rawValue),
             VocabularyGoldenRow(field: "role.browser", frozen: "browser", today: ProximityRole.browser.rawValue),
             VocabularyGoldenRow(field: "rangingMode.uwb", frozen: "uwb", today: ProximityRangingMode.uwb.rawValue),
@@ -774,11 +783,25 @@ struct ProximityVocabularyGoldenTests {
         ]
     }
 
-    /// Every value both ways: the case spells the literal, and the literal decodes to the case.
+    /// Every value both ways: the case spells the literal, and the literal decodes to the case. And
+    /// the session mode Fernlet persists is ProximityKit's, case for case: FernletConnections'
+    /// `ProximityMode.init(_:)` maps each `ProximitySessionMode` to the `ProximityMode` that spells the
+    /// same frozen literal, so a converted mode persists the bytes it always did.
     @Test func everySessionEnumIsItsFrozenSpellingBothWays() {
-        #expect(Self.expectFrozen(Self.sessionEnumRows) == 7)
+        #expect(Self.expectFrozen(Self.sessionEnumRows) == 9)
         #expect(ProximityMode(rawValue: Self.frozen("mode.trainer")) == .trainer)
         #expect(ProximityMode(rawValue: Self.frozen("mode.friend")) == .friend)
+        #expect(ProximitySessionMode(rawValue: Self.frozen("sessionMode.trainer")) == .trainer)
+        #expect(ProximitySessionMode(rawValue: Self.frozen("sessionMode.friend")) == .friend)
+        let modes: [(ProximitySessionMode, ProximityMode, String)] = [
+            (.trainer, .trainer, "mode.trainer"), (.friend, .friend, "mode.friend")
+        ]
+        // R2: bounded by the two session modes.
+        for (session, persisted, field) in modes {
+            #expect(ProximityMode(session) == persisted, "\(field): the conversion maps \(session) elsewhere")
+            #expect(ProximityMode(session).rawValue == Self.frozen(field), "the converted \(field) moved")
+            #expect(session.rawValue == persisted.rawValue, "\(field): the two enums spell it apart")
+        }
         #expect(ProximityRole(rawValue: Self.frozen("role.advertiser")) == .advertiser)
         #expect(ProximityRole(rawValue: Self.frozen("role.browser")) == .browser)
         #expect(ProximityRangingMode(rawValue: Self.frozen("rangingMode.uwb")) == .uwb)
@@ -1428,7 +1451,7 @@ struct ProximityVocabularyGoldenTests {
     /// identity sits on a throwaway service it never writes.
     static func presentationReadings(of namespace: ProximityNamespace) throws -> PresentationReadings {
         let mesh = NetworkMeshSession(namespace: namespace)
-        let recipe = NetworkRecipeShareSession(namespace: namespace, profile: .recipeShare(in: namespace))
+        let recipe = NetworkPairSession(namespace: namespace, profile: .recipeShare(in: namespace))
         let recipePosture = try recipe.runWithoutRadiosForTesting()
         recipe.stop()
         let host = PresentationNamespaceHost(namespace: namespace)
@@ -1460,7 +1483,7 @@ struct ProximityVocabularyGoldenTests {
             family: ProximityNamespace.Family(
                 purposes: fernlet.family.purposes,
                 radios: ProximityNamespace.Radios(
-                    mesh: radios.mesh, presence: radios.presence, recipeShare: radios.recipeShare,
+                    mesh: radios.mesh, presence: radios.presence, pair: radios.pair,
                     meshHeartbeat: radios.meshHeartbeat, meshInstanceNamePrefix: "golden-link-",
                     presenceInstanceNamePrefix: "gl-", tlsCommonName: "golden-link"),
                 verifyQR: fernlet.family.verifyQR,
@@ -1933,7 +1956,7 @@ struct ProximityVocabularyGoldenTests {
             let instanceName = namespace.family.radios.meshInstanceNamePrefix + "0123456789ab"
             #expect(PeerNameDisplay.personName(instanceName, fingerprint: nil, in: namespace) == nil, note)
             #expect(PeerNameDisplay.personName("a1b2c3d4e5f60718", fingerprint: nil, in: namespace) == nil, note)
-            #expect(RecipeShareAdvertisedName.publishable(long, in: namespace) == capped, note)
+            #expect(ProximityPairAdvertisedName.publishable(long, in: namespace) == capped, note)
             let transcript = Self.transcriptNames(of: ["fp-long": long, "fp-blank": invisible], in: namespace)
             #expect(transcript == ["fp-long": capped, "fp-blank": policy.floor], note)
         }
@@ -1956,7 +1979,7 @@ struct ProximityVocabularyGoldenTests {
             #expect(names.voucher == policy.floor, "and filed the voucher as \(names.voucher ?? "nothing")")
             let host = PresentationNamespaceHost(namespace: namespace, displayName: long)
             let advertised = withExtendedLifetime(host) {   // the manager's `store` is `unowned`
-                Self.recipeAdvertisedFields(host: host)[RecipeShareAdvertisement.nameKey]
+                Self.recipeAdvertisedFields(host: host)[ProximityPairAdvertisement.nameKey]
             }
             #expect(advertised == capped, "a recipe-share manager under a cap of \(policy.maxLength) advertised \(advertised ?? "nothing")")
         }
@@ -2109,7 +2132,7 @@ struct ProximityVocabularyGoldenTests {
     static let radioFieldsTheNamespaceGoldenPins: Set<String> = [
         "family.radios.mesh.serviceType", "family.radios.mesh.alpn",
         "family.radios.presence.serviceType", "family.radios.presence.alpn",
-        "family.radios.recipeShare.serviceType", "family.radios.recipeShare.alpn",
+        "family.radios.pair.serviceType", "family.radios.pair.alpn",
         "family.radios.meshHeartbeat"
     ]
 
@@ -2498,15 +2521,15 @@ struct ProximityVocabularyGoldenTests {
 
     /// The radio a recipe-share manager over `host` builds: since plan step A0.7.3 its pair session's,
     /// `ProximityRecipeShareManager(store: host).pairSession.radioForTesting`; until then the manager's own.
-    static func recipeManagerRadio(host: any ProximityHost) -> any RecipeShareRadioSession {
+    static func recipeManagerRadio(host: any ProximityHost) -> any ProximityPairRadioSession {
         ProximityRecipeShareManager(store: host).pairSession.radioForTesting
     }
 
     /// The recipe radio for `namespace`, built explicitly: since plan step A0.7.3
-    /// `NetworkRecipeShareSession(namespace:profile:)` under Fernlet's recipe profile on `namespace`,
-    /// FernletConnections' `recipeShare(in:)`; until then `NetworkRecipeShareSession(namespace:)`.
-    static func recipeRadio(namespace: ProximityNamespace) -> NetworkRecipeShareSession {
-        NetworkRecipeShareSession(namespace: namespace, profile: .recipeShare(in: namespace))
+    /// `NetworkPairSession(namespace:profile:)` under Fernlet's recipe profile on `namespace`,
+    /// FernletConnections' `recipeShare(in:)`; until then the radio's own `init(namespace:)`.
+    static func recipeRadio(namespace: ProximityNamespace) -> NetworkPairSession {
+        NetworkPairSession(namespace: namespace, profile: .recipeShare(in: namespace))
     }
 
     /// The canonical bytes of 15b's recipe envelope, schema 2 under `.fernlet`'s labels: 336 bytes,
@@ -2578,12 +2601,13 @@ struct ProximityVocabularyGoldenTests {
     /// 15a's spellings: the record's keys, its version and its entry bound as frozen literals, and the
     /// dial hello's keys exactly the record's `sid` and `v`.
     static func expectRecipeKeySpellings() throws {
-        let spellings = [RecipeShareAdvertisement.versionKey, RecipeShareAdvertisement.sessionIDKey,
-                         RecipeShareAdvertisement.nameKey, RecipeShareAdvertisement.modeKey,
-                         RecipeShareAdvertisement.version]
+        let spellings = [ProximityPairAdvertisement.versionKey, ProximityPairAdvertisement.sessionIDKey,
+                         ProximityPairAdvertisement.nameKey, ProximityPairAdvertisement.modeKey,
+                         ProximityPairAdvertisement.version]
         #expect(spellings == ["v", "sid", "name", "mode", "1"], "the record's keys and version are \(spellings)")
-        #expect(RecipeShareAdvertisement.maxEntryByteCount == 255, "an entry may hold \(RecipeShareAdvertisement.maxEntryByteCount) bytes")
-        let hello = try RecipeShareDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
+        #expect(ProximityPairAdvertisement.maxEntryByteCount == 255,
+                "an entry may hold \(ProximityPairAdvertisement.maxEntryByteCount) bytes")
+        let hello = try ProximityPairDialHello.encoded(sessionID: "550e8400-e29b-41d4-a716-446655440000")
         let object = try #require(try JSONSerialization.jsonObject(with: hello) as? [String: Any], "the hello is no JSON object")
         #expect(Set(object.keys) == ["sid", "v"], "the hello's keys are \(object.keys.sorted())")
     }
@@ -2592,7 +2616,7 @@ struct ProximityVocabularyGoldenTests {
     /// browses the recipe row's service type and binds its ALPN.
     static func expectRecipeRadioRow() {
         let host = PresentationNamespaceHost(namespace: .fernlet, displayName: "Alex")
-        let radio = recipeManagerRadio(host: host) as? NetworkRecipeShareSession
+        let radio = recipeManagerRadio(host: host) as? NetworkPairSession
         #expect(radio?.serviceType == "_fernlet-recipe2._udp", "the manager's radio browses \(radio?.serviceType ?? "nothing")")
         #expect(radio?.alpn == "fernlet-recipe-v1", "the manager's radio binds \(radio?.alpn ?? "nothing")")
     }

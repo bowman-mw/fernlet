@@ -15,13 +15,15 @@ replay, and mandatory sealing for sensitive payload types — before any handler
 social exhaust (who you met, who sent you warmth, who you reported) lives in device-local sidecar
 files that are deliberately **never** part of the synced snapshot.
 
-**Position in the FernletKit graph and the S3 wall.** The `ProximityKit` target depends on
-`FernletCrypto` (only for the `CryptographicPurpose` signing overloads of ``IdentityService``, which
-the app's duress and probe signatures and `FernletSocial`'s feature labels sign through until C1;
-see "Protocol namespace" below) and `FernletDomainModel` (Fernlet's session mode, named only on the
-one line `ProximityNamespaceBoundaryTests` allowlists, until C5), and on nothing else: that wall pins the list, so neither `FernletFoundation` nor
-`PrivateMediaStore`, which only Fernlet's mesh features read, can come back unseen. It sits on the
-*protected* side of the S3 privacy wall: the walled `AIProviders` / `CloudKitSync` targets can never
+**Position in the FernletKit graph and the S3 wall.** The `ProximityKit` target depends on nothing
+in FernletKit (plan step A1.0). ``IdentityService`` signs and verifies only under its own
+``ProximityCryptographicPurpose`` values, a host's own signature labels among them, minted with
+``ProximityCryptographicPurpose/featureSignature(_:framing:)`` (`FernletSocial`'s feature labels and
+the app's duress and probe labels; see "Protocol namespace" below), so it has no `FernletCrypto`
+edge; its session mode is its own (``ProximitySessionMode``), which Fernlet converts to the
+`ProximityMode` it persists, so it has no `FernletDomainModel` edge. `ProximityNamespaceBoundaryTests`
+pins the empty list, so none of `FernletCrypto`, `FernletDomainModel`, `FernletFoundation` and
+`PrivateMediaStore` can come back unseen. It sits on the *protected* side of the S3 privacy wall: the walled `AIProviders` / `CloudKitSync` targets can never
 import it (nor it them, nor `FernletSocial`, whose heart dead-drop gets its CloudKit transport
 injected app-side through FernletDomainModel's `HeartDropTransporting` seam and so only ever hands
 ciphertext + rotating day tags outward). Its one seam back to app state is the
@@ -520,12 +522,13 @@ values through this module's token doors, and read and sign envelopes through Fe
 of the envelope's token, which is `FernletConnections`'; this module names no `PayloadType`. It reads
 no feature label:
 the activities' and the moderation report's are `FernletSocial`'s, signed and verified there through
-``IdentityService``'s `CryptographicPurpose` overloads, and the sealed-backup escrow's two are the
-app's, with its escrow. The heart dead-drop's keychain service and the moderation ban store's are
+``IdentityService`` under host labels minted with
+``ProximityCryptographicPurpose/featureSignature(_:framing:)``, and the sealed-backup escrow's two are
+the app's, with its escrow. The heart dead-drop's keychain service and the moderation ban store's are
 `FernletSocial`'s, and so is presence, with its labels and the heart payload format it checks.
-`ProximityNamespaceBoundaryTests` refuses any read of FernletCrypto's registry here, and allowlists
-each literal that spells `fernlet` and each line that still names one of Fernlet's domain types, with
-the step that removes it. Beside it the
+`ProximityNamespaceBoundaryTests` refuses any read of FernletCrypto's registry here, and any literal
+that spells `fernlet` or line that names one of Fernlet's domain types outside an exact allowlist
+naming the step that removes it; both lists are empty. Beside it the
 host supplies two things this module used to take from Fernlet's own modules, the install binding
 the sealed mesh stores seal under and the sink audit lines go to, and two mechanisms were copied in
 rather than shared: the column seal and the keychain item. This module holds no instance of the
@@ -558,16 +561,23 @@ module's: the QR host `verify`, its query key `d` and version 1, the `FPT2`, `FG
 row's accessibility and synchronizable class, which the key-custody walls read in this module's code.
 
 **Labels are the host's literals; roles are this module's.** A label is a `StaticString` source
-literal handed to a group initializer, or to
+literal handed to a group initializer, to
 ``ProximityCryptographicPurpose/featureKeyDerivationSalt(_:)`` for a salt a host's feature derives
-under: those are the only doors that mint a ``ProximityCryptographicPurpose`` (its own initializer is
+under, or to ``ProximityCryptographicPurpose/featureSignature(_:framing:)`` for a transcript a host's
+feature signs and verifies through ``IdentityService``: those are the only doors that mint a
+``ProximityCryptographicPurpose`` (its own initializer is
 internal, and it has no `Codable` conformance and no decoding path), so every label is a reviewed
 spelling in the host's source: none is assembled at run time and none arrives over the wire. The
 field it fills fixes its ``ProximityCryptographicPurpose/Role`` (a length-prefixed or raw-prefix
 signature transcript, the verify-only `.absent` legacy pair, a length-prefixed or raw hash preimage,
-an HKDF salt, a column seal, an AEAD prefix, the exporter label), and the feature-salt mint gives its
-one role, an HKDF salt, so a host supplies bytes and never decides how this module consumes them, and
-a label in a non-signature role verifies nothing. A feature salt reaches its one door,
+an HKDF salt, a column seal, an AEAD prefix, the exporter label), the feature-salt mint gives its
+one role, an HKDF salt, and the feature-signature mint a writable signature role under the one fact
+a host states, the framing its own transcript is written in (length-prefixed or raw prefix: the
+framing's type has no verify-only `.absent`), so a host supplies bytes and never decides how this
+module consumes them, and a label in a non-signature role verifies nothing. A feature signature
+label is declared in no namespace, so the soundness verdict does not judge it: keeping it apart
+from the protocol's labels is the host's own review (Fernlet's six are twins of its FernletCrypto
+registry's entries until plan step C1). A feature salt reaches its one door,
 ``IdentityService/pairSecret(with:purpose:)``, only when the host's namespace declares it, byte for
 byte in its role (``ProximityNamespace/FeaturePurposes/declares(_:)`` compares the label's bytes,
 never its text, which Swift's `String` would compare by Unicode canonical equivalence): the door
@@ -613,7 +623,7 @@ and, for the mesh manager, every founding a caller can begin without one
 first commit needs a peer the radio linked), so that identity founds no mesh and links no peer.
 A ``ProximityPairSession`` checks its ``ProximityPairProfile`` against its host's namespace too, once,
 at construction: a profile whose radio is not one of the namespace's pair-session rows
-(`family.radios.recipeShare`), or whose TXT mode is empty or over 64 UTF-8 bytes, is refused the same
+(`family.radios.pair`), or whose TXT mode is empty or over 64 UTF-8 bytes, is refused the same
 way, under `<auditArea>.profile.namespaceMismatch` (at `construction`, then at every refused `start`),
 before its radio can start, so namespace soundness still covers every value its radio runs on.
 `FernletSocial`'s `HeartDropService` holds no namespace of its own to compare with; its identity's
@@ -662,7 +672,7 @@ hand it:
 | Reader | How it reads the namespace |
 | --- | --- |
 | ``MeshNetworkManager``, ``ProximityPairSession``, and `FernletSocial`'s `PresenceManager` | Read ``ProximityHost/proximityNamespace`` once in `init` and keep a `nonisolated let namespace`; build their radio from it (the pair session from it and its profile, which it checks against it), take their default identity from ``ProximityHost/makeProximityIdentity()``, and hand the namespace, or its `family.purposes`, to every reader they call. The identity they hold, handed to them or built by their host, is compared with it once, in `init`, and one of another namespace never starts their radio. |
-| ``IdentityService`` | Takes it in ``IdentityService/init(namespace:keychainService:provisioningParticipant:)`` (a `nil` service means the namespace's identity service) and keeps it with its ``IdentityService/purposes``: it signs, seals, opens and wraps under its own labels and keeps its four device rows under the namespace's accounts. Its ``ProximityCryptographicPurpose`` overloads of `sign` and `verify` treat a label by its role, and `sign` refuses a verify-only or non-signature label. ``IdentityService/pairSecret(with:purpose:)`` derives only under a feature salt its namespace's family declares (`family.purposes.feature`). Under an unsound namespace it refuses to provision and to wrap a group key, and so derives no pair secret. |
+| ``IdentityService`` | Takes it in ``IdentityService/init(namespace:keychainService:provisioningParticipant:)`` (a `nil` service means the namespace's identity service) and keeps it with its ``IdentityService/purposes``: it signs, seals, opens and wraps under its own labels and keeps its four device rows under the namespace's accounts. Its `sign` and `verify` take only a ``ProximityCryptographicPurpose`` and treat a label by its role, and `sign` refuses a verify-only or non-signature label. ``IdentityService/pairSecret(with:purpose:)`` derives only under a feature salt its namespace's family declares (`family.purposes.feature`). Under an unsound namespace it refuses to provision and to wrap a group key, and so derives no pair secret. |
 | Builders: envelopes, admission tokens, membership records and messages, the removal quorum, key advertisements, routed items, chunks and receipts, the verify QR | Sign under their signing identity's ``IdentityService/purposes``. |
 | Verifiers: the six routed verifiers, `MeshChannelIntroductionExchange` | Keep their own copy, a trailing `purposes:` with no default. |
 | The membership digest and its holders: `MeshInventoryDigest`, `MeshMembershipRecordVerifier`, `MeshLedgerAdoption` | Take the whole family (`family:`, or the adoption's `in family:`, with no default), because the digest needs its record kinds beside its labels: every record is tagged with its kind's token from `family.vocabulary.membershipRecordKinds` (`MeshMembershipRecordKind.token(in:)`). The verifier keeps the family as its copy, so its labels and record kinds come from one namespace; an identity's signed digest uses its own namespace's. |
@@ -673,10 +683,10 @@ hand it:
 | Capability gates: `ProximityCoordinator.PeerIdentity.supports(_:in:)`, `PeerSlot.supports(_:in:)` | Take a token and the host's `capabilities` last: a peer that listed none supports exactly `assumedForLegacyPeers`. A host's features gate on their own capability tokens through these token forms (Fernlet's spell `ProximityCapability` raw values; this module has no typed overload); the mesh's sealed sends and the coordinator ask for the host's wire2 token, which the mesh, through its host's capability list, and presence advertise. |
 | Stateless helpers: the serializer's `canonicalBytes(for:in:)` overloads and `canonicalInventoryDigestBytes`, ``MeshRoutedContentDigest``, ``MeshChunkAssembly``, the item seal and the content-key wrap, ``ProximityVerifyQR/parse(_:in:)``, ``MeshEpochRef/minted(counter:coordinatorFingerprint:meshID:in:)`` | Take `in purposes:` (or `in:` a namespace) last. |
 | Ids that hash a label: ``MeshChunk/chunkID(in:)``, ``MeshCustodyReceipt/receiptID(in:)``, ``MeshRecipientReceipt/receiptID(in:)`` | Are functions, not stored properties: a value decoded off the wire carries no namespace, so `Codable` stays namespace-free. |
-| The radios: `NetworkMeshSession`, `NetworkPresenceSession`, `NetworkRecipeShareSession` | Take `init(namespace:)` (the pair session's radio `init(namespace:profile:)`, reading its service type, ALPN and TXT mode off its pair profile, which its session has checked against the namespace) and read their service type, ALPN, heartbeat, exporter label, log subsystem and soundness verdict there, once (their `start` refuses an unsound namespace by that verdict); the mesh radio keeps `family.purposes` for the channel introductions it frames and checks, and the mesh and recipe radios keep the mesh instance-name prefix and the TLS common name their instance names and certificates are minted under. |
+| The radios: `NetworkMeshSession`, `NetworkPresenceSession`, `NetworkPairSession` | Take `init(namespace:)` (the pair session's radio `init(namespace:profile:)`, reading its service type, ALPN and TXT mode off its pair profile, which its session has checked against the namespace) and read their service type, ALPN, heartbeat, exporter label, log subsystem and soundness verdict there, once (their `start` refuses an unsound namespace by that verdict); the mesh radio keeps `family.purposes` for the channel introductions it frames and checks, and the mesh and recipe radios keep the mesh instance-name prefix and the TLS common name their instance names and certificates are minted under. |
 | The presence posture: `PresenceEpochPosture` | Is minted, and rotated, with the presence instance-name prefix and the TLS common name its caller passes: `FernletSocial`'s `PresenceManager`'s posture mint, built in `init` from the manager's namespace, passes them. |
 | The name display: ``PeerNameDisplay/personName(_:fingerprint:in:)``, with `FernletConnections`' placeholders (`shown`, `firstName`) and `FernletSocial`'s `PresenceManager.firstName(of:in:)` over it | Take `in namespace:` last, sanitize under its peer-name cap and hide a name that begins with its mesh instance-name prefix. The app passes the namespace it hands this module. |
-| The peer-name coercion: `ProximityDisplayName.peerDisplayName(_:in:)`, ``FernletIdentityEnvelope/sanitizedSenderDisplayName(in:)`` and ``FernletIdentityEnvelope/disclosedSenderDisplayName(in:)``, `RecipeShareAdvertisedName.publishable(_:in:)`, and over them `FernletSocial`'s chat store (`SessionMessageStore.receiveIncoming(…in:)`) and incoming-photo coercion | Take `in namespace:` last and read `installation.peerNames`: a peer's sanitized name keeps at most the cap and reads as the floor when nothing displayable is left, and the advertised recipe name is capped the same way. The managers pass their own namespace (the mesh manager also to its descriptor coercion, a mesh name under the cap), the coordinator its identity's, and `FernletSocial`'s features their composition's. `ProximityDisplayName.sanitized(_:maxLength:)` is FernletDomainModel's `ItemNameModeration.sanitizedName` copied scalar for scalar; only `FernletSocial`'s activities still use the original. |
+| The peer-name coercion: `ProximityDisplayName.peerDisplayName(_:in:)`, ``FernletIdentityEnvelope/sanitizedSenderDisplayName(in:)`` and ``FernletIdentityEnvelope/disclosedSenderDisplayName(in:)``, `ProximityPairAdvertisedName.publishable(_:in:)`, and over them `FernletSocial`'s chat store (`SessionMessageStore.receiveIncoming(…in:)`) and incoming-photo coercion | Take `in namespace:` last and read `installation.peerNames`: a peer's sanitized name keeps at most the cap and reads as the floor when nothing displayable is left, and the advertised recipe name is capped the same way. The managers pass their own namespace (the mesh manager also to its descriptor coercion, a mesh name under the cap), the coordinator its identity's, and `FernletSocial`'s features their composition's. `ProximityDisplayName.sanitized(_:maxLength:)` is FernletDomainModel's `ItemNameModeration.sanitizedName` copied scalar for scalar; only `FernletSocial`'s activities still use the original. |
 | Storage scopes: ``MeshSessionStorageScope``, ``MeshRoutedStorageScope`` | Carry the namespace and the install binding (`init(namespace:directory:keychainService:installBinding:)`, ``MeshSessionStorageScope/production(for:directory:installBinding:)`` on the root the host states); the two stores read their file names, seal-key accounts and column-seal labels off `scope.namespace`. |
 | Closures that cross an actor | Capture the `Sendable` value when they are made, as `FernletSocial`'s `PresenceManager`'s radio factory does. |
 
@@ -684,7 +694,9 @@ hand it:
 `.fernlet` carries to the literal Fernlet shipped (64 rows, its two declared feature salts among
 them), each label's role and its FernletCrypto twin, soundness, the byte-prefix check over
 FernletCrypto's 81 registry labels and `.fernlet`'s 41 together, one role-versus-consumer cell per
-hash and transcript consumer, and the readers above under `.fernlet` and under a foreign namespace. `ProximityVocabularyGoldenTests`, on
+hash and transcript consumer, the readers above under `.fernlet` and under a foreign namespace, and
+the six signature labels Fernlet mints with the feature-signature mint, each its FernletCrypto twin's
+spelling, framing and accepted bytes. `ProximityVocabularyGoldenTests`, on
 the same line, holds every token and presentation string this module's consumers read to the
 literal Fernlet shipped before A0.3, and `.fernlet`'s vocabulary and presentation strings to the
 same literals; it drives the radios, the presence posture mint and the name display under `.fernlet`
@@ -719,13 +731,14 @@ camera's hold-failure line, the audit lines the features write, and the order a 
 end run their legs in.
 `ProximityNamespaceBoundaryTests`, on the s3-grep CI line, keeps the result from eroding: no
 namespace, group or purpose is built in this module outside `Namespace/`; `FernletCryptoPurpose` is
-named nowhere in its code; every remaining string literal that spells `fernlet` is on
-an exact allowlist that names why it is still here and the plan step that removes it (the DEBUG
-test-hook names, A1);
+named nowhere in its code; a string literal that spells `fernlet` is only on an exact allowlist
+that names why it is still here and the plan step that removes it, which is empty: no literal
+spells it (the DEBUG launch-environment keys this module reads are its own, `PROXIMITYKIT_*`);
 FernletDomainModel's `PayloadType`, `ProximityCapability`, `ProximityMode`, `ItemNameModeration`,
 `ProximityTrustedPeerRecord`, `TrainerAuditEvent` and `ConnectionSessionLog` are named only on an
-exact per-file, per-type allowlist: one line, the coordinator's session-mode alias (C5), the other
-six types named nowhere (Fernlet's typed view of the envelope's token is `FernletConnections`');
+exact per-file, per-type allowlist, which is empty: the seven types are named nowhere (the
+coordinator's session mode is ``ProximitySessionMode``, and Fernlet's typed view of the envelope's
+token is `FernletConnections`');
 `package` is declared only on the doors its list names (see "Package doors" below); no type that
 left this module for `FernletSocial` or the app (the heart dead-drop's, presence's, moderation's,
 closeness's and friend state's types, the parked chat payload, the mesh features' — the clothing
@@ -734,9 +747,13 @@ hearts' with the heart ledger, the session photos' with their review, the JSON s
 copy vault — the deleted support layout, the sealed-backup escrow's and the recipe share's: its
 manager, the diagnostics ring presence shares with it, and its wire types), and none of the recipe
 share's three public values this module renamed for the one-to-one send (`RecipeShareOutcome`,
-`RecipeShareFailure`, `ProximityRecipeShareRecipient`), is declared, extended or aliased here again,
-a list that only grows as features move out, because a feature that came back under its old
-name with no Fernlet string, label or domain type of its own would pass the other rules; and the target depends on exactly `FernletCrypto` and `FernletDomainModel`. The literal and
+`RecipeShareFailure`, `ProximityRecipeShareRecipient`), nor the nine recipe-named types of the pair
+session's mechanism, renamed with pair names before the split (`ProximityPairTransfer`,
+`NetworkPairSession` and the rest; the wall lists the old names), is declared, extended or aliased
+here again (and the old name of the namespace's pair-session radio, renamed `pair` with them, is
+named nowhere in this module's code), a list that only grows as features move out, because a
+feature that came back under its old name with no Fernlet string, label or domain type of its own
+would pass the other rules; and the target depends on nothing in FernletKit. The literal and
 domain-type lists can only shrink, and a door's row lasts exactly as long as the door. The exact
 per-file lists in `ProximityNamespaceBoundaryTests` are the one place the ratchet's numbers live.
 
@@ -820,13 +837,12 @@ participant every identity the app builds carries, with the escrow's two feature
 since plan step A0.6, is the Live Activity reaper (`ProximityLiveActivityReaper`, with the attributes
 type it enumerates), which only cleans up after Fernlet's own earlier builds.
 `ProximityNamespaceBoundaryTests` keeps every one of their types out of this module, and holds its
-dependencies to `FernletCrypto` and `FernletDomainModel`. What still ties this module to Fernlet
-leaves in these steps:
+dependencies to none (plan step A1.0). What still ties this module to Fernlet leaves in these steps:
 
 - **C1.** FernletCrypto's 40 twins of `.fernlet`'s labels (38 protocol labels and the two
-  feature salts) retire, with the app's duress and probe purposes; `IdentityService`'s
-  `CryptographicPurpose` overloads of `sign` and `verify` serve those and the feature labels until
-  then.
+  feature salts) retire, with its 6 twins of the signature labels Fernlet mints with
+  ``ProximityCryptographicPurpose/featureSignature(_:framing:)`` (`FernletSocial`'s activity and
+  moderation labels, the app's duress and probe labels).
 - **C5.** The one-to-one radio is a profile-driven pair session, ``ProximityPairSession`` over a
   host's ``ProximityPairProfile``, whose per-connection half is the coordinator's public token send
   and manual commit (see "Package doors" below); Fernlet's typed view of the envelope's token and its
@@ -836,14 +852,10 @@ leaves in these steps:
   and admission after the identity handshake, a confirmation timeout long enough for pairing, a
   sealed send before confirmation that fails closed, an introduction bound to the channel, and the
   radio's `recipe.quic.*` labels, pinned in a golden before they are parameterized. The coordinator's
-  `Mode`, Fernlet's `ProximityMode` (a session profile, not a token, and the one line of Fernlet's
-  domain vocabulary this module still names), generalizes then into the session policy that profile
-  brings, the first other than friend.
-- **A1.** The DEBUG test-hook names are settled when the package leaves Fernlet's tree, and so are
-  the presence radio's `package` doors, published as mechanism or wrapped (see "Package doors"
-  below). Before its 0.1.0 tag, one pass renames what still says recipe in the pair session's
-  mechanism: the internal `RecipeShare*` types, the radio `NetworkRecipeShareSession`, the
-  `RecipeSharing/` folder and the namespace's `Radios.recipeShare` row (its bytes stay).
+  `Mode`, ``ProximitySessionMode`` (a session profile, not a token; its raw values are frozen),
+  generalizes then into the session policy that profile brings, the first other than friend.
+- **A1.** The presence radio's `package` doors are settled when the package leaves Fernlet's tree,
+  published as mechanism or wrapped (see "Package doors" below).
 
 ### Package doors
 
@@ -891,18 +903,20 @@ where its framework is usable:
 - ``ProtectedSidecar``'s protected-data retry observes UIKit's protected-data notification under
   `#if canImport(UIKit)` and compiles out without it, so on a Mac a read retries on access only.
 
-**The gate.** `Scripts/macos-build-check.sh` builds the package's `ProximityKit` product, this module
-and its closure (`FernletCrypto`, `FernletDomainModel` and `FernletFoundation`), for
+**The gate.** `Scripts/macos-build-check.sh` builds the package's `MacReady` product, which names the
+Mac-ready set: this module, and `FernletFoundation`, `FernletCrypto` and `FernletDomainModel`, which a
+Mac host of Fernlet's needs whatever this module depends on. It builds them for
 `generic/platform=macOS`, arm64 and x86_64, with warnings as errors, and then requires native macOS
-products, because that destination also matches Mac Catalyst. That closure is the Mac-ready set: the
-manifest's `.macOS(.v26)` is package-wide, as SwiftPM declares platforms, and no other module is built
-for macOS (`FernletSocial`'s photo path still needs `UIImage`). `Scripts/macos-build-selftest.sh`
-proves the check load-bearing: an `import UIKit` it plants in this module must fail the check, and the
-clean tree must pass it. CI runs the self-test on every push (the "ProximityKit on native macOS" step
-of `s3-wall.yml`), and the pre-push hook runs the check when a push touches the closure, the manifest
-or either script. It is an `xcodebuild` build, not `swift build`: the SwiftPM command line leaves the
-closure's string catalogs unprocessed. The build is the compiler half, which refuses any symbol native
-macOS lacks wherever it stands outside its guard. `ProximityPlatformBoundaryTests`, on the s3-grep CI
+products, because that destination also matches Mac Catalyst. The manifest's `.macOS(.v26)` is
+package-wide, as SwiftPM declares platforms, and no other module is built for macOS
+(`FernletSocial`'s photo path still needs `UIImage`). `Scripts/macos-build-selftest.sh` proves the
+check load-bearing: an `import UIKit` it plants in this module must fail the check, and the clean tree
+must pass it. CI runs the self-test on every push (the "ProximityKit on native macOS" step of
+`s3-wall.yml`), and the pre-push hook runs the check when a push touches one of the four modules, the
+manifest or either script. It is an `xcodebuild` build, not `swift build`: the SwiftPM command line
+leaves the set's string catalogs (`FernletFoundation`'s and `FernletDomainModel`'s) unprocessed. The
+build is the compiler half, which refuses any symbol native macOS lacks wherever it stands outside its
+guard. `ProximityPlatformBoundaryTests`, on the s3-grep CI
 line, is the source half: it holds this module's imports to a neutral baseline and the two seams
 above, and its platform branches (`#if os(…)`) to the NearbyInteraction file's guard, refuses the
 device-name sources, platform-directory APIs and host-fact defaults it lists (its rows for them are
@@ -942,9 +956,9 @@ the simulator's `xctest` agent, so no keychain entitlement reaches it (every `Se
 `errSecMissingEntitlement`) and no ``ProximityAuditSink`` is installed (every audit line is dropped).
 It builds in Swift 6 language mode with no default isolation; with the three upcoming features it
 declares, that is every upcoming feature Fernlet's own tests use, though they build in Swift 5 mode.
-It declares this module as its one dependency, and its files import nothing else of the package: this
-module's closure (`FernletCrypto`, `FernletDomainModel`, `FernletFoundation`) holds Fernlet's values
-and does not travel. CI runs it on the iOS simulator; a macOS lane is A1's.
+It declares this module as its one dependency, and its files import nothing else of the package,
+whose other modules hold Fernlet's values and do not travel (this module depends on none of them). CI runs it on the iOS
+simulator; a macOS lane is A1's.
 The three helpers both test targets use (the fake peer transport, the ranging mock and the membership
 fixtures) live in each, held identical but for their imports, because a test target cannot import
 another. CI names its suites `ProximityKitTests/<Suite>`; `Tests/suite-inventory.tsv` and
@@ -1031,10 +1045,11 @@ activities, the moderation report relay and friend state.
 
 A coordinator reports its session to the ``ProximityInspectorRecording`` its owner attaches in this
 module's own value types (an envelope record, a distance sample, the peer line, transport events
-stamped with the coordinator's own clock, the role and the ranging mode) and names no host's log: a
-host that keeps one converts each value into its own record, as Fernlet's app-side
+stamped with the coordinator's own clock, the role, the ranging mode and the session mode) and names
+no host's log: a host that keeps one converts each value into its own record, as Fernlet's app-side
 `ConnectionInspector` does into its persisted `ConnectionSessionLog`, which keeps its own copies of
-the role and ranging mode with the same raw values.
+the role and ranging mode, and FernletDomainModel's `ProximityMode` for the session mode, with the
+same raw values.
 
 - ``ProximityCoordinator``
 - ``ProximityCommitDetector``
@@ -1042,6 +1057,7 @@ the role and ranging mode with the same raw values.
 - ``ObservationLoop``
 - ``ProximityRole``
 - ``ProximityRangingMode``
+- ``ProximitySessionMode``
 - ``ProximityInspectorRecording``
 - ``ProximityInspectorEventRecorder``
 - ``ProximityInspectorEnvelope``
@@ -1062,7 +1078,7 @@ asserts **zero** framework identifiers under the whole package.
 radio** since 2026-09-21 — see
 [the network migration plan](../../../../Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md) §7),
 `NetworkPresenceSession` (the same framework, the presence radio, §17.1) and
-`NetworkRecipeShareSession` (the recipe radio, same plan section) each multiplex into per-peer
+`NetworkPairSession` (the recipe radio, same plan section) each multiplex into per-peer
 channels — `NetworkPeerChannel` — that conform to ``PeerTransport``. The three share one channel
 type through `NetworkChannelHost` and one parameter factory through `ProximityQUICParameters`,
 which is where `prohibitedInterfaceTypes = [.cellular]`, the accept-any validator and the declared
@@ -1450,27 +1466,27 @@ actually lives: `NetworkMeshSession`, `NetworkPresenceSession`, `NetworkPeerChan
 `MeshRosterVerdict`, `MeshIntroductionNonceCache`, `MeshVerifiedPeer`, `MeshIntroductionAuthority`.
 
 The pair session's radio, the recipe-share radio, is on QUIC (P9 item 3 pass 2:
-`NetworkRecipeShareSession`, behind the `RecipeShareRadioSession` seam, on its pair profile's row:
+`NetworkPairSession`, behind the `ProximityPairRadioSession` seam, on its pair profile's row:
 `_fernlet-recipe2._udp`, ALPN `fernlet-recipe-v1`, TXT mode `recipe` under Fernlet's recipe profile),
 and the two decisions a transport swap would have lost quietly were settled as tier-1 values first.
-``RecipeShareDiscoveryGate`` is the
+``ProximityPairDiscoveryGate`` is the
 pause/resume contract — the radio goes quiet to new peers the moment a pairing is registered and
 reopens only when that pairing's session-level RECORD is evicted, never on a transport disconnect
-event (a failed handshake fires none) and never over a stopped radio. ``RecipeShareTransfer`` is the
+event (a failed handshake fires none) and never over a stopped radio. ``ProximityPairTransfer`` is the
 share itself: `connecting → verified → sending → sent/failed/cancelled`, with a completion that is
 counted rather than assigned, and with the row that matters most — a discovery pause or resume is
 accepted in every phase and moves none of them, because closing the radio to new peers is not
-pausing a share in flight. ``RecipeShareAdvertisedName`` bounds the advertised display name in
+pausing a share in flight. ``ProximityPairAdvertisedName`` bounds the advertised display name in
 BYTES, not Characters, so the Bonjour publisher (which DROPS an over-long TXT value rather than
 truncating it) cannot silently strip the name off a long one; a name it cannot publish at all is
-omitted rather than sent empty, and ``RecipeShareAdvertisedName/received(_:hint:)`` falls back to
+omitted rather than sent empty, and ``ProximityPairAdvertisedName/received(_:hint:)`` falls back to
 the peer's transport hint on an absent *and* an empty one. The gate answers `unchanged` for
 `refreshRequested`, `transportErrorWhileListening` and `stopped` only because the SESSION's own
-`stop()` clears its paused flag — `NetworkRecipeShareSession.stop()` does, and a cell says so,
+`stop()` clears its paused flag — `NetworkPairSession.stop()` does, and a cell says so,
 because otherwise a refresh restarts into a radio that is still standing down and the only symptom
 is a search that finds nothing.
 
-**What the QUIC radio adds, and what it deliberately does not.** It wears a `RecipeSharePosture`
+**What the QUIC radio adds, and what it deliberately does not.** It wears a `ProximityPairPosture`
 minted fresh at every `start()` and every resume — a random instance name, a new TLS identity and a
 new `sid`, with **no rotation timer**, because the radio's lifetime is a Food-tab visit. That is an
 improvement on what it replaces rather than a reproduction: the retired radio advertised the
@@ -1487,7 +1503,11 @@ transfer are audited and nothing more, because the owner's transport-error hook 
 radio down.
 
 Internal to the module, DEBUG-only, and listed here so they are never mistaken for production
-behaviour: `MeshTransportConsoleLog`, `MeshIntroductionChaos`, `MeshIntroductionChaosBehaviour`.
+behaviour: `MeshTransportConsoleLog`, `MeshIntroductionChaos`, `MeshIntroductionChaosBehaviour`,
+switched on by the launch-environment keys `PROXIMITYKIT_MESH_CONSOLE_LOG`,
+`PROXIMITYKIT_MESH_CHAOS` and `PROXIMITYKIT_MESH_CHAOS_BARRED` (the module's own names, as are the
+`PROXIMITYKIT_UI_TEST_MESH_*` flags ``MeshNetworkManager`` `injectUITestStateIfNeeded()` seeds a
+canned mesh from).
 They exist so the rejection matrix above can be *observed on a real radio* rather than only
 enumerated at tier 1 — the runbook's Lane C, two Simulators on one Mac. **Three** Simulators run on
 the same lane and form a **full mesh** (3/3 runs, 2026-09-02): every node reaches `slots total=2
@@ -2130,7 +2150,7 @@ a member it had dropped, so `barred` was empty in production and a removed peer 
 anonymous `unknownIdentity` — matrix row 3 (`barredMember`) was produced by a DEBUG chaos hook. The
 admission record keeps the member's signing key, so a verified removal or departure names a key and
 `barred` has real contents. P3 item 9 then drove the `barredMember` branch on the radio with
-`FERNLET_MESH_CHAOS_BARRED` **unset** — a pair, a really-signed removal record, and the shipping
+`PROXIMITYKIT_MESH_CHAOS_BARRED` **unset** — a pair, a really-signed removal record, and the shipping
 derived roster's own refusal — so the hook survives only where a *real* quorum is needed
 (⌊2/2⌋ + 1 = 2 votes with the target excluded leaves one eligible voter), which takes three nodes. With **no** ledger the answer falls back to the gossiped
 descriptor's members and logs `mesh.introductionAuthority.legacyRosterFallback` once — reachable
@@ -3075,7 +3095,7 @@ bundle the signed identity introduction carries is this module's wire type.
 
 A ``ProximityPairSession`` is a one-to-one connection between two devices, driven by a
 ``ProximityPairProfile`` its host builds from its own namespace: the radio it runs on (one of the
-namespace's pair-session rows, `family.radios.recipeShare`), the TXT `mode` it advertises and
+namespace's pair-session rows, `family.radios.pair`), the TXT `mode` it advertises and
 believes, and the area its own audit events go under. Fernlet's recipe profile is
 `FernletConnections`' `ProximityPairProfile.recipeShare(in:)`, and Fernlet's recipe share,
 `FernletSocial`'s `ProximityRecipeShareManager`, is its owner. The session owns its radio, this
@@ -3112,9 +3132,9 @@ The causes are tokens: the app maps them to localized copy.
 - ``ProximityPairPeer``
 - ``ProximityPairSendOutcome``
 - ``ProximityPairSendFailure``
-- ``RecipeShareDiscoveryGate``
-- ``RecipeShareTransfer``
-- ``RecipeShareAdvertisedName``
+- ``ProximityPairDiscoveryGate``
+- ``ProximityPairTransfer``
+- ``ProximityPairAdvertisedName``
 
 ### Peer names on screen
 

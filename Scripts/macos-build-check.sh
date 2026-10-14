@@ -1,18 +1,22 @@
 #!/bin/bash
 #
-# macos-build-check.sh — prove ProximityKit builds for native macOS 26 (plan step A0.6, Mac
-# readiness, Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md §4).
+# macos-build-check.sh — prove ProximityKit, and the Fernlet modules a Mac host needs beside it, build
+# for native macOS 26 (plan step A0.6, Mac readiness, Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md
+# §4).
 #
-# WHAT IT CHECKS: ProximityKit and its closure (ProximityKit, FernletCrypto, FernletDomainModel,
-# FernletFoundation) compile for `generic/platform=macOS`, arm64 and x86_64, with warnings as errors.
-# Nothing in the closure may name an API native macOS lacks: ProximityKit takes such facts from its
-# host, and its two platform seams compile only where their framework is usable (NIRangingSession
-# under `#if os(iOS)`, ProtectedSidecar's protected-data retry under `#if canImport(UIKit)`). Nothing
-# on iOS can see that hold or break: a UIKit, NearbyInteraction or ActivityKit symbol outside its guard
-# compiles clean there. This build is the compiler half; Tests/FernletTests/ProximityPlatformBoundaryTests
-# is the source half, and it pins that this script, its self-test, the CI step and the pre-push leg run.
+# WHAT IT CHECKS: the Mac-ready set (ProximityKit, FernletFoundation, FernletCrypto and
+# FernletDomainModel) compiles for `generic/platform=macOS`, arm64 and x86_64, with warnings as errors.
+# The three Fernlet modules are named, not reached through ProximityKit's dependencies, which hold
+# none of them since plan step A1.0: a Mac host of Fernlet's (workstream B, the Coach app) needs all
+# three, so each keeps its macOS build whatever ProximityKit depends on. Nothing in the set may name an API native macOS
+# lacks: ProximityKit takes such facts from its host, and its two platform seams compile only where
+# their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's protected-data
+# retry under `#if canImport(UIKit)`). Nothing on iOS can see that hold or break: a UIKit,
+# NearbyInteraction or ActivityKit symbol outside its guard compiles clean there. This build is the
+# compiler half; Tests/FernletTests/ProximityPlatformBoundaryTests is the source half, and it pins
+# that this script, its self-test, the CI step and the pre-push leg run.
 #
-# WHY XCODEBUILD AND NOT `swift build`: the SwiftPM command line leaves the closure's `.xcstrings`
+# WHY XCODEBUILD AND NOT `swift build`: the SwiftPM command line leaves the set's `.xcstrings`
 # catalogs unprocessed, so FernletFoundation and FernletDomainModel get no `Bundle.module`.
 # `resources: [.process(…)]` would make it build, but the CLI then copies each catalog raw, so every
 # CLI-built binary would show English and still build green: the silent failure the localization wall
@@ -20,8 +24,9 @@
 #
 # WHY A PRODUCT: for a local package, xcodebuild offers one scheme per library product plus
 # `FernletKit-Package`, which also builds the UIKit modules (FernletUI, PrivateMediaStore,
-# AppServices). The `ProximityKit` product is the one scheme that builds exactly ProximityKit's
-# closure. No app target links it.
+# AppServices). The `MacReady` product names exactly the Mac-ready set, so its scheme builds those four
+# modules and nothing else; ProximityPlatformBoundaryTests pins its line in the manifest. No app target
+# links it.
 #
 # WHY ITS OWN DERIVED DATA: `-derivedDataPath` defaults to FernletKit/build/macos-check (gitignored),
 # or FERNLET_MACOS_DERIVED_DATA when set. It deliberately does not read FERNLET_DERIVED_DATA, so a
@@ -55,18 +60,18 @@ DERIVED="${FERNLET_MACOS_DERIVED_DATA:-$REPO_ROOT/FernletKit/build/macos-check}"
 
 cd "$REPO_ROOT/FernletKit" || exit 99
 
-echo "==> ProximityKit for native macOS 26 (closure: ProximityKit, FernletCrypto, FernletDomainModel, FernletFoundation)"
+echo "==> The Mac-ready set for native macOS 26 (MacReady: ProximityKit, FernletFoundation, FernletCrypto, FernletDomainModel)"
 echo "    derived data: $DERIVED"
 echo
 
-xcodebuild build -scheme ProximityKit -destination 'generic/platform=macOS' -derivedDataPath "$DERIVED" \
+xcodebuild build -scheme MacReady -destination 'generic/platform=macOS' -derivedDataPath "$DERIVED" \
   DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR \
   SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES
 CODE=$?
 
 echo
 if [ $CODE -ne 0 ]; then
-  echo "MACOS BUILD FAILED (exit $CODE): ProximityKit or its closure no longer builds for native macOS 26."
+  echo "MACOS BUILD FAILED (exit $CODE): the Mac-ready set no longer builds for native macOS 26."
   echo "An iOS-only API reached it (guard a mechanism seam with #if os(iOS), or take the fact from the host),"
   echo "or a warning appeared (Power-of-10 rule 10). See ProximityKit.md, \"Platforms\"."
   exit $CODE
@@ -77,4 +82,4 @@ if [ ! -d "$DERIVED/Build/Products/Debug" ] || [ -d "$DERIVED/Build/Products/Deb
   echo "if a stale Catalyst build was left there)."
   exit 1
 fi
-echo "MACOS BUILD PASSED — ProximityKit's closure built for native macOS 26 with zero warnings."
+echo "MACOS BUILD PASSED — the Mac-ready set built for native macOS 26 with zero warnings."

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import FernletCrypto
+import FernletConnections
 @testable import ProximityKit
 @testable import Fernlet
 
@@ -105,13 +105,13 @@ struct MeshTransportSelectionTests {
             signature,
             of: bytes,
             by: manager.localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshChannelIntroductionV1
+            purpose: ProximityNamespace.fernlet.family.purposes.signature.meshChannelIntroductionV1
         ), "the authority must sign under fernlet.mesh.channel-introduction.v1")
         #expect(!IdentityService.verify(
             signature,
             of: bytes,
             by: manager.localSigningPublicKey,
-            purpose: FernletCryptoPurpose.Signature.meshProbeChannelIntroductionV1
+            purpose: MeshProbeConstants.channelIntroductionPurpose
         ), "and that signature must not verify under the DEBUG probe's neighbouring purpose")
     }
 

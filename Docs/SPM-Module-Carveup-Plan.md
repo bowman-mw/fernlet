@@ -134,7 +134,7 @@ injected dependency (`HealthSampleSource`), so the export contract stays portabl
 | `FernletLock` | App lock: `FernletLockService`, `FernletLockGate`, `FernletLockView`. Conforms to `SecureKeyValueStore`/`BiometricGate`. Re-declares `CryptoSwift`. | `FernletFoundation`, `FernletCrypto` | [S] | |
 | `CloudKitSync` | `CoreDataFernletRepository`, `CloudKitDataService`, `Persistence`, CoreData `SavedRecipe`. Alternate `FernletRepository`. **Must omit all `Private*` stores** (verify exact upper deps at extraction). | `FernletPersistence` | [S] | |
 | `AppServices` | `NotificationService`, `WeatherKitService`, `NutritionLabelScanner`, `SharedRecipeImportQueue`. | `FernletDomainModel` | [S] | |
-| `ProximityKit` | **One black-box module** — whole `Proximity/` tree. Depends only on a narrow `ProximityHost` protocol, `FernletDomainModel` (until steps A0.7 and C5) and `FernletCrypto` (its `CryptographicPurpose` signing overloads, until C1); `PrivateMediaStore` left with the session photos at step A0.5. | `FernletDomainModel`, `FernletCrypto` | [S] | |
+| `ProximityKit` | **One black-box module** — whole `Proximity/` tree. Depends on no FernletKit module, only on a narrow `ProximityHost` protocol its host answers; `PrivateMediaStore` left with the session photos at step A0.5, and at step A1.0 `FernletDomainModel`, when the session mode became ProximityKit's own, and `FernletCrypto`, when a host's own signature labels began to be minted with its `featureSignature(_:framing:)`. | — | [S] | |
 
 ### Layer 7 — UI / App
 | Module | Responsibility | Depends on | Tag | S3 |
