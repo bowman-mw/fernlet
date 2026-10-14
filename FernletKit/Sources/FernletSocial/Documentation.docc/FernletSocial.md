@@ -220,8 +220,9 @@ engine through its public seams.
   decodable so an older peer's frame parks by name, and it is the sealing-required control several
   wire suites make their claims against.
 
-Only presence drives a radio itself, through ProximityKit's presence seam (below); the mesh features
-ride the engine the composition builds, which runs the mesh radio. The engine hands every payload
+Only presence brings a radio up itself, through ProximityKit's public presence engine,
+`ProximityPresenceSession` (below); the mesh features ride the engine the composition builds, which
+runs the mesh radio. The engine hands every payload
 and routed item it receives for a feature to the handler, projection handler or ledger judge
 registered for its token, after its own gates; the features hand what the app files (verified
 moderation rows, a friend's state) to the app's closures, and the app files them in these stores. The mesh and presence hand the prekey bundles their introductions carry
@@ -406,9 +407,10 @@ and still reads a whole recipe. The "Include notes" strip
 group 31 pins the payload's JSON, the pairing's frames, persisted audit rows and status sentences,
 the copy's templates and the profile and constants.
 
-**What is still in ProximityKit.** The presence radio itself (its seam and QUIC conformer, its epoch
-posture and TXT vocabulary), the mechanism presence drives, the routed mesh engine the mesh features
-ride, and the one-to-one pair session recipe sharing runs over, each for good.
+**What is still in ProximityKit.** The presence engine, `ProximityPresenceSession`, with the radio it
+wraps (its seam and QUIC conformer, its epoch posture and TXT vocabulary), the mechanism presence
+drives, the routed mesh engine the mesh features ride, and the one-to-one pair session recipe sharing
+runs over, each for good.
 
 **Position in the FernletKit graph and the S3 wall.** The target depends on `ProximityKit`; on
 `FernletConnections`, for `FernletFeaturePurposes.heartDropPairV1` and `.presencePairV1`, the

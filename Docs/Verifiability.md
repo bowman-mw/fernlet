@@ -75,11 +75,13 @@ xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet 
 >   switches it).
 > - **`-only-testing:` takes a TEST-TARGET path, not a filesystem path.** The old commands read
 >   `-only-testing:Tests/FernletTests/<Suite>`, which mirrors where the file lives on disk.
->   `xcodebuild` wants `<TestTarget>/<Suite>`, and the target is named **`FernletTests`** — so it is
->   `-only-testing:FernletTests/<Suite>`. The disk-path form does not error usefully; it matches
->   nothing and the run passes having executed **zero tests**, which is the worst possible failure
->   mode for a verification command. Whatever you run, confirm the `Test case` lines you expected
->   actually appear — never accept the success banner alone.
+>   `xcodebuild` wants `<TestTarget>/<Suite>`: the app's unit-test target is named **`FernletTests`**
+>   and, since ProximityKit plan step A0.8, ProximityKit's package test target **`ProximityKitTests`**
+>   — so it is `-only-testing:FernletTests/<Suite>` or `-only-testing:ProximityKitTests/<Suite>`.
+>   The disk-path form does not error usefully; it matches nothing and the run passes having
+>   executed **zero tests**, which is the worst possible failure mode for a verification command.
+>   Whatever you run, confirm the `Test case` lines you expected actually appear — never accept the
+>   success banner alone.
 >
 > Suite identifiers are matched **exactly**, with no prefix matching, so a file declaring several
 > suites needs each one named. The `-only-testing:` fragments in the table below all assume the
