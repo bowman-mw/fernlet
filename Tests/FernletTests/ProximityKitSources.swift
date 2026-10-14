@@ -67,9 +67,8 @@ enum ProximityKitSources {
     }
 
     /// `file`'s path under the module root, read off the path's own `FernletKit/Sources/ProximityKit/`
-    /// component so a symlinked checkout (`/tmp` and `/private/tmp`) resolves alike; the full path if
-    /// the file is somehow outside it. The feature golden's recipe-copy scan names a stray literal's file
-    /// by this path.
+    /// component so a symlinked checkout names its files alike; the full path if the file is somehow
+    /// outside it. The feature golden's recipe-copy scan names a stray literal's file by this path.
     static func relativePath(of file: URL) -> String {
         let path = file.path
         guard let range = path.range(of: "/" + moduleRoot + "/", options: .backwards) else { return path }

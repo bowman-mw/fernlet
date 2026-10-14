@@ -238,8 +238,8 @@ import FernletFoundation
             """)
         #expect(aliases.isEmpty, """
             `ProximityAudit` is extended, aliased or taken as a metatype at \(aliases); no file Fernlet \
-            holds may do either, since a bare `install(` in an extension, or an `install` through an alias \
-            or a metatype, reaches the sink's slot by a spelling the install count cannot see.
+            holds may do any of the three, since a bare `install(` in an extension, or an `install` through \
+            an alias or a metatype, reaches the sink's slot by a spelling the install count cannot see.
             """)
     }
 

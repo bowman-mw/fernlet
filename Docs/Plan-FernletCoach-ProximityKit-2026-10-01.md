@@ -343,8 +343,9 @@ end:
   left in ProximityKit's code; the presence radio's `package` doors closed at A1.1.
 
 **A1.1 Create the repo.** Its prep, what ProximityKit's package needs to leave and to test itself
-without Fernlet, ran in this tree before the split (owner decisions 2026-10-13), one gated commit at
-a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged. At its end:
+without Fernlet, ran in this tree before the split (owner decisions 2026-10-13 and 2026-10-14), one
+gated commit at a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged. At
+its end:
 - **A presence engine (owner decision: an engine, not the doors published).** FernletSocial's
   `PresenceManager` drove the presence radio through 36 `package` declarations in four ProximityKit
   files, and `package` access does not reach a module of another package, so no tag could have
@@ -362,11 +363,12 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   has, and a door compiled only in Debug lets the package's tests install an in-memory store. The
   package's own `ProximityKeychainDoorTests` holds the door to that one caller and its declaration to
   the Debug branch, whose text it pins; `KeyCustodyBoundaryTests` holds that no Fernlet file names
-  the door, and Fernlet's hosted tests on the system keychain. CI never compiles a Release build, so
-  the Release branch is held by its code, by that pinned text (it can break only where the Debug
-  branch does) and by a one-off gate (a native macOS Release build of `MacReady` passed, and failed
-  on a planted call to the door), as `s3-wall.yml`'s mesh-batteries note accepts for
-  `resolvedKind(environment:)`'s Release arm.
+  the door, and Fernlet's hosted tests on the system keychain. Fernlet's CI never compiles a Release
+  build, so in this repository the Release branch is held by its code, by that pinned text (it can
+  break only where the Debug branch does) and by a one-off gate (a native macOS Release build of
+  `MacReady` passed, and failed on a planted call to the door), as `s3-wall.yml`'s mesh-batteries
+  note accepts for `resolvedKind(environment:)`'s Release arm; the package repository's CI compiles
+  the library in Release on every run (below).
 - **The package's own test support** (`FernletKit/Tests/ProximityKitTests/TestSupport/`): a test
   namespace, `.packageTest` (`pktest` spellings in `.fernlet`'s shapes; a `FernletTests` cell holds
   it clear of `.fernlet`); the call shapes Fernlet's test bindings restore, copied with
@@ -374,11 +376,12 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   replacement pair; `PackageRoot`, a file locator whose markers (`Package.swift` and
   `Sources/ProximityKit`) hold at `FernletKit/` and at the package repository's root;
   `PackageTestHost`, a `ProximityHost` built from ProximityKit's public API alone, on a scratch root
-  with `.test.` keychain services; an audit sink installed once for the bundle and read through
-  scoped `PackageAuditCapture`s; and the in-memory keychain store. Canary suites hold them
-  (`PackageTestSupportTests`, `PackageKeychainStoreTests`, `PackageTestHostTests`), and the package's
-  own tree walls (`PackageTestTreeWallTests`, A1.1.14) hold the host double's and every store's scopes,
-  the one install of the audit sink and ML5 over the package's tests.
+  with `.test.` keychain services; an audit sink read through scoped `PackageAuditCapture`s and the
+  in-memory keychain store, both installed once for the bundle by one installer,
+  `PackageTestEnvironment.swift`. Canary suites hold them (`PackageTestSupportTests`,
+  `PackageKeychainStoreTests`, `PackageTestHostTests`), and the package's own tree walls (below) hold
+  the host double's and every store's scopes, the one install of the audit sink and ML5 over the
+  package's tests.
 - **Six suites (79 tests) moved before the split (owner decision).**
   `ProximityNamespaceSoundnessTests` with its five framing byte pins, and the whole files
   `MeshEpochModelTests.swift` and `MeshSessionIDClaimTests.swift`, whose suites compute under
@@ -386,30 +389,81 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   but for imports by `CIGateSelectorBoundaryTests`: beside A0.8's three, the mesh-message spelling
   helper (moved verbatim out of the soundness suite's file), the epoch fixtures, `.packageTest` and
   the source walls' lexer.
-- **The walls whose subject is ProximityKit travel with it (owner decision).**
-  `ProximityNamespaceBoundaryTests` (rules 1–6 and the manifest pin),
-  `ProximityPlatformNeutralityTests` (the platform wall's W1–W5 over ProximityKit's code and its two
-  channel-ready doors) and `ProximityKeychainDoorTests` (the keychain door declared once, in the
-  funnel's `#if DEBUG` branch, and named by the package tests' installer alone) are package tests
-  that read ProximityKit through `PackageRoot`, so they run unchanged in both repositories.
-  `ProximityPlatformBoundaryTests` keeps Fernlet's half of the platform wall: W6, presence's heart
-  door and the readers other walls call; `KeyCustodyBoundaryTests` keeps Fernlet's half of the door
-  wall: no Fernlet file names the door. `FernletTests` keeps its own copy of the lexer, with its
-  fixture cell in `SwiftSourceLexerTests`, and its feature golden reads ProximityKit's sources
-  through a walker of `FernletTests`' own, `ProximityKitSources`.
-- The package's tests hold 25 suites (203 tests): 21 on the `proximitykit` line (138 tests), three on
-  mesh-batteries (22) and the soundness suite on crypto-goldens (43).
+- **The public envelope takes ProximityKit's name (owner decision 2026-10-14).** The signed identity
+  envelope, a public wire type, is `ProximityIdentityEnvelope` (`FernletIdentityEnvelope` until
+  then; the name is on no wire, so no byte moved), its file, FernletConnections' typed view's file
+  and its suite following it, and `ProximityNamespaceBoundaryTests`' rule 6 refuses the old name.
+  After the first tag a rename would be an API break.
+- **The walls whose subject is ProximityKit travel with it (owner decisions).** Seven package suites
+  read ProximityKit's sources or the package's tests through `PackageRoot`, so they run unchanged in
+  both repositories; each rides the `proximitykit` line until A1.3:
+  - `ProximityNamespaceBoundaryTests`: rules 1–6 and the manifest pin.
+  - `ProximityPlatformNeutralityTests`: the platform wall's W1–W5 over ProximityKit's code and its
+    two channel-ready doors; W1 refuses CloudKit by name (since A1.1.15, in place of
+    `S3BoundaryTests`' ProximityKit row), in the lexed code and in the raw text.
+  - `ProximityKeychainDoorTests`: the keychain door declared once, in the funnel's `#if DEBUG`
+    branch, and named by the package tests' installer alone.
+  - `PackageTestHygieneTests` (A1.1.13): nothing the unhosted bundle cannot serve (I9, with its
+    allowlist and its per-file keychain rule), the package tests' imports (I11), T3's one consequence
+    (nothing in the package's tests extends `ProximityHost`; T3 itself compares two test targets'
+    keys, so it has nothing to compare in a one-target package) and the package's own inventory,
+    `FernletKit/Tests/ProximityKitTests.tsv` (each suite's file and declared tests, the rows and
+    their sum measured), to which `CIGateSelectorBoundaryTests` holds Fernlet's package rows.
+  - `PackageTestTreeWallTests` (A1.1.14): the one install of the audit sink in the package's tests
+    and none in ProximityKit's code, every store on a scope of the test's own and the host double's
+    scopes, ML5 and the acceptance batteries' digest homes.
+  - `ProximitySourceWallTests` (A1.1.15 to A1.1.17), over ProximityKit's code: its `PROXIMITYKIT_*`
+    hook keys read only inside `#if DEBUG`, its keychain rows never synchronizable and only under
+    `ThisDeviceOnly` classes, no identity built in its code, a purpose named at every raw
+    cryptographic call, and its one `x509-self-signature` escape hatch counted, its justification
+    beside the pin.
+  - `ProximityMemoryLifecycleTests` (A1.1.17): ML1–ML4 over ProximityKit's code (stored tasks
+    cancelled, observers removed, `withObservationTracking` in `ObservationLoop` alone, every `Task`
+    in a host-holding file pinned or marked).
 
-The split itself:
-- Split `FernletKit/Sources/ProximityKit` plus its package tests (`FernletKit/Tests/ProximityKitTests`)
-  out with history (`git filter-repo` or a subtree split). The inventory's `ProximityKitTests` rows
-  become the package repo's to hold.
+  Fernlet's walls keep Fernlet's halves: `ProximityPlatformBoundaryTests` W6, presence's heart door
+  and the readers other walls call; `KeyCustodyBoundaryTests` that no Fernlet file names the door,
+  and its exception greps and identity-construction wall over Fernlet's code;
+  `CIGateSelectorBoundaryTests` I1–I6, I8, I10 and the mirror cell; and `ProximityAuditBridgeTests`,
+  the store isolation walls, `MemoryLifecycleBoundaryTests`, the batteries' scans,
+  `TestHookBoundaryTests`, `CryptographicPurposeBoundaryTests` and
+  `CryptographicEscapeHatchCensusTests` over Fernlet's trees. A Fernlet wall that reads
+  `FernletKit/Sources` leaves ProximityKit's folder to the package through one exclusion constant,
+  `ProximityKitSources.folder` (seven call sites, serving six suites), so A1.3's deletion of
+  `ProximityKitSources.swift` breaks every exclusion by compile rather than letting one outlive the
+  folder. `FernletTests` keeps its own copy of the lexer, with its fixture cell in
+  `SwiftSourceLexerTests`, and its feature golden reads ProximityKit's sources through the same
+  file's walker. `TestHookBoundaryTests` and `CryptographicEscapeHatchCensusTests`, walls with no
+  compiler half, ride no CI line (§13).
+- The package's tests hold 25 suites (203 tests): 21 on the `proximitykit` line (138 tests, its
+  floor 138), three on mesh-batteries (22) and the soundness suite on crypto-goldens (43).
+
+The split itself (owner decisions 2026-10-14):
+- **Out with history, from the carve-up on.** Once the PR holding A1.1's prep is merged into
+  Fernlet's `main` with a merge commit (so each of its commits survives), git's own fast-export
+  pipeline (`git fast-export --full-history --simplify-merges`, a filter that re-roots the paths,
+  `git fast-import`) extracts three paths from that `main`: `FernletKit/Sources/ProximityKit` as
+  `Sources/ProximityKit`, `FernletKit/Tests/ProximityKitTests` as `Tests/ProximityKitTests` and the
+  package's inventory, `FernletKit/Tests/ProximityKitTests.tsv`, as `Tests/ProximityKitTests.tsv`. No
+  `git filter-repo` is needed, and a subtree split cannot do it: it takes one prefix. The history
+  starts at 649858e9, the carve-up that made ProximityKit a target (308 commits to A1.1.11, A1.1's
+  later steps on top); the run is deterministic, its tip trees byte-identical to the three paths,
+  authors and messages kept. Commit hashes and "plan step" citations in those messages stay verbatim:
+  the package's README says that commits before the import were made in `bowman-mw/fernlet` and cite
+  this plan.
+- **Merged, never force-pushed.** The extracted history is merged into the package repository's
+  `main` with `git merge --allow-unrelated-histories --no-ff`, which conflicts with nothing and leaves
+  the published `main` an ancestor, on a branch whose PR is merged with a merge commit.
+- **A freeze.** From the extraction to A1.3, ProximityKit is frozen in this repository: a change it
+  needs in that window is made in the package repository, or the extraction is re-run before the
+  import is pushed.
 - Root `Package.swift`: tools 6.2; iOS 26 and macOS 26; `defaultIsolation(MainActor.self)` as today
   for the sources; the test target keeps Swift 6 with no default isolation and its three upcoming
   features. It spells the target `name: "ProximityKit", dependencies: [...]` literally (the
-  namespace wall's manifest pin reads that line) and names the test target `ProximityKitTests`
-  (`PackageTestSupportTests` reads it).
-- Apache-2.0 `LICENSE`/`NOTICE` and the DocC catalog.
+  namespace wall's manifest pin reads that line), names the test target `ProximityKitTests`
+  (`PackageTestSupportTests` reads it), and carries no `unsafeFlags` and no warning setting (the
+  manifest wall below).
+- Apache-2.0 `LICENSE`/`NOTICE`, the DocC catalog and a `.gitignore`.
 - **The repository's walls are brought up to date before the import.** Two of its scanners fail on
   an entry that matches nothing, so the first CI run after the import would fail: its
   `local-link-scan.py` still permits `Transport/NetworkRecipeShareSession.swift`, and the entry is
@@ -418,53 +472,68 @@ The split itself:
   allowlist still holds the `ProximityForegroundAnchor.swift` entry Fernlet's dropped at A0.6, which
   goes (the scan's only failure over the split layout). That scanner also reads `Tests/` and
   enforces R6 and R8 there, which Fernlet's, reading shipping code only, does not.
-- **The rules that keep the package's tests clean are ported into the package before A1.3 removes
-  Fernlet's copies.** I9 (the keychain, storage, location and repo-path hazard needles, their allowlist
-  and the per-file rule for the files that reach the keychain, `packageKeychainFiles`), I11 (the
-  package tests' import allowlist), T3's one consequence (nothing in the package's tests extends
-  `ProximityHost`) and the inventory with its declared-test count are the package's own since A1.1.13,
-  `PackageTestHygieneTests`, over the package's own inventory,
-  `FernletKit/Tests/ProximityKitTests.tsv`, which `CIGateSelectorBoundaryTests` holds Fernlet's package
-  rows to. The one-installer rule for `ProximityAudit.install`, the store-isolation walls' test-tree
-  scans with their scratch-root needle, ML5 and the acceptance batteries' digest homes are the
-  package's own since A1.1.14, `PackageTestTreeWallTests`, over the package's tests (and, for the
-  install sites, ProximityKit's sources); Fernlet's halves (`ProximityAuditBridgeTests`,
-  `MeshRoutedStoreIsolationTests` and `MeshSessionStoreIsolationTests`, `MemoryLifecycleBoundaryTests`'
-  ML5 and the batteries' scans) read Fernlet's trees alone. The keychain door's one-installer rule is
-  the package's already (`ProximityKeychainDoorTests`, A1.1). The repository's
-  own walls read `Tests/` only for Power-of-10's R6 and R8 and for tracking SDKs and symbols, and its
-  `swift test` step holds no test-count floor. So a package suite reading the package's own folder
-  through `PackageRoot` (or a fifth Python wall) carries them, a floor holds the package's test count,
-  and the package's CODEOWNERS protects the three walls that travel (the namespace, platform and
-  keychain door walls), the presence engine's suite (`ProximityPresenceSessionTests`), the lexer and
-  the two `TestSupport/` installers (`PackageTestEnvironment.swift` and the keychain store).
-- **CI** (`swift test` / `xcodebuild` on an iOS simulator and macOS; the first CI run of the package's
-  tests on macOS) running its own walls:
-  - no tracking SDKs and no `URLSession` at all;
+- **Its walls and CI** (`.github/workflows/ci.yml`: `swift test` and `xcodebuild test` on macOS, its
+  tests' first macOS runs in CI, and `xcodebuild test` on an iOS simulator). Before any build, seven
+  walls, each a script under `Scripts/`:
+  - no tracking SDKs and no `URLSession` at all, over `Sources/` and `Tests/`, each floored;
   - local-link APIs only in the radio files;
-  - the Power-of-10 scanner with the 2 ProximityKit allowlist entries (`power-of-10-allowlist.json:51, :56`);
+  - the Power-of-10 scanner, with the 2 ProximityKit allowlist entries
+    (`power-of-10-allowlist.json:51, :56`), R6, R8 and R2's `while true` enforced in `Tests/` too,
+    and an assertion-density floor of 1.0;
   - doc coverage;
-  - the CloudKit half of the S3 pair (`ProximityPlatformNeutralityTests`' W1 refuses CloudKit by name,
-    since A1.1.15);
-  - golden bytes;
-  - a protected label registry, mirroring the `FernletCrypto/` CODEOWNERS rule;
-  - the namespace and platform walls, which are among its tests;
-  - what A1.3 takes off Fernlet's walls: its `PROXIMITYKIT_*` hook keys read only inside `#if DEBUG`,
-    and its keychain rows never synchronizable and only under `ThisDeviceOnly` classes (since A1.1.15),
-    a purpose named at every raw cryptographic call and its one `x509-self-signature` escape hatch,
-    counted (since A1.1.16), and no identity built in its code (since A1.1.17), all ProximityKit's own
-    `ProximitySourceWallTests`; and the memory-lifecycle wall's ML1-ML4 over its code (stored tasks
-    cancelled, observers removed, `withObservationTracking` in `ObservationLoop` alone, every `Task` in
-    a host-holding file pinned or marked), ProximityKit's own `ProximityMemoryLifecycleTests` (since
-    A1.1.17).
-- **After the split the package copies suites; Fernlet keeps its own (owner decision).** The suites
-  still in `FernletTests` whose subject is ProximityKit and which need only ProximityKit and the
-  package's test support are copied into its tests, keychain-free first, then those the in-memory
-  store hosts. Fernlet keeps its originals until A1.3 or later decides whether to delete them, so
-  mesh-batteries and the P9 batteries do not churn before the tag. The presence engine's own suite,
-  `ProximityPresenceSessionTests`, is the package's already (A1.1); Fernlet's presence-manager suites
-  stay Fernlet's.
-- Tag `0.1.0`.
+  - the manifest: no `unsafeFlags`, no warning setting, and a `Package.swift` beside the sources;
+  - CODEOWNERS: every rule resolves to a path, and a required set of the walls and what they read
+    through is owned;
+  - the workflow itself: every build leg strict, every test leg followed by the test-count floor, every
+    wall run before any leg.
+
+  Then a test-count floor over the package's inventory, which only a check outside the bundle can
+  hold (a test can count declarations, never executions): two measured literals in `ci.yml`, the
+  test floor at least the inventory's sum and the suite count its rows, checked before the build; and,
+  after each test leg, the run read back (`swift test`'s summary; each `xcodebuild` lane's result
+  bundle: at least the floor, 0 failed, 0 skipped, every inventory suite run, no other suite, no
+  restart). Rule 10 on every build leg (`-Xswiftc -warnings-as-errors` on SwiftPM's, the strict
+  overrides on `xcodebuild`'s, never in `Package.swift`): Fernlet's strict build compiles the tag
+  with warnings as errors (A1.4), so a warning in the tag would fail Fernlet. A Release compile of
+  the library (`swift build -c release`) holds the keychain funnel's Release branch;
+  `swift test -c release` fails by design, its door being Debug-only. The simulator stays pinned
+  (iPhone 17), so counts compare with Fernlet's measured lines.
+- **Its tests hold the rest, on every lane:** golden bytes (the soundness suite's framing pins), the
+  namespace and platform walls, and what A1.3 takes off Fernlet's walls, all moved ahead of it (the
+  walls that travel with it, A1.1). A protected label registry mirrors the `FernletCrypto/`
+  CODEOWNERS rule.
+- **Its CODEOWNERS protects one list** (the split's and A1.3's lists, which differed, reconciled): the
+  six ProximityKit source rows Fernlet's CODEOWNERS holds (`Namespace/`, the label registry;
+  `ProximityColumnCrypto.swift`; `ProximityInstallBinding.swift`; `ProximityKeychainItem.swift`, the
+  keychain funnel; `ProximityPresenceSession.swift`, the presence engine;
+  `IdentityProvisioningParticipant.swift`); the seven walls that travel, the soundness golden and the
+  presence engine's suite; the package's inventory; what every wall or golden reads through (the
+  lexer, the walker `PackageSwiftFiles.swift`, `PackageRoot.swift` and the test namespace
+  `PackageTestNamespace.swift`) and the one installer, `PackageTestEnvironment.swift`, with the
+  keychain store it installs; and `Package.swift`, `Scripts/` and `.github/`. The import commit
+  completes the list and re-measures the floor's literals on the imported tree.
+- **Copies, in the package repository only (owner decision).** The suites still in `FernletTests`
+  whose subject is ProximityKit are copied into the package's tests there, never in this tree: the
+  inventory holds every suite to one target and T3 forbids a key declared in both, so a second copy
+  here cannot pass. Fernlet keeps its originals until A1.3 or later decides whether to delete them, so
+  mesh-batteries and the P9 batteries do not churn before the tag.
+  - **Batch A before the tag:** the 33 keychain-free suites (305 tests, 344 cases with their
+    arguments). They need package-side additions only: 19 call shapes in the test bindings, value
+    fixtures, one source-scan helper the copied source walls read through, the import allowlist
+    widened to CryptoKit, Security and Observation, and 19 rows of I9's allowlist.
+  - **Batches B and C after it:** 38 suites that reach the keychain, C's also the stores. The
+    in-memory store alone hosts none of them as written: they need I9's per-file rule refined (to
+    admit traits, arguments and static keychain fixtures), an identity binding without the escrow, and
+    an install binding a test can switch.
+  - **A1.3, not the tag, forces the source-reading copies.** The tag needs no copy, but A1.3 deletes
+    Fernlet's reads of ProximityKit's sources, so the copies that read them land first: six in batch A
+    (`NetworkMeshWireTests`, `NetworkMeshSessionTests`, `PresenceEpochPostureTests`,
+    `MeshMergeWindowStateTests`, `MeshRoutedCustodyHandoffWallTests`, `MeshRoutedRetryPlanTests`) and
+    three cells of two batch C suites.
+
+  The presence engine's own suite, `ProximityPresenceSessionTests`, is the package's already (A1.1);
+  Fernlet's presence-manager suites stay Fernlet's.
+- Tag `0.1.0`, on the import PR's merge commit, after batch A.
 
 **A1.2 Prove "drop-in for anything".** Add a tiny example app in the package repo that uses a
 different namespace (not `.fernlet`). Two devices pair and exchange a message, and a test shows its
@@ -477,8 +546,17 @@ umbrella entry:
   the `ProximityKit` product and the `ProximityKitTests` test target go; and `MacReady`, which may
   name only the manifest's own targets, names FernletFoundation, FernletCrypto and
   FernletDomainModel.
-- **`App/Fernlet.xcodeproj`:** the app and `FernletTests` link the `ProximityKit` product through a
-  remote reference to `proximitykit`, pinned as the manifest pins it, as CryptoSwift is linked.
+- **`App/Fernlet.xcodeproj`:** the app and `FernletTests` both link the `ProximityKit` product,
+  through one remote reference to `proximitykit` pinned as the manifest pins it. The links are
+  load-bearing, not a formality (measured 2026-10-14): with neither, everything compiles and the
+  app's link fails (175 undefined ProximityKit symbols); with the app's alone, `FernletTests`' link
+  fails (402 ProximityKit types). Nothing before the linker notices: the S3 wall's
+  `DIAGNOSE_MISSING_TARGET_DEPENDENCIES` holds imports to the package graph, never a product link.
+  CryptoSwift is only half a precedent: the app links it and `FernletTests` does not. Both
+  `Package.resolved` files gain the pin, FernletKit's (which the workspace resolves) and the app
+  project's (which `-project`, and so a release archive, resolves). The manifest and the project
+  spell the URL one way; a local `file://` override spells a path's spaces literally (a
+  percent-encoded one fails Xcode's resolver).
 - **The Mac build (owner default, 2026-10-13):** `Scripts/macos-build-check.sh` builds `MacReady`'s
   three modules and `Scripts/macos-build-selftest.sh` plants its probe in FernletFoundation; the
   `s3-wall.yml` step's name, the pre-push hook's macOS pattern and `ProximityPlatformBoundaryTests`'
@@ -487,51 +565,66 @@ umbrella entry:
   repository's CI.
 - **`ProximityPlatformBoundaryTests`** keeps its name, W6, presence's heart door and the readers
   `CIGateSelectorBoundaryTests` and `PowerOfTenBoundaryTests` call.
-  `CIGateSelectorBoundaryTests.theDirectoryNeedlesMatchTheirPackageCopy` goes with the package's copy
-  of the platform-directory needles.
-- **No Fernlet test reads ProximityKit's sources.** `ProximityKitSources` goes, and with it the
-  feature golden's scan of ProximityKit for the recipe copy, its one caller. Beyond the walls named
-  here, the mesh, presence and recipe suites of 30 `FernletTests` files still read a path under
-  `FernletKit/Sources/ProximityKit` (counted 2026-10-14; on mesh-batteries, but four suites on
-  mesh-features and one on no line). Each such suite moves (the package holds its copy and Fernlet's
-  original goes) or keeps only its Fernlet half. First, a walk over ProximityKit and a Fernlet
-  module holds a floor per root (`MeshRoutedStoreIsolationTests.proximitySources()`), and
-  `MeshRoutedLockedDeviceTests`' outcome-default walk a floor of its own, so neither passes on what
-  is left. `ProximityAuditBridgeTests` keeps its canary and loses its scan of ProximityKit's code;
-  `ProximityNamespaceGoldenTests` and `FernletFeatureGoldenTests` lose their ProximityKit-source cells
-  and rows; key-custody's `KeyCustodyBoundaryTests` and `IdentityProvisioningReadTests` lose their
-  reads of `IdentityService.swift`, and the key-custody door cell's exclusion of ProximityKit's
-  folder goes with the folder (it reads `ProximityKeychainItem.swift` no longer: that half of the
-  door wall is the package's).
+- **No Fernlet test reads ProximityKit's sources.** `ProximityKitSources.swift` goes, and with it
+  every exclusion that names its folder constant: seven call sites, serving six suites
+  (`ProximityAuditBridgeTests`' install-site cell; `TestHookBoundaryTests`' scan;
+  `KeyCustodyBoundaryTests`' two exception greps, its keychain-door cell and its
+  identity-construction wall; `CryptographicPurposeBoundaryTests` and
+  `CryptographicEscapeHatchCensusTests` through `CryptographicWallScan.fernletSourceFiles()`; and
+  `MemoryLifecycleBoundaryTests`' ML1–ML4 scan), each removed as it stops compiling and the floors it
+  held re-measured over what is left; the samples that hold the exclusion (in
+  `ProximityAuditBridgeTests` and `TestHookBoundaryTests`); and the feature golden's recipe-copy scan,
+  the walker's one reader. `TestHookBoundaryTests` keeps the `PROXIMITYKIT_UI_TEST_` token at floor 0
+  with its two samples, so an app-side read of one of ProximityKit's flags stays held to DEBUG, and
+  `PROXIMITYKIT_MESH` at the app banner's two reads. Beyond those, these still read ProximityKit's
+  sources (counted 2026-10-14), and each moves (the package holds its copy and Fernlet's original
+  goes) or keeps only its Fernlet half:
+  - the mesh, presence and recipe suites of 30 `FernletTests` files that read a path under
+    `FernletKit/Sources/ProximityKit` (on mesh-batteries, but four suites on mesh-features and one on
+    no line): 28 suites (the P5–P9 acceptance batteries and the mesh-core, routed-mesh,
+    session-photo, presence and recipe suites) and two walks, which first gain floors so neither
+    passes on what is left: `MeshRoutedStoreIsolationTests.proximitySources()`, over ProximityKit and
+    a Fernlet module, a floor per root, and `MeshRoutedLockedDeviceTests`' outcome-default walk, a
+    floor of its own;
+  - the walls that read one of its files by path: `ProximityAuditBridgeTests`' scan that
+    ProximityKit's code names `FernletAuditLog` nowhere (the suite keeps its canary);
+    `ProximityNamespaceGoldenTests` and `FernletFeatureGoldenTests`, which lose their
+    ProximityKit-source cells and rows; `IdentityProvisioningReadTests`, which loses its read of
+    `IdentityService.swift` (`KeyCustodyBoundaryTests` reads no ProximityKit file since A1.1.17);
+    `TransportNeutralityBoundaryTests` and `PrivacyWipeCoverageTests` (re-pointed, below);
+    `ProximityPlatformBoundaryTests`' W6 pins (the Mac build, above); and
+    `CodeOwnersResolutionTests` (CODEOWNERS, below);
+  - and the whole-root scans that shrink rather than fail: `CryptographicWallScan.sourceFiles()`,
+    which three mesh suites read (`MeshKeyAgreementAdvertisementTests`,
+    `MeshMembershipEventWireTests`, `MeshP3AcceptanceTests`), and `MeshP8AcceptanceTests`' scan of
+    `FernletKit/Sources`.
 - **`NoTrackingBoundaryTests`:**
   - add the repo URL to `allowedPackageURLs` (:170), with a `Docs/No-Tracking-Wall.md` row;
   - drop the radios from `permittedLocalLinkFiles` (:334–346), or the missing-file check fails;
-  - keep the Bonjour classification app-side.
-- **`S3BoundaryTests`:** the row that ProximityKit imports no CloudKit (:243) moves to the new repo;
-  its reverse, that CloudKitSync imports no ProximityKit (:247), stays.
+  - keep the Bonjour classification app-side;
+  - drop its `FernletKit/Tests` root and that root's floor (the root holds no file once the package
+    leaves).
+- **`S3BoundaryTests`** keeps its row that CloudKitSync imports no ProximityKit; the row that
+  ProximityKit imports no CloudKit is the package's already (W1, A1.1).
 - **Power-of-10:** delete the 2 moved allowlist entries (:51, :56).
-- **`TestHookBoundaryTests`:** ProximityKit's two hook families leave the shipping roots with its
-  sources: `PROXIMITYKIT_UI_TEST_`, its floor and its two fixture samples go, and
-  `PROXIMITYKIT_MESH`'s floor is the app banner's two reads; the package walls its own keys (A1.1).
-- **`CryptographicEscapeHatchCensusTests`:** the `x509-self-signature` hatch leaves with
-  `EphemeralMeshTLSIdentity.swift`: its label goes and the file count is 3, with
-  `Docs/Crypto-Domain-Separation.md` §Escape-hatch abuse in the same commit.
-- **CODEOWNERS:** the `/FernletKit/Sources/ProximityKit/` rows (the presence engine's and the
-  keychain funnel's among them) and the package tests' rows (the namespace wall, the platform suite,
-  the keychain door's wall, the installer `PackageTestEnvironment.swift` and the lexer's package
-  half) go to the package's CODEOWNERS (A1.1); `ProximityKitSources`' row goes with its file; and
-  `CodeOwnersResolutionTests`' required patterns lose the platform suite, the keychain door's wall
-  and the keychain funnel.
-- **Re-point:** `PrivacyWipeCoverageTests:280–284` with its `PrivacyWipeCoverage.md` rows,
-  `TransportNeutralityBoundaryTests`, and `MemoryLifecycleBoundaryTests`, whose observation-loop file
-  is ProximityKit's and whose host-holding floor is 3 (two of today's five holders are
-  ProximityKit's).
-- **`s3-wall.yml`:** re-scope key-custody and crypto-goldens, and update `CIGateSelectorBoundaryTests`
-  with every line it counts. The `proximitykit` line goes, with its suite count and
-  `wallLines["proximitykit"]` in `CIGateSelectorBoundaryTests`; crypto-goldens loses
+- **CODEOWNERS:** the six `/FernletKit/Sources/ProximityKit/` rows (the label registry, the
+  column-crypto and install-binding copies, the keychain funnel, the presence engine and the
+  provisioning participant) and the eleven package-test rows (the namespace, platform and keychain
+  door walls; the hygiene, tree-wall, source-wall and memory-lifecycle suites; the package's
+  inventory; the walker `PackageSwiftFiles.swift`; the installer `PackageTestEnvironment.swift`; and
+  the lexer's package half) leave this repository's CODEOWNERS, all of them in the package's already
+  (A1.1); `ProximityKitSources`' row goes with its file; and `CodeOwnersResolutionTests`' required
+  patterns lose their eight ProximityKit entries (the platform suite, the keychain funnel and the
+  door's wall; the hygiene, tree-wall, source-wall and memory-lifecycle suites and the package's
+  inventory), or its resolution cell fails on a pattern that matches nothing.
+- **Re-point:** `PrivacyWipeCoverageTests:280–284` with its `PrivacyWipeCoverage.md` rows, and
+  `TransportNeutralityBoundaryTests`.
+- **`s3-wall.yml`:** update `CIGateSelectorBoundaryTests` with every line it counts. The
+  `proximitykit` line goes, with its suite count and `wallLines["proximitykit"]` in
+  `CIGateSelectorBoundaryTests`; crypto-goldens loses
   `ProximityKitTests/ProximityNamespaceSoundnessTests` (43 tests), mesh-batteries its three
-  `ProximityKitTests` suites (22), and s3-grep, mesh-features, mesh-batteries and crypto-goldens the
-  ProximityKit-source cells above; each line is re-measured.
+  `ProximityKitTests` suites (22), and s3-grep, key-custody, mesh-features, mesh-batteries and
+  crypto-goldens the ProximityKit-source cells above; each line is re-measured.
   `ProximityNamespaceGoldenTests`' `.packageTest` collision cell reads the `FernletTests` half of that
   twin: it goes with the half, or the half stays as an ordinary file.
 - **The in-tree test target (A0.8):** remove the `Fernlet` scheme's `ProximityKitTests` testable;
@@ -539,24 +632,15 @@ umbrella entry:
   and test-target-dependency pins; `Scripts/run-gated-suites.sh`'s second selector shape, and its
   self-test's two-target assertions and their `both.json` tree; README's
   `-only-testing:ProximityKitTests` and its sentences on the package test target; and
-  `BackgroundRefreshBoundaryTests`' row. With the package holding its own copies of the rules that
-  keep its tests clean (A1.1), these go too: the inventory's package rows and pins (the package-cell
-  count among them), its hazard list (each allowlist row names a package file) and its per-file
-  keychain list (`packageKeychainFiles`, with its structure reader's fixtures), its import allowlist
-  (I11, with its lexed reader's fixture) and T3's package half; the twin list (the `FernletTests`
-  halves of the fake transport, the ranging mock, the membership and epoch fixtures, the
-  mesh-message spelling helper and the lexer become ordinary files) and the replacement list
-  (Fernlet's test bindings are their own again); and every `FernletKit/Tests` root, which holds no
-  file once the package leaves, with its floor: `NoTrackingBoundaryTests`',
-  `MemoryLifecycleBoundaryTests`' ML5 scan (a file from each root), the store-isolation walls' and
-  the acceptance batteries' test-tree scans (18 files) and `ProximityAuditBridgeTests`' install-site
-  cell (18), with `MeshRoutedStoreIsolationTests.minimumHostDoubles` back to 17 without
-  `PackageTestHost`. That install-site cell also floors `FernletKit/Sources` at 335 files, of which
-  288 remain once ProximityKit's leave, and its list names a package file (`installSites`'
-  `PackageTestEnvironment.swift` beside `FernletApp.swift`): it keeps Fernlet's half (the app's one
-  sink), its floor re-measured. `KeyCustodyBoundaryTests`' door cell already reads Fernlet's roots
-  alone (App, `FernletKit/Sources` without ProximityKit's folder, floored at 230, and Tests) and
-  names no package file, since the door wall's package half is `ProximityKeychainDoorTests` (A1.1).
+  `BackgroundRefreshBoundaryTests`' row. The package's own suites hold the rules that keep its tests
+  clean (A1.1), so what goes here is Fernlet's side of them: the inventory's package rows, their
+  measured count (`measuredInventoryRows["ProximityKitTests"]`) and the mirror cell that holds them
+  to the package's inventory; the twin list (the `FernletTests` halves of the fake transport, the
+  ranging mock, the membership and epoch fixtures, the mesh-message spelling helper and the lexer
+  become ordinary files) and the replacement list (Fernlet's test bindings are their own again); and
+  `ProximityAuditBridgeTests`' check that `FernletKit/Tests` holds no Swift file outside the
+  package's test folder, which goes with the folder. Fernlet's other walls over test trees read
+  `Tests` alone already (A1.1).
 - **The fake transport's check:** `FakePeerTransportTests` leaves mesh-batteries with the package, and
   the twin wall that held Fernlet's copy of the fabric to the copy it tests goes with it, while
   Fernlet's acceptance batteries keep building on their own `FakePeerTransport.swift`. So Fernlet
@@ -573,19 +657,26 @@ umbrella entry:
   CODEOWNERS and `CodeOwnersResolutionTests`, the pre-push hook's relevance pattern, and the
   documented commands (README, `Docs/Verifiability.md`, `Docs/No-Tracking-Wall.md`,
   `Docs/Power-of-10-Swift.md`, `Scripts/branded-catalog/README.md`).
-- **Docs:** split `Docs/FileIndex.md` (108 rows for ProximityKit's sources and 28 for its package
-  tests, counted 2026-10-14) and `Docs/ProximityFunctionIndex.md`; `Docs/Verifiability.md` (the
-  dependency claim, which gains proximitykit beside CryptoSwift, and the macOS claim, which its
-  repository's CI and Fernlet's three-module check now verify), `Docs/Release-Process.md` and
-  `Docs/Power-of-10-Swift.md` (the macOS check's modules); the owner updates the local, untracked
-  CLAUDE.md and AGENTS.md (the S3 wall paragraph names the Proximity subtree; both are gitignored).
+- **Docs:** split `Docs/FileIndex.md` (108 rows for ProximityKit's sources and 34 for its package
+  tests and their inventory, counted 2026-10-14) and `Docs/ProximityFunctionIndex.md`;
+  `Docs/Verifiability.md` (the dependency claim, which gains proximitykit beside CryptoSwift, and the
+  macOS claim, which its repository's CI and Fernlet's three-module check now verify),
+  `Docs/Release-Process.md` and `Docs/Power-of-10-Swift.md` (the macOS check's modules); the owner
+  updates the local, untracked CLAUDE.md and AGENTS.md (the S3 wall paragraph names the Proximity
+  subtree; both are gitignored).
 
-**A1.4 `@testable` across repos.** 122 `FernletTests` files import ProximityKit with `@testable`
-(counted 2026-10-14: the files holding that import line; two more spell it only in fixtures), among
-them the forwarders to the presence engine's internal seams and the key-custody cell that reads the
-keychain backend. A0.8 and A1.1 showed it works from a package test target under the strict build;
-whether a remote dependency's Debug build allows it is still open. Verify early. If not, expose what
-integration tests need with `@_spi(Testing)`, or use test doubles.
+**A1.4 `@testable` across repos (verified 2026-10-14).** 122 `FernletTests` files import
+ProximityKit with `@testable` (counted 2026-10-14: the files holding that import line; two more spell
+it only in fixtures), among them the forwarders to the presence engine's internal seams and the
+key-custody cell that reads the keychain backend. A tagged URL dependency allows it: with ProximityKit
+pinned at exactly `0.1.0` from a tagged repository, the strict build-for-testing
+(`Scripts/spm-wall-check.sh`'s command line) built the whole tree from an empty DerivedData with no
+error and no warning, all 122 `@testable` files among it, and four suites that use ProximityKit's
+internals ran green on a simulator (79 tests). Xcode builds a remote package's Debug configuration
+with `-enable-testing`, so no setting changes; under the strict build's flags it also compiles the
+package with warnings as errors and without `-suppress-warnings`, so the package's CI builds under the
+same flags (A1.1). `@_spi(Testing)` is no fallback: it would have to mark about 560 declarations. A
+full `FernletTests` run against the tag is A1.3's to measure.
 
 **A1.5 Developing across repos.** Develop with a local package override (a sibling checkout dragged
 into the root `Fernlet.xcworkspace`). Never commit the override, and CI always builds the tag.
@@ -1074,8 +1165,9 @@ trader status is needed while it's free and US-only.
 **P2: the move.**
 - A1: ProximityKit first stands alone in this tree (A1.0: no FernletKit dependency, the pair names,
   the `PROXIMITYKIT_*` hook keys) and readies its package there (A1.1: the presence engine, the
-  keychain backend, its tests' own namespace, host double and audit sink, and the walls that travel
-  with it), then moves to its repo, tagged 0.1.0, with the example app.
+  keychain backend, its tests' own namespace, host double and audit sink, its public envelope's name,
+  and the walls that travel with it), then moves to its repo with its history, its CI and the first
+  copied suites, tagged 0.1.0, with the example app.
 - FernletKit depends on it, and the mesh test batteries stay green.
 
 **P3: in parallel**
@@ -1108,14 +1200,16 @@ engine generalized in ProximityKit), and the item design app as the second famil
   - `NoTrackingBoundaryTests`: the package allowlist gains ProximityKit's URL, the Bonjour types are
     reclassified, and the local-link permits move to ProximityKit's repo.
   - Power-of-10 allowlist entries for ProximityKit paths move with it.
-  - Every other wall that reads ProximityKit's sources keeps only its Fernlet half (A1.3); no Fernlet
-    test reads them.
+  - Every other wall that reads ProximityKit's sources keeps only its Fernlet half: those whose
+    subject is ProximityKit since A1.1, their ProximityKit halves moved into its package tests; the
+    rest at A1.3, after which no Fernlet test reads them.
   - Persisted-surface and wipe rows for the coach records, the link inbox and the coach-session
     store; `DeleteAllDataTests`.
   - `CryptographicDomainSeparationTests` (new purposes); `PrivacyPolicyParityTests`.
 - **ProximityKit's own walls:** no tracking SDKs, the local-link API only in the radio files, no
-  URLSession at all, the Power-of-10 scan, doc coverage, its namespace, platform and keychain door
-  walls (package tests since A1.1), and builds for iOS and macOS.
+  URLSession at all, the Power-of-10 scan, doc coverage, its manifest, its CODEOWNERS and its
+  workflow (seven script walls); a test-count floor and Rule 10 on every leg; the walls that travel
+  with it, among its package tests since A1.1; and builds and tests on iOS and macOS.
 
 ---
 
@@ -1136,8 +1230,8 @@ engine generalized in ProximityKit), and the item design app as the second famil
 9. **Font licensing:** OFL texts (task filed).
 10. **Crafted fernlet.com links:** someone can make the site display text they chose. Mitigated by
     text-only rendering, no clickable links, and a label saying the app checks who sent it.
-11. **`@testable` across repos** (A1.4): 122 Fernlet test files rely on it. Check this before the
-    move.
+11. **`@testable` across repos** (A1.4): retired 2026-10-14. 122 Fernlet test files rely on it, and
+    a tagged URL dependency allows it (A1.4).
 
 ---
 
@@ -1150,6 +1244,11 @@ engine generalized in ProximityKit), and the item design app as the second famil
 4. **Coach on Mac:** a handover device too (needs the coach connection on Mac), or planning only.
    Decide after P0.2.
 5. **Privacy policy wording** for coach links and the coach connection (owner).
+6. **Two Fernlet walls ride no CI line** (owner): `TestHookBoundaryTests` and
+   `CryptographicEscapeHatchCensusTests`, Fernlet's halves of the launch-hook wall and of the
+   escape-hatch census. Neither has a compiler half, so each holds only when somebody runs it (A1.1's
+   steps ran both by hand). Put them on a line (`s3-grep`, at its shared floor 1, say) or record why
+   not.
 
 Decided 2026-10-01 and moved to §1: the synced coach key (O16) and broadcast, tap, lock session
 start (O17).

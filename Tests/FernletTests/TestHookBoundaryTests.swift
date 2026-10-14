@@ -76,10 +76,10 @@ struct TestHookBoundaryTests {
     /// The mesh families are matched WITHOUT a trailing underscore (`FERNLET_MESH` and
     /// `PROXIMITYKIT_MESH`, not `FERNLET_MESH_`) so a bare future `FERNLET_MESH` cannot slip past the
     /// prefix. That is safe against double-counting because `hookReads` records one read per LINE
-    /// however many tokens match, to the first family in this list it names, and it is deliberate
-    /// that `PROXIMITYKIT_UI_TEST_MESH_*` — three real flags — score to `PROXIMITYKIT_UI_TEST_` rather
-    /// than to a mesh family. The one line that names two families, `UITestSupport`'s harness check
-    /// over both UI-test prefixes, counts once, toward `FERNLET_UI_TEST_`.
+    /// however many tokens match, to the first family in this list it names. No hook's name holds
+    /// another family's token (a `…_UI_TEST_MESH_*` flag holds `MESH` but neither mesh token), so the
+    /// order decides only a line that names two families: the one such line, `UITestSupport`'s harness
+    /// check over both UI-test prefixes, counts once, toward `FERNLET_UI_TEST_`.
     static let hookTokens = [
         "FERNLET_UI_TEST_", "FERNLET_SKIP_", "FERNLET_MESH", "FERNLET_PROBE",
         "PROXIMITYKIT_UI_TEST_", "PROXIMITYKIT_MESH"
@@ -100,8 +100,9 @@ struct TestHookBoundaryTests {
     /// one outside `#if DEBUG`; no other rule would, and its two samples below hold the matcher to it.
     ///
     /// The global floor above cannot catch a matcher that loses one family: drop every mesh and
-    /// probe read and 50 remain, comfortably past it. These are what make each family's membership
-    /// in the wall load-bearing rather than decorative.
+    /// probe read and 47 remain, comfortably past it. These are what make each family's membership
+    /// in the wall load-bearing rather than decorative, but `PROXIMITYKIT_UI_TEST_`'s: at floor 0,
+    /// only its two samples hold it.
     static let hookTokenFloors: [String: Int] = [
         "FERNLET_UI_TEST_": 25, "FERNLET_SKIP_": 5, "FERNLET_MESH": 7, "FERNLET_PROBE": 2,
         "PROXIMITYKIT_UI_TEST_": 0, "PROXIMITYKIT_MESH": 2
@@ -155,7 +156,9 @@ struct TestHookBoundaryTests {
     ///
     /// Comment stripping is load-bearing: most textual matches in the tree are `//`/`///` prose (the
     /// `UITestSupport` doc block alone holds ~20), and a wall that counted those would be satisfied
-    /// by documentation while real reads shipped.
+    /// by documentation while real reads shipped. Its one known narrowness, ProximityKit's copy's
+    /// too: a line that opens with `/*` is skipped whole, so code after a `*/` on that same line is not
+    /// read.
     static func hookReads(for path: String, source: String) -> [HookRead] {
         var reads: [HookRead] = []
         var regions: [Bool] = []          // one entry per open `#if`; true when it is a DEBUG region
@@ -215,9 +218,11 @@ struct TestHookBoundaryTests {
         }
     }
 
-    /// Every family still contributes. A token that stops matching — renamed hooks, a prefix edited
-    /// to something no source line carries — would otherwise leave that family silently unwalled
-    /// while the global floor stayed green on the others.
+    /// Every family still contributes at its floor. A token that stops matching — renamed hooks, a
+    /// prefix edited to something no source line carries — would otherwise leave that family silently
+    /// unwalled while the global floor stayed green on the others. `PROXIMITYKIT_UI_TEST_`'s floor is
+    /// 0, since no Fernlet line reads one of its flags, so this cell holds nothing for it; its two
+    /// samples in the fixture cell hold its matcher.
     @Test func everyHookFamilyStillMatches() {
         let byToken = Dictionary(grouping: Self.sharedScan.reads, by: \.token)
         for token in Self.hookTokens {

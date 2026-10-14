@@ -42,7 +42,8 @@ private enum IdentityKeychainKey: String {
 /// `makeProximityIdentity()` answers that factory for the proximity managers, so whichever identity
 /// provisions first on a device runs the escrow's provisioning cases.
 /// `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` holds every shipping
-/// construction of an identity to that factory, and
+/// construction of an identity in Fernlet's code to that factory (ProximityKit's own
+/// `ProximitySourceWallTests.proximityKitBuildsNoIdentityOfItsOwn` holds its code to none), and
 /// `KeyCustodyBoundaryTests.theStoresManagersHoldIdentitiesCarryingTheEscrowKey` the store's three
 /// managers to identities carrying this key. The app reaches the escrow through the identity (its
 /// `IdentityService` extension below forwards each call here).
@@ -542,8 +543,9 @@ extension IdentityService {
     /// escrow's provisioning cases, whichever provisions first on a device: Case 3 promotes a previous
     /// build's synced key-agreement key into its escrow slot before any mint overwrites the row.
     /// `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` holds every shipping
-    /// construction to this file, which ProximityKit's host door, with no default of its own, leaves
-    /// the app to answer.
+    /// construction in Fernlet's code to this file, and ProximityKit's own
+    /// `ProximitySourceWallTests.proximityKitBuildsNoIdentityOfItsOwn` holds its code to none: its host
+    /// door, with no default of its own, leaves the app to answer.
     ///
     /// - Parameter keychainService: The service holding the identity's rows, or `nil` for Fernlet's.
     /// - Returns: An identity that reads and writes nothing until it is provisioned.

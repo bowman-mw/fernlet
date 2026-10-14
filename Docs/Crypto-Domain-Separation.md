@@ -490,7 +490,10 @@ argument list, which sits below the opening line). ProximityKit's raw calls are 
 markers and window by ProximityKit's own package suite, `ProximitySourceWallTests` (ProximityKit plan
 step A1.1.16), so the rule travels with the package: its purpose words leave out
 `FernletCryptoPurpose`, a name ProximityKit never spells, and it reads at least 16 primitive-call
-lines, so a broken marker list cannot read none and pass.
+lines, so a broken marker list cannot read none and pass. Fernlet's half reads at least 18 such lines
+of Fernlet's code (since A1.1.18), and both halves hold the matcher to one bare call per marker, the
+samples equal to the marker list, and to the window's edges, so a marker the list loses or a window
+widened below fails.
 
 **What it catches:** a newly added primitive call that names no purpose at all — the case where a
 reviewer would have to remember the policy.
@@ -557,7 +560,8 @@ reviewer would have to remember the policy.
   from the table and from `pinnedByLabel` rather than left at 0: a label pinned at zero reads as a
   category that still exists and happens to be empty, when what actually happened is that the
   category was retired. A re-introduced legacy reader now fails the per-label pin as "1 found, 0
-  pinned" — the absence IS the wall.
+  pinned" — the absence IS the wall — and both censuses' legacy cells refuse the label in any spelling
+  or qualification (`legacy-read (v1 envelope)` as well, since A1.1.18), in the pin and at any site.
 
   Four steps, each landing with its deletion in one commit:
 
