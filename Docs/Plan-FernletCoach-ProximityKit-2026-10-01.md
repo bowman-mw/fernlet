@@ -337,7 +337,8 @@ end:
   `PROXIMITYKIT_MESH_CHAOS` and `PROXIMITYKIT_MESH_CHAOS_BARRED` (the transport's console mirror and
   chaos seam). The UI tests, `MeshRejectionMatrixHarness`'s banner, `UITestSupport`'s harness check
   and the feasibility runbook use them; the app's own `FERNLET_*` hooks keep their names.
-  `TestHookBoundaryTests` walls them as two families of their own, and
+  `TestHookBoundaryTests` walls them as two families of their own (ProximityKit's own reads, since
+  A1.1.15, in its package suite `ProximitySourceWallTests`), and
   `ProximityNamespaceBoundaryTests`' list of `fernlet` literals is empty, so no Fernlet string is
   left in ProximityKit's code; the presence radio's `package` doors closed at A1.1.
 
@@ -396,7 +397,7 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   wall: no Fernlet file names the door. `FernletTests` keeps its own copy of the lexer, with its
   fixture cell in `SwiftSourceLexerTests`, and its feature golden reads ProximityKit's sources
   through a walker of `FernletTests`' own, `ProximityKitSources`.
-- The package's tests hold 23 suites (185 tests): 19 on the `proximitykit` line (120 tests), three on
+- The package's tests hold 24 suites (191 tests): 20 on the `proximitykit` line (126 tests), three on
   mesh-batteries (22) and the soundness suite on crypto-goldens (43).
 
 The split itself:
@@ -443,13 +444,15 @@ The split itself:
   - local-link APIs only in the radio files;
   - the Power-of-10 scanner with the 2 ProximityKit allowlist entries (`power-of-10-allowlist.json:51, :56`);
   - doc coverage;
-  - the CloudKit half of the S3 pair;
+  - the CloudKit half of the S3 pair (`ProximityPlatformNeutralityTests`' W1 refuses CloudKit by name,
+    since A1.1.15);
   - golden bytes;
   - a protected label registry, mirroring the `FernletCrypto/` CODEOWNERS rule;
   - the namespace and platform walls, which are among its tests;
-  - what A1.3 takes off Fernlet's walls: its `PROXIMITYKIT_*` hook keys read only inside `#if DEBUG`
-    (`TestHookBoundaryTests` today), and its one `x509-self-signature` escape hatch, counted
-    (`CryptographicEscapeHatchCensusTests` today).
+  - what A1.3 takes off Fernlet's walls: its `PROXIMITYKIT_*` hook keys read only inside `#if DEBUG`,
+    and its keychain rows never synchronizable and only under `ThisDeviceOnly` classes (ProximityKit's
+    own `ProximitySourceWallTests`, since A1.1.15), and its one `x509-self-signature` escape hatch,
+    counted (`CryptographicEscapeHatchCensusTests` today).
 - **After the split the package copies suites; Fernlet keeps its own (owner decision).** The suites
   still in `FernletTests` whose subject is ProximityKit and which need only ProximityKit and the
   package's test support are copied into its tests, keychain-free first, then those the in-memory

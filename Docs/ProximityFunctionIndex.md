@@ -86,7 +86,13 @@ A1.1.14 the package tests' tree walls are a package suite too, `PackageTestTreeW
 ProximityKit's code (the walker reads ProximityKit's sources too); every session or routed store a test
 builds on a scope of its own and `PackageTestHost`'s scopes on its root; ML5 over `MeshNetworkManager`
 and `ProximityPairSession`; and no home of a determinism digest. Fernlet's audit install-site wall, store
-isolation walls, ML5 and acceptance batteries read Fernlet's trees alone. "The test
+isolation walls, ML5 and acceptance batteries read Fernlet's trees alone. Since A1.1.15 the source walls
+over ProximityKit's own code are a package suite too, `ProximitySourceWallTests`, on the `proximitykit`
+line: every read of its `PROXIMITYKIT_*` launch hooks (`injectUITestStateIfNeeded()`'s three UI-test
+flags, `MeshTransportDebugHooks.swift`'s three keys) inside `#if DEBUG`, each family at its measured floor, and
+no synchronizable keychain row or non-`ThisDeviceOnly` class in its code; Fernlet's hook and key-custody
+greps read Fernlet's shipping roots but ProximityKit's folder, and the platform suite's W1 refuses
+CloudKit by name in ProximityKit's code, in place of `S3BoundaryTests`' ProximityKit row. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'

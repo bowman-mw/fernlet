@@ -212,6 +212,10 @@ struct S3BoundaryTests {
     ///   heart dead-drop is the deliberate shape: FernletDomainModel declares `HeartDropTransporting`,
     ///   and the app injects CloudKitSync's implementation into the dead-drop service it builds
     ///   (`FernletStore.heartDropService`), so CloudKit only ever sees rotating day tags + ciphertext.
+    ///   ProximityKit's own import is held by its own package tests, which travel with it: the platform
+    ///   wall's W1 (`ProximityPlatformNeutralityTests`) refuses CloudKit by name, as an import or a
+    ///   `canImport`, whatever row is written (since ProximityKit plan step A1.1.15). The modules here
+    ///   that ride it must not import CloudKit either, and this cell holds them.
     ///   `FernletProximityUI` is held to the same rule: its review screens left ProximityKit's `UI/`
     ///   folder (ProximityKit plan step A0.1) and still render held peer photos and peer names.
     ///   `FernletConnections` is too: it holds Fernlet's protocol identity and payload vocabulary, and
@@ -240,7 +244,6 @@ struct S3BoundaryTests {
         let repoRoot = RepoRoot.url
 
         for (module, forbidden) in [
-            ("FernletKit/Sources/ProximityKit", "CloudKit"),
             ("FernletKit/Sources/FernletProximityUI", "CloudKit"),
             ("FernletKit/Sources/FernletConnections", "CloudKit"),
             ("FernletKit/Sources/FernletSocial", "CloudKit"),

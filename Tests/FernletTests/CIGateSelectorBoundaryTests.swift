@@ -392,6 +392,14 @@ import Testing
     /// determinism digests' homes), whose package halves leave Fernlet's walls, which read Fernlet's
     /// trees alone now, named `ProximityKitTests/PackageTestTreeWallTests`. `s3-grep`, `mesh-batteries`
     /// and `memory-lifecycle` keep their names. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.15 (2026-10-14): `proximitykit` 19 → 20, for
+    /// `ProximitySourceWallTests`, the walls over ProximityKit's own code (its launch hooks read only
+    /// inside `#if DEBUG`, each family at its floor; no synchronizable keychain row and no
+    /// non-`ThisDeviceOnly` class), whose ProximityKit halves leave Fernlet's hook and key-custody walls,
+    /// which read Fernlet's shipping roots but ProximityKit's folder now, named
+    /// `ProximityKitTests/ProximitySourceWallTests`. `s3-grep` and `key-custody` keep their names (S3's
+    /// ProximityKit row left for the platform suite's W1, already on `proximitykit`). Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -409,7 +417,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 155,
         "mesh-features": 48,
-        "proximitykit": 19
+        "proximitykit": 20
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -429,7 +437,9 @@ import Testing
     /// tests' own hygiene, `PackageTestHygieneTests` (what their unhosted bundle cannot serve, their
     /// imports, their inventory and its declared tests, and no extension of `ProximityHost`); and since
     /// A1.1.14 their tree walls, `PackageTestTreeWallTests` (the audit install, the stores' scopes, ML5
-    /// and the digest homes over the package's tests).
+    /// and the digest homes over the package's tests); and since A1.1.15 the source walls over
+    /// ProximityKit's own code, `ProximitySourceWallTests` (its launch hooks inside `#if DEBUG`, and no
+    /// synchronizable or non-`ThisDeviceOnly` keychain row).
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
                     "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
@@ -458,7 +468,8 @@ import Testing
                         "FoodSearchCorrectionResolverFirewallTests"],
         "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"],
         "proximitykit": ["ProximityNamespaceBoundaryTests", "ProximityPlatformNeutralityTests",
-                         "ProximityKeychainDoorTests", "PackageTestHygieneTests", "PackageTestTreeWallTests"]
+                         "ProximityKeychainDoorTests", "PackageTestHygieneTests", "PackageTestTreeWallTests",
+                         "ProximitySourceWallTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -1194,7 +1205,9 @@ import Testing
     /// RAISED at A1.1.13 (2026-10-14): 21 → 22, for the package's NEW `PackageTestHygieneTests`, measured
     /// on `proximitykit`; FernletTests stays 628. RAISED at A1.1.14 (2026-10-14): 22 → 23, for the
     /// package's NEW `PackageTestTreeWallTests`, measured on `proximitykit`; FernletTests stays 628.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 23]
+    /// RAISED at A1.1.15 (2026-10-14): 23 → 24, for the package's NEW `ProximitySourceWallTests`,
+    /// measured on `proximitykit`; FernletTests stays 628.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 24]
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has five

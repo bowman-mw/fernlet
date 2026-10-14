@@ -21,7 +21,10 @@ import FernletFoundation
 /// - **Grep-walls** pin where the two sanctioned exceptions may live in shipping code:
 ///   `synchronizable: true` (the escrow promotion) only in `SealedBackupEscrowKey.swift`, and a bare
 ///   non-`ThisDeviceOnly` accessibility class only in `PrivateMediaKeyStore.swift` +
-///   `SealedBackupEscrowKey.swift`; and where a device identity may be built: only in the app's
+///   `SealedBackupEscrowKey.swift`, over every shipping root but ProximityKit's own folder
+///   (`ProximityKitSources.folder`), whose code ProximityKit's own package suite,
+///   `ProximitySourceWallTests`, holds to neither exception (since plan step A1.1.15); and where a
+///   device identity may be built, over every shipping root: only in the app's
 ///   factory in `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none:
 ///   its host door, `ProximityHost.makeProximityIdentity()`, has no default, so the app's store must
 ///   answer it, and a behavioural cell holds what it answers, the store's three managers each holding
@@ -486,7 +489,10 @@ struct KeyCustodyBoundaryTests {
     /// Minimum shipping files the scan must see; catches a broken enumerator, not churn.
     private static let scanFloor = 250
 
-    /// Enumerates every shipping Swift file under ``shippingRoots``.
+    /// Enumerates every shipping Swift file under ``shippingRoots`` but ProximityKit's own
+    /// (``ProximityKitSources/folder``): the two exception walls read Fernlet's shipping code, and
+    /// ProximityKit's own `ProximitySourceWallTests` holds its code to no synchronizable row and no bare
+    /// class at all (since plan step A1.1.15).
     private func shippingSwiftFiles() -> [URL] {
         let repoRoot = RepoRoot.url
         var files: [URL] = []
@@ -496,7 +502,8 @@ struct KeyCustodyBoundaryTests {
                 Issue.record("scan root missing: \(root)")
                 continue
             }
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
+            for case let url as URL in enumerator
+            where url.pathExtension == "swift" && !ProximityKitSources.holds(url.path) {
                 files.append(url)
             }
         }
@@ -708,15 +715,11 @@ struct KeyCustodyBoundaryTests {
     /// The roots the backend-door wall reads, each with the fewest Swift files it may hold (about four
     /// fifths of its count when the wall was written: 264, 288 and 485), so a root that stops resolving
     /// fails rather than reading as clean: the app and its extensions, FernletKit's sources but
-    /// ProximityKit's own (``backendDoorExcludedFolder``), and Fernlet's test targets. ProximityKit's
-    /// sources and its package tests are its own door wall's to read.
+    /// ProximityKit's own (``ProximityKitSources/folder``, which declare the door), and Fernlet's test
+    /// targets. ProximityKit's sources and its package tests are its own door wall's to read.
     static let backendDoorRoots: [(root: String, floor: Int)] = [
         (root: "App", floor: 210), (root: "FernletKit/Sources", floor: 230), (root: "Tests", floor: 385)
     ]
-
-    /// The folder under ``backendDoorRoots``' `FernletKit/Sources` this wall does not read: ProximityKit's
-    /// own sources, which declare the door and whose wall travels with the package.
-    static let backendDoorExcludedFolder = "FernletKit/Sources/ProximityKit/"
 
     /// Matcher: the 1-based lines of lexed `code` that spell the door's name, a call however it is
     /// qualified, a reference with no call (`let door = ProximityKeychainItem.installBackend`), a
@@ -745,7 +748,7 @@ struct KeyCustodyBoundaryTests {
         // R2: bounded by the three roots and each root's finite file list.
         for (root, floor) in Self.backendDoorRoots {
             let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
-                .filter { !$0.hasPrefix(Self.backendDoorExcludedFolder) }
+                .filter { !ProximityKitSources.holds($0) }
             #expect(files.count >= floor, "the backend-door scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
             for path in files {
                 let source = try RepoRoot.source(path)

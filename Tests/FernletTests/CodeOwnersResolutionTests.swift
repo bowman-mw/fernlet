@@ -118,6 +118,9 @@ struct CodeOwnersResolutionTests {
         // The package's own tree walls: the one install of its audit sink, its stores' scopes, ML5 and the
         // digest homes over its tests (plan step A1.1.14).
         "/FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift",
+        // The source walls over ProximityKit's own code: its launch hooks inside `#if DEBUG` and its keychain
+        // rows device-bound and never synchronizable (plan step A1.1.15).
+        "/FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift",
         // The workspace the strict build and every CI test run go through (ProximityKit plan step A0.8).
         "/Fernlet.xcworkspace/",
         "/.github/workflows/s3-wall.yml",

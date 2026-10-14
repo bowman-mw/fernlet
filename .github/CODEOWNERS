@@ -49,12 +49,15 @@
 # walker the package's walls read its files through: a blind walker would pass every such wall vacuously.
 # Since plan step A1.1.14 the package tests' tree walls: their installer's one install of the audit sink
 # and none in ProximityKit's code, every store on a scope of the test's own and the host double's scopes,
-# ML5's two holders, and no home of a determinism digest.
+# ML5's two holders, and no home of a determinism digest. Since plan step A1.1.15 the source walls over
+# ProximityKit's own code: its launch hooks read only inside `#if DEBUG`, and no keychain row it writes
+# synchronizable or under a class that is not ThisDeviceOnly.
 /FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
 /FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift        @bowman-mw
 /FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift       @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift       @bowman-mw
 /FernletKit/Tests/ProximityKitTests.tsv                                  @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/PackageSwiftFiles.swift  @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw
