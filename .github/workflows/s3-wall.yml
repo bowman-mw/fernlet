@@ -591,6 +591,24 @@ jobs:
         # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11
         # suites; its floor stays the shared `1`, the policy for every FernletTests wall line. proximitykit is
         # raised 102 -> 108 and mesh-batteries 1373 -> 1379 (see their steps).
+        #
+        # ProximityKit plan step A1.1.13 (2026-10-14) moves the package tests' own hygiene into ProximityKit's
+        # package tests, so it travels with the package: `CIGateSelectorBoundaryTests`' rule I9 (what the
+        # unhosted bundle cannot serve, with its allowlist, its per-file keychain rule and their readers), its
+        # rule I11 (the package tests' imports) and its counting of the package's declared tests (rule I7's)
+        # leave for `ProximityKitTests/PackageTestHygieneTests` on `proximitykit`, over the package's own
+        # inventory, FernletKit/Tests/ProximityKitTests.tsv, beside a cell that no package test extends
+        # ProximityHost (T3's one consequence in a one-target package). `CIGateSelectorBoundaryTests` keeps
+        # I1 to I6, I8 and I10, and its new cell `thePackageRowsAreThePackagesOwnInventory` (rule I7,
+        # re-scoped) holds Tests/suite-inventory.tsv's ProximityKitTests rows to that inventory, in the place
+        # of `theDirectoryNeedlesMatchTheirPackageCopy`, which goes with Fernlet's copy of the
+        # platform-directory needles, I9's alone: `ProximityPlatformBoundaryTests` keeps no needle list. Its
+        # pins follow, each with a dated note: the inventory's measured rows are 628 / 22, `proximitykit` names
+        # 18 suites, `wallLines` pins the hygiene suite on `proximitykit`, and `measuredPackageCells` retires
+        # (the package's own `measuredDeclaredTests`, 179, is the count). No suite joined or left this line,
+        # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11
+        # suites (the selector wall still ten cells); its floor stays the shared `1`. proximitykit is raised
+        # 108 -> 114 (see its step); mesh-batteries, which runs the selector wall too, stays 1379.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -2294,9 +2312,22 @@ jobs:
         # failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT
         # 108: passed. Run once more at 108 without ProximityKitTests/ProximityPresenceSessionTests: 103 ran
         # and the floor refused it. 102 + 1 + 5 = 108 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.13 one name joins the line, PackageTestHygieneTests, the package tests' own hygiene (what
+        # their unhosted bundle cannot serve, rule I9; their imports, rule I11; their own inventory,
+        # FernletKit/Tests/ProximityKitTests.tsv, and its declared tests; no extension of ProximityHost), whose
+        # rules leave FernletTests' CIGateSelectorBoundaryTests so they travel with the package, reading this
+        # target's files through PackageRoot and the walls' walker (TestSupport/PackageSwiftFiles.swift):
+        # RAISED 108 -> 114 at A1.1.13, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact eighteen-name list run at the old floor 108 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 114
+        # (ProximityKitTests 114, "Test run with 114 tests in 18 suites passed after 0.647 seconds": the
+        # seventeen above at their counts and PackageTestHygieneTests 6), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 114: passed. Run once
+        # more at 114 without ProximityKitTests/PackageTestHygieneTests: 108 ran and the floor refused it.
+        # 108 + 6 = 114 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 108 \
+          Scripts/run-gated-suites.sh proximitykit 114 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2313,4 +2344,5 @@ jobs:
             ProximityKitTests/ProximityNamespaceBoundaryTests \
             ProximityKitTests/ProximityPlatformNeutralityTests \
             ProximityKitTests/ProximityKeychainDoorTests \
-            ProximityKitTests/ProximityPresenceSessionTests
+            ProximityKitTests/ProximityPresenceSessionTests \
+            ProximityKitTests/PackageTestHygieneTests

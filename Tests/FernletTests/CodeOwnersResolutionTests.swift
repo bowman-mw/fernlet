@@ -111,6 +111,10 @@ struct CodeOwnersResolutionTests {
         "/.github/CODEOWNERS",
         // The suite inventory CIGateSelectorBoundaryTests holds to the tree (ProximityKit plan step A0.8).
         "/Tests/suite-inventory.tsv",
+        // The package's own hygiene suite and its own inventory, which it holds to the declared tests and
+        // CIGateSelectorBoundaryTests holds this repository's package rows to (plan step A1.1.13).
+        "/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift",
+        "/FernletKit/Tests/ProximityKitTests.tsv",
         // The workspace the strict build and every CI test run go through (ProximityKit plan step A0.8).
         "/Fernlet.xcworkspace/",
         "/.github/workflows/s3-wall.yml",

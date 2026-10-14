@@ -70,12 +70,17 @@ the platform wall's rules over ProximityKit's own code are a package suite too,
 `ProximityPlatformNeutralityTests`, on the `proximitykit` line (its imports and platform branches, its
 device-name reads, platform directories and host-fact defaults, its two channel-ready doors and
 `NIRangingSession`'s one home), walking ProximityKit's sources with the namespace wall's walk; Fernlet's
-`ProximityPlatformBoundaryTests` keeps presence's heart door and the Mac build, and its copy of the
-platform-directory needles, which `CIGateSelectorBoundaryTests` holds equal to the package suite's. Since
+`ProximityPlatformBoundaryTests` keeps presence's heart door and the Mac build. Since
 A1.1.10 two more suites are the package's, on the `proximitykit` line: the keychain door's wall,
 `ProximityKeychainDoorTests` (the door declared once, in `ProximityKeychainItem`'s `#if DEBUG` branch,
 and named by the package tests' installer alone), and the presence engine's own cells,
-`ProximityPresenceSessionTests`, which drive `ProximityPresenceSession` over an in-memory radio. "The test
+`ProximityPresenceSessionTests`, which drive `ProximityPresenceSession` over an in-memory radio. Since
+A1.1.13 the package tests' own hygiene is a package suite too, `PackageTestHygieneTests`, on the
+`proximitykit` line: what their unhosted bundle cannot serve (rule I9, its location needles the platform
+suite's platform-directory list), their imports (rule I11), their own inventory
+(`FernletKit/Tests/ProximityKitTests.tsv`: each suite's file and its declared tests) and no extension of
+`ProximityHost`, read through the walls' walker, `TestSupport/PackageSwiftFiles.swift`;
+`CIGateSelectorBoundaryTests` holds Fernlet's rows of the package's suites to that inventory. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'

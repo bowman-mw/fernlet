@@ -42,10 +42,16 @@
 # a blind lexer would pass every wall vacuously. Since plan step A1.1.8 the platform wall's rules over
 # ProximityKit's own code are a package test too, the source half of its Mac readiness; and the keychain
 # door's wall, which holds the door to the funnel's `#if DEBUG` branch and its one caller to the package
-# tests' installer, the file that installs both the in-memory keychain store and the audit sink.
+# tests' installer, the file that installs both the in-memory keychain store and the audit sink. Since plan
+# step A1.1.13 the package tests' own hygiene (what their unhosted bundle cannot serve, their imports, and no
+# extension of `ProximityHost`), the package's own suite inventory it holds to the declared tests, and the
+# walker the package's walls read its files through: a blind walker would pass every such wall vacuously.
 /FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
+/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift        @bowman-mw
+/FernletKit/Tests/ProximityKitTests.tsv                                  @bowman-mw
+/FernletKit/Tests/ProximityKitTests/TestSupport/PackageSwiftFiles.swift  @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift    @bowman-mw
 /Tests/FernletTests/SwiftSourceLexer.swift                                @bowman-mw

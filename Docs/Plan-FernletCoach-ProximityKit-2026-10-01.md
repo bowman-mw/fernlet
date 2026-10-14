@@ -395,7 +395,7 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   wall: no Fernlet file names the door. `FernletTests` keeps its own copy of the lexer, with its
   fixture cell in `SwiftSourceLexerTests`, and its feature golden reads ProximityKit's sources
   through a walker of `FernletTests`' own, `ProximityKitSources`.
-- The package's tests hold 21 suites (173 tests): 17 on the `proximitykit` line (108 tests), three on
+- The package's tests hold 22 suites (179 tests): 18 on the `proximitykit` line (114 tests), three on
   mesh-batteries (22) and the soundness suite on crypto-goldens (43).
 
 The split itself:
@@ -417,21 +417,23 @@ The split itself:
   goes (the scan's only failure over the split layout). That scanner also reads `Tests/` and
   enforces R6 and R8 there, which Fernlet's, reading shipping code only, does not.
 - **The rules that keep the package's tests clean are ported into the package before A1.3 removes
-  Fernlet's copies.** Today they live only in `FernletTests`: `CIGateSelectorBoundaryTests`' I9 (its
-  keychain, storage, location and repo-path hazard needles, their allowlist and the per-file rule
-  for the files that reach the keychain, `packageKeychainFiles`), I11 (the package tests' import
-  allowlist), T3 (no key declared twice outside a pair) and the inventory with its package-cell
-  count; the one-installer rule for `ProximityAudit.install` (`ProximityAuditBridgeTests`); and the
-  store-isolation walls (`MeshRoutedStoreIsolationTests` and `MeshSessionStoreIsolationTests`, both
-  on mesh-batteries), the acceptance batteries' test-tree scans and `MemoryLifecycleBoundaryTests`'
-  ML5. The keychain door's one-installer rule is the package's already (`ProximityKeychainDoorTests`,
-  A1.1). The repository's own walls read `Tests/` only for Power-of-10's R6 and R8 and for tracking
-  SDKs and symbols, and its `swift test` step holds no test-count floor. So a package suite reading
-  the package's own folder through `PackageRoot` (or a fifth Python wall) carries them, a floor holds
-  the package's test count, and the package's CODEOWNERS protects the three walls that travel (the
-  namespace, platform and keychain door walls), the presence engine's suite
-  (`ProximityPresenceSessionTests`), the lexer and the two `TestSupport/` installers
-  (`PackageTestEnvironment.swift` and the keychain store).
+  Fernlet's copies.** I9 (the keychain, storage, location and repo-path hazard needles, their allowlist
+  and the per-file rule for the files that reach the keychain, `packageKeychainFiles`), I11 (the
+  package tests' import allowlist), T3's one consequence (nothing in the package's tests extends
+  `ProximityHost`) and the inventory with its declared-test count are the package's own since A1.1.13,
+  `PackageTestHygieneTests`, over the package's own inventory,
+  `FernletKit/Tests/ProximityKitTests.tsv`, which `CIGateSelectorBoundaryTests` holds Fernlet's package
+  rows to. The rest still live only in `FernletTests`: the one-installer rule for
+  `ProximityAudit.install` (`ProximityAuditBridgeTests`); and the store-isolation walls
+  (`MeshRoutedStoreIsolationTests` and `MeshSessionStoreIsolationTests`, both on mesh-batteries), the
+  acceptance batteries' test-tree scans and `MemoryLifecycleBoundaryTests`' ML5. The keychain door's
+  one-installer rule is the package's already (`ProximityKeychainDoorTests`, A1.1). The repository's
+  own walls read `Tests/` only for Power-of-10's R6 and R8 and for tracking SDKs and symbols, and its
+  `swift test` step holds no test-count floor. So a package suite reading the package's own folder
+  through `PackageRoot` (or a fifth Python wall) carries them, a floor holds the package's test count,
+  and the package's CODEOWNERS protects the three walls that travel (the namespace, platform and
+  keychain door walls), the presence engine's suite (`ProximityPresenceSessionTests`), the lexer and
+  the two `TestSupport/` installers (`PackageTestEnvironment.swift` and the keychain store).
 - **CI** (`swift test` / `xcodebuild` on an iOS simulator and macOS; the first CI run of the package's
   tests on macOS) running its own walls:
   - no tracking SDKs and no `URLSession` at all;
