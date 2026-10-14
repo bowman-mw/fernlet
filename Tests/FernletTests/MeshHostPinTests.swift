@@ -15,7 +15,8 @@
 // pin is missing, assertion 1 records a failure and the drain that follows drives `displayName` at a
 // destroyed host, which kills the test host and takes every other suite's results with it — so a
 // future regression presents as "the run crashed again", not as one red test. The durable guards are
-// rule ML4 in ``MemoryLifecycleBoundaryTests`` (no unmarked `Task` in a host-holding file) and the
+// rule ML4 (no unmarked `Task` in a host-holding file: over the mesh manager's file ProximityKit's own
+// `ProximityMemoryLifecycleTests`, over a host's holders ``MemoryLifecycleBoundaryTests``) and the
 // per-run `Attempted to read an unowned reference` grep. This suite's job is to produce the crash
 // once, on purpose, on an unpinned tree.
 //

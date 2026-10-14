@@ -52,13 +52,18 @@
 # ML5's two holders, and no home of a determinism digest. Since plan step A1.1.15 the source walls over
 # ProximityKit's own code: its launch hooks read only inside `#if DEBUG`, and no keychain row it writes
 # synchronizable or under a class that is not ThisDeviceOnly; since plan step A1.1.16 also a purpose named
-# at every raw cryptographic call, and its escape hatches pinned, each with its justification.
+# at every raw cryptographic call, and its escape hatches pinned, each with its justification; since plan
+# step A1.1.17 no identity built in its code. And since plan step A1.1.17 the memory-lifecycle wall over
+# ProximityKit's own code: its stored tasks cancelled in a deinit, its observers removed,
+# `withObservationTracking` in ObservationLoop alone, and every Task in a file holding an `unowned` host
+# pinned or marked.
 /FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
 /FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift        @bowman-mw
 /FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift       @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift       @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximityMemoryLifecycleTests.swift  @bowman-mw
 /FernletKit/Tests/ProximityKitTests.tsv                                  @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/PackageSwiftFiles.swift  @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw

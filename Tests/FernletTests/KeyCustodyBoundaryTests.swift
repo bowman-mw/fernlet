@@ -24,9 +24,10 @@ import FernletFoundation
 ///   `SealedBackupEscrowKey.swift`, over every shipping root but ProximityKit's own folder
 ///   (`ProximityKitSources.folder`), whose code ProximityKit's own package suite,
 ///   `ProximitySourceWallTests`, holds to neither exception (since plan step A1.1.15); and where a
-///   device identity may be built, over every shipping root: only in the app's
-///   factory in `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none:
-///   its host door, `ProximityHost.makeProximityIdentity()`, has no default, so the app's store must
+///   device identity may be built, over the same roots: only in the app's factory in
+///   `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none, which the
+///   same package suite holds over its code (since plan step A1.1.17): its host door,
+///   `ProximityHost.makeProximityIdentity()`, has no default, so the app's store must
 ///   answer it, and a behavioural cell holds what it answers, the store's three managers each holding
 ///   an identity that carries the escrow key. Between them no shipping path provisions an identity
 ///   that could mint over a previous build's key-agreement row without first promoting it into the
@@ -569,17 +570,13 @@ struct KeyCustodyBoundaryTests {
     // provisioning, so an identity may be constructed ONLY in the app's factory
     // (`IdentityService.fernletApp(keychainService:)`, which carries `SealedBackupEscrowKey`, and which
     // `FernletStore.makeProximityIdentity()` answers). ProximityKit constructs none: its host door has
-    // no default, so a host answers it, and a new convenience initializer or static factory of the
-    // identity anywhere else is a construction too.
+    // no default, so a host answers it, and ProximityKit's own `ProximitySourceWallTests` holds its code
+    // to no construction (since plan step A1.1.17). A new convenience initializer or static factory of
+    // the identity anywhere in Fernlet's code is a construction too.
 
     /// The shipping files that may construct an `IdentityService`, by repo-relative path: the app's
     /// factory, alone.
     static let identityConstructionHomes: Set<String> = ["App/Fernlet/SealedBackupEscrowKey.swift"]
-
-    /// ProximityKit's file that declares the identity, the one place its initializers may delegate to
-    /// one another: a delegating initializer there is the identity's own API, and every call of it is
-    /// still read where it is made.
-    static let identityDeclarationFile = "FernletKit/Sources/ProximityKit/Identity/IdentityService.swift"
 
     /// An argument list whose first label is one of the identity's initializer's three
     /// (`namespace:`, `keychainService:`, `provisioningParticipant:`).
@@ -618,11 +615,14 @@ struct KeyCustodyBoundaryTests {
         }
     }
 
-    /// Every shipping Swift file constructs an identity only in ``identityConstructionHomes``, exact
-    /// both ways, read as lexed code (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so
-    /// a doc comment or a string that spells a construction is not one: a construction in any file, and
-    /// a delegating initializer in any file but ``identityDeclarationFile``. Both matchers are held to
-    /// their samples and their neighbours first.
+    /// Every shipping Swift file but ProximityKit's own (``ProximityKitSources/folder``) constructs an
+    /// identity only in ``identityConstructionHomes``, exact both ways, read as lexed code
+    /// (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so a doc comment or a string that spells a
+    /// construction is not one: a construction, or a delegating initializer, in any file it reads (the
+    /// identity's declaration file, the one place its initializers may delegate to one another, is
+    /// ProximityKit's, and ProximityKit's own `ProximitySourceWallTests` holds its code to no
+    /// construction and no delegation outside that file, since plan step A1.1.17). Both matchers are
+    /// held to their samples and their neighbours first.
     @Test func everyShippingIdentityIsBuiltByItsHostsDoor() throws {
         Self.expectTheIdentityMatchersSeeTheirSamplesAndNoNeighbour()
         var homes: Set<String> = []
@@ -634,15 +634,16 @@ struct KeyCustodyBoundaryTests {
                 Issue.record("scan root missing: \(root)")
                 continue
             }
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
+            for case let url as URL in enumerator
+            where url.pathExtension == "swift" && !ProximityKitSources.holds(url.path) {
                 scanned += 1
                 guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
                 // A path that does not resolve under its root is kept whole, so it fails the set loudly.
                 let suffix = url.path.range(of: "/" + root + "/", options: .backwards).map { url.path[$0.upperBound...] }
                 let path = suffix.map { root + "/" + $0 } ?? url.path
                 let code = SwiftSourceLexer.lex(source).code
-                let delegations = path == Self.identityDeclarationFile ? [] : Self.identityDelegationLines(in: code)
-                guard !(Self.identityConstructionLines(in: code) + delegations).isEmpty else { continue }
+                let found = Self.identityConstructionLines(in: code) + Self.identityDelegationLines(in: code)
+                guard !found.isEmpty else { continue }
                 homes.insert(path)
             }
         }

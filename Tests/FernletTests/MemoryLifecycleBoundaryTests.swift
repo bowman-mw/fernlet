@@ -15,9 +15,10 @@
 //  ML2  A block-based `NotificationCenter.addObserver(forName:…)` token is RETAINED by the center
 //       (with everything its block captures) until it is removed. The file must `removeObserver` it,
 //       or be allowlisted with the reason it never needs to.
-//  ML3  `withObservationTracking` re-arm loops live in exactly ONE place — `ObservationLoop` — whose
-//       owner-held-weakly-across-the-await contract ``ObservationLoopLifecycleTests`` covers. Any
-//       other use is a hand-rolled copy of the machinery that leaked before the extraction.
+//  ML3  `withObservationTracking` re-arm loops live in exactly ONE place — ProximityKit's
+//       `ObservationLoop` — whose owner-held-weakly-across-the-await contract
+//       ``ObservationLoopLifecycleTests`` covers. Any other use is a hand-rolled copy of the machinery
+//       that leaked before the extraction, so Fernlet's own code holds none at all.
 //  ML4  A file holding an `unowned` `ProximityHost` (or, since ProximityKit plan step A0.5.10, its
 //       FernletSocial refinement `FernletSocialHost`) may not contain an UNMARKED `Task` construction.
 //       Those managers read a host they do not own, so a detached task that outlives the host reads
@@ -43,6 +44,12 @@
 //       are held to the same rule. ProximityKit's own package tests hold its two holders'
 //       constructions in their tests (`PackageTestTreeWallTests`), so that half travels with the package.
 //
+// ML1-ML4 read the five shipping roots but ProximityKit's own folder (`ProximityKitSources.folder`):
+// ProximityKit's package suite `ProximityMemoryLifecycleTests` holds its code to the same four rules
+// (since ProximityKit plan step A1.1.17), its one sanctioned `withObservationTracking` home and its two
+// `unowned` host holders, the mesh manager and the pair session, among them, so that half travels with
+// the package.
+//
 // Every scan discovers its inputs from the file system and carries a hard FLOOR (a moved root or a
 // broken enumerator must fail loudly, never pass vacuously — the S3BoundaryTests house rule), every
 // allowlist entry must be USED, and each rule's planted-token fixture must trip it.
@@ -50,8 +57,8 @@
 import Foundation
 import Testing
 
-/// Grep-wall for the five memory-lifecycle disciplines (ML1-ML5). Scans the five shipping roots once
-/// (``sharedScan``); every enforcement test reads from that immutable value.
+/// Grep-wall for the five memory-lifecycle disciplines (ML1-ML5). Scans the five shipping roots but
+/// ProximityKit's folder once (``sharedScan``); every enforcement test reads from that immutable value.
 struct MemoryLifecycleBoundaryTests {
 
     // MARK: - Scope, floors, allowlist
@@ -64,23 +71,30 @@ struct MemoryLifecycleBoundaryTests {
         "App/FernletMessagesExtension"
     ]
 
-    /// Floor for the shipping scan (366 files at the time of writing); a root that stops resolving trips it.
+    /// Floor for the shipping scan (366 files at the time of writing, 552 with ProximityKit's folder left
+    /// to its own suite at ProximityKit plan step A1.1.17); a root that stops resolving trips it.
     static let minimumShippingFilesScanned = 300
 
-    /// Files that store a `Task<…>` handle today; a wall that finds fewer has stopped looking.
+    /// Files that store a `Task<…>` handle today; a wall that finds fewer has stopped looking. Thirteen
+    /// since ProximityKit's folder left the scan (plan step A1.1.17); ProximityKit's six are its own
+    /// suite's.
     static let minimumTaskHolderFiles = 8
 
-    /// Files with a block-based observer today; a wall that finds fewer has stopped looking.
+    /// Files with a block-based observer today; a wall that finds fewer has stopped looking. Exactly two
+    /// since ProximityKit's folder left the scan (plan step A1.1.17); ProximityKit's one is its own
+    /// suite's.
     static let minimumObserverFiles = 2
 
-    /// Files holding an `unowned` `ProximityHost` today, five: the mesh manager and the recipe pair
-    /// session in ProximityKit (FernletSocial's recipe-share manager holds none: its session does),
-    /// presence and the activity manager in FernletSocial, and, since ProximityKit plan step A0.5.5,
-    /// the mesh features' `FernletMeshHost`; presence and the
-    /// holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10. Pinned at today's
-    /// count (plan step A0.5.13): a matcher that finds fewer has stopped looking, or a holder has left
-    /// the scan, and either fails here; a new holder raises the count, and is found and held to ML4.
-    static let minimumHostHoldingFiles = 5
+    /// Files holding an `unowned` `ProximityHost` today, three: presence and the activity manager in
+    /// FernletSocial, and, since ProximityKit plan step A0.5.5, the mesh features' `FernletMeshHost`;
+    /// presence and the holder hold it as FernletSocial's `FernletSocialHost` since plan step A0.5.10.
+    /// Pinned at today's count (plan step A0.5.13): a matcher that finds fewer has stopped looking, or a
+    /// holder has left the scan, and either fails here; a new holder raises the count, and is found and
+    /// held to ML4. MEASURED 5 -> 3 at ProximityKit plan step A1.1.17 (2026-10-14): the mesh manager and
+    /// the recipe pair session, ProximityKit's two holders, left the scan with its folder, and its own
+    /// `ProximityMemoryLifecycleTests` holds them (FernletSocial's recipe-share manager holds none: its
+    /// session does).
+    static let minimumHostHoldingFiles = 3
 
     /// Files that hold or take a `FernletMeshHost` today, ten (ML4's second audit, plan step A0.5.5):
     /// the mesh composition, its capability and vouch-list objects, the clothing shop's, moderation's
@@ -102,9 +116,6 @@ struct MemoryLifecycleBoundaryTests {
     /// This file — the ONE file the ML5 scan skips, because its planted-token fixtures spell out the
     /// violation ML5 forbids. Every other test file is scanned.
     static let wallFile = "Tests/FernletTests/MemoryLifecycleBoundaryTests.swift"
-
-    /// The single sanctioned home of `withObservationTracking`.
-    static let observationLoopFile = "FernletKit/Sources/ProximityKit/Engine/ObservationLoop.swift"
 
     /// One allowlist entry: a repo-relative file path plus the invariant that makes the exemption safe.
     /// Every entry must be USED by the rule it exempts (``allowlistIsFullyUsed()``), so an entry cannot
@@ -270,12 +281,16 @@ struct MemoryLifecycleBoundaryTests {
         return result
     }
 
-    /// Scans the five shipping roots. Never throws or traps: unreadable files are listed for the
-    /// enforcement tests to fail on.
+    /// Scans the five shipping roots but ProximityKit's own folder (``ProximityKitSources/folder``), whose
+    /// code its package suite `ProximityMemoryLifecycleTests` holds to ML1-ML4 (since plan step A1.1.17).
+    /// Never throws or traps: unreadable files are listed for the enforcement tests to fail on.
     static func scan(repoRoot: URL) -> TreeScan {
         var result = TreeScan()
+        // R2: bounded by the five shipping roots.
         for root in shippingRoots {
-            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot) {
+            // R2: bounded by the Swift files under the root.
+            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot)
+            where !ProximityKitSources.holds(path) {
                 guard let source = try? String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8) else {
                     result.unreadable.append(path)
                     continue
@@ -484,15 +499,16 @@ struct MemoryLifecycleBoundaryTests {
 
     // MARK: - ML3: withObservationTracking lives only in ObservationLoop
 
+    /// No file Fernlet's scan reads uses `withObservationTracking` at all: its one sanctioned home,
+    /// ProximityKit's `Engine/ObservationLoop.swift`, is in the folder this scan leaves to ProximityKit's
+    /// own `ProximityMemoryLifecycleTests`, which holds it as the module's one use (since plan step
+    /// A1.1.17). The matcher is held to its samples in ``fixturesTripEachMatcher()``.
     @Test func ml3ObservationTrackingLivesOnlyInObservationLoop() {
-        let users = Self.sharedScan.files.filter(\.usesObservationTracking).map(\.path)
-        #expect(users.contains(Self.observationLoopFile),
-                "ObservationLoop.swift no longer uses withObservationTracking — the matcher or the file moved; update observationLoopFile")
-        let strays = users.filter { $0 != Self.observationLoopFile }
+        let strays = Self.sharedScan.files.filter(\.usesObservationTracking).map(\.path)
         #expect(strays.isEmpty, """
-            ML3: withObservationTracking may only be used through ObservationLoop.start (owner held weakly \
-            across the suspension, cancellation finishes the stream). Route these through it instead of \
-            hand-rolling the loop:
+            ML3: withObservationTracking may only be used through ProximityKit's ObservationLoop.start \
+            (owner held weakly across the suspension, cancellation finishes the stream); Fernlet's code \
+            holds no use of its own. Route these through it instead of hand-rolling the loop:
             \(strays.joined(separator: "\n"))
             """)
     }

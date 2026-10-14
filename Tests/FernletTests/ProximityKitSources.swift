@@ -14,9 +14,11 @@
 // leaves that code to them: it reads `FernletKit/Sources` but ``ProximityKitSources/folder``, the one
 // exclusion every such wall names (the audit install-site wall, `ProximityAuditBridgeTests`, whose
 // package half is `PackageTestTreeWallTests`; the launch-hook wall, `TestHookBoundaryTests`,
-// `KeyCustodyBoundaryTests`' two exception greps, and the purpose wall and the escape-hatch census
-// through `CryptographicWallScan.fernletSourceFiles()`, whose package half is `ProximitySourceWallTests`;
-// and `KeyCustodyBoundaryTests`' keychain-door cell, whose package half is `ProximityKeychainDoorTests`).
+// `KeyCustodyBoundaryTests`' two exception greps and its identity-construction wall, and the purpose
+// wall and the escape-hatch census through `CryptographicWallScan.fernletSourceFiles()`, whose package
+// half is `ProximitySourceWallTests`; `KeyCustodyBoundaryTests`' keychain-door cell, whose package half
+// is `ProximityKeychainDoorTests`; and `MemoryLifecycleBoundaryTests`' ML1-ML4 scan, whose package half
+// is `ProximityMemoryLifecycleTests`).
 // Plan step A1.3, which takes ProximityKit's sources out of this repository, deletes this file with
 // them, so every exclusion that names it stops compiling and is removed with it, rather than outliving
 // the folder it names.

@@ -727,6 +727,15 @@ jobs:
         # identity-construction wall still reads ProximityKit's sources. No cell added or removed: the line,
         # MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 55 tests in 4 suites; its floor
         # stays the shared `1`.
+        #
+        # ProximityKit plan step A1.1.17 (2026-10-14) splits the identity-construction wall. Its ProximityKit
+        # half (no `IdentityService` constructed anywhere in ProximityKit's code, and no delegation to one of
+        # its initializers outside Identity/IdentityService.swift: exact, the empty set) is ProximityKit's own
+        # `ProximityKitTests/ProximitySourceWallTests` on `proximitykit`, so it travels with the package;
+        # `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` reads every shipping root but
+        # ProximityKit's folder, its exact set unchanged (SealedBackupEscrowKey.swift), and refuses a
+        # delegation in every file it reads. No cell added or removed: the line, MEASURED on a Mac on that tree
+        # (iPhone 17 simulator, iOS 26.5), ran 55 tests in 4 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh key-custody 1 \
@@ -1223,6 +1232,12 @@ jobs:
         # Since ProximityKit plan step A1.1.14 (2026-10-14) ML5 reads Fernlet's tests alone, and
         # ProximityKit's package tests hold their own half (ProximityKitTests/PackageTestTreeWallTests on
         # proximitykit); MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), the line ran 8.
+        # Since ProximityKit plan step A1.1.17 (2026-10-14) ML1-ML4 read the five shipping roots but
+        # ProximityKit's folder (`ProximityKitSources.folder`), and ProximityKit's package tests hold their own
+        # half (ProximityKitTests/ProximityMemoryLifecycleTests on proximitykit): ML3's one home and two of
+        # ML4's five host holders are ProximityKit's, so Fernlet's ML3 holds Fernlet's roots to no use and its
+        # host-holding floor is 3. No cell added or removed: MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), the line ran 8.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh memory-lifecycle 8 MemoryLifecycleBoundaryTests
@@ -2431,9 +2446,23 @@ jobs:
         # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 132: passed. Run once
         # more at 132 without ProximityKitTests/ProximitySourceWallTests: 120 ran and the floor refused it.
         # 126 + 6 = 132 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.17 one name joins the line, ProximityMemoryLifecycleTests, the memory-lifecycle wall's ML1-ML4
+        # over ProximityKit's own code (every stored task handle cancelled in a deinit, every block observer
+        # removed, `withObservationTracking` in ObservationLoop alone, every Task in a file holding an
+        # `unowned` host pinned or marked), and ProximitySourceWallTests gains a cell, no identity built in
+        # ProximityKit's code; their ProximityKit halves leave FernletTests' MemoryLifecycleBoundaryTests and
+        # KeyCustodyBoundaryTests so they travel with the package:
+        # RAISED 132 -> 138 at A1.1.17, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact twenty-one-name list run at the old floor 132 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 138
+        # (ProximityKitTests 138, "Test run with 138 tests in 21 suites passed after 0.999 seconds": the
+        # twenty above at their counts but ProximitySourceWallTests 12 -> 13, and ProximityMemoryLifecycleTests
+        # 5), 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run
+        # AT 138: passed. Run once more at 138 without ProximityKitTests/ProximityMemoryLifecycleTests: 133 ran
+        # and the floor refused it. 132 + 5 + 1 = 138 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 132 \
+          Scripts/run-gated-suites.sh proximitykit 138 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2453,4 +2482,5 @@ jobs:
             ProximityKitTests/ProximityPresenceSessionTests \
             ProximityKitTests/PackageTestHygieneTests \
             ProximityKitTests/PackageTestTreeWallTests \
-            ProximityKitTests/ProximitySourceWallTests
+            ProximityKitTests/ProximitySourceWallTests \
+            ProximityKitTests/ProximityMemoryLifecycleTests
