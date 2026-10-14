@@ -466,6 +466,23 @@ jobs:
         # mesh-batteries stays 1372: the two orders the engine's move kept (the engine wires a radio's
         # hooks before it starts it, the manager marks a heart channel connected only after its
         # coordinator has begun) are rows inside MeshP9PresenceSwapAcceptanceTests' existing source cell.
+        #
+        # ProximityKit plan step A1.1.4 (2026-10-13) gives ProximityKit's package tests a namespace of
+        # their own, `.packageTest` (a twin, so FernletTests can hold it disjoint from `.fernlet`), the
+        # call shapes their suites compute through, and a package-rooted file locator, PackageRoot; and
+        # MeshEpochModelTests.swift and MeshSessionIDClaimTests.swift move into the package.
+        # `CIGateSelectorBoundaryTests`' pins follow, each with a dated note: the inventory's measured
+        # rows are 628 / 15 and the package's declared tests 140, `proximitykit` names 11 suites, the twin
+        # list holds six pairs (the test namespace and the epoch fixtures join it), and its twin cell
+        # holds a REPLACEMENT pair kind: the package's test bindings against Fernlet's, every declaration
+        # of the package's equal to one of Fernlet's with `.packageTest` read as `.fernlet` (a brace-depth
+        # reader, fixtured), the shared keys accepted inside the pair and nowhere else, and the measured
+        # count of such pairs (1). `packageHazardAllowlist` holds a second row, PackageRoot's one read of
+        # its own source's path, and I9's repository-path reason names PackageRoot. No suite joined or
+        # left this line and no cell was added, and the line, MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`.
+        # mesh-batteries is HELD at 1372 (MeshSessionIDClaimTests named ProximityKitTests/<Suite> in
+        # place), proximitykit is raised 44 -> 75 and crypto-goldens 356 -> 357 (see their steps).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -920,9 +937,23 @@ jobs:
         # 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT 356:
         # passed. Run once more at 356 without ProximityKitTests/ProximityNamespaceSoundnessTests: 313
         # ran and the floor refused it. 356 - 43 + 43 = 356 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.4 no suite joined or left, so the NAME count stays 8; one suite here gained a cell:
+        # RAISED 356 -> 357 at A1.1.4, MEASURED on a Mac, 2026-10-13 (iPhone 17 simulator, iOS 26.5):
+        # this exact eight-name list run at its floor through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 357
+        # (FernletTests 314 in 7 suites, "Test run with 314 tests in 7 suites passed after 4.581
+        # seconds": CryptographicPurposeBoundaryTests 6, CryptographicDomainSeparationTests 13,
+        # MeshMembershipEventGoldenTests 19, ProximityNamespaceGoldenTests 105 -> 106,
+        # ProximityVocabularyGoldenTests 55, ProximityNamespaceGateTests 17 and FernletFeatureGoldenTests
+        # 98; ProximityKitTests 43 in 1, ProximityNamespaceSoundnessTests 43), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 357: passed. Run
+        # once more at 357 without ProximityNamespaceGoldenTests: 251 ran and the floor refused it.
+        # 356 + 1 (the namespace golden's cell holding `.packageTest`, the namespace ProximityKit's
+        # package tests compute under, sound and colliding with `.fernlet` nowhere, asked from both
+        # sides) = 357 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh crypto-goldens 356 \
+          Scripts/run-gated-suites.sh crypto-goldens 357 \
             CryptographicPurposeBoundaryTests \
             CryptographicDomainSeparationTests \
             MeshMembershipEventGoldenTests \
@@ -1836,6 +1867,19 @@ jobs:
         # Re-run AT 1372: passed. Run once more at 1372 without ProximityKitTests/FakePeerTransportTests:
         # 1362 ran and the floor refused it; and without ProximityKitTests/PeerHandleIdentityTests: 1367
         # ran and the floor refused it. 1372 - 15 + 15 = 1372 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.4 no suite joined or left and no cell was added, so the NAME count stays 154 and the
+        # floor 1372; one suite changed bundles: HELD at 1372 at A1.1.4, MEASURED on a Mac, 2026-10-13
+        # (iPhone 17 simulator, iOS 26.5): this exact 154-name list, MeshSessionIDClaimTests now in
+        # ProximityKit's package test target and named ProximityKitTests/MeshSessionIDClaimTests (its
+        # radio built over the package tests' namespace, its source needle read through PackageRoot),
+        # run at its floor through Fernlet.xcworkspace after the strict build-for-testing (WALL CHECK
+        # PASSED), read off its own result bundle: totalTestCount 1372 (FernletTests 1350 in 151 suites,
+        # "Test run with 1350 tests in 151 suites passed after 205.650 seconds"; ProximityKitTests 22 in
+        # 3, "Test run with 22 tests in 3 suites": PeerHandleIdentityTests 5, FakePeerTransportTests 10
+        # and MeshSessionIDClaimTests 7, its count in FernletTests before the move), 0 failed, 0
+        # skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT 1372:
+        # passed. Run once more at 1372 without ProximityKitTests/MeshSessionIDClaimTests: 1365 ran and
+        # the floor refused it. 1372 - 7 + 7 = 1372 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1372 \
@@ -1981,7 +2025,7 @@ jobs:
             MeshP10HonestyAcceptanceTests \
             MeshNameWithholdingTests \
             MeshSeatTransportProofTests \
-            MeshSessionIDClaimTests \
+            ProximityKitTests/MeshSessionIDClaimTests \
             MeshReturningMemberReseatTests \
             SessionResumeCopyTests \
             MeshSessionResumePresentationTests \
@@ -2014,12 +2058,32 @@ jobs:
         # and the floor refused it; and without ProximityKitTests/ReplayCacheTests: 43 ran and the floor
         # refused it. 9 + 6 + 9 + 10 + 9 + 1 = 44 is the ARITHMETIC CHECK, never the source. RAISE it when
         # a suite here gains a cell; never lower it in passing.
+        # At A1.1.4 five names join the line: the four epoch suites of MeshEpochModelTests.swift, which
+        # rode no line before they moved into the package, and the package's new
+        # PackageTestSupportTests, which holds its test namespace sound and its file locator to its own
+        # folder. The suites that moved compute under the package tests' namespace, `.packageTest`:
+        # RAISED 44 -> 75 at A1.1.4, MEASURED on a Mac, 2026-10-13 (iPhone 17 simulator, iOS 26.5): this
+        # exact eleven-name list run at its floor through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 75
+        # (ProximityKitTests 75, "Test run with 75 tests in 11 suites passed after 0.061 seconds": the
+        # six above at their counts, MeshEpochRefTests 10, MeshEpochKeyringTests 5,
+        # MeshEpochAcceptanceTests 4 and MeshFrameReplayWindowTests 10, each its count in FernletTests
+        # before the move, and PackageTestSupportTests 2), 0 failed, 0 skipped, no `Restarting after
+        # unexpected exit` line, the suite census silent. Re-run AT 75: passed. Run once more at 75
+        # without ProximityKitTests/MeshEpochRefTests: 65 ran and the floor refused it; and without
+        # ProximityKitTests/PackageTestSupportTests: 73 ran and the floor refused it.
+        # 44 + 10 + 5 + 4 + 10 + 2 = 75 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 44 \
+          Scripts/run-gated-suites.sh proximitykit 75 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
             ProximityKitTests/MeshRoutedDrainPlanTests \
             ProximityKitTests/NearbyRangingSessionTests \
-            ProximityKitTests/ReplayCacheTests
+            ProximityKitTests/ReplayCacheTests \
+            ProximityKitTests/MeshEpochRefTests \
+            ProximityKitTests/MeshEpochKeyringTests \
+            ProximityKitTests/MeshEpochAcceptanceTests \
+            ProximityKitTests/MeshFrameReplayWindowTests \
+            ProximityKitTests/PackageTestSupportTests

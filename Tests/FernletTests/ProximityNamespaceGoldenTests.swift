@@ -49,7 +49,9 @@
 //    and no signature purpose of either accepts a transcript framed for the other, except Fernlet's
 //    two verify-only legacy labels, which accept every transcript by construction. Its payload
 //    vocabulary and presentation strings share no string with `.fernlet`'s, whose own values
-//    ProximityVocabularyGoldenTests pins.
+//    ProximityVocabularyGoldenTests pins. And `.packageTest`, the namespace ProximityKit's package
+//    tests compute under, is sound and collides with `.fernlet` nowhere either: the package cannot
+//    name `.fernlet`, so this is where the two are compared.
 // 8. **The supply path.** `IdentityService(namespace:)` takes its keychain service from the
 //    namespace it is handed (Fernlet's frozen service for `.fernlet`, another app's for another
 //    app's, an explicit service over either), and its `sign` and `verify` treat each label by its
@@ -1720,6 +1722,22 @@ struct ProximityNamespaceGoldenTests {
         #expect(foreign.familyCollisions(with: fernlet).isEmpty, "\(foreign.familyCollisions(with: fernlet))")
         #expect(fernlet.installationCollisions(with: foreign).isEmpty, "\(fernlet.installationCollisions(with: foreign))")
         #expect(foreign.installationCollisions(with: fernlet).isEmpty, "\(foreign.installationCollisions(with: fernlet))")
+    }
+
+    /// The namespace ProximityKit's package tests compute under, `.packageTest` (the
+    /// `PackageTestNamespace.swift` twin), is sound and overlaps `.fernlet` nowhere, asked from both
+    /// sides: no label equal or byte-prefix related, no service type, ALPN, heartbeat or scheme shared,
+    /// and no keychain service, directory or log subsystem either. So a package suite computing under
+    /// it can never sign, derive, advertise or store under one of Fernlet's values. The package cannot
+    /// name `.fernlet`, so this is the one place the two are compared (ProximityKit plan step A1.1).
+    @Test func thePackageTestNamespaceCollidesWithFernletNowhere() {
+        let package = ProximityNamespace.packageTest
+        #expect(package.soundness == .sound, "the package tests' namespace is unsound: \(package.soundness)")
+        let fernlet = ProximityNamespace.fernlet
+        #expect(fernlet.familyCollisions(with: package).isEmpty, "\(fernlet.familyCollisions(with: package))")
+        #expect(package.familyCollisions(with: fernlet).isEmpty, "\(package.familyCollisions(with: fernlet))")
+        #expect(fernlet.installationCollisions(with: package).isEmpty, "\(fernlet.installationCollisions(with: package))")
+        #expect(package.installationCollisions(with: fernlet).isEmpty, "\(package.installationCollisions(with: fernlet))")
     }
 
     /// No signature purpose of either namespace accepts a transcript framed for the other's, in either

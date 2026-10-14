@@ -45,12 +45,18 @@ stays as the pair session (A0.7.3).
 **2026-10-11 (ProximityKit plan step A0.8):** ProximityKit has its own package test target,
 `ProximityKitTests` (`FernletKit/Tests/ProximityKitTests`), holding the suites that need nothing
 but ProximityKit (the fake transport fabric and the peer handle, the membership
-records, the routed drain plan, the commit detector and ranging fallback, the replay cache, and since
-plan step A1.1.2 the namespace's soundness rules, `ProximityNamespaceSoundnessTests`); its
-landing page's "Its tests" says how it runs and what waits for A1. "The test target" in this index
-still means the app's `FernletTests`, where the bindings, the host doubles and every other ProximityKit
-suite run until A1. The fake peer transport, the ranging mock, the membership fixtures and the
-mesh-message spelling helper live in both targets, held identical but for imports.
+records, the routed drain plan, the commit detector and ranging fallback, the replay cache, since
+plan step A1.1.2 the namespace's soundness rules, `ProximityNamespaceSoundnessTests`, and since A1.1.4
+the epoch model, `MeshSessionIDClaimTests` and the test support's own facts, `PackageTestSupportTests`);
+its landing page's "Its tests" says how it runs and what waits for A1. Since A1.1.4 those suites compute
+under a test namespace of their own, `.packageTest` (`TestSupport/PackageTestNamespace.swift`), through
+`TestSupport/PackageTestBindings.swift`, each one of Fernlet's test bindings
+(`Tests/FernletTests/ProximityNamespaceTestBindings.swift`) with `.packageTest` for `.fernlet`, and read
+a source through `TestSupport/PackageRoot.swift`, by a path relative to the package root. "The test
+target" in this index still means the app's `FernletTests`, where the bindings, the host doubles and
+every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
+fixtures, the mesh-message spelling helper, the test namespace and the epoch fixtures live in both
+targets, held identical but for imports.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend

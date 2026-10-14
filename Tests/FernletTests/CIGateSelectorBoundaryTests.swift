@@ -14,7 +14,8 @@
 // A0.8), every mesh acceptance battery and wire golden declared in either target must be named by the
 // workflow (the P3/P4/P5 batteries were ungated for three phases because nothing said they had to
 // be), `Tests/suite-inventory.tsv` must be the tree (every suite's target, file and lines, and each
-// package suite's declared tests), the helpers both targets compile must be twins, the strict build
+// package suite's declared tests), the helpers both targets compile must be twins and the package's
+// test bindings a replacement of Fernlet's (ProximityKit plan step A1.1), the strict build
 // and every run go through `Fernlet.xcworkspace`, which resolves the CryptoSwift revision the app
 // project pins (ProximityKit plan step A0.8.1), the Fernlet scheme's testables hold the package
 // test target, which declares ProximityKit as its one dependency (A0.8.2) and whose files import no
@@ -328,6 +329,15 @@ import Testing
     /// At ProximityKit plan step A1.1.2 (2026-10-13) no count moves: one name is re-qualified in
     /// place, `crypto-goldens`' `ProximityNamespaceSoundnessTests`, now
     /// `ProximityKitTests/ProximityNamespaceSoundnessTests` in ProximityKit's package test target.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.4 (2026-10-13): `proximitykit` 6 → 11, for the four
+    /// epoch suites that rode no line before they moved into ProximityKit's package test target with
+    /// `MeshEpochModelTests.swift` (`MeshEpochRefTests`, `MeshEpochKeyringTests`,
+    /// `MeshEpochAcceptanceTests`, `MeshFrameReplayWindowTests`) and the new
+    /// `PackageTestSupportTests`, which holds the package tests' namespace sound and their file locator
+    /// to the package's own folder, each named `ProximityKitTests/<Suite>`; and one name is re-qualified
+    /// in place, `mesh-batteries`' `MeshSessionIDClaimTests`, now
+    /// `ProximityKitTests/MeshSessionIDClaimTests`, so that count stays. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -345,7 +355,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 154,
         "mesh-features": 48,
-        "proximitykit": 6
+        "proximitykit": 11
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -1099,8 +1109,12 @@ import Testing
     /// `NearbyRangingSessionTests`, `ReplayCacheTests`), measured in the package's bundle on the new
     /// `proximitykit` line at their FernletTests counts. MOVED at plan step A1.1.2 (2026-10-13):
     /// 634 → 633 and 8 → 9, for `ProximityNamespaceSoundnessTests`, measured in the package's bundle
-    /// on `crypto-goldens` at its FernletTests count.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 633, "ProximityKitTests": 9]
+    /// on `crypto-goldens` at its FernletTests count. MOVED at plan step A1.1.4 (2026-10-13): 633 → 628
+    /// and 9 → 15, for the five suites of `MeshEpochModelTests.swift` and `MeshSessionIDClaimTests.swift`
+    /// (the four epoch suites onto `proximitykit`, `MeshSessionIDClaimTests` still on `mesh-batteries`),
+    /// measured in the package's bundle at their FernletTests counts, and the package's NEW
+    /// `PackageTestSupportTests`, measured on `proximitykit`.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 15]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
@@ -1108,8 +1122,11 @@ import Testing
     /// at A0.8.3 (2026-10-11): 15 + `MeshDerivedRosterTests` 9 + `MeshMembershipMergeTests` 6 +
     /// `MeshMembershipBoundsTests` 9 + `MeshRoutedDrainPlanTests` 10 + `NearbyRangingSessionTests` 9 +
     /// `ReplayCacheTests` 1, each its count in FernletTests. MOVED at A1.1.2 (2026-10-13): 102 = 59 +
-    /// `ProximityNamespaceSoundnessTests` 43, its count in FernletTests.
-    static let measuredPackageCells = 102
+    /// `ProximityNamespaceSoundnessTests` 43, its count in FernletTests. MOVED at A1.1.4 (2026-10-13):
+    /// 140 = 102 + `MeshEpochRefTests` 10 + `MeshEpochKeyringTests` 5 + `MeshEpochAcceptanceTests` 4 +
+    /// `MeshFrameReplayWindowTests` 10 + `MeshSessionIDClaimTests` 7, each its count in FernletTests, +
+    /// the NEW `PackageTestSupportTests` 2.
+    static let measuredPackageCells = 140
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1142,8 +1159,11 @@ import Testing
             """
         let location = "a production or process-shared location; on an unsandboxed Mac, the developer's own"
         let repo = """
-            the package has no file locator whose markers hold in both repositories until plan step A1, \
-            and a relative path read from the unhosted agent has no defined base
+            a package test reads a file through PackageRoot (TestSupport/PackageRoot.swift), whose markers \
+            hold in both repositories, by a path relative to the package root: RepoRoot and this \
+            repository's paths do not travel with the package, a path computed from a source file's \
+            own location breaks when a layout moves, and a relative path read from the unhosted agent \
+            has no defined base
             """
         let keychainNeedles = ["SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService",
                                "DeviceBindingID", "StoragePreferences", "ColumnCrypto", "ProtectedSidecar",
@@ -1167,14 +1187,23 @@ import Testing
     /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
     /// an invariant a reviewer can check against the line it names, and a row whose line is gone or
     /// changed is a failure, so no row outlives the line it excuses. Empty at plan steps A0.8.2 and
-    /// A0.8.3; one row since A1.1.2 (2026-10-13), the soundness suite's storage cell, which reads
-    /// `URL.applicationSupportDirectory` as a value.
+    /// A0.8.3; one row at A1.1.2 (2026-10-13), the soundness suite's storage cell, which reads
+    /// `URL.applicationSupportDirectory` as a value; two since A1.1.4 (2026-10-13), with the package's
+    /// file locator's one read of its own source's path, from which it walks up to the package root.
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
         (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
          line: "for base in [URL.applicationSupportDirectory, scratch] {",
          invariant: """
             anInstallationsFolderIsItsNameUnderTheBaseItsHostPicks builds a URL value under each base \
             with Storage.directory(under:) and compares it; nothing is read, written or created there
+            """),
+        (file: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageRoot.swift",
+         line: "let origin = URL(fileURLWithPath: #filePath)",
+         invariant: """
+            PackageRoot only locates the package root: from its own source's path it walks up to the \
+            first folder holding Package.swift and Sources/ProximityKit, reading, writing and creating \
+            nothing; a package suite reads only Package.swift, Sources/ProximityKit/** and Tests/** \
+            under that root, by a path relative to it
             """)
     ]
 
@@ -1646,7 +1675,12 @@ import Testing
     /// `ProximityNamespaceMeshMessagesSpelling.swift`, extracted from
     /// `ProximityNamespaceSoundnessTests.swift` at A1.1.1), which `ProximityNamespaceSoundnessTests`
     /// uses in the package and the namespace and vocabulary goldens and the runtime gate
-    /// (`ProximityNamespaceGateTests`) use in FernletTests.
+    /// (`ProximityNamespaceGateTests`) use in FernletTests; and since A1.1.4 the package tests'
+    /// namespace (`.packageTest`, `TestSupport/PackageTestNamespace.swift` in the package), which the
+    /// package's suites compute under and `ProximityNamespaceGoldenTests` holds disjoint from Fernlet's
+    /// in FernletTests, and the epoch fixtures (`MeshEpochFixtures`, extracted from
+    /// `MeshEpochModelTests.swift`), which its four suites use in the package and three FernletTests
+    /// files use, each half minting through its own target's bindings.
     static let twins: [(package: String, fernlet: String)] = [
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
          fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift"),
@@ -1655,24 +1689,151 @@ import Testing
         (package: "FernletKit/Tests/ProximityKitTests/MeshMembershipFixtures.swift",
          fernlet: "Tests/FernletTests/MeshMembershipFixtures.swift"),
         (package: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceMeshMessagesSpelling.swift",
-         fernlet: "Tests/FernletTests/ProximityNamespaceMeshMessagesSpelling.swift")
+         fernlet: "Tests/FernletTests/ProximityNamespaceMeshMessagesSpelling.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestNamespace.swift",
+         fernlet: "Tests/FernletTests/PackageTestNamespace.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/MeshEpochFixtures.swift",
+         fernlet: "Tests/FernletTests/MeshEpochFixtures.swift")
     ]
 
     /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10); 1 at A0.8.2
     /// (2026-10-11), the fake peer transport; 3 at A0.8.3 (2026-10-11), with the ranging mock and the
-    /// membership fixtures; 4 at A1.1.2 (2026-10-13), with the mesh-message spelling helper. Each
-    /// twin added or retired changes it in the same commit.
-    static let measuredTwinCount = 4
+    /// membership fixtures; 4 at A1.1.2 (2026-10-13), with the mesh-message spelling helper; 6 at
+    /// A1.1.4 (2026-10-13), with the package tests' namespace and the epoch fixtures. Each twin added or
+    /// retired changes it in the same commit.
+    static let measuredTwinCount = 6
+
+    /// The line prefixes of an import, in every form a test file spells one: `import `, `@testable
+    /// import ` and `@preconcurrency import `.
+    private static let importPrefixes = ["import ", "@testable import ", "@preconcurrency import "]
 
     /// A twin's comparable body: its lines, in order, minus every line whose trimmed text starts
-    /// `import `, `@testable import ` or `@preconcurrency import ` (a package copy cannot import the
-    /// app, so the two copies' imports may differ and nothing else may).
+    /// with one of ``importPrefixes`` (a package copy cannot import the app, so the two copies'
+    /// imports may differ and nothing else may).
     static func twinBody(_ source: String) -> [String] {
-        let imports = ["import ", "@testable import ", "@preconcurrency import "]
-        return source.components(separatedBy: "\n").filter { line in
+        source.components(separatedBy: "\n").filter { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !imports.contains { trimmed.hasPrefix($0) }
+            return !importPrefixes.contains { trimmed.hasPrefix($0) }
         }
+    }
+
+    // MARK: - Replacements (ProximityKit plan step A1.1)
+
+    /// The replacement pairs (rules T5 and T6): (the package file, the FernletTests file, the package's
+    /// token, Fernlet's token), the files repo-relative. A replacement is not a twin: the package file
+    /// restores the FernletTests file's call shapes over the package tests' namespace where the
+    /// FernletTests file restores them over Fernlet's, which the package cannot name, so the two can
+    /// never be one file. Each declaration of the package file is a declaration of the FernletTests
+    /// file, verbatim once the package's token reads Fernlet's, so no shape the package's suites
+    /// compute through can drift from the one the FernletTests suites were written against; and, as
+    /// for a twin, the keys the two declare (rule T3) are declared nowhere else in either target. Since
+    /// A1.1.4 the package's test bindings (`TestSupport/PackageTestBindings.swift`), which replace
+    /// `ProximityNamespaceTestBindings.swift` with `.packageTest` for `.fernlet`.
+    static let replacements: [(package: String, fernlet: String, packageToken: String, fernletToken: String)] = [
+        (package: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestBindings.swift",
+         fernlet: "Tests/FernletTests/ProximityNamespaceTestBindings.swift",
+         packageToken: ".packageTest", fernletToken: ".fernlet")
+    ]
+
+    /// The MEASURED replacement count (rule T5): 1 at plan step A1.1.4 (2026-10-13), the package's
+    /// test bindings. Each replacement added or retired changes it in the same commit.
+    static let measuredReplacementCount = 1
+
+    /// One declaration a replacement file holds (rule T6).
+    struct ReplacementMember: Hashable {
+        /// The declaration it sits in: `extension <Type>` for a member of an extension, `""` for a
+        /// top-level declaration.
+        let container: String
+        /// Its code lines, whole and in order: its comment lines and blank lines are not among them.
+        let lines: [String]
+    }
+
+    /// The declarations a Swift source holds, for the replacement rule (T6), in order: every
+    /// top-level declaration but an import and an extension, and every declaration one level inside an
+    /// extension, each from its first code line (an attribute on a line of its own included) through
+    /// the line on which its braces, parentheses and brackets balance again, counted on each line's
+    /// code (``codePart(of:)``: literals blanked, a trailing comment cut), so a brace in a string or a
+    /// comment counts for nothing. A comment line and a blank line belong to no declaration; a
+    /// multi-line literal's lines belong to the declaration they sit in.
+    static func replacementMembers(of source: String) -> [ReplacementMember] {
+        var members: [ReplacementMember] = []
+        var container = ""
+        var depth = 0
+        var open: (container: String, base: Int, lines: [String])?
+        var nesting = 0
+        var inMultilineString = false
+        // R2: bounded by the source's line count.
+        for line in source.components(separatedBy: "\n") {
+            guard !inMultilineString else {
+                open?.lines.append(line)
+                inMultilineString = !line.contains("\"\"\"")
+                continue
+            }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("//") else { continue }
+            let read = codePart(of: line)
+            inMultilineString = read.opensMultilineString
+            let braces = read.code.filter { $0 == "{" }.count - read.code.filter { $0 == "}" }.count
+            let groups = read.code.filter { "([".contains($0) }.count - read.code.filter { ")]".contains($0) }.count
+            if open == nil {
+                if depth == 0, importPrefixes.contains(where: { trimmed.hasPrefix($0) }) { continue }
+                if depth == 0, let extended = afterAttributes(line, readingPast: visibleModifiers).flatMap(extendedTypeName) {
+                    depth = max(0, braces)
+                    container = depth == 0 ? "" : "extension " + extended
+                    continue
+                }
+                if depth == 1, read.code.trimmingCharacters(in: .whitespaces) == "}" {
+                    depth = 0
+                    container = ""
+                    continue
+                }
+                open = (container: depth == 0 ? "" : container, base: depth, lines: [])
+                nesting = 0
+            }
+            guard var member = open else { continue }
+            member.lines.append(line)
+            depth += braces
+            nesting += groups
+            let attributeOnly = trimmed.hasPrefix("@") && afterAttributes(trimmed, readingPast: [])?.isEmpty == true
+            if depth <= member.base && nesting <= 0 && !attributeOnly {
+                members.append(ReplacementMember(container: member.container, lines: member.lines))
+                depth = member.base
+                open = nil
+            } else {
+                open = member
+            }
+        }
+        return members
+    }
+
+    /// T6: each replacement pair's two files exist, the package file holds at least one declaration
+    /// (``replacementMembers(of:)``), and every one of them, with the pair's package token read as
+    /// Fernlet's on each line, equals a declaration of the FernletTests file in the same container;
+    /// each that equals none is named by its container and first line.
+    private static func replacementProblems() throws -> [String] {
+        var problems: [String] = []
+        // R2: bounded by the replacement list.
+        for pair in replacements {
+            let missing = [pair.package, pair.fernlet].filter { !FileManager.default.fileExists(atPath: RepoRoot.url($0).path) }
+            guard missing.isEmpty else {
+                problems.append("T6: the replacement \(pair.package) / \(pair.fernlet) is missing \(missing.joined(separator: ", "))")
+                continue
+            }
+            let package = replacementMembers(of: try RepoRoot.source(pair.package))
+            let fernlet = Set(replacementMembers(of: try RepoRoot.source(pair.fernlet)))
+            if package.isEmpty {
+                problems.append("T6: \(pair.package) holds no declaration the reader can name, so nothing in it is held to \(pair.fernlet)")
+            }
+            // R2: bounded by the package file's declarations.
+            for member in package {
+                let read = member.lines.map { $0.replacingOccurrences(of: pair.packageToken, with: pair.fernletToken) }
+                guard !fernlet.contains(ReplacementMember(container: member.container, lines: read)) else { continue }
+                let place = member.container.isEmpty ? "at the top level" : "in `\(member.container)`"
+                let first = member.lines.first?.trimmingCharacters(in: .whitespaces) ?? ""
+                problems.append("T6: \(pair.package) declares `\(first)` \(place), which equals no declaration of \(pair.fernlet) with `\(pair.packageToken)` read as `\(pair.fernletToken)`: a replacement restores that file's shapes verbatim over the package tests' namespace, and adds none of its own")
+            }
+        }
+        return problems
     }
 
     /// The non-private top-level declaration keys one test target holds (rule T3), each with the
@@ -1708,27 +1869,81 @@ import Testing
         return nil
     }
 
-    /// The helpers both test targets compile are twins, and nothing else is declared in both: T1 the
-    /// twin list holds the measured count; T2 each pair's two files exist and their bodies
-    /// (``twinBody(_:)``) are equal; T3 every non-private top-level declaration key present in both
-    /// targets (a type, a protocol or a typealias, `extension <Type>`, or a column-0 `func`, `let` or
-    /// `var`) is declared only in
-    /// the two halves of one listed pair, so a helper copied outside a pair, by type or by extension,
-    /// is red; T4 the comparator itself: an import-only difference is equal, a code difference is not.
+    /// The helpers both test targets compile are twins, the package's test bindings a replacement of
+    /// Fernlet's, and nothing else is declared in both: T1 the twin list holds the measured count; T2
+    /// each pair's two files exist and their bodies (``twinBody(_:)``) are equal; T3 every non-private
+    /// top-level declaration key present in both targets (a type, a protocol or a typealias,
+    /// `extension <Type>`, or a column-0 `func`, `let` or `var`) is declared only in the two halves of
+    /// one listed twin or replacement pair, so a helper copied outside a pair, by type or by extension,
+    /// is red; T4 the comparator itself: an import-only difference is equal, a code difference is not;
+    /// T5 the replacement list holds the measured count (ProximityKit plan step A1.1); T6 each
+    /// replacement's package file declares only declarations of its FernletTests file, verbatim once
+    /// the package's token reads Fernlet's; T7 the declaration reader itself, on a fixture.
     @Test func everyTwinMatchesItsOriginal() throws {
         #expect(Self.twins.count == Self.measuredTwinCount, """
             T1: \(Self.twins.count) twin pairs are listed; \(Self.measuredTwinCount) were measured. A twin \
             added or retired changes `measuredTwinCount` in the same commit.
             """)
-        let problems = try Self.twinPairProblems() + Self.sharedDeclarationProblems()
+        #expect(Self.replacements.count == Self.measuredReplacementCount, """
+            T5: \(Self.replacements.count) replacement pairs are listed; \(Self.measuredReplacementCount) \
+            were measured. A replacement added or retired changes `measuredReplacementCount` in the same \
+            commit.
+            """)
+        let problems = try Self.twinPairProblems() + Self.replacementProblems() + Self.sharedDeclarationProblems()
         #expect(problems.isEmpty, """
-            Helpers both test targets declare are not twins:
+            Helpers both test targets declare are not twins or replacements:
             \(problems.joined(separator: "\n"))
             """)
         let original = "import Foundation\n@testable import Fernlet\n\nlet x = 1\n"
         let copy = "@preconcurrency import ProximityKit\n\nlet x = 1\n"
         #expect(Self.twinBody(original) == Self.twinBody(copy), "T4: an import-only difference is equal")
         #expect(Self.twinBody("let x = 1\n") != Self.twinBody("let x = 2\n"), "T4: a code difference is not")
+        Self.expectTheReplacementReaderFixtured()
+    }
+
+    /// T7: the replacement rule's declaration reader on a fixture. An import and an extension's
+    /// opening and closing lines are no declaration; a one-line member, a member whose signature
+    /// spans lines after an attribute on a line of its own, a member whose string and comment hold
+    /// braces, and a top-level function are one each, with their comment and blank lines dropped.
+    private static func expectTheReplacementReaderFixtured() {
+        let fixture = """
+            import Foundation
+            @testable import ProximityKit
+
+            /// The extension.
+            extension Shape {
+
+                /// One line.
+                var one: Int { 1 }
+
+                @MainActor
+                static func two(
+                    first: Int,
+                    second: Int
+                ) -> Int {
+                    // A comment {
+                    first + second
+                }
+
+                func three() -> String { "}{" } // }
+            }
+
+            func four() {
+                _ = [1, 2].map { $0 }
+            }
+            """
+        let expected = [
+            ReplacementMember(container: "extension Shape", lines: ["    var one: Int { 1 }"]),
+            ReplacementMember(container: "extension Shape", lines: [
+                "    @MainActor", "    static func two(", "        first: Int,", "        second: Int",
+                "    ) -> Int {", "        first + second", "    }"
+            ]),
+            ReplacementMember(container: "extension Shape",
+                              lines: ["    func three() -> String { \"}{\" } // }"]),
+            ReplacementMember(container: "", lines: ["func four() {", "    _ = [1, 2].map { $0 }", "}"])
+        ]
+        let read = replacementMembers(of: fixture)
+        #expect(read == expected, "T7: the replacement reader read \(read)")
     }
 
     /// T2: each listed pair's two files exist and their bodies are equal, the first differing line
@@ -1754,18 +1969,19 @@ import Testing
         return problems
     }
 
-    /// T3: every declaration key present in both targets is declared only in one listed pair's two
-    /// halves.
+    /// T3: every declaration key present in both targets is declared only in one listed twin or
+    /// replacement pair's two halves.
     private static func sharedDeclarationProblems() throws -> [String] {
         let packageKeys = try declarationKeys(inTarget: packageTarget)
         let appKeys = try declarationKeys(inTarget: appTarget)
+        let pairs = twins + replacements.map { (package: $0.package, fernlet: $0.fernlet) }
         var problems: [String] = []
-        // R2: bounded by the package's key count × the twin list.
+        // R2: bounded by the package's key count × the pair list.
         for (key, packageFiles) in packageKeys.sorted(by: { $0.key < $1.key }) {
             guard let appFiles = appKeys[key] else { continue }
-            let paired = twins.contains { packageFiles == [$0.package] && appFiles == [$0.fernlet] }
+            let paired = pairs.contains { packageFiles == [$0.package] && appFiles == [$0.fernlet] }
             guard !paired else { continue }
-            problems.append("T3: `\(key)` is declared in both targets (\(packageFiles.joined(separator: ", ")); \(appFiles.joined(separator: ", "))) outside one twin pair's two halves")
+            problems.append("T3: `\(key)` is declared in both targets (\(packageFiles.joined(separator: ", ")); \(appFiles.joined(separator: ", "))) outside one twin or replacement pair's two halves")
         }
         return problems
     }
