@@ -149,7 +149,7 @@ struct MeshReturningMemberReseatTests {
         let coordinator = rig.manager.makeRetainedSlotCoordinatorForTesting(
             peer: peer, transport: transport, ranging: MockRangingProvider(isHardwareSupported: false)
         )
-        let introduction = try FernletIdentityEnvelope.signed(
+        let introduction = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Returning",
             payloadType: .identityIntroduction,
@@ -295,7 +295,7 @@ struct MeshReturningMemberReseatTests {
                 "precondition: the re-seat judged M, whose key the tunnel proved, and asked")
         await waitUntil { isConnected(link.coordinator) }
 
-        let replayed = try FernletIdentityEnvelope.signed(
+        let replayed = try ProximityIdentityEnvelope.signed(
             identityService: victim, senderDisplayName: "Replayed",
             payloadType: .identityIntroduction, payloadSummary: PayloadSummary(title: "Hello"), payload: Data()
         )

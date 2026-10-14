@@ -352,7 +352,7 @@ struct MeshRoutedDrainAnswerSigningTests {
         let payload = try JSONEncoder().encode(MeshRoutedDrainAnswerFixtures.payload())
         let base = MeshRoutedDrainAnswerFixtures.base
 
-        let frame = try FernletIdentityEnvelope.signed(
+        let frame = try ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "answerer",
             recipientFingerprint: receiver.localFingerprint,
             payloadType: .meshRoutedDrainAnswer, payloadEncryption: .none,

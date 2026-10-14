@@ -132,7 +132,6 @@ FernletTests	FernletDismissalWindowTests	Tests/FernletTests/FernletAnnouncerTest
 FernletTests	FernletExchangeTests	Tests/FernletTests/FernletExchangeTests.swift	messages-envelope	-
 FernletTests	FernletFeatureGoldenTests	Tests/FernletTests/FernletFeatureGoldenTests.swift	crypto-goldens	-
 FernletTests	FernletFontRegistrationTests	Tests/FernletTests/FernletFontRegistrationTests.swift	-	-
-FernletTests	FernletIdentityEnvelopeTests	Tests/FernletTests/FernletIdentityEnvelopeTests.swift	-	-
 FernletTests	FernletLockCryptoTests	Tests/FernletTests/FernletLockCryptoTests.swift	-	-
 FernletTests	FernletLockScopeTests	Tests/FernletTests/FernletLockScopeTests.swift	-	-
 FernletTests	FernletLockServiceTests	Tests/FernletTests/FernletLockServiceTests.swift	-	-
@@ -526,6 +525,7 @@ FernletTests	ProgressPhotoStoreTests	Tests/FernletTests/ProgressPhotoStoreTests.
 FernletTests	ProtectedSidecarTests	Tests/FernletTests/ProtectedSidecarTests.swift	-	-
 FernletTests	ProximityAuditBridgeTests	Tests/FernletTests/ProximityAuditBridgeTests.swift	s3-grep	-
 FernletTests	ProximityCoordinatorTests	Tests/FernletTests/ProximityCoordinatorTests.swift	-	-
+FernletTests	ProximityIdentityEnvelopeTests	Tests/FernletTests/ProximityIdentityEnvelopeTests.swift	-	-
 FernletTests	ProximityManagerDeallocationTests	Tests/FernletTests/MemoryLifecycleTests.swift	-	-
 FernletTests	ProximityNamespaceGateTests	Tests/FernletTests/ProximityNamespaceGateTests.swift	crypto-goldens	-
 FernletTests	ProximityNamespaceGoldenTests	Tests/FernletTests/ProximityNamespaceGoldenTests.swift	crypto-goldens	-

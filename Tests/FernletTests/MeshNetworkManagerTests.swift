@@ -372,9 +372,9 @@ struct MeshNetworkManagerTests {
 
     /// An inbound envelope shell — `proximityCoordinator(_:didReceive:...)` receives
     /// post-verification envelopes, so dummy keys/signature are fine here.
-    private func inboundEnvelope(payloadType: PayloadType, plaintext: Data) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    private func inboundEnvelope(payloadType: PayloadType, plaintext: Data) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),
@@ -865,8 +865,8 @@ struct MeshNetworkManagerTests {
         var handlerCalled = false
         manager.registerPayloadHandler(for: .trainerPlan) { _, _, _ in handlerCalled = true }
 
-        let unknown = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let unknown = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),

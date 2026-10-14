@@ -494,9 +494,9 @@ struct ProximityRecipeShareCapTests {
 
     /// An inbound envelope shell — the receive path takes post-verification envelopes, so a
     /// dummy signature is fine here.
-    private func recipeEnvelope(senderDisplayName: String, plaintext: Data) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    private func recipeEnvelope(senderDisplayName: String, plaintext: Data) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),

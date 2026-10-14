@@ -1231,7 +1231,7 @@ public final class PresenceManager: ProximityPayloadHandling {
                 // string, and it is — on the RECIPIENT's Connection Inspector, not the sender's.
                 // It is also folded into the Ed25519 canonical bytes. The user-facing copy for this
                 // feature is the `heartSendState` text a few lines below, which IS display and may
-                // localize freely. See `FernletIdentityEnvelope.payloadSummary`.
+                // localize freely. See `ProximityIdentityEnvelope.payloadSummary`.
                 summary: PayloadSummary(title: "Good vibes"),
                 payload: payloadData,
                 sealed: true
@@ -1398,7 +1398,7 @@ public final class PresenceManager: ProximityPayloadHandling {
 
     public func proximityCoordinator(
         _ coordinator: ProximityCoordinator,
-        didReceive envelope: FernletIdentityEnvelope,
+        didReceive envelope: ProximityIdentityEnvelope,
         plaintext: Data,
         from peer: ProximityCoordinator.PeerIdentity?
     ) {

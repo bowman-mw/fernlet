@@ -335,7 +335,7 @@ extension MeshRoutedDrainRig {
         _ payload: some Encodable, type: PayloadType, sender: Int, receiver: Int,
         binding: DeviceBindingID.TestOverride? = nil
     ) throws {
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: identities[sender], senderDisplayName: "advert",
             recipientFingerprint: nodes[receiver].fingerprint,
             payloadType: type, payloadEncryption: .none,

@@ -247,7 +247,7 @@ struct CoachSessionHardeningTests {
 
         // Our own intro advertises the configured capability set.
         let intro = try #require(transport.sentData.first.flatMap {
-            try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.0)
+            try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.0)
         })
         #expect(intro.payloadType == .identityIntroduction)
         struct DecodableCaps: Decodable { let capabilities: [String]? }
@@ -257,7 +257,7 @@ struct CoachSessionHardeningTests {
         let payload = try JSONEncoder().encode(CapablePayload(
             rangingMode: "rssi", discoveryToken: nil,
             capabilities: [ProximityCapability.wire2.rawValue]))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Remote Coach",
             payloadType: .identityIntroduction,

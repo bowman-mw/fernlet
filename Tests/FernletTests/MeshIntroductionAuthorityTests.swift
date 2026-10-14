@@ -627,7 +627,7 @@ struct MeshLedgerConvergenceTests {
         over coordinator: ProximityCoordinator
     ) throws {
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Peer",
             payloadType: type,

@@ -721,7 +721,7 @@ struct MeshRoutedInventorySigningTests {
         let payload = try JSONEncoder().encode(MeshRoutedInventoryFixtures.payload())
         let base = MeshRoutedInventoryFixtures.base
 
-        let frame = try FernletIdentityEnvelope.signed(
+        let frame = try ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "advertiser",
             recipientFingerprint: receiver.localFingerprint,
             payloadType: .meshRoutedInventoryDigest, payloadEncryption: .none,
@@ -732,13 +732,13 @@ struct MeshRoutedInventorySigningTests {
         )
         #expect(opened == payload)
 
-        let control = try FernletIdentityEnvelope.signed(
+        let control = try ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "advertiser",
             recipientFingerprint: receiver.localFingerprint,
             payloadType: .tempMessage, payloadEncryption: .none,
             payloadSummary: PayloadSummary(title: "digest"), payload: payload, createdAt: base
         )
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try control.verify(identityService: receiver, replayCache: ReplayCache(dateProvider: { base }))
         }
     }

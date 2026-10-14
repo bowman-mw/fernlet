@@ -193,7 +193,7 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
             // rendered in the RECEIVING device's Connection Inspector, so translating it here would
             // put the sender's language in a stranger's audit log. The recipient-facing consent copy
             // is built on the receiving side and is free to localize; this is not it. See
-            // `FernletIdentityEnvelope.payloadSummary`.
+            // `ProximityIdentityEnvelope.payloadSummary`.
             summary: PayloadSummary(
                 title: "Recipe share",
                 subtitle: nil,
@@ -215,7 +215,7 @@ public final class ProximityRecipeShareManager: ProximityPayloadHandling {
 
     public func proximityCoordinator(
         _ coordinator: ProximityCoordinator,
-        didReceive envelope: FernletIdentityEnvelope,
+        didReceive envelope: ProximityIdentityEnvelope,
         plaintext: Data,
         from peer: ProximityCoordinator.PeerIdentity?
     ) {

@@ -562,7 +562,7 @@ struct MeshRecipientReceiptSigningTests {
         )
         let base = MeshRecipientReceiptFixtures.base
 
-        let frame = try FernletIdentityEnvelope.signed(
+        let frame = try ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "recipient",
             recipientFingerprint: receiver.localFingerprint,
             payloadType: .meshRecipientReceipt, payloadEncryption: .none,
@@ -573,13 +573,13 @@ struct MeshRecipientReceiptSigningTests {
         )
         #expect(opened == payload)
 
-        let control = try FernletIdentityEnvelope.signed(
+        let control = try ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "recipient",
             recipientFingerprint: receiver.localFingerprint,
             payloadType: .tempMessage, payloadEncryption: .none,
             payloadSummary: PayloadSummary(title: "receipt"), payload: payload, createdAt: base
         )
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try control.verify(identityService: receiver, replayCache: ReplayCache(dateProvider: { base }))
         }
     }

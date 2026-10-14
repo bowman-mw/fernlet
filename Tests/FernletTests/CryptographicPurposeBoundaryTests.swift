@@ -44,8 +44,8 @@ struct CryptographicPurposeBoundaryTests {
     /// remaining `fernlet.canonical.*` types share that same writer and their own round-trip suites.
     @Test func canonicalSerializerTranscriptsMatchTheirDeclaredFraming() {
         let envelopePurpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(repeating: 1, count: 32),
             senderKeyAgreementPublicKey: Data(repeating: 2, count: 32),

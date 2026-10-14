@@ -1,7 +1,7 @@
-// FernletIdentityEnvelopeTests.swift
+// ProximityIdentityEnvelopeTests.swift
 // FernletTests
 //
-// Tests for FernletIdentityEnvelope, PayloadEncryption, ReplayCache (Phase 7.2).
+// Tests for ProximityIdentityEnvelope, PayloadEncryption, ReplayCache (Phase 7.2).
 // Each test uses UUID-scoped Keychain services cleaned up via defer.
 
 import ProximityKit
@@ -15,7 +15,7 @@ import FernletConnections
 
 @MainActor
 @Suite(.serialized)
-struct FernletIdentityEnvelopeTests {
+struct ProximityIdentityEnvelopeTests {
 
     // MARK: - Harness
 
@@ -38,8 +38,8 @@ struct FernletIdentityEnvelopeTests {
         recipientFingerprint: String? = nil,
         expiresAt: Date? = nil,
         createdAt: Date = Date()
-    ) throws -> FernletIdentityEnvelope {
-        try FernletIdentityEnvelope.signed(
+    ) throws -> ProximityIdentityEnvelope {
+        try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Test Sender",
             recipientFingerprint: recipientFingerprint,
@@ -53,11 +53,11 @@ struct FernletIdentityEnvelopeTests {
     }
 
     /// Rebuilds an envelope with one field replaced, keeping the original signature (for tamper tests).
-    private func tamper(_ env: FernletIdentityEnvelope,
+    private func tamper(_ env: ProximityIdentityEnvelope,
                         schemaVersion: Int? = nil,
                         payload: Data? = nil,
-                        payloadSummary: PayloadSummary? = nil) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
+                        payloadSummary: PayloadSummary? = nil) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
             schemaVersion:               schemaVersion ?? env.schemaVersion,
             envelopeID:                  env.envelopeID,
             senderSigningPublicKey:      env.senderSigningPublicKey,
@@ -88,7 +88,7 @@ struct FernletIdentityEnvelopeTests {
         for pt in PayloadType.allCases {
             let env = try signedEnvelope(sender: sender, payloadType: pt)
             let data = try encoder.encode(env)
-            let decoded = try decoder.decode(FernletIdentityEnvelope.self, from: data)
+            let decoded = try decoder.decode(ProximityIdentityEnvelope.self, from: data)
             #expect(decoded == env, "Round-trip failed for PayloadType.\(pt.rawValue)")
         }
     }
@@ -98,7 +98,7 @@ struct FernletIdentityEnvelopeTests {
         defer { cleanup(sid) }
 
         let env = try signedEnvelope(sender: sender, payloadEncryption: .none)
-        let decoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: JSONEncoder().encode(env))
+        let decoded = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: JSONEncoder().encode(env))
 
         #expect(decoded == env)
         #expect(decoded.payloadEncryption == .none)
@@ -114,7 +114,7 @@ struct FernletIdentityEnvelopeTests {
         let enc: PayloadEncryption = .sealedTo(recipientKeyAgreementPublicKey: recipient.localKeyAgreementPublicKey)
         let env = try signedEnvelope(sender: sender, payload: sealedPayload, payloadEncryption: enc)
 
-        let decoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: JSONEncoder().encode(env))
+        let decoded = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: JSONEncoder().encode(env))
 
         #expect(decoded == env)
         #expect(decoded.payloadEncryption == enc)
@@ -144,7 +144,7 @@ struct FernletIdentityEnvelopeTests {
         let env = try signedEnvelope(sender: alice, payload: Data("original".utf8))
         let bad = tamper(env, payload: Data("tampered".utf8))
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid) {
             try bad.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -158,7 +158,7 @@ struct FernletIdentityEnvelopeTests {
         let env = try signedEnvelope(sender: alice)
         let bad = tamper(env, payloadSummary: PayloadSummary(title: "TAMPERED TITLE"))
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid) {
             try bad.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -171,7 +171,7 @@ struct FernletIdentityEnvelopeTests {
 
         let env = try signedEnvelope(sender: alice, expiresAt: .distantPast)
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.expired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.expired) {
             try env.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -185,7 +185,7 @@ struct FernletIdentityEnvelopeTests {
         let env = try signedEnvelope(sender: alice)
         let bad = tamper(env, schemaVersion: 99)
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.schemaVersionUnsupported) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.schemaVersionUnsupported) {
             try bad.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -202,7 +202,7 @@ struct FernletIdentityEnvelopeTests {
         let env = try signedEnvelope(sender: alice, recipientFingerprint: carol.localFingerprint)
 
         // Bob tries to verify — fingerprint doesn't match
-        #expect(throws: FernletIdentityEnvelope.VerifyError.recipientMismatch) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.recipientMismatch) {
             try env.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -219,7 +219,7 @@ struct FernletIdentityEnvelopeTests {
         let legacyRecipient = String(bob.localFingerprint.prefix(8))
         let env = try signedEnvelope(sender: alice, recipientFingerprint: legacyRecipient)
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.recipientMismatch) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.recipientMismatch) {
             try env.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -235,7 +235,7 @@ struct FernletIdentityEnvelopeTests {
 
         _ = try env.verify(identityService: bob, replayCache: replayCache)
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.replayDetected) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.replayDetected) {
             try env.verify(identityService: bob, replayCache: replayCache)
         }
     }
@@ -278,7 +278,7 @@ struct FernletIdentityEnvelopeTests {
         )
 
         // Eve's fingerprint doesn't match — fails before even attempting decryption
-        #expect(throws: FernletIdentityEnvelope.VerifyError.recipientMismatch) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.recipientMismatch) {
             try env.verify(identityService: eve, replayCache: ReplayCache())
         }
     }
@@ -314,7 +314,7 @@ struct FernletIdentityEnvelopeTests {
             payloadType: .friendHeart,
             payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: bob.localKeyAgreementPublicKey)
         )
-        #expect(throws: FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.payloadLegacyWireFormat) {
             try legacy.verify(identityService: bob, replayCache: ReplayCache())
         }
 
@@ -328,7 +328,7 @@ struct FernletIdentityEnvelopeTests {
             payloadType: .friendHeart,
             payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: bob.localKeyAgreementPublicKey)
         )
-        #expect(throws: FernletIdentityEnvelope.VerifyError.payloadDecryptionFailed) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.payloadDecryptionFailed) {
             try forged.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -347,7 +347,7 @@ struct FernletIdentityEnvelopeTests {
             recipientFingerprint: bob.localFingerprint
         )
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try env.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -368,7 +368,7 @@ struct FernletIdentityEnvelopeTests {
             recipientFingerprint: bob.localFingerprint
         )
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try env.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -390,7 +390,7 @@ struct FernletIdentityEnvelopeTests {
             recipientFingerprint: bob.localFingerprint
         )
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try env.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -431,7 +431,7 @@ struct FernletIdentityEnvelopeTests {
 
         for payloadType in meshPayloadTypes {
             let envelope = try signedEnvelope(sender: alice, payloadType: payloadType)
-            let decoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: JSONEncoder().encode(envelope))
+            let decoded = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: JSONEncoder().encode(envelope))
             #expect(decoded.payloadType == payloadType)
         }
     }
@@ -617,7 +617,7 @@ struct FernletIdentityEnvelopeTests {
         let (recipient, rid) = try makeIdentity()
         defer { cleanup(rid) }
         let envelope = try signedEnvelope(sender: sender, payloadType: .friendPhoto, payloadEncryption: .none)
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try envelope.verify(identityService: recipient, replayCache: ReplayCache())
         }
     }
@@ -645,7 +645,7 @@ struct FernletIdentityEnvelopeTests {
         try cache.recordIfNew(envelopeID: id1, createdAt: clock.date)
 
         // Confirm it's tracked
-        #expect(throws: FernletIdentityEnvelope.VerifyError.replayDetected) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.replayDetected) {
             try cache.recordIfNew(envelopeID: id1, createdAt: clock.date)
         }
 
@@ -667,9 +667,9 @@ struct FernletIdentityEnvelopeTests {
 
     /// A fully-specified envelope with non-ASCII text, a sealed encryption case, a populated
     /// `dateRange`, and an out-of-order `extraDetails` map — exercises every canonical branch.
-    private func fixedGoldenEnvelope() -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    private func fixedGoldenEnvelope() -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
             senderSigningPublicKey: Data([0x01, 0x02, 0x03, 0x04]),
             senderKeyAgreementPublicKey: Data([0x05, 0x06, 0x07, 0x08]),
@@ -753,9 +753,9 @@ struct FernletIdentityEnvelopeTests {
 
     /// Builds a v1 (pre-WI-6) signed envelope: signs over the LEGACY canonical bytes and stamps the
     /// legacy schema version, exactly as a not-yet-updated in-field peer would.
-    private func legacySignedEnvelope(sender: LegacyPeer, payload: Data) throws -> FernletIdentityEnvelope {
-        var env = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.legacySchemaVersion,
+    private func legacySignedEnvelope(sender: LegacyPeer, payload: Data) throws -> ProximityIdentityEnvelope {
+        var env = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.legacySchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: sender.signingPublicKey,
             senderKeyAgreementPublicKey: sender.keyAgreementPublicKey,
@@ -788,9 +788,9 @@ struct FernletIdentityEnvelopeTests {
     @Test func wi6_canonicalBytesIndependentOfMapInsertionOrder() {
         let forward = PayloadSummary(title: "t", extraDetails: ["a": "1", "b": "2", "c": "3"])
         let reverse = PayloadSummary(title: "t", extraDetails: ["c": "3", "b": "2", "a": "1"])
-        func envelope(_ summary: PayloadSummary) -> FernletIdentityEnvelope {
-            FernletIdentityEnvelope(
-                schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        func envelope(_ summary: PayloadSummary) -> ProximityIdentityEnvelope {
+            ProximityIdentityEnvelope(
+                schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
                 envelopeID: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
                 senderSigningPublicKey: Data([0x01]), senderKeyAgreementPublicKey: Data([0x02]),
                 senderDisplayName: "n", recipientFingerprint: nil, payloadType: .inspectorEcho,
@@ -808,7 +808,7 @@ struct FernletIdentityEnvelopeTests {
         defer { cleanup(bid) }
 
         let env = try signedEnvelope(sender: alice, payload: Data("v2 payload".utf8))
-        #expect(env.schemaVersion == FernletIdentityEnvelope.currentSchemaVersion)
+        #expect(env.schemaVersion == ProximityIdentityEnvelope.currentSchemaVersion)
         let recovered = try env.verify(identityService: bob, replayCache: ReplayCache())
         #expect(recovered == Data("v2 payload".utf8))
     }
@@ -821,13 +821,13 @@ struct FernletIdentityEnvelopeTests {
 
         // New (v2) signs and verifies via the cross-platform serializer.
         let newEnv = try signedEnvelope(sender: alice, payload: Data("hello".utf8))
-        #expect(newEnv.schemaVersion == FernletIdentityEnvelope.currentSchemaVersion)
+        #expect(newEnv.schemaVersion == ProximityIdentityEnvelope.currentSchemaVersion)
         #expect(try newEnv.verify(identityService: bob, replayCache: ReplayCache()) == Data("hello".utf8))
 
         // Legacy (v1) — minted with the old encoder by a not-yet-updated peer — still verifies (no
         // in-field peer cut off).
         let legacyEnv = try legacySignedEnvelope(sender: LegacyPeer(), payload: Data("hello".utf8))
-        #expect(legacyEnv.schemaVersion == FernletIdentityEnvelope.legacySchemaVersion)
+        #expect(legacyEnv.schemaVersion == ProximityIdentityEnvelope.legacySchemaVersion)
         #expect(try legacyEnv.verify(identityService: bob, replayCache: ReplayCache()) == Data("hello".utf8))
     }
 
@@ -886,7 +886,7 @@ struct FernletIdentityEnvelopeTests {
         let env = try signedEnvelope(sender: alice, payload: Data("original".utf8))
         // Flip a canonical field (display name) while retaining the original signature.
         let bad = tamperDisplayName(env, to: env.senderDisplayName + "!")
-        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid) {
             try bad.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -937,9 +937,9 @@ struct FernletIdentityEnvelopeTests {
         payload: Data = Data("future payload".utf8),
         recipientFingerprint: String? = nil,
         envelopeID: UUID = UUID()
-    ) throws -> FernletIdentityEnvelope {
-        var env = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    ) throws -> ProximityIdentityEnvelope {
+        var env = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: envelopeID,
             senderSigningPublicKey: sender.localSigningPublicKey,
             senderKeyAgreementPublicKey: sender.localKeyAgreementPublicKey,
@@ -967,7 +967,7 @@ struct FernletIdentityEnvelopeTests {
 
         let env = try signedUnknownTypeEnvelope(sender: sender)
         let wireData = try JSONEncoder().encode(env)
-        let decoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: wireData)
+        let decoded = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: wireData)
 
         #expect(decoded.isUnknownPayloadType)
         #expect(decoded.payloadType == nil)
@@ -975,7 +975,7 @@ struct FernletIdentityEnvelopeTests {
         #expect(decoded == env)
 
         // Re-encode parks the token back under the original wire key, unchanged.
-        let reencoded = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: JSONEncoder().encode(decoded))
+        let reencoded = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: JSONEncoder().encode(decoded))
         #expect(reencoded.payloadTypeToken == "fernlet.future.sparkle.v1")
     }
 
@@ -1009,7 +1009,7 @@ struct FernletIdentityEnvelopeTests {
         let recovered = try env.verify(identityService: bob, replayCache: replayCache)
         #expect(recovered == Data(), "Unknown-type payload must be parked, not returned")
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.replayDetected) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.replayDetected) {
             try env.verify(identityService: bob, replayCache: replayCache)
         }
     }
@@ -1044,14 +1044,14 @@ struct FernletIdentityEnvelopeTests {
 
         let env = try signedUnknownTypeEnvelope(sender: alice)
         let bad = tamper(env, payload: Data("tampered".utf8))
-        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid) {
             try bad.verify(identityService: bob, replayCache: ReplayCache())
         }
 
         // Same signature presented under a DIFFERENT unknown token must also fail.
         var retyped = try signedUnknownTypeEnvelope(sender: alice, token: "fernlet.future.other.v1")
         retyped.signature = env.signature
-        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid) {
             try retyped.verify(identityService: bob, replayCache: ReplayCache())
         }
     }
@@ -1064,8 +1064,8 @@ struct FernletIdentityEnvelopeTests {
         let (bob, bid) = try makeIdentity()
         defer { cleanup(bid) }
 
-        var env = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.legacySchemaVersion,
+        var env = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.legacySchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: alice.signingPublicKey,
             senderKeyAgreementPublicKey: alice.keyAgreementPublicKey,
@@ -1084,8 +1084,8 @@ struct FernletIdentityEnvelopeTests {
         #expect(try env.verify(identityService: bob, replayCache: ReplayCache()) == Data())
     }
 
-    private func tamperDisplayName(_ env: FernletIdentityEnvelope, to name: String) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
+    private func tamperDisplayName(_ env: ProximityIdentityEnvelope, to name: String) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
             schemaVersion: env.schemaVersion,
             envelopeID: env.envelopeID,
             senderSigningPublicKey: env.senderSigningPublicKey,

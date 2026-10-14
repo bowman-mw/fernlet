@@ -798,7 +798,7 @@ generalized in A).
   the hash of the packet bytes avoids re-encoding the plan.
 - **Framer:** reuse the Messages v2 framer, made public with its limits passed in. It hard-codes
   Messages limits today and its 2-byte length caps documents at 65,535 bytes.
-- **Not `FernletIdentityEnvelope`:** it requires sealing for plan types, and it throws on a
+- **Not `ProximityIdentityEnvelope`:** it requires sealing for plan types, and it throws on a
   recipient mismatch, which breaks O12.
 - **Size:**
   - Measured: a 4-week plan with demo links compresses to roughly 2.8 KB of URL text.

@@ -24,7 +24,7 @@
 //
 // **What the fabric carries and what this file supplies.** Frames are real: signed by the sending
 // manager, encoded, carried by `FakePeerNetwork` on a clock the test owns, and verified on arrival
-// through `FernletIdentityEnvelope.verify(identityService:replayCache:)` — the same check
+// through `ProximityIdentityEnvelope.verify(identityService:replayCache:)` — the same check
 // `ProximityCoordinator` makes, including the recipient gate and the replay cache. The one thing
 // supplied here is the ROUTING step the coordinator would do next (`didReceive` → the manager),
 // because a coordinator on this fabric would first want the whole identity-introduction ceremony,
@@ -172,7 +172,7 @@ enum MeshMergeWire {
             let frame = frames[node.delivered]
             node.delivered += 1
             moved += 1
-            let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: frame.data)
+            let envelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: frame.data)
             let plaintext = try envelope.verify(
                 identityService: node.manager.identityForTesting, replayCache: node.replayCache
             )
@@ -221,7 +221,7 @@ enum MeshMergeWire {
     /// The payload-type tokens an endpoint has received, in arrival order.
     static func receivedTypes(_ channel: FakePeerTransport) -> [String] {
         channel.receivedFrames.compactMap { frame in
-            try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: frame.data).payloadTypeToken
+            try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: frame.data).payloadTypeToken
         }
     }
 }

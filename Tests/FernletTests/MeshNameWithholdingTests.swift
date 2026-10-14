@@ -69,8 +69,8 @@ final class MeshNameWithholdingRig {
     }
 
     /// Every envelope `endpoint` was sent, decoded.
-    func envelopes(on endpoint: FakePeerTransport) throws -> [FernletIdentityEnvelope] {
-        try endpoint.sentFrames.map { try JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+    func envelopes(on endpoint: FakePeerTransport) throws -> [ProximityIdentityEnvelope] {
+        try endpoint.sentFrames.map { try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
     }
 
     /// The removal proposal `endpoint` was sent, decoded out of its (unsealed) envelope.
@@ -239,7 +239,7 @@ struct MeshNameWithholdingTests {
         #expect(rig.manager.beginQRVerification(with: qr.url, slotID: endpoint.handle.id), "the ceremony started")
         await rig.drain()
         let challenges = try endpoint.transport.sentFrames
-            .map { try JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+            .map { try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
             .filter { $0.payloadType == .verifyChallenge }
         #expect(challenges.count == 1, "the challenge really went out on the uncommitted slot")
         #expect(challenges.allSatisfy { $0.senderDisplayName.isEmpty }, "and it names nobody — the door keys on the slot")
@@ -258,7 +258,7 @@ struct MeshNameWithholdingTests {
         )
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateConnected(peer: peer)
-        let introduction = try FernletIdentityEnvelope.signed(
+        let introduction = try ProximityIdentityEnvelope.signed(
             identityService: remote, senderDisplayName: "", payloadType: .identityIntroduction,
             payloadSummary: PayloadSummary(title: "Hello"), payload: Data()
         )

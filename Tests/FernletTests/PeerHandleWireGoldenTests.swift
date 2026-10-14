@@ -14,7 +14,7 @@ import Testing
 /// A rename that changed its type, its optionality, or the moment it is read would move signed bytes
 /// and break verification against every already-shipped peer, with no compile error anywhere.
 ///
-/// So these are golden vectors in the style of `FernletIdentityEnvelopeTests`' WI-6 section: fixed
+/// So these are golden vectors in the style of `ProximityIdentityEnvelopeTests`' WI-6 section: fixed
 /// input, pinned hex, failure message re-printing the actual so a *deliberate* format bump can be
 /// re-pinned by copy-paste. If one of these fails and the change was not a deliberate wire-format
 /// change, the change has left P1's scope.
@@ -47,9 +47,9 @@ struct PeerHandleWireGoldenTests {
 
     /// The envelope shape the coordinator emits, parameterized only by the peer's advertised
     /// fingerprint — every other field is fixed so the bytes are reproducible.
-    private func envelope(boundTo peer: PeerHandle?) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    private func envelope(boundTo peer: PeerHandle?) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(uuidString: "11111111-2222-3333-4444-555555555555") ?? UUID(),
             senderSigningPublicKey: Data([0x01, 0x02, 0x03, 0x04]),
             senderKeyAgreementPublicKey: Data([0x05, 0x06, 0x07, 0x08]),

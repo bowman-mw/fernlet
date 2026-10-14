@@ -166,7 +166,7 @@ public final class HeartDropService {
         do {
             try identity.ensureProvisioned()
         } catch {
-            // Benign here: every later identity use (`FernletIdentityEnvelope.signed`,
+            // Benign here: every later identity use (`ProximityIdentityEnvelope.signed`,
             // `heartDropPairSecret`, `staticKeyAgreement`) throws and maps to `.failed`
             // or a skip — but the ROOT cause has to be recorded, or a service that fails every
             // send looks unexplained.
@@ -342,7 +342,7 @@ public final class HeartDropService {
         do {
             let payload = HeartPayload(sentAtDayKey: localDayKey(sentAt))
             let payloadData = try JSONEncoder().encode(payload)
-            let envelope = try FernletIdentityEnvelope.signed(
+            let envelope = try ProximityIdentityEnvelope.signed(
                 identityService: identity,
                 senderDisplayName: displayName(),
                 recipientFingerprint: friend.fingerprint,
@@ -351,7 +351,7 @@ public final class HeartDropService {
                 // Frozen by construction: the summary title is the payload-type rawValue, never
                 // prose. Keep it that way and never localize it — the summary is signed into the
                 // envelope's canonical bytes, and a dead-drop envelope is verified on a device whose
-                // locale the sender cannot know. See `FernletIdentityEnvelope.payloadSummary`.
+                // locale the sender cannot know. See `ProximityIdentityEnvelope.payloadSummary`.
                 payloadSummary: PayloadSummary(title: PayloadType.friendHeartDrop.rawValue),
                 payload: payloadData,
                 createdAt: sentAt,
@@ -714,7 +714,7 @@ public final class HeartDropService {
     /// Opens the outer seal and decodes the inner envelope, naming the rejection reason (R7): a
     /// stuck hostile or corrupt record is re-fetched and re-rejected on EVERY sync, so a silent
     /// drop here is a permanently invisible failure. No identifying context beyond the reason.
-    private func openSealedRecord(_ record: HeartDropRecord) -> FernletIdentityEnvelope? {
+    private func openSealedRecord(_ record: HeartDropRecord) -> ProximityIdentityEnvelope? {
         do {
             let inner = try HeartDropSealer.open(
                 record.payload,
@@ -722,7 +722,7 @@ public final class HeartDropService {
                 staticAgreement: { [identity] eph in try identity.staticKeyAgreement(withEphemeralPublicKey: eph) },
                 staticPublicKey: identity.localKeyAgreementPublicKey
             )
-            return try JSONDecoder().decode(FernletIdentityEnvelope.self, from: inner)
+            return try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: inner)
         } catch {
             FernletAuditLog.log("heartdrop.rejected", context: [
                 "reason": "openFailed", "error": String(describing: error)
@@ -735,7 +735,7 @@ public final class HeartDropService {
     ///
     /// nil replay cache: drops are legitimately older than the 24 h cache window; the durable
     /// dedup replaces it. Signature/schema/expiry/recipient checks all still run.
-    private func verifiedHeartPayload(of envelope: FernletIdentityEnvelope) -> HeartPayload? {
+    private func verifiedHeartPayload(of envelope: ProximityIdentityEnvelope) -> HeartPayload? {
         do {
             let plaintext = try envelope.verify(identityService: identity, replayCache: nil)
             let heart = try JSONDecoder().decode(HeartPayload.self, from: plaintext)

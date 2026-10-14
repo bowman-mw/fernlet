@@ -620,9 +620,9 @@ struct MeshEncryptionTests {
 
     /// An inbound envelope shell: `proximityCoordinator(_:didReceive:...)` receives envelopes that
     /// have already been verified, so the key and signature fields are unused here.
-    private func inboundEnvelope(_ payloadType: PayloadType, plaintext: Data) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    private func inboundEnvelope(_ payloadType: PayloadType, plaintext: Data) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),

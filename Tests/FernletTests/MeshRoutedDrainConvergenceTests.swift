@@ -530,7 +530,7 @@ extension MeshConvergenceRun {
               slot.fingerprint != nil
         else { return false }
         let identity = sender.node.manager.identityForTesting
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: identity, senderDisplayName: "replay",
             recipientFingerprint: receiver.fingerprint,
             payloadType: .meshRoutedManifest, payloadEncryption: .none,

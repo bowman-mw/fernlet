@@ -774,7 +774,7 @@ struct MeshRoutedManifestSigningTests {
         let minted = try mint(rig: try MeshDeliveryFixtures.rig(memberCount: 3))
         let relay = try #require(minted.rig.identities[minted.rig.fingerprints[1]])
         let wire = try JSONEncoder().encode(MeshRoutedManifestPayload(manifest: minted.manifest))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: relay,
             senderDisplayName: "relay",
             payloadType: .meshRoutedManifest,
@@ -969,7 +969,7 @@ struct MeshRoutedManifestSigningTests {
         let payload = try JSONEncoder().encode(MeshRoutedManifestPayload(manifest: minted.manifest))
         let base = MeshMembershipEventFixtures.base
 
-        let manifestFrame = try FernletIdentityEnvelope.signed(
+        let manifestFrame = try ProximityIdentityEnvelope.signed(
             identityService: minted.origin,
             senderDisplayName: "origin",
             recipientFingerprint: receiver.localFingerprint,
@@ -985,7 +985,7 @@ struct MeshRoutedManifestSigningTests {
         #expect(opened == payload)
 
         // Positive control: the same call for a type in `.fernlet`'s sealing set is fail-closed.
-        let control = try FernletIdentityEnvelope.signed(
+        let control = try ProximityIdentityEnvelope.signed(
             identityService: minted.origin,
             senderDisplayName: "origin",
             recipientFingerprint: receiver.localFingerprint,
@@ -995,7 +995,7 @@ struct MeshRoutedManifestSigningTests {
             payload: payload,
             createdAt: base
         )
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try control.verify(identityService: receiver, replayCache: ReplayCache(dateProvider: { base }))
         }
     }

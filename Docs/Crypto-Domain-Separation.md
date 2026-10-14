@@ -108,8 +108,8 @@ on the reasoning.
 
 | Constant | Spelling | Framing | Consumer |
 |---|---|---|---|
-| `identityEnvelopeV2` | `fernlet.canonical.identity-envelope.v2` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `FernletIdentityEnvelope` |
-| `identityEnvelopeLegacyV1` | `fernlet.canonical.identity-envelope.v1` | `.absent` | `FernletIdentityEnvelope` |
+| `identityEnvelopeV2` | `fernlet.canonical.identity-envelope.v2` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `ProximityIdentityEnvelope` |
+| `identityEnvelopeLegacyV1` | `fernlet.canonical.identity-envelope.v1` | `.absent` | `ProximityIdentityEnvelope` |
 | `meshAdmissionTokenV2` | `fernlet.canonical.mesh-admission-token.v2` | `.lengthPrefixed` | `CanonicalSignatureSerializer`, `MeshPayloads` |
 | `meshAdmissionTokenLegacyV1` | `fernlet.canonical.mesh-admission-token.v1` | `.absent` | `MeshPayloads` |
 | `activityDescriptorV2` | `fernlet.canonical.activity-descriptor.v2` | `.lengthPrefixed` | `FeatureCanonicalBytes` |
@@ -415,7 +415,7 @@ than from this device's disk.
 | Format | Current write | Older readers still live | Where |
 |---|---|---|---|
 | Sealed column blob | **v3**: `0x03 ‖ ChaChaPoly(nonce‖ct‖tag)` with `purpose ‖ deviceBindingID` as AAD | **None.** v2 (`0x02`, binding-only AAD) and legacy (bare `combined`, no version byte) are CLASSIFIED and refused, never opened | `ColumnCrypto.openBlob` requires `0x03`; anything else throws `SealedColumnOpenError.retiredFormat(_:)` |
-| Identity envelope signature | `identityEnvelopeV2` over the binary canonical serializer | `identityEnvelopeLegacyV1` over the old `.sortedKeys`/`.iso8601` JSON, selected by `schemaVersion` | `FernletIdentityEnvelope.verify` |
+| Identity envelope signature | `identityEnvelopeV2` over the binary canonical serializer | `identityEnvelopeLegacyV1` over the old `.sortedKeys`/`.iso8601` JSON, selected by `schemaVersion` | `ProximityIdentityEnvelope.verify` |
 | Mesh admission token | `meshAdmissionTokenV2` | `meshAdmissionTokenLegacyV1`, tried as a **fallback** after v2 fails | `MeshPayloads` |
 | Sealed backup key | `sealedBackupV2` info + a real salt | `sealedBackupLegacyV1` info + an empty salt, selected by `formatVersion` | `SealedBackupEscrowKey.deriveSealedBackupKey` (the app) |
 
@@ -596,7 +596,7 @@ reviewer would have to remember the policy.
   line; `SealedPhotoRestoreSummary.unverifiableLegacyDigest` (deliberately a TERMINAL list rather
   than the retryable one, because a permanently unverifiable entry in the repair ledger would re-run
   a doomed restore on every launch); `MeshEncryptionError.legacyWireFormat`,
-  `IdentityError.legacyWireFormat` and `FernletIdentityEnvelope.VerifyError.payloadLegacyWireFormat`
+  `IdentityError.legacyWireFormat` and `ProximityIdentityEnvelope.VerifyError.payloadLegacyWireFormat`
   on the wire; `ColumnCrypto.SealedColumnOpenError.retiredFormat(_:)`, which says *which* generation
   the marker reports, beside `emptyBlob` and `installBindingMissing` so a store fault and a lost
   binding row can never be filed as a legacy row; `FernletLockError.contentKeyWrapFormatRetired`,

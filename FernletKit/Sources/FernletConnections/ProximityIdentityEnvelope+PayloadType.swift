@@ -1,8 +1,8 @@
-// FernletIdentityEnvelope+PayloadType.swift
+// ProximityIdentityEnvelope+PayloadType.swift
 // FernletConnections
 //
 // Fernlet's typed view of the signed envelope's raw payload token, in Fernlet's vocabulary module.
-// ProximityKit's `FernletIdentityEnvelope` carries the token as a string (`payloadTypeToken`, the
+// ProximityKit's `ProximityIdentityEnvelope` carries the token as a string (`payloadTypeToken`, the
 // `payloadType` key on the wire): `verify` parks by the verifying namespace's `payloads.known`, and the
 // engine reads and signs the raw token. Fernlet's features read and sign through this view, which spells
 // the same token as FernletDomainModel's `PayloadType` case, so every byte an envelope minted through it
@@ -19,7 +19,7 @@ import ProximityKit
 // `nonisolated`, `Sendable` wire value, so its typed reads and typed initializer are reachable from any
 // isolation, as its raw ones are (a nonisolated test suite builds typed envelopes synchronously). Only
 // `signed` touches the `@MainActor` IdentityService, and it says so.
-nonisolated extension FernletIdentityEnvelope {
+nonisolated extension ProximityIdentityEnvelope {
 
     /// Fernlet's typed view of `payloadTypeToken`: the `PayloadType` case it spells, or `nil` when
     /// Fernlet has no case for it. Feature code and tests read it, and Fernlet's feature dispatch
@@ -114,7 +114,7 @@ nonisolated extension FernletIdentityEnvelope {
         payload: Data,
         createdAt: Date = Date(),
         expiresAt: Date? = nil
-    ) throws -> FernletIdentityEnvelope {
+    ) throws -> ProximityIdentityEnvelope {
         try signed(
             identityService: identityService, envelopeID: envelopeID, senderDisplayName: senderDisplayName,
             recipientFingerprint: recipientFingerprint, payloadTypeToken: payloadType.rawValue,

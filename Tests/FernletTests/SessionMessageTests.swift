@@ -99,11 +99,11 @@ struct SessionMessageTests {
         id: UUID = UUID(),
         sentAt: Date? = nil,
         senderName: String = "Robin"
-    ) throws -> (envelope: FernletIdentityEnvelope, plaintext: Data) {
+    ) throws -> (envelope: ProximityIdentityEnvelope, plaintext: Data) {
         let payload = TempMessagePayload(id: id, text: text, sentAt: sentAt ?? day)
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),

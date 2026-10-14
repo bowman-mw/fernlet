@@ -111,7 +111,7 @@ final class MeshHostPinProbe {
     func sentSenderDisplayNames() -> [String] {
         let decoder = JSONDecoder()
         return channel.sentFrames
-            .compactMap { try? decoder.decode(FernletIdentityEnvelope.self, from: $0.data) }
+            .compactMap { try? decoder.decode(ProximityIdentityEnvelope.self, from: $0.data) }
             .map(\.senderDisplayName)
     }
 

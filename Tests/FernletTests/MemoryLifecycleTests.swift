@@ -459,7 +459,7 @@ struct PresenceReleaseTests {
             discoveryInfo: ["fp": remote.localFingerprint],
             advertisedFingerprint: remote.localFingerprint
         )
-        let intro = try FernletIdentityEnvelope.signed(
+        let intro = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: peerName,
             payloadType: .identityIntroduction,

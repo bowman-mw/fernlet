@@ -54,7 +54,7 @@ struct ProximityWireOffMainDecodeTests {
     /// Exercising this `@Test` is trivially true at runtime; the VALUE is that it only compiles while
     /// every listed wire type stays `Sendable` (the `nonisolated, Sendable` annotations from WI-9).
     @Test func wireTypesRemainSendable() {
-        assertSendable(FernletIdentityEnvelope.self)
+        assertSendable(ProximityIdentityEnvelope.self)
         assertSendable(MeshAdmissionToken.self)
         assertSendable(MeshAdmissionGrantPayload.self)
         assertSendable(MeshDescriptor.self)
@@ -79,7 +79,7 @@ struct ProximityWireOffMainDecodeTests {
         let (alice, aid) = try makeIdentity()
         defer { cleanup(aid) }
 
-        let env = try FernletIdentityEnvelope.signed(
+        let env = try ProximityIdentityEnvelope.signed(
             identityService: alice,
             senderDisplayName: "Off-main Sender",
             payloadType: .inspectorEcho,
@@ -91,7 +91,7 @@ struct ProximityWireOffMainDecodeTests {
 
         // Decode the wire bytes AND re-derive + check the signature entirely off the main actor.
         let verified = await Task.detached { () -> Bool in
-            guard let decoded = try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: json) else {
+            guard let decoded = try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: json) else {
                 return false
             }
             let canon = canonicalBytes(for: decoded)
@@ -110,7 +110,7 @@ struct ProximityWireOffMainDecodeTests {
         let (alice, aid) = try makeIdentity()
         defer { cleanup(aid) }
 
-        let env = try FernletIdentityEnvelope.signed(
+        let env = try ProximityIdentityEnvelope.signed(
             identityService: alice,
             senderDisplayName: "Off-main Sender",
             payloadType: .inspectorEcho,
@@ -118,7 +118,7 @@ struct ProximityWireOffMainDecodeTests {
             payload: Data("off-main payload".utf8)
         )
         // Flip a canonical-covered field (display name) while keeping the original signature.
-        let tampered = FernletIdentityEnvelope(
+        let tampered = ProximityIdentityEnvelope(
             schemaVersion: env.schemaVersion,
             envelopeID: env.envelopeID,
             senderSigningPublicKey: env.senderSigningPublicKey,
@@ -137,7 +137,7 @@ struct ProximityWireOffMainDecodeTests {
         let signerKey = alice.localSigningPublicKey
 
         let verified = await Task.detached { () -> Bool in
-            guard let decoded = try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: json) else {
+            guard let decoded = try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: json) else {
                 return false
             }
             return IdentityService.verify(

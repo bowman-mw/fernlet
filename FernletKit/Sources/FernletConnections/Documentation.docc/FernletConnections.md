@@ -324,11 +324,11 @@ namespace and refuses one that is not of it, so no host's profile runs a radio o
 never vetted. `FernletFeatureGoldenTests` 31f pins the profile, and the test target's restored
 recipe-share seam initializer builds it, as `init(store:)` does, on its host's own namespace.
 
-**The envelope's typed view.** ProximityKit's `FernletIdentityEnvelope` carries its payload token
+**The envelope's typed view.** ProximityKit's `ProximityIdentityEnvelope` carries its payload token
 raw (`payloadTypeToken`, the `payloadType` key on the wire): `verify` parks a token outside its
 namespace's `payloads.known`, and the engine reads and signs the raw token. Fernlet's features read
 and sign through a typed view of that token, a `nonisolated extension` here
-(`FernletIdentityEnvelope+PayloadType.swift`): `payloadType`, the `PayloadType` case the token
+(`ProximityIdentityEnvelope+PayloadType.swift`): `payloadType`, the `PayloadType` case the token
 spells, or `nil` when Fernlet has none; `isUnknownPayloadType`; a typed initializer that delegates to
 the raw one with the case's raw value; and a typed `signed` (`@MainActor`) that delegates to the raw
 factory. Every byte an envelope minted through the view carries is the raw form's for that raw value.

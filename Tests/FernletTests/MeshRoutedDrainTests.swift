@@ -250,7 +250,7 @@ struct MeshRoutedDrainRig {
     ) throws {
         let binding = binding ?? .identifier(MeshP3Acceptance.install)
         let now = now ?? MeshRoutedDrainRig.now
-        let frame = try FernletIdentityEnvelope.signed(
+        let frame = try ProximityIdentityEnvelope.signed(
             identityService: identities[sender], senderDisplayName: "drain",
             recipientFingerprint: nodes[receiver].fingerprint,
             payloadType: type, payloadEncryption: .none,

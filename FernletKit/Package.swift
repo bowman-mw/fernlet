@@ -497,7 +497,7 @@ let package = Package(
         // FernletConnections → ProximityKit, never the reverse. It also holds Fernlet's connection
         // profiles for ProximityKit's pair session: the recipe profile, `ProximityPairProfile.recipeShare(in:)`
         // (FernletPairProfiles); the coach profile and link purposes join it at C1 and C5. And it holds
-        // Fernlet's typed view of the signed envelope's payload token (FernletIdentityEnvelope+PayloadType:
+        // Fernlet's typed view of the signed envelope's payload token (ProximityIdentityEnvelope+PayloadType:
         // `payloadType`, `isUnknownPayloadType`, the typed initializer and `signed`), which Fernlet's
         // features read and sign through over ProximityKit's raw token.
         // Deps: ProximityKit + FernletCrypto (DeviceBindingID, behind the adapter) +
