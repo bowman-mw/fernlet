@@ -344,11 +344,17 @@ struct MemoryLifecycleBoundaryTests {
     /// (ProximityKit plan step A0.5.5): `FernletMeshFeatures(host: makeTestStore())` and
     /// `FernletMeshRig.features(store: makeTestStore())` trip, and so does the recipe pair session,
     /// which holds the host the manager over it does not: `ProximityPairSession(host: makeTestStore(),
-    /// …)`. Known narrowness, stated on purpose: a
-    /// multi-line call with `store:` on its own line is not matched — this covers the one shape that
-    /// has ever occurred in the tree, and ML5 is a ratchet on a repaired site, not a proof.
+    /// …)`. Each holder trips spelled `.init(` too, and so does an implicit `.init(store: …)` or
+    /// `.init(host: …)` whatever type it builds (no type is spelled there), a qualified host call
+    /// (`Fixtures.host()`) and a call after `try` or `await`; the regex runs over the whole file, so a
+    /// call broken across lines is read. Known narrowness, stated on purpose: a host expression that does
+    /// not open with a name or a dotted name called in place (`store: (makeHost())`,
+    /// `store: hosts[0].make()`, a closure called where it stands), and a holder built through an alias
+    /// or a factory of its own, are not read — ML5 is a ratchet on a repaired site, not a proof.
     static let inlineHostPattern =
-        #"(MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)\(\s*store:\s*\w+\(|ProximityPairSession\(\s*host:\s*\w+\(|FernletMeshFeatures\(\s*host:\s*\w+\(|FernletMeshRig\.features\(\s*store:\s*\w+\("#
+        #"(?:(?:MeshNetworkManager|PresenceManager|ProximityRecipeShareManager|ProximityActivityManager)(?:\s*\.\s*init)?\(\s*store:"#
+        + #"|(?:ProximityPairSession|FernletMeshFeatures)(?:\s*\.\s*init)?\(\s*host:|FernletMeshRig\s*\.\s*features\(\s*store:"#
+        + #"|(?<![A-Za-z0-9_])\.\s*init\(\s*(?:store|host):)\s*(?:(?:try[?!]?|await)\s+)*[\w.]+\("#
 
     /// Whether `line` constructs a `Task`. `///` documentation lines are excluded (the helper's own
     /// doc comment quotes the literal it replaces), as is a match that sits after a `//` on the line.
@@ -649,14 +655,8 @@ struct MemoryLifecycleBoundaryTests {
         #expect(Self.facts(for: "n.swift", source: emptyReason).hostPin.reasonlessMarkers == [3], "a reasonless marker must trip")
         let strayKind = host + "        // host-pin: whatever — not a kind\n        let x = 1\n"
         #expect(Self.facts(for: "o.swift", source: strayKind).hostPin.strayMarkers.isEmpty == false, "only `scoped` may sit off a Task line")
-
-        #expect(Self.inlineHostViolations(in: "let bare = MeshNetworkManager(store: makeTestStore(), transport: t)\n") == [1])
-        #expect(Self.inlineHostViolations(in: "let bare = MeshNetworkManager(store: bareHost, transport: t)\n").isEmpty)
-        #expect(Self.inlineHostViolations(in: "let p = PresenceManager(store: host, ledger: ledger)\n").isEmpty)
-        #expect(Self.inlineHostViolations(in: "let f = FernletMeshFeatures(host: makeTestStore())\n") == [1])
-        #expect(Self.inlineHostViolations(in: "let f = FernletMeshRig.features(store: makeTestStore(), transport: t)\n") == [1])
-        #expect(Self.inlineHostViolations(in: "let f = FernletMeshFeatures(host: store)\n").isEmpty)
-        #expect(Self.inlineHostViolations(in: "let f = FernletMeshRig.features(store: store, transport: t)\n").isEmpty)
+        Self.expectTheHostReadersReachEverySpelling(host: host)
+        Self.expectTheInlineHostMatcherFixtured()
 
         let meshHostHolder = "    private let meshHost: FernletMeshHost\n"
         #expect(Self.holdsMeshHost(meshHostHolder), "a feature holding the composition's host holder is ML4's subject")
@@ -668,5 +668,51 @@ struct MemoryLifecycleBoundaryTests {
         let plantedThere = Self.hostPinAudit(of: meshHostHolder + "        Task { await f() }\n")
         #expect(plantedThere.unmarkedSpawns == [2] && plantedThere.helperMarkers == 0,
                 "an unmarked spawn in a holder's file must trip the second audit")
+    }
+
+    /// ML4's readers reach what their docs promise: a marker of no kind on a `Task` line is a bad kind,
+    /// never an exemption, and the host pattern reads an `unowned var` and a host under another name, of
+    /// the host protocol and of FernletSocial's refinement alike.
+    private static func expectTheHostReadersReachEverySpelling(host: String) {
+        let pinned = facts(for: "p.swift", source: host + "        Task {   // host-pin: pinned — x\n        }\n").hostPin
+        #expect(pinned.badKinds == ["2: pinned"], "a Task line's marker of no kind must trip as a bad kind: \(pinned)")
+        let holders = [
+            "    unowned var host: any ProximityHost\n", "    private unowned let owner: any ProximityHost\n",
+            "    unowned var host: any FernletSocialHost\n", "    private unowned let owner: any FernletSocialHost\n"
+        ]
+        // R2: bounded by the fixed list.
+        for holder in holders {
+            #expect(facts(for: "q.swift", source: holder).holdsUnownedHost, "ML4 skipped an unowned host: \(holder)")
+        }
+    }
+
+    /// ML5's matcher reads every holder built over a call, in every spelling it names (a call broken
+    /// across lines, `.init(` spelled or implicit, a qualified host call, a call after `try` or `await`),
+    /// each on the line the construction opens, and none built over a held host.
+    private static func expectTheInlineHostMatcherFixtured() {
+        let inline = [
+            "let bare = MeshNetworkManager(store: makeTestStore(), transport: t)\n",
+            "let f = FernletMeshFeatures(host: makeTestStore())\n",
+            "let f = FernletMeshRig.features(store: makeTestStore(), transport: t)\n",
+            "let wrapped = MeshNetworkManager(\n    store: makeTestStore(),\n    transport: t\n)\n",
+            "let spelled = PresenceManager.init(store: makeTestStore(), ledger: ledger)\n",
+            "let implicit: MeshNetworkManager = .init(store: makeTestStore(), transport: t)\n",
+            "let qualified = MeshNetworkManager(store: Fixtures.host(), transport: t)\n",
+            "let tried = MeshNetworkManager(store: try makeTestStore(), transport: t)\n",
+            "let awaited: ProximityPairSession = .init(host: await makeTestStore(), profile: p)\n"
+        ]
+        let held = [
+            "let bare = MeshNetworkManager(store: bareHost, transport: t)\n",
+            "let p = PresenceManager(store: host, ledger: ledger)\n", "let f = FernletMeshFeatures(host: store)\n",
+            "let f = FernletMeshRig.features(store: store, transport: t)\n",
+            "let spelled = MeshNetworkManager.init(store: host)\n", "self.init(store: store, transport: nil)\n"
+        ]
+        // R2: bounded by the two fixed lists.
+        for sample in inline {
+            #expect(inlineHostViolations(in: sample) == [1], "ML5 missed a holder built over an inline host: \(sample)")
+        }
+        for sample in held {
+            #expect(inlineHostViolations(in: sample).isEmpty, "ML5 read a holder built over a held host: \(sample)")
+        }
     }
 }

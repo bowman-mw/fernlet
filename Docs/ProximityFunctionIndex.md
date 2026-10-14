@@ -99,7 +99,7 @@ the same suite holds a purpose named within reach of every raw cryptographic cal
 TLS identity's `x509-self-signature`, pinned with its justification; Fernlet's purpose wall and
 escape-hatch census read Fernlet's shipping roots but ProximityKit's folder. Since A1.1.17 the same suite
 holds that ProximityKit builds no identity of its own (no `IdentityService` construction anywhere in its
-code, no delegation to one of its initializers outside `Identity/IdentityService.swift`), and the
+code, no delegation to one of its initializers, `Identity/IdentityService.swift` included), and the
 memory-lifecycle wall's ML1-ML4 over ProximityKit's code are a package suite too,
 `ProximityMemoryLifecycleTests`, on the `proximitykit` line (the six task holders' deinits,
 `ProtectedSidecar`'s observer removal, `ObservationLoop` the one home of `withObservationTracking`, and

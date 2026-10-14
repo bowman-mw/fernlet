@@ -149,10 +149,11 @@ struct CryptographicEscapeHatchCensusTests {
     /// This is deliberately redundant with ``everyEscapeHatchLabelIsPinnedAtItsOwnCount``, which
     /// already fails a re-introduced `legacy-read` as "1 found, 0 pinned". The redundancy is the
     /// point. That wall lives in the ABSENCE of a dictionary key, and absence is repaired by typing
-    /// `"legacy-read": 1` — a one-line edit that looks like updating a count and reads as
-    /// reasonable in a diff. This test cannot be satisfied that way: it asserts the label is absent
-    /// from the pin AND that no site carries it, so restoring a legacy reader means deleting a test
-    /// whose name says what you are doing.
+    /// `"legacy-read": 1`, or a respelled label and its pin — a one-line edit that looks like updating a
+    /// count and reads as reasonable in a diff. This test cannot be satisfied that way: it asserts that
+    /// no label naming a legacy read, however spelled or qualified (``isLegacy(_:)``), is in the pin AND
+    /// that no site carries one, so restoring a legacy reader means deleting a test whose name says what
+    /// you are doing. The family reader is held to its samples first.
     ///
     /// If a legacy read path is ever genuinely needed again — a restored device backup written by a
     /// pre-standardization build is the case
@@ -160,10 +161,15 @@ struct CryptographicEscapeHatchCensusTests {
     /// §5 D5 knowingly accepted — that is a design decision with an owner, not a test to quietly
     /// amend.
     @Test func noLegacyReadPathRemainsAnywhere() throws {
-        let pinMessage = "`legacy-read` is back in pinnedByLabel. The pin is not the place to"
+        let respelled = Self.hatch(in: "// cryptographic-domain: legacy-read (v1 envelope)", path: "l.swift", line: 1)
+        #expect(Self.isLegacy("legacy-read") && Self.isLegacy("Legacy-Read (v1 envelope)")
+                && respelled.map { Self.isLegacy($0.label) } == true
+                && !Self.isLegacy("key-derived"), "the legacy reader missed a respelled label or read a foreign one")
+        let pinned = Self.pinnedByLabel.keys.filter(Self.isLegacy).sorted()
+        let pinMessage = "A legacy label is back in pinnedByLabel: \(pinned). The pin is not the place to"
             + " re-authorize a legacy read path — see the plan's §5 D5."
-        #expect(Self.pinnedByLabel["legacy-read"] == nil, "\(pinMessage)")
-        let legacy = try Self.scan().filter { !$0.isProse && $0.label == "legacy-read" }
+        #expect(pinned.isEmpty, "\(pinMessage)")
+        let legacy = try Self.scan().filter { !$0.isProse && Self.isLegacy($0.label) }
         let sites = legacy.map { "  \($0.printed)" }.joined(separator: "\n")
         let message = "\(legacy.count) legacy read path(s) have come back:\n\(sites)\n"
             + "Every stored format is standardized and every legacy reader was deleted in Phases 3"
@@ -203,6 +209,12 @@ struct CryptographicEscapeHatchCensusTests {
     }
 
     // MARK: - Scanning
+
+    /// Whether a hatch label names a legacy read, however it is spelled or qualified (`legacy-read`,
+    /// `Legacy-Read`, `legacy-read (v1 envelope)`): the census refuses the family, not one spelling of it.
+    private static func isLegacy(_ label: String) -> Bool {
+        label.lowercased().contains("legacy")
+    }
 
     private static func scan() throws -> [CryptographicEscapeHatch] {
         var found: [CryptographicEscapeHatch] = []
