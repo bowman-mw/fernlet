@@ -585,14 +585,15 @@ struct KeyCustodyBoundaryTests {
     /// Matcher: the 1-based lines of lexed `code` (comments removed, literals emptied) that construct
     /// an identity: a call of the type (`IdentityService(…)`, `IdentityService.init(…)`), or of its
     /// metatype (`IdentityService.self.init(…)`), or an implicit initializer (`.init(…)`, `Self(…)`,
-    /// `Self.init(…)`) or one through a metatype value (`make.init(…)`, any lowercase name but `self`)
-    /// under one of the identity's three labels first, which no other shipping type is built with either
-    /// way today, so a construction cannot hide behind type inference or a metatype.
+    /// `Self.init(…)`) or one through a metatype value (`make.init(…)`, any lowercase name but `self` and
+    /// `super`, whose `init` delegates) under one of the identity's three labels first, which no other
+    /// shipping type is built with either way today, so a construction cannot hide behind type inference
+    /// or a metatype.
     static func identityConstructionLines(in code: String) -> [Int] {
         let pattern = #"(?<![A-Za-z0-9_])IdentityService\s*(?:\.\s*init\s*)?\("#
             + #"|(?<![A-Za-z0-9_])IdentityService\s*\.\s*self\s*\.\s*init\s*\("#
             + #"|(?<![A-Za-z0-9_.])(?:Self\s*(?:\.\s*init\s*)?|\.\s*init\s*)"# + identityFirstLabel
-            + #"|(?<![A-Za-z0-9_.])(?!self\b)[a-z_][A-Za-z0-9_]*\s*\.\s*init\s*"# + identityFirstLabel
+            + #"|(?<![A-Za-z0-9_.])(?!(?:self|super)\b)[a-z_][A-Za-z0-9_]*\s*\.\s*init\s*"# + identityFirstLabel
         return lines(matching: pattern, in: code)
     }
 
@@ -661,11 +662,12 @@ struct KeyCustodyBoundaryTests {
 
     /// The construction matcher reads every way a construction is spelled, through the metatype and a
     /// metatype value too, and none of the nearest code that builds no identity (another type's
-    /// initializer under the same label, the lock service's own delegation, a metatype value built under
-    /// another label, the factory's call, a static read); the delegation matcher reads a convenience
-    /// initializer of the identity delegating under its first label or under another initializer's,
-    /// and not another type's delegation in code that never names the identity, even when a comment
-    /// does, nor code that names it and delegates nothing. Each sample is lexed first, as the files are.
+    /// initializer under the same label, the lock service's own delegation, a superclass's initializer
+    /// under the same label, a metatype value built under another label, the factory's call, a static
+    /// read); the delegation matcher reads a convenience initializer of the identity delegating under its
+    /// first label or under another initializer's, and not another type's delegation in code that never
+    /// names the identity, even when a comment does, nor code that names it and delegates nothing. Each
+    /// sample is lexed first, as the files are.
     private static func expectTheIdentityMatchersSeeTheirSamplesAndNoNeighbour() {
         let constructions = [
             "let id = IdentityService(namespace: .fernlet)", "let id = IdentityService.init(namespace: n)",
@@ -680,6 +682,7 @@ struct KeyCustodyBoundaryTests {
             "let id = IdentityService.fernletApp()", "self.init(namespace: .fernlet, keychainService: service)",
             "let radio = NetworkMeshSession(namespace: namespace)",
             "let lock = FernletLockService(keychainService: service)", "let radio = radioType.init(name: n)",
+            "super.init(keychainService: s)",
             "self.init(\n    keychainService: keychainService,\n    sealedContentKeyServices: services\n)"
         ]
         let delegations = [

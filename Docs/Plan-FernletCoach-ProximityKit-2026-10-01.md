@@ -1,6 +1,8 @@
 # Plan: Fernlet Coach, a standalone ProximityKit, and coach plan links (2026-10-01)
 
-**Status:** detailed plan, owner decisions recorded through O17. Nothing is built yet.
+**Status:** detailed plan, owner decisions recorded through O17 and, for A1, where they apply. Of
+workstream A (§4), A0, A1.0 and A1.1's prep are built in this repository; the split and the steps
+after it are not.
 **Supersedes in part:** [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md)
 (see §2) and §5 of [Data-Provenance-Coach-Trust-2026-07-12.md](Data-Provenance-Coach-Trust-2026-07-12.md)
 (App Attest).
