@@ -353,6 +353,13 @@ import Testing
     /// keychain services to itself and states every requirement itself, and a mesh manager built over it
     /// provisions its identity into the in-memory keychain unhosted), named
     /// `ProximityKitTests/PackageTestHostTests`. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.7 (2026-10-14): `proximitykit` 13 → 14, for
+    /// `ProximityNamespaceBoundaryTests`, the namespace wall, which joins ProximityKit's package tests and
+    /// reads ProximityKit's sources and manifest through `PackageRoot`, named
+    /// `ProximityKitTests/ProximityNamespaceBoundaryTests`; and `s3-grep` stays 11: the wall leaves that
+    /// line and `SwiftSourceLexerTests`, which holds Fernlet's copy of the walls' lexer to the wall's
+    /// lexer fixtures, joins it. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -370,7 +377,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 154,
         "mesh-features": 48,
-        "proximitykit": 13
+        "proximitykit": 14
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -379,10 +386,13 @@ import Testing
     /// swapped for another (the count stays one), and not a line whose last name was deleted: with
     /// no suite left, `gatedSteps` no longer parses it as a step, so nothing counts it at all. Every
     /// suite here is a wall with no compiler half — the `MeshRoutedDrainWallTests` argument — so its
-    /// line leaving, or it leaving its line, must red rather than go quiet.
+    /// line leaving, or it leaving its line, must red rather than go quiet. Since ProximityKit plan step
+    /// A1.1.7 the namespace wall is pinned on `proximitykit`, its line in ProximityKit's package tests,
+    /// and `SwiftSourceLexerTests` on `s3-grep` in its place: the fixtures of the lexer every Fernlet
+    /// source wall reads code through, which the namespace wall held until it moved.
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
-                    "ProximityNamespaceBoundaryTests", "ProximityPlatformBoundaryTests"],
+                    "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
@@ -406,7 +416,8 @@ import Testing
                         "TypicalPortionTableTests", "RecipePortionPickerTests", "FoodSearchCorrectionMemoryTests",
                         "FoodSearchCorrectionCatalogTests", "FoodSearchCorrectionWipeTests",
                         "FoodSearchCorrectionResolverFirewallTests"],
-        "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"]
+        "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"],
+        "proximitykit": ["ProximityNamespaceBoundaryTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -1131,8 +1142,11 @@ import Testing
     /// `PackageTestSupportTests`, measured on `proximitykit`. RAISED at A1.1.5 (2026-10-14): 15 → 16,
     /// for the package's NEW `PackageKeychainStoreTests`, measured on `proximitykit`; FernletTests stays
     /// 628. RAISED at A1.1.6 (2026-10-14): 16 → 17, for the package's NEW `PackageTestHostTests`, measured
-    /// on `proximitykit`; FernletTests stays 628.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 17]
+    /// on `proximitykit`; FernletTests stays 628. MOVED at A1.1.7 (2026-10-14): 628 → 627 and 17 → 18, for
+    /// `ProximityNamespaceBoundaryTests`, measured in the package's bundle on `proximitykit` at its
+    /// FernletTests count, and FernletTests 627 → 628 again for its NEW `SwiftSourceLexerTests`, measured
+    /// on `s3-grep`: FernletTests stays 628.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 18]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
@@ -1145,8 +1159,9 @@ import Testing
     /// `MeshFrameReplayWindowTests` 10 + `MeshSessionIDClaimTests` 7, each its count in FernletTests, +
     /// the NEW `PackageTestSupportTests` 2. RAISED at A1.1.5 (2026-10-14): 146 = 140 + the NEW
     /// `PackageKeychainStoreTests` 6. RAISED at A1.1.6 (2026-10-14): 150 = 146 + the NEW
-    /// `PackageTestHostTests` 4.
-    static let measuredPackageCells = 150
+    /// `PackageTestHostTests` 4. MOVED at A1.1.7 (2026-10-14): 162 = 150 +
+    /// `ProximityNamespaceBoundaryTests` 12, its count in FernletTests.
+    static let measuredPackageCells = 162
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1307,6 +1322,27 @@ import Testing
         "let failing = capture.marking { MeshNetworkManager(store: refused) }"
     ]
 
+    /// The namespace wall (rule I9, ProximityKit plan step A1.1.7), whose lines that spell a keychain
+    /// needle as data ``packageHazardAllowlist`` lists under ``packageNamespaceWallInvariant``.
+    static let packageNamespaceWallFile = "FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift"
+
+    /// What makes every line of ``packageNamespaceWallLines`` safe in the unhosted bundle.
+    static let packageNamespaceWallInvariant = """
+        the line is data the namespace wall reads as text and never runs: string literals holding a line \
+        of ProximityKit-shaped source, which the wall lexes and holds a matcher to missing (a neighbour of \
+        rule 4's domain-type matcher or of rule 6's moved-type matcher), or the names of types rule 6's \
+        matcher must find declared in ProximityKit's sources (its floor); nothing on it names, builds or \
+        calls a type in code, so it reaches no keychain
+        """
+
+    /// The namespace wall's lines that spell a keychain needle inside a literal, each exact as trimmed
+    /// (rule I9).
+    static let packageNamespaceWallLines = [
+        #""func beginSession(role: ProximityCoordinator.Role, mode: ProximityCoordinator.Mode, localFingerprint: String)","#,
+        #""public final class ProximityCoordinator {","#,
+        #""IdentityService", "ProximityHost", "ProximityPrekeyBundle", "PresenceAdvertisement", "ProtectedSidecar""#
+    ]
+
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
     /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
     /// an invariant a reviewer can check against the line it names, and a row whose line is gone or
@@ -1318,7 +1354,8 @@ import Testing
     /// store, and the 23 distinct lines of the keychain canary (``packageKeychainCanaryLines``), which
     /// share one invariant; 33 since A1.1.6 (2026-10-14), with the host double's three identity lines
     /// (``packageTestHostLines``) and its canary's four (``packageTestHostCanaryLines``), each set under
-    /// one invariant.
+    /// one invariant; 36 since A1.1.7 (2026-10-14), with the namespace wall's three lines that spell a
+    /// keychain needle inside a literal (``packageNamespaceWallLines``), under one invariant.
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
         (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
          line: "for base in [URL.applicationSupportDirectory, scratch] {",
@@ -1347,6 +1384,8 @@ import Testing
         (file: packageTestHostFile, line: $0, invariant: packageTestHostInvariant)
     } + packageTestHostCanaryLines.map {
         (file: packageTestHostCanaryFile, line: $0, invariant: packageTestHostCanaryInvariant)
+    } + packageNamespaceWallLines.map {
+        (file: packageNamespaceWallFile, line: $0, invariant: packageNamespaceWallInvariant)
     }
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
@@ -1844,7 +1883,11 @@ import Testing
     /// package's suites compute under and `ProximityNamespaceGoldenTests` holds disjoint from Fernlet's
     /// in FernletTests, and the epoch fixtures (`MeshEpochFixtures`, extracted from
     /// `MeshEpochModelTests.swift`), which its four suites use in the package and three FernletTests
-    /// files use, each half minting through its own target's bindings.
+    /// files use, each half minting through its own target's bindings; and since A1.1.7 the source walls'
+    /// lexer (`SwiftSourceLexer`, `TestSupport/SwiftSourceLexer.swift` in the package, extracted from
+    /// `ProximityNamespaceBoundaryTests.swift`), which the namespace wall reads ProximityKit through in
+    /// the package and Fernlet's source walls read code through in FernletTests, each half held to the
+    /// same fixtures in its own target (the namespace wall's lexer cell, `SwiftSourceLexerTests`).
     static let twins: [(package: String, fernlet: String)] = [
         (package: "FernletKit/Tests/ProximityKitTests/Mocks/FakePeerTransport.swift",
          fernlet: "Tests/FernletTests/Mocks/FakePeerTransport.swift"),
@@ -1857,15 +1900,18 @@ import Testing
         (package: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestNamespace.swift",
          fernlet: "Tests/FernletTests/PackageTestNamespace.swift"),
         (package: "FernletKit/Tests/ProximityKitTests/MeshEpochFixtures.swift",
-         fernlet: "Tests/FernletTests/MeshEpochFixtures.swift")
+         fernlet: "Tests/FernletTests/MeshEpochFixtures.swift"),
+        (package: "FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift",
+         fernlet: "Tests/FernletTests/SwiftSourceLexer.swift")
     ]
 
     /// The MEASURED twin count (rule T1): 0 at plan step A0.8.0 (2026-10-10); 1 at A0.8.2
     /// (2026-10-11), the fake peer transport; 3 at A0.8.3 (2026-10-11), with the ranging mock and the
     /// membership fixtures; 4 at A1.1.2 (2026-10-13), with the mesh-message spelling helper; 6 at
-    /// A1.1.4 (2026-10-13), with the package tests' namespace and the epoch fixtures. Each twin added or
-    /// retired changes it in the same commit.
-    static let measuredTwinCount = 6
+    /// A1.1.4 (2026-10-13), with the package tests' namespace and the epoch fixtures; 7 at A1.1.7
+    /// (2026-10-14), with the source walls' lexer. Each twin added or retired changes it in the same
+    /// commit.
+    static let measuredTwinCount = 7
 
     /// The line prefixes of an import, in every form a test file spells one: `import `, `@testable
     /// import ` and `@preconcurrency import `.

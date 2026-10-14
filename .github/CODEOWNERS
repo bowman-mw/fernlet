@@ -30,10 +30,18 @@
 /Tests/FernletTests/IdentityProvisioningReadTests.swift   @bowman-mw
 /Tests/FernletTests/ProximityNamespaceGoldenTests.swift   @bowman-mw
 /Tests/FernletTests/ProximityVocabularyGoldenTests.swift  @bowman-mw
-/Tests/FernletTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /Tests/FernletTests/ProximityNamespaceGateTests.swift     @bowman-mw
 /Tests/FernletTests/FernletFeatureGoldenTests.swift       @bowman-mw
 /Tests/FernletTests/ProximityPlatformBoundaryTests.swift  @bowman-mw
+# ProximityKit's namespace wall, one of ProximityKit's package tests since plan step A1.1.7, and what left
+# its file then: the source walls' lexer (a twin, one copy per test target) with Fernlet's copy's fixtures,
+# and FernletTests' walker over ProximityKit's sources. Every source wall reads code through the lexer, so
+# a blind lexer would pass every wall vacuously.
+/FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
+/FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift    @bowman-mw
+/Tests/FernletTests/SwiftSourceLexer.swift                                @bowman-mw
+/Tests/FernletTests/SwiftSourceLexerTests.swift                           @bowman-mw
+/Tests/FernletTests/ProximityKitSources.swift                             @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
 # job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned

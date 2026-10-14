@@ -60,11 +60,17 @@ manager unhosted over `TestSupport/PackageTestHost.swift`'s `PackageTestHost`, a
 ProximityKit's alone on a scratch root with `.test.` keychain services, and read this module's audit lines
 through `TestSupport/PackageAuditCapture.swift`'s `PackageAuditCapture`, scoped by context or by its own
 marking, over the bundle's `PackageAuditSink`, which the same installer puts in `ProximityAudit`'s slot;
-`PackageTestHostTests` holds both. "The test
+`PackageTestHostTests` holds both. Since A1.1.7 the namespace wall, `ProximityNamespaceBoundaryTests`,
+is a package suite too, on the `proximitykit` line: it reads ProximityKit's sources and its manifest
+through `PackageRoot` (`Sources/ProximityKit`, `Package.swift`) and code through the package's copy of
+the source walls' lexer, `TestSupport/SwiftSourceLexer.swift`, so it travels with the package; FernletTests
+keeps its own copy of the lexer, held to the same fixtures by `SwiftSourceLexerTests`, and its own walker
+over ProximityKit's sources, `ProximityKitSources`, which the platform wall and the feature golden read
+through. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
-fixtures, the mesh-message spelling helper, the test namespace and the epoch fixtures live in both
-targets, held identical but for imports.
+fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'
+lexer live in both targets, held identical but for imports.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
@@ -1579,7 +1585,8 @@ keychain mechanism are ProximityKit's own copies. ProximityKit holds no instance
 pins over a literal namespace) covers every rule below; `ProximityNamespaceGoldenTests` and
 `ProximityVocabularyGoldenTests` pin Fernlet's value and every reader, and `FernletFeatureGoldenTests`
 the bytes of Fernlet's features over ProximityKit, in `FernletSocial`, in the app and in ProximityKit;
-`ProximityNamespaceBoundaryTests` keeps any namespace, group or purpose from being built outside
+`ProximityNamespaceBoundaryTests` (in ProximityKit's package test target since A1.1.7, reading its
+sources through `PackageRoot`) keeps any namespace, group or purpose from being built outside
 `Namespace/`, `FernletCryptoPurpose` out of ProximityKit's code altogether, any `fernlet` literal to an
 allowlist naming its exit step, which is empty (its DEBUG launch-environment keys are its own,
 `PROXIMITYKIT_*`, since plan step A1.0), Fernlet's domain

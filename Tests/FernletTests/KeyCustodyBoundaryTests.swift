@@ -611,7 +611,7 @@ struct KeyCustodyBoundaryTests {
     }
 
     /// Every shipping Swift file constructs an identity only in ``identityConstructionHomes``, exact
-    /// both ways, read as lexed code (`SwiftSourceLexer`, from `ProximityNamespaceBoundaryTests`), so
+    /// both ways, read as lexed code (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so
     /// a doc comment or a string that spells a construction is not one: a construction in any file, and
     /// a delegating initializer in any file but ``identityDeclarationFile``. Both matchers are held to
     /// their samples and their neighbours first.

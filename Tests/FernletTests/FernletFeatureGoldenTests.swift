@@ -4378,7 +4378,7 @@ struct FernletFeatureGoldenTests {
             unexpected \(found.subtracting(frozen).sorted())
             """)
         var strays: [String] = []
-        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        let sources = try ProximityKitSources.proximitySources()
         // R2: bounded by ProximityKit's file list.
         for source in sources {
             let held = Set(source.lexed.literals.map { Self.normalizingInterpolations($0.text) }).intersection(frozen)

@@ -15,7 +15,7 @@
 // UIKit, NearbyInteraction or ActivityKit import, a read of the device's name, a platform directory
 // and a default for a fact only the host may state all compile clean on iOS and pass every other
 // test, and a directory, a device-name read or a host default compiles on macOS too. So it reads
-// ProximityKit's source through `ProximityNamespaceBoundaryTests`' one walker (lexed: comments
+// ProximityKit's source through FernletTests' one walker, `ProximityKitSources` (lexed: comments
 // dropped, literals emptied) and holds five rules, its readers fixtured both ways in a cell of their
 // own, the fifth keeping the compiler half running:
 //
@@ -85,7 +85,7 @@ import Testing
 @Suite struct ProximityPlatformBoundaryTests {
 
     /// One ProximityKit file: its path under the module root and its lexed source, as
-    /// `ProximityNamespaceBoundaryTests.proximitySources()` yields it.
+    /// `ProximityKitSources.proximitySources()` yields it.
     typealias Source = (path: String, lexed: SwiftSourceLexer.Lexed)
 
     /// Fewer files than this and the walk is broken, not the module clean: ProximityKit holds 135 Swift
@@ -185,9 +185,9 @@ import Testing
 
     /// The modules any ProximityKit file may import or test for: exactly the set it imports outside the
     /// seams, each a system module available on iOS and macOS alike. The target has no package
-    /// dependency (`ProximityNamespaceBoundaryTests.proximityKitDependencies` is empty since plan step
-    /// A1.0), so no Fernlet module is here, and an import of one fails this wall as well as the strict
-    /// build.
+    /// dependency (`ProximityNamespaceBoundaryTests.proximityKitDependencies`, in ProximityKit's package
+    /// tests, is empty since plan step A1.0), so no Fernlet module is here, and an import of one fails
+    /// this wall as well as the strict build.
     static let baselineModules: Set<String> = [
         "Foundation", "Combine", "Observation", "CryptoKit", "Security", "Network", "os", "Synchronization",
         "Dispatch", "Compression", "simd"
@@ -284,7 +284,7 @@ import Testing
     /// no `#if` or `#elseif` names `os(…)` but a seam row's own guard in that row's file, so no branch
     /// holds a platform answer the iOS run never executes and the macOS build compiles.
     @Test func proximityKitImportsOnlyNeutralModulesAndItsDeclaredSeams() throws {
-        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        let sources = try ProximityKitSources.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
         var named: Set<String> = []
         var imported: Set<String> = []
@@ -356,7 +356,7 @@ import Testing
     /// what an unnamed device is called is its host's fact. Both directions: a row whose file no longer
     /// names its token fails until the row is deleted.
     @Test func proximityKitReadsNoDeviceName() throws {
-        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        let sources = try ProximityKitSources.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
         let found = try Self.tokenUses(of: Self.deviceNameNeedles, in: sources)
         Self.expectExactly(Self.deviceNameRows, found: found, refusing: "a device-name source")
@@ -371,7 +371,7 @@ import Testing
     /// reader must see at least the two extensions the module holds (`ProximityHost.swift`'s defaults
     /// and `PeerDisplayNames.swift`'s local name), so a broken reader cannot pass on an empty read.
     @Test func proximityKitComputesNoDirectoryAndDefaultsNoHostFact() throws {
-        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        let sources = try ProximityKitSources.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
         let directories = try Self.tokenUses(of: Self.directoryNeedles, in: sources)
         Self.expectExactly(Self.directoryRows, found: directories, refusing: "a platform directory")
@@ -588,7 +588,7 @@ import Testing
                 #expect(try Self.mentions(of: needle, in: body) == 0, "\(door.path)'s door names \(needle.token)")
             }
         }
-        let sources = try ProximityNamespaceBoundaryTests.proximitySources()
+        let sources = try ProximityKitSources.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
         let named = try Self.tokenUses(of: [.identifier("NIRangingSession")], in: sources)
         let home = Self.key("Ranging/NIRangingSession.swift", "NIRangingSession")

@@ -527,7 +527,6 @@ FernletTests	ProtectedSidecarTests	Tests/FernletTests/ProtectedSidecarTests.swif
 FernletTests	ProximityAuditBridgeTests	Tests/FernletTests/ProximityAuditBridgeTests.swift	s3-grep	-
 FernletTests	ProximityCoordinatorTests	Tests/FernletTests/ProximityCoordinatorTests.swift	-	-
 FernletTests	ProximityManagerDeallocationTests	Tests/FernletTests/MemoryLifecycleTests.swift	-	-
-FernletTests	ProximityNamespaceBoundaryTests	Tests/FernletTests/ProximityNamespaceBoundaryTests.swift	s3-grep	-
 FernletTests	ProximityNamespaceGateTests	Tests/FernletTests/ProximityNamespaceGateTests.swift	crypto-goldens	-
 FernletTests	ProximityNamespaceGoldenTests	Tests/FernletTests/ProximityNamespaceGoldenTests.swift	crypto-goldens	-
 FernletTests	ProximityPlatformBoundaryTests	Tests/FernletTests/ProximityPlatformBoundaryTests.swift	s3-grep	-
@@ -612,6 +611,7 @@ FernletTests	SnapshotSaveCoordinatorTests	Tests/FernletTests/SnapshotSaveCoordin
 FernletTests	StoragePreferencesTests	Tests/FernletTests/StoragePreferencesTests.swift	-	-
 FernletTests	StoragePrivacyIntegrationTests	Tests/FernletTests/StoragePrivacyIntegrationTests.swift	-	-
 FernletTests	StressEngineTests	Tests/FernletTests/StressEngineTests.swift	-	-
+FernletTests	SwiftSourceLexerTests	Tests/FernletTests/SwiftSourceLexerTests.swift	s3-grep	-
 FernletTests	TabBarClearanceTests	Tests/FernletTests/TabBarCompactionTests.swift	-	-
 FernletTests	TabBarCompactionTests	Tests/FernletTests/TabBarCompactionTests.swift	-	-
 FernletTests	TabReselectTests	Tests/FernletTests/TabReselectTests.swift	-	-
@@ -653,5 +653,6 @@ ProximityKitTests	PackageKeychainStoreTests	FernletKit/Tests/ProximityKitTests/P
 ProximityKitTests	PackageTestHostTests	FernletKit/Tests/ProximityKitTests/PackageTestHostTests.swift	proximitykit	4
 ProximityKitTests	PackageTestSupportTests	FernletKit/Tests/ProximityKitTests/PackageTestSupportTests.swift	proximitykit	2
 ProximityKitTests	PeerHandleIdentityTests	FernletKit/Tests/ProximityKitTests/PeerTransportNeutralityTests.swift	mesh-batteries	5
+ProximityKitTests	ProximityNamespaceBoundaryTests	FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift	proximitykit	12
 ProximityKitTests	ProximityNamespaceSoundnessTests	FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift	crypto-goldens	43
 ProximityKitTests	ReplayCacheTests	FernletKit/Tests/ProximityKitTests/ReplayCacheTests.swift	proximitykit	1
