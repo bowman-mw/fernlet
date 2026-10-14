@@ -23,8 +23,9 @@
 // **Rule 7 — "a row that lands in two passes needs its gate to assert the later pass RAN."** Items
 // 2 and 3 are two-pass by shape (a value, then the radio wearing it), and pass 1 changed nothing on
 // the air. Every clause below therefore carries at least one needle that is FALSE at the pass-1
-// commit and true at the pass-2 one: the manager naming `NetworkPresenceSession` /
-// `NetworkPairSession` and no `serviceType` at all; the QUIC service type declared in
+// commit and true at the pass-2 one: the manager naming its QUIC radio (`NetworkPresenceSession` until
+// ProximityKit plan step A1.1; since then the presence engine, `ProximityPresenceSession`, which builds
+// that radio) / `NetworkPairSession` and no `serviceType` at all; the QUIC service type declared in
 // `Info.plist`; the radio advertising the posture's OWN bytes; `makeSession:` existing to inject a
 // fake through. A needle satisfied by a rename alone is named as such in `GATES.md` and is not one.
 //
@@ -563,27 +564,46 @@ struct MeshP9PresenceSwapAcceptanceTests {
                 """)
         #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["ProximityPresenceSession.swift"],
                 "and the posture is minted from one place: the engine the manager's epoch tick asks")
+        let app = try MeshP7Acceptance.sources(under: "App")
+        #expect(MeshP7Acceptance.homes(of: "ProximityPresenceSession(", in: kit + social + app) == ["PresenceManager.swift"],
+                "one presence engine per process: the manager's. A second engine on the same namespace would read the first one's advertisements as a stranger's")
     }
 
     /// The two orders the presence engine's move kept, read off the code: the engine wires a fresh
     /// radio's hooks before it starts it (so no browse result, tunnel or failure reaches an unwired
     /// radio), and the manager's heart door publishes a channel's `.connected` only after the
     /// coordinator built over it has begun (so the coordinator never takes the wrong handshake
-    /// branch). Each spelling occurs exactly once in its file, so the order is the code's.
+    /// branch). Each spelling occurs exactly once in its file and inside the body it belongs to (the
+    /// engine's `start(tags:)`; the closure the heart door spawns), the engine's start defers nothing,
+    /// and the manager's two lines are adjacent, so a call moved out of that body, or a `begin` wrapped
+    /// in a task of its own, reddens.
     static func expectThePresenceOrdersHold(manager: String) throws {
         let engine = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceEnginePath))
+        let start = try #require(MeshRoutedSourceScan.bracedBody(after: "public func start(tags:", in: engine),
+                                 "the engine's `start(tags:)` is gone or its braces do not close")
+        let door = try #require(MeshRoutedSourceScan.bracedBody(after: "private func handleHeartChannelReady(", in: manager),
+                                "the manager's heart door is gone or its braces do not close")
+        let spawned = try #require(MeshRoutedSourceScan.bracedBody(after: "spawnHostPinned {", in: door),
+                                   "the manager's heart door spawns no host-pinned closure")
         let orders = [
-            (engine, "the engine", "wire(radio)", "try radio.start(posture:"),
-            (manager, "the manager", "await coordinator.begin(role: .browser, mode: .friend)", "channel.notifyConnected()")
+            (engine, start, "the engine", "wire(radio)", "try radio.start(posture:"),
+            (manager, spawned, "the manager", "await coordinator.begin(role: .browser, mode: .friend)", "channel.notifyConnected()")
         ]
         // R2: bounded by the two orders.
-        for (code, file, first, then) in orders {
+        for (code, body, file, first, then) in orders {
             let firsts = code.components(separatedBy: first).count - 1
             let thens = code.components(separatedBy: then).count - 1
             #expect(firsts == 1 && thens == 1, "\(file) spells `\(first)` \(firsts) times and `\(then)` \(thens) times")
-            guard let early = code.range(of: first), let late = code.range(of: then) else { continue }
+            guard let early = body.range(of: first), let late = body.range(of: then) else {
+                Issue.record("\(file)'s `\(first)` and `\(then)` are not both inside the body they belong to")
+                continue
+            }
             #expect(early.upperBound <= late.lowerBound, "\(file) reaches `\(then)` before `\(first)`")
         }
+        #expect(!start.contains("defer"), "the engine's start defers a call, which runs after the radio's start")
+        let adjacent = #"await coordinator\.begin\(role: \.browser, mode: \.friend\)\s*\n\s*channel\.notifyConnected\(\)"#
+        #expect(spawned.range(of: adjacent, options: .regularExpression) != nil,
+                "the manager's `begin` and `notifyConnected()` are not adjacent lines of the spawned closure")
     }
 }
 

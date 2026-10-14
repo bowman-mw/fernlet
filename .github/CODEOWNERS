@@ -33,13 +33,20 @@
 /Tests/FernletTests/ProximityNamespaceGateTests.swift     @bowman-mw
 /Tests/FernletTests/FernletFeatureGoldenTests.swift       @bowman-mw
 /Tests/FernletTests/ProximityPlatformBoundaryTests.swift  @bowman-mw
+# Who installs an audit sink: Fernlet's app and ProximityKit's package tests' installer, once each, and
+# nothing else, or every "this event was not logged" check runs on a replaced sink
+/Tests/FernletTests/ProximityAuditBridgeTests.swift       @bowman-mw
 # ProximityKit's namespace wall, one of ProximityKit's package tests since plan step A1.1.7, and what left
 # its file then: the source walls' lexer (a twin, one copy per test target) with Fernlet's copy's fixtures,
 # and FernletTests' walker over ProximityKit's sources. Every source wall reads code through the lexer, so
 # a blind lexer would pass every wall vacuously. Since plan step A1.1.8 the platform wall's rules over
-# ProximityKit's own code are a package test too, the source half of its Mac readiness.
+# ProximityKit's own code are a package test too, the source half of its Mac readiness; and the keychain
+# door's wall, which holds the door to the funnel's `#if DEBUG` branch and its one caller to the package
+# tests' installer, the file that installs both the in-memory keychain store and the audit sink.
 /FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
+/FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift    @bowman-mw
 /Tests/FernletTests/SwiftSourceLexer.swift                                @bowman-mw
 /Tests/FernletTests/SwiftSourceLexerTests.swift                           @bowman-mw
@@ -92,6 +99,9 @@
 # ProximityKit's copy of ColumnCrypto's V3 seal and its DeviceBindingID seam: the mesh stores' at-rest format, owned like FernletCrypto's originals
 /FernletKit/Sources/ProximityKit/Support/ProximityColumnCrypto.swift   @bowman-mw
 /FernletKit/Sources/ProximityKit/Support/ProximityInstallBinding.swift @bowman-mw
+# ProximityKit's keychain funnel: every identity row's and seal key's query dictionary, the six calls that issue
+# them, and the Debug-only backend door its package tests install an in-memory store through
+/FernletKit/Sources/ProximityKit/Support/ProximityKeychainItem.swift    @bowman-mw
 
 # ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
 /FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw

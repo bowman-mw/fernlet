@@ -71,7 +71,11 @@ the platform wall's rules over ProximityKit's own code are a package suite too,
 device-name reads, platform directories and host-fact defaults, its two channel-ready doors and
 `NIRangingSession`'s one home), walking ProximityKit's sources with the namespace wall's walk; Fernlet's
 `ProximityPlatformBoundaryTests` keeps presence's heart door and the Mac build, and its copy of the
-platform-directory needles, which `CIGateSelectorBoundaryTests` holds equal to the package suite's. "The test
+platform-directory needles, which `CIGateSelectorBoundaryTests` holds equal to the package suite's. Since
+A1.1.10 two more suites are the package's, on the `proximitykit` line: the keychain door's wall,
+`ProximityKeychainDoorTests` (the door declared once, in `ProximityKeychainItem`'s `#if DEBUG` branch,
+and named by the package tests' installer alone), and the presence engine's own cells,
+`ProximityPresenceSessionTests`, which drive `ProximityPresenceSession` over an in-memory radio. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'
@@ -1876,9 +1880,10 @@ holds every query dictionary to the one FernletFoundation's source spells, and c
 read, list and delete each other's rows and fail and audit alike. Since plan step A1.1 every member
 reaches the keychain through one backend, handed the dictionary its builder spelled: the system
 keychain in every shipping build, and, in a Debug build, whatever ProximityKit's own package tests
-installed (an in-memory store, their unhosted bundle having no keychain). `KeyCustodyBoundaryTests`
-holds the install door's one caller to the package tests' installer, its declaration to `#if DEBUG`,
-and Fernlet's hosted tests on the system keychain.
+installed (an in-memory store, their unhosted bundle having no keychain). ProximityKit's own package
+tests (`ProximityKeychainDoorTests`) hold the install door's one caller to their installer and its
+declaration to `#if DEBUG`, the region's text pinned; Fernlet's `KeyCustodyBoundaryTests` holds that no
+Fernlet file names the door, and Fernlet's hosted tests on the system keychain.
 
 | Function | What It Does |
 | --- | --- |

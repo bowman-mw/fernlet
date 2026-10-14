@@ -256,6 +256,12 @@ struct PresenceManagerTests {
 
     // MARK: - Self-exclusion
 
+    /// Self-exclusion layer 1 at the manager: a sighting under a name the engine wore is dropped before
+    /// the manager hears of it, even when its tag is one layers 2 and 3 would admit. The ghost carries
+    /// the PREVIOUS epoch's tag for the one friend: inside layer 2's ±1 window and outside this epoch's
+    /// own tags, so layer 3 does not drop it either. The control, the same tag under a name the engine
+    /// never wore, IS admitted, so the ghost's drop is layer 1's alone. (The engine's own suite in
+    /// ProximityKit's package tests holds the names its real mints feed in and the record-version gate.)
     @Test func selfExclusionLayer1IgnoresOwnEphemeralPeerName() throws {
         let (identity, serviceID) = try makeIdentity()
         defer { KeychainItem.deleteAll(service: serviceID) }
@@ -271,10 +277,15 @@ struct PresenceManagerTests {
         manager.activateForTesting()
         manager.registerOwnEphemeralPeerNameForTesting("ghost")
 
-        // Even with a perfectly valid friend token, our own previous-start ghost is ignored.
-        let token = try identity.presenceTag(for: friendKA, epoch: epoch).base64EncodedString()
-        manager.handleDiscoveredPeerForTesting(peer(displayName: "ghost", tokens: [token]))
-        #expect(manager.nearbyFriendFingerprints.isEmpty)
+        // Our own previous-start ghost advertises a tag layers 2 and 3 would admit, and is ignored.
+        let previous = try identity.presenceTag(for: friendKA, epoch: epoch - 1).base64EncodedString()
+        #expect(!manager.ownTagTokens.contains(previous), "the previous epoch's tag is one of this epoch's own")
+        manager.handleDiscoveredPeerForTesting(peer(displayName: "ghost", tokens: [previous]))
+        #expect(manager.nearbyFriendFingerprints.isEmpty, "a sighting under a name the engine wore reached the manager")
+
+        manager.handleDiscoveredPeerForTesting(peer(displayName: "not-ours", tokens: [previous]))
+        #expect(manager.nearbyFriendFingerprints == [friend.fingerprint],
+                "the same tag under a name the engine never wore was not admitted, so layer 1 was not what dropped the ghost")
     }
 
     @Test func selfExclusionLayer2DropsAdvertisementMatchingMultipleFriends() throws {

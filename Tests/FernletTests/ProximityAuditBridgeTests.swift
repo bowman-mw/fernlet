@@ -19,7 +19,10 @@
 // would silence or redirect ProximityKit's lines for every suite running beside it. So this suite also
 // holds who may install one: Fernlet's app, at launch, and ProximityKit's own package tests' installer
 // (FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift), once, for their
-// unhosted bundle, which no app hosts; no file of Fernlet's test targets.
+// unhosted bundle, which no app hosts; no file of Fernlet's test targets. It reads every spelling of the
+// installer's name, a reference included, and refuses, outside ProximityAudit's own file, an extension
+// of ProximityAudit, an alias for it and its metatype, through which a bare or aliased `install` would
+// reach the slot unseen.
 
 import Foundation
 import os
@@ -154,65 +157,110 @@ import FernletFoundation
         "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift": 1
     ]
 
-    /// `ProximityAudit.install(` is called exactly once in each of two files, Fernlet's app and the package
+    /// The file that declares `ProximityAudit`, the one place its extensions, an alias for it or its
+    /// metatype belong.
+    static let auditDeclarationFile = "FernletKit/Sources/ProximityKit/Support/ProximityAudit.swift"
+
+    /// `ProximityAudit.install` is named exactly once in each of two files, Fernlet's app and the package
     /// tests' installer, and in no other: no file of Fernlet's test targets, so this hosted bundle runs on
     /// the bridge `FernletApp.init` installed, which every capture handler here reads through, and no
-    /// package suite replaces the sink its installer put in place. Read as lexed code
-    /// (`SwiftSourceLexer`), so a comment or a string that spells the call is not one, over every root at
-    /// its file floor, with the matcher held to its samples and neighbours first.
+    /// package suite replaces the sink its installer put in place. A reference with no call counts, since
+    /// a later call could apply it. Outside ``auditDeclarationFile`` no code extends `ProximityAudit`,
+    /// aliases it or takes its metatype: inside such an extension a bare `install(` names the slot, and
+    /// through an alias or a metatype an `install` call no longer spells the type, so either would reach
+    /// the slot unseen. Read as lexed code (`SwiftSourceLexer`), so a comment or a string that spells the
+    /// name is not one, over every root at its file floor, with the matchers held to their samples and
+    /// neighbours first.
     @Test func onlyTheAppAndThePackageTestsInstallerInstallASink() throws {
-        Self.expectTheInstallMatcherSeesItsSamplesAndNoNeighbour()
+        Self.expectTheInstallMatchersSeeTheirSamplesAndNoNeighbour()
         var sites: [String: Int] = [:]
+        var aliases: [String] = []
         // R2: bounded by the four roots and each root's finite file list.
         for (root, floor) in Self.installSiteRoots {
             let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
             #expect(files.count >= floor, "the install-site scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
             for path in files {
                 let source = try RepoRoot.source(path)
-                guard source.contains("install") else { continue }
-                let calls = Self.installCalls(in: SwiftSourceLexer.lex(source).code)
+                guard source.contains("ProximityAudit") else { continue }
+                let code = SwiftSourceLexer.lex(source).code
+                let calls = Self.installCalls(in: code)
                 if calls > 0 {
                     sites[path] = calls
+                }
+                if path != Self.auditDeclarationFile {
+                    aliases += Self.auditAliasLines(in: code).map { "\(path):\($0)" }
                 }
             }
         }
         #expect(sites == Self.installSites, """
-            `ProximityAudit.install(` is called in \(sites.sorted { $0.key < $1.key }); only \
-            \(Self.installSites.keys.sorted()) may call it, once each. A sink installed by a Fernlet test \
+            `ProximityAudit.install` is named in \(sites.sorted { $0.key < $1.key }); only \
+            \(Self.installSites.keys.sorted()) may name it, once each. A sink installed by a Fernlet test \
             replaces the app's bridge for every suite running beside it, and a second install in the \
             package's tests replaces the sink every package capture reads.
             """)
+        #expect(aliases.isEmpty, """
+            `ProximityAudit` is extended, aliased or taken as a metatype at \(aliases); outside \
+            \(Self.auditDeclarationFile) none may be, since a bare `install(` in an extension, or an `install` \
+            through an alias or a metatype, reaches the sink's slot by a spelling the install count cannot see.
+            """)
     }
 
-    /// The calls of `ProximityAudit.install(` in lexed `code`, the type and its member read across
-    /// whitespace and line breaks, or -1, which no file and no sample yields, when the pattern does not
-    /// compile.
+    /// The spellings of `ProximityAudit.install` in lexed `code`, a call or a reference, the type and its
+    /// member read across whitespace and line breaks, or -1, which no file and no sample yields, when the
+    /// pattern does not compile.
     static func installCalls(in code: String) -> Int {
-        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])ProximityAudit\s*\.\s*install\s*\("#) else {
+        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])ProximityAudit\s*\.\s*install(?![A-Za-z0-9_])"#) else {
             return -1
         }
         return regex.numberOfMatches(in: code, range: NSRange(code.startIndex..., in: code))
     }
 
-    /// The install matcher reads every way the call is spelled and none of its nearest neighbours (a
-    /// longer name, the declaration, another member, a comment, a string). Each sample is lexed first,
-    /// as the files are.
-    private static func expectTheInstallMatcherSeesItsSamplesAndNoNeighbour() {
+    /// The 1-based lines of lexed `code` that extend `ProximityAudit`, alias it or take its metatype,
+    /// qualified by its module or not, or `[-1]`, which no file and no sample yields, when the pattern
+    /// does not compile. A longer name holding it (`ProximityAuditSink`) is not one.
+    static func auditAliasLines(in code: String) -> [Int] {
+        let pattern = #"(?<![A-Za-z0-9_])extension\s+(?:ProximityKit\s*\.\s*)?ProximityAudit\b"#
+            + #"|(?<![A-Za-z0-9_])typealias\s+\w+\s*=\s*(?:ProximityKit\s*\.\s*)?ProximityAudit\b"#
+            + #"|(?<![A-Za-z0-9_])ProximityAudit\s*\.\s*self\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [-1] }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map {
+            text.substring(to: $0.range.location).count(where: { $0 == "\n" }) + 1
+        }
+    }
+
+    /// The install matcher reads every way the name is spelled, a call and a reference, and none of its
+    /// nearest neighbours (a longer name, the declaration, another member, a comment, a string); the alias
+    /// matcher reads an extension of the type, an alias for it and its metatype, and none of the sink
+    /// protocol's. Each sample is lexed first, as the files are.
+    private static func expectTheInstallMatchersSeeTheirSamplesAndNoNeighbour() {
         let calls = [
             "ProximityAudit.install(FernletAuditBridge())", "ProximityAudit\n    .install(sink)",
-            "ProximityKit.ProximityAudit.install(sink)", "ProximityAudit . install (sink)"
+            "ProximityKit.ProximityAudit.install(sink)", "ProximityAudit . install (sink)",
+            "let put = ProximityAudit.install", "[sink].forEach(ProximityAudit.install)"
         ]
         let neither = [
             "nonisolated public static func install(_ sink: any ProximityAuditSink) {", "MyProximityAudit.install(sink)",
             "ProximityAudit.installed(sink)", "ProximityAudit.log(\"install\")", "/// ProximityAudit.install(sink)",
             #"let s = "ProximityAudit.install(sink)""#
         ]
-        // R2: bounded by the two fixture lists.
+        let aliases = [
+            "extension ProximityAudit {", "extension ProximityKit.ProximityAudit {", "typealias PA = ProximityAudit",
+            "let t = ProximityAudit.self"
+        ]
+        let notAliases = ["extension ProximityAuditSink {", "typealias S = ProximityAuditSink", "/// extension ProximityAudit {"]
+        // R2: bounded by the four fixture lists.
         for sample in calls {
             #expect(installCalls(in: SwiftSourceLexer.lex(sample).code) == 1, "missed the call in: \(sample)")
         }
         for neighbour in neither {
             #expect(installCalls(in: SwiftSourceLexer.lex(neighbour).code) == 0, "read a call in: \(neighbour)")
+        }
+        for sample in aliases {
+            #expect(auditAliasLines(in: SwiftSourceLexer.lex(sample).code) == [1], "missed the alias in: \(sample)")
+        }
+        for neighbour in notAliases {
+            #expect(auditAliasLines(in: SwiftSourceLexer.lex(neighbour).code).isEmpty, "read an alias in: \(neighbour)")
         }
     }
 }

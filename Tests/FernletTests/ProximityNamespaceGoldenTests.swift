@@ -1727,9 +1727,11 @@ struct ProximityNamespaceGoldenTests {
     /// The namespace ProximityKit's package tests compute under, `.packageTest` (the
     /// `PackageTestNamespace.swift` twin), is sound and overlaps `.fernlet` nowhere, asked from both
     /// sides: no label equal or byte-prefix related, no service type, ALPN, heartbeat or scheme shared,
-    /// and no keychain service, directory or log subsystem either. So a package suite computing under
-    /// it can never sign, derive, advertise or store under one of Fernlet's values. The package cannot
-    /// name `.fernlet`, so this is the one place the two are compared (ProximityKit plan step A1.1).
+    /// no keychain service, directory or log subsystem either, and none of its vocabulary and
+    /// presentation strings (its tokens and titles, its two instance-name prefixes and its TLS common
+    /// name) is one of `.fernlet`'s. So a package suite computing under it can never sign, derive,
+    /// advertise or store under one of Fernlet's values. The package cannot name `.fernlet`, so this is
+    /// the one place the two are compared (ProximityKit plan step A1.1).
     @Test func thePackageTestNamespaceCollidesWithFernletNowhere() {
         let package = ProximityNamespace.packageTest
         #expect(package.soundness == .sound, "the package tests' namespace is unsound: \(package.soundness)")
@@ -1738,6 +1740,8 @@ struct ProximityNamespaceGoldenTests {
         #expect(package.familyCollisions(with: fernlet).isEmpty, "\(package.familyCollisions(with: fernlet))")
         #expect(fernlet.installationCollisions(with: package).isEmpty, "\(fernlet.installationCollisions(with: package))")
         #expect(package.installationCollisions(with: fernlet).isEmpty, "\(package.installationCollisions(with: fernlet))")
+        let shared = Self.vocabularyStrings(of: package.family).intersection(Self.vocabularyStrings(of: fernlet.family))
+        #expect(shared.isEmpty, "the package tests' namespace shares \(shared.sorted()) with .fernlet")
     }
 
     /// No signature purpose of either namespace accepts a transcript framed for the other's, in either

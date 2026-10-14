@@ -55,9 +55,11 @@ enum MeshP7Acceptance {
     /// unscoped audit counts and P10's production conformers), each with the fewest Swift files it may
     /// hold: the app's unit tests and, since ProximityKit plan step A1.1.6 (2026-10-14), ProximityKit's
     /// package tests, which now hold a host double and an audit capture of their own, so a file there
-    /// that spelled a digest, built a production conformer or counted audit lines unscoped would
-    /// otherwise go unseen. MEASURED then at 446 and 23 files; each floor is about four fifths of that,
-    /// so a root that stops resolving fails rather than reading as clean.
+    /// that spelled a digest or built a production conformer would otherwise go unseen. P9's unscoped
+    /// count reads FernletTests' capture API (`count(of:`), which a package file cannot call; the
+    /// package's own capture refuses to be built unscoped (`PackageAuditCapture`'s initializer). MEASURED
+    /// then at 446 and 23 files; each floor is about four fifths of that, so a root that stops resolving
+    /// fails rather than reading as clean.
     nonisolated static let testRoots: [(root: String, floor: Int)] = [
         (root: "Tests/FernletTests", floor: 356), (root: "FernletKit/Tests", floor: 18)
     ]

@@ -565,6 +565,32 @@ jobs:
         # a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11 suites (102 - 6 + 2 + 1, the
         # ARITHMETIC CHECK); its floor stays the shared `1`. proximitykit is raised 97 -> 102, and
         # mesh-batteries, which runs the selector wall too, 1372 -> 1373 (see their steps).
+        #
+        # ProximityKit plan step A1.1.10 (2026-10-14), the review fixes to the range's tests and walls, changes
+        # three walls on this line and adds no cell. `ProximityAuditBridgeTests`' install-site wall counts a
+        # reference to `ProximityAudit.install` as well as a call, and refuses, outside ProximityAudit.swift, an
+        # extension of `ProximityAudit`, an alias for it and its metatype, through which a bare or aliased
+        # `install` would reach the sink's slot unseen. `CIGateSelectorBoundaryTests`' rule I9 reads `SecItem`
+        # only where an identifier starts, so a raw keychain call is refused in every package file (the keychain
+        # store's included) and `errSecItemNotFound` is no needle, and a keychain needle stands only in a file
+        # on `packageKeychainFiles` (the installer, the host double and the keychain and host canaries), each
+        # held over lexed code to the structure its kind names (a suite file's suites read the installer in
+        # their first stored property and the file runs nothing without a suite instance; the installer's line
+        # sits in `static let keychain`'s initializer; the host double's sit in instance members behind an
+        # initializer that reads the installer first), which replaces the store's exemption and 31 per-line
+        # rows, so `packageHazardAllowlist` holds 23; its keychain reason no longer says what a Mac's keychain
+        # would answer. I11's Security allowance is keyed to the keychain store's exact path, and its module
+        # reader splits a line on any whitespace. Its pins follow, each with a dated note: the inventory's
+        # measured rows are 628 / 21 and the package's declared tests 173, `proximitykit` names 17 suites and
+        # `mesh-batteries` 155, `wallLines` pins the keychain door's wall, `ProximityKeychainDoorTests`, on
+        # `proximitykit`, and the floor-script cell pins `MeshSessionStoreIsolationTests` on `mesh-batteries`
+        # beside its routed twin. Two earlier notes' readers changed at A1.1.8 without their notes saying so:
+        # `ProximityPlatformBoundaryTests` reads no ProximityKit source since then, so `ProximityKitSources`
+        # has one reader, the feature golden (the A1.1.7 note names two), and the uninhabited `ExitStep` the
+        # A1.1.3 note compares with is `ProximityPlatformNeutralityTests`'. No suite joined or left this line,
+        # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11
+        # suites; its floor stays the shared `1`, the policy for every FernletTests wall line. proximitykit is
+        # raised 102 -> 108 and mesh-batteries 1373 -> 1379 (see their steps).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -632,6 +658,15 @@ jobs:
         # branch, and called only by the package tests' installer, over the app, FernletKit's sources and
         # both test trees. The line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran
         # 55 tests in 4 suites (53 before); its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A1.1.10 (2026-10-14) splits the keychain door's wall. Its ProximityKit half (the
+        # door declared once, in the funnel's `#if DEBUG` branch, whose text it now pins, and named by the
+        # package tests' installer alone) is ProximityKit's own `ProximityKitTests/ProximityKeychainDoorTests`
+        # on `proximitykit`, so it travels with the package; `KeyCustodyBoundaryTests` keeps the host's half,
+        # `noFernletFileNamesProximityKitsKeychainBackendDoor`: no file of App, of FernletKit/Sources but
+        # ProximityKit's own, or of Tests names the door, as a call, a reference or a declaration. No cell added
+        # or removed: the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 55 tests in
+        # 4 suites; its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh key-custody 1 \
@@ -1982,9 +2017,23 @@ jobs:
         # once more at 1373 without CIGateSelectorBoundaryTests: 1363 ran and the floor refused it. 1372 +
         # 1 (the selector wall's cell holding the platform-directory needles' two copies equal, its package
         # suite's and FernletTests') = 1373 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.10 one name joins the line, MeshSessionStoreIsolationTests, the session store's
+        # scope-isolation grep-wall (every test-tree construction of a session store on a scope of its own,
+        # never the production one, in both test trees since A1.1.6, and the app's session scope derived from
+        # seams already walled), which rode no line; and PresenceOverQUICTests gains a cell (the radio's lost,
+        # channel-ready and disconnect hooks reach the manager through the presence engine):
+        # RAISED 1373 -> 1379 at A1.1.10, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact 155-name list run at the old floor 1373 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 1379
+        # (FernletTests 1357 in 152 suites, "Test run with 1357 tests in 152 suites passed after 166.304
+        # seconds"; ProximityKitTests 22 in 3, "Test run with 22 tests in 3 suites": its three at their
+        # counts), MeshSessionStoreIsolationTests 5 and PresenceOverQUICTests 20 -> 21, no other suite moved,
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT
+        # 1379: passed. Run once more at 1379 without MeshSessionStoreIsolationTests: 1374 ran and the floor
+        # refused it. 1373 + 5 + 1 = 1379 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1373 \
+          Scripts/run-gated-suites.sh mesh-batteries 1379 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -2070,6 +2119,7 @@ jobs:
             MeshRoutedInventoryBuilderTests \
             MeshRoutedCustodyEvidenceTests \
             MeshRoutedStoreIsolationTests \
+            MeshSessionStoreIsolationTests \
             MeshP9EphemeralPostureAcceptanceTests \
             MeshP9PresenceSwapAcceptanceTests \
             MeshP9RecipeSwapAcceptanceTests \
@@ -2229,9 +2279,24 @@ jobs:
         # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 102: passed. Run once
         # more at 102 without ProximityKitTests/ProximityPlatformNeutralityTests: 97 ran and the floor
         # refused it. 97 + 5 = 102 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.10 two names join the line: ProximityKeychainDoorTests, the keychain door's wall over
+        # ProximityKit's own sources and these tests (the door declared once, in the funnel's `#if DEBUG`
+        # branch, whose text it pins, and named by the installer alone), which leaves KeyCustodyBoundaryTests'
+        # door cell so it travels with the package, and ProximityPresenceSessionTests, the presence engine's
+        # own cells over an in-memory radio of their own. (The A0.8.3 paragraph's "no keychain entitlement, no
+        # ProximityAudit sink" describes the simulator's xctest agent: the bundle has installed an in-memory
+        # keychain store and an audit sink of its own since A1.1.5 and A1.1.6.)
+        # RAISED 102 -> 108 at A1.1.10, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact seventeen-name list run at the old floor 102 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 108
+        # (ProximityKitTests 108, "Test run with 108 tests in 17 suites passed after 0.357 seconds": the
+        # fifteen above at their counts, ProximityKeychainDoorTests 1 and ProximityPresenceSessionTests 5), 0
+        # failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT
+        # 108: passed. Run once more at 108 without ProximityKitTests/ProximityPresenceSessionTests: 103 ran
+        # and the floor refused it. 102 + 1 + 5 = 108 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 102 \
+          Scripts/run-gated-suites.sh proximitykit 108 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2246,4 +2311,6 @@ jobs:
             ProximityKitTests/PackageKeychainStoreTests \
             ProximityKitTests/PackageTestHostTests \
             ProximityKitTests/ProximityNamespaceBoundaryTests \
-            ProximityKitTests/ProximityPlatformNeutralityTests
+            ProximityKitTests/ProximityPlatformNeutralityTests \
+            ProximityKitTests/ProximityKeychainDoorTests \
+            ProximityKitTests/ProximityPresenceSessionTests

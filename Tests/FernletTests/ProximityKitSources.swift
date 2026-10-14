@@ -2,8 +2,11 @@
 // FernletTests
 //
 // Fernlet's reader of ProximityKit's sources, while they are in this repository. One FernletTests suite
-// reads ProximityKit's Swift files: the feature golden's recipe-copy scan (`FernletFeatureGoldenTests`).
-// It reads them here, through the walk the namespace wall held while it was in FernletTests.
+// reads ProximityKit's Swift files through this walker: the feature golden's recipe-copy scan
+// (`FernletFeatureGoldenTests`). Other FernletTests suites read ProximityKit's files by their own paths or
+// walks (the store isolation walls, the acceptance batteries' source cells, the presence and key-custody
+// walls among them), and plan step A1.3 retires each of those reads too. The golden reads them here,
+// through the walk the namespace wall held while it was in FernletTests.
 // ProximityKit's namespace wall and the platform wall's rules over ProximityKit's code, which read the
 // same files, are ProximityKit's own package tests (`ProximityNamespaceBoundaryTests` and
 // `ProximityPlatformNeutralityTests`) and read them through the package's `PackageRoot`, so they travel
