@@ -52,7 +52,10 @@ its landing page's "Its tests" says how it runs and what waits for A1. Since A1.
 under a test namespace of their own, `.packageTest` (`TestSupport/PackageTestNamespace.swift`), through
 `TestSupport/PackageTestBindings.swift`, each one of Fernlet's test bindings
 (`Tests/FernletTests/ProximityNamespaceTestBindings.swift`) with `.packageTest` for `.fernlet`, and read
-a source through `TestSupport/PackageRoot.swift`, by a path relative to the package root. "The test
+a source through `TestSupport/PackageRoot.swift`, by a path relative to the package root. Since A1.1.5
+their keychain is an in-memory store, `TestSupport/PackageKeychainStore.swift`, which
+`TestSupport/PackageTestEnvironment.swift` installs once as `ProximityKeychainItem`'s backend before the
+first keychain call, held by `PackageKeychainStoreTests`. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, the host doubles and
 every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace and the epoch fixtures live in both
@@ -1853,10 +1856,19 @@ rows written before the copy read back unchanged and a host's own `KeychainItem`
 clears these services. Reach the keychain from ProximityKit through this type, never
 `KeychainItem`: `ProximityNamespaceGoldenTests` group 15 fails on ProximityKit code that names it,
 holds every query dictionary to the one FernletFoundation's source spells, and checks that the two
-read, list and delete each other's rows and fail and audit alike.
+read, list and delete each other's rows and fail and audit alike. Since plan step A1.1 every member
+reaches the keychain through one backend, handed the dictionary its builder spelled: the system
+keychain in every shipping build, and, in a Debug build, whatever ProximityKit's own package tests
+installed (an in-memory store, their unhosted bundle having no keychain). `KeyCustodyBoundaryTests`
+holds the install door's one caller to the package tests' installer, its declaration to `#if DEBUG`,
+and Fernlet's hosted tests on the system keychain.
 
 | Function | What It Does |
 | --- | --- |
+| `ProximityKeychainBackend` (internal protocol, `nonisolated`, `Sendable`) | The funnel's three keychain calls as one seam: `add(_:)`, `copyMatching(_:result:)` and `delete(_:)`, each taking the builder's `[String: Any]` dictionary and answering the `OSStatus` the matching `SecItem` call answers. |
+| `ProximityKeychainItem.SystemKeychain` | The system keychain, the only backend a shipping build has: `SecItemAdd(query as CFDictionary, nil)`, `SecItemCopyMatching(query as CFDictionary, &result)`, `SecItemDelete(query as CFDictionary)`, the calls the members made inline before the seam. |
+| `ProximityKeychainItem.backend` | The backend every member calls: in a Debug build the installed one, else `SystemKeychain()`; in a Release build always `SystemKeychain()`, with no slot to read. |
+| `ProximityKeychainItem.installBackend(_:)` (Debug only) | Replaces the backend for the whole process through a `Mutex` slot the type owns (last install wins). Called only by ProximityKit's package tests' installer, `PackageTestEnvironment`; absent from a Release build. |
 | `ProximityKeychainItem.store(_:account:service:accessibility:synchronizable:replacing:)` | Delete-then-add under the caller's class; `synchronizable` defaults to `false`, `replacing` (which variant the delete removes) to `.any`. Refuses an empty account, service or payload with `errSecParam`. Not discardable. |
 | `load(account:service:synchronizable:)` / `loadDistinguishingAbsence(account:service:synchronizable:)` | The single-row read: `Data?`, or the three-way `ReadResult` (`found`, `absent`, `unreadable(OSStatus)`) the mint-on-absent stores use to fail closed. An empty name is `nil` / `.unreadable(errSecParam)`. |
 | `loadAll(service:synchronizable:)` / `loadAllDistinguishingFailure(service:synchronizable:)` / `enumerationResult(status:matches:)` | Every row under a service, collapsing a failed enumeration into `[]` or reporting it as `EnumerationResult.unreadable`; the classifier is pure, so the statuses a simulator cannot produce are testable. |

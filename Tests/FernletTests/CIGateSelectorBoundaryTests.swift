@@ -338,6 +338,11 @@ import Testing
     /// to the package's own folder, each named `ProximityKitTests/<Suite>`; and one name is re-qualified
     /// in place, `mesh-batteries`' `MeshSessionIDClaimTests`, now
     /// `ProximityKitTests/MeshSessionIDClaimTests`, so that count stays. Counted off the lines.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.5 (2026-10-14): `proximitykit` 11 → 12, for the new
+    /// `PackageKeychainStoreTests`, the canary of the package tests' in-memory keychain store (the
+    /// funnel resolves it, and ProximityKit's identity and seal keys provision, read back, defer and
+    /// wipe through it), named `ProximityKitTests/PackageKeychainStoreTests`. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -355,7 +360,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 154,
         "mesh-features": 48,
-        "proximitykit": 11
+        "proximitykit": 12
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -1113,8 +1118,10 @@ import Testing
     /// and 9 → 15, for the five suites of `MeshEpochModelTests.swift` and `MeshSessionIDClaimTests.swift`
     /// (the four epoch suites onto `proximitykit`, `MeshSessionIDClaimTests` still on `mesh-batteries`),
     /// measured in the package's bundle at their FernletTests counts, and the package's NEW
-    /// `PackageTestSupportTests`, measured on `proximitykit`.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 15]
+    /// `PackageTestSupportTests`, measured on `proximitykit`. RAISED at A1.1.5 (2026-10-14): 15 → 16,
+    /// for the package's NEW `PackageKeychainStoreTests`, measured on `proximitykit`; FernletTests stays
+    /// 628.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 16]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
@@ -1125,8 +1132,9 @@ import Testing
     /// `ProximityNamespaceSoundnessTests` 43, its count in FernletTests. MOVED at A1.1.4 (2026-10-13):
     /// 140 = 102 + `MeshEpochRefTests` 10 + `MeshEpochKeyringTests` 5 + `MeshEpochAcceptanceTests` 4 +
     /// `MeshFrameReplayWindowTests` 10 + `MeshSessionIDClaimTests` 7, each its count in FernletTests, +
-    /// the NEW `PackageTestSupportTests` 2.
-    static let measuredPackageCells = 140
+    /// the NEW `PackageTestSupportTests` 2. RAISED at A1.1.5 (2026-10-14): 146 = 140 + the NEW
+    /// `PackageKeychainStoreTests` 6.
+    static let measuredPackageCells = 146
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1135,10 +1143,15 @@ import Testing
     /// (`SecItem`, `KeychainItem`), the statics known to call one directly, and the types whose
     /// construction or statics reach one; since plan step A0.8.5 each such type by its bare name, so
     /// `Type(`, `Type.init(`, `let x: Type = .init(` and its statics are all held, the two seal keys'
-    /// `wipe(service:)` among them. It is a needle list, not a call-graph closure: a path it misses
-    /// fails with -34018 on the simulator gate only where the failure surfaces, and a delete through
-    /// `ProximityKeychainItem.deleteAll` audits its failure to a sink this bundle lacks, so it passes
-    /// silently. The location needles are every platform directory
+    /// `wipe(service:)` among them (``packageKeychainNeedles``). Since plan step A1.1.5 the bundle has a
+    /// keychain, an in-memory store its installer (`TestSupport/PackageTestEnvironment.swift`) puts
+    /// behind ProximityKit's keychain funnel on first touch, so what the keychain needles hold is a call
+    /// made before anything touched it, which reaches the system keychain instead: a line that reaches
+    /// the keychain stands only on a ``packageHazardAllowlist`` row whose invariant says what reads the
+    /// installer first, and the store's own file is ``packageKeychainStoreFile``. It is a needle list,
+    /// not a call-graph closure: a path it misses fails with -34018 on the simulator gate only where the
+    /// failure surfaces, and a delete through `ProximityKeychainItem.deleteAll` audits its failure to a
+    /// sink this bundle lacks, so it passes silently. The location needles are every platform directory
     /// `ProximityPlatformBoundaryTests.directoryNeedles` names but the temporary ones, which are
     /// scratch a test may use, and the process-shared defaults and main bundle (A0.8.5; Documents,
     /// Caches, the home folder and a defaults suite were missing before).
@@ -1149,9 +1162,11 @@ import Testing
             installs a sink first
             """
         let keychain = """
-            the unhosted bundle gets errSecMissingEntitlement (-34018) on the simulator, and on a Mac the \
-            call would reach the developer's own data-protection keychain; plan step A1 answers the \
-            keychain first
+            the bundle's keychain is the in-memory store PackageTestEnvironment installs on first touch, \
+            and a call made before anything touched it reaches the system keychain, which answers \
+            errSecMissingEntitlement (-34018) on the simulator and is the developer's own on a Mac: a line \
+            that reaches the keychain needs an allowlist row whose invariant says what reads \
+            PackageTestEnvironment.keychain first
             """
         let stores = """
             the store isolation walls scan only Tests/FernletTests (their #filePath folders); until plan \
@@ -1165,11 +1180,6 @@ import Testing
             own location breaks when a layout moves, and a relative path read from the unhosted agent \
             has no defined base
             """
-        let keychainNeedles = ["SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService",
-                               "DeviceBindingID", "StoragePreferences", "ColumnCrypto", "ProtectedSidecar",
-                               ".forSeal(", ".forOpen(", "wipeForDeleteAll(", "MeshSessionSealKey",
-                               "MeshRoutedSealKey", "MeshNetworkManager", "ProximityPairSession",
-                               "ProximityCoordinator"]
         let storeNeedles = ["MeshRoutedStore", "MeshSessionStore", ".production("]
         let scratch: Set<String> = ["temporaryDirectory", "NSTemporaryDirectory"]
         let locationNeedles = ProximityPlatformBoundaryTests.directoryNeedles.map(\.token)
@@ -1177,11 +1187,68 @@ import Testing
         let repoNeedles = ["RepoRoot", "#filePath", "\"App/", "\"Docs/", "\"Tests/", "\".github/",
                            "\"FernletKit/", "\"Scripts/"]
         return [(needle: "addCaptureHandler", reason: audit)]
-            + keychainNeedles.map { (needle: $0, reason: keychain) }
+            + packageKeychainNeedles.map { (needle: $0, reason: keychain) }
             + storeNeedles.map { (needle: $0, reason: stores) }
             + locationNeedles.map { (needle: $0, reason: location) }
             + repoNeedles.map { (needle: $0, reason: repo) }
     }()
+
+    /// The keychain needles of ``packageHazards`` (rule I9): the keychain calls themselves, the statics
+    /// known to call one directly, and the types whose construction or statics reach one.
+    static let packageKeychainNeedles = [
+        "SecItem", "KeychainItem", "ensureProvisioned(", "IdentityService", "DeviceBindingID", "StoragePreferences",
+        "ColumnCrypto", "ProtectedSidecar", ".forSeal(", ".forOpen(", "wipeForDeleteAll(", "MeshSessionSealKey",
+        "MeshRoutedSealKey", "MeshNetworkManager", "ProximityPairSession", "ProximityCoordinator"
+    ]
+
+    /// The one package file the ``packageKeychainNeedles`` do not read (rule I9, ProximityKit plan step
+    /// A1.1.5): the package tests' in-memory keychain store, which their installer puts behind
+    /// ProximityKit's keychain funnel. It IS the bundle's keychain, answering the funnel's query
+    /// dictionaries in memory, so it spells the Security names a keychain answers with
+    /// (`errSecItemNotFound` holds the `SecItem` needle) and reaches no keychain itself. Every other
+    /// needle still reads it, and a declaration whose file is gone is a failure.
+    static let packageKeychainStoreFile = "FernletKit/Tests/ProximityKitTests/TestSupport/PackageKeychainStore.swift"
+
+    /// The package's keychain canary (rule I9, ProximityKit plan step A1.1.5), whose keychain lines
+    /// ``packageHazardAllowlist`` lists under ``packageKeychainCanaryInvariant``.
+    static let packageKeychainCanaryFile = "FernletKit/Tests/ProximityKitTests/PackageKeychainStoreTests.swift"
+
+    /// What makes every line of ``packageKeychainCanaryLines`` safe in the unhosted bundle.
+    static let packageKeychainCanaryInvariant = """
+        the line is in a cell of PackageKeychainStoreTests or in a private helper only its cells call, and \
+        the suite reads PackageTestEnvironment.keychain in its stored property `store`, which Swift Testing \
+        evaluates as it builds the suite instance for each cell, before the cell runs: the installer has \
+        put the in-memory store behind ProximityKit's keychain funnel before the line runs, so a call on it \
+        reaches the store, never the system keychain (the other lines only name the funnel's types), and \
+        the suite's first cell holds that the funnel resolves that store
+        """
+
+    /// The canary's lines that reach the keychain, each exact as trimmed (rule I9).
+    static let packageKeychainCanaryLines = [
+        "let resolved = ProximityKeychainItem.backend",
+        "#expect(ProximityKeychainItem.store(local, account: account, service: service, accessibility: deviceOnly)",
+        "#expect(ProximityKeychainItem.store(synced, account: account, service: service,",
+        "let scopes: [(ProximityKeychainItem.SynchronizableScope, [Data])] = [",
+        "let listed = ProximityKeychainItem.loadAll(service: service, synchronizable: scope).map(\\.data)",
+        "let read = ProximityKeychainItem.load(account: account, service: service, synchronizable: scope)",
+        "#expect(ProximityKeychainItem.store(again, account: account, service: service, accessibility: deviceOnly,",
+        "let listing = ProximityKeychainItem.loadAllDistinguishingFailure(service: service)",
+        "#expect(ProximityKeychainItem.deleteReportingStatus(account: account, service: service, synchronizable: .local)",
+        "#expect(ProximityKeychainItem.deleteAllReportingStatus(service: service) == PackageKeychainStore.success)",
+        "let emptied = ProximityKeychainItem.loadAllDistinguishingFailure(service: service)",
+        "#expect(ProximityKeychainItem.deleteReportingStatus(account: account, service: service)",
+        "@MainActor private static func provisionedIdentity(on service: String) throws -> IdentityService {",
+        "let identity = IdentityService(namespace: .packageTest, keychainService: service)",
+        "try identity.ensureProvisioned()",
+        "switch opening ? MeshSessionSealKey.forOpen(service: scope.service, account: scope.account)",
+        ": MeshSessionSealKey.forSeal(service: scope.service, account: scope.account) {",
+        "switch opening ? MeshRoutedSealKey.forOpen(service: scope.service, account: scope.account)",
+        ": MeshRoutedSealKey.forSeal(service: scope.service, account: scope.account) {",
+        "case .session: MeshSessionSealKey.wipe(service: scope.service)",
+        "case .routed: MeshRoutedSealKey.wipe(service: scope.service)",
+        "switch ProximityKeychainItem.loadDistinguishingAbsence(account: account, service: service) {",
+        "private static func spelled(_ listing: ProximityKeychainItem.EnumerationResult) -> String {"
+    ]
 
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
     /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
@@ -1189,7 +1256,10 @@ import Testing
     /// changed is a failure, so no row outlives the line it excuses. Empty at plan steps A0.8.2 and
     /// A0.8.3; one row at A1.1.2 (2026-10-13), the soundness suite's storage cell, which reads
     /// `URL.applicationSupportDirectory` as a value; two since A1.1.4 (2026-10-13), with the package's
-    /// file locator's one read of its own source's path, from which it walks up to the package root.
+    /// file locator's one read of its own source's path, from which it walks up to the package root;
+    /// 26 since A1.1.5 (2026-10-14), with the installer's one line, which installs the in-memory keychain
+    /// store, and the 23 distinct lines of the keychain canary (``packageKeychainCanaryLines``), which
+    /// share one invariant.
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
         (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
          line: "for base in [URL.applicationSupportDirectory, scratch] {",
@@ -1204,8 +1274,17 @@ import Testing
             first folder holding Package.swift and Sources/ProximityKit, reading, writing and creating \
             nothing; a package suite reads only Package.swift, Sources/ProximityKit/** and Tests/** \
             under that root, by a path relative to it
+            """),
+        (file: "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift",
+         line: "ProximityKeychainItem.installBackend(store)",
+         invariant: """
+            the bundle's installer, run once as PackageTestEnvironment.keychain is first read: it installs \
+            the in-memory store it has just built as ProximityKit's keychain backend and makes no keychain \
+            call itself, so every keychain call after it reaches the store
             """)
-    ]
+    ] + packageKeychainCanaryLines.map {
+        (file: packageKeychainCanaryFile, line: $0, invariant: packageKeychainCanaryInvariant)
+    }
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has five
@@ -1454,13 +1533,18 @@ import Testing
     }
 
     /// I9: no package file's code line (trimmed text not starting `//`) holds a ``packageHazards``
-    /// needle, except a ``packageHazardAllowlist`` row's exact line; and every allowlist row still
-    /// matches a line. Reads the package folder whether or not a target compiles it yet.
+    /// needle, except a ``packageHazardAllowlist`` row's exact line and a ``packageKeychainNeedles``
+    /// needle in ``packageKeychainStoreFile``; every allowlist row still matches a line; and that file
+    /// still exists. Reads the package folder whether or not a target compiles it yet.
     private static func packageHazardProblems() throws -> [String] {
         var problems: [String] = []
         var allowed: Set<Int> = []
+        let files = PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url)
+        if !files.contains(packageKeychainStoreFile) {
+            problems.append("I9: \(packageKeychainStoreFile), which the keychain needles do not read, is gone; delete its exemption")
+        }
         // R2: bounded by the package's file count × each file's line count × the needle list.
-        for file in PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url) {
+        for file in files {
             for line in try RepoRoot.source(file).components(separatedBy: "\n") {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 guard !trimmed.hasPrefix("//") else { continue }
@@ -1468,7 +1552,8 @@ import Testing
                     allowed.insert(row)
                     continue
                 }
-                for hazard in packageHazardNeedles(onLine: trimmed) {
+                for hazard in packageHazardNeedles(onLine: trimmed)
+                where file != packageKeychainStoreFile || !packageKeychainNeedles.contains(hazard.needle) {
                     problems.append("I9: \(file): `\(trimmed)` holds `\(hazard.needle)`: \(hazard.reason)")
                 }
             }
@@ -1497,13 +1582,29 @@ import Testing
         "ProximityKit", "Foundation", "Testing", "Combine", "simd", "Synchronization"
     ]
 
-    /// I11: every module a package file imports is in ``packageImportAllowlist``.
+    /// The package's test-support folder (rule I11), whose files may also import
+    /// ``packageTestSupportImportAllowlist``.
+    static let packageTestSupportFolder = "FernletKit/Tests/ProximityKitTests/TestSupport/"
+
+    /// The modules a file under ``packageTestSupportFolder`` may import besides
+    /// ``packageImportAllowlist`` (rule I11, ProximityKit plan step A1.1.5): Security, for the package
+    /// tests' in-memory keychain store (`PackageKeychainStore.swift`), which answers ProximityKit's
+    /// keychain funnel by the Security keys of the query dictionaries it is handed (`kSecClass`,
+    /// `kSecAttrService`, `kSecMatchLimit`, …) and with Security's statuses. A system module, so it
+    /// travels with the package; held to the support folder, so a suite reads the keychain through
+    /// ProximityKit and the store and never spells a keychain query of its own.
+    static let packageTestSupportImportAllowlist: Set<String> = ["Security"]
+
+    /// I11: every module a package file imports is in ``packageImportAllowlist``, or, for a file under
+    /// ``packageTestSupportFolder``, in ``packageTestSupportImportAllowlist``.
     private static func packageImportProblems() throws -> [String] {
         var problems: [String] = []
         // R2: bounded by the package's file count × each file's imports.
         for file in PowerOfTenBoundaryTests.swiftFiles(under: rootPath(of: packageTarget), repoRoot: RepoRoot.url) {
-            for module in importedModules(in: try RepoRoot.source(file)) where !packageImportAllowlist.contains(module) {
-                problems.append("I11: \(file) imports `\(module)`, which does not travel with ProximityKit's tests: \(packageImportAllowlist.sorted()) may be imported")
+            let allowed = file.hasPrefix(packageTestSupportFolder)
+                ? packageImportAllowlist.union(packageTestSupportImportAllowlist) : packageImportAllowlist
+            for module in importedModules(in: try RepoRoot.source(file)) where !allowed.contains(module) {
+                problems.append("I11: \(file) imports `\(module)`; a file there may import only \(allowed.sorted()) (a Fernlet module does not travel with ProximityKit's tests, and Security is the test support's alone)")
             }
         }
         return problems

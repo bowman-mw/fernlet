@@ -483,6 +483,21 @@ jobs:
         # simulator, iOS 26.5), ran 112 tests in 11 suites; its floor stays the shared `1`.
         # mesh-batteries is HELD at 1372 (MeshSessionIDClaimTests named ProximityKitTests/<Suite> in
         # place), proximitykit is raised 44 -> 75 and crypto-goldens 356 -> 357 (see their steps).
+        #
+        # ProximityKit plan step A1.1.5 (2026-10-14) routes ProximityKit's keychain funnel through one
+        # backend, the system keychain in every shipping build, with a Debug-only door through which the
+        # package tests install an in-memory keychain store (TestSupport/PackageKeychainStore.swift, put
+        # there once by TestSupport/PackageTestEnvironment.swift), and adds the package's keychain canary,
+        # PackageKeychainStoreTests. `CIGateSelectorBoundaryTests`' pins follow, each with a dated note: the
+        # inventory's measured rows are 628 / 16 and the package's declared tests 146, and `proximitykit`
+        # names 12 suites. I9's keychain reason says what its needles hold now that the bundle has a
+        # keychain, a call made before anything read PackageTestEnvironment.keychain; the store's own file
+        # is the one file its keychain needles do not read; and `packageHazardAllowlist` holds 26 rows, the
+        # installer's one line and the canary's 23 keychain lines under one invariant. I11 lets a
+        # TestSupport/ file import Security too, for the store, which reads the funnel's query dictionaries
+        # by their Security keys. No suite joined or left this line and no cell was added, and the line,
+        # MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its
+        # floor stays the shared `1`. proximitykit is raised 75 -> 81 (see its step).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -541,6 +556,15 @@ jobs:
         # passcode is needed. The remaining suites are pure crypto format pins, plus
         # IdentityProvisioningReadTests (F-1, 2026-09-06): the fail-closed identity read whose
         # source wall keeps a transient keychain error from minting over a live identity.
+        #
+        # ProximityKit plan step A1.1.5 (2026-10-14) routes ProximityKit's keychain funnel through one
+        # backend, the system keychain in every shipping build, with a Debug-only door through which
+        # ProximityKit's package tests install an in-memory store. KeyCustodyBoundaryTests gains two cells:
+        # this hosted bundle's funnel resolves the system keychain (a row it stores is FernletFoundation's
+        # to read back, under the class it wrote), and the door is declared once, in its `#if DEBUG`
+        # branch, and called only by the package tests' installer, over the app, FernletKit's sources and
+        # both test trees. The line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran
+        # 55 tests in 4 suites (53 before); its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh key-custody 1 \
@@ -2073,9 +2097,20 @@ jobs:
         # without ProximityKitTests/MeshEpochRefTests: 65 ran and the floor refused it; and without
         # ProximityKitTests/PackageTestSupportTests: 73 ran and the floor refused it.
         # 44 + 10 + 5 + 4 + 10 + 2 = 75 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.5 one name joins the line, the package's new PackageKeychainStoreTests, the canary of the
+        # in-memory keychain store the package tests install as ProximityKit's keychain backend (the funnel
+        # resolves it; the identity and both seal keys provision, read back, defer and wipe through it):
+        # RAISED 75 -> 81 at A1.1.5, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact twelve-name list run at the old floor 75 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 81
+        # (ProximityKitTests 81, "Test run with 81 tests in 12 suites passed after 0.055 seconds": the
+        # eleven above at their counts and PackageKeychainStoreTests 6), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 81: passed. Run once
+        # more at 81 without ProximityKitTests/PackageKeychainStoreTests: 75 ran and the floor refused it.
+        # 75 + 6 = 81 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 75 \
+          Scripts/run-gated-suites.sh proximitykit 81 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2086,4 +2121,5 @@ jobs:
             ProximityKitTests/MeshEpochKeyringTests \
             ProximityKitTests/MeshEpochAcceptanceTests \
             ProximityKitTests/MeshFrameReplayWindowTests \
-            ProximityKitTests/PackageTestSupportTests
+            ProximityKitTests/PackageTestSupportTests \
+            ProximityKitTests/PackageKeychainStoreTests
