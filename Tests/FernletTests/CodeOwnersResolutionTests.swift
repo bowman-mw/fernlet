@@ -115,6 +115,9 @@ struct CodeOwnersResolutionTests {
         // CIGateSelectorBoundaryTests holds this repository's package rows to (plan step A1.1.13).
         "/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift",
         "/FernletKit/Tests/ProximityKitTests.tsv",
+        // The package's own tree walls: the one install of its audit sink, its stores' scopes, ML5 and the
+        // digest homes over its tests (plan step A1.1.14).
+        "/FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift",
         // The workspace the strict build and every CI test run go through (ProximityKit plan step A0.8).
         "/Fernlet.xcworkspace/",
         "/.github/workflows/s3-wall.yml",

@@ -609,6 +609,22 @@ jobs:
         # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11
         # suites (the selector wall still ten cells); its floor stays the shared `1`. proximitykit is raised
         # 108 -> 114 (see its step); mesh-batteries, which runs the selector wall too, stays 1379.
+        #
+        # ProximityKit plan step A1.1.14 (2026-10-14) moves the package halves of four walls into
+        # ProximityKit's package tests, so they travel with the package: the audit install-site cell, the
+        # session and routed store isolation walls' test-tree scans with the scratch-root needle, ML5 and the
+        # acceptance batteries' digest homes become `ProximityKitTests/PackageTestTreeWallTests` on
+        # `proximitykit`, which reads the package's tests, and for the install sites ProximityKit's sources
+        # too. On this line `ProximityAuditBridgeTests`' install-site cell, renamed
+        # `onlyTheAppInstallsAnAuditSink`, reads Fernlet's half: App, FernletKit/Sources but ProximityKit's
+        # own folder (`ProximityKitSources.folder`, the one exclusion every such Fernlet wall names; its floor
+        # 335 -> 230, of 288 files) and Tests, where only FernletApp.swift installs a sink and no file
+        # extends, aliases or takes the metatype of ProximityAudit. `CIGateSelectorBoundaryTests`' pins
+        # follow, each with a dated note: the inventory's measured rows are 628 / 23, `proximitykit` names 19
+        # suites, and `wallLines` pins the tree walls on `proximitykit`. No suite joined or left this line
+        # and no cell was added, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
+        # 26.5), ran 99 tests in 11 suites (ProximityAuditBridgeTests 5); its floor stays the shared `1`.
+        # proximitykit is raised 114 -> 120 (see its step); mesh-batteries and memory-lifecycle hold.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -1165,6 +1181,9 @@ jobs:
         # and no test building a manager over an inline host. The 2026-08-17 leak review's durable
         # half; the timed weak-reference polls of MemoryLifecycleTests.swift are its behaviour
         # siblings and stay off every line (MeshP9HonestyAcceptanceTests.ungatedByDesign says why).
+        # Since ProximityKit plan step A1.1.14 (2026-10-14) ML5 reads Fernlet's tests alone, and
+        # ProximityKit's package tests hold their own half (ProximityKitTests/PackageTestTreeWallTests on
+        # proximitykit); MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), the line ran 8.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh memory-lifecycle 8 MemoryLifecycleBoundaryTests
@@ -2049,6 +2068,14 @@ jobs:
         # 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT
         # 1379: passed. Run once more at 1379 without MeshSessionStoreIsolationTests: 1374 ran and the floor
         # refused it. 1373 + 5 + 1 = 1379 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.14 no suite joined or left and no cell was added: the two store isolation walls' and the
+        # P8, P9 and P10 batteries' test-tree scans read Fernlet's tests alone (`MeshRoutedStoreIsolationTests`'
+        # scratch-root needle reads 17 host doubles), and their package halves are
+        # ProximityKitTests/PackageTestTreeWallTests on proximitykit. HELD at 1379 at A1.1.14, MEASURED on a
+        # Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this exact 155-name list run at its floor through
+        # Fernlet.xcworkspace after the strict build-for-testing (WALL CHECK PASSED), read off its own result
+        # bundle: totalTestCount 1379 (FernletTests 1357 in 152 suites; ProximityKitTests 22 in 3), 0 failed,
+        # no `Restarting after unexpected exit` line, the suite census silent.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1379 \
@@ -2325,9 +2352,23 @@ jobs:
         # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 114: passed. Run once
         # more at 114 without ProximityKitTests/PackageTestHygieneTests: 108 ran and the floor refused it.
         # 108 + 6 = 114 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.14 one name joins the line, PackageTestTreeWallTests, the package tests' tree walls (their
+        # installer's one install of the audit sink and none in ProximityKit's code, every store on a scope of
+        # the test's own and the host double's scopes, ML5's two holders, no home of a determinism digest),
+        # whose package halves leave FernletTests' ProximityAuditBridgeTests, store isolation walls,
+        # MemoryLifecycleBoundaryTests and acceptance batteries so they travel with the package, reading this
+        # target's files and ProximityKit's sources through PackageRoot and the walls' walker:
+        # RAISED 114 -> 120 at A1.1.14, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact nineteen-name list run at the old floor 114 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 120
+        # (ProximityKitTests 120, "Test run with 120 tests in 19 suites passed after 0.581 seconds": the
+        # eighteen above at their counts and PackageTestTreeWallTests 6), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 120: passed. Run once
+        # more at 120 without ProximityKitTests/PackageTestTreeWallTests: 114 ran and the floor refused it.
+        # 114 + 6 = 120 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 114 \
+          Scripts/run-gated-suites.sh proximitykit 120 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2345,4 +2386,5 @@ jobs:
             ProximityKitTests/ProximityPlatformNeutralityTests \
             ProximityKitTests/ProximityKeychainDoorTests \
             ProximityKitTests/ProximityPresenceSessionTests \
-            ProximityKitTests/PackageTestHygieneTests
+            ProximityKitTests/PackageTestHygieneTests \
+            ProximityKitTests/PackageTestTreeWallTests

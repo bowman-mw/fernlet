@@ -375,8 +375,9 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   `PackageTestHost`, a `ProximityHost` built from ProximityKit's public API alone, on a scratch root
   with `.test.` keychain services; an audit sink installed once for the bundle and read through
   scoped `PackageAuditCapture`s; and the in-memory keychain store. Canary suites hold them
-  (`PackageTestSupportTests`, `PackageKeychainStoreTests`, `PackageTestHostTests`), and the
-  store-isolation walls and the acceptance batteries' test-tree scans read the package's tests too.
+  (`PackageTestSupportTests`, `PackageKeychainStoreTests`, `PackageTestHostTests`), and the package's
+  own tree walls (`PackageTestTreeWallTests`, A1.1.14) hold the host double's and every store's scopes,
+  the one install of the audit sink and ML5 over the package's tests.
 - **Six suites (79 tests) moved before the split (owner decision).**
   `ProximityNamespaceSoundnessTests` with its five framing byte pins, and the whole files
   `MeshEpochModelTests.swift` and `MeshSessionIDClaimTests.swift`, whose suites compute under
@@ -395,7 +396,7 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   wall: no Fernlet file names the door. `FernletTests` keeps its own copy of the lexer, with its
   fixture cell in `SwiftSourceLexerTests`, and its feature golden reads ProximityKit's sources
   through a walker of `FernletTests`' own, `ProximityKitSources`.
-- The package's tests hold 22 suites (179 tests): 18 on the `proximitykit` line (114 tests), three on
+- The package's tests hold 23 suites (185 tests): 19 on the `proximitykit` line (120 tests), three on
   mesh-batteries (22) and the soundness suite on crypto-goldens (43).
 
 The split itself:
@@ -423,11 +424,13 @@ The split itself:
   `ProximityHost`) and the inventory with its declared-test count are the package's own since A1.1.13,
   `PackageTestHygieneTests`, over the package's own inventory,
   `FernletKit/Tests/ProximityKitTests.tsv`, which `CIGateSelectorBoundaryTests` holds Fernlet's package
-  rows to. The rest still live only in `FernletTests`: the one-installer rule for
-  `ProximityAudit.install` (`ProximityAuditBridgeTests`); and the store-isolation walls
-  (`MeshRoutedStoreIsolationTests` and `MeshSessionStoreIsolationTests`, both on mesh-batteries), the
-  acceptance batteries' test-tree scans and `MemoryLifecycleBoundaryTests`' ML5. The keychain door's
-  one-installer rule is the package's already (`ProximityKeychainDoorTests`, A1.1). The repository's
+  rows to. The one-installer rule for `ProximityAudit.install`, the store-isolation walls' test-tree
+  scans with their scratch-root needle, ML5 and the acceptance batteries' digest homes are the
+  package's own since A1.1.14, `PackageTestTreeWallTests`, over the package's tests (and, for the
+  install sites, ProximityKit's sources); Fernlet's halves (`ProximityAuditBridgeTests`,
+  `MeshRoutedStoreIsolationTests` and `MeshSessionStoreIsolationTests`, `MemoryLifecycleBoundaryTests`'
+  ML5 and the batteries' scans) read Fernlet's trees alone. The keychain door's one-installer rule is
+  the package's already (`ProximityKeychainDoorTests`, A1.1). The repository's
   own walls read `Tests/` only for Power-of-10's R6 and R8 and for tracking SDKs and symbols, and its
   `swift test` step holds no test-count floor. So a package suite reading the package's own folder
   through `PackageRoot` (or a fifth Python wall) carries them, a floor holds the package's test count,

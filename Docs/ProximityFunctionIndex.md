@@ -80,7 +80,13 @@ A1.1.13 the package tests' own hygiene is a package suite too, `PackageTestHygie
 suite's platform-directory list), their imports (rule I11), their own inventory
 (`FernletKit/Tests/ProximityKitTests.tsv`: each suite's file and its declared tests) and no extension of
 `ProximityHost`, read through the walls' walker, `TestSupport/PackageSwiftFiles.swift`;
-`CIGateSelectorBoundaryTests` holds Fernlet's rows of the package's suites to that inventory. "The test
+`CIGateSelectorBoundaryTests` holds Fernlet's rows of the package's suites to that inventory. Since
+A1.1.14 the package tests' tree walls are a package suite too, `PackageTestTreeWallTests`, on the
+`proximitykit` line: `ProximityAudit.install(_:)` named by their installer alone, once, and nowhere in
+ProximityKit's code (the walker reads ProximityKit's sources too); every session or routed store a test
+builds on a scope of its own and `PackageTestHost`'s scopes on its root; ML5 over `MeshNetworkManager`
+and `ProximityPairSession`; and no home of a determinism digest. Fernlet's audit install-site wall, store
+isolation walls, ML5 and acceptance batteries read Fernlet's trees alone. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'
@@ -1840,7 +1846,7 @@ namespace it is handed (group 13).
 | `MeshSessionSealKey` / `MeshRoutedSealKey` `forOpen(service:account:)` / `forSeal(service:account:)` | The seal-key reads under the scope namespace's account. |
 | `MeshSessionStore.fileName` / `sealKeyAccount`, `MeshRoutedStore.indexFileName` / `chunkDirectoryName` / `sealKeyAccount` | Instance reads of the scope's namespace. |
 | `MeshRoutedStore.stagingChunk(_:now:)` / `committingCustody(item:custodian:now:)` / `assembledBlob(item:expecting:)` | Measure under `scope.namespace.family.purposes`: a store holds one source of its labels. |
-| `ProximityHost.meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from the root the host states (`proximitySupportDirectory`, a requirement with no default since plan step A0.6.6), `proximityNamespace` and `proximityInstallBinding`: the namespace's production scopes on that root, whatever it is (the service named after a host's own root, and the default root itself, left at A0.6.6). A host that keeps more than one installation's files in one process, or a test double on a root of its own that opens a store, states both scopes itself; `MeshRoutedStoreIsolationTests`' scratch-root needle holds every test double that states its root to that. |
+| `ProximityHost.meshSessionStorage` / `meshRoutedStorage` (extension defaults) | Built from the root the host states (`proximitySupportDirectory`, a requirement with no default since plan step A0.6.6), `proximityNamespace` and `proximityInstallBinding`: the namespace's production scopes on that root, whatever it is (the service named after a host's own root, and the default root itself, left at A0.6.6). A host that keeps more than one installation's files in one process, or a test double on a root of its own that opens a store, states both scopes itself; `MeshRoutedStoreIsolationTests`' scratch-root needle holds every Fernlet test double that states its root to that, and `PackageTestTreeWallTests`' the package tests' `PackageTestHost`. |
 | `IdentityService.accounts` / `classifyDeviceIdentityRows(signing:keyAgreement:accounts:)` | The four device rows' accounts, the namespace's `installation.keychain.identity`, under the identity's `keychainService`. |
 | `FernletStore.proximityInstallBinding` / `meshSessionStorage` / `meshRoutedStorage` (app) | The adapter answers the host requirement; both scopes pass `namespace: proximityNamespace`, `installBinding: proximityInstallBinding` and derive the service `besideHeartDrop: heartDropKeychainService, in: proximityNamespace`; the store's proximity root defaults to `FernletConnections`' `FernletProximityStorage.productionDirectory`, `.fernlet`'s folder under Application Support (the path it has always used), as does `CryptoFormatCensus.Inputs.production`. |
 
@@ -2160,7 +2166,7 @@ Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog
 | Function | What It Does |
 | --- | --- |
 | `ProximityAuditSink.record(_:context:)` | The host's requirement: record one event, synchronously and on the caller's executor (`nonisolated`, `Sendable`, non-throwing). |
-| `ProximityAudit.install(_:)` | The host installs its sink once at launch; a later call replaces it. Until the first call every line is dropped. Called in two files only, Fernlet's `FernletApp.init` and ProximityKit's package tests' installer (`PackageTestEnvironment.audit`, their unhosted bundle having no app), held by `ProximityAuditBridgeTests`. |
+| `ProximityAudit.install(_:)` | The host installs its sink once at launch; a later call replaces it. Until the first call every line is dropped. Called in two files only, Fernlet's `FernletApp.init` and ProximityKit's package tests' installer (`PackageTestEnvironment.audit`, their unhosted bundle having no app): Fernlet's held by `ProximityAuditBridgeTests`, the package tests' by `PackageTestTreeWallTests`, which also holds ProximityKit's code to no install. |
 | `ProximityAudit.log(_:context:)` (internal) | The module's only audit entry point (`context` defaults to `[:]`): reads the sink under the slot's `Mutex`, calls it after releasing the lock, before returning; drops the line when no sink is installed. |
 
 ### `FernletConnections/FernletAuditBridge.swift`

@@ -17,8 +17,9 @@
 //
 // The wall has two halves, because this store's isolation has two:
 //   • the STORE half — every construction in the test tree names a scope, and never the production
-//     one; the test tree is the app's unit tests and, since ProximityKit plan step A1.1.6, ProximityKit's
-//     package tests under FernletKit/Tests, each root held to a file floor (``testRoots``);
+//     one; the test tree is the app's unit tests, held to a file floor (``testRoots``). ProximityKit's
+//     own package tests hold the same rule over theirs (`PackageTestTreeWallTests`), so it travels with
+//     the package;
 //   • the APP half — `FernletStore.meshSessionStorage` derives BOTH pieces from seams that are
 //     already walled (`proximitySupportRoot`, `heartDropKeychainService`), which is what makes a
 //     test store that is isolated for hearts isolated for mesh-session state for free. If that
@@ -235,14 +236,12 @@ struct MeshSessionStoreIsolationTests {
     // MARK: - Scanner
 
     /// The test roots this wall and its routed twin read, the twin's scratch-root needle among them,
-    /// each with the fewest Swift files it may hold: the app's unit tests and, since ProximityKit plan
-    /// step A1.1.6 (2026-10-14), ProximityKit's package tests, whose host double builds both scopes on a
-    /// scratch root of its own. MEASURED then at 446 and 23 files; each floor is about four fifths of
-    /// that, so a root that stops resolving fails rather than reading as clean, and the package root
-    /// cannot go dark behind the app's hundreds.
-    static let testRoots: [(root: String, floor: Int)] = [
-        (root: "Tests/FernletTests", floor: 356), (root: "FernletKit/Tests", floor: 18)
-    ]
+    /// each with the fewest Swift files it may hold: the app's unit tests, MEASURED at 446 files at
+    /// ProximityKit plan step A1.1.6 (2026-10-14), its floor about four fifths of that, so a root that
+    /// stops resolving fails rather than reading as clean. ProximityKit's package tests are the package's
+    /// own `PackageTestTreeWallTests`' to read since plan step A1.1.14 (its store cells, and its
+    /// scratch-root needle over `PackageTestHost`).
+    static let testRoots: [(root: String, floor: Int)] = [(root: "Tests/FernletTests", floor: 356)]
 
     /// Every `.swift` file under the test roots, as `(filename, source)`, minus this file.
     private static func testSources() throws -> [(String, String)] {
@@ -257,7 +256,7 @@ struct MeshSessionStoreIsolationTests {
     /// - Returns: Each file's name and text, root by root, in path order.
     static func testTreeSources(excluding excluded: Set<String>) throws -> [(String, String)] {
         var sources: [(String, String)] = []
-        // R2: bounded by the two roots and each root's finite file list.
+        // R2: bounded by the roots and each root's finite file list.
         for (root, floor) in testRoots {
             let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
             #expect(files.count >= floor, """

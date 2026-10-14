@@ -40,7 +40,8 @@
 //       dies at the end of the expression (invariant HP0), which is a dangling `unowned` from birth.
 //       The mesh composition's two constructions, `FernletMeshFeatures(host:` and the test rig's
 //       `FernletMeshRig.features(store:`, and the recipe pair session's, `ProximityPairSession(host:`,
-//       are held to the same rule.
+//       are held to the same rule. ProximityKit's own package tests hold its two holders'
+//       constructions in their tests (`PackageTestTreeWallTests`), so that half travels with the package.
 //
 // Every scan discovers its inputs from the file system and carries a hard FLOOR (a moved root or a
 // broken enumerator must fail loudly, never pass vacuously — the S3BoundaryTests house rule), every
@@ -89,11 +90,11 @@ struct MemoryLifecycleBoundaryTests {
     /// has stopped looking, or a holder has left the scan, and either fails here.
     static let minimumMeshHostHoldingFiles = 10
 
-    /// The test roots ML5 scans: the app's unit tests (308 files when the scan was written) and, since
-    /// ProximityKit plan step A0.8, the package's under `FernletKit/Tests`. Each must yield at least one
-    /// file (``TestTreeScan/filesScannedPerRoot``): the sum's floor alone would not notice the package
-    /// root going dark beside the app's hundreds.
-    static let testRoots = ["Tests/FernletTests", "FernletKit/Tests"]
+    /// The test roots ML5 scans: the app's unit tests (308 files when the scan was written).
+    /// ProximityKit's package tests are the package's own `PackageTestTreeWallTests`' to scan, since plan
+    /// step A1.1.14. Each root must yield at least one file (``TestTreeScan/filesScannedPerRoot``), so a
+    /// root added here cannot go dark behind another's hundreds.
+    static let testRoots = ["Tests/FernletTests"]
 
     /// Floor for the ML5 test-tree scan, over every root together.
     static let minimumTestFilesScanned = 200
@@ -251,7 +252,7 @@ struct MemoryLifecycleBoundaryTests {
     /// violation.
     static func scanTestTree(repoRoot: URL) -> TestTreeScan {
         var result = TestTreeScan()
-        // R2: bounded by the two test roots.
+        // R2: bounded by the test roots.
         for root in testRoots {
             result.filesScannedPerRoot[root] = 0
             // R2: bounded by the Swift files under the root.
@@ -557,8 +558,8 @@ struct MemoryLifecycleBoundaryTests {
         #expect(scan.unreadable.isEmpty, "Unreadable test files: \(scan.unreadable)")
         #expect(scan.filesScanned >= Self.minimumTestFilesScanned,
                 "Scanned only \(scan.filesScanned) test files (floor \(Self.minimumTestFilesScanned)) — the test roots \(Self.testRoots) stopped resolving")
-        // Per-root floor, as the no-tracking wall's: one root going dark must not be masked by the
-        // other's hundreds of files. R2: bounded by the two test roots.
+        // Per-root floor, as the no-tracking wall's: one root going dark must not be masked by
+        // another's hundreds of files. R2: bounded by the test roots.
         for root in Self.testRoots {
             let count = scan.filesScannedPerRoot[root] ?? 0
             #expect(count > 0, "ML5 scanned zero Swift files under '\(root)' — the root moved and ML5 is silently narrower")

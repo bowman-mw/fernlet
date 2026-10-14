@@ -113,8 +113,9 @@ struct MeshP10HonestyAcceptanceTests {
     }
 
     /// **The production conformers are built by nothing in either test target, and their device rows
-    /// are recorded as owed.** The scan reads the app's unit tests and, since ProximityKit plan step
-    /// A1.1.6, ProximityKit's package tests (`MeshP7Acceptance.testTreeSources()`, each root at its floor).
+    /// are recorded as owed.** The scan reads the app's unit tests (`MeshP7Acceptance.testTreeSources()`,
+    /// at its floor); ProximityKit's package tests cannot name the app's types (their imports are the
+    /// package's alone), so they build neither.
     ///
     /// This is the honest statement of what tier 1 covers, made MECHANICALLY instead of in prose.
     /// `SystemCompanionRefreshScheduler` and `SystemCompanionRefreshTaskHandle` are the only parts

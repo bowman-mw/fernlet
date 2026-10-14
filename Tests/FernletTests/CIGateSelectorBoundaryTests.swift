@@ -385,6 +385,13 @@ import Testing
     /// and its declared tests; and no extension of `ProximityHost`), whose rules leave this suite for the
     /// package so they travel with it, named `ProximityKitTests/PackageTestHygieneTests`. `s3-grep` and
     /// `mesh-batteries` keep their names: this suite keeps its ten cells. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.14 (2026-10-14): `proximitykit` 18 → 19, for
+    /// `PackageTestTreeWallTests`, the package tests' tree walls (the one install of an audit sink, the
+    /// session and routed stores' scopes and the scratch-root needle, ML5's two holders and the
+    /// determinism digests' homes), whose package halves leave Fernlet's walls, which read Fernlet's
+    /// trees alone now, named `ProximityKitTests/PackageTestTreeWallTests`. `s3-grep`, `mesh-batteries`
+    /// and `memory-lifecycle` keep their names. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -402,7 +409,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 155,
         "mesh-features": 48,
-        "proximitykit": 18
+        "proximitykit": 19
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -418,9 +425,11 @@ import Testing
     /// platform wall's rules over ProximityKit's own code, `ProximityPlatformNeutralityTests`, are pinned
     /// on `proximitykit` too, and `ProximityPlatformBoundaryTests` stays pinned on `s3-grep` with
     /// Fernlet's half. Since A1.1.10 the keychain door's wall over ProximityKit's own code and tests,
-    /// `ProximityKeychainDoorTests`, is pinned on `proximitykit` as well; and since A1.1.13 the package
+    /// `ProximityKeychainDoorTests`, is pinned on `proximitykit` as well; since A1.1.13 the package
     /// tests' own hygiene, `PackageTestHygieneTests` (what their unhosted bundle cannot serve, their
-    /// imports, their inventory and its declared tests, and no extension of `ProximityHost`).
+    /// imports, their inventory and its declared tests, and no extension of `ProximityHost`); and since
+    /// A1.1.14 their tree walls, `PackageTestTreeWallTests` (the audit install, the stores' scopes, ML5
+    /// and the digest homes over the package's tests).
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
                     "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
@@ -449,7 +458,7 @@ import Testing
                         "FoodSearchCorrectionResolverFirewallTests"],
         "mesh-features": ["LastMemberPhotoReviewSourceWallTests", "PhotoDirectoryIsolationTests"],
         "proximitykit": ["ProximityNamespaceBoundaryTests", "ProximityPlatformNeutralityTests",
-                         "ProximityKeychainDoorTests", "PackageTestHygieneTests"]
+                         "ProximityKeychainDoorTests", "PackageTestHygieneTests", "PackageTestTreeWallTests"]
     ]
 
     /// Every floor-script invocation in the workflow, with backslash continuations joined and
@@ -781,8 +790,9 @@ import Testing
                 "the routed store's scope-isolation grep-wall is gated")
         // Its session twin joins it on the same argument at ProximityKit plan step A1.1.10:
         // `MeshSessionStoreIsolationTests` holds every test-tree construction of a session store to a
-        // scope of its own, never the production one (both test trees since A1.1.6), and the app's
-        // session scope to the seams already walled — uncompiled source counts that ran on no line.
+        // scope of its own, never the production one (Fernlet's tree; the package's half is its own
+        // `PackageTestTreeWallTests` since A1.1.14), and the app's session scope to the seams already
+        // walled — uncompiled source counts that ran on no line.
         #expect(gated.contains("MeshSessionStoreIsolationTests"),
                 "the session store's scope-isolation grep-wall is gated")
         // P9 item 9 adds the one of its seven newly-gated suites that earns a NAME pin on the
@@ -1182,8 +1192,9 @@ import Testing
     /// `ProximityKeychainDoorTests` and `ProximityPresenceSessionTests`, measured on `proximitykit`;
     /// FernletTests stays 628 (`MeshSessionStoreIsolationTests` keeps its row and joins `mesh-batteries`).
     /// RAISED at A1.1.13 (2026-10-14): 21 → 22, for the package's NEW `PackageTestHygieneTests`, measured
-    /// on `proximitykit`; FernletTests stays 628.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 22]
+    /// on `proximitykit`; FernletTests stays 628. RAISED at A1.1.14 (2026-10-14): 22 → 23, for the
+    /// package's NEW `PackageTestTreeWallTests`, measured on `proximitykit`; FernletTests stays 628.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 23]
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has five
