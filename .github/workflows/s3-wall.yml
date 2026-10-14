@@ -1137,6 +1137,19 @@ jobs:
         # 356 + 1 (the namespace golden's cell holding `.packageTest`, the namespace ProximityKit's
         # package tests compute under, sound and colliding with `.fernlet` nowhere, asked from both
         # sides) = 357 is the ARITHMETIC CHECK, never the source.
+        #
+        # ProximityKit plan step A1.1.16 (2026-10-14) splits the purpose wall,
+        # `CryptographicPurposeBoundaryTests.rawCryptographicCallsNameAPurpose`, and the escape-hatch
+        # census beside it (`CryptographicEscapeHatchCensusTests`, which rides no line). Their ProximityKit
+        # half (every raw cryptographic call in ProximityKit's code naming a purpose in its window, and its
+        # one `x509-self-signature` hatch pinned) is ProximityKit's own
+        # `ProximityKitTests/ProximitySourceWallTests` on `proximitykit`, so it travels with the package;
+        # both read every shipping root but ProximityKit's folder through
+        # `CryptographicWallScan.fernletSourceFiles()` (`ProximityKitSources.folder`, the one exclusion
+        # every such Fernlet wall names), the census pinned at 6 hatches in 3 files. No cell added or
+        # removed: the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 357 tests
+        # (FernletTests 314 in 7 suites, CryptographicPurposeBoundaryTests 6; ProximityKitTests 43 in 1);
+        # its floor stays 357.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh crypto-goldens 357 \
@@ -2405,9 +2418,22 @@ jobs:
         # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 126: passed. Run once
         # more at 126 without ProximityKitTests/ProximitySourceWallTests: 120 ran and the floor refused it.
         # 120 + 6 = 126 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.16 no name joins or leaves the line; ProximitySourceWallTests gains six cells, the purpose
+        # wall (every raw cryptographic call in ProximityKit's code naming a purpose, at least 16 such lines
+        # read) and the escape-hatch census (its one hatch, `x509-self-signature`, pinned by total, label,
+        # file and prose, no legacy read path), whose ProximityKit halves leave FernletTests'
+        # CryptographicPurposeBoundaryTests and CryptographicEscapeHatchCensusTests so they travel with the
+        # package: RAISED 126 -> 132 at A1.1.16, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS
+        # 26.5): this exact twenty-name list run at the old floor 126 through Fernlet.xcworkspace after the
+        # strict build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 132
+        # (ProximityKitTests 132, "Test run with 132 tests in 20 suites passed after 0.846 seconds": the
+        # nineteen above at their counts and ProximitySourceWallTests 6 -> 12), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 132: passed. Run once
+        # more at 132 without ProximityKitTests/ProximitySourceWallTests: 120 ran and the floor refused it.
+        # 126 + 6 = 132 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 126 \
+          Scripts/run-gated-suites.sh proximitykit 132 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \

@@ -92,7 +92,12 @@ line: every read of its `PROXIMITYKIT_*` launch hooks (`injectUITestStateIfNeede
 flags, `MeshTransportDebugHooks.swift`'s three keys) inside `#if DEBUG`, each family at its measured floor, and
 no synchronizable keychain row or non-`ThisDeviceOnly` class in its code; Fernlet's hook and key-custody
 greps read Fernlet's shipping roots but ProximityKit's folder, and the platform suite's W1 refuses
-CloudKit by name in ProximityKit's code, in place of `S3BoundaryTests`' ProximityKit row. "The test
+CloudKit by name in ProximityKit's code, in place of `S3BoundaryTests`' ProximityKit row. Since A1.1.16
+the same suite holds a purpose named within reach of every raw cryptographic call in ProximityKit's code
+(at least 16 such lines; `IdentityService`, the routed item seal and content-key wrapper,
+`ProximityColumnCrypto`, the mesh manager and the TLS identity hold them) and its one escape hatch, the
+TLS identity's `x509-self-signature`, pinned with its justification; Fernlet's purpose wall and
+escape-hatch census read Fernlet's shipping roots but ProximityKit's folder. "The test
 target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
 and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace, the epoch fixtures and the source walls'

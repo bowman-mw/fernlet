@@ -8,6 +8,14 @@ import Foundation
 /// the wall does not enforce over — so the roots, the primitive markers and the context window live
 /// here once rather than twice.
 ///
+/// ## What the two walls read
+///
+/// Every shipping root but ProximityKit's folder (``fernletSourceFiles()``): ProximityKit's own package
+/// suite, `ProximitySourceWallTests`, holds ProximityKit's code to the same markers, window and census,
+/// so those rules travel with the package (ProximityKit plan step A1.1.16). ``sourceFiles()`` still walks
+/// every root, ProximityKit's folder included, for the mesh suites that read ProximityKit's code through
+/// it.
+///
 /// ## Why the roots are enumerated rather than globbed
 ///
 /// A shipping target no wall enumerates is a target with no wall. The three extension roots were
@@ -59,6 +67,14 @@ enum CryptographicWallScan {
             all.append(contentsOf: files)
         }
         return all
+    }
+
+    /// Every `.swift` file under every root but ProximityKit's folder (``ProximityKitSources/holds(_:)``):
+    /// what the purpose wall and the escape-hatch census read, since ProximityKit's own package suite,
+    /// `ProximitySourceWallTests`, holds ProximityKit's code to the same rules. A missing or empty root
+    /// still throws.
+    static func fernletSourceFiles() throws -> [URL] {
+        try sourceFiles().filter { !ProximityKitSources.holds($0.path) }
     }
 
     /// The path a failure message should print — repo-relative, so it is the same string on every

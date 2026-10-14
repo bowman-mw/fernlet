@@ -482,11 +482,15 @@ say what it found, and it is pinned as such in `ColumnCryptoDeviceBindingTests`.
 
 ### `CryptographicPurposeBoundaryTests` — a grep wall
 
-It scans the five shipping roots (see below) for nine primitive markers (`signature(for:`,
-`isValidSignature(`, `hkdfDerivedSymmetricKey`, `HKDF<`, `HMAC<`, `ChaChaPoly.seal/open`,
-`AES.GCM.seal/open`) and requires a purpose to be named within an asymmetric window: three lines
-above the call, six below (a multi-line call names its purpose inside its own argument list, which
-sits below the opening line).
+It scans the five shipping roots (see below) but ProximityKit's folder for nine primitive markers
+(`signature(for:`, `isValidSignature(`, `hkdfDerivedSymmetricKey`, `HKDF<`, `HMAC<`,
+`ChaChaPoly.seal/open`, `AES.GCM.seal/open`) and requires a purpose to be named within an asymmetric
+window: three lines above the call, six below (a multi-line call names its purpose inside its own
+argument list, which sits below the opening line). ProximityKit's raw calls are held to the same
+markers and window by ProximityKit's own package suite, `ProximitySourceWallTests` (ProximityKit plan
+step A1.1.16), so the rule travels with the package: its purpose words leave out
+`FernletCryptoPurpose`, a name ProximityKit never spells, and it reads at least 16 primitive-call
+lines, so a broken marker list cannot read none and pass.
 
 **What it catches:** a newly added primitive call that names no purpose at all — the case where a
 reviewer would have to remember the policy.
@@ -513,17 +517,19 @@ reviewer would have to remember the policy.
   (verified 2026-08-27, checked by nothing), which is what happened to the Messages extension under
   the localization wall (see
   [MessagesExtensionReleaseChecklist.md](MessagesExtensionReleaseChecklist.md) §Localization).
-  A root that stops resolving to Swift now throws `CryptographicWallScan.MissingRoot` rather than
-  scanning an empty directory and reporting green — the one failure a grep-wall cannot survive. A
-  sixth shipping target is still invisible until someone adds it to `CryptographicWallScan.roots`.
+  ProximityKit's folder inside `FernletKit/Sources` is not scanned here either: its own package
+  suite reads it instead (above). A root that stops resolving to Swift now throws
+  `CryptographicWallScan.MissingRoot` rather than scanning an empty directory and reporting green —
+  the one failure a grep-wall cannot survive. A sixth shipping target is still invisible until
+  someone adds it to `CryptographicWallScan.roots`.
 - **Escape-hatch abuse — now counted, and no longer any debt.** `// cryptographic-domain: …`
-  silences the wall by design, for the paths that genuinely have no domain to name. **There are 7
-  of them, across 4 files.** This document used to add that "nothing tracks the number, so a
-  nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and the next one
-  added fails CI. It pins four things, not one: the total, the count **per label**, the number of
-  files, and the set of labels that exist at all — so a hatch added while another is removed, a
-  hatch relabelled into a more benign category, and a brand-new category of exemption each fail
-  separately. The table below and the pins are one fact in two places, and move in the same commit.
+  silences the wall by design, for the paths that genuinely have no domain to name. **There are 6
+  of them in Fernlet's code, across 3 files.** This document used to add that "nothing tracks the
+  number, so a nineteenth passes unremarked"; `CryptographicEscapeHatchCensusTests` now does, and the
+  next one added fails it. It pins four things, not one: the total, the count **per label**, the
+  number of files, and the set of labels that exist at all — so a hatch added while another is
+  removed, a hatch relabelled into a more benign category, and a brand-new category of exemption each
+  fail separately. The table below and the pins are one fact in two places, and move in the same commit.
 
   By the label each one gives itself:
 
@@ -532,29 +538,16 @@ reviewer would have to remember the policy.
   | `purpose-derived salt` | 2 | The domain reached the primitive through the KDF salt, not as a visible argument |
   | `key-derived` | 2 | The domain is bound in the key rather than at this call |
   | `authenticatedData-bound aad` | 2 | The domain is inside the `aad` local, built above the window |
-  | `x509-self-signature` | 1 | The transcript is a DER TBSCertificate, whose bytes X.509 fixes — a Fernlet prefix would make the certificate unparseable |
 
-  **Six of the seven are annotations, and none of them is debt.** The domain IS bound at all six of
-  those; the marker only silences a grep that cannot see three lines up, and re-reading them is the
-  only way to tell an annotation from an exemption. There is no reader hatch left in the tree and
-  no write-side one either.
+  **All six are annotations, and none of them is debt.** The domain IS bound at all six; the marker
+  only silences a grep that cannot see three lines up, and re-reading them is the only way to tell an
+  annotation from an exemption. There is no reader hatch left in the tree and no write-side one
+  either.
 
-  **The seventh is a different kind, which is why it has its own label.** `x509-self-signature`
-  (`FernletKit/Sources/ProximityKit/Transport/EphemeralMeshTLSIdentity.swift`, added with the QUIC
-  mesh transport — [Plan-ProximityKit-Network-Migration-2026-08-27.md](Plan-ProximityKit-Network-Migration-2026-08-27.md)
-  §7.2) is not an annotation over a domain bound elsewhere: there is genuinely no Fernlet domain to
-  bind, because the signature is over a format Fernlet does not own. QUIC's listener must present a
-  certificate, X.509 defines exactly what a certificate's self-signature covers, and prefixing that
-  transcript would produce bytes no TLS stack can parse.
-
-  What makes it safe is not a domain but a scope: the key is a P-256 pair minted at session start,
-  used for this one signature and nothing else, never persisted, and thrown away with the session —
-  so there is no second use for the first to be confused with, which is what domain separation buys.
-  It is also not a trust decision. Nothing in Fernlet verifies this signature; the certificate
-  validator accepts anything, and peer authentication is the signed identity introduction exchanged
-  over the connection (and, from P2 item 7, the TLS-exporter-bound channel introduction on top of
-  it). A future hatch claiming this label would have to be another foreign signature format, not
-  another Fernlet transcript that skipped its purpose.
+  ProximityKit's one hatch, `x509-self-signature` (an X.509 certificate's self-signature, over a
+  format no host owns, added with the QUIC mesh transport), is ProximityKit's to count. Its own
+  package suite, `ProximitySourceWallTests`, pins it by the same rules, with its justification beside
+  the pin (ProximityKit plan step A1.1.16).
 
   **How the count got here, and why `legacy-read` is not a row at 0.**
 
@@ -590,6 +583,11 @@ reviewer would have to remember the policy.
   These deletions proceed on the owner's RISK judgement under §0 of the plan — one install, test
   data only — not on a discharged gate. The distinction is recorded because the two are easy to
   conflate later.
+
+  After the round, the QUIC mesh transport added ProximityKit's `x509-self-signature` hatch (6 → 7,
+  3 files → 4), and ProximityKit plan step A1.1.16 (2026-10-14) moved its count to ProximityKit's
+  own package suite with the rest of the census's ProximityKit half (7 → 6, 4 files → 3 here). No
+  hatch was deleted: the two censuses together count the seven.
 
   **Every refusal is NAMED.** That is the through-line, and it is worth more than the count:
   `PendingNarrativeBufferError.legacyUnprefixedFormat`; a `privateMedia.legacyFormatRefused` audit

@@ -439,7 +439,8 @@ import Testing
     /// A1.1.14 their tree walls, `PackageTestTreeWallTests` (the audit install, the stores' scopes, ML5
     /// and the digest homes over the package's tests); and since A1.1.15 the source walls over
     /// ProximityKit's own code, `ProximitySourceWallTests` (its launch hooks inside `#if DEBUG`, and no
-    /// synchronizable or non-`ThisDeviceOnly` keychain row).
+    /// synchronizable or non-`ThisDeviceOnly` keychain row; since A1.1.16 also a purpose named at every
+    /// raw cryptographic call, and its escape hatches counted).
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
                     "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],

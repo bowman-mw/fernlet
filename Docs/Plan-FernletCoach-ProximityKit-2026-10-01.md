@@ -397,7 +397,7 @@ a time, Fernlet's behaviour and every wire, keychain and on-disk byte unchanged.
   wall: no Fernlet file names the door. `FernletTests` keeps its own copy of the lexer, with its
   fixture cell in `SwiftSourceLexerTests`, and its feature golden reads ProximityKit's sources
   through a walker of `FernletTests`' own, `ProximityKitSources`.
-- The package's tests hold 24 suites (191 tests): 20 on the `proximitykit` line (126 tests), three on
+- The package's tests hold 24 suites (197 tests): 20 on the `proximitykit` line (132 tests), three on
   mesh-batteries (22) and the soundness suite on crypto-goldens (43).
 
 The split itself:
@@ -450,9 +450,9 @@ The split itself:
   - a protected label registry, mirroring the `FernletCrypto/` CODEOWNERS rule;
   - the namespace and platform walls, which are among its tests;
   - what A1.3 takes off Fernlet's walls: its `PROXIMITYKIT_*` hook keys read only inside `#if DEBUG`,
-    and its keychain rows never synchronizable and only under `ThisDeviceOnly` classes (ProximityKit's
-    own `ProximitySourceWallTests`, since A1.1.15), and its one `x509-self-signature` escape hatch,
-    counted (`CryptographicEscapeHatchCensusTests` today).
+    and its keychain rows never synchronizable and only under `ThisDeviceOnly` classes (since A1.1.15),
+    and a purpose named at every raw cryptographic call and its one `x509-self-signature` escape hatch,
+    counted (since A1.1.16), all ProximityKit's own `ProximitySourceWallTests`.
 - **After the split the package copies suites; Fernlet keeps its own (owner decision).** The suites
   still in `FernletTests` whose subject is ProximityKit and which need only ProximityKit and the
   package's test support are copied into its tests, keychain-free first, then those the in-memory

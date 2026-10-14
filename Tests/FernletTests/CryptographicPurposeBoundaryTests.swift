@@ -12,11 +12,14 @@ import Testing
 ///
 /// The roots, the primitive markers and the context window live in ``CryptographicWallScan``, shared
 /// with ``CryptographicEscapeHatchCensusTests`` so the pinned escape-hatch count cannot describe a
-/// different set of bytes than the wall enforces over.
+/// different set of bytes than the wall enforces over. Both read every shipping root but ProximityKit's
+/// folder (``CryptographicWallScan/fernletSourceFiles()``), whose raw calls ProximityKit's own package
+/// suite, `ProximitySourceWallTests`, holds to the same markers and window (ProximityKit plan step
+/// A1.1.16).
 struct CryptographicPurposeBoundaryTests {
 
     @Test func rawCryptographicCallsNameAPurpose() throws {
-        for sourceURL in try CryptographicWallScan.sourceFiles() {
+        for sourceURL in try CryptographicWallScan.fernletSourceFiles() {
             let lines = try String(contentsOf: sourceURL, encoding: .utf8)
                 .components(separatedBy: .newlines)
             let path = CryptographicWallScan.repoRelativePath(sourceURL)

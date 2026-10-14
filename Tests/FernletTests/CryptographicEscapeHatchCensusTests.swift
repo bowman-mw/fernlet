@@ -25,9 +25,14 @@ struct CryptographicEscapeHatch: Sendable {
 /// handful the mechanism reads like, and nothing tracks the number, so a nineteenth passes
 /// unremarked." Now a nineteenth fails here.
 ///
+/// It reads every shipping root but ProximityKit's folder (``CryptographicWallScan/fernletSourceFiles()``),
+/// the same bytes as the purpose wall: ProximityKit's hatches are ProximityKit's to count, and its own
+/// package suite, `ProximitySourceWallTests`, pins them by the same rules, each with its justification
+/// beside its pin (ProximityKit plan step A1.1.16).
+///
 /// ## What each assertion catches
 ///
-/// - The **total** catches a hatch added anywhere in the five shipping roots.
+/// - The **total** catches a hatch added anywhere in Fernlet's shipping code.
 /// - The **per-label counts** catch a hatch that is added and another removed in the same commit,
 ///   and a hatch relabelled to hide under a more benign category.
 /// - The **known-label set** catches a NEW category of hatch, which is a policy change and not a
@@ -68,18 +73,15 @@ struct CryptographicEscapeHatchCensusTests {
 
     /// The label → count pin. The sum is the number §Escape-hatch abuse quotes.
     ///
-    /// `x509-self-signature` (added with the QUIC mesh transport, plan §7.2) is a NEW category and
-    /// not a count change, so it is named here rather than folded into a neighbour. It covers the
-    /// one place a raw ECDSA signature is produced over a transcript Fernlet does not define: the
-    /// ephemeral per-session TLS certificate's own self-signature, whose bytes X.509 fixes exactly.
-    /// A domain prefix there would produce a certificate no TLS stack can parse. It is the only
-    /// non-`legacy-read` category whose justification is "the format is somebody else's", which is
-    /// why it reads differently from the other three.
+    /// Three labels, every one an annotation over a domain bound out of the window's reach. The fourth
+    /// category in the tree, `x509-self-signature` (the QUIC mesh transport's X.509 certificate
+    /// self-signature, a format no host owns), is ProximityKit's one hatch, which this census does not
+    /// read: ProximityKit's own `ProximitySourceWallTests` pins it, with its justification beside the pin
+    /// (ProximityKit plan step A1.1.16).
     private static let pinnedByLabel: [String: Int] = [
         "purpose-derived salt": 2,
         "key-derived": 2,
-        "authenticatedData-bound aad": 2,
-        "x509-self-signature": 1
+        "authenticatedData-bound aad": 2
     ]
 
     /// The number of distinct files holding a hatch. §Escape-hatch abuse said 11; the tree has only
@@ -105,11 +107,11 @@ struct CryptographicEscapeHatchCensusTests {
     /// left the set. What remains is `SealedBackupService.swift`, `SealedPhotoBackupService.swift`
     /// and `HeartDropSealer.swift` — no file in the tree carries a reader hatch any more.
     ///
-    /// Moved 3 → **4** by the QUIC mesh transport: `EphemeralMeshTLSIdentity.swift` mints a
-    /// self-signed P-256 certificate per session, and X.509 fixes the bytes it signs. This is the
-    /// first hatch added since the standardization round closed, and it is a genuinely new kind —
-    /// not a reader kept alive, but a signature over a format Fernlet does not own.
-    private static let pinnedFileCount = 4
+    /// Moved 3 → 4 by the QUIC mesh transport, whose `EphemeralMeshTLSIdentity.swift` signs an X.509
+    /// certificate's bytes under the `x509-self-signature` hatch. Moved 4 → **3** at ProximityKit plan
+    /// step A1.1.16 (2026-10-14): that hatch's file is ProximityKit's, whose own package suite counts it,
+    /// and this census reads every shipping root but ProximityKit's folder. The three are the three above.
+    private static let pinnedFileCount = 3
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,
     /// which is what ``proseMentionsCannotSilenceTheWall`` checks.
@@ -205,7 +207,7 @@ struct CryptographicEscapeHatchCensusTests {
     private static func scan() throws -> [CryptographicEscapeHatch] {
         var found: [CryptographicEscapeHatch] = []
         // R2: bounded by the file list the roots enumerate.
-        for url in try CryptographicWallScan.sourceFiles() {
+        for url in try CryptographicWallScan.fernletSourceFiles() {
             let path = CryptographicWallScan.repoRelativePath(url)
             let lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: .newlines)
             // R2: bounded by the file's line count.
