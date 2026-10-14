@@ -55,9 +55,14 @@ under a test namespace of their own, `.packageTest` (`TestSupport/PackageTestNam
 a source through `TestSupport/PackageRoot.swift`, by a path relative to the package root. Since A1.1.5
 their keychain is an in-memory store, `TestSupport/PackageKeychainStore.swift`, which
 `TestSupport/PackageTestEnvironment.swift` installs once as `ProximityKeychainItem`'s backend before the
-first keychain call, held by `PackageKeychainStoreTests`. "The test
-target" in this index still means the app's `FernletTests`, where the bindings, the host doubles and
-every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
+first keychain call, held by `PackageKeychainStoreTests`. Since A1.1.6 a package suite can build a
+manager unhosted over `TestSupport/PackageTestHost.swift`'s `PackageTestHost`, a `ProximityHost` of
+ProximityKit's alone on a scratch root with `.test.` keychain services, and read this module's audit lines
+through `TestSupport/PackageAuditCapture.swift`'s `PackageAuditCapture`, scoped by context or by its own
+marking, over the bundle's `PackageAuditSink`, which the same installer puts in `ProximityAudit`'s slot;
+`PackageTestHostTests` holds both. "The test
+target" in this index still means the app's `FernletTests`, where the bindings, Fernlet's host doubles
+and every other ProximityKit suite run until A1. The fake peer transport, the ranging mock, the membership
 fixtures, the mesh-message spelling helper, the test namespace and the epoch fixtures live in both
 targets, held identical but for imports.
 
@@ -2133,7 +2138,7 @@ Audit a new ProximityKit event with `ProximityAudit.log`, never `FernletAuditLog
 | Function | What It Does |
 | --- | --- |
 | `ProximityAuditSink.record(_:context:)` | The host's requirement: record one event, synchronously and on the caller's executor (`nonisolated`, `Sendable`, non-throwing). |
-| `ProximityAudit.install(_:)` | The host installs its sink once at launch; a later call replaces it. Until the first call every line is dropped. |
+| `ProximityAudit.install(_:)` | The host installs its sink once at launch; a later call replaces it. Until the first call every line is dropped. Called in two files only, Fernlet's `FernletApp.init` and ProximityKit's package tests' installer (`PackageTestEnvironment.audit`, their unhosted bundle having no app), held by `ProximityAuditBridgeTests`. |
 | `ProximityAudit.log(_:context:)` (internal) | The module's only audit entry point (`context` defaults to `[:]`): reads the sink under the slot's `Mutex`, calls it after releasing the lock, before returning; drops the line when no sink is installed. |
 
 ### `FernletConnections/FernletAuditBridge.swift`

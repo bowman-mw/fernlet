@@ -16,7 +16,10 @@
 // that bypassed the sink could not hide from them under the old spelling.
 //
 // Nothing here installs a sink. The process-wide slot is the app's, and a test that replaced it
-// would silence or redirect ProximityKit's lines for every suite running beside it.
+// would silence or redirect ProximityKit's lines for every suite running beside it. So this suite also
+// holds who may install one: Fernlet's app, at launch, and ProximityKit's own package tests' installer
+// (FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift), once, for their
+// unhosted bundle, which no app hosts; no file of Fernlet's test targets.
 
 import Foundation
 import os
@@ -130,5 +133,86 @@ import FernletFoundation
             `ProximityAudit.log(_:context:)`, which reaches Fernlet's log through the installed \
             bridge and every other host's sink too.
             """)
+    }
+
+    // MARK: - Who installs a sink (ProximityKit plan step A1.1)
+
+    /// The roots the install-site scan reads, each with the fewest Swift files it may hold (about four
+    /// fifths of its count when the cell was written: 264, 423, 485 and 23), so a root that stops
+    /// resolving fails rather than reading as clean: the app and its extensions, the package's sources,
+    /// Fernlet's test targets and the package's tests.
+    static let installSiteRoots: [(root: String, floor: Int)] = [
+        (root: "App", floor: 210), (root: "FernletKit/Sources", floor: 335), (root: "Tests", floor: 385),
+        (root: "FernletKit/Tests", floor: 18)
+    ]
+
+    /// The files that install a sink, each with its one call: Fernlet's app, first thing in
+    /// `FernletApp.init`, and ProximityKit's package tests' installer, `PackageTestEnvironment.audit`,
+    /// once, for their unhosted bundle.
+    static let installSites: [String: Int] = [
+        "App/Fernlet/FernletApp.swift": 1,
+        "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift": 1
+    ]
+
+    /// `ProximityAudit.install(` is called exactly once in each of two files, Fernlet's app and the package
+    /// tests' installer, and in no other: no file of Fernlet's test targets, so this hosted bundle runs on
+    /// the bridge `FernletApp.init` installed, which every capture handler here reads through, and no
+    /// package suite replaces the sink its installer put in place. Read as lexed code
+    /// (`SwiftSourceLexer`), so a comment or a string that spells the call is not one, over every root at
+    /// its file floor, with the matcher held to its samples and neighbours first.
+    @Test func onlyTheAppAndThePackageTestsInstallerInstallASink() throws {
+        Self.expectTheInstallMatcherSeesItsSamplesAndNoNeighbour()
+        var sites: [String: Int] = [:]
+        // R2: bounded by the four roots and each root's finite file list.
+        for (root, floor) in Self.installSiteRoots {
+            let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
+            #expect(files.count >= floor, "the install-site scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
+            for path in files {
+                let source = try RepoRoot.source(path)
+                guard source.contains("install") else { continue }
+                let calls = Self.installCalls(in: SwiftSourceLexer.lex(source).code)
+                if calls > 0 {
+                    sites[path] = calls
+                }
+            }
+        }
+        #expect(sites == Self.installSites, """
+            `ProximityAudit.install(` is called in \(sites.sorted { $0.key < $1.key }); only \
+            \(Self.installSites.keys.sorted()) may call it, once each. A sink installed by a Fernlet test \
+            replaces the app's bridge for every suite running beside it, and a second install in the \
+            package's tests replaces the sink every package capture reads.
+            """)
+    }
+
+    /// The calls of `ProximityAudit.install(` in lexed `code`, the type and its member read across
+    /// whitespace and line breaks, or -1, which no file and no sample yields, when the pattern does not
+    /// compile.
+    static func installCalls(in code: String) -> Int {
+        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])ProximityAudit\s*\.\s*install\s*\("#) else {
+            return -1
+        }
+        return regex.numberOfMatches(in: code, range: NSRange(code.startIndex..., in: code))
+    }
+
+    /// The install matcher reads every way the call is spelled and none of its nearest neighbours (a
+    /// longer name, the declaration, another member, a comment, a string). Each sample is lexed first,
+    /// as the files are.
+    private static func expectTheInstallMatcherSeesItsSamplesAndNoNeighbour() {
+        let calls = [
+            "ProximityAudit.install(FernletAuditBridge())", "ProximityAudit\n    .install(sink)",
+            "ProximityKit.ProximityAudit.install(sink)", "ProximityAudit . install (sink)"
+        ]
+        let neither = [
+            "nonisolated public static func install(_ sink: any ProximityAuditSink) {", "MyProximityAudit.install(sink)",
+            "ProximityAudit.installed(sink)", "ProximityAudit.log(\"install\")", "/// ProximityAudit.install(sink)",
+            #"let s = "ProximityAudit.install(sink)""#
+        ]
+        // R2: bounded by the two fixture lists.
+        for sample in calls {
+            #expect(installCalls(in: SwiftSourceLexer.lex(sample).code) == 1, "missed the call in: \(sample)")
+        }
+        for neighbour in neither {
+            #expect(installCalls(in: SwiftSourceLexer.lex(neighbour).code) == 0, "read a call in: \(neighbour)")
+        }
     }
 }

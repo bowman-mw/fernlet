@@ -58,7 +58,10 @@ import Testing
 
     /// ProximityKit's own package test target (ProximityKit plan step A0.8), named by a
     /// `ProximityKitTests/<Suite>` selector. Unhosted: it runs in the simulator's `xctest` agent, with
-    /// no keychain entitlement and no ProximityAudit sink, which is what ``packageHazards`` refuses.
+    /// no keychain entitlement and no app to install a ProximityAudit sink, so its test support installs
+    /// an in-memory keychain store and an audit sink of its own on first touch
+    /// (`TestSupport/PackageTestEnvironment.swift`), and ``packageHazards`` refuses what it still
+    /// cannot serve.
     static let packageTarget = "ProximityKitTests"
 
     /// Every test target a selector can name, with its repo-relative folder. A target whose folder
@@ -343,6 +346,13 @@ import Testing
     /// `PackageKeychainStoreTests`, the canary of the package tests' in-memory keychain store (the
     /// funnel resolves it, and ProximityKit's identity and seal keys provision, read back, defer and
     /// wipe through it), named `ProximityKitTests/PackageKeychainStoreTests`. Counted off the line.
+    ///
+    /// RE-MEASURED at ProximityKit plan step A1.1.6 (2026-10-14): `proximitykit` 12 → 13, for the new
+    /// `PackageTestHostTests`, the canary of the package tests' host double and audit sink (the bundle's
+    /// sink delivers each line to the captures scoped to it, `PackageTestHost` keeps its root and its
+    /// keychain services to itself and states every requirement itself, and a mesh manager built over it
+    /// provisions its identity into the in-memory keychain unhosted), named
+    /// `ProximityKitTests/PackageTestHostTests`. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -360,7 +370,7 @@ import Testing
         "food-search": 13,
         "mesh-batteries": 154,
         "mesh-features": 48,
-        "proximitykit": 12
+        "proximitykit": 13
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -1120,8 +1130,9 @@ import Testing
     /// measured in the package's bundle at their FernletTests counts, and the package's NEW
     /// `PackageTestSupportTests`, measured on `proximitykit`. RAISED at A1.1.5 (2026-10-14): 15 → 16,
     /// for the package's NEW `PackageKeychainStoreTests`, measured on `proximitykit`; FernletTests stays
-    /// 628.
-    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 16]
+    /// 628. RAISED at A1.1.6 (2026-10-14): 16 → 17, for the package's NEW `PackageTestHostTests`, measured
+    /// on `proximitykit`; FernletTests stays 628.
+    static let measuredInventoryRows: [String: Int] = ["FernletTests": 628, "ProximityKitTests": 17]
 
     /// The MEASURED sum of the package rows' cells, each its suite's declared tests (rule I7). 0 at
     /// plan step A0.8.0 (2026-10-10), before any suite moved; 15 at A0.8.2 (2026-10-11):
@@ -1133,8 +1144,9 @@ import Testing
     /// 140 = 102 + `MeshEpochRefTests` 10 + `MeshEpochKeyringTests` 5 + `MeshEpochAcceptanceTests` 4 +
     /// `MeshFrameReplayWindowTests` 10 + `MeshSessionIDClaimTests` 7, each its count in FernletTests, +
     /// the NEW `PackageTestSupportTests` 2. RAISED at A1.1.5 (2026-10-14): 146 = 140 + the NEW
-    /// `PackageKeychainStoreTests` 6.
-    static let measuredPackageCells = 146
+    /// `PackageKeychainStoreTests` 6. RAISED at A1.1.6 (2026-10-14): 150 = 146 + the NEW
+    /// `PackageTestHostTests` 4.
+    static let measuredPackageCells = 150
 
     /// What ProximityKit's unhosted package test bundle cannot serve, by needle, each with its reason
     /// (rule I9). Matched as a substring of every code line of every Swift file under
@@ -1150,17 +1162,18 @@ import Testing
     /// the keychain stands only on a ``packageHazardAllowlist`` row whose invariant says what reads the
     /// installer first, and the store's own file is ``packageKeychainStoreFile``. It is a needle list,
     /// not a call-graph closure: a path it misses fails with -34018 on the simulator gate only where the
-    /// failure surfaces, and a delete through `ProximityKeychainItem.deleteAll` audits its failure to a
-    /// sink this bundle lacks, so it passes silently. The location needles are every platform directory
-    /// `ProximityPlatformBoundaryTests.directoryNeedles` names but the temporary ones, which are
-    /// scratch a test may use, and the process-shared defaults and main bundle (A0.8.5; Documents,
-    /// Caches, the home folder and a defaults suite were missing before).
+    /// failure surfaces, and a delete through `ProximityKeychainItem.deleteAll` only audits its failure,
+    /// which no cell sees unless it captures that line, so it passes silently. The package's host
+    /// double, `TestSupport/PackageTestHost.swift`, reads that installer first too: its identity lines
+    /// stand on allowlist rows under one invariant, and so do its canary's. Since plan step A1.1.6
+    /// there is no audit needle: the bundle installs its own sink (`PackageTestEnvironment.audit`), every
+    /// `PackageAuditCapture` registers with it as it is built, so no capture reads before the sink is
+    /// installed, and `ProximityAuditBridgeTests` holds every install of a sink to that file and the
+    /// app's `FernletApp.swift`. The location
+    /// needles are every platform directory `ProximityPlatformBoundaryTests.directoryNeedles` names but
+    /// the temporary ones, which are scratch a test may use, and the process-shared defaults and main
+    /// bundle (A0.8.5; Documents, Caches, the home folder and a defaults suite were missing before).
     static let packageHazards: [(needle: String, reason: String)] = {
-        let audit = """
-            the unhosted bundle installs no ProximityAuditSink, so ProximityKit's audit lines never reach \
-            a capture and a "was not logged" check passes vacuously (ProximityAudit.swift); plan step A1 \
-            installs a sink first
-            """
         let keychain = """
             the bundle's keychain is the in-memory store PackageTestEnvironment installs on first touch, \
             and a call made before anything touched it reaches the system keychain, which answers \
@@ -1169,8 +1182,10 @@ import Testing
             PackageTestEnvironment.keychain first
             """
         let stores = """
-            the store isolation walls scan only Tests/FernletTests (their #filePath folders); until plan \
-            step A1 widens or moves them, a construction here would escape them
+            a store seals its files under a seal key it reads from the keychain, so it needs an allowlist \
+            row whose invariant says what reads PackageTestEnvironment.keychain first, and writes them \
+            under its scope's directory, which the store isolation walls hold to a scope of the test's \
+            own, never the production one (they read this folder too since plan step A1.1.6)
             """
         let location = "a production or process-shared location; on an unsandboxed Mac, the developer's own"
         let repo = """
@@ -1186,8 +1201,7 @@ import Testing
             .filter { !scratch.contains($0) } + ["UserDefaults", "Bundle.main"]
         let repoNeedles = ["RepoRoot", "#filePath", "\"App/", "\"Docs/", "\"Tests/", "\".github/",
                            "\"FernletKit/", "\"Scripts/"]
-        return [(needle: "addCaptureHandler", reason: audit)]
-            + packageKeychainNeedles.map { (needle: $0, reason: keychain) }
+        return packageKeychainNeedles.map { (needle: $0, reason: keychain) }
             + storeNeedles.map { (needle: $0, reason: stores) }
             + locationNeedles.map { (needle: $0, reason: location) }
             + repoNeedles.map { (needle: $0, reason: repo) }
@@ -1250,6 +1264,49 @@ import Testing
         "private static func spelled(_ listing: ProximityKeychainItem.EnumerationResult) -> String {"
     ]
 
+    /// The package's host double (rule I9, ProximityKit plan step A1.1.6), whose identity lines
+    /// ``packageHazardAllowlist`` lists under ``packageTestHostInvariant``.
+    static let packageTestHostFile = "FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestHost.swift"
+
+    /// What makes every line of ``packageTestHostLines`` safe in the unhosted bundle.
+    static let packageTestHostInvariant = """
+        PackageTestHost's initializer reads PackageTestEnvironment.keychain before anything else, so no host \
+        exists before the in-memory store is ProximityKit's keychain backend: the identity the host builds on \
+        its own .test. service reads and writes nothing until a manager provisions it, and then reaches the \
+        store, never the system keychain; IdentityService.fingerprint(of:) is a pure function of a key's \
+        bytes, and the declaration only names the type
+        """
+
+    /// The host double's lines that name the identity, each exact as trimmed (rule I9).
+    static let packageTestHostLines = [
+        "blockedFingerprints.insert(IdentityService.fingerprint(of: signingPublicKey))",
+        "func makeProximityIdentity() -> IdentityService {",
+        "IdentityService(namespace: proximityNamespace, keychainService: identityService)"
+    ]
+
+    /// The host double's canary (rule I9, ProximityKit plan step A1.1.6), whose lines that build a
+    /// manager or provision an identity ``packageHazardAllowlist`` lists under
+    /// ``packageTestHostCanaryInvariant``.
+    static let packageTestHostCanaryFile = "FernletKit/Tests/ProximityKitTests/PackageTestHostTests.swift"
+
+    /// What makes every line of ``packageTestHostCanaryLines`` safe in the unhosted bundle.
+    static let packageTestHostCanaryInvariant = """
+        the line is in a cell of PackageTestHostTests and builds over, or reads from, a PackageTestHost the \
+        cell built before it, whose initializer read PackageTestEnvironment.keychain first: a manager's \
+        identity and an identity read back provision into the in-memory store on the host's own .test. \
+        service, never the system keychain, and the cell holds that the rows land there; \
+        IdentityService.fingerprint(of:) is a pure function of a key's bytes
+        """
+
+    /// The canary's lines that build a manager, provision an identity or name the identity type, each
+    /// exact as trimmed (rule I9).
+    static let packageTestHostCanaryLines = [
+        "let fingerprint = IdentityService.fingerprint(of: blocked)",
+        "let manager = capture.marking { MeshNetworkManager(store: host) }",
+        "try readBack.ensureProvisioned()",
+        "let failing = capture.marking { MeshNetworkManager(store: refused) }"
+    ]
+
     /// The package lines a ``packageHazards`` needle may stand on (rule I9): the repo-relative file,
     /// the line's exact trimmed text, and the invariant that makes it safe. A row is added only with
     /// an invariant a reviewer can check against the line it names, and a row whose line is gone or
@@ -1259,7 +1316,9 @@ import Testing
     /// file locator's one read of its own source's path, from which it walks up to the package root;
     /// 26 since A1.1.5 (2026-10-14), with the installer's one line, which installs the in-memory keychain
     /// store, and the 23 distinct lines of the keychain canary (``packageKeychainCanaryLines``), which
-    /// share one invariant.
+    /// share one invariant; 33 since A1.1.6 (2026-10-14), with the host double's three identity lines
+    /// (``packageTestHostLines``) and its canary's four (``packageTestHostCanaryLines``), each set under
+    /// one invariant.
     static let packageHazardAllowlist: [(file: String, line: String, invariant: String)] = [
         (file: "FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift",
          line: "for base in [URL.applicationSupportDirectory, scratch] {",
@@ -1284,6 +1343,10 @@ import Testing
             """)
     ] + packageKeychainCanaryLines.map {
         (file: packageKeychainCanaryFile, line: $0, invariant: packageKeychainCanaryInvariant)
+    } + packageTestHostLines.map {
+        (file: packageTestHostFile, line: $0, invariant: packageTestHostInvariant)
+    } + packageTestHostCanaryLines.map {
+        (file: packageTestHostCanaryFile, line: $0, invariant: packageTestHostCanaryInvariant)
     }
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines

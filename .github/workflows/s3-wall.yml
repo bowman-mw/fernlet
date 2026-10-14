@@ -498,6 +498,29 @@ jobs:
         # by their Security keys. No suite joined or left this line and no cell was added, and the line,
         # MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 112 tests in 11 suites; its
         # floor stays the shared `1`. proximitykit is raised 75 -> 81 (see its step).
+        #
+        # ProximityKit plan step A1.1.6 (2026-10-14) gives ProximityKit's package tests a host double,
+        # TestSupport/PackageTestHost.swift (a ProximityHost of ProximityKit's alone on a scratch root
+        # with `.test.` keychain services), and an audit sink and scoped capture,
+        # TestSupport/PackageAuditCapture.swift, the sink installed once by
+        # TestSupport/PackageTestEnvironment.swift, and the package's canary of both, PackageTestHostTests.
+        # `ProximityAuditBridgeTests` gains one cell: `ProximityAudit.install(` is called once in the app's
+        # FernletApp.swift and once in the package tests' installer, and in no other file of App,
+        # FernletKit/Sources, Tests or FernletKit/Tests, read over lexed code with its matcher fixtured.
+        # `CIGateSelectorBoundaryTests`' pins follow, each with a dated note: the inventory's measured rows
+        # are 628 / 17 and the package's declared tests 150, and `proximitykit` names 13 suites. I9 has no
+        # audit needle now that the bundle installs its own sink, which every capture reads as it is
+        # built; its store reason says what its needles hold now that the store isolation walls read the
+        # package's folder too; and `packageHazardAllowlist` holds 33 rows, with the host double's three
+        # identity lines and its canary's four, each set under one invariant.
+        # MeshRoutedStoreIsolationTests and MeshSessionStoreIsolationTests read both test trees, each root
+        # at a file floor (356 and 18), and the scratch-root needle reads 18 host doubles, the package's
+        # PackageTestHost the eighteenth; the P8, P9 and P10 honesty suites' test-tree scans read both
+        # trees through MeshP7Acceptance.testTreeSources(), at the same floors. No suite joined or left this
+        # line, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 113 tests
+        # in 11 suites (ProximityAuditBridgeTests 4 -> 5); its floor stays the shared `1`. mesh-batteries
+        # stays 1372 with its split unchanged: no cell joined it, the changed cells read more files.
+        # proximitykit is raised 81 -> 85 (see its step).
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -2108,9 +2131,22 @@ jobs:
         # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 81: passed. Run once
         # more at 81 without ProximityKitTests/PackageKeychainStoreTests: 75 ran and the floor refused it.
         # 75 + 6 = 81 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.6 one name joins the line, the package's new PackageTestHostTests, the canary of the
+        # package tests' host double and audit sink (the bundle's sink delivers each line to the captures
+        # scoped to it, PackageTestHost keeps its root and keychain services to itself and states every
+        # requirement itself, and a mesh manager built over it provisions its identity into the in-memory
+        # keychain unhosted):
+        # RAISED 81 -> 85 at A1.1.6, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact thirteen-name list run at the old floor 81 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 85
+        # (ProximityKitTests 85, "Test run with 85 tests in 13 suites passed after 0.060 seconds": the
+        # twelve above at their counts and PackageTestHostTests 4), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 85: passed. Run once
+        # more at 85 without ProximityKitTests/PackageTestHostTests: 81 ran and the floor refused it.
+        # 81 + 4 = 85 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 81 \
+          Scripts/run-gated-suites.sh proximitykit 85 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2122,4 +2158,5 @@ jobs:
             ProximityKitTests/MeshEpochAcceptanceTests \
             ProximityKitTests/MeshFrameReplayWindowTests \
             ProximityKitTests/PackageTestSupportTests \
-            ProximityKitTests/PackageKeychainStoreTests
+            ProximityKitTests/PackageKeychainStoreTests \
+            ProximityKitTests/PackageTestHostTests

@@ -1358,7 +1358,7 @@ struct MeshP9HonestyAcceptanceTests {
     /// `MeshP5AcceptanceTests`, and the gate that runs this battery re-runs the determinism suites,
     /// which is where a moved digest actually reddens.
     @Test func neitherDeterminismDigestMovedNorLeftItsOneHome() throws {
-        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        let tests = try MeshP7Acceptance.testTreeSources()
         #expect(tests.count >= 280, "the test-target scan lost its files (347 when this was measured)")
         #expect(MeshP7Acceptance.homes(of: "ca898" + "bcc", in: tests) == ["MeshP5AcceptanceTests.swift"],
                 "the schedule digest has exactly one home, and this file's split spelling is not a second")
@@ -1520,7 +1520,7 @@ struct MeshP9HonestyAcceptanceTests {
                 deletion would be invisible everywhere else
                 """)
         }
-        let tests = try MeshP7Acceptance.sources(under: "Tests/FernletTests")
+        let tests = try MeshP7Acceptance.testTreeSources()
         #expect(tests.count >= 280, "the test-target scan lost its files (347 when this was measured)")
         // Split so this cell's own literal is not one of the reads it counts.
         let read = ".count(" + "of: "

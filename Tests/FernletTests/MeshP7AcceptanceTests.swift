@@ -51,6 +51,33 @@ enum MeshP7Acceptance {
         return sources
     }
 
+    /// The test roots the batteries' test-tree scans read (P8's, P9's and P10's digest homes, P9's
+    /// unscoped audit counts and P10's production conformers), each with the fewest Swift files it may
+    /// hold: the app's unit tests and, since ProximityKit plan step A1.1.6 (2026-10-14), ProximityKit's
+    /// package tests, which now hold a host double and an audit capture of their own, so a file there
+    /// that spelled a digest, built a production conformer or counted audit lines unscoped would
+    /// otherwise go unseen. MEASURED then at 446 and 23 files; each floor is about four fifths of that,
+    /// so a root that stops resolving fails rather than reading as clean.
+    nonisolated static let testRoots: [(root: String, floor: Int)] = [
+        (root: "Tests/FernletTests", floor: 356), (root: "FernletKit/Tests", floor: 18)
+    ]
+
+    /// Every Swift file under both test roots (``testRoots``), comment-stripped, each root held to its
+    /// floor.
+    nonisolated static func testTreeSources() throws -> [(name: String, code: String)] {
+        var all: [(name: String, code: String)] = []
+        // R2: bounded by the two roots.
+        for (root, floor) in testRoots {
+            let read = try Self.sources(under: root)
+            #expect(read.count >= floor, """
+                the test-tree scan read \(read.count) Swift files under \(root), below its floor \(floor): \
+                the root moved, or the reader stopped reading it
+                """)
+            all += read
+        }
+        return all
+    }
+
     /// The file names in which `needle` occurs, one entry per occurrence.
     nonisolated static func homes(of needle: String, in sources: [(name: String, code: String)]) -> [String] {
         var homes: [String] = []
