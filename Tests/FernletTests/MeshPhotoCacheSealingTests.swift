@@ -111,14 +111,16 @@ struct MeshPhotoCacheSealingTests {
             indexURL: legacyIndexURL(in: directory),
             keyProvider: InMemoryPrivateMediaKeyProvider()
         )
-        let saved = photo(named: "Alice", fingerprint: "fp-alice", at: Date())
+        // Long names on purpose: the cell asserts the name is ABSENT from ~200-300 bytes of
+        // ciphertext, and a five-byte "Alice" turns up there by chance about once in 2³² runs.
+        let saved = photo(named: "Alice Marchetti", fingerprint: "fp-alice", at: Date())
 
         store.save([saved])
 
         #expect(!FileManager.default.fileExists(atPath: legacyIndexURL(in: directory).path),
                 "the sealed store must not write the plaintext index path")
         let onDisk = try #require(try? Data(contentsOf: sealedIndexURL(in: directory)))
-        #expect(onDisk.range(of: Data("Alice".utf8)) == nil, "sender name is in the clear in the index")
+        #expect(onDisk.range(of: Data("Alice Marchetti".utf8)) == nil, "sender name is in the clear in the index")
         #expect(onDisk.range(of: Data("fp-alice".utf8)) == nil, "sender fingerprint is in the clear in the index")
         #expect(throws: (any Error).self) {
             try JSONDecoder().decode([FriendPhotoPayload].self, from: onDisk)
@@ -126,7 +128,7 @@ struct MeshPhotoCacheSealingTests {
 
         let loaded = try #require(store.load().first)
         #expect(loaded.id == saved.id)
-        #expect(loaded.senderName == "Alice")
+        #expect(loaded.senderName == "Alice Marchetti")
         #expect(loaded.senderFingerprint == "fp-alice")
         #expect(loaded.imageData == nil)
     }
@@ -153,18 +155,20 @@ struct MeshPhotoCacheSealingTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let provider = InMemoryPrivateMediaKeyProvider()
         let store = PrivateMediaStore(indexURL: legacyIndexURL(in: directory), keyProvider: provider)
-        let older = photo(named: "Alice", fingerprint: "fp-alice", at: Date(timeIntervalSince1970: 1_000))
-        let newer = photo(named: "Bruno", fingerprint: "fp-bruno", at: Date(timeIntervalSince1970: 2_000))
+        // Long names for the same reason as `indexIsSealedAtRestAndRoundTrips`: a short one can
+        // appear in the ciphertext by chance.
+        let older = photo(named: "Alice Marchetti", fingerprint: "fp-alice", at: Date(timeIntervalSince1970: 1_000))
+        let newer = photo(named: "Bruno Bellweather", fingerprint: "fp-bruno", at: Date(timeIntervalSince1970: 2_000))
         try writeLegacyIndex([older, newer], to: legacyIndexURL(in: directory))
 
         let loaded = store.load()
 
         #expect(loaded.count == 2, "the migration dropped entries")
-        #expect(loaded.map(\.senderName) == ["Bruno", "Alice"], "entries must come back newest first")
+        #expect(loaded.map(\.senderName) == ["Bruno Bellweather", "Alice Marchetti"], "entries must come back newest first")
         #expect(!FileManager.default.fileExists(atPath: legacyIndexURL(in: directory).path),
                 "the plaintext index survived the migration")
         let onDisk = try #require(try? Data(contentsOf: sealedIndexURL(in: directory)))
-        #expect(onDisk.range(of: Data("Bruno".utf8)) == nil, "the migrated index is still plaintext")
+        #expect(onDisk.range(of: Data("Bruno Bellweather".utf8)) == nil, "the migrated index is still plaintext")
 
         // And the sealed file — not the deleted plaintext one — is what a fresh store reads.
         let reopened = PrivateMediaStore(indexURL: legacyIndexURL(in: directory), keyProvider: provider)

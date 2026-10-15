@@ -160,8 +160,8 @@ struct HomeView: View {
         }
         .task {
             // Ambience sky accents: opt-in (weather prompts) and served from the shared
-            // ≤30-min WeatherKitService cache, so this costs at most one fetch per half
-            // hour. Renders never wait on it — until (unless) it lands, the layer shows
+            // ≤90-min WeatherKitService cache, under its 10-a-day WeatherKit budget. Renders
+            // never wait on it — until (unless) it lands, the layer shows
             // the time-of-day tint alone.
             guard store.settings.weatherPromptsEnabled else { return }
             companionAmbient = await WeatherKitService.shared.currentAmbient()

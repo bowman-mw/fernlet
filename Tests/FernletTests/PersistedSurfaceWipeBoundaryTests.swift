@@ -191,6 +191,7 @@ struct PersistedSurfaceWipeBoundaryTests {
         // ── Cleared by the funnel ────────────────────────────────────────────────────────────────
         "ageAssuranceRecord": .cleared(token: "ageAssurance.clear"),
         "fernlet.ai.quota.pair": .cleared(token: "aiCallQuotaStore.reset"),
+        "fernlet.weather.requestBudget": .cleared(token: "WeatherKitService.shared.clearRequestHistory"),
         "fernlet.barcodeLastServings.v1": .cleared(token: "BarcodeServingMemory.clearAll"),
         // The companion petting state, all four keys. `clearPersistentState()` existed long before
         // anything on a shipping path called it — see the header.

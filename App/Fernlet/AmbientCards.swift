@@ -67,7 +67,7 @@ struct AmbientCardsView: View {
             forgottenFavorites = computeForgottenFavorites()
             forgottenWorkout = computeForgottenWorkout()
             if store.settings.weatherPromptsEnabled {
-                // Both reads share the service's ≤30-min conditions cache (one fetch, two prompts).
+                // Both reads share the service's ≤90-min conditions cache (one fetch, two prompts).
                 weatherPrompt = await WeatherKitService.shared.moodRecoveryPrompt()
                 walkComfort = await WeatherKitService.shared.currentComfort()
             }

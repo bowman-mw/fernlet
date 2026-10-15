@@ -65,7 +65,12 @@ public struct WeatherAmbient: Equatable, Sendable {
 /// `CompanionAmbienceLayer`, and `SettingsSheet` — gate on `settings.weatherPromptsEnabled` and
 /// must treat `nil` as "feature simply absent".
 ///
-/// Concurrency invariants: the snapshot is cached for ``cacheInterval`` (30 min), and BOTH the
+/// Request budget: at most ``WeatherRequestBudget/dailyLimit`` WeatherKit calls per local day,
+/// persisted by ``WeatherRequestBudgetStore`` so a relaunch cannot reset it, and a failed call is not
+/// retried for ``failureRetryInterval``. Each call asks for the current conditions only
+/// (`including: .current`), never the full forecast. A spent budget reads as `nil`, like any failure.
+///
+/// Concurrency invariants: the snapshot is cached for ``cacheInterval`` (90 min), and BOTH the
 /// location fix and the WeatherKit fetch coalesce concurrent callers onto a single in-flight
 /// `Task` (`locationRequest` / `conditionsRequest`) — only that task ever installs
 /// `locationContinuation`, so a cold-launch burst of `.task`s cannot overwrite and leak another
@@ -79,15 +84,30 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     public static let shared = WeatherKitService()
 
     /// How long one fetched current-weather snapshot is reused before re-querying WeatherKit.
-    /// Shared by `moodRecoveryPrompt` and `currentComfort` so a Home appearance costs at most one
-    /// location + weather fetch per half hour (previously every appearance refetched).
-    public static let cacheInterval: TimeInterval = 30 * 60
+    /// Shared by all three read surfaces. Ten calls (``WeatherRequestBudget/dailyLimit``), each
+    /// fresh for ninety minutes, cover a 15-hour waking day, so someone who keeps the app open from
+    /// morning to night still fits inside the budget; it was 30 minutes, which spent ten calls in
+    /// five hours.
+    public static let cacheInterval: TimeInterval = 90 * 60
+
+    /// How long after a failed WeatherKit call the next attempt waits. Without it every surface
+    /// appearance retried at once (two failed calls six seconds apart in one launch's log), and a
+    /// persistent failure such as a missing WeatherKit service on the App ID would spend the whole
+    /// day's budget in a few screens.
+    public static let failureRetryInterval: TimeInterval = 30 * 60
 
     /// This module's unified-log sink. `AppServices` deliberately declares no `FernletFoundation`
     /// edge (see `Package.swift`), so `os.Logger` — not `FernletAuditLog` — is the audit surface here.
     private static let logger = Logger(subsystem: "com.fernlet", category: "weather")
 
     private let locationManager = CLLocationManager()
+    /// The persisted daily WeatherKit call count.
+    private let budgetStore: WeatherRequestBudgetStore
+    /// The clock every budget, cache and retry decision reads.
+    private let now: () -> Date
+    /// When the last WeatherKit call failed, cleared by the next success; held for
+    /// ``failureRetryInterval``. In memory only: the daily budget is the cross-launch bound.
+    private var lastFailedAttemptAt: Date?
     private var authContinuation: CheckedContinuation<Bool, Never>?
     private var locationContinuation: CheckedContinuation<CLLocation?, Never>?
 
@@ -125,10 +145,41 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     private var conditionsRequest: Task<ConditionsSnapshot?, Never>?
     #endif
 
-    override init() {
+    /// - Parameters:
+    ///   - budgetStore: Where the daily call count persists; `.standard` defaults in production.
+    ///   - now: The clock; `Date.init` in production.
+    init(
+        budgetStore: WeatherRequestBudgetStore = WeatherRequestBudgetStore(),
+        now: @escaping () -> Date = Date.init
+    ) {
+        self.budgetStore = budgetStore
+        self.now = now
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyReduced
+    }
+
+    /// Whether a WeatherKit call may be made at `now`: the day's budget has room and no failed call
+    /// is still inside ``failureRetryInterval``. Pure, so tests pin the gate without WeatherKit.
+    public static func mayAttemptFetch(
+        budget: WeatherRequestBudget,
+        lastFailedAttemptAt: Date?,
+        now: Date
+    ) -> Bool {
+        if let lastFailedAttemptAt, now.timeIntervalSince(lastFailedAttemptAt) < failureRetryInterval {
+            return false
+        }
+        return budget.allowsRequest(now: now)
+    }
+
+    /// The "delete everything" leg: forgets the day's call count, the failure hold and the cached
+    /// conditions. A plain `UserDefaults` removal with no failure signal, like the AI-call quota's.
+    public func clearRequestHistory() {
+        budgetStore.reset()
+        lastFailedAttemptAt = nil
+        #if canImport(WeatherKit)
+        cachedConditions = nil
+        #endif
     }
 
     /// Whether when-in-use (or always) location authorization is currently granted.
@@ -179,7 +230,7 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     /// Whether a short walk would be inviting right now — pleasant conditions + daylight — or `nil`
     /// whenever weather is unavailable (no authorization, no entitlement, network error). Callers
     /// gate on `settings.weatherPromptsEnabled` (same contract as `moodRecoveryPrompt`); a `nil`
-    /// simply removes the walk offer, never blocks anything. Served from the shared ≤30-min cache.
+    /// simply removes the walk offer, never blocks anything. Served from the shared ≤90-min cache.
     public func currentComfort() async -> WeatherComfort? {
         #if canImport(WeatherKit)
         guard let conditions = await currentConditions() else { return nil }
@@ -197,7 +248,7 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     /// weather is unavailable (no authorization, no entitlement — WeatherKit needs it at
     /// runtime — or a network error). Callers gate on `settings.weatherPromptsEnabled`
     /// and must treat `nil` as "time-of-day tint only"; this never blocks rendering.
-    /// Served from the same shared ≤30-min conditions cache as `moodRecoveryPrompt` and
+    /// Served from the same shared ≤90-min conditions cache as `moodRecoveryPrompt` and
     /// `currentComfort` — one location + weather fetch covers all three surfaces.
     public func currentAmbient() async -> WeatherAmbient? {
         #if canImport(WeatherKit)
@@ -245,34 +296,53 @@ public final class WeatherKitService: NSObject, CLLocationManagerDelegate {
     /// Concurrent callers on a cache miss coalesce onto one in-flight `conditionsRequest` so the
     /// three weather surfaces appearing together share a single location + WeatherKit fetch.
     private func currentConditions() async -> ConditionsSnapshot? {
-        if let cachedConditions, Date().timeIntervalSince(cachedConditions.fetchedAt) < Self.cacheInterval {
+        if let cachedConditions, now().timeIntervalSince(cachedConditions.fetchedAt) < Self.cacheInterval {
             return cachedConditions
         }
         if let conditionsRequest { return await conditionsRequest.value }
         let request = Task<ConditionsSnapshot?, Never> { [weak self] in
             guard let self else { return nil }
             defer { self.conditionsRequest = nil }
-            guard self.isAuthorized, let location = await self.currentLocation() else { return nil }
-            do {
-                let current = try await WeatherService.shared.weather(for: location).currentWeather
-                let snapshot = ConditionsSnapshot(
-                    condition: current.condition,
-                    temperatureCelsius: current.temperature.converted(to: .celsius).value,
-                    isDaylight: current.isDaylight,
-                    fetchedAt: Date()
-                )
-                self.cachedConditions = snapshot
-                return snapshot
-            } catch {
-                // Recovery: `nil` = "weather surface simply absent", which every caller handles.
-                // Logged so a missing WeatherKit entitlement or a persistent service failure is
-                // distinguishable from "the user never granted location".
-                Self.logger.notice("weather.fetchFailed (surface hidden): \(error.localizedDescription, privacy: .public)")
-                return nil
-            }
+            return await self.fetchConditions()
         }
         conditionsRequest = request
         return await request.value
+    }
+
+    /// One budgeted WeatherKit call. The gate is read before the location fix (a spent day needs
+    /// no fix) and the call is counted before it is made, so a call that never returns still
+    /// counts. Only the current-conditions dataset is requested.
+    private func fetchConditions() async -> ConditionsSnapshot? {
+        guard isAuthorized else { return nil }
+        let budget = budgetStore.load(now: now())
+        guard Self.mayAttemptFetch(budget: budget, lastFailedAttemptAt: lastFailedAttemptAt, now: now()) else {
+            return nil
+        }
+        guard let location = await currentLocation() else { return nil }
+        let attemptedAt = now()
+        let spent = budgetStore.recordRequest(now: attemptedAt)
+        if spent.count == WeatherRequestBudget.dailyLimit {
+            Self.logger.notice("weather.dailyBudgetSpent limit=\(WeatherRequestBudget.dailyLimit, privacy: .public)")
+        }
+        do {
+            let current = try await WeatherService.shared.weather(for: location, including: .current)
+            let snapshot = ConditionsSnapshot(
+                condition: current.condition,
+                temperatureCelsius: current.temperature.converted(to: .celsius).value,
+                isDaylight: current.isDaylight,
+                fetchedAt: now()
+            )
+            lastFailedAttemptAt = nil
+            cachedConditions = snapshot
+            return snapshot
+        } catch {
+            // Recovery: `nil` = "weather surface simply absent", which every caller handles, and no
+            // retry for `failureRetryInterval`. Logged so a missing WeatherKit entitlement or a
+            // persistent service failure is distinguishable from "the user never granted location".
+            lastFailedAttemptAt = attemptedAt
+            Self.logger.notice("weather.fetchFailed (surface hidden): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
     #endif
 
