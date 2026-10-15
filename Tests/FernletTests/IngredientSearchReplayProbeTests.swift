@@ -25,7 +25,8 @@
 // absent or unwritable, the JSON is printed between `===REPLAY-JSON-BEGIN <label>===` and
 // `===REPLAY-JSON-END===` lines instead. The branded On-Demand-Resource catalog is attached for a
 // second pass when `FERNLET_REPLAY_BRANDED` names its absolute path, or when
-// `ODRAssets/FoodCatalogBranded.sqlite` exists under the repo root; otherwise only the base pass runs.
+// `ODRAssets/FoodCatalogBranded.sqlite` exists under the repo root and is not the build's empty
+// placeholder; otherwise only the base pass runs.
 //
 //     TEST_RUNNER_FERNLET_REPLAY=1 TEST_RUNNER_FERNLET_REPLAY_OUT=/abs/out \
 //       TEST_RUNNER_FERNLET_REPLAY_BRANDED=/abs/FoodCatalogBranded.sqlite \
@@ -234,7 +235,7 @@ struct IngredientSearchReplayProbeTests {
         let named = env["FERNLET_REPLAY_BRANDED"] ?? env["TEST_RUNNER_FERNLET_REPLAY_BRANDED"]
         let candidate = named.map { URL(fileURLWithPath: $0) }
             ?? RepoRoot.url("ODRAssets/FoodCatalogBranded.sqlite")
-        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+        return BrandedODRCatalogTests.usableBrandedDatabase(at: candidate)
     }
 
     private static func emit(_ run: IngredientReplayRun, to directory: String?) {

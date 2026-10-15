@@ -31,7 +31,8 @@
 // OPT-IN, exactly like the cold probe: nothing runs unless the runner environment carries
 // `FERNLET_REPLAY`; output goes to `FERNLET_REPLAY_OUT` as `replay-warm-<label>.json` (or is printed
 // between `===REPLAY-JSON-BEGIN warm-<label>===` markers); the branded ODR pass runs when
-// `FERNLET_REPLAY_BRANDED` names the file or `ODRAssets/FoodCatalogBranded.sqlite` exists.
+// `FERNLET_REPLAY_BRANDED` names the file or `ODRAssets/FoodCatalogBranded.sqlite` exists and is
+// not the build's empty placeholder.
 //
 //     TEST_RUNNER_FERNLET_REPLAY=1 TEST_RUNNER_FERNLET_REPLAY_OUT=/abs/out \
 //       xcodebuild test-without-building … -only-testing:FernletTests/IngredientSearchWarmReplayProbeTests
@@ -121,7 +122,7 @@ struct IngredientSearchWarmReplayProbeTests {
         Self.emit(try Self.run(label: "base", catalog: catalog, matchers: matchers), to: outDirectory)
         let named = env["FERNLET_REPLAY_BRANDED"] ?? env["TEST_RUNNER_FERNLET_REPLAY_BRANDED"]
         let brandedURL = named.map { URL(fileURLWithPath: $0) } ?? RepoRoot.url("ODRAssets/FoodCatalogBranded.sqlite")
-        guard FileManager.default.fileExists(atPath: brandedURL.path) else { return }
+        guard BrandedODRCatalogTests.usableBrandedDatabase(at: brandedURL) != nil else { return }
         let branded = try #require(SQLiteBundledFoodSource(url: brandedURL, skipPriorityOrder: true, candidateCap: 600))
         let withBranded = FoodCatalog.bundled()
         withBranded.attachBrandedSource(branded)
