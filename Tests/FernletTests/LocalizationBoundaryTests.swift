@@ -182,6 +182,10 @@ struct LocalizationBoundaryTests {
     /// `String(localized:)` form is the CORRECT one there — scanning it would demand `bundle: .module`
     /// where no `.module` accessor even exists, and a wall that asks for the wrong thing gets
     /// disabled. The two app extensions are likewise their own main bundles.
+    ///
+    /// ProximityKit is not under this root: it is a package dependency since ProximityKit plan step
+    /// A1.3, and its package suite of this name holds its sources to the same rules (A, A2, E, F, G and
+    /// H1), so the walls here read Fernlet's own modules.
     static let packageSourceRoot = "FernletKit/Sources"
 
     /// Floor for the package scan (215 `.swift` files at the time of writing). Set well below the real

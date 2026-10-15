@@ -362,7 +362,7 @@ the period/intimacy gating work.
 - **No-tracking wall.** No network call, no new SPM dependency, no new destination. `NoTrackingBoundaryTests`
   scans every Swift file in every target, so a new UI file passes without a change to
   [`No-Tracking-Wall.md`](No-Tracking-Wall.md). The corollary is a constraint: adding a third-party
-  "screen shield" package would fail `thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage()`
+  "screen shield" package would fail `packageDependenciesAreExactlyTheAllowedPackages()`
   until allowlisted and documented in the same commit — which is one more reason to build these ~200
   lines in-house with UIKit/SwiftUI only.
 - **S3 wall.** No sealed-store access, no `Private*` import, no `AIProviders` / `CloudKitSync`

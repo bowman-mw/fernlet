@@ -46,12 +46,12 @@
 # commands, here and in Scripts/macos-build-check.sh, are the only place package warnings become
 # errors. A new warning anywhere in this build therefore fails this check.
 #
-# WHY THE WORKSPACE (ProximityKit plan step A0.8): `-project App/Fernlet.xcodeproj` cannot see a
-# local package's test target. As a scheme testable it is absent from the build graph, and
-# build-for-testing exits 0 without compiling it (measured 2026-10-10). Fernlet.xcworkspace holds
-# FernletKit as a root beside the app project, the one container in which the Fernlet scheme can see
-# a package test target; the scheme's ProximityKitTests testable is compiled here, strict. Its
-# packages resolve from FernletKit/Package.resolved.
+# WHY THE WORKSPACE (ProximityKit plan steps A0.8 and A1.3): Fernlet.xcworkspace holds FernletKit as a
+# root beside the app project. It is where ProximityKit, a dependency pinned at exactly 0.1.0 from its
+# own repository since plan step A1.3, can be developed beside Fernlet (plan step A1.5): a sibling
+# checkout of the package dragged into the workspace overrides the tag on one machine, never
+# committed, while CI always builds the tag. Its packages resolve from FernletKit/Package.resolved,
+# which CIGateSelectorBoundaryTests holds to the app project's resolved file, pin for pin.
 # Scripts/run-gated-suites.sh runs through the same workspace: a build and a run through different
 # containers land in different derived data.
 #
@@ -87,5 +87,5 @@ if [ $CODE -ne 0 ]; then
   exit $CODE
 fi
 echo "WALL CHECK PASSED — the FernletKit dependency DAG is honest under enforcement, and the tree"
-echo "                    (app, extensions, the FernletTests, FernletUITests and ProximityKitTests"
-echo "                    bundles, and every FernletKit package target) built with zero warnings."
+echo "                    (app, extensions, the FernletTests and FernletUITests bundles, every"
+echo "                    FernletKit package target and ProximityKit's tag) built with zero warnings."

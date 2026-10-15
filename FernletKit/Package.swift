@@ -2,10 +2,9 @@
 import PackageDescription
 
 // FernletKit — the local Swift package for the SPM module carve-up (plan §6).
-// The layered DAG below (28 targets and ProximityKit's test target, one
-// umbrella product) IS the S3 privacy wall: the walled AI (`AIProviders`) and
-// iCloud-sync (`CloudKitSync`) targets have no dependency edge to the sealed
-// `Private*` stores, and the build runs with
+// The layered DAG below (27 targets, one umbrella product) IS the S3 privacy
+// wall: the walled AI (`AIProviders`) and iCloud-sync (`CloudKitSync`) targets
+// have no dependency edge to the sealed `Private*` stores, and the build runs with
 // `DIAGNOSE_MISSING_TARGET_DEPENDENCIES=YES_ERROR` so a forbidden import is a
 // hard build error (see Scripts/spm-wall-check.sh).
 //
@@ -26,38 +25,44 @@ let package = Package(
     name: "FernletKit",
     defaultLocalization: "en",
     // macOS 26 is declared package-wide, which is how SwiftPM declares a platform. The Mac-ready set
-    // builds for it: ProximityKit and the three modules a Mac host of Fernlet's will need below it
-    // (FernletFoundation, FernletCrypto and FernletDomainModel), each named in the `MacReady` product,
-    // which Scripts/macos-build-check.sh builds on every push (plan step A0.6); since plan step A0.8.2
-    // ProximityKit's own test target, ProximityKitTests, builds and runs natively on macOS too, though
-    // no CI lane runs it there before plan step A1. Every other target is iOS-only until a plan step
-    // says otherwise (FernletUI: workstream B).
+    // builds for it: the three modules a Mac host of Fernlet's will need (FernletFoundation,
+    // FernletCrypto and FernletDomainModel), each named in the `MacReady` product, which
+    // Scripts/macos-build-check.sh builds on every push (plan step A0.6). ProximityKit builds for macOS
+    // in its own repository, whose CI builds and tests it there (plan step A1.3). Every other target is
+    // iOS-only until a plan step says otherwise (FernletUI: workstream B).
     platforms: [
         .iOS(.v26),
         .macOS(.v26),
     ],
     products: [
-        // The app and its tests link the umbrella product. An extension that needs only a portable
-        // exchange boundary links `FernletExchange` directly, avoiding the app's wider module graph.
-        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "ProximityKit", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
+        // The app and its tests link the umbrella product, and ProximityKit's own product from its
+        // repository beside it (an umbrella names its own targets only, so it carries no remote one).
+        // An extension that needs only a portable exchange boundary links `FernletExchange` directly,
+        // avoiding the app's wider module graph.
+        .library(name: "FernletKit", targets: ["FernletFoundation", "FernletCrypto", "WebScrapingKit", "FernletDomainModel", "FernletExchange", "FernletScoring", "FoodCatalog", "FernletPersistence", "LocalPersistence", "PrivateStoreCore", "PrivateHealthStore", "PrivateMemoryStore", "PrivateMediaStore", "PeriodContextBridge", "AIContext", "AIProviders", "CloudKitSync", "StoreCore", "DiaryStore", "HealthKitGateway", "FernletLock", "FernletLockUI", "AppServices", "FernletUI", "FernletProximityUI", "FernletConnections", "FernletSocial"]),
         .library(name: "FernletExchange", targets: ["FernletExchange"]),
-        // ProximityKit on its own: the product the package exports from its own repository at plan
-        // step A1. No app target links it; the app links the umbrella.
-        .library(name: "ProximityKit", targets: ["ProximityKit"]),
-        // The Mac-ready set, each module named: ProximityKit, and FernletFoundation, FernletCrypto and
-        // FernletDomainModel, which a Mac host of Fernlet's (workstream B, the Coach app) needs. They
-        // are named because ProximityKit's dependencies reach none of them (it depends on nothing in
-        // FernletKit since plan step A1.0), so their Mac builds ride on no edge.
+        // The Mac-ready set, each module named: FernletFoundation, FernletCrypto and FernletDomainModel,
+        // which a Mac host of Fernlet's (workstream B, the Coach app) needs. Each is named rather than
+        // reached through an edge, so each one's Mac build is checked on its own.
         // Scripts/macos-build-check.sh builds this product's scheme for native macOS on every push, and
         // ProximityPlatformBoundaryTests pins this line. No app target links it.
-        .library(name: "MacReady", targets: ["ProximityKit", "FernletFoundation", "FernletCrypto", "FernletDomainModel"]),
+        .library(name: "MacReady", targets: ["FernletFoundation", "FernletCrypto", "FernletDomainModel"]),
     ],
     dependencies: [
         // CryptoSwift supplies the memory-hard Scrypt KDF used by FernletLock's passphrase
-        // derivation (the ONE external package the carve-up needs). Requirement mirrors the
+        // derivation (the one third-party package the carve-up needs). Requirement mirrors the
         // app target's pbxproj reference exactly (upToNextMinor from 1.10.0) so SPM resolves
         // a single shared CryptoSwift across the .xcodeproj reference and this local package.
         .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),
+        // ProximityKit, the peer-to-peer subsystem ([S]: the radios, identity, the signed envelope,
+        // sealing and replay, the session coordinator, ranging, the protocol namespace its host
+        // supplies, the routed mesh engine, the presence radio and the one-to-one pair session), from
+        // its own repository since plan step A1.3. Pinned exactly, as the app target's pbxproj
+        // reference pins it, so the workspace and `-project` resolve one revision
+        // (CIGateSelectorBoundaryTests holds both Package.resolved files to the same pin). It depends on
+        // nothing; FernletProximityUI, FernletConnections and FernletSocial depend on its product, never
+        // the reverse.
+        .package(url: "https://github.com/bowman-mw/proximitykit", exact: "0.1.0"),
     ],
     targets: [
         .target(
@@ -385,80 +390,6 @@ let package = Package(
                 .defaultIsolation(MainActor.self),
             ]
         ),
-        // Layer 6 — the Proximity peer-to-peer subsystem ([S]): the radios (Network.framework/QUIC
-        // over Bonjour; MultipeerConnectivity until 2026-09-22), identity, the signed envelope, sealing
-        // and replay (CryptoKit Ed25519/X25519), the session coordinator and the trust protocols its
-        // host answers, the ranging seam (NearbyInteraction on iOS), the protocol namespace its host
-        // supplies, the routed mesh engine
-        // (whose routed-type rows and the features that ride them its host registers through the
-        // engine's public seams), the presence radio and the ProximityHost seam protocol; and the
-        // one-to-one pair session a host's profile drives (Fernlet's recipe share runs over it). The
-        // sealed-backup escrow beside its identity is the app's, through
-        // the identity's provisioning participant. Fernlet's rules (its
-        // namespace, trust vault, session policies and recipe pair profile) are FernletConnections', and
-        // Fernlet's social features are FernletSocial's (the mesh features and their composition, presence,
-        // the heart dead-drop, moderation, closeness, friend state and recipe sharing): both below, both
-        // depending on this module,
-        // never the reverse. "Outward edges only": the files with backward edges to the app
-        // (ConnectionInspector → FernletStore; the SwiftUI views on app components) STAY in the app, as
-        // does ProximityHostAdapter (the FernletStore → ProximityHost conformance). Deps: none, nothing
-        // in FernletKit (plan step A1.0). No FernletCrypto edge: its identity signs and verifies only
-        // under its own `ProximityCryptographicPurpose`, and a host's own signature labels (FernletSocial's
-        // activity and moderation labels, the app's duress and probe labels) are minted with its
-        // `featureSignature(_:framing:)`; no FernletDomainModel edge: the session mode is its own
-        // `ProximitySessionMode`, which Fernlet converts to the `ProximityMode` it persists, and Fernlet's
-        // typed view of the envelope's payload token is FernletConnections'; no FernletFoundation and no
-        // PrivateMediaStore edge: the session hearts' day key and the session photos' wall and pending
-        // corpus are FernletSocial's.
-        // ProximityNamespaceBoundaryTests pins this list (a literal, which its reader requires), and
-        // also refuses any type that left it for FernletSocial or the app, declared, extended or
-        // aliased here again. No FernletUI edge and no SwiftUI view: the review sheets
-        // moved to FernletProximityUI (below). MainActor default: the managers are @Observable
-        // @MainActor, and the wire values and pure crypto statics are nonisolated within. It builds
-        // for iOS 26 and native macOS 26 (plan step A0.6): its two platform seams compile only where
-        // their framework is usable (NIRangingSession under `#if os(iOS)`, ProtectedSidecar's
-        // protected-data retry under `#if canImport(UIKit)`), and Scripts/macos-build-check.sh builds
-        // it, in the MacReady product, for macOS on every push, the compiler half;
-        // ProximityPlatformNeutralityTests, in its package tests, which holds its imports, device-name
-        // reads, directories and host defaults to exact rows, is the source half.
-        .target(
-            name: "ProximityKit",
-            dependencies: [],
-            swiftSettings: [
-                .defaultIsolation(MainActor.self),
-                // Swift 6 language mode (the package default — no `.swiftLanguageMode(.v5)`).
-                //
-                // WI-9 (2026-06-27) marked the wire `Codable` types, the canonical signing
-                // serializer, and the pure `IdentityService` crypto statics `nonisolated`
-                // (+ `Sendable`) so they are decode/verify-safe off the main actor. This
-                // follow-up then dropped `.v5` by reworking the `nonisolated` delegate callbacks
-                // that captured non-Sendable framework objects into their `Task { @MainActor … }`
-                // hops — those captures are the Swift-6 `sending` data races `.v5` had hidden:
-                //   • Ranging/NIRangingSession.swift — `session(_:didUpdate:)` extracts the
-                //     Sendable values (distance/direction) BEFORE the hop, and
-                //     `session(_:didInvalidateWith:)` transfers the invalidated session itself via
-                //     a `nonisolated(unsafe)` local and compares it by identity after the hop (an
-                //     `ObjectIdentifier` would admit address reuse).
-                //   • Transport/MeshMultipeerSession.swift (deleted 2026-09-22 with the
-                //     MultipeerConnectivity radio) — its MCSession / advertiser / browser callbacks
-                //     transferred the non-Sendable `MCPeerID` (and the single-shot
-                //     `invitationHandler`) across the hop via a `nonisolated(unsafe)` local.
-                //   • ForegroundAnchor/ProximityForegroundAnchor.swift — the non-Sendable
-                //     ActivityKit `Activity` (a class) was passed to its `nonisolated async` `end`
-                //     via a `nonisolated(unsafe)` local. (P9 item 5 retired the requester, leaving
-                //     the orphan reaper as the one site; the `update` half went with it.) The
-                //     reaper and its one `end` call are the app's since plan step A0.6
-                //     (App/Fernlet/ProximityLiveActivityReaper.swift), whose target compiles the
-                //     call with no transfer local, so this module holds no ActivityKit code.
-                // All rewrites are behavior-preserving — the UWB/MC/ActivityKit objects keep their
-                // exact runtime semantics — so the target builds clean in Swift 6 mode. (An earlier
-                // estimate of "exactly two errors, both in NIRangingSession" was incomplete: the
-                // Mesh and ForegroundAnchor captures were equally blocking.)
-                //
-                // HealthKitGateway still uses `.v5` independently for its HealthKit `@Sendable`
-                // query-completion handler captures; that is a separate target.
-            ]
-        ),
         // Layer 6.5 — the in-person review screens (Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md
         // step A0.1): FriendPhotoReviewSheet with its tile, the add-only Photos saver and the shared
         // save-failure alert, KeepFriendsPromptSheet, and FingerprintText, moved out of ProximityKit's
@@ -474,7 +405,7 @@ let package = Package(
         // Photos-queue work marked nonisolated within.
         .target(
             name: "FernletProximityUI",
-            dependencies: ["ProximityKit", "FernletSocial", "FernletUI", "FernletDomainModel", "FernletFoundation", "FernletConnections"],
+            dependencies: [.product(name: "ProximityKit", package: "proximitykit"), "FernletSocial", "FernletUI", "FernletDomainModel", "FernletFoundation", "FernletConnections"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
@@ -513,7 +444,7 @@ let package = Package(
         // conversions, the envelope's typed view and the name placeholders).
         .target(
             name: "FernletConnections",
-            dependencies: ["ProximityKit", "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
+            dependencies: [.product(name: "ProximityKit", package: "proximitykit"), "FernletCrypto", "FernletFoundation", "FernletDomainModel"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
             ]
@@ -577,33 +508,9 @@ let package = Package(
         // storage scope, the format census, the heart-drop tag statics and the presence tag length).
         .target(
             name: "FernletSocial",
-            dependencies: ["ProximityKit", "FernletConnections", "FernletCrypto", "FernletDomainModel", "FernletFoundation", "PrivateMediaStore"],
+            dependencies: [.product(name: "ProximityKit", package: "proximitykit"), "FernletConnections", "FernletCrypto", "FernletDomainModel", "FernletFoundation", "PrivateMediaStore"],
             swiftSettings: [
                 .defaultIsolation(MainActor.self),
-            ]
-        ),
-        // ProximityKit's own tests (plan step A0.8): the suites that need nothing but ProximityKit and their
-        // own test support (TestSupport/, plan step A1.1), so they travel with the package at plan step A1
-        // (their files import no FernletKit module but ProximityKit, which depends on none). The Fernlet
-        // scheme runs them as a second, unhosted test bundle (the simulator's xctest agent: no keychain
-        // entitlement and no app to install a ProximityAudit sink, so their test support installs an
-        // in-memory keychain store and an audit sink of its own) through Fernlet.xcworkspace, the one
-        // container in which the scheme can see a package test target, so Scripts/spm-wall-check.sh builds
-        // them strict; Tests/FernletTests/CIGateSelectorBoundaryTests holds them to Tests/suite-inventory.tsv
-        // and pins this target's dependencies to ProximityKit alone. FernletTests builds in Swift 5 language
-        // mode with six upcoming features (SWIFT_APPROACHABLE_CONCURRENCY's five, and member import
-        // visibility); this target builds in Swift 6 mode (the package default), which implies three of them,
-        // with no default isolation and the other three below, so a suite keeps the isolation, executor
-        // semantics and name lookup it had there. Swift 6 also checks concurrency completely and isolation at
-        // run time, which FernletTests does not, so each move's behaviour is measured on the new target rather
-        // than equal by construction.
-        .testTarget(
-            name: "ProximityKitTests",
-            dependencies: ["ProximityKit"],
-            swiftSettings: [
-                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
-                .enableUpcomingFeature("InferIsolatedConformances"),
-                .enableUpcomingFeature("MemberImportVisibility"),
             ]
         ),
     ]

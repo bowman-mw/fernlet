@@ -441,8 +441,9 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// The radios' log subsystem, read off `.fernlet` since step A0.2.7, when each radio began building
-    /// its `Logger` from the namespace it is handed. A `Logger` does not expose its subsystem, so
-    /// ``theThreeRadiosLogUnderTheFrozenSubsystem()`` pins that read in each radio's source.
+    /// its `Logger` from the namespace it is handed. A `Logger` does not expose its subsystem, so the
+    /// package copy of ``theThreeRadiosLogUnderTheFrozenSubsystem()`` pins that read in each radio's
+    /// source.
     private static var logRows: [NamespaceGoldenRow] {
         [NamespaceGoldenRow(.logSubsystem, Self.logSubsystemField, frozen: "com.fernlet",
                             today: .text(ProximityNamespace.fernlet.installation.logSubsystem))]
@@ -547,24 +548,11 @@ struct ProximityNamespaceGoldenTests {
 
     /// The radios' log subsystem: the row reads `.fernlet`'s field, and since step A0.2.7 each radio
     /// builds its one `Logger` in `init(namespace:)` from the namespace it is handed. A `Logger` does
-    /// not expose its subsystem, so that read is pinned in each radio's source: exactly one `Logger`
-    /// built from `namespace.installation.logSubsystem`, and no subsystem spelled as a literal.
-    @Test func theThreeRadiosLogUnderTheFrozenSubsystem() throws {
+    /// not expose its subsystem, so that read is pinned in each radio's source (exactly one `Logger`
+    /// built from `namespace.installation.logSubsystem`, and no subsystem spelled as a literal) by
+    /// ProximityKit's package suite of this name; the row's half is held here.
+    @Test func theThreeRadiosLogUnderTheFrozenSubsystem() {
         #expect(Self.expectFrozen(.logSubsystem) == 1, "the log subsystem's row names no value")
-        let fromNamespace = "Logger(subsystem: namespace.installation.logSubsystem, category: \""
-        let radios = [
-            "FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift",
-            "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift",
-            "FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift"
-        ]
-        // R2: bounded by the three radios.
-        for path in radios {
-            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(path))
-            let literals = Self.loggerSubsystems(in: code)
-            #expect(literals.isEmpty, "\(path) still declares a Logger under the literal subsystem \(literals)")
-            let built = code.components(separatedBy: fromNamespace).count - 1
-            #expect(built == 1, "\(path) builds \(built) Loggers from the namespace's log subsystem, not one")
-        }
     }
 
     /// Every service type the namespace carries is declared in the app's `NSBonjourServices`: a type
@@ -2552,37 +2540,18 @@ struct ProximityNamespaceGoldenTests {
     }
 
     /// The mesh radio's two consumers of a moved value, against what their fields promise. Tier 1
-    /// cannot open the live QUIC connection both run over, so they are pinned in source, the way
-    /// `NetworkMeshWireTests` pins the wire ceiling's two call sites:
+    /// cannot open the live QUIC connection both run over, so the radio's half is pinned in its
+    /// source, by ProximityKit's package suite of this name: the heartbeat goes out on both pipes as
+    /// the radio's own `heartbeatDatagram` and both receive loops drop it by byte equality, and the
+    /// channel binding derives under the label it is handed, whole, its one caller handing it the label
+    /// the radio read off its namespace.
     ///
-    /// - the heartbeat goes out on both pipes as the radio's own `heartbeatDatagram`, and both receive
-    ///   loops drop it by byte equality against that same value before anything decodes a frame;
-    /// - the channel binding derives under the label it is handed, whole, as the `.tlsExporterLabel`
-    ///   role says (its `prefixBytes` are its bytes): the TLS exporter gets the label's bytes and their
-    ///   count, no terminator and no count in front. It names no registry purpose, and its one caller
-    ///   hands it the label the radio read off its namespace.
-    @Test func theMeshRadiosHeartbeatAndChannelBindingTakeTheirValuesWhole() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"))
-        func count(_ needle: String) -> Int { code.components(separatedBy: needle).count - 1 }
-        #expect(count("guard payload != heartbeatDatagram else {") == 2,
-                "both receive loops must drop the heartbeat by byte equality")
-        #expect(count("try await self.sendFramed(self.heartbeatDatagram, over: stream)") == 1,
-                "the control-stream beat must send the radio's own heartbeat")
-        #expect(count("try await datagrams.send(self.heartbeatDatagram)") == 1,
-                "the datagram beat must send the radio's own heartbeat")
-
+    /// What stays here is `.fernlet`'s half: its exporter label is a `.tlsExporterLabel`, taken whole
+    /// (its `prefixBytes` are its bytes), so the TLS exporter gets the label's bytes and their count,
+    /// no terminator and no count in front.
+    @Test func theMeshRadiosHeartbeatAndChannelBindingTakeTheirValuesWhole() {
         let label = ProximityNamespace.fernlet.family.purposes.keyDerivation.meshTLSExporterV1
         #expect(label.role == .tlsExporterLabel && label.prefixBytes == label.data, "an exporter label is taken whole")
-        let binding = try #require(MeshRoutedSourceScan.bracedBody(after: "static func channelBindingHash(", in: code),
-                                   "the channel binding's derivation is gone")
-        #expect(binding.contains("let label = exporterLabel.rawValue"), "the binding derives under another label")
-        #expect(binding.contains("label.utf8.count,"), "the exporter is not handed the label's own byte count")
-        #expect(!binding.contains("FernletCryptoPurpose"), "the binding names a registry purpose again")
-        #expect(count("Self.channelBindingHash(for: connection, exporterLabel: tlsExporterLabel)") == 1,
-                "the introduction no longer binds under the radio's own exporter label")
-        #expect(count("tlsExporterLabel = namespace.family.purposes.keyDerivation.meshTLSExporterV1") == 1,
-                "the radio no longer reads its exporter label off the namespace")
     }
 
     // MARK: Group 13 — the at-rest names and rows read the namespace (A0.2.8)
@@ -3197,33 +3166,6 @@ struct ProximityNamespaceGoldenTests {
         #expect(byCopy == byOriginal, "the copy's delete lines are \(byCopy), FernletFoundation's \(byOriginal)")
     }
 
-    /// ProximityKit's code reaches the keychain through its own copy and names FernletFoundation's
-    /// `KeychainItem` nowhere, so the move is whole: a call that went back to the original, from a
-    /// file that still imports FernletFoundation for something else, fails here. Comments may name
-    /// `KeychainItem` (the copy's own explain where it came from); the scan reads code lines only.
-    @Test func proximityKitReachesTheKeychainOnlyThroughItsOwnCopy() throws {
-        let root = RepoRoot.url("FernletKit/Sources/ProximityKit")
-        let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
-        let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
-        let original = try NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])KeychainItem\b"#)
-        var copyUses = 0
-        var offenders: [String] = []
-        // R2: bounded by the module's own file list.
-        for file in files.sorted(by: { $0.path < $1.path }) {
-            let code = MeshRoutedSourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
-            copyUses += code.components(separatedBy: "ProximityKeychainItem.").count - 1
-            if original.firstMatch(in: code, range: NSRange(code.startIndex..., in: code)) != nil {
-                offenders.append(file.lastPathComponent)
-            }
-        }
-        #expect(files.count >= 50, "the ProximityKit sweep read only \(files.count) Swift files")
-        #expect(copyUses > 0, "the sweep found no `ProximityKeychainItem.` use: wrong tree?")
-        #expect(offenders.isEmpty, """
-            ProximityKit code names FernletFoundation's KeychainItem in \(offenders). Reach the keychain \
-            through `ProximityKeychainItem`, which issues the same queries.
-            """)
-    }
-
     /// A row's class and synchronizable flag as the keychain itself holds them.
     private struct StoredKeychainClass: Equatable {
         /// `kSecAttrAccessible`.
@@ -3309,21 +3251,6 @@ struct ProximityNamespaceGoldenTests {
             return ""
         }
         return row.frozen
-    }
-
-    /// Every `Logger(subsystem: "…"` literal in `source`, in order.
-    private static func loggerSubsystems(in source: String) -> [String] {
-        let opener = "Logger(subsystem: \""
-        var found: [String] = []
-        var rest = Substring(source)
-        // R2: each pass consumes the opener it found, so the loop ends within the source's length.
-        while let start = rest.range(of: opener) {
-            let tail = rest[start.upperBound...]
-            guard let close = tail.firstIndex(of: "\"") else { break }
-            found.append(String(tail[..<close]))
-            rest = tail[close...]
-        }
-        return found
     }
 
     /// The entries `directory` holds, by name, hidden ones aside and sorted.

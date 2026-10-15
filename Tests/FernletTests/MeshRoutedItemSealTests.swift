@@ -316,12 +316,12 @@ struct MeshRoutedItemSealTests {
 
     /// B-2: the sealed plaintext names no epoch — the property that makes branch and epoch stop
     /// deciding decryptability. The body is FernletSocial's since plan step A0.5.11
-    /// (`MeshRoutedPhotoBody.swift`, moved from ProximityKit's `MeshRoutedItemBody.swift`).
+    /// (`MeshRoutedPhotoBody.swift`, moved from ProximityKit's `MeshRoutedItemBody.swift`); the item
+    /// seal's half, that `MeshRoutedItemSeal.swift` names none either, is ProximityKit's package suite
+    /// of this name.
     @Test func theRoutedPhotoBodyNamesNoEpoch() throws {
         let body = try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshRoutedPhotoBody.swift")
-        let seal = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedItemSeal.swift")
         #expect(!MeshRoutedSourceScan.codeOnly(body).contains("keyEpoch"))
-        #expect(!MeshRoutedSourceScan.codeOnly(seal).contains("keyEpoch"))
     }
 
     /// B-4: an unknown header field is ignored on decode (invariant 8's tolerance half).

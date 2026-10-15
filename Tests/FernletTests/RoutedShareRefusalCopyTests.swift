@@ -99,15 +99,11 @@ import ProximityKit
         #expect(RoutedShareRefusalCopy.chatNotice(.ageGated) != noRecipients)
     }
 
-    /// The package composes no sentence and the camera presents the typed cause.
+    /// The package composes no sentence and the camera presents the typed cause. The package's half
+    /// (the manager spells no sentence and publishes the refusal as its frozen token) reads
+    /// ProximityKit's source and is its package suite of this name; the camera's and the chat panel's
+    /// halves are held here.
     @Test func theRefusalLeavesThePackageAsATokenOnly() throws {
-        let manager = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-        )
-        #expect(!manager.contains("Couldn't share that photo"),
-                "the refusal sentence is composed in the app, never in the package")
-        #expect(manager.contains("routedShareRefusal = refusal"),
-                "the refusal is published as its frozen token")
         let camera = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("App/Fernlet/DisposableCameraView.swift")
         )

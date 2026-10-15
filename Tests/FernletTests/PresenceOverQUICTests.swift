@@ -544,33 +544,6 @@ struct PresenceOverQUICTests {
         #expect(radio.tunnelCountForTesting == 0, "and opened nothing")
     }
 
-    /// The listener and browser task bodies check for cancellation before they report.
-    ///
-    /// A source claim because it has to be: `NetworkListener.run` is a framework call a unit test
-    /// cannot make throw. The order is the whole of it — `republish(posture:discoveryInfo:)`
-    /// cancels the listener task at EVERY epoch boundary and every roster refresh, because
-    /// re-creating the listener is the only way to withdraw a Bonjour registration, so a
-    /// `CancellationError` reported as a start failure would stand presence down every 900 s.
-    @Test func theListenerAndBrowserTasksDoNotReportTheirOwnCancellation() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift")
-        )
-        for signature in ["func startListener() throws", "func startBrowser()"] {
-            let body = try #require(
-                MeshRoutedSourceScan.bracedBody(after: signature, in: code),
-                "\(signature) is gone or its braces do not close"
-            )
-            let guardIndex = try #require(
-                body.range(of: "guard !Task.isCancelled else { return }")?.lowerBound,
-                "\(signature)'s task body reports without checking for its own cancellation first"
-            )
-            let reportIndex = try #require(
-                body.range(of: "report(")?.lowerBound, "\(signature) no longer reports at all"
-            )
-            #expect(guardIndex < reportIndex, "\(signature) guards AFTER it reports, which guards nothing")
-        }
-    }
-
     // MARK: - Glare
 
     /// Two friends who sight each other at the same moment and both dial keep exactly ONE
@@ -722,7 +695,8 @@ struct PresenceOverQUICTests {
 
     /// `PresenceManager` no longer names MultipeerConnectivity anywhere in its code, and does name
     /// the radio that replaced it: ProximityKit's presence engine (plan step A1.1), which builds that
-    /// radio and speaks its TXT vocabulary.
+    /// radio. That the engine builds the production conformer and speaks the presence TXT vocabulary
+    /// reads ProximityKit's source and is the package suite of this name's.
     ///
     /// The rule-7 gate for a two-pass item: pass 1 changed nothing on the air, so the only
     /// mechanical proof that pass 2 RAN is that the MC path is gone from this file. Pinned in both
@@ -739,10 +713,6 @@ struct PresenceOverQUICTests {
             #expect(!code.contains(needle), "PresenceManager still names `\(needle)` in code")
         }
         #expect(code.contains("ProximityPresenceSession"), "and it drives the QUIC presence radio's engine")
-        let engine = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift"))
-        #expect(engine.contains("NetworkPresenceSession"), "whose production conformer the engine builds")
-        #expect(engine.contains("PresenceAdvertisement"), "through the presence TXT vocabulary")
 
         // The COMMENTS get a narrower rule, and the line is drawn where it is un-brittle: the
         // framework's API TYPE names describe a mechanism, so a comment carrying one is describing

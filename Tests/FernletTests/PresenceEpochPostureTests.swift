@@ -17,7 +17,9 @@
 // `notBefore`/`notAfter` to one that rotated on the boundary, and cannot be picked out by them.
 //
 // Tier 1: no rig, no radio, no simulator, no clock — every instant is an injected `Date` and every
-// random draw is an injected closure.
+// random draw is an injected closure. The two source walls over the value's own file (one epoch
+// length and one clock; nothing from the device and nothing to disk) are ProximityKit's package copy
+// of this suite's, since ProximityKit plan step A1.3.
 
 import FernletConnections
 import Foundation
@@ -280,62 +282,5 @@ struct PresenceEpochPostureTests {
                 "the boundary mint anchors to the new epoch's start, not to the 431st second of it")
         #expect(rotated.tlsIdentity.certificateDER.range(of: shared) == nil,
                 "and the window rotated with it — the next epoch's certificate is not valid from this one's start")
-    }
-
-    // MARK: - Source walls
-
-    /// The value's source, code lines only (`///` and `//` dropped), so a doc sentence about 900
-    /// seconds or about the device cannot satisfy — or break — the greps below.
-    static func postureCodeLines() throws -> [String] {
-        let url = RepoRoot.url
-            .appendingPathComponent("FernletKit/Sources/ProximityKit/Presence/PresenceEpochPosture.swift")
-        let lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: .newlines)
-        let code = lines.filter {
-            let trimmed = $0.trimmingCharacters(in: .whitespaces)
-            return !trimmed.hasPrefix("//") && !trimmed.isEmpty
-        }
-        #expect(code.count > 40, "the wall must be scanning the real file, not an empty one")
-        return code
-    }
-
-    /// One epoch length, one clock. The posture declares no 900 of its own and derives its epoch
-    /// from `IdentityService.presenceEpoch(at:)` — the same counter the tags use — so the posture
-    /// and the payload can never rotate on two different phases.
-    @Test func thePostureDeclaresNoSecondEpochLengthAndNoSecondClock() throws {
-        let code = try Self.postureCodeLines()
-        #expect(IdentityService.presenceEpochSeconds == 900, "the one named constant")
-        #expect(!code.contains { $0.contains("900") },
-                "the posture must not write 900 down again — IdentityService.presenceEpochSeconds is the one home")
-        #expect(code.contains { $0.contains("IdentityService.presenceEpoch(at:") },
-                "the epoch comes from the presence clock, not from arithmetic done here")
-        #expect(!code.contains { $0.contains("Date()") },
-                "every instant is injected — the value reads no clock of its own")
-        #expect(!code.contains { $0.contains("Task") || $0.contains("Timer") || $0.contains("sleep") },
-                "a value schedules nothing")
-    }
-
-    /// Nothing about the device reaches the posture, and nothing about the posture reaches disk.
-    /// A grep rather than a sample of call paths: a future edit that reaches for the device name or
-    /// the keychain must fail here rather than rely on a reviewer remembering the claim.
-    @Test func noByteOfThePostureComesFromTheDeviceOrGoesToDisk() throws {
-        let code = try Self.postureCodeLines()
-        // The vendor-identifier symbol is deliberately NOT spelled here: `NoTrackingBoundaryTests`
-        // bans it in every file of every kind repo-wide, INCLUDING comments, so naming it would
-        // only indict this suite (it did, once). `UIDevice` below is the only door to it, and the
-        // import assertion at the end of this cell closes even that.
-        let forbidden = [
-            "UIDevice", "ProcessInfo", "hostName", "Host.current",
-            "fingerprint", "Keychain", "KeychainItem", "SecItem", "kSecAttrService",
-            "UserDefaults", "FileManager", "write(to:", "JSONSidecarFile",
-            "MCPeerID", "localPeerID", "bundleIdentifier", "meshID", "localMeshID",
-            "signingPublicKey", "keyAgreementPublicKey", "presenceTag", "localizedString"
-        ]
-        for marker in forbidden {
-            #expect(!code.contains { $0.contains(marker) },
-                    "PresenceEpochPosture must not reach for '\(marker)' — the posture is entropy and a clock, nothing else")
-        }
-        let imports = code.filter { $0.hasPrefix("import ") }
-        #expect(imports == ["import Foundation"],
-                "the value imports Foundation only — no UIKit, no MultipeerConnectivity, no Security of its own")
     }
 }

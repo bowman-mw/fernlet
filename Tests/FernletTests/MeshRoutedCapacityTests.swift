@@ -439,32 +439,6 @@ struct MeshRoutedCapacityTests {
         #expect(index.itemCount == 3, "neither condition drops anything")
     }
 
-    /// Every index growth site answers a cap — the census that makes "nothing grows silently"
-    /// mechanical rather than a promise.
-    @Test func everyIndexGrowthSiteAnswersACap() throws {
-        let expected = [
-            "MeshRoutedCustody.swift": 5, "MeshRoutedCustodyHandoff.swift": 2,
-            "MeshRoutedCustodyCommit.swift": 1, "MeshRoutedDeliveryCommit.swift": 1,
-            "MeshRoutedDeliveryIngest.swift": 1
-        ]
-        var receivers: Set<String> = []
-        var total = 0
-        for (name, count) in expected.sorted(by: { $0.key < $1.key }) {
-            let code = MeshRoutedSourceScan.codeOnly(
-                try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/\(name)")
-            )
-            let sites = Self.upsertReceivers(in: code)
-            #expect(sites.count == count, "a new growth site owes a capacity answer: \(name)")
-            receivers.formUnion(sites)
-            total += sites.count
-        }
-        #expect(total == 10)
-        // A THIRD receiver spelling would hide an eleventh site behind a green census: today the
-        // sites are spelled `index.upsert(` and `updated.upsert(`, and one of the two admission
-        // doors is the latter.
-        #expect(receivers == ["index", "updated"])
-    }
-
     /// Every `capacity*` refusal is in the manager's "this device is full" set — a new one that never
     /// becomes visible fails here rather than shipping silent.
     @Test func everyCapacityRefusalIsInTheDeviceIsFullSet() {
@@ -484,18 +458,6 @@ struct MeshRoutedCapacityTests {
         #expect(named.subtracting(MeshNetworkManager.routedStoreFullRefusals)
                 == [.capacityChunksPerItem, .capacityReceipts, .capacityRecipientReceipts],
                 "the excluded three are the per-item caps, and nothing else")
-    }
-
-    /// The "own items" wall (D-9.2): the store has exactly TWO admission doors, and both carry the
-    /// capacity check. P6's mint inherits the refusal or fails here.
-    @Test func theStoreHasExactlyTwoAdmissionDoors() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedCustody.swift")
-        )
-        #expect(Self.occurrences(of: "recordAdmitting(", in: code) == 2, "one definition, one caller")
-        #expect(Self.occurrences(of: "recordStaging(", in: code) == 2)
-        #expect(Self.occurrences(of: "capacityRefusal(", in: code) == 7,
-                "three definitions and four call sites — one per capacity-guarded door")
     }
 
     /// The origin's own staging into a full store is refused at the door P6's mint will use.
@@ -577,32 +539,6 @@ struct MeshRoutedCapacityTests {
         #expect(report.refused.isEmpty, "a claim has no capacity refusal to answer")
         #expect(Caps.index(of: store)?.record(for: MeshRoutedItemKey(manifest))?.chunks.count == 1,
                 "a claim adds no bytes")
-    }
-
-    // MARK: Source scanning
-
-    /// The receiver names of every `.upsert(` call in `code`.
-    private static func upsertReceivers(in code: String) -> [String] {
-        var found: [String] = []
-        var scanner = Substring(code)
-        while let range = scanner.range(of: ".upsert(") {
-            let head = scanner[scanner.startIndex..<range.lowerBound]
-            let name = head.reversed().prefix { $0.isLetter || $0.isNumber }
-            found.append(String(name.reversed()))
-            scanner = scanner[range.upperBound...]
-        }
-        return found
-    }
-
-    /// How many times `needle` appears in `code`.
-    private static func occurrences(of needle: String, in code: String) -> Int {
-        var count = 0
-        var scanner = Substring(code)
-        while let range = scanner.range(of: needle) {
-            count += 1
-            scanner = scanner[range.upperBound...]
-        }
-        return count
     }
 }
 

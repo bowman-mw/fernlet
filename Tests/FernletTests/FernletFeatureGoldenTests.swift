@@ -4358,12 +4358,13 @@ struct FernletFeatureGoldenTests {
 
     /// **31e.** The recipe copy is its frozen templates in its home: the code literals of
     /// ``recipeCopyHomes`` that hold a space (lexed as Swift reads them, comments out), each
-    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct; and no
-    /// ProximityKit file holds one of the forty as a literal, so none comes back to the pair session.
-    /// And the render row: every event and every status failure, each argument a distinct sentinel,
-    /// renders to its frozen sentence, and every status maps to the status line that names the same
-    /// case, a failure to its sentence, so two arguments swapped inside one template, or two cases'
-    /// sentences exchanged, fail here though the set of templates is unchanged.
+    /// interpolation read as `\(…)`, are ``frozenRecipeCopyTemplates`` as a set, forty distinct. That no
+    /// ProximityKit file holds one of the forty as a literal, so none comes back to the pair session,
+    /// reads ProximityKit's sources and is its package suite of this name. And the render row: every
+    /// event and every status failure, each argument a distinct sentinel, renders to its frozen
+    /// sentence, and every status maps to the status line that names the same case, a failure to its
+    /// sentence, so two arguments swapped inside one template, or two cases' sentences exchanged, fail
+    /// here though the set of templates is unchanged.
     @Test func theRecipeCopyIsItsFrozenTemplatesInItsHome() throws {
         var found: Set<String> = []
         // R2: bounded by the homes.
@@ -4377,15 +4378,6 @@ struct FernletFeatureGoldenTests {
             the copy's templates moved: missing \(frozen.subtracting(found).sorted()), \
             unexpected \(found.subtracting(frozen).sorted())
             """)
-        var strays: [String] = []
-        let sources = try ProximityKitSources.proximitySources()
-        // R2: bounded by ProximityKit's file list.
-        for source in sources {
-            let held = Set(source.lexed.literals.map { Self.normalizingInterpolations($0.text) }).intersection(frozen)
-            strays += held.sorted().map { "\(source.path): \($0)" }
-        }
-        #expect(sources.count >= 50, "the ProximityKit walk read only \(sources.count) Swift files")
-        #expect(strays.isEmpty, "the recipe copy is back in ProximityKit: \(strays)")
         Self.expectRecipeRenderings()
     }
 
@@ -4445,12 +4437,13 @@ struct FernletFeatureGoldenTests {
     /// **31f.** The recipe and heart sends keep their constants and spellings: the 12 s connect timeout,
     /// Fernlet's recipe profile (``frozenRecipeProfile``: the recipe radio's row, the TXT mode and the
     /// audit area), the radio's one tunnel and two pending inbound connections, and
-    /// ``recipeConstantsPaths``' rows, each needle counted exactly in its file or its brace-matched body
-    /// (comments dropped): the door's 25 s handshake, its friend-mode browser start, its retained trust
-    /// policy and its default capabilities and plain introduction; the parked timeout and sweep, the
-    /// status clear and the identity checks' audit events, spelled in full under the profile's area;
-    /// the inbound cap and rate limit, the summary's title and the payload's encoder; and the heart
-    /// delivery's token, title and seal.
+    /// ``recipeConstantsPaths``' seven rows, each needle counted exactly in its file or its
+    /// brace-matched body (comments dropped): the inbound cap and rate limit, the summary's title and
+    /// the payload's encoder; and the heart delivery's token, title and seal. The pair session's rows
+    /// (the door's 25 s handshake, its friend-mode browser start, its retained trust policy and its
+    /// default capabilities and plain introduction; the parked timeout and sweep, the status clear and
+    /// the identity checks' audit events, spelled in full under the profile's area) read ProximityKit's
+    /// source and are its package suite of this name.
     @Test func theRecipeAndHeartSendsKeepTheirConstantsAndSpellings() throws {
         let rig = try RecipePairingRig()
         defer { rig.tearDown() }
@@ -4461,6 +4454,7 @@ struct FernletFeatureGoldenTests {
         #expect(NetworkPairSession.maxTunnels == 1, "the recipe radio holds \(NetworkPairSession.maxTunnels) tunnels")
         #expect(NetworkPairSession.maxPendingInbound == 2,
                 "the recipe radio holds \(NetworkPairSession.maxPendingInbound) pending inbound connections")
+        #expect(Self.recipeConstantsPaths.count == 7, "31f reads \(Self.recipeConstantsPaths.count) source rows, not seven")
         // R2: bounded by the rows.
         for row in Self.recipeConstantsPaths {
             let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(row.path))
@@ -5644,13 +5638,10 @@ extension FernletFeatureGoldenTests {
     /// in ProximityKit.
     static let recipeCopyHomes = ["FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"]
 
-    /// The file that holds the recipe pairing's channel-ready door and the pair session's constants:
-    /// since plan step A0.7.3 ProximityKit's pair session; until then the recipe-share manager there.
-    static let recipeDoorPath = "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
-
     /// The file that holds the recipe share's own constants (the inbound queue and rate limit, the
     /// signed summary and the payload's encoder): since plan step A0.7.3 FernletSocial's recipe-share
-    /// manager; until then the manager's file in ProximityKit, which also held the door.
+    /// manager; until then the manager's file in ProximityKit, which also held the door (ProximityKit's
+    /// pair session's since then, and its rows the package suite's).
     static let recipeFeaturePath = "FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift"
 
     /// The file that holds the heart delivery, presence's send through the coordinator's payload door.
@@ -5660,20 +5651,10 @@ extension FernletFeatureGoldenTests {
     /// file), a needle, and how many times the needle occurs there, comments dropped. A commit that
     /// moves a row's text re-points its file or its body, never its needle's count.
     static let recipeConstantsPaths: [(path: String, body: String?, needle: String, count: Int)] = [
-        (recipeDoorPath, "private func handleChannelReady(", "timeoutSeconds: 25", 1),
-        (recipeDoorPath, "private func handleChannelReady(", "begin(role: .browser, mode: .friend)", 1),
-        (recipeDoorPath, "private func handleChannelReady(", "capabilities:", 0),
-        (recipeDoorPath, "private func handleChannelReady(", "sealedIntroductionPeerKeyAgreementKey:", 0),
-        (recipeDoorPath, "private func handleChannelReady(", "let trustPolicy = store.makeProximityTrustPolicy()", 1),
-        (recipeDoorPath, nil, "parkedConnectionTimeoutSeconds: TimeInterval = 30", 1),
-        (recipeDoorPath, nil, "parkedSweepIntervalSeconds: TimeInterval = 5", 1),
-        (recipeDoorPath, nil, ".seconds(2.5)", 1),
         (recipeFeaturePath, nil, "maxPendingShares = 8", 1),
         (recipeFeaturePath, nil, "perSenderRateLimitSeconds: TimeInterval = 3", 1),
         (recipeFeaturePath, "public func sendRecipeShare(", #"title: "Recipe share""#, 1),
         (recipeFeaturePath, "public func sendRecipeShare(", "JSONEncoder().encode(", 1),
-        (recipeDoorPath, nil, #""\(profile.auditArea).identity.namespaceMismatch""#, 2),
-        (recipeDoorPath, nil, #""\(profile.auditArea).identity.provisionFailed""#, 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", "payloadTypeToken: PayloadType.friendHeart.rawValue", 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", #"PayloadSummary(title: "Good vibes")"#, 1),
         (heartDeliveryPath, "private func deliverHeart(via connection:", "sealed: true", 1)

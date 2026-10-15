@@ -8,8 +8,12 @@
 //    zero and said so), so `MeshSessionState.continuingInBackground` was unreachable and the heart
 //    stage's third leg could not be exercised by anything but a test. The wall says the raises now
 //    exist and that there is exactly ONE of each, in one place, reached from the app through one
-//    narrow public pair and from one file: three counts, comment-stripped, path-anchored, floored on
-//    the file count so a moved root fails loudly rather than passing over nothing.
+//    narrow public pair and from one file: comment-stripped, path-anchored, floored on the file count
+//    so a moved root fails loudly rather than passing over nothing. The one place is ProximityKit's
+//    manager, so the counts over its source (each raise's one home, inside its own public door, and
+//    the doors reading no gate) are ProximityKit's package suite of this name; this suite holds the
+//    Fernlet halves: no FernletKit module raises a scene event, and the app speaks each public raise
+//    once, from the driver, and offers the session machine nothing else.
 //
 // 2. `MeshContinuationDriverTests` — the driver's own behaviour over a manager with no session:
 //    which deliveries are adopted and how, which endings complete, and — the load-bearing negative —
@@ -57,13 +61,11 @@ import Testing
 
 // MARK: - The wall
 
-/// **Pass 1's wall.** The two session-state raises have one home each in ProximityKit, the app
-/// reaches them through one public pair spoken in one file, and the app reaches the session machine
-/// no other way.
+/// **Pass 1's wall, Fernlet's half.** The two session-state raises have one home each, in
+/// ProximityKit's manager (its package suite of this name pins them), so no FernletKit module raises
+/// either; the app reaches them through one public pair spoken in one file, and the app reaches the
+/// session machine no other way.
 struct MeshContinuationRaiseWallTests {
-
-    /// The one file in ProximityKit allowed to raise either scene event.
-    private static let manager = "MeshNetworkManager.swift"
 
     /// The one file in the app target allowed to speak either public raise.
     private static let driver = "MeshContinuationDriver.swift"
@@ -86,28 +88,18 @@ struct MeshContinuationRaiseWallTests {
         MeshP7Acceptance.homes(of: needle, in: sources)
     }
 
-    /// **(a)** Each scene event is raised exactly once in the whole package, and each raise sits
-    /// inside the public door named for it — brace-matched, so a raise that drifted out of the pair
-    /// into the file around it reddens.
+    /// **(a)** Each scene event is raised exactly once, inside the public door named for it in
+    /// ProximityKit's manager — brace-matched there by the package suite of this name — so no
+    /// FernletKit module raises either. The walk is floored at 231 files, four fifths of the 289
+    /// measured at ProximityKit plan step A1.3, so the two zero-lists cannot pass over a walk that lost
+    /// a module.
     @Test func eachSceneEventIsRaisedExactlyOnceAndInsideItsOwnPublicDoor() throws {
         let kit = try Self.codeSources(under: "FernletKit/Sources")
-        #expect(kit.count >= 100, "the package scan lost its files")
-        #expect(Self.homes(of: "applySessionEvent(.backgrounded", in: kit) == [Self.manager],
-                "the backgrounded raise has exactly one home, and it is the manager's own door")
-        #expect(Self.homes(of: "applySessionEvent(.foregrounded", in: kit) == [Self.manager],
-                "and so does the foregrounded raise")
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/\(Self.manager)"))
-        let began = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "public func beginBackgroundContinuation()", in: source),
-            "the public begin door is gone")
-        #expect(began.contains("applySessionEvent(.backgrounded)"),
-                "and it is what raises the backgrounded event")
-        let ended = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "public func endBackgroundContinuation()", in: source),
-            "the public end door is gone")
-        #expect(ended.contains("applySessionEvent(.foregrounded)"),
-                "and its sibling raises the foregrounded one")
+        #expect(kit.count >= 231, "the package scan lost its files")
+        #expect(Self.homes(of: "applySessionEvent(.backgrounded", in: kit).isEmpty,
+                "no FernletKit module raises the backgrounded event: its one home is ProximityKit's manager")
+        #expect(Self.homes(of: "applySessionEvent(.foregrounded", in: kit).isEmpty,
+                "and none raises the foregrounded event")
     }
 
     /// **(b)** The app speaks each public raise exactly once, from the continuation driver and from
@@ -165,7 +157,8 @@ struct MeshContinuationRaiseWallTests {
 
     /// **The independence pin, in source.** The gate writer decides nothing from the session
     /// machine, and neither raise reads the gate. Two legs that read each other are one leg with two
-    /// names, and the disagreement §24.1 asks for would be unstatable.
+    /// names, and the disagreement §24.1 asks for would be unstatable. The raises' half, that neither
+    /// public door reads the gate, reads ProximityKit's manager and is the package suite of this name's.
     @Test func neitherLegIsWrittenInTermsOfTheOther() throws {
         let store = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("App/Fernlet/FernletStore.swift"))
         let funnel = try #require(
@@ -173,15 +166,6 @@ struct MeshContinuationRaiseWallTests {
             "the run-policy core is gone from the store")
         #expect(!funnel.contains("sessionState") && !funnel.contains("continuingInBackground"),
                 "the gate writer reads no session state — the scene phase is its only foreground fact")
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/\(Self.manager)"))
-        // R2: bounded by the two doors.
-        for door in ["public func beginBackgroundContinuation()", "public func endBackgroundContinuation()"] {
-            let body = try #require(MeshRoutedSourceScan.bracedBody(after: door, in: source),
-                                    "a public raise door is gone")
-            #expect(!body.contains("routedAccessGate") && !body.contains("Gate"),
-                    "a raise that read the routed access gate would make one leg the other")
-        }
     }
 }
 

@@ -903,15 +903,13 @@ func holdsForeignCover(_ controller: UIViewController?) -> Bool {
 /// and the SwiftUI presenter — so both are pinned by reading the shipping source. Since plan step
 /// A0.5.11 the live list, its answers, the promotion and the purge are the session photos'
 /// (`MeshSessionPhotos.swift`), told each moment by the mesh's session observer; the teardown and
-/// the start stay the manager's.
+/// the start stay the manager's, in ProximityKit, and their order (the leave tears down before it tells
+/// the observer, a new search tells it a session begins) is ProximityKit's package suite of this name.
 @Suite
 struct LastMemberPhotoReviewSourceWallTests {
 
     /// Only the user's answer, the promotion and delete-all may empty the live photo list.
     @Test func theLivePhotoListIsEmptiedOnlyByAnAnswerOrThePromotion() throws {
-        let manager = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-        )
         let source = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshSessionPhotos.swift")
         )
@@ -946,10 +944,6 @@ struct LastMemberPhotoReviewSourceWallTests {
         // The leave (plan step A0.5.13): the mesh's `leaveSession()` tears down, which runs the ending
         // and its promotion, and only then tells the observer, whose one photo leg forgets the photo
         // session's ids and decides nothing about the photos (the ending stamped them with those ids).
-        let leave = try #require(MeshRoutedSourceScan.bracedBody(after: "public func leaveSession()", in: manager))
-        let teardown = try #require(leave.range(of: "leaveMesh("), "leaveSession no longer tears the session down")
-        let told = try #require(leave.range(of: "meshSessionDidLeave("), "leaveSession no longer tells the observer")
-        #expect(teardown.upperBound <= told.lowerBound, "the observer hears the leave before the teardown's ending")
         let composition = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/FernletMeshFeatures.swift")
         )
@@ -958,8 +952,6 @@ struct LastMemberPhotoReviewSourceWallTests {
         let forgetting = try #require(MeshRoutedSourceScan.bracedBody(after: "func forgetPhotoSession()", in: source))
         #expect(!forgetting.contains("sessionPhotos") && !forgetting.contains("pendingFriendReview"),
                 "the leave decides nothing about the photos")
-        let join = try #require(MeshRoutedSourceScan.bracedBody(after: "public func startJoin()", in: manager))
-        #expect(join.contains("meshSessionWillBegin("), "a new search tells the session observer a session begins")
         let begin = try #require(MeshRoutedSourceScan.bracedBody(after: "func beginNewPhotoSession()", in: source))
         #expect(begin.contains("movePhotosIntoPendingReview()"), "a new search promotes leftovers too")
     }

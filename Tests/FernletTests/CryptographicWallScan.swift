@@ -10,11 +10,11 @@ import Foundation
 ///
 /// ## What the two walls read
 ///
-/// Every shipping root but ProximityKit's folder (``fernletSourceFiles()``): ProximityKit's own package
-/// suite, `ProximitySourceWallTests`, holds ProximityKit's code to the same markers, window and census,
-/// so those rules travel with the package (ProximityKit plan step A1.1.16). ``sourceFiles()`` still walks
-/// every root, ProximityKit's folder included, for the mesh suites that read ProximityKit's code through
-/// it.
+/// Every shipping root of this repository (``sourceFiles()``). ProximityKit is a package dependency,
+/// pinned at its tag since ProximityKit plan step A1.3, so none of its code is under these roots: its
+/// own package suite, `ProximitySourceWallTests`, holds its code to the same markers, window and
+/// census. Four zero-lists in three mesh test files (the two goodbye walls, the key-agreement set's
+/// fold wall and its schema's retired field) read the same walk, each held to its own file-count floor.
 ///
 /// ## Why the roots are enumerated rather than globbed
 ///
@@ -67,14 +67,6 @@ enum CryptographicWallScan {
             all.append(contentsOf: files)
         }
         return all
-    }
-
-    /// Every `.swift` file under every root but ProximityKit's folder (``ProximityKitSources/holds(_:)``):
-    /// what the purpose wall and the escape-hatch census read, since ProximityKit's own package suite,
-    /// `ProximitySourceWallTests`, holds ProximityKit's code to the same rules. A missing or empty root
-    /// still throws.
-    static func fernletSourceFiles() throws -> [URL] {
-        try sourceFiles().filter { !ProximityKitSources.holds($0.path) }
     }
 
     /// The path a failure message should print — repo-relative, so it is the same string on every

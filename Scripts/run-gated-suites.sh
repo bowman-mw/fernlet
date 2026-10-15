@@ -12,20 +12,19 @@
 # writes a result bundle, and the bundle's OWN test count is checked against the floor before
 # the step may pass, and its own tests tree against every selector (the suite census below).
 # Tests/FernletTests/CIGateSelectorBoundaryTests.swift is the static half — every suite the
-# workflow names must be a declared suite of its target, every mesh battery declared in the tree
-# must be named, and Tests/suite-inventory.tsv holds every suite to its target, file and lines.
+# workflow names must be a declared FernletTests suite, every mesh battery declared in the tree
+# must be named, and Tests/suite-inventory.tsv holds every suite to its file and lines.
 #
 # Usage:  Scripts/run-gated-suites.sh <label> <min-tests> <Selector> [<Selector> ...]
 #         <label>      a short name for the result bundle (letters, digits, dashes)
 #         <min-tests>  the smallest test count that may pass. 1 means "at least not vacuous";
 #                      a battery pins its real count and RAISES it as suites grow — lowering a
 #                      floor is a review event, never a drive-by.
-#         <Selector>   a FernletTests suite's bare name, or ProximityKitTests/<Suite> for a suite
-#                      of ProximityKit's own package test target (plan step A0.8); no other shape,
-#                      so this script and CIGateSelectorBoundaryTests read a line alike. One run may
-#                      name both: xcodebuild runs FernletTests, then ProximityKitTests, and
-#                      totalTestCount, which the floor reads, is their sum. Every named suite must
-#                      run at least one test case (the suite census).
+#         <Selector>   a FernletTests suite's bare name; no other shape, so this script and
+#                      CIGateSelectorBoundaryTests read a line alike (ProximityKit's package tests,
+#                      named ProximityKitTests/<Suite> from plan step A0.8, are its own repository's
+#                      CI since A1.3). Every named suite must run at least one test case (the suite
+#                      census).
 #
 #         Scripts/run-gated-suites.sh --check-log <xcodebuild-log>
 #                      scans a SAVED xcodebuild log for the restart marker with the same grep the
@@ -93,37 +92,34 @@ RUN_LOG="$RESULT_DIR/fernlet-$LABEL-$$.log"
 rm -rf "$BUNDLE"
 rm -f "$RUN_LOG"
 
-# Through the workspace: -project cannot see ProximityKit's package test target (a selector naming it
-# exits 70), and Scripts/spm-wall-check.sh builds through the same workspace, so a run with the default
-# derived data finds what that build made.
+# Through the workspace: Scripts/spm-wall-check.sh builds through the same workspace (kept for
+# developing ProximityKit beside Fernlet, plan step A1.5), so a run with the default derived data finds
+# what that build made; a run through -project would read other derived data.
 # Seeded non-empty on purpose: macOS ships bash 3.2, where expanding an EMPTY array under
 # `set -u` is an unbound-variable error.
 ARGS=(-workspace Fernlet.xcworkspace -scheme Fernlet -destination "$DESTINATION" -resultBundlePath "$BUNDLE")
 if [[ -n "${FERNLET_DERIVED_DATA:-}" ]]; then
     ARGS+=(-derivedDataPath "$FERNLET_DERIVED_DATA")
 fi
-# Two shapes: a bare FernletTests suite, or ProximityKitTests/<Suite>. Every other shape, and a suite
-# named twice on one line (it would run twice and inflate the floor), is refused before xcodebuild
-# runs. Bounded: one pass over the arguments. The identifier class is spelled out, not ranged: under
-# macOS's default UTF-8 locale, bash 3.2's `A-Z` admits accented letters, which
+# One shape: a bare FernletTests suite. Every other shape (a `/` among them: FernletTests/<Suite>,
+# or the ProximityKitTests/<Suite> a line used for ProximityKit's package tests until plan step A1.3),
+# and a suite named twice on one line (it would run twice and inflate the floor), is refused before
+# xcodebuild runs. Bounded: one pass over the arguments. The identifier class is spelled out, not
+# ranged: under macOS's default UTF-8 locale, bash 3.2's `A-Z` admits accented letters, which
 # CIGateSelectorBoundaryTests' ASCII-only reader refuses (ProximityKit plan step A0.8.5).
 IDENTIFIER_CHARS='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_'
 SELECTORS=""
-for selector in "$@"; do
-    case "$selector" in
-        ProximityKitTests/*) target="ProximityKitTests"; suite="${selector#ProximityKitTests/}" ;;
-        *) target="FernletTests"; suite="$selector" ;;
-    esac
+for suite in "$@"; do
     case "$suite" in
         *[!$IDENTIFIER_CHARS]*|"")
-            echo "a selector is a FernletTests suite's bare name or ProximityKitTests/<Suite>, got '$selector'" >&2
+            echo "a selector is a FernletTests suite's bare name, got '$suite'" >&2
             exit 2 ;;
     esac
     case " $SELECTORS " in
-        *" $target/$suite "*) echo "'$selector' is named twice on this line: it would run twice" >&2; exit 2 ;;
+        *" FernletTests/$suite "*) echo "'$suite' is named twice on this line: it would run twice" >&2; exit 2 ;;
     esac
-    SELECTORS="$SELECTORS $target/$suite"
-    ARGS+=("-only-testing:$target/$suite")
+    SELECTORS="$SELECTORS FernletTests/$suite"
+    ARGS+=("-only-testing:FernletTests/$suite")
 done
 
 echo "==> $LABEL: $# selector(s), floor $MIN_TESTS test(s)"
@@ -206,7 +202,7 @@ if total < floor:
     problems.append(
         f"only {total} test(s) ran but the floor is {floor} — a selector matched nothing "
         "(misspelled, renamed or deleted suite, a file name where a @Suite struct was meant, "
-        "or a suite named in the wrong target), "
+        "or a suite of another bundle), "
         "or a battery shrank; raise the floor deliberately, never lower it in passing"
     )
 if unparsed:
@@ -219,9 +215,9 @@ if unparsed:
 unrun = [s for s in os.environ["SELECTORS"].split() if counts.get(s, 0) == 0]
 if unrun and not unparsed:
     problems.append(
-        "named but ran no test case: " + ", ".join(unrun) + " — a selector of the wrong target (a suite "
-        "that moved bundles), a scheme that lost a testable, or a suite that matched nothing; a mixed "
-        "line's total can hide it, this cannot"
+        "named but ran no test case: " + ", ".join(unrun) + " — a suite that left FernletTests, a "
+        "scheme that lost a testable, or a suite that matched nothing; a line's total can hide it, "
+        "this cannot"
     )
 if problems:
     print("::error::" + label + ": " + "; ".join(problems))

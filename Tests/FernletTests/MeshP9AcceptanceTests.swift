@@ -32,7 +32,9 @@
 // **What this battery does NOT claim** is in clause (e), by name and not by omission: item 4 was
 // SPLIT; the MC->QUIC FLIP landed on 2026-09-21 and the DELETION on 2026-09-22, so clause (d) is
 // now the zero-list it was always meant to become (the two MC files absent, the framework imported
-// nowhere, the _fernlet-friend pair retired); the two lane rows (9.2.2, 9.3.2) are tier-2
+// nowhere, the _fernlet-friend pair retired). Since ProximityKit plan step A1.3 every cell's reads of
+// ProximityKit's own sources are its package suites' of the same names, and these keep the halves
+// over Fernlet's code and values; the two lane rows (9.2.2, 9.3.2) are tier-2
 // sim↔sim observations; item 0's rows need phones in the owner's hands; P9-3-A was a product
 // decision on P7's run-policy table. The two determinism digests keep their one home in
 // `MeshP5AcceptanceTests`, this file spells neither, and the gate that runs it re-runs the
@@ -60,44 +62,15 @@ enum MeshP9Acceptance {
 
     // MARK: Paths
 
-    /// The presence posture value (item 2 pass 1).
-    static let posturePath = "FernletKit/Sources/ProximityKit/Presence/PresenceEpochPosture.swift"
-
-    /// The presence radio (item 2 pass 2).
-    static let presenceSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPresenceSession.swift"
-
     /// The presence manager — the file whose MultipeerConnectivity names pass 2 removed. It is
     /// FernletSocial's, and drives ProximityKit's presence radio from there, through the engine.
     static let presenceManagerPath = "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift"
-
-    /// ProximityKit's presence engine (plan step A1.1): the one owner of the presence radio, the
-    /// posture it wears and the TXT record it advertises.
-    static let presenceEnginePath = "FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift"
-
-    /// The recipe radio, which also declares ``ProximityPairPosture`` (item 3 pass 2).
-    static let recipeSessionPath = "FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift"
-
-    /// The recipe radio's owner: ProximityKit's pair session (the recipe-share manager's mechanism
-    /// until plan step A0.7.3, when the manager left for FernletSocial over it).
-    static let recipePairSessionPath =
-        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
-
-    /// The transport factory: the one file that decides which mesh radio a shipping launch builds.
-    static let transportSelectionPath =
-        "FernletKit/Sources/ProximityKit/Transport/MeshTransportSelection.swift"
 
     /// The app target's Info.plist — the `NSBonjourServices` declaration.
     static let plistPath = "App/Fernlet/Info.plist"
 
     /// The workflow that gates this battery.
     static let workflowPath = ".github/workflows/s3-wall.yml"
-
-    /// The two files that owned MultipeerConnectivity until the deletion round (2026-09-22), sorted —
-    /// pinned ABSENT now (item 4's `[SPLIT: LATER]` half, taken).
-    static let multipeerFiles = [
-        "FernletKit/Sources/ProximityKit/Transport/MCPeerIDStore.swift",
-        "FernletKit/Sources/ProximityKit/Transport/MeshMultipeerSession.swift"
-    ]
 
     // MARK: The posture walk
 
@@ -292,39 +265,15 @@ struct MeshP9EphemeralPostureAcceptanceTests {
     /// a 900 s epoch every device agrees on, with the certificate minted at the epoch START; recipe
     /// share is minted per `start()` and per `resume()` because its lifetime is a Food-tab visit,
     /// and giving it the epoch type would be a silent mismatch plus a second timer on a subsystem
-    /// allowed one. The needle is narrow on purpose: the recipe session legitimately reuses
-    /// `PresenceEpochPosture.systemEntropy` / `.hexadecimal` as byte helpers, so the ban is on the
-    /// posture's own MINT and on the epoch clock, not on the type's name.
+    /// allowed one. The source half — the presence posture minting at the epoch start from the one
+    /// presence clock, and the recipe radio wearing no epoch posture, reading no presence clock,
+    /// holding no timer and minting a fresh posture in its start and resume doors — reads
+    /// ProximityKit's sources and is the package suite of this name's. What stays here is the runtime
+    /// half: two recipe mints at one instant share nothing, because there is no epoch for them to
+    /// agree inside.
     ///
-    /// Rule 7: `ProximityPairPosture` and its three mint sites exist only because pass 2 landed.
+    /// Rule 7: `ProximityPairPosture` and its mint exist only because pass 2 landed.
     @Test func theTwoRadiosWearDifferentPosturesByDecisionAndNeitherWearsTheOthers() throws {
-        let posture = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.posturePath))
-        #expect(posture.contains("IdentityService.presenceEpochStart(at: now)"),
-                "the presence certificate is minted at the epoch start")
-        #expect(posture.contains("IdentityService.presenceEpoch(at: now)"),
-                "and the epoch comes from the one presence clock")
-        #expect(!posture.contains("randomInstanceName"),
-                "the presence name is drawn here, not borrowed from the mesh advertisement")
-
-        let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
-        #expect(!session.contains("PresenceEpochPosture.minted"),
-                "the recipe radio must not wear the 900 s posture — its lifetime is a tab visit")
-        #expect(!session.contains("presenceEpoch"), "and it must not read the presence clock")
-        // R2: bounded by the three banned clock spellings.
-        for banned in ["Timer", "rotateEpochIfNeeded", "presenceEpochSeconds"] {
-            #expect(!session.contains(banned),
-                    "`\(banned)` is a rotation timer on a radio the ledger allows none")
-        }
-        let started = try #require(
-            MeshRoutedSourceScan.bracedBody(
-                after: "func start(advertisement: [String: String]) throws {", in: session),
-            "the recipe radio's start door is gone")
-        #expect(started.contains("ProximityPairPosture.minted("), "a fresh posture per start()")
-        let resumed = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "func resumeDiscovery() {", in: session),
-            "the recipe radio's resume door is gone")
-        #expect(resumed.contains("ProximityPairPosture.minted("), "and a fresh one per resume()")
-
         let one = try ProximityPairPosture.minted(now: MeshP9Acceptance.epochAnchor)
         let two = try ProximityPairPosture.minted(now: MeshP9Acceptance.epochAnchor)
         #expect(one.instanceName != two.instanceName, "two mints at ONE instant share no name")
@@ -333,33 +282,15 @@ struct MeshP9EphemeralPostureAcceptanceTests {
                 "and no certificate — there is no epoch here for two mints to agree inside")
     }
 
-    /// **Neither posture is persisted, and neither file schedules anything.**
+    /// **Neither posture is persisted, and neither value schedules anything.**
     ///
     /// P9's wipe-wall row, inverted: the phase added no persisted surface, so a posture that reached
     /// for the keychain, a file or `UserDefaults` would owe a `Docs/PrivacyWipeCoverage.md` row and
-    /// delete-all wiring that do not exist. Widened past the unit suite's presence-only cell to the
-    /// recipe posture, which has no cell of its own, and restricted to the value declarations —
-    /// `NetworkPairSession` as a whole legitimately holds tasks.
+    /// delete-all wiring that do not exist. That neither value declaration (`PresenceEpochPosture`,
+    /// and `ProximityPairPosture` inside `NetworkPairSession`, which as a whole legitimately holds
+    /// tasks) reaches for persistence or schedules anything reads ProximityKit's sources and is the
+    /// package suite of this name's. What stays here is the wipe document's half: no posture has a row.
     @Test func neitherPostureIsPersistedAndTheValuesScheduleNothing() throws {
-        let posture = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.posturePath))
-        let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
-        let recipePosture = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "nonisolated struct ProximityPairPosture {", in: session),
-            "the recipe posture's declaration is gone")
-        // The vendor-identifier symbol is deliberately not spelled: `NoTrackingBoundaryTests` bans
-        // it repo-wide including comments, so naming it here would only indict this suite.
-        let forbidden = ["UserDefaults", "Keychain", "KeychainItem", "SecItem", "FileManager",
-                         "write(to:", "JSONSidecarFile", "UIDevice", "hostName", "bundleIdentifier"]
-        // R2: bounded by the forbidden list × the two sources.
-        for marker in forbidden {
-            #expect(!posture.contains(marker), "PresenceEpochPosture reaches for '\(marker)'")
-            #expect(!recipePosture.contains(marker), "ProximityPairPosture reaches for '\(marker)'")
-        }
-        // R2: bounded by the three scheduling spellings.
-        for marker in ["Task", "Timer", "sleep"] {
-            #expect(!posture.contains(marker), "a value schedules nothing: PresenceEpochPosture '\(marker)'")
-            #expect(!recipePosture.contains(marker), "nor does ProximityPairPosture: '\(marker)'")
-        }
         let wipe = try RepoRoot.source("Docs/PrivacyWipeCoverage.md")
         #expect(!wipe.contains("PresenceEpochPosture") && !wipe.contains("ProximityPairPosture"), """
             a posture has gained a wipe row, which means it gained a persisted surface — P9's \
@@ -434,7 +365,8 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// no observable state — so the declaration is pinned present; a shared ALPN would let a
     /// presence dial complete a TLS handshake with a mesh or recipe listener, so the three are
     /// pinned apart. The retired MultipeerConnectivity pair is pinned ABSENT, which is item 4's
-    /// `[SPLIT: NOW]` half seen from this clause.
+    /// `[SPLIT: NOW]` half seen from this clause. That the radio reads its ALPN off the host's
+    /// namespace and binds it reads ProximityKit's source and is the package suite of this name's.
     @Test func thePresenceRadioIsItsOwnServiceAndItsPredecessorIsOffTheAir() throws {
         let radios = ProximityNamespace.fernlet.family.radios
         #expect(radios.presence.serviceType == "_fernlet-near2._udp")
@@ -455,10 +387,6 @@ struct MeshP9PresenceSwapAcceptanceTests {
             #expect(!declared.contains(retired),
                     "`\(retired)` is still declared — no radio has browsed it since pass 2 crossed")
         }
-        let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceSessionPath))
-        #expect(session.contains("alpn = namespace.family.radios.presence.alpn"),
-                "the session reads its ALPN off the host's namespace, from its own radio's field")
-        #expect(session.contains("alpn: alpn"), "the session must actually bind its own ALPN")
     }
 
     /// **Every presence audit line names its peer by a salted, per-session label of a fixed shape —
@@ -527,14 +455,15 @@ struct MeshP9PresenceSwapAcceptanceTests {
     /// Rule 7's mechanical half for item 2: pass 1 changed nothing on the air, so the only proof
     /// that pass 2 ran is that the MultipeerConnectivity path is gone from this file and the QUIC
     /// seam is in it. Pinned in both directions — a file naming neither has been renamed or emptied,
-    /// not cleaned — and widened past the unit cell's single file to a walk of the whole package and
-    /// of FernletSocial, the manager's module, so an `extension PresenceManager` in a new file of
-    /// either cannot reintroduce a needle silently. Since plan step A1.1 the seam is ProximityKit's
-    /// presence engine: the manager names it and none of the radio, posture, channel or TXT types
-    /// behind it, the radio's seam has the engine and the conformer for its two homes, and the posture
-    /// is minted in the engine alone. The two orders the move had to keep are read off the code too:
-    /// the engine wires a radio's hooks before it starts it, and the manager's heart door marks a
-    /// channel connected only after its coordinator has begun.
+    /// not cleaned — and widened past the unit cell's single file to a walk of FernletSocial, the
+    /// manager's module, so an `extension PresenceManager` in a new file cannot reintroduce a needle
+    /// silently. Since plan step A1.1 the seam is ProximityKit's presence engine: the manager names it
+    /// and none of the radio, posture, channel or TXT types behind it, no FernletSocial file names the
+    /// radio's seam or mints the posture, and the manager builds the one engine. The manager's order is
+    /// read off the code too: its heart door marks a channel connected only after its coordinator has
+    /// begun. The package suite of this name holds the engine's half: the radio's seam has the engine
+    /// and the conformer for its two homes, the posture is minted in the engine alone, and the engine
+    /// wires a radio's hooks before it starts it.
     @Test func theManagerNamesNoRetiredRadioAndReachesTheAirThroughTheSeamAlone() throws {
         let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceManagerPath))
         // R2: bounded by the retired-radio spellings.
@@ -551,56 +480,43 @@ struct MeshP9PresenceSwapAcceptanceTests {
         #expect(manager.contains("presenceSession.rotatePosture(at:"), "wearing the posture pass 1 built, through the engine")
         try Self.expectThePresenceOrdersHold(manager: manager)
 
-        let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
-        // Anti-vacuity floors, RE-MEASURED at item 9's fix review (NOTE 4) and set within ~20%
-        // of reality rather than at a round 100: 141 files here (143 before the deletion round). A floor a deleted third of the
-        // package still clears is a floor that cannot fail. It holds ProximityKit's part of the walk.
-        #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
-        #expect(Set(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: kit + social))
-                == ["ProximityPresenceSession.swift", "NetworkPresenceSession.swift"], """
-                the presence seam has exactly two homes in the package and FernletSocial — the engine \
+        // Four fifths of FernletSocial's 52 Swift files when measured (ProximityKit plan step A1.3),
+        // so the two zero-lists below cannot pass over a walk that lost a folder.
+        #expect(social.count >= 41, "the FernletSocial scan lost its files (52 when this was measured)")
+        #expect(MeshP7Acceptance.homes(of: "PresenceRadioSession", in: social).isEmpty, """
+                no FernletSocial file names the presence seam: its two homes are ProximityKit's engine \
                 that drives it and the conformer that is it. A third is a second owner for one radio
                 """)
-        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: kit + social) == ["ProximityPresenceSession.swift"],
-                "and the posture is minted from one place: the engine the manager's epoch tick asks")
+        #expect(MeshP7Acceptance.homes(of: "PresenceEpochPosture.minted", in: social).isEmpty,
+                "and no FernletSocial file mints the posture: the engine the manager's epoch tick asks does")
         let app = try MeshP7Acceptance.sources(under: "App")
-        #expect(MeshP7Acceptance.homes(of: "ProximityPresenceSession(", in: kit + social + app) == ["PresenceManager.swift"],
+        #expect(MeshP7Acceptance.homes(of: "ProximityPresenceSession(", in: social + app) == ["PresenceManager.swift"],
                 "one presence engine per process: the manager's. A second engine on the same namespace would read the first one's advertisements as a stranger's")
     }
 
-    /// The two orders the presence engine's move kept, read off the code: the engine wires a fresh
-    /// radio's hooks before it starts it (so no browse result, tunnel or failure reaches an unwired
-    /// radio), and the manager's heart door publishes a channel's `.connected` only after the
-    /// coordinator built over it has begun (so the coordinator never takes the wrong handshake
-    /// branch). Each spelling occurs exactly once in its file and inside the body it belongs to (the
-    /// engine's `start(tags:)`; the closure the heart door spawns), the engine's start defers nothing,
-    /// and the manager's two lines are adjacent, so a call moved out of that body, or a `begin` wrapped
-    /// in a task of its own, reddens.
+    /// The order the presence engine's move kept in the manager, read off the code: the manager's
+    /// heart door publishes a channel's `.connected` only after the coordinator built over it has
+    /// begun (so the coordinator never takes the wrong handshake branch). Each spelling occurs exactly
+    /// once in the file and inside the closure the heart door spawns, and the two lines are adjacent,
+    /// so a call moved out of that body, or a `begin` wrapped in a task of its own, reddens. The
+    /// engine's own order (it wires a fresh radio's hooks before it starts it, and its start defers
+    /// nothing) reads ProximityKit's source and is the package suite's.
     static func expectThePresenceOrdersHold(manager: String) throws {
-        let engine = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.presenceEnginePath))
-        let start = try #require(MeshRoutedSourceScan.bracedBody(after: "public func start(tags:", in: engine),
-                                 "the engine's `start(tags:)` is gone or its braces do not close")
         let door = try #require(MeshRoutedSourceScan.bracedBody(after: "private func handleHeartChannelReady(", in: manager),
                                 "the manager's heart door is gone or its braces do not close")
         let spawned = try #require(MeshRoutedSourceScan.bracedBody(after: "spawnHostPinned {", in: door),
                                    "the manager's heart door spawns no host-pinned closure")
-        let orders = [
-            (engine, start, "the engine", "wire(radio)", "try radio.start(posture:"),
-            (manager, spawned, "the manager", "await coordinator.begin(role: .browser, mode: .friend)", "channel.notifyConnected()")
-        ]
-        // R2: bounded by the two orders.
-        for (code, body, file, first, then) in orders {
-            let firsts = code.components(separatedBy: first).count - 1
-            let thens = code.components(separatedBy: then).count - 1
-            #expect(firsts == 1 && thens == 1, "\(file) spells `\(first)` \(firsts) times and `\(then)` \(thens) times")
-            guard let early = body.range(of: first), let late = body.range(of: then) else {
-                Issue.record("\(file)'s `\(first)` and `\(then)` are not both inside the body they belong to")
-                continue
-            }
-            #expect(early.upperBound <= late.lowerBound, "\(file) reaches `\(then)` before `\(first)`")
+        let first = "await coordinator.begin(role: .browser, mode: .friend)"
+        let then = "channel.notifyConnected()"
+        let firsts = manager.components(separatedBy: first).count - 1
+        let thens = manager.components(separatedBy: then).count - 1
+        #expect(firsts == 1 && thens == 1, "the manager spells `\(first)` \(firsts) times and `\(then)` \(thens) times")
+        if let early = spawned.range(of: first), let late = spawned.range(of: then) {
+            #expect(early.upperBound <= late.lowerBound, "the manager reaches `\(then)` before `\(first)`")
+        } else {
+            Issue.record("the manager's `\(first)` and `\(then)` are not both inside the body they belong to")
         }
-        #expect(!start.contains("defer"), "the engine's start defers a call, which runs after the radio's start")
         let adjacent = #"await coordinator\.begin\(role: \.browser, mode: \.friend\)\s*\n\s*channel\.notifyConnected\(\)"#
         #expect(spawned.range(of: adjacent, options: .regularExpression) != nil,
                 "the manager's `begin` and `notifyConnected()` are not adjacent lines of the spawned closure")
@@ -855,7 +771,8 @@ struct MeshP9RecipeSwapAcceptanceTests {
     ///
     /// A shared ALPN would let a recipe dial complete a TLS handshake with a mesh or presence
     /// listener; a missing `NSBonjourServices` entry kills discovery on device with no log and no
-    /// observable state.
+    /// observable state. That the radio reads its ALPN off its pair profile's radio and binds it reads
+    /// ProximityKit's source and is the package suite of this name's.
     @Test func theRecipeRadioIsItsOwnServiceAndItsPredecessorIsOffTheAir() throws {
         let radios = ProximityNamespace.fernlet.family.radios
         #expect(radios.pair.serviceType == "_fernlet-recipe2._udp")
@@ -872,76 +789,8 @@ struct MeshP9RecipeSwapAcceptanceTests {
             #expect(!declared.contains(retired),
                     "`\(retired)` is still declared — no radio has advertised it since pass 2 crossed")
         }
-        let session = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipeSessionPath))
-        #expect(session.contains("alpn = profile.radio.alpn"),
-                "the session reads its ALPN off its pair profile's radio, the host namespace's recipe row")
-        #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
         #expect(NetworkPairSession.maxTunnels == 1,
                 "the shipped 2-device cap is what the pause/resume contract exists to preserve")
-    }
-
-    /// **Discovery moves through the gate alone, and no file of the subtree names the retired
-    /// radio.**
-    ///
-    /// The containment pairing, not text proximity: `occurrences(verb) == 1` alone stayed green when
-    /// the call was moved OUT of `applyDiscoveryGate`, so the whole-file count is paired with the
-    /// count inside the function's brace-matched body. And the unit is the SUBTREE, not one file —
-    /// an `extension ProximityPairSession` in a new file reintroduces every needle without
-    /// reddening a scan of the session alone.
-    ///
-    /// Rule 7 for item 3: the seam and its conformer in the manager (`ProximityPairRadioSession` /
-    /// `NetworkPairSession`, spelled `RecipeShareRadioSession` / `NetworkRecipeShareSession` until plan
-    /// step A1.0) are false at `79f6b15` and true at `ba34491`.
-    @Test func discoveryMovesThroughTheGateAloneAndNoRecipeFileNamesTheRetiredRadio() throws {
-        let manager = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(MeshP9Acceptance.recipePairSessionPath))
-        let gate = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "private func applyDiscoveryGate(", in: manager),
-            "applyDiscoveryGate is gone — the discovery contract has no door")
-        // R2: bounded by the two discovery verbs.
-        for verb in ["session.pauseDiscovery()", "session.resumeDiscovery()"] {
-            let whole = manager.components(separatedBy: verb).count - 1
-            let inside = gate.components(separatedBy: verb).count - 1
-            #expect(whole == 1, "\(verb) is called \(whole) times; the gate is the one door")
-            #expect(inside == whole, "\(verb) is called outside applyDiscoveryGate's own body")
-        }
-        #expect(manager.contains("ProximityPairRadioSession"), "the manager drives the QUIC seam")
-        #expect(manager.contains("NetworkPairSession"), "whose production conformer it builds")
-
-        // The BIRTH SEED has one mint site (item 9's fix review, FIX 3). `beginTransferForTesting`
-        // is what every cell of this battery and of `RecipeShareTransferTests` drives; the pair
-        // session's `send(_:to:)` is what ships, and no cell of either executes it (one golden does,
-        // `FernletFeatureGoldenTests`' recipe pairing, which reads the bytes, not the seed) — so
-        // while the seed was spelled twice, item 3 pass 1's own defect (`radioIsQuiet: false` on
-        // the shipping line) could be restored with the whole tree green. Containment, not
-        // proximity: the shipping door's brace-matched body must call the helper, and the record
-        // may be constructed in exactly one place.
-        let send = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "public func send(", in: manager),
-            "the pair session's shipping send is gone")
-        #expect(send.contains("mintTransfer(for: recipient.id)"), """
-            the pair session's send mints its exchange record somewhere other than the one seeded helper — \
-            which is how the shipping seed and the seed every test drives came apart before
-            """)
-        let mints = manager.components(separatedBy: "ProximityPairTransfer(recipientID:").count - 1
-        #expect(mints == 1, "the exchange record is constructed in \(mints) places; the helper is the one")
-
-        let subtree = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit/PairSession")
-        // Four since 2026-09-29: `ProximityPairSendOutcome.swift` (the send's frozen outcome tokens,
-        // added as `RecipeShareOutcome.swift`) was read against the needle walk below, which it
-        // passes — it names no radio at all.
-        #expect(subtree.count == 4, """
-            the PairSession subtree holds \(subtree.count) files, not the four it held when this \
-            was measured (the pair session, the advertisement, the transfer record and the send \
-            outcome). A fifth is a file this cell's retired-radio walk has never been read against; \
-            a fourth gone is a scan that lost its root. EXACT on purpose — `>= 4` was satisfied by \
-            the tree it was written against and by every tree that could ever follow it
-            """)
-        // R2: bounded by the retired-radio spellings × the subtree's files.
-        for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",
-                       "PeerChannelTransport", "displayHint"] {
-            let homes = Set(MeshP7Acceptance.homes(of: needle, in: subtree)).sorted()
-            #expect(homes.isEmpty, "`\(needle)` is back in the recipe subtree, in \(homes)")
-        }
     }
 }
 
@@ -970,94 +819,41 @@ struct MeshP9McRetirementAcceptanceTests {
 
     /// **Both MultipeerConnectivity files are gone, and the selection seam went with them.**
     ///
-    /// The zero-list half of item 4, in both directions. The two files are pinned ABSENT (a
-    /// re-created one reddens here with the deletion checklist in reverse); the selection seam that
-    /// existed only to choose between two radios — `MeshTransportKind`, `MeshTransportFactory`, the
-    /// `quicSelectionEnvironmentKey` read, the MC conformance — is pinned OUT of
-    /// `MeshTransportSelection.swift` by identifier; and the one default the deletion left is pinned
-    /// IN by its source text: `MeshNetworkManager.init`'s
-    /// `transport ?? NetworkMeshSession(namespace: namespace)` (built from the host's namespace since
-    /// ProximityKit plan step A0.2.7), the line the survey called "the cutover" (its VALUE is
-    /// `MeshTransportSelectionTests`' `theAppsInitializerRunsOnTheQUICRadio`).
+    /// The zero-list half of item 4. The selection seam that existed only to choose between two
+    /// radios — `MeshTransportKind`, `MeshTransportFactory`, the `quicSelectionEnvironmentKey` read,
+    /// the MC conformance — is pinned OUT of FernletSocial, whose presence manager drives the presence
+    /// radio, by identifier: the four names are Fernlet's own, so neither the import wall nor
+    /// `TransportNeutralityBoundaryTests`' SDK symbols would see a `MeshTransportKind` re-introduced
+    /// in a new file (the deletion round's verify, finding 6). Comment-stripped sources, as every walk
+    /// in this battery.
     ///
-    /// The stranger-admission needle stays, unchanged: D-4.3's refusal-made-CONDITIONAL is what let
-    /// the deletion ship without losing first-meeting founding, and the unseeded pair run of
-    /// 2026-09-22 is its tier-2 observation. Widening it further is a second decision, and it must
-    /// not land silently either.
+    /// The engine's half reads ProximityKit's sources and is the package suite of this name's: the two
+    /// deleted files pinned ABSENT, the same four identifiers pinned out of the module, the one default
+    /// the deletion left (`MeshNetworkManager.init`'s `transport ?? NetworkMeshSession(namespace:
+    /// namespace)`) pinned IN by its source text, and D-4.3's conditional stranger refusal at the line
+    /// that enforces it. The default's VALUE is `MeshTransportSelectionTests`'
+    /// `theAppsInitializerRunsOnTheQUICRadio`.
     @MainActor
     @Test func theMultipeerFilesAreGoneAndTheSelectionSeamWithThem() throws {
-        // R2: bounded by the two deleted files.
-        for path in MeshP9Acceptance.multipeerFiles {
-            #expect(!FileManager.default.fileExists(atPath: RepoRoot.url(path).path), """
-                \(path) is back in the tree. MultipeerConnectivity was deleted in the deletion round \
-                (2026-09-22) after the flip (2026-09-21) and the unseeded Lane C observation; \
-                re-adding the radio is a phase decision that owes the permit list, the plist pair, \
-                the CI name count and this cell in the same commit — it is not a fix for a red
-                """)
-        }
-        // A code LINE, not a substring of the comment-stripped file: `codeOnly` drops whole-line
-        // comments only, so a trailing `// transport ?? NetworkMeshSession(namespace: namespace)`
-        // would otherwise satisfy this pin (the deletion round's verify, finding 7). The VALUE half is
-        // `MeshTransportSelectionTests.theAppsInitializerRunsOnTheQUICRadio`.
-        let manager = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
-        let needle = "transport ?? NetworkMeshSession(namespace: namespace)"
-        let initDefault = manager.split(separator: "\n").contains { line in
-            (line.components(separatedBy: "//").first ?? "").contains(needle)
-        }
-        #expect(initDefault, """
-            MeshNetworkManager.init no longer defaults its radio to \
-            `NetworkMeshSession(namespace: namespace)` directly. There is no selection seam left to \
-            route through: a second radio, a factory or a launch variable here is the seam the \
-            deletion round removed coming back
-            """)
-        // The WHOLE package, not the one file the seam used to live in, and FernletSocial, whose
-        // presence manager drives the presence radio: the four names are Fernlet's own, so neither
-        // the import wall nor `TransportNeutralityBoundaryTests`' SDK symbols would see a
-        // `MeshTransportKind` re-introduced in a new file (the deletion round's verify, finding 6).
-        // Comment-stripped sources, as every walk in this battery.
-        let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
+        // Four fifths of FernletSocial's 52 Swift files when measured (ProximityKit plan step A1.3), so
+        // the zero-list below cannot pass over a walk that lost a folder.
+        #expect(social.count >= 41, "the FernletSocial scan lost its files (52 when this was measured)")
         // R2: bounded by the four retired identifiers.
         for retired in ["MeshTransportKind", "MeshTransportFactory", "quicSelectionEnvironmentKey",
                         "MeshMultipeerSession"] {
-            let homes = Set(MeshP7Acceptance.homes(of: retired, in: kit + social)).sorted()
+            let homes = Set(MeshP7Acceptance.homes(of: retired, in: social)).sorted()
             #expect(homes.isEmpty, """
                 `\(retired)` is back, in \(homes). The selection seam retired with the second radio \
                 (Variant A of the survey's patch); `MeshTransportSession` and `MeshPeerChannel` are \
                 the whole surface now, and a second radio is a phase decision
                 """)
         }
-        // The second reason, at the line that enforces it rather than in the note that states it.
-        //
-        // **The needle MOVED on 2026-09-21, deliberately, and this is the argument.** It used to be
-        // the unconditional `case .stranger: return .unknownIdentity` — the "stranger admission has
-        // no QUIC path" half of the split, kept so loosening it could not land silently. The owner
-        // took D-4.3 (Option 1) on the stranger-admission design's recommendation, so it has now
-        // landed, and it did not land silently: it landed here. What replaces it is the same
-        // refusal with the ONE condition the decision added — a stranger is refused unless the
-        // owner's join doors are open — so the needle still fails if the arm is deleted, if it
-        // stops naming a refusal, or if the refusal stops being the default. What it no longer
-        // claims is that the QUIC radio is members-only before any app frame, because it is not:
-        // see `MeshIntroductionRoster.admitsStrangersProvisionally` and the amendment to plan
-        // §7.2's "non-roster member" bullet recorded on `MeshIntroductionAuthority`'s scope
-        // paragraph. Observed on a real tunnel on 2026-09-22 (the runbook's "Lane C — the deletion
-        // round's item 0").
-        let introduction = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/MeshChannelIntroduction.swift"))
-        #expect(
-            introduction.contains("guard roster.admitsStrangersProvisionally else { return .unknownIdentity }"),
-            """
-            the QUIC channel introduction no longer refuses a peer the roster calls a stranger \
-            BY DEFAULT. Since D-4.3 the refusal is conditional on the owner's join doors being \
-            open, and `unknownIdentity` must stay the answer when they are shut — widening it \
-            further is a second decision, and it must not land silently either
-            """
-        )
     }
 
-    /// **The framework import has no home, and no framework type is named anywhere in the package,
-    /// FernletSocial (whose presence manager drives a radio) or the app.**
+    /// **The framework import has no home, and no framework type is named anywhere in FernletSocial
+    /// (whose presence manager drives a radio) or the app.** ProximityKit's own sources are the package
+    /// suite of this name's to walk.
     ///
     /// `TransportNeutralityBoundaryTests` makes the same claim through a permit list it scans
     /// against — empty since the deletion round; this is a second decomposition of it — the *claim*
@@ -1070,13 +866,13 @@ struct MeshP9McRetirementAcceptanceTests {
     /// deliberately so — "what the retired MC advertiser could not do" is the sentence that explains
     /// why the ephemeral posture exists at all.
     @Test func theFrameworkImportHasNoHomeAndNoFrameworkTypeIsNamed() throws {
-        let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
         let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
         let app = try MeshP7Acceptance.sources(under: "App/Fernlet")
-        // MEASURED floors (NOTE 4): 141 and 185 files after the deletion. See clause (b) for why not 100.
-        #expect(kit.count >= 120, "the ProximityKit scan lost its files (141 when this was measured)")
+        // MEASURED floors: 52 FernletSocial files at ProximityKit plan step A1.3 (four fifths, 41), and
+        // 185 app files after the deletion (NOTE 4), so a walk that lost a folder reds.
+        #expect(social.count >= 41, "the FernletSocial scan lost its files (52 when this was measured)")
         #expect(app.count >= 140, "the app-target scan lost its files (185 when this was measured)")
-        let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: kit + social + app)).sorted()
+        let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: social + app)).sorted()
         #expect(homes.isEmpty, """
             MultipeerConnectivity is imported in \(homes). The framework left the tree in the \
             deletion round (2026-09-22); a new import is a new dependency on a retired radio, and \
@@ -1087,7 +883,7 @@ struct MeshP9McRetirementAcceptanceTests {
         // WHOLE-identifier wall (`TransportNeutralityBoundaryTests`) covers the rest.
         // R2: bounded by the three unambiguous framework type names.
         for symbol in ["MCNearbyServiceAdvertiser", "MCNearbyServiceBrowser", "MCSessionState"] {
-            let anywhere = Set(MeshP7Acceptance.homes(of: symbol, in: kit + social + app)).sorted()
+            let anywhere = Set(MeshP7Acceptance.homes(of: symbol, in: social + app)).sorted()
             #expect(anywhere.isEmpty, "`\(symbol)` is named in \(anywhere); the framework is gone")
         }
     }
@@ -1297,8 +1093,11 @@ struct MeshP9HonestyAcceptanceTests {
     /// The runbook's Lane C sections are the evidence for what P9's acceptance actually ran; Lane D
     /// is where the branches that no Simulator reaches are specified and still not run. Each
     /// unobserved row is paired with the SOURCE fact that stands in for it, so the pairing cannot
-    /// drift: `RecipeShareOverQUICTests` holds the `.remove` branch as a source assertion precisely
-    /// because no execution reaches it, and this battery names that substitution out loud.
+    /// drift: `RecipeShareOverQUICTests.theRegistrationRemoveBranchIsNotABareAssignment` holds the
+    /// `.remove` branch as a source assertion precisely because no execution reaches it, and this
+    /// battery names that substitution out loud. The assertion reads the pair session's source, so
+    /// since ProximityKit plan step A1.3 it is ProximityKit's package copy of that suite; Fernlet's
+    /// recipe suite keeps the record of where it stands, beside the behavioural republish cell.
     @Test func everyLaneRowThisBatteryCannotRunIsStillNamedInItsRecord() throws {
         let runbook = try RepoRoot.source("Docs/Mesh-Network-Feasibility-Runbook.md")
         // R2: bounded by the three lane headings.
@@ -1320,10 +1119,13 @@ struct MeshP9HonestyAcceptanceTests {
                 """)
         }
         let recipeTests = try RepoRoot.source("Tests/FernletTests/RecipeShareOverQUICTests.swift")
-        #expect(recipeTests.contains("theRegistrationRemoveBranchIsNotABareAssignment"), """
-            the source-level stand-in for the `.remove` → republish branch is gone. That cell is a \
-            SHAPE assertion, not an execution: it exists because the branch never fires on a \
-            Simulator, and deleting it leaves the branch covered by nothing at all
+        #expect(recipeTests.contains("`theRegistrationRemoveBranchIsNotABareAssignment`")
+                    && recipeTests.contains("func aWithdrawnRegistrationRepublishesUnderAFreshPosture("), """
+            the record of the source-level stand-in for the `.remove` → republish branch is gone from \
+            Fernlet's recipe suite, or the republish cell beside it is. The stand-in is a SHAPE \
+            assertion, not an execution, ProximityKit's package copy of the suite since plan step \
+            A1.3: it exists because the branch never fires on a Simulator, and losing track of it \
+            leaves the branch covered by nothing anyone reads
             """)
         #expect(ledger.contains("P9-2-B") && ledger.contains("third friend"), """
             the accepted residual is gone: a sole-friend pair never surfaces in presence (layer-3 \

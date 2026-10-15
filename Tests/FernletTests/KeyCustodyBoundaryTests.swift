@@ -21,9 +21,9 @@ import FernletFoundation
 /// - **Grep-walls** pin where the two sanctioned exceptions may live in shipping code:
 ///   `synchronizable: true` (the escrow promotion) only in `SealedBackupEscrowKey.swift`, and a bare
 ///   non-`ThisDeviceOnly` accessibility class only in `PrivateMediaKeyStore.swift` +
-///   `SealedBackupEscrowKey.swift`, over every shipping root but ProximityKit's own folder
-///   (`ProximityKitSources.folder`), whose code ProximityKit's own package suite,
-///   `ProximitySourceWallTests`, holds to neither exception (since plan step A1.1.15); and where a
+///   `SealedBackupEscrowKey.swift`, over every shipping root of this repository (ProximityKit is a
+///   package dependency, whose code its own package suite, `ProximitySourceWallTests`, holds to
+///   neither exception, since plan step A1.1.15); and where a
 ///   device identity may be built, over the same roots: only in the app's factory in
 ///   `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none, which the
 ///   same package suite holds over its code (since plan step A1.1.17): its host door,
@@ -490,10 +490,9 @@ struct KeyCustodyBoundaryTests {
     /// Minimum shipping files the scan must see; catches a broken enumerator, not churn.
     private static let scanFloor = 250
 
-    /// Enumerates every shipping Swift file under ``shippingRoots`` but ProximityKit's own
-    /// (``ProximityKitSources/folder``): the two exception walls read Fernlet's shipping code, and
-    /// ProximityKit's own `ProximitySourceWallTests` holds its code to no synchronizable row and no bare
-    /// class at all (since plan step A1.1.15).
+    /// Enumerates every shipping Swift file under ``shippingRoots``: the two exception walls read
+    /// Fernlet's shipping code, and ProximityKit's own `ProximitySourceWallTests` holds its code to no
+    /// synchronizable row and no bare class at all (since plan step A1.1.15).
     private func shippingSwiftFiles() -> [URL] {
         let repoRoot = RepoRoot.url
         var files: [URL] = []
@@ -503,8 +502,7 @@ struct KeyCustodyBoundaryTests {
                 Issue.record("scan root missing: \(root)")
                 continue
             }
-            for case let url as URL in enumerator
-            where url.pathExtension == "swift" && !ProximityKitSources.holds(url.path) {
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
                 files.append(url)
             }
         }
@@ -619,8 +617,8 @@ struct KeyCustodyBoundaryTests {
         }
     }
 
-    /// Every shipping Swift file but ProximityKit's own (``ProximityKitSources/folder``) constructs an
-    /// identity only in ``identityConstructionHomes``, exact both ways, read as lexed code
+    /// Every shipping Swift file of this repository constructs an identity only in
+    /// ``identityConstructionHomes``, exact both ways, read as lexed code
     /// (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so a doc comment or a string that spells a
     /// construction is not one: a construction, or a delegating initializer, in any file it reads (the
     /// identity's declaration file is ProximityKit's, and ProximityKit's own `ProximitySourceWallTests`
@@ -637,8 +635,7 @@ struct KeyCustodyBoundaryTests {
                 Issue.record("scan root missing: \(root)")
                 continue
             }
-            for case let url as URL in enumerator
-            where url.pathExtension == "swift" && !ProximityKitSources.holds(url.path) {
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
                 scanned += 1
                 guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
                 // A path that does not resolve under its root is kept whole, so it fails the set loudly.
@@ -721,9 +718,9 @@ struct KeyCustodyBoundaryTests {
 
     /// The roots the backend-door wall reads, each with the fewest Swift files it may hold (about four
     /// fifths of its count when the wall was written: 264, 288 and 485), so a root that stops resolving
-    /// fails rather than reading as clean: the app and its extensions, FernletKit's sources but
-    /// ProximityKit's own (``ProximityKitSources/folder``, which declare the door), and Fernlet's test
-    /// targets. ProximityKit's sources and its package tests are its own door wall's to read.
+    /// fails rather than reading as clean: the app and its extensions, FernletKit's sources, and
+    /// Fernlet's test targets. ProximityKit, which declares the door, is a package dependency: its
+    /// sources and its package tests are its own door wall's to read.
     static let backendDoorRoots: [(root: String, floor: Int)] = [
         (root: "App", floor: 210), (root: "FernletKit/Sources", floor: 230), (root: "Tests", floor: 385)
     ]
@@ -743,7 +740,7 @@ struct KeyCustodyBoundaryTests {
     }
 
     /// No Fernlet file names ProximityKit's keychain backend door: no file of the app and its extensions,
-    /// of FernletKit's modules but ProximityKit, or of Fernlet's test targets calls it, refers to it or
+    /// of FernletKit's modules, or of Fernlet's test targets calls it, refers to it or
     /// declares a function of its name, so every shipping process, and this hosted bundle's keychain
     /// cells, reach the system keychain. A host calls none; ProximityKit's own package tests hold the
     /// declaration and its one caller. Read as lexed code (`SwiftSourceLexer`), so a comment or a string
@@ -755,7 +752,6 @@ struct KeyCustodyBoundaryTests {
         // R2: bounded by the three roots and each root's finite file list.
         for (root, floor) in Self.backendDoorRoots {
             let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
-                .filter { !ProximityKitSources.holds($0) }
             #expect(files.count >= floor, "the backend-door scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
             for path in files {
                 let source = try RepoRoot.source(path)

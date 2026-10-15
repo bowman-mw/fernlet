@@ -516,6 +516,8 @@ struct MeshRoutedBackpressureTests {
 // MARK: - The parked-set drop rule, at the door
 
 /// The one clause that turns a refused manifest into dropped bytes, driven through the real ingest.
+/// Its structural half, that the drop has one call site and it is the verifier's rejection branch, reads
+/// the manager's source and is ProximityKit's package suite of the same name.
 @MainActor
 @Suite(.serialized)
 struct MeshRoutedParkedDropDoorTests {
@@ -745,23 +747,6 @@ struct MeshRoutedParkedDropDoorTests {
         )
         #expect(rig.routedIndex(rig.nodes[1])?.record(for: item.key)?.isComplete == true,
                 "an origin retracted content this device had already received")
-    }
-
-    /// The structural half: the drop has EXACTLY one call site, and it is the verifier-rejection
-    /// branch — so neither the `notADestinationOrHandoff` guard nor a capacity refusal can ever
-    /// reach it, whatever a future edit intends.
-    @Test func theDropHasOneCallSiteAndItIsTheVerifierBranch() throws {
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-        )
-        let lines = source.split(separator: "\n", omittingEmptySubsequences: false)
-        let calls = lines.enumerated().filter { $0.element.contains("dropParkedSetIfTerminal(") }
-        #expect(calls.count == 2, "one definition and one call site")
-        let callSite = try #require(calls.first)
-        let window = lines[max(0, callSite.offset - 8)..<callSite.offset].joined(separator: "\n")
-        #expect(window.contains("door.verify(manifest)"),
-                "the drop must hang off the verifier's rejection and nothing else")
-        #expect(source.contains("dropParkedSet(key:") )
     }
 }
 

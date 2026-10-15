@@ -1446,7 +1446,8 @@ final class MeshDoubleDoorProbe {
 /// dispatch at the receiver, the real verifier against the receiver's own admission set. The rig's
 /// one seam is `armKeyAdvertisements()`, which calls the production self-mint — the tier-1 rigs arm
 /// their ledgers through a seed that bypasses both arming doors, so without it no node would have
-/// its own row to relay.
+/// its own row to relay. The source pin that the manager routes, decodes and dispatches the frame is
+/// ProximityKit's package suite of the same name.
 ///
 /// The honest labels, which the plan's §11.3/§23.4 rewrite must use verbatim: of D-13.22's three
 /// refusals the advertisement converts **one** into a delivery (the resumption, `R-16`) and the
@@ -1714,30 +1715,6 @@ struct MeshKeyAdvertisementDeliveryTests {
             #expect(grantAt < addressingAt,
                     "the order is load-bearing: before the grant the joiner has no ledger to verify against")
         }
-    }
-
-    /// **Three lines carry the frame in, and a missing one of them is SILENT.** Pinned by source.
-    ///
-    /// This is not paranoia: the first draft of pass B had the `decodeMembershipFrame` arm, the
-    /// `DecodedMembershipRecord` case and the dispatch arm — and not the top-level routing line — and
-    /// every advertisement was dropped at the dispatch switch's `default` with no audit line at all.
-    /// Two of the three are compile-fenced (`mergeOffer(for:)`, `insertMembershipRecord` and
-    /// `bufferedForAdoption` are `default`-free switches over `DecodedMembershipRecord`); the other
-    /// two are not, and `decodeMembershipFrame`'s `default: return nil` plus
-    /// `dispatchMembershipEventPayload`'s unaudited `guard let decoded` is exactly how a forgotten
-    /// arm becomes a frame that never arrived.
-    @Test func theKeyAgreementFrameIsRoutedDecodedAndDispatched() throws {
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-        )
-        #expect(source.contains(".meshInventoryDigest, .meshEpochHeads, .meshKeyAgreement:"),
-                "the top-level switch must route the token to the membership-event family")
-        #expect(source.contains("case .meshKeyAgreement:"),
-                "decodeMembershipFrame must have its own arm, or the frame decodes to nil")
-        #expect(source.contains("case .keyAdvertisements(let payload) = decoded"),
-                "and the dispatch must hand the decoded batch to the receive door")
-        #expect(source.contains("receiveKeyAdvertisements(payload, from: senderFingerprint)"),
-                "with the AUTHENTICATED sender, never the frame's own audit-only field")
     }
 
     /// A persisted advertisement whose admission the CURRENT ledger no longer proves is dropped at

@@ -45,15 +45,5 @@
   "rule": "R9-UNSAFE",
   "path": "FernletKit/Sources/PrivateStoreCore/PrivatePersistenceController.swift",
   "reason": "Core Data seam: `NSPersistentContainer` is not `Sendable`, so the process-wide sealed-store controller cannot be a checked-Sendable global, and real actor isolation is unavailable because all four sealed repositories are deliberately `nonisolated` so keyless deletion works from any executor while the app is locked. Invariant: `shared` is a `let` initialized exactly once by Swift's lazy-static machinery; every use of `container.viewContext` happens inside `NSManagedObjectContext.performAndWait`, which serializes on the context's own queue; and the one piece of mutable state outside that discipline, `didFailToLoad`, is now read and written only under the type's `stateLock` (`NSLock`)."
- },
- {
-  "rule": "R9-UNSAFE",
-  "path": "FernletKit/Sources/ProximityKit/Wire/SealedPayloadFraming.swift",
-  "reason": "Apple Compression framework C seam (compression_stream_init/process/destroy take raw pointers; NSData.decompressed(using:) has no inflate limit, so it cannot enforce maxInflatedByteCount and would lose the 16 MiB decompression-bomb guard). Invariant: the compression_stream and the 64 KiB destination buffer are allocated and deallocated in the SAME scope via defer and never escape; the source pointer is valid only inside input.withUnsafeBytes and the whole process loop runs inside that closure; every produced chunk is copied into a Swift Data before the buffer is reused; total output is bounded by `limit`."
- },
- {
-  "rule": "R9-UNSAFE",
-  "path": "FernletKit/Sources/ProximityKit/Ranging/NIRangingSession.swift",
-  "reason": "NearbyInteraction delegate bridging seam. Invariant: the invalidated NISession is transferred solely to compare identity (===) against self.niSession on the MainActor; it is never called or mutated after the hop, and holding the strong reference until the comparison runs is precisely what prevents the address-reuse aliasing an ObjectIdentifier comparison would admit."
  }
 ]

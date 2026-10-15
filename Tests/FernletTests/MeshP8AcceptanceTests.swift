@@ -580,33 +580,27 @@ struct MeshP8HoldVerbAcceptanceTests {
 
 // MARK: - (c) The raises and the disagreement
 
-/// **Item 5: the two session-state raises and the cell §24.1 and §25.1 name.** The wall's three
-/// counts re-asserted here, the four corners of the two legs on a real founding, and the reset that
+/// **Item 5: the two session-state raises and the cell §24.1 and §25.1 name.** The wall's Fernlet
+/// half re-asserted here, the four corners of the two legs on a real founding, and the reset that
 /// must give the session leg back or strand a mesh in the background forever.
 @MainActor
 @Suite(.serialized)
 struct MeshP8RaiseAndDisagreementAcceptanceTests {
 
-    /// The wall, re-walked: one raise of each scene event in the whole package, each inside the
-    /// public door named for it; the app speaks each public raise exactly once and only from the
-    /// driver; and the app offers the session machine no event directly.
+    /// The wall, re-walked: no FernletKit module raises a scene event (the one raise of each, inside
+    /// the public door named for it in ProximityKit's manager, is the package suite of this name's to
+    /// pin); the app speaks each public raise exactly once and only from the driver; and the app
+    /// offers the session machine no event directly.
+    ///
+    /// The FernletKit walk is floored at 231 files, four fifths of the 289 measured at ProximityKit
+    /// plan step A1.3, so its two zero-lists cannot pass over a walk that lost a module.
     @Test func eachRaiseHasOneHomeAndTheAppReachesTheSessionMachineNoOtherWay() throws {
         let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources")
-        #expect(kit.count >= 100, "the package scan lost its files")
-        #expect(MeshP7Acceptance.homes(of: "applySessionEvent(.backgrounded", in: kit) == ["MeshNetworkManager.swift"],
-                "the backgrounded raise has exactly one home")
-        #expect(MeshP7Acceptance.homes(of: "applySessionEvent(.foregrounded", in: kit) == ["MeshNetworkManager.swift"],
-                "and so does the foregrounded raise")
-        let manager = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
-        let began = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "public func beginBackgroundContinuation()", in: manager),
-            "the public begin door is gone")
-        #expect(began.contains("applySessionEvent(.backgrounded)"), "and the begin door is what raises it")
-        let ended = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "public func endBackgroundContinuation()", in: manager),
-            "the public end door is gone")
-        #expect(ended.contains("applySessionEvent(.foregrounded)"), "and its sibling raises the other")
+        #expect(kit.count >= 231, "the package scan lost its files")
+        #expect(MeshP7Acceptance.homes(of: "applySessionEvent(.backgrounded", in: kit).isEmpty,
+                "no FernletKit module raises the backgrounded event: its one home is ProximityKit's manager")
+        #expect(MeshP7Acceptance.homes(of: "applySessionEvent(.foregrounded", in: kit).isEmpty,
+                "and none raises the foregrounded event")
         let app = try MeshP7Acceptance.sources(under: "App")
         #expect(app.count >= 100, "the app-target scan lost its files")
         #expect(MeshP7Acceptance.homes(of: "beginBackgroundContinuation()", in: app) == ["MeshContinuationDriver.swift"],

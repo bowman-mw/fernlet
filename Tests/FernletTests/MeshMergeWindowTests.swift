@@ -27,7 +27,8 @@ import FernletDomainModel
 
 // MARK: - MeshMergeWindowStateTests
 
-/// The closing law, as pure values.
+/// The closing law, as pure values. The mechanical half of "recorded, never compared" (the value
+/// type's own file reads no clock) is ProximityKit's package suite of this name.
 @MainActor
 @Suite
 struct MeshMergeWindowStateTests {
@@ -238,14 +239,6 @@ struct MeshMergeWindowStateTests {
         #expect(fresh.reEvaluated(against: local, reachable: [Self.peerB])
                 .verdict(reachable: [Self.peerB]) == .open(outstanding: 1),
                 "a window with no evidence of its own matches nobody, whatever another window saw")
-    }
-
-    /// **39. The mechanical half of "recorded, never compared".** The value type holds no clock.
-    @Test func theWindowTypeHasNoClock() throws {
-        let source = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshMergeWindow.swift")
-        let code = MeshRoutedSourceScan.codeOnly(source)
-        #expect(!code.contains("Date()"), "the manager supplies `now`; the window never reads a clock")
-        #expect(!code.contains("timeIntervalSince"), "and never compares one")
     }
 }
 

@@ -684,35 +684,6 @@ struct MeshRoutedCustodyEvidenceTests {
         #expect(admitting(manifest, in: store).refusal == .duplicateItemID)
     }
 
-    /// The store never names a decryption seam: no unwrap, no content key, no key-agreement key —
-    /// which is what makes custody ciphertext-only on a locked device by construction.
-    ///
-    /// `MeshRoutedAccessGate.swift` joined the list at P5 item 10: it is the file that answers
-    /// *whether plaintext may exist*, so it is precisely the file a future "just decrypt it here"
-    /// would be tempted into — and it must stay as free of a decryption seam as the store itself.
-    @Test func theRoutedStoreNamesNoDecryptionSeam() throws {
-        let files = [
-            "MeshRoutedStore.swift", "MeshRoutedCustody.swift", "MeshRoutedCustodyCommit.swift",
-            "MeshRoutedIndex.swift", "MeshRoutedStoreKey.swift", "MeshRoutedContentHasher.swift",
-            "MeshChunkAdmissionRule.swift", "MeshRoutedCustodyHandoff.swift",
-            "MeshRoutedCapacity.swift", "MeshRoutedDeliveryHold.swift",
-            "MeshRoutedAccessGate.swift", "MeshRoutedRefusalBudget.swift"
-        ]
-        var scanned = 0
-        var sealing: [String] = []
-        for name in files {
-            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/\(name)"))
-            scanned += 1
-            for forbidden in ["MeshRoutedContentKeyWrapper", "localKeyAgreement", ".unwrap("] {
-                #expect(code.contains(forbidden) == false, "\(name) names \(forbidden)")
-            }
-            if code.contains("ColumnCrypto") { sealing.append(name) }
-        }
-        #expect(scanned == files.count)
-        // `ColumnCrypto` is reached in exactly one of them: the at-rest seal, and nothing else.
-        #expect(sealing == ["MeshRoutedStore.swift"], "the at-rest seal must live in one file: \(sealing)")
-    }
-
     /// The forwarding doors hand back the ORIGIN's exact signed bytes — a custodian is a courier,
     /// not a co-signer.
     @Test func theForwardingDoorsReturnTheOriginsExactBytes() throws {

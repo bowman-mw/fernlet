@@ -769,19 +769,10 @@ struct MeshP6HonestyAcceptanceTests {
     /// - **An adoption that never receives an admission grant** sits at `.idle` and self-heals via
     ///   descriptor re-broadcast (item 6's fix review, residual (c)), so every heart claim here keys
     ///   on an ADMITTED member and never on "holds a mesh".
-    @Test func theBatteryNamesWhatItDoesNotClaim() throws {
-        let manager = try MeshP5Acceptance.codeLines(
-            of: "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"
-        ).joined(separator: "\n")
-        #expect(manager.contains("sessionState == .activeForeground"), """
-            the heart stage's third leg is the session state and nothing weaker — a gate-only \
-            predicate would defer the text projection with it
-            """)
-        let app = try MeshP5Acceptance.codeLines(
-            of: "FernletKit/Sources/ProximityKit/Mesh/MeshSessionStateMachine.swift"
-        ).joined(separator: "\n")
-        #expect(app.contains("case continuingInBackground"),
-                "the state the asleep quarter drives, by name")
+    ///
+    /// That the heart stage's third leg is the session state, and that the state machine names the
+    /// asleep quarter's state, read ProximityKit's sources and are the package suite of this name's.
+    @Test func theBatteryNamesWhatItDoesNotClaim() {
         #expect(MeshRoutedTypeRegistry.increment1.tokens.count == 3,
                 "increment 1 registers three routed types, and a fourth is P7's or later")
     }

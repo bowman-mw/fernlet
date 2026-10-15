@@ -25,10 +25,10 @@ struct CryptographicEscapeHatch: Sendable {
 /// handful the mechanism reads like, and nothing tracks the number, so a nineteenth passes
 /// unremarked." Now a nineteenth fails here.
 ///
-/// It reads every shipping root but ProximityKit's folder (``CryptographicWallScan/fernletSourceFiles()``),
-/// the same bytes as the purpose wall: ProximityKit's hatches are ProximityKit's to count, and its own
-/// package suite, `ProximitySourceWallTests`, pins them by the same rules, each with its justification
-/// beside its pin (ProximityKit plan step A1.1.16).
+/// It reads every shipping root of this repository (``CryptographicWallScan/sourceFiles()``), the same
+/// bytes as the purpose wall. ProximityKit is a package dependency, so its hatches are ProximityKit's to
+/// count: its own package suite, `ProximitySourceWallTests`, pins them by the same rules, each with its
+/// justification beside its pin (ProximityKit plan step A1.1.16).
 ///
 /// ## What each assertion catches
 ///
@@ -219,7 +219,7 @@ struct CryptographicEscapeHatchCensusTests {
     private static func scan() throws -> [CryptographicEscapeHatch] {
         var found: [CryptographicEscapeHatch] = []
         // R2: bounded by the file list the roots enumerate.
-        for url in try CryptographicWallScan.fernletSourceFiles() {
+        for url in try CryptographicWallScan.sourceFiles() {
             let path = CryptographicWallScan.repoRelativePath(url)
             let lines = try String(contentsOf: url, encoding: .utf8).components(separatedBy: .newlines)
             // R2: bounded by the file's line count.

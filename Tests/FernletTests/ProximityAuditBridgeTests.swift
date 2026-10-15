@@ -10,10 +10,10 @@
 // bridge missing, no ProximityKit line would reach `FernletAuditLog` at all, every one of those
 // would pass vacuously, and only this suite would go red.
 //
-// It also holds the spelling the re-pointed source walls rely on (`MeshRoutedRefusalBudgetTests`
-// counts `ProximityAudit.log(` in the digest doors, `MeshRoutedRetryPlanTests` forbids
-// `ProximityAudit` in the planner): ProximityKit code names `FernletAuditLog` nowhere, so a line
-// that bypassed the sink could not hide from them under the old spelling.
+// The spelling the source walls over ProximityKit's code rely on (they count `ProximityAudit.log(`
+// in the digest doors, or forbid `ProximityAudit` in the planner) is ProximityKit's to hold: its
+// package suite of this name scans its code for `FernletAuditLog`, so a line that bypassed the sink
+// could not hide from them under the old spelling (since plan step A1.3, when the sources left).
 //
 // Nothing here installs a sink. The process-wide slot is the app's, and a test that replaced it
 // would silence or redirect ProximityKit's lines for every suite running beside it. So this suite also
@@ -21,7 +21,7 @@
 // modules or test targets. It reads every spelling of the installer's name, a reference included, and
 // refuses an extension of ProximityAudit, an alias for it and its metatype, through which a bare or
 // aliased `install` would reach the slot unseen. ProximityKit's sources and its own package tests are
-// ProximityKit's to hold: its `PackageTestTreeWallTests` holds their installer
+// its repository's to hold (since plan step A1.3): its `PackageTestTreeWallTests` holds their installer
 // (TestSupport/PackageTestEnvironment.swift) to one install, for their unhosted bundle, which no app
 // hosts, and ProximityKit's code to none.
 
@@ -33,7 +33,7 @@ import FernletFoundation
 @testable import ProximityKit
 
 /// The installed bridge delivers a ProximityKit audit line to a `FernletAuditLog` capture handler
-/// verbatim and before the emitting call returns, and ProximityKit has no other way to audit.
+/// verbatim and before the emitting call returns, and only Fernlet's app installs a sink.
 @Suite struct ProximityAuditBridgeTests {
 
     /// One `FernletAuditLog` line as a capture handler saw it.
@@ -109,44 +109,15 @@ import FernletFoundation
                 "FernletAuditBridge forwarded \(lines)")
     }
 
-    /// ProximityKit code names `FernletAuditLog` nowhere: every audit line in the module goes
-    /// through the host's sink, spelled `ProximityAudit.log(`.
-    ///
-    /// The source walls that count or forbid audit lines read that one spelling, so a line written
-    /// straight to `FernletAuditLog` would bypass the sink AND hide from them. Comments may still
-    /// name it (three doc comments explain its redaction and its process-global registry); the scan
-    /// reads code lines only.
-    @Test func proximityKitCodeNamesFernletAuditLogNowhere() throws {
-        let root = RepoRoot.url("FernletKit/Sources/ProximityKit")
-        let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
-        let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
-        var sinkCalls = 0
-        var offenders: [String] = []
-        // R2: bounded by the module's own file list.
-        for file in files.sorted(by: { $0.path < $1.path }) {
-            let code = MeshRoutedSourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
-            sinkCalls += code.components(separatedBy: "ProximityAudit.log(").count - 1
-            if code.contains("FernletAuditLog") {
-                offenders.append(file.lastPathComponent)
-            }
-        }
-        #expect(files.count >= 50, "the ProximityKit sweep read only \(files.count) Swift files")
-        #expect(sinkCalls > 0, "the sweep found no `ProximityAudit.log(` call: wrong tree?")
-        #expect(offenders.isEmpty, """
-            ProximityKit code names FernletAuditLog in \(offenders). Audit through \
-            `ProximityAudit.log(_:context:)`, which reaches Fernlet's log through the installed \
-            bridge and every other host's sink too.
-            """)
-    }
-
     // MARK: - Who installs a sink (ProximityKit plan step A1.1)
 
     /// The roots the install-site scan reads, each with the fewest Swift files it may hold (about four
     /// fifths of its count when measured: 264 and 485 when the cell was written, and 288 under
-    /// FernletKit/Sources but ProximityKit's own at plan step A1.1.14), so a root that stops resolving
-    /// fails rather than reading as clean: the app and its extensions, FernletKit's sources but
-    /// ProximityKit's (``ProximityKitSources/folder``), and Fernlet's test targets. ProximityKit's
-    /// sources and its package tests are its own `PackageTestTreeWallTests`' to read.
+    /// FernletKit/Sources but ProximityKit's own at plan step A1.1.14, 289 once they left at A1.3), so
+    /// a root that stops resolving fails rather than reading as clean: the app and its extensions,
+    /// FernletKit's sources, and Fernlet's test targets. ProximityKit is a package dependency, not one
+    /// of these roots: its sources and its package tests are its own `PackageTestTreeWallTests`' to
+    /// read.
     static let installSiteRoots: [(root: String, floor: Int)] = [
         (root: "App", floor: 210), (root: "FernletKit/Sources", floor: 230), (root: "Tests", floor: 385)
     ]
@@ -155,44 +126,18 @@ import FernletFoundation
     /// `FernletApp.init`.
     static let installSites: [String: Int] = ["App/Fernlet/FernletApp.swift": 1]
 
-    /// The package tests' folder under `FernletKit/Tests`, and the fewest Swift files it may hold: about
-    /// four fifths of the 33 it held at ProximityKit plan step A1.1.18, so a walk that stops resolving
-    /// fails rather than reading as clean. Plan step A1.3 deletes it with the folder.
-    static let packageTestFolder = (path: "FernletKit/Tests/ProximityKitTests/", floor: 26)
-
-    /// `FernletKit/Tests` holds no Swift file outside ``packageTestFolder``: Fernlet's walls over its
-    /// test trees (this audit wall, the two store isolation walls, the acceptance batteries' test-tree
-    /// scans and ML5) read `Tests`, and the package's own walls read the package's test folder alone, so
-    /// a FernletKit test target added beside it would be read by none of them. Such a target fails here
-    /// until the walls that must read it are decided. Plan step A1.3 deletes this with the folder.
-    static func expectFernletKitTestsHoldOnlyThePackageTests() {
+    /// `FernletKit/Tests` holds no Swift file: Fernlet's walls over its test trees (this audit wall, the
+    /// two store isolation walls, the acceptance batteries' test-tree scans and ML5) read `Tests`, so a
+    /// FernletKit test target would be read by none of them. Such a target fails here until the walls
+    /// that must read it are decided. (ProximityKit's package tests lived there from plan step A0.8 and
+    /// left with the package at A1.3; this cell's floor-holding walk over them went with them, and the
+    /// install-site roots' own floors hold the walker.)
+    static func expectFernletKitHoldsNoTestTarget() {
         let files = PowerOfTenBoundaryTests.swiftFiles(under: "FernletKit/Tests", repoRoot: RepoRoot.url)
-        let packageTests = files.filter { $0.hasPrefix(packageTestFolder.path) }
-        #expect(packageTests.count >= packageTestFolder.floor, """
-            the FernletKit/Tests walk saw \(packageTests.count) Swift files under \(packageTestFolder.path), \
-            below its floor \(packageTestFolder.floor): the walk is broken, not the root clean
+        #expect(files.isEmpty, """
+            FernletKit/Tests holds Swift files: \(files). No wall reads them: Fernlet's test-tree walls \
+            read Tests. Decide which walls read the new target, and widen their roots, before adding it.
             """)
-        let stray = files.filter { !$0.hasPrefix(packageTestFolder.path) }
-        #expect(stray.isEmpty, """
-            FernletKit/Tests holds Swift files outside \(packageTestFolder.path): \(stray). No wall reads \
-            them: Fernlet's test-tree walls read Tests, and ProximityKit's read its own test folder alone. \
-            Decide which walls read the new target, and widen their roots, before adding it.
-            """)
-    }
-
-    /// The exclusion Fernlet's walls apply to ProximityKit's folder (``ProximityKitSources/holds(_:)``)
-    /// holds its sources, by a repository-relative path or an absolute one, and no neighbour: a module
-    /// whose name only starts like it, a FernletKit module beside it, or the app's code. Held here, on a
-    /// CI line, because this wall is one of its users.
-    static func expectTheExclusionHoldsProximityKitsFolderAlone() {
-        let excluded = ProximityKitSources.holds("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-            && ProximityKitSources.holds("/checkout/FernletKit/Sources/ProximityKit/Support/ProximityAudit.swift")
-        let neighbours = ["FernletKit/Sources/FernletProximityUI/MeshReviewView.swift",
-                          "FernletKit/Sources/ProximityKitExtras/Hook.swift",
-                          "App/Fernlet/Proximity/Feasibility/MeshRejectionMatrixHarness.swift"]
-        let caught = neighbours.filter { ProximityKitSources.holds($0) }
-        #expect(excluded, "the exclusion missed a ProximityKit source, repository-relative or absolute")
-        #expect(caught.isEmpty, "the exclusion caught a file outside ProximityKit's folder: \(caught)")
     }
 
     /// `ProximityAudit.install` is named exactly once in Fernlet's app, and in no other file Fernlet
@@ -202,22 +147,19 @@ import FernletFoundation
     /// `ProximityAudit`, aliases it or takes its metatype: inside such an extension a bare `install(`
     /// names the slot, and through an alias or a metatype an `install` call no longer spells the type, so
     /// either would reach the slot unseen. Read as lexed code (`SwiftSourceLexer`), so a comment or a
-    /// string that spells the name is not one, over every root at its file floor, ProximityKit's sources
-    /// left out (its own `PackageTestTreeWallTests` holds them, the declaration's file among them, and
-    /// its package tests' one install), with the matchers held to their samples and neighbours first,
-    /// and the exclusion to its own (``expectTheExclusionHoldsProximityKitsFolderAlone()``). And
-    /// `FernletKit/Tests` holds no Swift file outside the package's test folder
-    /// (``expectFernletKitTestsHoldOnlyThePackageTests()``), the root none of these walls reads.
+    /// string that spells the name is not one, over every root at its file floor (ProximityKit's sources
+    /// are none of them: its own `PackageTestTreeWallTests` holds them, the declaration's file among
+    /// them, and its package tests' one install), with the matchers held to their samples and neighbours
+    /// first. And `FernletKit/Tests` holds no Swift file (``expectFernletKitHoldsNoTestTarget()``), the
+    /// root none of these walls reads.
     @Test func onlyTheAppInstallsAnAuditSink() throws {
         Self.expectTheInstallMatchersSeeTheirSamplesAndNoNeighbour()
-        Self.expectTheExclusionHoldsProximityKitsFolderAlone()
-        Self.expectFernletKitTestsHoldOnlyThePackageTests()
+        Self.expectFernletKitHoldsNoTestTarget()
         var sites: [String: Int] = [:]
         var aliases: [String] = []
         // R2: bounded by the three roots and each root's finite file list.
         for (root, floor) in Self.installSiteRoots {
             let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
-                .filter { !ProximityKitSources.holds($0) }
             #expect(files.count >= floor, "the install-site scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
             for path in files {
                 let source = try RepoRoot.source(path)

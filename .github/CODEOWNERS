@@ -35,42 +35,14 @@
 /Tests/FernletTests/ProximityPlatformBoundaryTests.swift  @bowman-mw
 # Who installs an audit sink: Fernlet's app, once, and no other file Fernlet holds, or every "this event
 # was not logged" check runs on a replaced sink (ProximityKit's package tests' one install is held by
-# their own tree walls, below)
+# their own tree walls, in its repository)
 /Tests/FernletTests/ProximityAuditBridgeTests.swift       @bowman-mw
-# ProximityKit's namespace wall, one of ProximityKit's package tests since plan step A1.1.7, and what left
-# its file then: the source walls' lexer (a twin, one copy per test target) with Fernlet's copy's fixtures,
-# and FernletTests' walker over ProximityKit's sources. Every source wall reads code through the lexer, so
-# a blind lexer would pass every wall vacuously. Since plan step A1.1.8 the platform wall's rules over
-# ProximityKit's own code are a package test too, the source half of its Mac readiness; and the keychain
-# door's wall, which holds the door to the funnel's `#if DEBUG` branch and its one caller to the package
-# tests' installer, the file that installs both the in-memory keychain store and the audit sink. Since plan
-# step A1.1.13 the package tests' own hygiene (what their unhosted bundle cannot serve, their imports, and no
-# extension of `ProximityHost`), the package's own suite inventory it holds to the declared tests, and the
-# walker the package's walls read its files through: a blind walker would pass every such wall vacuously.
-# Since plan step A1.1.14 the package tests' tree walls: their installer's one install of the audit sink
-# and none in ProximityKit's code, every store on a scope of the test's own and the host double's scopes,
-# ML5's two holders, and no home of a determinism digest. Since plan step A1.1.15 the source walls over
-# ProximityKit's own code: its launch hooks read only inside `#if DEBUG`, and no keychain row it writes
-# synchronizable or under a class that is not ThisDeviceOnly; since plan step A1.1.16 also a purpose named
-# at every raw cryptographic call, and its escape hatches pinned, each with its justification; since plan
-# step A1.1.17 no identity built in its code. And since plan step A1.1.17 the memory-lifecycle wall over
-# ProximityKit's own code: its stored tasks cancelled in a deinit, its observers removed,
-# `withObservationTracking` in ObservationLoop alone, and every Task in a file holding an `unowned` host
-# pinned or marked.
-/FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
-/FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
-/FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
-/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift        @bowman-mw
-/FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift       @bowman-mw
-/FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift       @bowman-mw
-/FernletKit/Tests/ProximityKitTests/ProximityMemoryLifecycleTests.swift  @bowman-mw
-/FernletKit/Tests/ProximityKitTests.tsv                                  @bowman-mw
-/FernletKit/Tests/ProximityKitTests/TestSupport/PackageSwiftFiles.swift  @bowman-mw
-/FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw
-/FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift    @bowman-mw
+# The source walls' lexer, which every Fernlet source wall reads code through (a blind lexer would pass
+# every wall vacuously), and its fixtures. The walls over ProximityKit's own code and tests, with the files
+# they read through, rode beside it from plan step A1.1.7 and are ProximityKit's own repository's since plan
+# step A1.3, where its CODEOWNERS protects them.
 /Tests/FernletTests/SwiftSourceLexer.swift                                @bowman-mw
 /Tests/FernletTests/SwiftSourceLexerTests.swift                           @bowman-mw
-/Tests/FernletTests/ProximityKitSources.swift                             @bowman-mw
 
 # Wall scripts, hooks, and CI. The Power-of-10 scanner and its allowlist gate that wall's CI
 # job the same way the shell scripts gate the S3 wall — an allowlist entry is a sanctioned
@@ -104,8 +76,12 @@
 /Site/privacy/                                @bowman-mw
 /App/Fernlet/PrivacyPolicyView.swift          @bowman-mw
 
-# The dependency DAG is the S3 wall's compiler half
+# The dependency DAG is the S3 wall's compiler half; the two resolved files pin the revision of each
+# package from outside this repository (CryptoSwift, and since plan step A1.3 ProximityKit, exactly 0.1.0)
+# that the strict build and a release archive compile, which CIGateSelectorBoundaryTests holds equal
 /FernletKit/Package.swift                     @bowman-mw
+/FernletKit/Package.resolved                  @bowman-mw
+/App/Fernlet.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved @bowman-mw
 
 # App Store privacy manifests (the NoTracking tests pin their contents)
 /App/Fernlet/PrivacyInfo.xcprivacy            @bowman-mw
@@ -116,15 +92,10 @@
 # Key custody and at-rest formats (what the tripwire/format tests protect)
 /FernletKit/Sources/FernletCrypto/            @bowman-mw
 /FernletKit/Sources/FernletLock/              @bowman-mw
-# ProximityKit's copy of ColumnCrypto's V3 seal and its DeviceBindingID seam: the mesh stores' at-rest format, owned like FernletCrypto's originals
-/FernletKit/Sources/ProximityKit/Support/ProximityColumnCrypto.swift   @bowman-mw
-/FernletKit/Sources/ProximityKit/Support/ProximityInstallBinding.swift @bowman-mw
-# ProximityKit's keychain funnel: every identity row's and seal key's query dictionary, the six calls that issue
-# them, and the Debug-only backend door its package tests install an in-memory store through
-/FernletKit/Sources/ProximityKit/Support/ProximityKeychainItem.swift    @bowman-mw
-
-# ProximityKit's protocol-namespace label registry: changing a label breaks every app's wire format
-/FernletKit/Sources/ProximityKit/Namespace/   @bowman-mw
+# ProximityKit's own at-rest, keychain and label-registry code (its column-crypto and install-binding
+# copies, its keychain funnel, its namespace registry, its presence engine and the identity's provisioning
+# participant) is its own repository's since plan step A1.3, which Fernlet pins at exactly 0.1.0 (the
+# resolved files above) and whose CODEOWNERS protects those rows.
 
 # Fernlet's wire identity (ProximityNamespace.fernlet): changing a literal breaks Fernlet's wire,
 # keychain and on-disk formats for every device already in the field
@@ -164,12 +135,6 @@
 # advertises and matches by — changing a byte here makes every pair of friends invisible to each other
 /FernletKit/Sources/FernletSocial/Presence/IdentityService+PresenceTags.swift @bowman-mw
 
-# ProximityKit's presence engine: the production posture mint (the instance-name prefix and TLS common
-# name every presence posture is minted under), the record its host's tags are advertised in, and the
-# check that drops this device's own ghosts by name before its host hears of a sighting — changing a
-# byte here changes what every device advertises on the presence radio, or what it hears there
-/FernletKit/Sources/ProximityKit/Presence/ProximityPresenceSession.swift @bowman-mw
-
 # FernletSocial's recipe share: the recipe payload's wire format (its JSON, format token and version)
 # and the summary signed into every recipe envelope, over ProximityKit's pair session — changing a byte
 # here breaks every recipe share between devices on different builds
@@ -178,7 +143,6 @@
 
 # The sealed-backup escrow: the app's escrow key (its content-addressed iCloud Keychain rows, the one
 # synchronizable key, its HKDF derivations, and the order it promotes a previous build's key before a
-# mint overwrites the row) and the identity's provisioning participant seam it rides — a mistake here
-# can destroy a user's backup key on a device that never ran the build
+# mint overwrites the row), which rides ProximityKit's identity provisioning participant seam — a mistake
+# here can destroy a user's backup key on a device that never ran the build
 /App/Fernlet/SealedBackupEscrowKey.swift                                        @bowman-mw
-/FernletKit/Sources/ProximityKit/Identity/IdentityProvisioningParticipant.swift @bowman-mw

@@ -9,9 +9,10 @@
 // identity and every trust relationship built on it.
 //
 // The keychain cannot be made to fail on demand in a test, so the rule lives in a PURE function
-// (`classifyDeviceIdentityRows`) over `ProximityKeychainItem.ReadResult` values, tabled here; the one path a
-// real keychain can drive (a present-but-unparseable row) is driven for real; and a source wall pins
-// that the identity rows are never read nil-collapsing again.
+// (`classifyDeviceIdentityRows`) over `ProximityKeychainItem.ReadResult` values, tabled here; and the one
+// path a real keychain can drive (a present-but-unparseable row) is driven for real. The source wall
+// that pins the identity rows as never read nil-collapsing again reads ProximityKit's identity service
+// and is its package suite of this name.
 
 import CryptoKit
 import Foundation
@@ -20,7 +21,7 @@ import Testing
 import FernletFoundation
 @testable import ProximityKit
 
-/// The fail-closed identity read: the decision table, the one keychain-drivable path, and the wall.
+/// The fail-closed identity read: the decision table and the one keychain-drivable path.
 @MainActor
 @Suite(.serialized)
 struct IdentityProvisioningReadTests {
@@ -160,30 +161,5 @@ struct IdentityProvisioningReadTests {
         try second.ensureProvisioned()
         #expect(second.localSigningPublicKey == first.localSigningPublicKey)
         #expect(second.localKeyAgreementPublicKey == first.localKeyAgreementPublicKey)
-    }
-
-    // MARK: - The wall
-
-    /// Neither identity private-key row is read nil-collapsing anywhere in the service, the
-    /// distinguishing read is used for both rows and Case 3's legacy read, and the unreadable arm
-    /// throws rather than returns. The rows are named by the identity's `accounts` (the namespace's
-    /// `installation.keychain.identity`) since ProximityKit plan step A0.2.8, which deleted the
-    /// `IdentityKeychainKey` cases the needle used to spell. Since step A0.2.11 the service reads
-    /// through ProximityKit's copy, `ProximityKeychainItem`; each needle below spells
-    /// FernletFoundation's `KeychainItem.…`, which the copy's `ProximityKeychainItem.…` contains, so
-    /// the wall holds both: a nil-collapsing read through either is caught, and a distinguishing read
-    /// through either counts.
-    @Test func theIdentityRowsAreNeverReadNilCollapsing() throws {
-        let source = try RepoRoot.source("FernletKit/Sources/ProximityKit/Identity/IdentityService.swift")
-        // R2: bounded by the two rows.
-        for row in [Self.signingRow, Self.keyAgreementRow] {
-            #expect(!source.contains("KeychainItem.load(account: accounts.\(row)"),
-                    "\(row) is read with the nil-collapsing load again — a transient error would mint over it")
-        }
-        let distinguishingReads = source.components(separatedBy: "KeychainItem.loadDistinguishingAbsence(").count - 1
-        #expect(distinguishingReads >= 3, "signing, key-agreement and the legacy Case-3 read all distinguish absence")
-        #expect(source.components(separatedBy: "throw IdentityError.keychainReadFailed(status)").count - 1 == 2,
-                "both fail-closed reads throw, neither returns nil on an error")
-        #expect(source.contains("case keychainReadFailed(OSStatus)"), "the error case is named")
     }
 }

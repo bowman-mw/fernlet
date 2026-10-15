@@ -232,8 +232,10 @@ cannot statically follow — prefer an `enum` switch.
   push, and the pre-push hook runs each when a push touches what it builds:
   `Scripts/spm-wall-check.sh`, the app's iOS `build-for-testing` (via `spm-wall-selftest.sh` in CI),
   and, since ProximityKit plan step A0.6.5, `Scripts/macos-build-check.sh`, the Mac-ready set
-  (ProximityKit, FernletFoundation, FernletCrypto, FernletDomainModel) built for native macOS (via `macos-build-selftest.sh` in CI), so a warning only a macOS build
-  reports fails too. Locally, the same three overrides on any `xcodebuild build-for-testing`
+  (FernletFoundation, FernletCrypto and FernletDomainModel since plan step A1.3) built for native
+  macOS (via `macos-build-selftest.sh` in CI), so a warning only a macOS build reports fails too.
+  ProximityKit, a pinned dependency from its own repository since A1.3, is compiled by the iOS
+  strict build with the same overrides, and its own CI builds it with warnings as errors on macOS. Locally, the same three overrides on any `xcodebuild build-for-testing`
   reproduce the strict build. The SwiftPM command line does not: `swift build` inside `FernletKit/`
   leaves the package's string catalogs unprocessed, so the catalog-bearing modules get no
   `Bundle.module` and fail to build.

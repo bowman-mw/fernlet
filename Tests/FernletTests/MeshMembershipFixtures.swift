@@ -1,12 +1,11 @@
 // MeshMembershipFixtures.swift
 //
-// Deterministic membership records for test fixtures. A twin (ProximityKit plan step A0.8): the
-// same file at Tests/FernletTests and FernletKit/Tests/ProximityKitTests, held identical but for
-// its imports by CIGateSelectorBoundaryTests.everyTwinMatchesItsOriginal(), because the package's
-// three membership suites (MeshMembershipRecordsTests.swift) and six FernletTests files (the
-// membership event wire, P7 acceptance, rotation trigger, session resume presentation, session
-// state machine and session store suites) build fixtures with it, and a test target cannot import
-// another.
+// Deterministic membership records for test fixtures, which six FernletTests files (the membership
+// event wire, P7 acceptance, rotation trigger, session resume presentation, session state machine and
+// session store suites) build with. Extracted from MeshMembershipRecordsTests.swift at ProximityKit plan
+// step A0.8, when that file's three suites moved into ProximityKit's package tests with a copy of this
+// file; the copies were twins until plan step A1.3 took the package's tests to its own repository, and
+// this one is Fernlet's own since.
 
 import Foundation
 @testable import ProximityKit

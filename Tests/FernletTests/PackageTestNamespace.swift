@@ -3,13 +3,11 @@
 // ProximityKit plan step A1.1: the namespace ProximityKit's package tests compute under, `.packageTest`,
 // built from ProximityKit's public API alone out of literals no app ships: `pktest.*` labels in the
 // shapes Fernlet's take (legacy peers accepted, two feature salts), `_pktest-*._udp` radios with the
-// presence prefix `pk-`, `org.example.pktest.*` keychain services and a peer-name cap of 24. A twin: the
-// same file at FernletKit/Tests/ProximityKitTests/TestSupport and Tests/FernletTests, held identical but
-// for its imports by CIGateSelectorBoundaryTests.everyTwinMatchesItsOriginal(), because the package's
-// suites compute under it (through TestSupport/PackageTestBindings.swift) while FernletTests holds it
-// disjoint from Fernlet's namespace, which the package cannot name, and a test target cannot import
-// another. It is declared at each level a binding hands ProximityKit (the namespace, its family and its
-// labels) and its installation, as Fernlet's namespace is.
+// presence prefix `pk-`, `org.example.pktest.*` keychain services and a peer-name cap of 24. ProximityKit's
+// package tests compute under their own copy of this file, in its repository since plan step A1.3 (the
+// two were twins until then); FernletTests keeps this one to hold it disjoint from Fernlet's namespace,
+// which the package cannot name. It is declared at each level a binding hands ProximityKit (the
+// namespace, its family and its labels) and its installation, as Fernlet's namespace is.
 
 import Foundation
 import ProximityKit
