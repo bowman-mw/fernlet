@@ -85,6 +85,8 @@ struct MilestonesView: View {
                     shelfLink(rows: rows, totalGifts: totalGifts, totalCoins: totalCoins)
                 }
 
+                sillyStatsLink
+
                 coinsSummary(totalCoins: totalCoins)
             }
             .padding(20)
@@ -165,6 +167,37 @@ struct MilestonesView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    /// The way into the silly stats, pushed inside this sheet's stack like the keepsake shelf.
+    private var sillyStatsLink: some View {
+        NavigationLink {
+            SillyStatsList(store: store)
+                .navigationTitle(Text("Silly stats"))
+                .navigationBarTitleDisplayMode(.inline)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "face.smiling")
+                    .font(.footnote.weight(.semibold))
+                Text("Silly stats")
+                    .font(.fernlet(.label))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(Color.bark)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.bark.opacity(0.14), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("milestones.sillyStats")
     }
 
     // MARK: - Rows (7a)

@@ -793,6 +793,18 @@
         }
       }
     },
+    "homeWidget.sillyStats" : {
+      "comment" : "Home widget name: the card of deliberately useless lifetime stats",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Silly stats"
+          }
+        }
+      }
+    },
     "hygiene.deodorant" : {
       "comment" : "Personal-care checklist item: applying deodorant",
       "extractionState" : "extracted_with_value",

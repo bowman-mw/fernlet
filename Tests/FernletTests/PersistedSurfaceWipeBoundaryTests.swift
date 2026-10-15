@@ -198,6 +198,14 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.companionPets.windowStart": .cleared(token: "PetInteractionGovernor.clearPersistentState"),
         "fernlet.companionPets.cooldownUntil": .cleared(token: "PetInteractionGovernor.clearPersistentState"),
         "fernlet.companionPets.settledLineShownFor": .cleared(token: "PetInteractionGovernor.clearPersistentState"),
+        // The lifetime pat count behind the silly stats' Pats Given — same funnel as the four above.
+        "fernlet.companionPets.lifetime": .cleared(token: "PetInteractionGovernor.clearPersistentState"),
+        // The silly stats' companion pacing: the last mention's day, kind and per-kind numbers (some
+        // Health-derived, so they stay on this device) and the next day a mention is due.
+        "fernlet.sillyStats.lastMentionDay": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
+        "fernlet.sillyStats.lastMentionKind": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
+        "fernlet.sillyStats.nextMentionDay": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
+        "fernlet.sillyStats.lastMentionValues": .cleared(token: "SillyStatsCompanionPacer.clearPersistentState"),
         // The plaintext half of the Health capability ledger. The live record is a keychain row now;
         // this defaults key is the legacy copy the ledger drains, and `clear` removes it directly.
         "fernlet.healthkit.requested-capabilities": .cleared(token: "HealthCapabilityRequestLedger.clear"),

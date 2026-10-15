@@ -270,6 +270,8 @@ final class LaunchPreparationService {
         await backfillDaySummaries(for: store)
         store.storeCompanionThought(await generateCompanionThought(for: store))
         await store.backfillWorkoutsFromHealthIfNeeded()
+        // After the workout backfill, so stair minutes and swims Health just imported count.
+        await store.refreshSillyStats()
 
         // Cycle status messages while async work runs.
         Task { @MainActor in

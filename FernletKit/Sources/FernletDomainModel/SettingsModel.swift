@@ -191,6 +191,10 @@ public nonisolated struct FernletSettings: Codable {
     /// `defaultWidgets`); a settings blob written before the widget existed decodes this as `false` and
     /// triggers a one-time append of `.mealPhotos` so an existing user sees it, then flips to `true`.
     public var didMigrateMealPhotosWidget: Bool = true
+    /// One-time marker for the "Silly stats" home widget, mirroring `didMigrateMealPhotosWidget`:
+    /// fresh installs start `true` (they get it via `defaultWidgets`); a blob written before the widget
+    /// existed decodes `false`, appends `.sillyStats` once so an existing user sees it, then flips.
+    public var didMigrateSillyStatsWidget: Bool = true
     public var personalCareTasks: [PersonalCareTask] = PersonalCareTask.defaultTasks
     public var proximityDisplayName: String = ""
     public var showProximityDebugTools: Bool = false
@@ -479,6 +483,14 @@ public nonisolated struct FernletSettings: Codable {
             }
             didMigrateMealPhotosWidget = true
         }
+        // The same one-time append for the "Silly stats" widget, with the same empty-list guard.
+        didMigrateSillyStatsWidget = try container.decodeIfPresent(Bool.self, forKey: .didMigrateSillyStatsWidget) ?? false
+        if !didMigrateSillyStatsWidget {
+            if !decodedHomeWidgets.isEmpty && !decodedHomeWidgets.contains(.sillyStats) {
+                decodedHomeWidgets.append(.sillyStats)
+            }
+            didMigrateSillyStatsWidget = true
+        }
         homeWidgets = HomeWidget.normalized(decodedHomeWidgets)
         let decodedCareTasks = try container.decodeIfPresent([PersonalCareTask].self, forKey: .personalCareTasks) ?? PersonalCareTask.defaultTasks
         // R3: a user-created list with no cap anywhere; bound it where the rows enter this build.
@@ -591,7 +603,7 @@ public nonisolated struct FernletSettings: Codable {
              calorieTargetOverride, proteinTargetOverride, fatTargetOverride,
              weightManagementDeficitPercent, quickLogItems,
              unknownQuickLogTokens, homeWidgets, unknownHomeWidgetTokens,
-             didMigrateMilestonesFirstAidWidgets, didMigrateMealPhotosWidget, personalCareTasks,
+             didMigrateMilestonesFirstAidWidgets, didMigrateMealPhotosWidget, didMigrateSillyStatsWidget, personalCareTasks,
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
@@ -680,6 +692,7 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(unknownHomeWidgetTokens, forKey: .unknownHomeWidgetTokens)
         try container.encode(didMigrateMilestonesFirstAidWidgets, forKey: .didMigrateMilestonesFirstAidWidgets)
         try container.encode(didMigrateMealPhotosWidget, forKey: .didMigrateMealPhotosWidget)
+        try container.encode(didMigrateSillyStatsWidget, forKey: .didMigrateSillyStatsWidget)
         try container.encode(personalCareTasks, forKey: .personalCareTasks)
     }
 

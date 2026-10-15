@@ -232,6 +232,7 @@ extension FernletSheet {
         case "recipeBook":        self = .recipeBook
         case "trends":            self = .trends
         case "milestones":        self = .milestones
+        case "sillyStats":        self = .sillyStats
         case "stressExplainer":   self = .stressExplainer
         case "firstAid":          self = .firstAid(nil)
         case "logPeriod":         self = .logPeriod(targetDate: nil, editingRecord: nil)
