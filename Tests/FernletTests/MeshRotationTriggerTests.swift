@@ -291,7 +291,7 @@ struct MeshKeyRotationCauseWireTests {
     /// The pinned encoding of an extended rotation frame.
     ///
     /// **A new vector, not a moved one.** `meshKeyRotation` is unsigned — it rides the signed
-    /// `FernletIdentityEnvelope` — so it had no canonical serializer and no golden before this
+    /// `ProximityIdentityEnvelope` — so it had no canonical serializer and no golden before this
     /// item, and adding `cause` moved no signature transcript. Nothing in
     /// `PeerHandleWireGoldenTests` or `MeshMembershipEventWireTests` changes.
     private static let goldenJSON = """

@@ -33,8 +33,9 @@
 /Tests/FernletTests/ProximityNamespaceGateTests.swift     @bowman-mw
 /Tests/FernletTests/FernletFeatureGoldenTests.swift       @bowman-mw
 /Tests/FernletTests/ProximityPlatformBoundaryTests.swift  @bowman-mw
-# Who installs an audit sink: Fernlet's app and ProximityKit's package tests' installer, once each, and
-# nothing else, or every "this event was not logged" check runs on a replaced sink
+# Who installs an audit sink: Fernlet's app, once, and no other file Fernlet holds, or every "this event
+# was not logged" check runs on a replaced sink (ProximityKit's package tests' one install is held by
+# their own tree walls, below)
 /Tests/FernletTests/ProximityAuditBridgeTests.swift       @bowman-mw
 # ProximityKit's namespace wall, one of ProximityKit's package tests since plan step A1.1.7, and what left
 # its file then: the source walls' lexer (a twin, one copy per test target) with Fernlet's copy's fixtures,
@@ -42,10 +43,29 @@
 # a blind lexer would pass every wall vacuously. Since plan step A1.1.8 the platform wall's rules over
 # ProximityKit's own code are a package test too, the source half of its Mac readiness; and the keychain
 # door's wall, which holds the door to the funnel's `#if DEBUG` branch and its one caller to the package
-# tests' installer, the file that installs both the in-memory keychain store and the audit sink.
+# tests' installer, the file that installs both the in-memory keychain store and the audit sink. Since plan
+# step A1.1.13 the package tests' own hygiene (what their unhosted bundle cannot serve, their imports, and no
+# extension of `ProximityHost`), the package's own suite inventory it holds to the declared tests, and the
+# walker the package's walls read its files through: a blind walker would pass every such wall vacuously.
+# Since plan step A1.1.14 the package tests' tree walls: their installer's one install of the audit sink
+# and none in ProximityKit's code, every store on a scope of the test's own and the host double's scopes,
+# ML5's two holders, and no home of a determinism digest. Since plan step A1.1.15 the source walls over
+# ProximityKit's own code: its launch hooks read only inside `#if DEBUG`, and no keychain row it writes
+# synchronizable or under a class that is not ThisDeviceOnly; since plan step A1.1.16 also a purpose named
+# at every raw cryptographic call, and its escape hatches pinned, each with its justification; since plan
+# step A1.1.17 no identity built in its code. And since plan step A1.1.17 the memory-lifecycle wall over
+# ProximityKit's own code: its stored tasks cancelled in a deinit, its observers removed,
+# `withObservationTracking` in ObservationLoop alone, and every Task in a file holding an `unowned` host
+# pinned or marked.
 /FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift     @bowman-mw
+/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift        @bowman-mw
+/FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift       @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift       @bowman-mw
+/FernletKit/Tests/ProximityKitTests/ProximityMemoryLifecycleTests.swift  @bowman-mw
+/FernletKit/Tests/ProximityKitTests.tsv                                  @bowman-mw
+/FernletKit/Tests/ProximityKitTests/TestSupport/PackageSwiftFiles.swift  @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/PackageTestEnvironment.swift @bowman-mw
 /FernletKit/Tests/ProximityKitTests/TestSupport/SwiftSourceLexer.swift    @bowman-mw
 /Tests/FernletTests/SwiftSourceLexer.swift                                @bowman-mw

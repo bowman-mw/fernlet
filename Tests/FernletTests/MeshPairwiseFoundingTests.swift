@@ -164,7 +164,7 @@ struct MeshFoundingRig {
             guard let coordinator = node.coordinators[frame.peer.endpoint],
                   let sender = nodes.firstIndex(where: { $0.handle.isSameEndpoint(as: frame.peer) })
             else { continue }
-            let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: frame.data)
+            let envelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: frame.data)
             let plaintext = try envelope.verify(
                 identityService: node.manager.identityForTesting, replayCache: node.replayCache
             )
@@ -201,7 +201,7 @@ struct MeshFoundingRig {
     /// arriving on a slot in a known commit state needs to put that exact frame in itself.
     func deliver(_ payload: some Encodable, type: PayloadType, from sender: Int, to receiver: Int) throws {
         let node = nodes[receiver]
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: identities[sender], senderDisplayName: nodes[sender].label,
             recipientFingerprint: node.fingerprint,
             payloadType: type, payloadEncryption: .none,
@@ -883,7 +883,7 @@ struct MeshPairwiseFoundingTests {
         over coordinator: ProximityCoordinator
     ) throws {
         let plaintext = try JSONEncoder().encode(request)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Requester",
             payloadType: .meshAdmissionRequest,
@@ -1589,7 +1589,7 @@ struct MeshPairwiseFoundingTests {
         over coordinator: ProximityCoordinator
     ) throws {
         let plaintext = try JSONEncoder().encode(MeshStateChangePayload(descriptor: descriptor))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Peer",
             payloadType: .meshDescriptor,
@@ -2035,7 +2035,7 @@ struct MeshPairwiseFoundingTests {
     /// ALREADY-verified fingerprint — this cell is about the session-end hook, not the wire.
     private static func catalogEnvelope(
         displayName: String
-    ) throws -> (envelope: FernletIdentityEnvelope, plaintext: Data) {
+    ) throws -> (envelope: ProximityIdentityEnvelope, plaintext: Data) {
         let item = CustomizationItem(
             name: "Star Cape",
             slot: .hat,
@@ -2048,8 +2048,8 @@ struct MeshPairwiseFoundingTests {
             designerID: UUID(), displayName: displayName, items: [item]
         )
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),

@@ -16,7 +16,7 @@ import ProximityKit
 /// sharedInfo ephPub ‖ recipientPub) → ChaChaPoly with the 17-byte header as AAD. Unlike the
 /// live-radio `IdentityService.seal`, the sender's static key is deliberately NOT in the KDF —
 /// the opener can't know the sender before decrypting (sealed-sender, as in bitchat's one-way
-/// Noise X mail). Sender authenticity comes from the INNER `FernletIdentityEnvelope`'s Ed25519
+/// Noise X mail). Sender authenticity comes from the INNER `ProximityIdentityEnvelope`'s Ed25519
 /// signature, verified after opening.
 ///
 /// The plaintext is always the wire2-framed inner envelope JSON (compressed + padded — every

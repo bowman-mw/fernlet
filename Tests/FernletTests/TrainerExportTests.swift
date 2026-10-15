@@ -7,7 +7,7 @@ import FernletConnections
 /// Trainer / Nutritionist export (Phase 7). Proves the curated bundle carries workouts + nutrition and is
 /// FAIL-CLOSED against every hard-excluded category, that opt-in sections stay out until chosen, and that
 /// the wire payload round-trips + is bounded. (The "sealed on the wire" contract is asserted in
-/// `FernletIdentityEnvelopeTests.trainerExportEnvelopeRejectsUnsealedPayload`.)
+/// `ProximityIdentityEnvelopeTests.trainerExportEnvelopeRejectsUnsealedPayload`.)
 @MainActor
 final class TrainerExportTests: XCTestCase {
 

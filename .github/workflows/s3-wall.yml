@@ -591,6 +591,78 @@ jobs:
         # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11
         # suites; its floor stays the shared `1`, the policy for every FernletTests wall line. proximitykit is
         # raised 102 -> 108 and mesh-batteries 1373 -> 1379 (see their steps).
+        #
+        # ProximityKit plan step A1.1.13 (2026-10-14) moves the package tests' own hygiene into ProximityKit's
+        # package tests, so it travels with the package: `CIGateSelectorBoundaryTests`' rule I9 (what the
+        # unhosted bundle cannot serve, with its allowlist, its per-file keychain rule and their readers), its
+        # rule I11 (the package tests' imports) and its counting of the package's declared tests (rule I7's)
+        # leave for `ProximityKitTests/PackageTestHygieneTests` on `proximitykit`, over the package's own
+        # inventory, FernletKit/Tests/ProximityKitTests.tsv, beside a cell that no package test extends
+        # ProximityHost (T3's one consequence in a one-target package). `CIGateSelectorBoundaryTests` keeps
+        # I1 to I6, I8 and I10, and its new cell `thePackageRowsAreThePackagesOwnInventory` (rule I7,
+        # re-scoped) holds Tests/suite-inventory.tsv's ProximityKitTests rows to that inventory, in the place
+        # of `theDirectoryNeedlesMatchTheirPackageCopy`, which goes with Fernlet's copy of the
+        # platform-directory needles, I9's alone: `ProximityPlatformBoundaryTests` keeps no needle list. Its
+        # pins follow, each with a dated note: the inventory's measured rows are 628 / 22, `proximitykit` names
+        # 18 suites, `wallLines` pins the hygiene suite on `proximitykit`, and `measuredPackageCells` retires
+        # (the package's own `measuredDeclaredTests`, 179, is the count). No suite joined or left this line,
+        # and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 99 tests in 11
+        # suites (the selector wall still ten cells); its floor stays the shared `1`. proximitykit is raised
+        # 108 -> 114 (see its step); mesh-batteries, which runs the selector wall too, stays 1379.
+        #
+        # ProximityKit plan step A1.1.14 (2026-10-14) moves the package halves of four walls into
+        # ProximityKit's package tests, so they travel with the package: the audit install-site cell, the
+        # session and routed store isolation walls' test-tree scans with the scratch-root needle, ML5 and the
+        # acceptance batteries' digest homes become `ProximityKitTests/PackageTestTreeWallTests` on
+        # `proximitykit`, which reads the package's tests, and for the install sites ProximityKit's sources
+        # too. On this line `ProximityAuditBridgeTests`' install-site cell, renamed
+        # `onlyTheAppInstallsAnAuditSink`, reads Fernlet's half: App, FernletKit/Sources but ProximityKit's
+        # own folder (`ProximityKitSources.folder`, the one exclusion every such Fernlet wall names; its floor
+        # 335 -> 230, of 288 files) and Tests, where only FernletApp.swift installs a sink and no file
+        # extends, aliases or takes the metatype of ProximityAudit. `CIGateSelectorBoundaryTests`' pins
+        # follow, each with a dated note: the inventory's measured rows are 628 / 23, `proximitykit` names 19
+        # suites, and `wallLines` pins the tree walls on `proximitykit`. No suite joined or left this line
+        # and no cell was added, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS
+        # 26.5), ran 99 tests in 11 suites (ProximityAuditBridgeTests 5); its floor stays the shared `1`.
+        # proximitykit is raised 114 -> 120 (see its step); mesh-batteries and memory-lifecycle hold.
+        #
+        # ProximityKit plan step A1.1.15 (2026-10-14) moves the ProximityKit half of `S3BoundaryTests`'
+        # proximity <-> cloud cell (ProximityKit imports no CloudKit) into ProximityKit's package tests, so it
+        # travels with the package: the platform suite's W1, `ProximityKitTests/ProximityPlatformNeutralityTests`
+        # on `proximitykit`, refuses CloudKit by name in ProximityKit's code, as an import or a `canImport`,
+        # with this cell's reason, and refuses CloudKit as a baseline module or a seam row. On this line the
+        # cell's row for ProximityKit goes; it holds FernletProximityUI, FernletConnections and FernletSocial
+        # to no CloudKit import and CloudKitSync to none of ProximityKit, FernletConnections and
+        # FernletSocial. `CIGateSelectorBoundaryTests`' pins follow, each with a dated note: the inventory's
+        # measured rows are 628 / 24, `proximitykit` names 20 suites, and `wallLines` pins the source walls
+        # over ProximityKit's own code, `ProximitySourceWallTests`, on `proximitykit`. No suite joined or left
+        # this line and no cell was added, and the line, MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), ran 99 tests in 11 suites (S3BoundaryTests 6); its floor stays the shared
+        # `1`. proximitykit is raised 120 -> 126 (see its step); mesh-batteries holds.
+        #
+        # ProximityKit plan step A1.1.17 (2026-10-14) moves the ProximityKit halves of the memory-lifecycle
+        # wall's ML1-ML4 and of key custody's identity-construction wall into ProximityKit's package tests
+        # (see the memory-lifecycle and key-custody steps). No suite of this line changes;
+        # `CIGateSelectorBoundaryTests`' pins follow, each with a dated note: the inventory's measured rows
+        # are 628 / 25, `proximitykit` names 21 suites, and `wallLines` pins the memory-lifecycle wall over
+        # ProximityKit's own code, `ProximityMemoryLifecycleTests`, on `proximitykit`. No suite joined or left
+        # this line and no cell was added, and the line, MEASURED on a Mac on that tree (iPhone 17 simulator,
+        # iOS 26.5), ran 99 tests in 11 suites (the selector wall still ten cells); its floor stays the shared
+        # `1`. proximitykit is raised 132 -> 138 (see its step); mesh-batteries, which runs the selector wall
+        # too, holds at 1379.
+        #
+        # ProximityKit plan step A1.1.18 (2026-10-14), the review fixes to the tests and walls of A1.1.12 to
+        # A1.1.17, changes two suites of this line and adds no cell.
+        # `ProximityAuditBridgeTests.onlyTheAppInstallsAnAuditSink` holds `ProximityKitSources.holds`'
+        # samples (a repository-relative and an absolute ProximityKit path read, three neighbours not),
+        # which until then ran only in TestHookBoundaryTests, on no line, and holds FernletKit/Tests to no
+        # Swift file outside the package's test folder (floor 26 of its 33 files), the root neither
+        # Fernlet's test-tree walls (this audit wall, the store isolation walls, the batteries' scans, ML5)
+        # nor the package's own read since A1.1.14; `SwiftSourceLexerTests` holds FernletTests' lexer to
+        # four regex-literal rows, both lexer twins now reading regex literals. No pin of
+        # `CIGateSelectorBoundaryTests` moved, and the line, MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), ran 99 tests in 11 suites (ProximityAuditBridgeTests 5,
+        # SwiftSourceLexerTests 1); its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -667,6 +739,34 @@ jobs:
         # ProximityKit's own, or of Tests names the door, as a call, a reference or a declaration. No cell added
         # or removed: the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 55 tests in
         # 4 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A1.1.15 (2026-10-14) splits the two exception greps. Their ProximityKit half
+        # (no `synchronizable: true` and no bare, non-ThisDeviceOnly accessibility class anywhere in
+        # ProximityKit's code: exact, the empty set) is ProximityKit's own
+        # `ProximityKitTests/ProximitySourceWallTests` on `proximitykit`, so it travels with the package;
+        # `KeyCustodyBoundaryTests`' two greps read every shipping root but ProximityKit's folder
+        # (`ProximityKitSources.folder`, the one exclusion every such Fernlet wall names), their exact sets
+        # unchanged (SealedBackupEscrowKey.swift; PrivateMediaKeyStore.swift and SealedBackupEscrowKey.swift),
+        # and its keychain-door cell names the same constant in place of its own copy of the folder. The
+        # identity-construction wall still reads ProximityKit's sources. No cell added or removed: the line,
+        # MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 55 tests in 4 suites; its floor
+        # stays the shared `1`.
+        #
+        # ProximityKit plan step A1.1.17 (2026-10-14) splits the identity-construction wall. Its ProximityKit
+        # half (no `IdentityService` constructed anywhere in ProximityKit's code, and no delegation to one of
+        # its initializers outside Identity/IdentityService.swift: exact, the empty set) is ProximityKit's own
+        # `ProximityKitTests/ProximitySourceWallTests` on `proximitykit`, so it travels with the package;
+        # `KeyCustodyBoundaryTests.everyShippingIdentityIsBuiltByItsHostsDoor` reads every shipping root but
+        # ProximityKit's folder, its exact set unchanged (SealedBackupEscrowKey.swift), and refuses a
+        # delegation in every file it reads. No cell added or removed: the line, MEASURED on a Mac on that tree
+        # (iPhone 17 simulator, iOS 26.5), ran 55 tests in 4 suites; its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A1.1.18 (2026-10-14), the review fixes, widens the identity-construction wall
+        # in both halves: a construction is also `IdentityService.self.init(` and a lowercase metatype value's
+        # `.init(` under one of the three labels, and ProximityKit's half drops its allowance for delegations
+        # in Identity/IdentityService.swift, which it now reads like every other file. No cell added or
+        # removed: the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 55 tests in
+        # 4 suites (KeyCustodyBoundaryTests 22); its floor stays the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh key-custody 1 \
@@ -1077,6 +1177,27 @@ jobs:
         # 356 + 1 (the namespace golden's cell holding `.packageTest`, the namespace ProximityKit's
         # package tests compute under, sound and colliding with `.fernlet` nowhere, asked from both
         # sides) = 357 is the ARITHMETIC CHECK, never the source.
+        #
+        # ProximityKit plan step A1.1.16 (2026-10-14) splits the purpose wall,
+        # `CryptographicPurposeBoundaryTests.rawCryptographicCallsNameAPurpose`, and the escape-hatch
+        # census beside it (`CryptographicEscapeHatchCensusTests`, which rides no line). Their ProximityKit
+        # half (every raw cryptographic call in ProximityKit's code naming a purpose in its window, and its
+        # one `x509-self-signature` hatch pinned) is ProximityKit's own
+        # `ProximityKitTests/ProximitySourceWallTests` on `proximitykit`, so it travels with the package;
+        # both read every shipping root but ProximityKit's folder through
+        # `CryptographicWallScan.fernletSourceFiles()` (`ProximityKitSources.folder`, the one exclusion
+        # every such Fernlet wall names), the census pinned at 6 hatches in 3 files. No cell added or
+        # removed: the line, MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), ran 357 tests
+        # (FernletTests 314 in 7 suites, CryptographicPurposeBoundaryTests 6; ProximityKitTests 43 in 1);
+        # its floor stays 357.
+        #
+        # ProximityKit plan step A1.1.18 (2026-10-14), the review fixes: the purpose wall reads at least
+        # `primitiveCallFloor` 18 primitive-call lines of Fernlet's code (22 in 11 files, MEASURED) and holds
+        # its matcher first to one bare call per marker and to the window's edges, as ProximityKit's half
+        # does, and both escape-hatch censuses' legacy cells (Fernlet's on no line) refuse the label in any
+        # spelling or qualification. No cell added or removed: the line, MEASURED on a Mac on that tree
+        # (iPhone 17 simulator, iOS 26.5), ran 357 tests (FernletTests 314 in 7 suites,
+        # CryptographicPurposeBoundaryTests 6; ProximityKitTests 43 in 1); its floor stays 357.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh crypto-goldens 357 \
@@ -1147,6 +1268,20 @@ jobs:
         # and no test building a manager over an inline host. The 2026-08-17 leak review's durable
         # half; the timed weak-reference polls of MemoryLifecycleTests.swift are its behaviour
         # siblings and stay off every line (MeshP9HonestyAcceptanceTests.ungatedByDesign says why).
+        # Since ProximityKit plan step A1.1.14 (2026-10-14) ML5 reads Fernlet's tests alone, and
+        # ProximityKit's package tests hold their own half (ProximityKitTests/PackageTestTreeWallTests on
+        # proximitykit); MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), the line ran 8.
+        # Since ProximityKit plan step A1.1.17 (2026-10-14) ML1-ML4 read the five shipping roots but
+        # ProximityKit's folder (`ProximityKitSources.folder`), and ProximityKit's package tests hold their own
+        # half (ProximityKitTests/ProximityMemoryLifecycleTests on proximitykit): ML3's one home and two of
+        # ML4's five host holders are ProximityKit's, so Fernlet's ML3 holds Fernlet's roots to no use and its
+        # host-holding floor is 3. No cell added or removed: MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), the line ran 8.
+        # Since ProximityKit plan step A1.1.18 (2026-10-14), in both halves, ML5 also reads a holder spelled
+        # `.init(`, an implicit `.init(store:` or `.init(host:`, a qualified host call and a call after `try`
+        # or `await`, and ML4's samples reach a `Task` line's marker of no kind and every host spelling. No
+        # cell added or removed: MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), the line ran
+        # 8.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh memory-lifecycle 8 MemoryLifecycleBoundaryTests
@@ -2031,6 +2166,16 @@ jobs:
         # 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT
         # 1379: passed. Run once more at 1379 without MeshSessionStoreIsolationTests: 1374 ran and the floor
         # refused it. 1373 + 5 + 1 = 1379 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.14 no suite joined or left and no cell was added: the two store isolation walls' and the
+        # P8, P9 and P10 batteries' test-tree scans read Fernlet's tests alone (`MeshRoutedStoreIsolationTests`'
+        # scratch-root needle reads 17 host doubles), and the store walls' and the digest homes' package
+        # halves are ProximityKitTests/PackageTestTreeWallTests on proximitykit; P9's unscoped count and
+        # P10's conformer scan have none (a package file cannot call FernletTests' `count(of:` or name the
+        # app's conformers). HELD at 1379 at A1.1.14, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator,
+        # iOS 26.5): this exact 155-name list run at its floor through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 1379
+        # (FernletTests 1357 in 152 suites; ProximityKitTests 22 in 3), 0 failed, no `Restarting after
+        # unexpected exit` line, the suite census silent.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1379 \
@@ -2294,9 +2439,84 @@ jobs:
         # failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT
         # 108: passed. Run once more at 108 without ProximityKitTests/ProximityPresenceSessionTests: 103 ran
         # and the floor refused it. 102 + 1 + 5 = 108 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.13 one name joins the line, PackageTestHygieneTests, the package tests' own hygiene (what
+        # their unhosted bundle cannot serve, rule I9; their imports, rule I11; their own inventory,
+        # FernletKit/Tests/ProximityKitTests.tsv, and its declared tests; no extension of ProximityHost), whose
+        # rules leave FernletTests' CIGateSelectorBoundaryTests so they travel with the package, reading this
+        # target's files through PackageRoot and the walls' walker (TestSupport/PackageSwiftFiles.swift):
+        # RAISED 108 -> 114 at A1.1.13, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact eighteen-name list run at the old floor 108 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 114
+        # (ProximityKitTests 114, "Test run with 114 tests in 18 suites passed after 0.647 seconds": the
+        # seventeen above at their counts and PackageTestHygieneTests 6), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 114: passed. Run once
+        # more at 114 without ProximityKitTests/PackageTestHygieneTests: 108 ran and the floor refused it.
+        # 108 + 6 = 114 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.14 one name joins the line, PackageTestTreeWallTests, the package tests' tree walls (their
+        # installer's one install of the audit sink and none in ProximityKit's code, every store on a scope of
+        # the test's own and the host double's scopes, ML5's two holders, no home of a determinism digest),
+        # whose package halves leave FernletTests' ProximityAuditBridgeTests, store isolation walls,
+        # MemoryLifecycleBoundaryTests and acceptance batteries so they travel with the package, reading this
+        # target's files and ProximityKit's sources through PackageRoot and the walls' walker:
+        # RAISED 114 -> 120 at A1.1.14, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact nineteen-name list run at the old floor 114 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 120
+        # (ProximityKitTests 120, "Test run with 120 tests in 19 suites passed after 0.581 seconds": the
+        # eighteen above at their counts and PackageTestTreeWallTests 6), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 120: passed. Run once
+        # more at 120 without ProximityKitTests/PackageTestTreeWallTests: 114 ran and the floor refused it.
+        # 114 + 6 = 120 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.15 one name joins the line, ProximitySourceWallTests, the walls over ProximityKit's own code
+        # (every read of its DEBUG launch-environment keys inside `#if DEBUG`, each family at its measured
+        # floor; no synchronizable keychain row and no accessibility class but a ThisDeviceOnly one), whose
+        # ProximityKit halves leave FernletTests' TestHookBoundaryTests and KeyCustodyBoundaryTests so they
+        # travel with the package, reading ProximityKit's sources through PackageRoot and the walls' walker:
+        # RAISED 120 -> 126 at A1.1.15, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact twenty-name list run at the old floor 120 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 126
+        # (ProximityKitTests 126, "Test run with 126 tests in 20 suites passed after 0.766 seconds": the
+        # nineteen above at their counts and ProximitySourceWallTests 6), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 126: passed. Run once
+        # more at 126 without ProximityKitTests/ProximitySourceWallTests: 120 ran and the floor refused it.
+        # 120 + 6 = 126 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.16 no name joins or leaves the line; ProximitySourceWallTests gains six cells, the purpose
+        # wall (every raw cryptographic call in ProximityKit's code naming a purpose, at least 16 such lines
+        # read) and the escape-hatch census (its one hatch, `x509-self-signature`, pinned by total, label,
+        # file and prose, no legacy read path), whose ProximityKit halves leave FernletTests'
+        # CryptographicPurposeBoundaryTests and CryptographicEscapeHatchCensusTests so they travel with the
+        # package: RAISED 126 -> 132 at A1.1.16, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS
+        # 26.5): this exact twenty-name list run at the old floor 126 through Fernlet.xcworkspace after the
+        # strict build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 132
+        # (ProximityKitTests 132, "Test run with 132 tests in 20 suites passed after 0.846 seconds": the
+        # nineteen above at their counts and ProximitySourceWallTests 6 -> 12), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 132: passed. Run once
+        # more at 132 without ProximityKitTests/ProximitySourceWallTests: 120 ran and the floor refused it.
+        # 126 + 6 = 132 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.17 one name joins the line, ProximityMemoryLifecycleTests, the memory-lifecycle wall's ML1-ML4
+        # over ProximityKit's own code (every stored task handle cancelled in a deinit, every block observer
+        # removed, `withObservationTracking` in ObservationLoop alone, every Task in a file holding an
+        # `unowned` host pinned or marked), and ProximitySourceWallTests gains a cell, no identity built in
+        # ProximityKit's code; their ProximityKit halves leave FernletTests' MemoryLifecycleBoundaryTests and
+        # KeyCustodyBoundaryTests so they travel with the package:
+        # RAISED 132 -> 138 at A1.1.17, MEASURED on a Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this
+        # exact twenty-one-name list run at the old floor 132 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 138
+        # (ProximityKitTests 138, "Test run with 138 tests in 21 suites passed after 0.999 seconds": the
+        # twenty above at their counts but ProximitySourceWallTests 12 -> 13, and ProximityMemoryLifecycleTests
+        # 5), 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run
+        # AT 138: passed. Run once more at 138 without ProximityKitTests/ProximityMemoryLifecycleTests: 133 ran
+        # and the floor refused it. 132 + 5 + 1 = 138 is the ARITHMETIC CHECK, never the source.
+        # At A1.1.18 no name joins or leaves the line and no cell is added: the review fixes extend cells of
+        # six of its suites (the namespace wall's lexer cell, the platform wall's W1 and W4, the hygiene
+        # suite's I9 and its samples, the tree walls' store and ML5 cells, the source walls' purpose, legacy
+        # and identity cells, the memory-lifecycle wall's ML4 samples). HELD at 138 at A1.1.18, MEASURED on a
+        # Mac, 2026-10-14 (iPhone 17 simulator, iOS 26.5): this exact twenty-one-name list run at its floor
+        # through Fernlet.xcworkspace after the strict build-for-testing (WALL CHECK PASSED), read off its own
+        # result bundle: totalTestCount 138 (ProximityKitTests 138 in 21 suites, each at its A1.1.17 count),
+        # 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census silent.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh proximitykit 108 \
+          Scripts/run-gated-suites.sh proximitykit 138 \
             ProximityKitTests/MeshDerivedRosterTests \
             ProximityKitTests/MeshMembershipMergeTests \
             ProximityKitTests/MeshMembershipBoundsTests \
@@ -2313,4 +2533,8 @@ jobs:
             ProximityKitTests/ProximityNamespaceBoundaryTests \
             ProximityKitTests/ProximityPlatformNeutralityTests \
             ProximityKitTests/ProximityKeychainDoorTests \
-            ProximityKitTests/ProximityPresenceSessionTests
+            ProximityKitTests/ProximityPresenceSessionTests \
+            ProximityKitTests/PackageTestHygieneTests \
+            ProximityKitTests/PackageTestTreeWallTests \
+            ProximityKitTests/ProximitySourceWallTests \
+            ProximityKitTests/ProximityMemoryLifecycleTests

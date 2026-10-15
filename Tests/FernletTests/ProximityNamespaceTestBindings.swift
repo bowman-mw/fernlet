@@ -50,7 +50,7 @@ import Foundation
 // labels. The routed and channel-introduction overloads follow in their own section (A0.2.5).
 
 /// `canonicalBytes(for: envelope, in: .fernlet)`: the identity envelope under Fernlet's labels.
-func canonicalBytes(for envelope: FernletIdentityEnvelope) -> Data {
+func canonicalBytes(for envelope: ProximityIdentityEnvelope) -> Data {
     canonicalBytes(for: envelope, in: .fernlet)
 }
 
@@ -851,7 +851,7 @@ extension ItemNameModeration {
 
 /// The envelope's two sender reads as the properties the suites were written against (plan step
 /// A0.3.12), each under `.fernlet`'s peer-name policy.
-extension FernletIdentityEnvelope {
+extension ProximityIdentityEnvelope {
 
     /// `sanitizedSenderDisplayName(in: .fernlet)`.
     var sanitizedSenderDisplayName: String { sanitizedSenderDisplayName(in: .fernlet) }

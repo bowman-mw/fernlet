@@ -83,7 +83,7 @@ struct HeartShareTests {
         let plaintext = try JSONEncoder().encode(payload)
         let sealed = try sender.seal(plaintext, to: recipient.localKeyAgreementPublicKey)
 
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Aisha",
             recipientFingerprint: recipient.localFingerprint,
@@ -108,7 +108,7 @@ struct HeartShareTests {
         defer { cleanup(recipientID) }
 
         let plaintext = try JSONEncoder().encode(HeartPayload(sentAtDayKey: "2026-07-05"))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Aisha",
             recipientFingerprint: recipient.localFingerprint,
@@ -118,7 +118,7 @@ struct HeartShareTests {
             payload: plaintext
         )
 
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try envelope.verify(identityService: recipient, replayCache: ReplayCache())
         }
     }
@@ -145,10 +145,10 @@ struct HeartShareTests {
         )
     }
 
-    private func makeHeartEnvelope(payload: HeartPayload, senderDisplayName: String) throws -> (FernletIdentityEnvelope, Data) {
+    private func makeHeartEnvelope(payload: HeartPayload, senderDisplayName: String) throws -> (ProximityIdentityEnvelope, Data) {
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),
@@ -415,7 +415,7 @@ struct HeartShareTests {
             discoveryInfo: ["fp": remote.localFingerprint],
             advertisedFingerprint: remote.localFingerprint
         )
-        let intro = try FernletIdentityEnvelope.signed(
+        let intro = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: peerName,
             payloadType: .identityIntroduction,
@@ -591,7 +591,7 @@ struct HeartShareTests {
             discoveryInfo: ["fp": remote.localFingerprint],
             advertisedFingerprint: remote.localFingerprint
         )
-        let intro = try FernletIdentityEnvelope.signed(
+        let intro = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Revoked",
             payloadType: .identityIntroduction,

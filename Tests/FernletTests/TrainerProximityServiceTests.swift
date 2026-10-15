@@ -40,8 +40,8 @@ struct TrainerProximityServiceTests {
         )
     }
 
-    private func signedIntroduction(from identity: IdentityService, displayName: String = "Coach Alex") throws -> FernletIdentityEnvelope {
-        try FernletIdentityEnvelope.signed(
+    private func signedIntroduction(from identity: IdentityService, displayName: String = "Coach Alex") throws -> ProximityIdentityEnvelope {
+        try ProximityIdentityEnvelope.signed(
             identityService: identity,
             senderDisplayName: displayName,
             payloadType: .identityIntroduction,

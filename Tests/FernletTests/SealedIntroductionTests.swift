@@ -32,10 +32,10 @@ import FernletConnections
 
 @MainActor
 final class RecordingPayloadHandler: ProximityPayloadHandling {
-    var received: [(envelope: FernletIdentityEnvelope, plaintext: Data)] = []
+    var received: [(envelope: ProximityIdentityEnvelope, plaintext: Data)] = []
     func proximityCoordinator(
         _ coordinator: ProximityCoordinator,
-        didReceive envelope: FernletIdentityEnvelope,
+        didReceive envelope: ProximityIdentityEnvelope,
         plaintext: Data,
         from peer: ProximityCoordinator.PeerIdentity?
     ) {
@@ -136,7 +136,7 @@ struct SealedIntroductionTests {
         let sent = try #require(transport.sentData.first?.0)
 
         // It is NOT a plain identity envelope...
-        #expect((try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: sent)) == nil,
+        #expect((try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: sent)) == nil,
                 "A presence-heart intro must never go on the wire as a plain (cleartext) envelope")
         // ...it is the sealed wrapper.
         let wrapper = try JSONDecoder().decode(SealedIntroductionEnvelope.self, from: sent)
@@ -154,7 +154,7 @@ struct SealedIntroductionTests {
 
         // The intended friend CAN open it — the real identity is inside, sealed only to them.
         let opened = try friend.open(wrapper.sealedIntroduction, from: local.localKeyAgreementPublicKey)
-        let inner = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: opened)
+        let inner = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: opened)
         #expect(inner.payloadType == .identityIntroduction)
         #expect(inner.senderSigningPublicKey == local.localSigningPublicKey)
         // Stranger-admission Option 1b (2026-09-22): the introduction carries NO name, sealed or not
@@ -240,7 +240,7 @@ struct SealedIntroductionTests {
         await waitUntil { !transport.sentData.isEmpty }   // our sealed intro is out
         let sentAfterIntro = transport.sentData.count
 
-        let inner = try FernletIdentityEnvelope.signed(
+        let inner = try ProximityIdentityEnvelope.signed(
             identityService: friend,
             senderDisplayName: "Robin",
             payloadType: .identityIntroduction,
@@ -284,7 +284,7 @@ struct SealedIntroductionTests {
 
         // The forger sends its own signed PLAIN identity introduction, hoping to bait a cleartext
         // acknowledgement. On a sealed connection the plain intro is rejected outright.
-        let plainIntro = try FernletIdentityEnvelope.signed(
+        let plainIntro = try ProximityIdentityEnvelope.signed(
             identityService: forger,
             senderDisplayName: "Forger",
             payloadType: .identityIntroduction,
@@ -323,7 +323,7 @@ struct SealedIntroductionTests {
         // fire before identity is verified.
         let pingPayload = try JSONEncoder().encode(
             ["kind": "ping", "heartbeatID": UUID().uuidString, "sentAt": ISO8601DateFormatter().string(from: Date())])
-        let ping = try FernletIdentityEnvelope.signed(
+        let ping = try ProximityIdentityEnvelope.signed(
             identityService: forger,
             senderDisplayName: "Forger",
             payloadType: .sessionHeartbeat,
@@ -390,7 +390,7 @@ struct SealedIntroductionTests {
 
         // The inner envelope is signed by the FORGER — a genuine, verifiable signature over a
         // different identity than the one this coordinator exists for.
-        let innerEnvelope = try FernletIdentityEnvelope.signed(
+        let innerEnvelope = try ProximityIdentityEnvelope.signed(
             identityService: forger,
             senderDisplayName: "Forger",
             payloadType: .identityIntroduction,

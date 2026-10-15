@@ -281,7 +281,7 @@ enum MeshDepartureRig {
             node.delivered += 1
             moved += 1
             guard let coordinator = node.coordinators[frame.peer.endpoint] else { continue }
-            let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: frame.data)
+            let envelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: frame.data)
             let plaintext = try envelope.verify(
                 identityService: node.manager.identityForTesting, replayCache: node.replayCache
             )
@@ -345,7 +345,7 @@ enum MeshDepartureRig {
         node.channel.receivedFrames
             .filter { $0.peer.isSameEndpoint(as: sender) }
             .compactMap { frame in
-                try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: frame.data)
+                try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: frame.data)
                     .payloadTypeToken
             }
     }

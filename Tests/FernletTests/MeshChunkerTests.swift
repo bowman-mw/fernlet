@@ -454,7 +454,7 @@ struct MeshChunkerTests {
         )
         let chunk = try #require(minted.chunks.first)
         #expect(chunk.payload.count == MeshChunkFormat.maxChunkPayloadBytes)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: minted.origin,
             senderDisplayName: "origin",
             payloadType: .meshRoutedChunk,
@@ -478,7 +478,7 @@ struct MeshChunkerTests {
         let payload = try JSONEncoder().encode(MeshChunkPayload(chunk: try #require(minted.chunks.first)))
         let base = MeshMembershipEventFixtures.base
 
-        let frame = try FernletIdentityEnvelope.signed(
+        let frame = try ProximityIdentityEnvelope.signed(
             identityService: minted.origin,
             senderDisplayName: "origin",
             recipientFingerprint: receiver.localFingerprint,
@@ -491,7 +491,7 @@ struct MeshChunkerTests {
         let opened = try frame.verify(identityService: receiver, replayCache: ReplayCache(dateProvider: { base }))
         #expect(opened == payload)
 
-        let control = try FernletIdentityEnvelope.signed(
+        let control = try ProximityIdentityEnvelope.signed(
             identityService: minted.origin,
             senderDisplayName: "origin",
             recipientFingerprint: receiver.localFingerprint,
@@ -501,7 +501,7 @@ struct MeshChunkerTests {
             payload: payload,
             createdAt: base
         )
-        #expect(throws: FernletIdentityEnvelope.VerifyError.sealingRequired) {
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.sealingRequired) {
             try control.verify(identityService: receiver, replayCache: ReplayCache(dateProvider: { base }))
         }
     }
@@ -518,7 +518,7 @@ struct MeshChunkerTests {
         session.network.clock.advance(by: .milliseconds(20))
 
         for chunk in minted.chunks.reversed() {
-            let envelope = try FernletIdentityEnvelope.signed(
+            let envelope = try ProximityIdentityEnvelope.signed(
                 identityService: minted.origin,
                 senderDisplayName: "origin",
                 payloadType: .meshRoutedChunk,
@@ -536,7 +536,7 @@ struct MeshChunkerTests {
         #expect(frames.count == minted.chunks.count)
         var assembly = try #require(MeshChunkAssembly.forManifest(minted.manifest))
         for frame in frames {
-            let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: frame.data)
+            let envelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: frame.data)
             let chunk = try JSONDecoder().decode(MeshChunkPayload.self, from: envelope.payload).chunk
             #expect(minted.verifier.verify(chunk) == nil)
             #expect(assembly.admit(chunk) != .refused(.foreignItem))

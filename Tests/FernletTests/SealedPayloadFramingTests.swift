@@ -167,7 +167,7 @@ struct SealedPayloadFramingTests {
     // `JSONEncoder` output into `IdentityService.seal`:
     //   • `ProximityCoordinator.sealIfNeeded` — every presence / recipe-share sealed payload;
     //   • `ProximityCoordinator.encodeIdentityEnvelopeForTransport` — the sealed introduction, which
-    //     seals an encoded `FernletIdentityEnvelope` rather than a payload struct;
+    //     seals an encoded `ProximityIdentityEnvelope` rather than a payload struct;
     //   • `MeshNetworkManager.sendEnvelope(_:encodable:via:sealed:)`;
     //   • `MeshNetworkManager.sendVerifyEnvelope(...)`.
     // So the tests below encode a representative value of each sealed payload type (plus the envelope
@@ -267,12 +267,12 @@ struct SealedPayloadFramingTests {
     }
 
     /// The sealed INTRODUCTION seals an encoded envelope, not a payload struct — so the invariant has
-    /// to hold for `FernletIdentityEnvelope` itself, over a real signed value.
+    /// to hold for `ProximityIdentityEnvelope` itself, over a real signed value.
     @Test func theSealedIntroductionBodyIsAlsoAJSONObject() throws {
         let (alice, aliceID) = try makeService()
         defer { cleanup(aliceID) }
 
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: alice,
             senderDisplayName: "Alice",
             payloadType: .identityIntroduction,

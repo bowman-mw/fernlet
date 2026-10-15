@@ -36,11 +36,8 @@
 //
 // And it holds what other walls read: the `xcodebuild` command reader and its whole-word flag match
 // (`xcodebuildBuildCommands(in:action:)` and `carries(_:in:)`, which `PowerOfTenBoundaryTests`' rule-10
-// pins and `CIGateSelectorBoundaryTests` read), the capture reader `CIGateSelectorBoundaryTests`
-// reads the manifest with (`captures(of:in:)`), and the Foundation APIs for a platform directory
-// (`directoryNeedles`), which `CIGateSelectorBoundaryTests`' rule I9 reads as ProximityKit's package
-// tests' location needles and holds equal, line for line, to the package suite's copy, the one its
-// third rule holds ProximityKit's code to.
+// pins and `CIGateSelectorBoundaryTests` read), and the capture reader `CIGateSelectorBoundaryTests`
+// reads the manifest with (`captures(of:in:)`).
 //
 // It never spells the vendor-identifier symbol: `NoTrackingBoundaryTests` bans that spelling
 // everywhere, comments included.
@@ -54,7 +51,7 @@ import Testing
 @Suite struct ProximityPlatformBoundaryTests {
 
     /// One token a rule refuses: its spelling, and the pattern that reads it in lexed code as a whole
-    /// identifier or a labelled call, never inside a longer name.
+    /// identifier, never inside a longer name.
     struct Needle: Sendable {
         /// The token as the lists and the failure messages spell it.
         let token: String
@@ -66,36 +63,7 @@ import Testing
         static func identifier(_ name: String) -> Needle {
             Needle(token: name, pattern: #"(?<![A-Za-z0-9_])"# + name + #"(?![A-Za-z0-9_])"#)
         }
-
-        /// A call by its name and first argument label, `name(label:`.
-        static func call(_ name: String, label: String) -> Needle {
-            Needle(token: name + "(" + label + ":",
-                   pattern: #"(?<![A-Za-z0-9_])"# + name + #"\s*\(\s*"# + label + #"\s*:"#)
-        }
     }
-
-    /// Every Foundation API by which a module could name a platform directory: the `URL` and
-    /// `FileManager` locations by name (the user's application, media and trash folders and the current
-    /// directory among them), the three Foundation functions, the search-path call, an app-group or
-    /// ubiquity container, and the lookups by a search-path directory by their first label (`FileManager`'s
-    /// two and `URL`'s initializer). ProximityKit's package suite holds ProximityKit's code to its own
-    /// copy (`ProximityPlatformNeutralityTests.directoryNeedles`, its third rule); this copy is the one
-    /// `CIGateSelectorBoundaryTests`' rule I9 reads as the package tests' location needles, and its
-    /// `theDirectoryNeedlesMatchTheirPackageCopy()` holds the two declarations equal, line for line, so a
-    /// directory API one refuses is one the other refuses.
-    static let directoryNeedles: [Needle] = [
-        .identifier("applicationSupportDirectory"), .identifier("documentDirectory"),
-        .identifier("documentsDirectory"), .identifier("cachesDirectory"), .identifier("libraryDirectory"),
-        .identifier("temporaryDirectory"), .identifier("NSTemporaryDirectory"), .identifier("NSHomeDirectory"),
-        .identifier("NSHomeDirectoryForUser"), .identifier("homeDirectory"), .identifier("homeDirectoryForCurrentUser"),
-        .identifier("NSSearchPathForDirectoriesInDomains"), .identifier("downloadsDirectory"),
-        .identifier("desktopDirectory"), .identifier("sharedPublicDirectory"), .identifier("applicationDirectory"),
-        .identifier("userDirectory"), .identifier("moviesDirectory"), .identifier("musicDirectory"),
-        .identifier("picturesDirectory"), .identifier("trashDirectory"), .identifier("currentDirectory"),
-        .identifier("currentDirectoryPath"), .identifier("containerURL"),
-        .call("url", label: "forUbiquityContainerIdentifier"), .call("urls", label: "for"), .call("url", label: "for"),
-        .call("URL", label: "for")
-    ]
 
     // MARK: W5, Fernlet's half: the presence door's ranging
 

@@ -348,7 +348,7 @@ which the ledger buckets reporters and the ban store names a peer's ban, its gen
 the sealer's static-key fallback opens through, its `sign` and `verify` under the host labels the
 activities and the moderation report mint with `ProximityCryptographicPurpose.featureSignature(_:framing:)`,
 the presence epoch clock,
-its key-agreement public key, provisioning and wipe; the signed `FernletIdentityEnvelope` with its
+its key-agreement public key, provisioning and wipe; the signed `ProximityIdentityEnvelope` with its
 `PayloadSummary`; `SealedPayloadFraming`; `ProtectedSidecar` and `SidecarSeal`; the
 `ProximityPrekeyBundle` wire type; the two mesh storage scopes the derivation extends; the mesh
 engine, `MeshNetworkManager`, and every seam the composition plugs into it — the payload token door

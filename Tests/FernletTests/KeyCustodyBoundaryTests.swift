@@ -21,9 +21,13 @@ import FernletFoundation
 /// - **Grep-walls** pin where the two sanctioned exceptions may live in shipping code:
 ///   `synchronizable: true` (the escrow promotion) only in `SealedBackupEscrowKey.swift`, and a bare
 ///   non-`ThisDeviceOnly` accessibility class only in `PrivateMediaKeyStore.swift` +
-///   `SealedBackupEscrowKey.swift`; and where a device identity may be built: only in the app's
-///   factory in `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none:
-///   its host door, `ProximityHost.makeProximityIdentity()`, has no default, so the app's store must
+///   `SealedBackupEscrowKey.swift`, over every shipping root but ProximityKit's own folder
+///   (`ProximityKitSources.folder`), whose code ProximityKit's own package suite,
+///   `ProximitySourceWallTests`, holds to neither exception (since plan step A1.1.15); and where a
+///   device identity may be built, over the same roots: only in the app's factory in
+///   `SealedBackupEscrowKey.swift`, which carries the escrow key. ProximityKit builds none, which the
+///   same package suite holds over its code (since plan step A1.1.17): its host door,
+///   `ProximityHost.makeProximityIdentity()`, has no default, so the app's store must
 ///   answer it, and a behavioural cell holds what it answers, the store's three managers each holding
 ///   an identity that carries the escrow key. Between them no shipping path provisions an identity
 ///   that could mint over a previous build's key-agreement row without first promoting it into the
@@ -486,7 +490,10 @@ struct KeyCustodyBoundaryTests {
     /// Minimum shipping files the scan must see; catches a broken enumerator, not churn.
     private static let scanFloor = 250
 
-    /// Enumerates every shipping Swift file under ``shippingRoots``.
+    /// Enumerates every shipping Swift file under ``shippingRoots`` but ProximityKit's own
+    /// (``ProximityKitSources/folder``): the two exception walls read Fernlet's shipping code, and
+    /// ProximityKit's own `ProximitySourceWallTests` holds its code to no synchronizable row and no bare
+    /// class at all (since plan step A1.1.15).
     private func shippingSwiftFiles() -> [URL] {
         let repoRoot = RepoRoot.url
         var files: [URL] = []
@@ -496,7 +503,8 @@ struct KeyCustodyBoundaryTests {
                 Issue.record("scan root missing: \(root)")
                 continue
             }
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
+            for case let url as URL in enumerator
+            where url.pathExtension == "swift" && !ProximityKitSources.holds(url.path) {
                 files.append(url)
             }
         }
@@ -562,30 +570,30 @@ struct KeyCustodyBoundaryTests {
     // provisioning, so an identity may be constructed ONLY in the app's factory
     // (`IdentityService.fernletApp(keychainService:)`, which carries `SealedBackupEscrowKey`, and which
     // `FernletStore.makeProximityIdentity()` answers). ProximityKit constructs none: its host door has
-    // no default, so a host answers it, and a new convenience initializer or static factory of the
-    // identity anywhere else is a construction too.
+    // no default, so a host answers it, and ProximityKit's own `ProximitySourceWallTests` holds its code
+    // to no construction (since plan step A1.1.17). A new convenience initializer or static factory of
+    // the identity anywhere in Fernlet's code is a construction too.
 
     /// The shipping files that may construct an `IdentityService`, by repo-relative path: the app's
     /// factory, alone.
     static let identityConstructionHomes: Set<String> = ["App/Fernlet/SealedBackupEscrowKey.swift"]
-
-    /// ProximityKit's file that declares the identity, the one place its initializers may delegate to
-    /// one another: a delegating initializer there is the identity's own API, and every call of it is
-    /// still read where it is made.
-    static let identityDeclarationFile = "FernletKit/Sources/ProximityKit/Identity/IdentityService.swift"
 
     /// An argument list whose first label is one of the identity's initializer's three
     /// (`namespace:`, `keychainService:`, `provisioningParticipant:`).
     private static let identityFirstLabel = #"\(\s*(?:namespace|keychainService|provisioningParticipant)\s*:"#
 
     /// Matcher: the 1-based lines of lexed `code` (comments removed, literals emptied) that construct
-    /// an identity: a call of the type (`IdentityService(…)`, `IdentityService.init(…)`), or an implicit
-    /// initializer (`.init(…)`, `Self(…)`, `Self.init(…)`) under one of the identity's three labels
-    /// first, which no other shipping type is built with implicitly today, so a construction cannot
-    /// hide behind type inference.
+    /// an identity: a call of the type (`IdentityService(…)`, `IdentityService.init(…)`), or of its
+    /// metatype (`IdentityService.self.init(…)`), or an implicit initializer (`.init(…)`, `Self(…)`,
+    /// `Self.init(…)`) or one through a metatype value (`make.init(…)`, any lowercase name but `self` and
+    /// `super`, whose `init` delegates) under one of the identity's three labels first, which no other
+    /// shipping type is built with either way today, so a construction cannot hide behind type inference
+    /// or a metatype.
     static func identityConstructionLines(in code: String) -> [Int] {
         let pattern = #"(?<![A-Za-z0-9_])IdentityService\s*(?:\.\s*init\s*)?\("#
+            + #"|(?<![A-Za-z0-9_])IdentityService\s*\.\s*self\s*\.\s*init\s*\("#
             + #"|(?<![A-Za-z0-9_.])(?:Self\s*(?:\.\s*init\s*)?|\.\s*init\s*)"# + identityFirstLabel
+            + #"|(?<![A-Za-z0-9_.])(?!(?:self|super)\b)[a-z_][A-Za-z0-9_]*\s*\.\s*init\s*"# + identityFirstLabel
         return lines(matching: pattern, in: code)
     }
 
@@ -611,11 +619,13 @@ struct KeyCustodyBoundaryTests {
         }
     }
 
-    /// Every shipping Swift file constructs an identity only in ``identityConstructionHomes``, exact
-    /// both ways, read as lexed code (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so
-    /// a doc comment or a string that spells a construction is not one: a construction in any file, and
-    /// a delegating initializer in any file but ``identityDeclarationFile``. Both matchers are held to
-    /// their samples and their neighbours first.
+    /// Every shipping Swift file but ProximityKit's own (``ProximityKitSources/folder``) constructs an
+    /// identity only in ``identityConstructionHomes``, exact both ways, read as lexed code
+    /// (`SwiftSourceLexer`, in `SwiftSourceLexer.swift`), so a doc comment or a string that spells a
+    /// construction is not one: a construction, or a delegating initializer, in any file it reads (the
+    /// identity's declaration file is ProximityKit's, and ProximityKit's own `ProximitySourceWallTests`
+    /// holds its code, that file included, to no construction and no delegation). Both matchers are held
+    /// to their samples and their neighbours first.
     @Test func everyShippingIdentityIsBuiltByItsHostsDoor() throws {
         Self.expectTheIdentityMatchersSeeTheirSamplesAndNoNeighbour()
         var homes: Set<String> = []
@@ -627,15 +637,16 @@ struct KeyCustodyBoundaryTests {
                 Issue.record("scan root missing: \(root)")
                 continue
             }
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
+            for case let url as URL in enumerator
+            where url.pathExtension == "swift" && !ProximityKitSources.holds(url.path) {
                 scanned += 1
                 guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
                 // A path that does not resolve under its root is kept whole, so it fails the set loudly.
                 let suffix = url.path.range(of: "/" + root + "/", options: .backwards).map { url.path[$0.upperBound...] }
                 let path = suffix.map { root + "/" + $0 } ?? url.path
                 let code = SwiftSourceLexer.lex(source).code
-                let delegations = path == Self.identityDeclarationFile ? [] : Self.identityDelegationLines(in: code)
-                guard !(Self.identityConstructionLines(in: code) + delegations).isEmpty else { continue }
+                let found = Self.identityConstructionLines(in: code) + Self.identityDelegationLines(in: code)
+                guard !found.isEmpty else { continue }
                 homes.insert(path)
             }
         }
@@ -645,30 +656,33 @@ struct KeyCustodyBoundaryTests {
             \(Self.identityConstructionHomes.sorted()) may. Build Fernlet's identity with \
             `IdentityService.fernletApp(keychainService:)` (it carries the sealed-backup escrow key), a \
             manager's with its host's `makeProximityIdentity()`, add no initializer or factory of the \
-            identity outside ProximityKit's `Identity/IdentityService.swift`, and spell any other type's \
-            `init(namespace:)` with its type name.
+            identity, and spell any other type's `init(namespace:)` with its type name.
             """)
     }
 
-    /// The construction matcher reads every way a construction is spelled and none of the nearest code
-    /// that builds no identity (another type's initializer under the same label, the lock service's own
-    /// delegation, the factory's call, a static read); the delegation matcher reads a convenience
-    /// initializer of the identity delegating under its first label or under another initializer's,
-    /// and not another type's delegation in code that never names the identity, even when a comment
-    /// does, nor code that names it and delegates nothing. Each sample is lexed first, as the files are.
+    /// The construction matcher reads every way a construction is spelled, through the metatype and a
+    /// metatype value too, and none of the nearest code that builds no identity (another type's
+    /// initializer under the same label, the lock service's own delegation, a superclass's initializer
+    /// under the same label, a metatype value built under another label, the factory's call, a static
+    /// read); the delegation matcher reads a convenience initializer of the identity delegating under its
+    /// first label or under another initializer's, and not another type's delegation in code that never
+    /// names the identity, even when a comment does, nor code that names it and delegates nothing. Each
+    /// sample is lexed first, as the files are.
     private static func expectTheIdentityMatchersSeeTheirSamplesAndNoNeighbour() {
         let constructions = [
             "let id = IdentityService(namespace: .fernlet)", "let id = IdentityService.init(namespace: n)",
             "let id: IdentityService = .init(namespace: n)", "return Self(namespace: n, keychainService: s)",
             "return Self.init(namespace: n)", "let id: IdentityService = .init(keychainService: s)",
-            "let id: IdentityService = .init(provisioningParticipant: nil)"
+            "let id: IdentityService = .init(provisioningParticipant: nil)",
+            "let id = IdentityService.self.init(namespace: n)", "let id = make.init(namespace: n)"
         ]
         let notConstructions = [
             "let tag = IdentityService.fingerprint(of: key)", "let identity: IdentityService",
             "/// IdentityService(namespace:)", #"let s = "IdentityService(namespace: .fernlet)""#,
             "let id = IdentityService.fernletApp()", "self.init(namespace: .fernlet, keychainService: service)",
             "let radio = NetworkMeshSession(namespace: namespace)",
-            "let lock = FernletLockService(keychainService: service)",
+            "let lock = FernletLockService(keychainService: service)", "let radio = radioType.init(name: n)",
+            "super.init(keychainService: s)",
             "self.init(\n    keychainService: keychainService,\n    sealedContentKeyServices: services\n)"
         ]
         let delegations = [
@@ -708,15 +722,11 @@ struct KeyCustodyBoundaryTests {
     /// The roots the backend-door wall reads, each with the fewest Swift files it may hold (about four
     /// fifths of its count when the wall was written: 264, 288 and 485), so a root that stops resolving
     /// fails rather than reading as clean: the app and its extensions, FernletKit's sources but
-    /// ProximityKit's own (``backendDoorExcludedFolder``), and Fernlet's test targets. ProximityKit's
-    /// sources and its package tests are its own door wall's to read.
+    /// ProximityKit's own (``ProximityKitSources/folder``, which declare the door), and Fernlet's test
+    /// targets. ProximityKit's sources and its package tests are its own door wall's to read.
     static let backendDoorRoots: [(root: String, floor: Int)] = [
         (root: "App", floor: 210), (root: "FernletKit/Sources", floor: 230), (root: "Tests", floor: 385)
     ]
-
-    /// The folder under ``backendDoorRoots``' `FernletKit/Sources` this wall does not read: ProximityKit's
-    /// own sources, which declare the door and whose wall travels with the package.
-    static let backendDoorExcludedFolder = "FernletKit/Sources/ProximityKit/"
 
     /// Matcher: the 1-based lines of lexed `code` that spell the door's name, a call however it is
     /// qualified, a reference with no call (`let door = ProximityKeychainItem.installBackend`), a
@@ -745,7 +755,7 @@ struct KeyCustodyBoundaryTests {
         // R2: bounded by the three roots and each root's finite file list.
         for (root, floor) in Self.backendDoorRoots {
             let files = PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: RepoRoot.url)
-                .filter { !$0.hasPrefix(Self.backendDoorExcludedFolder) }
+                .filter { !ProximityKitSources.holds($0) }
             #expect(files.count >= floor, "the backend-door scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
             for path in files {
                 let source = try RepoRoot.source(path)

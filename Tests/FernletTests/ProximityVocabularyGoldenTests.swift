@@ -91,7 +91,7 @@
 //     the wire through the production door is `FernletFeatureGoldenTests`' group 31.
 //
 // What another suite already pins literally is referenced, not repeated: the schema-v2 envelope
-// golden (`FernletIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
+// golden (`ProximityIdentityEnvelopeTests.goldenEnvelopeHex`), the routed registry's columns and its
 // photo and text caps (`MeshRoutedTypeRegistryTests`, `MeshRoutedTextBodyTests`), the tolerant
 // record decodes (`ProximityRecordDecodeCompatTests`), and the one-admission inventory digest
 // (`MeshMembershipEventGoldenTests.goldenRecordsHashHex`). The token tables are whole on purpose:
@@ -113,7 +113,7 @@
 // Foundation's `.whitespaces` (`c == "\t"` or Unicode category Zs; `str.strip()` is not that
 // predicate: it strips a line break). Group 15's vectors were derived twice, by two independent Python
 // implementations that agree byte for byte: one with `struct` and `json`, which first reproduced
-// `FernletIdentityEnvelopeTests.goldenEnvelopeHex`, and one writing big-endian fields by shifts into a
+// `ProximityIdentityEnvelopeTests.goldenEnvelopeHex`, and one writing big-endian fields by shifts into a
 // `bytearray`; its TXT rows by a Python model of `MeshLinkAdvertisement`'s publishing rule (the `sid`
 // hoisted, `fp` withheld, empty or over-64-byte values dropped, keys sorted, at most eight kept).
 
@@ -364,13 +364,13 @@ struct ProximityVocabularyGoldenTests {
         for row in Self.payloadRows {
             let type = try #require(PayloadType(rawValue: row.frozen), "\(row.field) decodes to no case")
             let payload = Data(row.field.utf8)
-            let envelope = try FernletIdentityEnvelope.signed(
+            let envelope = try ProximityIdentityEnvelope.signed(
                 identityService: identity, senderDisplayName: "", payloadType: type,
                 payloadEncryption: .none, payloadSummary: PayloadSummary(title: row.frozen), payload: payload)
             do {
                 let opened = try envelope.verify(identityService: identity, replayCache: cache)
                 #expect(opened == payload, "\(row.frozen) verified unsealed but handed back other bytes")
-            } catch FernletIdentityEnvelope.VerifyError.sealingRequired {
+            } catch ProximityIdentityEnvelope.VerifyError.sealingRequired {
                 refused.insert(row.frozen)
             }
         }
@@ -387,8 +387,8 @@ struct ProximityVocabularyGoldenTests {
         defer { KeychainItem.deleteAll(service: service) }
         let identity = IdentityService(namespace: .fernlet, keychainService: service)
         try identity.ensureProvisioned()
-        var envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
+        var envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
             senderSigningPublicKey: identity.localSigningPublicKey,
             senderKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
             senderDisplayName: "", recipientFingerprint: nil, payloadTypeToken: Self.unknownToken,
@@ -443,13 +443,13 @@ struct ProximityVocabularyGoldenTests {
         of token: String, under identity: IdentityService, cache: ReplayCache
     ) throws -> String {
         let payload = Data(token.utf8)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: identity, senderDisplayName: "", payloadTypeToken: token,
             payloadSummary: PayloadSummary(title: token), payload: payload)
         do {
             let opened = try envelope.verify(identityService: identity, replayCache: cache)
             return opened == payload ? "opened" : opened.isEmpty ? "parked" : "other bytes"
-        } catch FernletIdentityEnvelope.VerifyError.sealingRequired {
+        } catch ProximityIdentityEnvelope.VerifyError.sealingRequired {
             return "refused"
         }
     }
@@ -750,7 +750,7 @@ struct ProximityVocabularyGoldenTests {
         let catalogToken = frozen("payloadType.clothingCatalog")
         let catalog = {
             link.transport.sentFrames.lazy
-                .compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+                .compactMap { try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
                 .first { $0.payloadTypeToken == catalogToken }
         }
         await VocabularyCoordinatorRig.settle { catalog() != nil }
@@ -1253,7 +1253,7 @@ struct ProximityVocabularyGoldenTests {
         manager.broadcastCoordinatorBeaconForTesting()
         let beacon = {
             link.transport.sentFrames.lazy
-                .compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+                .compactMap { try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
                 .first { $0.payloadTypeToken == mesh.coordinatorBeacon }
         }
         await VocabularyCoordinatorRig.settle { beacon() != nil }
@@ -1281,8 +1281,8 @@ struct ProximityVocabularyGoldenTests {
     }
 
     /// An unsealed goodbye under `token`, signed by `sender`, as a peer of a pre-departure build sends it.
-    static func goodbye(under token: String, from sender: IdentityService) throws -> FernletIdentityEnvelope {
-        try FernletIdentityEnvelope.signed(
+    static func goodbye(under token: String, from sender: IdentityService) throws -> ProximityIdentityEnvelope {
+        try ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "", payloadTypeToken: token,
             payloadSummary: PayloadSummary(title: token), payload: Data("{}".utf8))
     }
@@ -1561,7 +1561,7 @@ struct ProximityVocabularyGoldenTests {
 
     /// One envelope's schema-v1 canonical bytes: the legacy encoder's sorted-keys JSON (`/` unescaped,
     /// ISO-8601 dates), the signature blanked. The schema-v2 golden is
-    /// `FernletIdentityEnvelopeTests.goldenEnvelopeHex`.
+    /// `ProximityIdentityEnvelopeTests.goldenEnvelopeHex`.
     static let legacyEnvelopeHex = [
         "7b22637265617465644174223a22323032332d31312d31345432323a31333a32305a222c22656e76656c6f7065494422",
         "3a2230413041304130412d314231422d344334432d384438442d324532453245324532453245222c2265787069726573",
@@ -1638,9 +1638,9 @@ struct ProximityVocabularyGoldenTests {
 
     /// The fixed envelope behind ``legacyEnvelopeHex``: non-ASCII name, a recipient, a sealed
     /// encryption, the full summary, an expiry — and a signature the canonical bytes leave out.
-    static func legacyEnvelope() -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.legacySchemaVersion,
+    static func legacyEnvelope() -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.legacySchemaVersion,
             envelopeID: uuid("0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E"),
             senderSigningPublicKey: Data([0x01, 0x02, 0x03, 0x04]),
             senderKeyAgreementPublicKey: Data([0x05, 0x06, 0x07, 0x08]),
@@ -2036,9 +2036,9 @@ struct ProximityVocabularyGoldenTests {
 
     /// The legacy envelope with `senderDisplayName` as its sender's name and nothing sealed: the
     /// sender reads never look past the name.
-    static func envelope(senderDisplayName: String) -> FernletIdentityEnvelope {
+    static func envelope(senderDisplayName: String) -> ProximityIdentityEnvelope {
         let envelope = legacyEnvelope()
-        return FernletIdentityEnvelope(
+        return ProximityIdentityEnvelope(
             schemaVersion: envelope.schemaVersion, envelopeID: envelope.envelopeID,
             senderSigningPublicKey: envelope.senderSigningPublicKey,
             senderKeyAgreementPublicKey: envelope.senderKeyAgreementPublicKey,
@@ -2649,10 +2649,10 @@ struct ProximityVocabularyGoldenTests {
     /// fingerprint as recipient, sealed to `0x03` × 32, the summary `Recipe share` with three items,
     /// the payload `sealed-recipe`, created at 1 700 000 000 s and expiring 300 s later), is
     /// ``recipeEnvelopeCanonicalHex``, 336 bytes, whose SHA-256 is ``recipeEnvelopeCanonicalSHA256``.
-    /// A second, independent vector on the recipe token beside `FernletIdentityEnvelopeTests`' own
+    /// A second, independent vector on the recipe token beside `ProximityIdentityEnvelopeTests`' own
     /// golden, whose input differs.
     @Test func aRecipeEnvelopeSignsItsFrozenCanonicalBytes() {
-        let envelope = FernletIdentityEnvelope(
+        let envelope = ProximityIdentityEnvelope(
             schemaVersion: 2, envelopeID: Self.uuid("0A0A0A0A-1B1B-4C4C-8D8D-2E2E2E2E2E2E"),
             senderSigningPublicKey: Data(repeating: 0x01, count: 32),
             senderKeyAgreementPublicKey: Data(repeating: 0x02, count: 32),
@@ -2850,7 +2850,7 @@ final class VocabularyCoordinatorRig {
         network.clock.advance(by: FakePeerNetwork.defaultLatency)
         await Self.settle { self.local.sentFrames.count >= 1 }
         let introduction = namespace.family.vocabulary.session.identityIntroduction
-        try await deliver(FernletIdentityEnvelope.signed(
+        try await deliver(ProximityIdentityEnvelope.signed(
             identityService: remoteIdentity, senderDisplayName: "", payloadTypeToken: introduction.payloadType,
             payloadSummary: PayloadSummary(title: introduction.summaryTitle), payload: payload))
         await Self.settle {
@@ -2863,23 +2863,23 @@ final class VocabularyCoordinatorRig {
 
     /// A ping from the peer, under the rig's namespace's heartbeat, which a connected coordinator
     /// must answer.
-    func heartbeatPing() throws -> FernletIdentityEnvelope {
+    func heartbeatPing() throws -> ProximityIdentityEnvelope {
         let body = HeartbeatBody(kind: "ping", heartbeatID: UUID(), sentAt: Date())
         let heartbeat = namespace.family.vocabulary.session.heartbeat
-        return try FernletIdentityEnvelope.signed(
+        return try ProximityIdentityEnvelope.signed(
             identityService: remoteIdentity, senderDisplayName: "", payloadTypeToken: heartbeat.payloadType,
             payloadSummary: PayloadSummary(title: heartbeat.pingTitle), payload: JSONEncoder().encode(body))
     }
 
     /// Sends `envelope` from the peer across the fabric and runs the clock until it lands.
-    func deliver(_ envelope: FernletIdentityEnvelope) async throws {
+    func deliver(_ envelope: ProximityIdentityEnvelope) async throws {
         try await remote.send(JSONEncoder().encode(envelope), to: localHandle, mode: .reliable)
         network.clock.advance(by: FakePeerNetwork.defaultLatency)
     }
 
     /// Every frame the coordinator sent, decoded as the envelope it is.
-    func sentEnvelopes() throws -> [FernletIdentityEnvelope] {
-        try local.sentFrames.map { try JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+    func sentEnvelopes() throws -> [ProximityIdentityEnvelope] {
+        try local.sentFrames.map { try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
     }
 
     /// Yields until `condition` holds, a bounded number of times: the coordinator reacts to its

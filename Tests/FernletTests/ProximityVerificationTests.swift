@@ -155,7 +155,7 @@ struct ProximityVerificationTests {
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateConnected(peer: peer)
         try await Task.sleep(nanoseconds: 10_000_000)
-        let introduction = try FernletIdentityEnvelope.signed(
+        let introduction = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: name,
             payloadType: .identityIntroduction,
@@ -177,13 +177,13 @@ struct ProximityVerificationTests {
         _ type: PayloadType,
         from sender: IdentityService,
         plaintext: Data
-    ) -> FernletIdentityEnvelope {
+    ) -> ProximityIdentityEnvelope {
         // The dispatch entry point takes already-verified, already-unsealed envelopes, so the
         // signature/ciphertext fields are inert here — the sender key fields are not: the
         // ceremony seals its reply to `senderKeyAgreementPublicKey` and binds it into the
         // transcript.
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: sender.localSigningPublicKey,
             senderKeyAgreementPublicKey: sender.localKeyAgreementPublicKey,

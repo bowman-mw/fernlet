@@ -1620,7 +1620,8 @@ The last row is the same lesson item 0 learned about inbound refusals: **without
 never arrived" and "the frame arrived and was refused" read identically**, and run 1 below was
 un-diagnosable until it existed.
 
-Everything is `#if DEBUG` and env-gated in the family `TestHookBoundaryTests` walls; a Release build
+Everything is `#if DEBUG` and env-gated in the families `TestHookBoundaryTests` walls (and, in
+ProximityKit's own code, the families its own `ProximitySourceWallTests` walls); a Release build
 compiles the environment reads, the seams and the echoes to nothing.
 
 #### How to run it

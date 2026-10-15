@@ -1141,7 +1141,7 @@ struct MeshMemberRemovalFrameTests {
         binding: DeviceBindingID.TestOverride? = nil
     ) throws {
         let plaintext = try JSONEncoder().encode(MeshMemberRemovalPayload(record: record))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Peer",
             payloadType: .meshMemberRemoval,

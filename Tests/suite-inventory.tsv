@@ -4,11 +4,14 @@
 # 2026-10-10); held to the tree by Tests/FernletTests/CIGateSelectorBoundaryTests (theSuiteInventoryIsTheTree).
 # Columns, tab-separated: target; suite (the type a selector names); file (repo-relative, the file whose column-0 line
 # declares it); lines (the workflow labels whose selectors name it, sorted, comma-joined, or -); cells (a
-# ProximityKitTests row's declared test count, which the wall counts across the package's files, an extension's
-# included; - for a FernletTests row, whose count the lines' floors and the full runs hold).
+# ProximityKitTests row's declared test count, its row's in the package's own inventory,
+# FernletKit/Tests/ProximityKitTests.tsv, which the package's PackageTestHygieneTests counts across the package's
+# files, an extension's included; CIGateSelectorBoundaryTests holds the two rows equal; - for a FernletTests row,
+# whose count the lines' floors and the full runs hold).
 # Rows sorted by target, then suite. A suite that moves, is renamed or deleted, or joins or leaves a line edits its
 # row in the same commit; the wall's per-target row counts change only with an argued, measured change. A new
-# FernletTests suite needs a row only when a line names it; a new ProximityKitTests suite always needs one.
+# FernletTests suite needs a row only when a line names it; a new ProximityKitTests suite always needs one, here
+# and in the package's own inventory.
 target	suite	file	lines	cells
 FernletTests	AIAuditLogScreenTests	Tests/FernletTests/AIAuditLogScreenTests.swift	-	-
 FernletTests	AIAuditLogTests	Tests/FernletTests/AIAuditLogTests.swift	-	-
@@ -132,7 +135,6 @@ FernletTests	FernletDismissalWindowTests	Tests/FernletTests/FernletAnnouncerTest
 FernletTests	FernletExchangeTests	Tests/FernletTests/FernletExchangeTests.swift	messages-envelope	-
 FernletTests	FernletFeatureGoldenTests	Tests/FernletTests/FernletFeatureGoldenTests.swift	crypto-goldens	-
 FernletTests	FernletFontRegistrationTests	Tests/FernletTests/FernletFontRegistrationTests.swift	-	-
-FernletTests	FernletIdentityEnvelopeTests	Tests/FernletTests/FernletIdentityEnvelopeTests.swift	-	-
 FernletTests	FernletLockCryptoTests	Tests/FernletTests/FernletLockCryptoTests.swift	-	-
 FernletTests	FernletLockScopeTests	Tests/FernletTests/FernletLockScopeTests.swift	-	-
 FernletTests	FernletLockServiceTests	Tests/FernletTests/FernletLockServiceTests.swift	-	-
@@ -526,6 +528,7 @@ FernletTests	ProgressPhotoStoreTests	Tests/FernletTests/ProgressPhotoStoreTests.
 FernletTests	ProtectedSidecarTests	Tests/FernletTests/ProtectedSidecarTests.swift	-	-
 FernletTests	ProximityAuditBridgeTests	Tests/FernletTests/ProximityAuditBridgeTests.swift	s3-grep	-
 FernletTests	ProximityCoordinatorTests	Tests/FernletTests/ProximityCoordinatorTests.swift	-	-
+FernletTests	ProximityIdentityEnvelopeTests	Tests/FernletTests/ProximityIdentityEnvelopeTests.swift	-	-
 FernletTests	ProximityManagerDeallocationTests	Tests/FernletTests/MemoryLifecycleTests.swift	-	-
 FernletTests	ProximityNamespaceGateTests	Tests/FernletTests/ProximityNamespaceGateTests.swift	crypto-goldens	-
 FernletTests	ProximityNamespaceGoldenTests	Tests/FernletTests/ProximityNamespaceGoldenTests.swift	crypto-goldens	-
@@ -651,11 +654,15 @@ ProximityKitTests	MeshSessionIDClaimTests	FernletKit/Tests/ProximityKitTests/Mes
 ProximityKitTests	NearbyRangingSessionTests	FernletKit/Tests/ProximityKitTests/NearbyRangingSessionTests.swift	proximitykit	9
 ProximityKitTests	PackageKeychainStoreTests	FernletKit/Tests/ProximityKitTests/PackageKeychainStoreTests.swift	proximitykit	6
 ProximityKitTests	PackageTestHostTests	FernletKit/Tests/ProximityKitTests/PackageTestHostTests.swift	proximitykit	4
+ProximityKitTests	PackageTestHygieneTests	FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift	proximitykit	6
 ProximityKitTests	PackageTestSupportTests	FernletKit/Tests/ProximityKitTests/PackageTestSupportTests.swift	proximitykit	2
+ProximityKitTests	PackageTestTreeWallTests	FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift	proximitykit	6
 ProximityKitTests	PeerHandleIdentityTests	FernletKit/Tests/ProximityKitTests/PeerTransportNeutralityTests.swift	mesh-batteries	5
 ProximityKitTests	ProximityKeychainDoorTests	FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift	proximitykit	1
+ProximityKitTests	ProximityMemoryLifecycleTests	FernletKit/Tests/ProximityKitTests/ProximityMemoryLifecycleTests.swift	proximitykit	5
 ProximityKitTests	ProximityNamespaceBoundaryTests	FernletKit/Tests/ProximityKitTests/ProximityNamespaceBoundaryTests.swift	proximitykit	12
 ProximityKitTests	ProximityNamespaceSoundnessTests	FernletKit/Tests/ProximityKitTests/ProximityNamespaceSoundnessTests.swift	crypto-goldens	43
 ProximityKitTests	ProximityPlatformNeutralityTests	FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift	proximitykit	5
 ProximityKitTests	ProximityPresenceSessionTests	FernletKit/Tests/ProximityKitTests/ProximityPresenceSessionTests.swift	proximitykit	5
+ProximityKitTests	ProximitySourceWallTests	FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift	proximitykit	13
 ProximityKitTests	ReplayCacheTests	FernletKit/Tests/ProximityKitTests/ReplayCacheTests.swift	proximitykit	1

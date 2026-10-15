@@ -1444,7 +1444,7 @@ struct ProximityNamespaceGoldenTests {
     /// The canonical envelope opens with `lp(identityEnvelopeV2)`.
     @Test func theIdentityEnvelopeTranscriptBeginsWithItsFieldsPrefix() {
         Self.expectFramed(canonicalBytes(for: Self.consumerEnvelope(), in: .fernlet), by: Self.signatures.identityEnvelopeV2,
-                          consumer: "canonicalBytes(for: FernletIdentityEnvelope, in:)")
+                          consumer: "canonicalBytes(for: ProximityIdentityEnvelope, in:)")
     }
 
     /// The canonical admission token opens with `lp(meshAdmissionTokenV2)`.
@@ -1665,9 +1665,9 @@ struct ProximityNamespaceGoldenTests {
 
     /// An identity envelope with every field set: the shape `CryptographicPurposeBoundaryTests`' framing
     /// cell signs.
-    private static func consumerEnvelope() -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion, envelopeID: MeshMembershipEventFixtures.proposalID,
+    private static func consumerEnvelope() -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion, envelopeID: MeshMembershipEventFixtures.proposalID,
             senderSigningPublicKey: Data(repeating: 0x01, count: 32), senderKeyAgreementPublicKey: Data(repeating: 0x02, count: 32),
             senderDisplayName: "Golden", recipientFingerprint: nil, payloadType: .inspectorEcho, payloadEncryption: .none,
             payloadSummary: PayloadSummary(title: "Golden"), payload: Data("golden".utf8),
@@ -1962,7 +1962,7 @@ struct ProximityNamespaceGoldenTests {
                 "a schema-v1 envelope no longer verifies under .fernlet")
         let foreign = IdentityService(namespace: ForeignAppNamespace.namespace(),
                                       keychainService: Self.isolatedIdentityService())
-        #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid,
+        #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid,
                 "a family that refuses legacy peers verified a schema-v1 envelope") {
             _ = try envelope.verify(identityService: foreign, replayCache: nil)
         }
@@ -1987,13 +1987,13 @@ struct ProximityNamespaceGoldenTests {
         let payload = Data("golden".utf8)
         // R2: bounded by the two directions.
         for (signer, other) in [(fernlet, foreign), (foreign, fernlet)] {
-            let envelope = try FernletIdentityEnvelope.signed(
+            let envelope = try ProximityIdentityEnvelope.signed(
                 identityService: signer, senderDisplayName: "Golden",
                 payloadTypeToken: signer.namespace.family.vocabulary.session.heartbeat.payloadType,
                 payloadSummary: PayloadSummary(title: "Golden"), payload: payload)
             #expect(try envelope.verify(identityService: signer, replayCache: nil) == payload,
                     "an envelope signed under \(signer.purposes.signature.identityEnvelopeV2.rawValue) did not verify there")
-            #expect(throws: FernletIdentityEnvelope.VerifyError.signatureInvalid,
+            #expect(throws: ProximityIdentityEnvelope.VerifyError.signatureInvalid,
                     "an envelope signed under \(signer.purposes.signature.identityEnvelopeV2.rawValue) verified elsewhere") {
                 _ = try envelope.verify(identityService: other, replayCache: nil)
             }
@@ -3447,8 +3447,8 @@ struct ProximityNamespaceGoldenTests {
         on coordinator: ProximityCoordinator, from peer: ProximityCoordinator.PeerIdentity?
     ) throws {
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
             senderSigningPublicKey: Data(), senderKeyAgreementPublicKey: Data(), senderDisplayName: "Peer",
             recipientFingerprint: nil, payloadTypeToken: role.token(in: manager.namespace.family.vocabulary.mesh),
             payloadEncryption: .none, payloadSummary: PayloadSummary(title: "Golden"), payload: plaintext,
@@ -3545,9 +3545,9 @@ struct ProximityNamespaceGoldenTests {
 
     /// A schema-v1 broadcast envelope from `sender`, carrying `signature`: the shape a pre-WI-6 peer
     /// still sends, signed over the legacy JSON bytes.
-    private static func legacyEnvelope(sender: Data, signature: Data) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.legacySchemaVersion, envelopeID: MeshMembershipEventFixtures.proposalID,
+    private static func legacyEnvelope(sender: Data, signature: Data) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.legacySchemaVersion, envelopeID: MeshMembershipEventFixtures.proposalID,
             senderSigningPublicKey: sender, senderKeyAgreementPublicKey: Data(repeating: 0x02, count: 32),
             senderDisplayName: "Golden", recipientFingerprint: nil, payloadType: .inspectorEcho, payloadEncryption: .none,
             payloadSummary: PayloadSummary(title: "Golden"), payload: Data("golden legacy".utf8),

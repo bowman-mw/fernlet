@@ -53,22 +53,19 @@ enum MeshP7Acceptance {
 
     /// The test roots the batteries' test-tree scans read (P8's, P9's and P10's digest homes, P9's
     /// unscoped audit counts and P10's production conformers), each with the fewest Swift files it may
-    /// hold: the app's unit tests and, since ProximityKit plan step A1.1.6 (2026-10-14), ProximityKit's
-    /// package tests, which now hold a host double and an audit capture of their own, so a file there
-    /// that spelled a digest or built a production conformer would otherwise go unseen. P9's unscoped
-    /// count reads FernletTests' capture API (`count(of:`), which a package file cannot call; the
-    /// package's own capture refuses to be built unscoped (`PackageAuditCapture`'s initializer). MEASURED
-    /// then at 446 and 23 files; each floor is about four fifths of that, so a root that stops resolving
-    /// fails rather than reading as clean.
-    nonisolated static let testRoots: [(root: String, floor: Int)] = [
-        (root: "Tests/FernletTests", floor: 356), (root: "FernletKit/Tests", floor: 18)
-    ]
+    /// hold: the app's unit tests, MEASURED at 446 files at ProximityKit plan step A1.1.6 (2026-10-14),
+    /// the floor about four fifths of that, so a root that stops resolving fails rather than reading as
+    /// clean. ProximityKit's package tests hold their own digest homes (`PackageTestTreeWallTests`,
+    /// since plan step A1.1.14); they cannot call FernletTests' capture API (`count(of:`), and the
+    /// package's own capture refuses to be built unscoped (`PackageAuditCapture`'s initializer); and they
+    /// cannot name the app's production conformers.
+    nonisolated static let testRoots: [(root: String, floor: Int)] = [(root: "Tests/FernletTests", floor: 356)]
 
-    /// Every Swift file under both test roots (``testRoots``), comment-stripped, each root held to its
+    /// Every Swift file under the test roots (``testRoots``), comment-stripped, each root held to its
     /// floor.
     nonisolated static func testTreeSources() throws -> [(name: String, code: String)] {
         var all: [(name: String, code: String)] = []
-        // R2: bounded by the two roots.
+        // R2: bounded by the roots.
         for (root, floor) in testRoots {
             let read = try Self.sources(under: root)
             #expect(read.count >= floor, """

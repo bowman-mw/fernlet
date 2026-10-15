@@ -100,8 +100,8 @@ struct PresenceHeartsTests {
 
     private func deliverHeart(_ payload: HeartPayload, to manager: PresenceManager, from peer: ProximityCoordinator.PeerIdentity?) throws {
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),

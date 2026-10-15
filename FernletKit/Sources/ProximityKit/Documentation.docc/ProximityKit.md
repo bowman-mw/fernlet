@@ -10,7 +10,7 @@ moves over local radios (Network.framework/QUIC over Bonjour for data, NearbyInt
 distance where the host's provider has it) between two phones
 that are physically together. The design center is a privacy stance the rest of the app depends
 on: identities are per-device Ed25519/X25519 key pairs (``IdentityService``), every wire transfer
-travels in a signed ``FernletIdentityEnvelope`` that is verified — signature, expiry, recipient,
+travels in a signed ``ProximityIdentityEnvelope`` that is verified — signature, expiry, recipient,
 replay, and mandatory sealing for sensitive payload types — before any handler sees it, and the
 social exhaust (who you met, who sent you warmth, who you reported) lives in device-local sidecar
 files that are deliberately **never** part of the synced snapshot.
@@ -24,7 +24,8 @@ edge; its session mode is its own (``ProximitySessionMode``), which Fernlet conv
 `ProximityMode` it persists, so it has no `FernletDomainModel` edge. `ProximityNamespaceBoundaryTests`
 pins the empty list, so none of `FernletCrypto`, `FernletDomainModel`, `FernletFoundation` and
 `PrivateMediaStore` can come back unseen. It sits on the *protected* side of the S3 privacy wall: the walled `AIProviders` / `CloudKitSync` targets can never
-import it (nor it them, nor `FernletSocial`, whose heart dead-drop gets its CloudKit transport
+import it (nor it them: its manifest names no dependency, and its own platform wall refuses CloudKit by
+name; nor `FernletSocial`, whose heart dead-drop gets its CloudKit transport
 injected app-side through FernletDomainModel's `HeartDropTransporting` seam and so only ever hands
 ciphertext + rotating day tags outward). Its one seam back to app state is the
 ``ProximityHost`` protocol, which `FernletStore` conforms to via an app-side adapter; the
@@ -182,7 +183,7 @@ the name out early. The introduction's summary is `"Hello"`, never an interpolat
 an identity built from an introduction carries NO name whatever the peer sent
 (``ProximityCoordinator/PeerIdentity/isDisplayNameWithheld``), so the guarantee does not depend on the
 peer's build; the name is adopted from the first verified post-commit envelope that discloses one
-(``FernletIdentityEnvelope/disclosedSenderDisplayName(in:)``), once, from the verified signing key only,
+(``ProximityIdentityEnvelope/disclosedSenderDisplayName(in:)``), once, from the verified signing key only,
 and ``ProximityCoordinator/onPeerDisplayNameDisclosed`` tells the owning manager. Every site that
 persists a peer name (rosters, the trust vault, audits) reads
 ``ProximityCoordinator/PeerIdentity/displayNameOrFingerprint``. Every site that RENDERS one goes
@@ -388,8 +389,12 @@ own is also cancelled in an `isolated deinit`, and every record-drop path (stop,
 disconnect, stale/parked sweeps, slot eviction) runs the dropped ``ProximityCoordinator``'s own
 `cancel()` so ranging and the Live Activity anchor stop with it; the mesh manager additionally
 kicks an evicted peer's link (`MeshTransportSession.disconnectPeer`) so no zombie link
-survives a slot (`Tests/FernletTests/MemoryLifecycleTests` + `MemoryLifecycleBoundaryTests` are
-the enforcement; see Docs/Memory-Leak-Review-2026-08-17.md). Framework delegate callbacks
+survives a slot (this module's own `ProximityMemoryLifecycleTests` holds its code to the four
+static disciplines, ML1-ML4: stored tasks cancelled in a deinit, observers removed, observation
+tracking in ``ObservationLoop`` alone, every `Task` in a file holding an `unowned` host pinned or
+marked; in Fernlet's repository `Tests/FernletTests/MemoryLifecycleTests` holds the behaviour and
+`MemoryLifecycleBoundaryTests` the same disciplines over Fernlet's code; see
+Docs/Memory-Leak-Review-2026-08-17.md). Framework delegate callbacks
 (NearbyInteraction; the retired MultipeerConnectivity radio's did too) transfer non-Sendable objects across the main-actor
 hop via documented `nonisolated(unsafe)` locals. Signing inputs come from the deterministic
 binary serializer in `CanonicalSignatureSerializer.swift` (domain-tagged per signed type,
@@ -483,9 +488,12 @@ inherits all three:
   unreachable. Those spawns stay plain `Task { … }` and carry a `// host-pin: timer — <reason>`
   marker instead.
 
-`MemoryLifecycleBoundaryTests` rule ML4 fails any unmarked `Task` construction in a file holding an
-`unowned` host, or holding or taking a `FernletMeshHost` (a stored property or a parameter); rule ML5
-fails a test that builds a manager or a composition over an inline host expression.
+Rule ML4 fails any unmarked `Task` construction in a file holding an `unowned` host: in this module's
+code its own `ProximityMemoryLifecycleTests` holds its two holders, the mesh manager and the pair
+session, and a host's ML4 holds the host's code (Fernlet's `MemoryLifecycleBoundaryTests` also every file
+holding or taking a `FernletMeshHost`, a stored property or a parameter). Rule ML5 fails a test that
+builds a manager or a composition over an inline host expression. A host's ML5 holds the host's tests;
+in this module's own tests `PackageTestTreeWallTests` holds the same rule over its two holders.
 `ProximityManagerDeallocationTests` measures HP2 directly, with the beacon loop armed.
 
 ### Localization: nothing on the wire is display copy
@@ -566,7 +574,8 @@ shown for one that sanitizes to nothing). Two apps that share a family speak one
 still never share a key, a file or a log stream. What names a format rather than an app stays this
 module's: the QR host `verify`, its query key `d` and version 1, the `FPT2`, `FGK2`, `FMGM2` and
 `FMRI1` markers, the column byte `0x03`, the `corrupt` and `chunk` extensions, and each keychain
-row's accessibility and synchronizable class, which the key-custody walls read in this module's code.
+row's accessibility and synchronizable class, which this module's own source walls
+(`ProximitySourceWallTests`) hold to `ThisDeviceOnly` and never synchronizable in its code.
 
 **Labels are the host's literals; roles are this module's.** A label is a `StaticString` source
 literal handed to a group initializer, to
@@ -685,7 +694,7 @@ hand it:
 | Verifiers: the six routed verifiers, `MeshChannelIntroductionExchange` | Keep their own copy, a trailing `purposes:` with no default. |
 | The membership digest and its holders: `MeshInventoryDigest`, `MeshMembershipRecordVerifier`, `MeshLedgerAdoption` | Take the whole family (`family:`, or the adoption's `in family:`, with no default), because the digest needs its record kinds beside its labels: every record is tagged with its kind's token from `family.vocabulary.membershipRecordKinds` (`MeshMembershipRecordKind.token(in:)`). The verifier keeps the family as its copy, so its labels and record kinds come from one namespace; an identity's signed digest uses its own namespace's. |
 | The routed type registry: ``MeshRoutedTypeRegistry`` and its projection, the ack-stage table | Read no namespace: ``MeshNetworkManager`` builds its one registry at `init` from its host's rows (``ProximityHost/meshRoutedTypeEntries``), each keyed by a token the host reads off its own namespace's `family.vocabulary.routedTypes` (Fernlet's, `FernletSocial`'s `FernletRoutedTypes`), and the manifest mint takes the manager's registry with no default, so this module spells no routed type. |
-| The envelope: ``FernletIdentityEnvelope/verify(identityService:replayCache:sealedPayloadFormat:)`` | Reads its identity's namespace's `family.vocabulary.payloads`, in the checks' fixed order: an unsealed envelope whose token is in `sealingRequired` is refused, and one whose token is outside `known` is parked (authenticated and replay-recorded, never opened). `signed` mints under a token the host names; Fernlet's typed view of the token (`payloadType`, `isUnknownPayloadType`, and a typed initializer and `signed`) is `FernletConnections`', and delegates to the raw forms. |
+| The envelope: ``ProximityIdentityEnvelope/verify(identityService:replayCache:sealedPayloadFormat:)`` | Reads its identity's namespace's `family.vocabulary.payloads`, in the checks' fixed order: an unsealed envelope whose token is in `sealingRequired` is refused, and one whose token is outside `known` is parked (authenticated and replay-recorded, never opened). `signed` mints under a token the host names; Fernlet's typed view of the token (`payloadType`, `isUnknownPayloadType`, and a typed initializer and `signed`) is `FernletConnections`', and delegates to the raw forms. |
 | The session coordinator: ``ProximityCoordinator`` | Reads its identity's namespace's `family.vocabulary` at each use: it signs its introduction, acknowledgement and heartbeat with its reply under `session`'s tokens and titles and dispatches by them, parks a token outside `payloads.known`, and takes the wire2 token, the legacy assumption and its receive bound on a peer's list (twice `capabilities.known.count`) from `capabilities`. |
 | The mesh engine's own frames: ``MeshNetworkManager``, `MeshPayloadRole` | Name each frame by role, never by spelling: `MeshPayloadRole` has one case per mesh message, and its `token(in:)` and `role(for:in:)` are the one place a role meets its token, read off the manager's namespace's `family.vocabulary.mesh`. Every engine send is signed under the role's token, which is also its summary title; the payload door parks a token outside `payloads.known`, switches on the role of one inside it, and hands any other token, a feature's, to the handler registry, which is keyed by token (a host's feature registers its handler under its own token, ``MeshNetworkManager/registerPayloadHandler(forToken:handler:)``). The encrypted-metadata door resolves its inner token the same way, and every audit line names the token. A feature's payload goes out under its own token through the feature-only send, ``MeshNetworkManager/sendFeatureEnvelope(_:encodable:via:sealed:)``. |
 | Capability gates: `ProximityCoordinator.PeerIdentity.supports(_:in:)`, `PeerSlot.supports(_:in:)` | Take a token and the host's `capabilities` last: a peer that listed none supports exactly `assumedForLegacyPeers`. A host's features gate on their own capability tokens through these token forms (Fernlet's spell `ProximityCapability` raw values; this module has no typed overload); the mesh's sealed sends and the coordinator ask for the host's wire2 token, which the mesh, through its host's capability list, and presence advertise. |
@@ -694,7 +703,7 @@ hand it:
 | The radios: `NetworkMeshSession`, `NetworkPresenceSession`, `NetworkPairSession` | Take `init(namespace:)` (the pair session's radio `init(namespace:profile:)`, reading its service type, ALPN and TXT mode off its pair profile, which its session has checked against the namespace) and read their service type, ALPN, heartbeat, exporter label, log subsystem and soundness verdict there, once (their `start` refuses an unsound namespace by that verdict); the mesh radio keeps `family.purposes` for the channel introductions it frames and checks, and the mesh and recipe radios keep the mesh instance-name prefix and the TLS common name their instance names and certificates are minted under. |
 | The presence posture: `PresenceEpochPosture` | Is minted, and rotated, with the presence instance-name prefix and the TLS common name its caller passes: ``ProximityPresenceSession``'s posture mint, built in `init` from the session's namespace, passes them. |
 | The name display: ``PeerNameDisplay/personName(_:fingerprint:in:)``, with `FernletConnections`' placeholders (`shown`, `firstName`) and `FernletSocial`'s `PresenceManager.firstName(of:in:)` over it | Take `in namespace:` last, sanitize under its peer-name cap and hide a name that begins with its mesh instance-name prefix. The app passes the namespace it hands this module. |
-| The peer-name coercion: `ProximityDisplayName.peerDisplayName(_:in:)`, ``FernletIdentityEnvelope/sanitizedSenderDisplayName(in:)`` and ``FernletIdentityEnvelope/disclosedSenderDisplayName(in:)``, `ProximityPairAdvertisedName.publishable(_:in:)`, and over them `FernletSocial`'s chat store (`SessionMessageStore.receiveIncoming(…in:)`) and incoming-photo coercion | Take `in namespace:` last and read `installation.peerNames`: a peer's sanitized name keeps at most the cap and reads as the floor when nothing displayable is left, and the advertised recipe name is capped the same way. The managers pass their own namespace (the mesh manager also to its descriptor coercion, a mesh name under the cap), the coordinator its identity's, and `FernletSocial`'s features their composition's. `ProximityDisplayName.sanitized(_:maxLength:)` is FernletDomainModel's `ItemNameModeration.sanitizedName` copied scalar for scalar; only `FernletSocial`'s activities still use the original. |
+| The peer-name coercion: `ProximityDisplayName.peerDisplayName(_:in:)`, ``ProximityIdentityEnvelope/sanitizedSenderDisplayName(in:)`` and ``ProximityIdentityEnvelope/disclosedSenderDisplayName(in:)``, `ProximityPairAdvertisedName.publishable(_:in:)`, and over them `FernletSocial`'s chat store (`SessionMessageStore.receiveIncoming(…in:)`) and incoming-photo coercion | Take `in namespace:` last and read `installation.peerNames`: a peer's sanitized name keeps at most the cap and reads as the floor when nothing displayable is left, and the advertised recipe name is capped the same way. The managers pass their own namespace (the mesh manager also to its descriptor coercion, a mesh name under the cap), the coordinator its identity's, and `FernletSocial`'s features their composition's. `ProximityDisplayName.sanitized(_:maxLength:)` is FernletDomainModel's `ItemNameModeration.sanitizedName` copied scalar for scalar; only `FernletSocial`'s activities still use the original. |
 | Storage scopes: ``MeshSessionStorageScope``, ``MeshRoutedStorageScope`` | Carry the namespace and the install binding (`init(namespace:directory:keychainService:installBinding:)`, ``MeshSessionStorageScope/production(for:directory:installBinding:)`` on the root the host states); the two stores read their file names, seal-key accounts and column-seal labels off `scope.namespace`. |
 | Closures that cross an actor | Capture the `Sendable` value when they are made, as ``ProximityPresenceSession``'s radio factory and posture mint, set in its `init`, do. |
 
@@ -758,9 +767,11 @@ manager, the diagnostics ring presence shares with it, and its wire types), and 
 share's three public values this module renamed for the one-to-one send (`RecipeShareOutcome`,
 `RecipeShareFailure`, `ProximityRecipeShareRecipient`), nor the nine recipe-named types of the pair
 session's mechanism, renamed with pair names before the split (`ProximityPairTransfer`,
-`NetworkPairSession` and the rest; the wall lists the old names), is declared, extended or aliased
-here again (and the old name of the namespace's pair-session radio, renamed `pair` with them, is
-named nowhere in this module's code), a list that only grows as features move out, because a
+`NetworkPairSession` and the rest; the wall lists the old names, and the old name of the
+namespace's pair-session radio, renamed `pair` with them, is named nowhere in this module's code),
+nor the Fernlet name of the signed envelope, renamed ``ProximityIdentityEnvelope`` before the
+package's first tag (the wall lists it too), is declared, extended or aliased here again, a list
+that only grows as features move out or a public name is made the module's own, because a
 feature that came back under its old name with no Fernlet string, label or domain type of its own
 would pass the other rules; and the target depends on nothing in FernletKit. The literal and
 domain-type lists can only shrink, and a door's row lasts exactly as long as the door. The exact
@@ -838,7 +849,9 @@ exactly as they did when this module named `FernletAuditLog` itself. `ProximityA
 the canary for that install: every test asserting that an event was not logged would pass vacuously
 without it. This module's own package tests run unhosted, with no app to install a sink, so their test
 support installs one of its own (see "Its tests"); `ProximityAuditBridgeTests` also holds that the
-app's install and that one are the only two.
+app's install is the only one in Fernlet's code and tests, and this module's tree walls
+(`PackageTestTreeWallTests`) hold its tests' install to the one in their installer and this module's
+code to none.
 
 **What is left.** The vocabulary and the session rules are the host's: every group
 of the vocabulary is read off the namespace its reader holds (the reader table above), the radios
@@ -940,10 +953,11 @@ leaves the set's string catalogs (`FernletFoundation`'s and `FernletDomainModel`
 build is the compiler half, which refuses any symbol native macOS lacks wherever it stands outside its
 guard. `ProximityPlatformNeutralityTests`, one of this module's own tests on the `proximitykit` CI line
 (see "Its tests"), is the source half: it holds this module's imports to a neutral baseline and the
-two seams above, and its platform branches (`#if os(…)`) to the NearbyInteraction file's guard,
-refuses the device-name sources, platform-directory APIs and host-fact defaults it lists (its rows for
-them are empty), and holds this module's two channel-ready doors to their host's ranging provider and
-`NIRangingSession` to its own file. Fernlet's `ProximityPlatformBoundaryTests`, on the s3-grep CI line,
+two seams above, refuses CloudKit by name whatever row is written (the cloud half of the S3 pair,
+which no compiler wall can hold), holds its platform branches (`#if os(…)`) to the NearbyInteraction
+file's guard, refuses the device-name sources, platform-directory APIs and host-fact defaults it lists
+(its rows for them are empty), and holds this module's two channel-ready doors to their host's ranging
+provider and `NIRangingSession` to its own file. Fernlet's `ProximityPlatformBoundaryTests`, on the s3-grep CI line,
 holds its own channel-ready door, presence's heart door in `FernletSocial`, to the same rule, and pins
 that the gate runs, neither skipped nor tolerated in CI and on by default in the pre-push hook.
 
@@ -981,8 +995,10 @@ crypto-goldens line) and, on the `proximitykit` line, the membership records (`M
 (`PackageTestSupportTests`), the test keychain (`PackageKeychainStoreTests`), the test host and
 audit sink (`PackageTestHostTests`), the namespace wall (`ProximityNamespaceBoundaryTests`), the
 platform wall (`ProximityPlatformNeutralityTests`), the keychain door's wall
-(`ProximityKeychainDoorTests`) and the presence engine (`ProximityPresenceSessionTests`): twenty-one
-suites, 173 tests. The
+(`ProximityKeychainDoorTests`), the presence engine (`ProximityPresenceSessionTests`), the tests' own
+hygiene (`PackageTestHygieneTests`), their tree walls (`PackageTestTreeWallTests`), the source walls
+over this module's own code (`ProximitySourceWallTests`) and the memory-lifecycle wall over it
+(`ProximityMemoryLifecycleTests`): twenty-five suites, 203 tests. The
 target is unhosted: Fernlet's scheme runs it as a second test bundle through `Fernlet.xcworkspace`, in
 the simulator's `xctest` agent, so no keychain entitlement reaches it (on the simulator a `SecItem`
 call returns `errSecMissingEntitlement`; for a Mac see the Keychain row of "Hosting on macOS") and no
@@ -992,8 +1008,8 @@ and its audit sink one its test support installs too, both described below.
 It builds in Swift 6 language mode with no default isolation; with the three upcoming features it
 declares, that is every upcoming feature Fernlet's own tests use, though they build in Swift 5 mode.
 It declares this module as its one dependency, and its files import nothing else of the package,
-whose other modules hold Fernlet's values and do not travel (this module depends on none of them). CI runs it on the iOS
-simulator; a macOS lane is A1's.
+whose other modules hold Fernlet's values and do not travel (this module depends on none of them). Fernlet's CI runs it on
+the iOS simulator; the package repository's CI has a macOS lane (`swift test`) beside its iOS simulator lane.
 
 Its test support lives in `TestSupport/`. The suites compute under a namespace of their own,
 `.packageTest` (`PackageTestNamespace.swift`), built from this module's public API alone out of
@@ -1028,8 +1044,9 @@ reads back the same key and wipes; an unreadable service defers or refuses and i
 while an absent one mints; scopes on two services never see each other's rows; and the synced and
 device-only variants of one account stay apart. At plan step A1.1.6 the bundle, 150 tests then, also
 built and ran natively on a Mac (`swift build --product FernletKitPackageTests`, then
-`swift test --skip-build`), against its in-memory store; the suites added since have run only on the
-simulator.
+`swift test --skip-build`), against its in-memory store; the suites added since have run natively on a
+Mac too, all twenty-five passing `swift test` with this module and its tests laid out as in the package
+repository (`Sources/`, `Tests/` and a root manifest).
 
 The bundle's audit sink is `PackageAuditSink` (`PackageAuditCapture.swift`), which
 `PackageTestEnvironment.audit` installs through ``ProximityAudit/install(_:)`` once, lazily, as it
@@ -1041,7 +1058,7 @@ its scope admits: those whose context holds the capture's context pairs (a rig's
 capture built `markedOnly`, those logged inside its own `marking(_:)`, for a line that names no rig.
 The bundle's host is `PackageTestHost` (`PackageTestHost.swift`), a ``ProximityHost`` built from this
 module's public API alone that states all thirteen requirements itself, since nothing in the target
-extends ``ProximityHost``: the namespace it is handed, `.packageTest` by default; a scratch root,
+extends ``ProximityHost`` (`PackageTestHygieneTests` holds that): the namespace it is handed, `.packageTest` by default; a scratch root,
 `PackageTestHost-<UUID>` directly under the temporary directory and never Application Support, which
 nothing creates until a store opens and `tearDown()` removes; both storage scopes on that root, under
 its namespace and a sixteen-byte `PinnedInstallBinding` read with no keychain, on `.test.` services of
@@ -1057,11 +1074,9 @@ more; the host's root and services are scratch of its own, and two hosts share n
 its rows, its policy and its radio itself; and a ``MeshNetworkManager`` built over it, unhosted,
 provisions its identity into the in-memory store and logs no line, while one whose identity service
 the store answers as unreadable logs its failure. So a suite in this target can build a manager over
-`PackageTestHost` and read this module's audit lines, a line's absence included. Fernlet's store
-isolation walls (`MeshRoutedStoreIsolationTests`, whose scratch-root needle holds the host as one of
-the doubles, and `MeshSessionStoreIsolationTests`) and its acceptance batteries' test-tree scans read
-this target's folder too, and `ProximityAuditBridgeTests` holds the installer to the one install of a
-sink in either test target.
+`PackageTestHost` and read this module's audit lines, a line's absence included. This target's tree
+walls (`PackageTestTreeWallTests`, below) hold the host as the package tests' host double and the
+installer to the one install of a sink in these tests.
 
 The namespace wall, `ProximityNamespaceBoundaryTests` (see "Protocol namespace" and "Package doors"),
 is one of this target's suites, on the `proximitykit` line, so it travels with the package and runs
@@ -1076,10 +1091,8 @@ The platform wall, `ProximityPlatformNeutralityTests` (see "Platforms"), is one 
 suites too, on the `proximitykit` line, so it also travels with the package. It walks this module's
 sources with the namespace wall's walk, through `PackageRoot`, reads its two channel-ready doors by
 their paths under the package root, and reads code through the same copy of the lexer, its readers
-fixtured in a cell of their own. Its platform-directory needles are also Fernlet's selector wall's
-location needles for this target (what an unhosted test may not reach), so while the module is in
-Fernlet's repository `CIGateSelectorBoundaryTests` holds Fernlet's copy of the list equal to this
-suite's, line for line. A host's own doors and its Mac build are its own walls' to hold: Fernlet's
+fixtured in a cell of their own. Its platform-directory needles are also this target's hygiene
+suite's location needles (what an unhosted test may not reach). A host's own doors and its Mac build are its own walls' to hold: Fernlet's
 `ProximityPlatformBoundaryTests` holds presence's heart door and pins the native macOS build.
 
 The keychain door's wall, `ProximityKeychainDoorTests` (see "The keychain mechanism"), is one of this
@@ -1088,6 +1101,73 @@ own files through `PackageRoot` and their code through the same copy of the lexe
 funnel's Debug-only door declared once, in its `#if DEBUG` branch, whose whole text it pins, and named
 by this target's installer alone, its readers fixtured first. A host's own walls hold that the host
 names the door nowhere: Fernlet's `KeyCustodyBoundaryTests`.
+
+The tests' own hygiene, `PackageTestHygieneTests`, is one of this target's suites too, on the
+`proximitykit` line, so the rules that keep these tests runnable unhosted travel with them. It reads
+every Swift file of this target through `PackageRoot` and the walls' walker
+(`TestSupport/PackageSwiftFiles.swift`), which each cell that reads through it holds to a file floor, and
+holds four rules, each reader fixtured both ways. Nothing reaches what the unhosted bundle cannot serve
+(rule I9): a keychain call outside a file listed with the structure that keeps it behind the
+installer's read, a raw `SecItem` call anywhere, a store or its production scope, a production or
+process-shared location, or a path of a host repository, each excused only by an exact allowlisted line
+with its invariant; a wall file, the suite's own first, is read as code, so the needles it holds in its
+literals are data and a needle in its code is refused, and so is a literal of it that starts with a
+host repository's folder. Every import travels with the package (rule I11): this module, Foundation,
+Testing, Combine, simd and Synchronization, and Security in the keychain store's file alone. The
+target's own inventory, `Tests/ProximityKitTests.tsv` beside this target's folder, is the tree: every
+suite's file and its declared tests, the row count and the tests' sum measured, which the test-count
+floor of CI in ProximityKit's own repository reads. And nothing extends ``ProximityHost``.
+
+The tests' tree walls, `PackageTestTreeWallTests`, are one of this target's suites as well, on the
+`proximitykit` line, so the walls that keep these tests from harming one another in one process travel
+with them. Each reads every Swift file of this target, and one of them this module's sources too,
+through the walls' walker at its file floor, each matcher fixtured first, and holds four rules. The
+audit install: ``ProximityAudit/install(_:)`` is named in this target's installer alone, once, and in
+none of this module's code, and outside ProximityAudit's own file nothing extends it, aliases it or takes
+its metatype. The stores: every session or routed store a test builds names a scope of its own, none
+reaches a production scope by any spelling, and every host double that states a root of its own states
+both scopes on it (`PackageTestHost` the one double). ML5: no test builds a ``MeshNetworkManager`` or a
+``ProximityPairSession``, the two holders of an `unowned` host, over a host expression that is itself a
+call. And no test file is a home of either determinism digest, which a host's acceptance batteries pin.
+In Fernlet's repository, Fernlet's own walls (`ProximityAuditBridgeTests`, the store isolation walls,
+ML5 and the batteries' digest homes) hold the same rules over Fernlet's trees and not this folder.
+
+The source walls, `ProximitySourceWallTests`, are one of this target's suites as well, on the
+`proximitykit` line, so the rules a host holds over its shipping code hold this module's code wherever
+it lives. They read every Swift file of this module through the walls' walker at its file floor, each
+matcher fixtured first, and hold four rules. The launch hooks: every line that reads one of this module's
+DEBUG launch-environment keys, `PROXIMITYKIT_UI_TEST_*` (the mesh manager's canned-mesh flags) or
+`PROXIMITYKIT_MESH*` (the transport's console mirror and chaos keys), sits inside an open `#if DEBUG`
+region, and each family is read at its measured floor, so a matcher that stops seeing one fails. Key
+custody: no keychain row this module writes is synchronizable, every accessibility class it names is a
+`ThisDeviceOnly` one, and no line of its code constructs an ``IdentityService`` or delegates to one of
+its initializers, its own file included, read as code through the walls' lexer: its host door,
+``ProximityHost/makeProximityIdentity()``, has no default, so every identity a manager holds is built in
+its host's code, under the host's custody. The purpose wall: every line that opens a raw CryptoKit
+primitive call (nine markers: signing and verifying, HKDF, HMAC, ChaChaPoly and AES-GCM) names a purpose
+within three lines above it to six below, by ``ProximityCryptographicPurpose``, a `purpose` argument, an
+authenticated-data binding or an escape-hatch comment, and at least 16 such lines are read (21 in six
+files today). The escape-hatch census: the calls that answer with a `cryptographic-domain:` comment
+instead are pinned by total, by label, by file and by documentation mention, with no legacy read path
+among them; the one hatch is the QUIC transport's X.509 certificate self-signature
+(`x509-self-signature`, over bytes X.509 fixes, under the radio's ephemeral TLS key, whose only other
+signatures are its listener's TLS 1.3 CertificateVerify messages, which TLS itself prefixes so that no
+bytes one use signs can be bytes the other signs), its justification beside its pin. In Fernlet's
+repository, `TestHookBoundaryTests`, `KeyCustodyBoundaryTests`, `CryptographicPurposeBoundaryTests` and
+`CryptographicEscapeHatchCensusTests` hold the same rules over Fernlet's shipping code and not this
+folder.
+
+The memory-lifecycle wall, `ProximityMemoryLifecycleTests`, is one of this target's suites as well, on
+the `proximitykit` line, so the static memory-lifecycle disciplines travel with this module's code. It
+reads every Swift file of this module through the walls' walker at its file floor, each
+matcher fixtured first, and holds four disciplines, each at a measured floor of the files it applies
+to. ML1: a file that stores a `Task` handle cancels it in a `deinit` or `isolated deinit` (six do, with
+no exemption). ML2: a block-based `NotificationCenter` observer is removed (one file registers one). ML3:
+`withObservationTracking` is used in ``ObservationLoop``'s file and nowhere else. ML4: in a file holding
+an `unowned` ``ProximityHost`` (the mesh manager's and the pair session's), every `Task` construction
+goes through the file's one `spawnHostPinned(_:)` or carries a `// host-pin:` marker of a known kind
+with its reason. In Fernlet's repository, `MemoryLifecycleBoundaryTests` holds the same rules over
+Fernlet's shipping code and not this folder.
 
 The presence engine's own contract is held here too, by `ProximityPresenceSessionTests`, over an
 in-memory radio of the suite's own, under `.packageTest` and the engine's own posture mint: a sighting
@@ -1104,9 +1184,10 @@ target to that target's namespace, and the source walls' lexer, each copy held t
 its own target. The test bindings are a replacement, not a twin: this target's bind to
 `.packageTest` and Fernlet's to `.fernlet`, so `CIGateSelectorBoundaryTests` holds each declaration of
 this target's to one of Fernlet's with that one token read across, and lets the extensions both declare
-live nowhere else. CI names its suites `ProximityKitTests/<Suite>`;
+live nowhere else. CI names its suites `ProximityKitTests/<Suite>`. In Fernlet's repository,
 `Tests/suite-inventory.tsv` and `CIGateSelectorBoundaryTests` hold every suite to one target, one file
-and its lines, and refuse what this bundle cannot serve and an import of the closure.
+and its lines, and hold its rows to this target's own inventory, while this target's hygiene suite
+refuses what the bundle cannot serve and an import of the closure.
 
 Every other ProximityKit suite still runs in the app's `FernletTests`. `ProximityNamespaceSoundnessTests`
 needs neither a host nor an audit sink, and it runs in this module's
@@ -1177,7 +1258,7 @@ activities, the moderation report relay and friend state.
 
 ### Wire envelope and sealing
 
-- ``FernletIdentityEnvelope``
+- ``ProximityIdentityEnvelope``
 - ``PayloadEncryption``
 - ``PayloadSummary``
 - ``DateRange``
@@ -1653,7 +1734,8 @@ behaviour: `MeshTransportConsoleLog`, `MeshIntroductionChaos`, `MeshIntroduction
 switched on by the launch-environment keys `PROXIMITYKIT_MESH_CONSOLE_LOG`,
 `PROXIMITYKIT_MESH_CHAOS` and `PROXIMITYKIT_MESH_CHAOS_BARRED` (the module's own names, as are the
 `PROXIMITYKIT_UI_TEST_MESH_*` flags ``MeshNetworkManager`` `injectUITestStateIfNeeded()` seeds a
-canned mesh from).
+canned mesh from), every read of them held inside `#if DEBUG` by this module's own
+`ProximitySourceWallTests`.
 They exist so the rejection matrix above can be *observed on a real radio* rather than only
 enumerated at tier 1 — the runbook's Lane C, two Simulators on one Mac. **Three** Simulators run on
 the same lane and form a **full mesh** (3/3 runs, 2026-09-02): every node reaches `slots total=2

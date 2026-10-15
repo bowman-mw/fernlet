@@ -55,8 +55,8 @@ struct ProximityCoordinatorTests {
         )
     }
 
-    private func signedIntroduction(from identity: IdentityService, displayName: String = "Remote Device") throws -> FernletIdentityEnvelope {
-        try FernletIdentityEnvelope.signed(
+    private func signedIntroduction(from identity: IdentityService, displayName: String = "Remote Device") throws -> ProximityIdentityEnvelope {
+        try ProximityIdentityEnvelope.signed(
             identityService: identity,
             senderDisplayName: displayName,
             payloadType: .identityIntroduction,
@@ -186,7 +186,7 @@ struct ProximityCoordinatorTests {
 
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
         #expect(transport.sentData.count == 1)
-        let sentEnvelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: transport.sentData[0].0)
+        let sentEnvelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: transport.sentData[0].0)
         #expect(sentEnvelope.payloadType == .identityIntroduction)
     }
 
@@ -302,7 +302,7 @@ struct ProximityCoordinatorTests {
         let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging, inspector: inspector)
         let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
         let payload = try JSONEncoder().encode(RangingPayload(rangingMode: "uwb", discoveryToken: Data([9, 8, 7])))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Remote Device",
             payloadType: .identityIntroduction,
@@ -321,7 +321,7 @@ struct ProximityCoordinatorTests {
         #expect(ranging.lastPeerTokenData == Data([9, 8, 7]))
         #expect(inspector.liveLog?.ranging.mode == .uwb)
         #expect(transport.sentData.contains { sent in
-            (try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: sent.0))?.payloadType == .identityAcknowledge
+            (try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: sent.0))?.payloadType == .identityAcknowledge
         } == true)
     }
 
@@ -364,7 +364,7 @@ struct ProximityCoordinatorTests {
         let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
         let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
         let payload = try JSONEncoder().encode(RangingPayload(rangingMode: "uwb", discoveryToken: Data([9, 8, 7])))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Remote Device",
             payloadType: .identityIntroduction,
@@ -502,7 +502,7 @@ struct ProximityCoordinatorTests {
         await coordinator.confirmPeerIdentity()
 
         await coordinator.heartbeatTick()
-        let heartbeatEnvelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: transport.sentData.last!.0)
+        let heartbeatEnvelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: transport.sentData.last!.0)
         let heartbeat = try JSONDecoder().decode(DecodedHeartbeat.self, from: heartbeatEnvelope.payload)
         currentDate = start.addingTimeInterval(0.125)
         let ackPayload = AckHeartbeat(
@@ -512,7 +512,7 @@ struct ProximityCoordinatorTests {
             responseTo: heartbeat.heartbeatID
         )
         let ackData = try JSONEncoder().encode(ackPayload)
-        let ackEnvelope = try FernletIdentityEnvelope.signed(
+        let ackEnvelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Remote",
             recipientFingerprint: local.localFingerprint,
@@ -701,7 +701,7 @@ struct ProximityCoordinatorTests {
         let coordinator = makeCoordinator(identity: local, transport: transport)
         let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
         let introduction = try JSONEncoder().encode(signedIntroduction(from: remote))
-        let payload = try FernletIdentityEnvelope.signed(
+        let payload = try ProximityIdentityEnvelope.signed(
             identityService: local,
             senderDisplayName: "Local Device",
             payloadType: .inspectorEcho,
@@ -762,7 +762,7 @@ struct ProximityCoordinatorTests {
         transport.sendDelayNanoseconds = 1_000_000_000
         var currentDate = Date()
         let coordinator = makeCoordinator(identity: local, transport: transport) { currentDate }
-        let payload = try FernletIdentityEnvelope.signed(
+        let payload = try ProximityIdentityEnvelope.signed(
             identityService: local,
             senderDisplayName: "Local Device",
             payloadType: .inspectorEcho,
@@ -857,9 +857,9 @@ struct ProximityCoordinatorTests {
     private func signedUnknownTypeEnvelope(
         from identity: IdentityService,
         token: String = "fernlet.future.sparkle.v1"
-    ) throws -> FernletIdentityEnvelope {
-        var env = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    ) throws -> ProximityIdentityEnvelope {
+        var env = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: identity.localSigningPublicKey,
             senderKeyAgreementPublicKey: identity.localKeyAgreementPublicKey,
@@ -946,7 +946,7 @@ struct ProximityCoordinatorTests {
             discoveryToken: nil,
             capabilities: [ProximityCapability.photos.rawValue, ProximityCapability.shop.rawValue]
         ))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Remote Device",
             payloadType: .identityIntroduction,
@@ -1022,7 +1022,7 @@ struct ProximityCoordinatorTests {
         try await Task.sleep(nanoseconds: 10_000_000)
 
         #expect(transport.sentData.count == 1)
-        let sentEnvelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: transport.sentData[0].0)
+        let sentEnvelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: transport.sentData[0].0)
         #expect(sentEnvelope.payloadType == .identityIntroduction)
         let payload = try JSONDecoder().decode(CapableRangingPayload.self, from: sentEnvelope.payload)
         #expect(payload.capabilities == ["photos"])
@@ -1058,7 +1058,7 @@ struct ProximityCoordinatorTests {
         let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
 
         let hugeName = String(repeating: "A", count: 100_000)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: hugeName,
             payloadType: .identityIntroduction,
@@ -1127,7 +1127,7 @@ struct ProximityCoordinatorTests {
         payloadOverride: Data? = nil
     ) throws -> Data {
         let body = HeartbeatWireBody(kind: kind, heartbeatID: UUID(), sentAt: Date(), responseTo: nil)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: identity,
             senderDisplayName: displayName,
             payloadType: .sessionHeartbeat,
@@ -1154,7 +1154,7 @@ struct ProximityCoordinatorTests {
         let payload = try JSONEncoder().encode(RangingPayload(
             rangingMode: uwbCapable ? "uwb" : "rssi",
             discoveryToken: uwbCapable ? Data([1, 2, 3]) : nil))
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Remote Device",
             payloadType: .identityIntroduction,
@@ -1264,8 +1264,8 @@ struct ProximityCoordinatorTests {
     // MARK: - Option 1b: the display name is withheld until commit (owner's call, 2026-09-22)
 
     /// Every identity envelope this side sent before it committed, decoded off the mock radio.
-    private func envelopesSent(on transport: MockMultipeerTransport) throws -> [FernletIdentityEnvelope] {
-        try transport.sentData.map { try JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.0) }
+    private func envelopesSent(on transport: MockMultipeerTransport) throws -> [ProximityIdentityEnvelope] {
+        try transport.sentData.map { try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.0) }
     }
 
     /// Reaches `.awaitingUserConfirmation` on a trainer-mode coordinator — this side has verified

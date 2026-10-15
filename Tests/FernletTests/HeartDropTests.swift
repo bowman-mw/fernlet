@@ -38,7 +38,7 @@ struct HeartDropTests {
 
     /// Shared mutable clock so the service, ledger, outbox, dedup store and bundle cache all move
     /// together (the send gate, the backlog cap and the pickup window are all time-keyed).
-    /// Anchored on the REAL now, not a fixed epoch: `FernletIdentityEnvelope.verify` checks
+    /// Anchored on the REAL now, not a fixed epoch: `ProximityIdentityEnvelope.verify` checks
     /// `expiresAt` against the wall clock, so a fixed fixture date would rot into expiry failures.
     nonisolated final class TestClock: @unchecked Sendable {
         var date: Date
@@ -1974,7 +1974,7 @@ struct HeartDropTests {
         // it. The tag binds the pair; only the inner signature binds the person.
         let sentAt = Date()
         let payload = try JSONEncoder().encode(HeartPayload(sentAtDayKey: FernletDate.dayKey(for: sentAt)))
-        let forged = try FernletIdentityEnvelope.signed(
+        let forged = try ProximityIdentityEnvelope.signed(
             identityService: mallory,
             senderDisplayName: "Definitely Alice",
             recipientFingerprint: bob.localFingerprint,

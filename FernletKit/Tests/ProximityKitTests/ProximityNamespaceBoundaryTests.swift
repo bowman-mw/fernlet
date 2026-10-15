@@ -40,7 +40,7 @@
 //   5. `package` is declared in ProximityKit code only on an exact per-file list of the doors a named
 //      later step reshapes or closes, each row with that step, which is empty: no line declares it
 //      (the presence radio's doors closed at plan step A1.1, behind its public presence engine);
-//   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (96 names:
+//   6. no type that left ProximityKit for FernletSocial or the app, or was renamed in it (97 names:
 //      the heart dead-drop's, presence's, moderation's (the report relay's among them), closeness's
 //      and friend state's types, the parked chat payload, the clothing shop's, the activity manager's
 //      with its payloads and the two domain types its signing extends, the live-session chat's with
@@ -50,11 +50,12 @@
 //      deleted support layout and camera's copy vault, the sealed-backup escrow's, the Live Activity
 //      reaper and its attributes, the app's since plan step A0.6, the recipe-share manager, its
 //      diagnostics ring and its wire types, FernletSocial's since plan step A0.7, the three public
-//      values plan step A0.7 renamed, and the nine recipe-named types of the pair session's mechanism
-//      plan step A1.0 renamed with pair names, so no compatibility alias brings a recipe name back) is
-//      declared, extended or aliased in ProximityKit code again, and no renamed public member's old
-//      name (`recipeShare`, the namespace's pair-session radio, `Radios.pair` since plan step A1.0) is
-//      named in its code at all.
+//      values plan step A0.7 renamed, the nine recipe-named types of the pair session's mechanism
+//      plan step A1.0 renamed with pair names, so no compatibility alias brings a recipe name back,
+//      and the signed identity envelope's Fernlet name, `ProximityIdentityEnvelope` since plan step
+//      A1.1, renamed before the package's first tag) is declared, extended or aliased in ProximityKit
+//      code again, and no renamed public member's old name (`recipeShare`, the namespace's
+//      pair-session radio, `Radios.pair` since plan step A1.0) is named in its code at all.
 //
 // And ProximityKit's target in its package's manifest (the package root's `Package.swift`:
 // `FernletKit/Package.swift` in the Fernlet repository, the root's own in ProximityKit's) depends on
@@ -778,13 +779,14 @@ import Testing
     /// public values were renamed in place for the one-to-one send, so their old names are refused here
     /// too, against a compatibility alias, as are (plan step A1.0) the old names of the nine
     /// recipe-named types of the pair session's mechanism, renamed with pair names before the package
-    /// left Fernlet's tree. Rules 2 to 4 cannot see one come back: a feature
-    /// re-declared here under its old name, with no Fernlet string, no registry label and no domain
-    /// type of its own, compiles clean and passes them and every other test, and two declarations of
-    /// one name in two modules the app imports compile until a caller names it. So each name is
-    /// refused as a type declared here (a class, struct, enum, actor or protocol, nested or not), an
-    /// extension, or an alias's name or target, module-qualified or not. The list has no exit step: it
-    /// only grows, as each step adds the types it moves out.
+    /// left Fernlet's tree, and (plan step A1.1) the signed identity envelope's Fernlet name, renamed
+    /// `ProximityIdentityEnvelope` before the package's first tag. Rules 2 to 4 cannot see one come
+    /// back: a feature re-declared here under its old name, with no Fernlet string, no registry label
+    /// and no domain type of its own, compiles clean and passes them and every other test, and two
+    /// declarations of one name in two modules the app imports compile until a caller names it. So each
+    /// name is refused as a type declared here (a class, struct, enum, actor or protocol, nested or
+    /// not), an extension, or an alias's name or target, module-qualified or not. The list has no exit
+    /// step: it only grows, as each step adds the types it moves out.
     /// Only code counts: comments and literals may name a moved type freely, as the docs that say where
     /// it went do. The same matcher over types that stay (``declarationFloorNames``) must find each of
     /// them, so a matcher gone blind cannot pass the module vacuously.
@@ -947,7 +949,10 @@ import Testing
     /// `ProximityPairTransfer`, `ProximityPairDiscoveryGate`, `ProximityPairAdvertisedName`,
     /// `ProximityPairAdvertisement`, `ProximityPairDialHello`, `ProximityPairPosture`,
     /// `ProximityPairRadioSession`, `NetworkPairSession` and the radio's private `PairTransferClaim`, so
-    /// no compatibility alias brings a recipe name back.
+    /// no compatibility alias brings a recipe name back. Renamed in place, since plan step A1.1: the
+    /// signed identity envelope every transfer travels in, `FernletIdentityEnvelope`, named
+    /// `ProximityIdentityEnvelope` before the package's first tag, after which a rename would break its
+    /// public API, so no alias brings the Fernlet name back.
     static let movedTypeNames = [
         "HeartDropService", "HeartDropOutbox", "HeartDropDedupStore", "HeartDropPeerBundleCache",
         "HeartDropSealer", "HeartDropSidecarSeal", "HeartDropStorageScope", "HeartDropSidecarFormatCensus",
@@ -976,7 +981,8 @@ import Testing
         "SharedSavedRecipePayload", "PendingProximityRecipeShare",
         "RecipeShareTransfer", "RecipeShareDiscoveryGate", "RecipeShareAdvertisedName", "RecipeShareAdvertisement",
         "RecipeShareDialHello", "RecipeSharePosture", "RecipeShareRadioSession", "NetworkRecipeShareSession",
-        "RecipeShareTransferClaim"
+        "RecipeShareTransferClaim",
+        "FernletIdentityEnvelope"
     ]
 
     /// Every public member renamed in place, by its old name, which ProximityKit code names nowhere:
@@ -1063,10 +1069,17 @@ import Testing
     /// Fernlet's source walls read through, which Fernlet's `SwiftSourceLexerTests` holds to the same
     /// fixtures).
     ///
-    /// Each fixture is a form the module or the test tree writes, chosen where a looser reading goes
-    /// wrong: a quote in a comment, a comment inside a comment, an escaped quote, a literal inside an
-    /// interpolation, a raw literal holding quotes and a `\(` that is text, and a multi-line literal,
-    /// whose line breaks the code must keep so every later line number stays true.
+    /// Each fixture is a form Swift reads, chosen where a looser reading goes wrong: a quote in a comment,
+    /// a comment inside a comment, an escaped quote, a literal inside an interpolation, a raw literal
+    /// holding quotes and a `\(` that is text, a multi-line literal, whose line breaks the code must keep
+    /// so every later line number stays true, and regex literals whose bodies would open a comment or a
+    /// literal (an extended one holding `/*`, a multi-line one holding a quote and a short closing
+    /// delimiter, a bare one holding an escaped `/` before a `*` and a quote, and bare ones right after
+    /// `return`, `in` and `try?` with no blank, the first before an import), beside the `/`s that are
+    /// code: operators declared with names that start with one (`func /(`, `func /=(` and
+    /// `infix operator /+/`), a `/` whose closing `/` would open a comment, which Swift reads as no regex
+    /// literal, so a later literal is read where it stands, the divisions, the compound assignment, the
+    /// operator reference, and divisions after a member named `in` and after a name ending in it.
     @Test func theLexerTellsCodeCommentsAndLiteralsApartAsSwiftDoes() {
         let commented = SwiftSourceLexer.lex(#"let a = "x" // "not a literal""#)
         #expect(commented.literals == [SwiftSourceLexer.Literal(line: 1, text: "x")])
@@ -1085,6 +1098,27 @@ import Testing
         #expect(multiline.literals.map(\.line) == [1, 4])
         #expect(multiline.literals.first?.text == "\n    one \"two\"\n    ")
         #expect(multiline.code == "let g = \"\n\n\"\nlet h = \"\"")
+        let extended = SwiftSourceLexer.lex("let r = #/a/*/#\nimport CloudKit")
+        #expect(extended.code == "let r = \"\"\nimport CloudKit")
+        let hashed = SwiftSourceLexer.lex("let r = ##/\n  \" /#\n/##\nlet s = \"q\"")
+        #expect(hashed.literals == [SwiftSourceLexer.Literal(line: 4, text: "q")])
+        #expect(hashed.code == "let r = \"\n\n\"\nlet s = \"\"")
+        let bare = SwiftSourceLexer.lex(#"let r = /a\/*"/"# + "\nimport CloudKit")
+        #expect(bare.code == "let r = \"\"\nimport CloudKit")
+        let keyword = SwiftSourceLexer.lex(#"func f() -> Regex<Substring> { return/a\/*/ }"# + "\nimport CloudKit")
+        #expect(keyword.code == #"func f() -> Regex<Substring> { return"" }"# + "\nimport CloudKit")
+        let tight = SwiftSourceLexer.lex(#"let k = s.map { c in/a"/ }, r = try?/b"/.wholeMatch(in: s)"#)
+        #expect(tight.code == #"let k = s.map { c in"" }, r = try?"".wholeMatch(in: s)"#)
+        #expect(tight.literals.isEmpty)
+        let declared = "static func /(l: V, r: V) -> V { V(v: l.v/r.v) }\n"
+            + "static func /=(l: inout V, r: V) { l.v = l.v/r.v }\ninfix operator /+/ : MultiplicationPrecedence"
+        #expect(SwiftSourceLexer.lex(declared).code == declared)
+        let closing = SwiftSourceLexer.lex("let y = /x//\"c\nlet z = (/x/*c*/)\nlet w = \"q\"")
+        #expect(closing.code == "let y = /x\nlet z = (/x)\nlet w = \"\"")
+        #expect(closing.literals == [SwiftSourceLexer.Literal(line: 3, text: "q")])
+        let operators = "let q = a / b / c, w = a/b/c\nx /= 2.0/1.0\nlet v = [1.0].reduce(0, /)\n"
+            + "let m = k.in/b/c, n = margin/b/c"
+        #expect(SwiftSourceLexer.lex(operators).code == operators)
     }
 
     // MARK: The sweep
@@ -1107,9 +1141,9 @@ import Testing
     }
 
     /// `file`'s path under the module root, read off the path's own `Sources/ProximityKit/` component
-    /// (its last) so a symlinked checkout (`/tmp` and `/private/tmp`) resolves alike, inside the Fernlet
-    /// repository and at ProximityKit's own root; the full path if the file is somehow outside it, which
-    /// then matches no allowlist row and fails loudly. Every row above names its file by this path.
+    /// (its last) so a symlinked checkout names its files alike, inside the Fernlet repository and at
+    /// ProximityKit's own root; the full path if the file is somehow outside it, which then matches no
+    /// allowlist row and fails loudly. Every row above names its file by this path.
     static func relativePath(of file: URL) -> String {
         let path = file.path
         guard let range = path.range(of: "/" + moduleRoot + "/", options: .backwards) else { return path }

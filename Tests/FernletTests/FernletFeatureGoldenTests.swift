@@ -3867,7 +3867,7 @@ struct FernletFeatureGoldenTests {
 
     /// 31b's introduction: the frozen token and title, no name, no recipient, a 300 s expiry (the
     /// coordinator's own expression), and ``frozenRecipeIntroductionBody`` as its body's object.
-    static func expectRecipeIntroductionFrame(in frames: [FernletIdentityEnvelope]) throws {
+    static func expectRecipeIntroductionFrame(in frames: [ProximityIdentityEnvelope]) throws {
         let introduction = try #require(frames.first { $0.payloadTypeToken == "fernlet.identity.intro.v1" },
                                         "no introduction was sent: \(frames.map(\.payloadTypeToken))")
         #expect(introduction.payloadSummary.title == "Hello", "the introduction is titled \(introduction.payloadSummary.title)")
@@ -3881,7 +3881,7 @@ struct FernletFeatureGoldenTests {
     /// 31b's share: the recipe token and summary, the summary's segment in its canonical bytes, sealed
     /// in the legacy framing to the peer's key and opened by the peer to 31a's object, addressed to the
     /// peer from `Tester`, schema 2, expiring 300 s after it was made, and verified by the peer.
-    static func expectRecipeShareFrame(in frames: [FernletIdentityEnvelope], rig: RecipePairingRig) throws {
+    static func expectRecipeShareFrame(in frames: [ProximityIdentityEnvelope], rig: RecipePairingRig) throws {
         let share = try #require(frames.first { $0.payloadTypeToken == "fernlet.recipe.share.v1" },
                                  "no recipe share was sent: \(frames.map(\.payloadTypeToken))")
         #expect(share.payloadSummary == PayloadSummary(title: "Recipe share", itemCount: 2), "the share's summary is \(share.payloadSummary)")
@@ -3928,7 +3928,7 @@ struct FernletFeatureGoldenTests {
         let inbound = Self.recipeOatsPayload(id: Self.uuid(Self.recipeInboundID))
         let ownKey = rig.identity.localKeyAgreementPublicKey
         let sealed = try rig.peerIdentity.seal(try JSONEncoder().encode(inbound), to: ownKey, format: .legacy)
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: rig.peerIdentity, senderDisplayName: "Blair", recipientFingerprint: rig.identity.localFingerprint,
             payloadTypeToken: "fernlet.recipe.share.v1", payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey: ownKey),
             payloadSummary: PayloadSummary(title: "Recipe share", subtitle: nil, itemCount: 2), payload: sealed)
@@ -5103,8 +5103,8 @@ extension FernletFeatureGoldenTests {
 
     /// Every frame the mesh sent on bob's link, in send order, decoded as the envelope it is: today
     /// `FakePeerTransport.sentFrames`, appended inside `send` with no suspension before it.
-    static func envelopes(sentIn rig: SessionRig) -> [FernletIdentityEnvelope] {
-        rig.link.transport.sentFrames.compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+    static func envelopes(sentIn rig: SessionRig) -> [ProximityIdentityEnvelope] {
+        rig.link.transport.sentFrames.compactMap { try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
     }
 
     /// Yields until the mesh has sent bob an envelope under each of `tokens`, a bounded number of times:
@@ -5118,7 +5118,7 @@ extension FernletFeatureGoldenTests {
 
     /// bob's open of a body the mesh sealed to him, read in the legacy framing, which leaves a wire2
     /// frame tag in place: today `IdentityService.open(_:from:format:)`.
-    static func openedByBob(_ envelope: FernletIdentityEnvelope, in rig: SessionRig) throws -> Data {
+    static func openedByBob(_ envelope: ProximityIdentityEnvelope, in rig: SessionRig) throws -> Data {
         try rig.bob.open(envelope.payload, from: envelope.senderKeyAgreementPublicKey, format: .legacy)
     }
 
@@ -5442,7 +5442,7 @@ extension FernletFeatureGoldenTests {
         try #require(holdLive(sessionPhoto(1), on: rig.photos) == .held, "the live photo was not held")
         let catalog = Data(frozenCatalogJSON.utf8)
         let token = featureToken("catalog")
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: rig.bob, senderDisplayName: "Bob", payloadTypeToken: token,
             payloadSummary: PayloadSummary(title: token), payload: catalog)
         rig.features.clothingShop.isSharingEnabledProvider = { true }
@@ -6372,7 +6372,7 @@ extension FernletFeatureGoldenTests {
     /// body.
     struct SentToBob {
         /// The envelope, as bob's link carried it.
-        let envelope: FernletIdentityEnvelope
+        let envelope: ProximityIdentityEnvelope
         /// bob's open of its payload, in the legacy framing.
         let body: Data
     }
@@ -6499,9 +6499,9 @@ extension FernletFeatureGoldenTests {
 
     /// A feature frame of `type` whose envelope names no key, as a slot that proved none carries it; its
     /// payload is an empty JSON object, which no handler reaches past its sender check.
-    static func unverifiedFrame(_ type: PayloadType) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
+    static func unverifiedFrame(_ type: PayloadType) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion, envelopeID: UUID(),
             senderSigningPublicKey: Data(), senderKeyAgreementPublicKey: Data(), senderDisplayName: "Unverified",
             recipientFingerprint: nil, payloadType: type, payloadEncryption: .none,
             payloadSummary: PayloadSummary(title: "Unverified"), payload: Data("{}".utf8),
@@ -6837,8 +6837,8 @@ extension FernletFeatureGoldenTests {
 
     /// Every frame `radio` was handed to send, decoded as the envelope it is (the in-memory radio sits
     /// below the length header, so a frame is one envelope's JSON), in order.
-    static func sentFrames(of radio: FakeRecipeShareRadioSession) -> [FernletIdentityEnvelope] {
-        radio.sent.compactMap { try? JSONDecoder().decode(FernletIdentityEnvelope.self, from: $0.data) }
+    static func sentFrames(of radio: FakeRecipeShareRadioSession) -> [ProximityIdentityEnvelope] {
+        radio.sent.compactMap { try? JSONDecoder().decode(ProximityIdentityEnvelope.self, from: $0.data) }
     }
 
     /// Runs one recipe pairing through the production door over `rig`: Blair (``recipePeerTXT``) is
@@ -6862,7 +6862,7 @@ extension FernletFeatureGoldenTests {
             sentFrames(of: rig.radio).contains { $0.payloadTypeToken == "fernlet.identity.intro.v1" }
         }
         #expect(introduced, "the door's coordinator never introduced itself")
-        let introduction = try FernletIdentityEnvelope.signed(
+        let introduction = try ProximityIdentityEnvelope.signed(
             identityService: rig.peerIdentity, senderDisplayName: "", payloadTypeToken: "fernlet.identity.intro.v1",
             payloadSummary: PayloadSummary(title: "Hello"), payload: Data(#"{"rangingMode":"rssi","capabilities":[]}"#.utf8))
         channel.receive(try JSONEncoder().encode(introduction), at: Date())

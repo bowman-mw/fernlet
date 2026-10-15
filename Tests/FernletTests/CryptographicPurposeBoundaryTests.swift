@@ -12,15 +12,31 @@ import Testing
 ///
 /// The roots, the primitive markers and the context window live in ``CryptographicWallScan``, shared
 /// with ``CryptographicEscapeHatchCensusTests`` so the pinned escape-hatch count cannot describe a
-/// different set of bytes than the wall enforces over.
+/// different set of bytes than the wall enforces over. Both read every shipping root but ProximityKit's
+/// folder (``CryptographicWallScan/fernletSourceFiles()``), whose raw calls ProximityKit's own package
+/// suite, `ProximitySourceWallTests`, holds to the same markers and window (ProximityKit plan step
+/// A1.1.16).
 struct CryptographicPurposeBoundaryTests {
 
+    /// The fewest primitive-call lines the wall may read in Fernlet's code: about four fifths of the
+    /// 22, in eleven files, MEASURED at ProximityKit plan step A1.1.18 (2026-10-14), so a marker list or a
+    /// walk that stops seeing the calls fails rather than reading as clean. It does not move for an added
+    /// call; a removal lowers it only with the removal argued.
+    static let primitiveCallFloor = 18
+
+    /// Every line of Fernlet's code that opens a raw primitive call names a purpose within the window
+    /// around it, over every shipping root but ProximityKit's folder, and at least
+    /// ``primitiveCallFloor`` such lines are read; the matcher is held to its samples first
+    /// (``expectThePurposeMatcherTripsOnPlantedCalls()``).
     @Test func rawCryptographicCallsNameAPurpose() throws {
-        for sourceURL in try CryptographicWallScan.sourceFiles() {
+        expectThePurposeMatcherTripsOnPlantedCalls()
+        var callLines = 0
+        for sourceURL in try CryptographicWallScan.fernletSourceFiles() {
             let lines = try String(contentsOf: sourceURL, encoding: .utf8)
                 .components(separatedBy: .newlines)
             let path = CryptographicWallScan.repoRelativePath(sourceURL)
             for index in lines.indices where CryptographicWallScan.isPrimitiveCall(lines[index]) {
+                callLines += 1
                 let context = CryptographicWallScan.context(around: index, in: lines)
                 #expect(
                     hasPurpose(context),
@@ -28,6 +44,56 @@ struct CryptographicPurposeBoundaryTests {
                 )
             }
         }
+        #expect(callLines >= Self.primitiveCallFloor, """
+            the purpose wall read only \(callLines) primitive-call lines in Fernlet's code (floor \
+            \(Self.primitiveCallFloor)): the marker list or the walk is broken
+            """)
+    }
+
+    /// The purpose matcher trips on a planted call and passes its near-misses: a call with no purpose
+    /// word in reach is reported, and one whose `purpose:` argument sits below it is not; the window
+    /// reaches six lines below a call but not seven, and three above it but not four; and every marker
+    /// opens a call by itself: a bare call of each, holding that marker and no other, is reported, and the
+    /// samples are the marker list exactly, so a marker the list loses, or one it gains without a sample,
+    /// fails here.
+    private func expectThePurposeMatcherTripsOnPlantedCalls() {
+        let call = "let s = try key.signature(for: bytes)"
+        let filler = { (count: Int) in Array(repeating: "let a = 1", count: count) }
+        #expect(purposeNamed(in: [call]) == [false], "a raw call with no purpose word in reach must be reported")
+        #expect(purposeNamed(in: ["let s = try identity.sign(", "    key.signature(for: bytes),", "    purpose: label)"]) == [true],
+                "a call whose `purpose:` argument sits below it names a purpose")
+        #expect(purposeNamed(in: [call] + filler(5) + ["let p = purpose"]) == [true], "the window reaches six lines below a call")
+        #expect(purposeNamed(in: [call] + filler(6) + ["let p = purpose"]) == [false], "the window does not reach seven below")
+        #expect(purposeNamed(in: ["let p = purpose"] + filler(2) + [call]) == [true], "the window reaches three lines above a call")
+        #expect(purposeNamed(in: ["let p = purpose"] + filler(3) + [call]) == [false], "the window does not reach four above")
+        let samples: [(marker: String, line: String)] = [
+            (marker: "signature(for:", line: "let s = try k.signature(for: d)"),
+            (marker: "isValidSignature(", line: "let ok = p.isValidSignature(s, for: d)"),
+            (marker: "hkdfDerivedSymmetricKey",
+             line: "let k = s.hkdfDerivedSymmetricKey(using: SHA256.self, salt: x, sharedInfo: y, outputByteCount: 32)"),
+            (marker: "HKDF<", line: "let k = HKDF<SHA256>.deriveKey(inputKeyMaterial: m, salt: x, info: y, outputByteCount: 32)"),
+            (marker: "HMAC<", line: "let c = HMAC<SHA256>.authenticationCode(for: d, using: k)"),
+            (marker: "ChaChaPoly.seal", line: "let b = try ChaChaPoly.seal(m, using: k)"),
+            (marker: "ChaChaPoly.open", line: "let m = try ChaChaPoly.open(b, using: k)"),
+            (marker: "AES.GCM.seal", line: "let b = try AES.GCM.seal(m, using: k)"),
+            (marker: "AES.GCM.open", line: "let m = try AES.GCM.open(b, using: k)")
+        ]
+        let markers = CryptographicWallScan.primitiveMarkers
+        #expect(samples.count == markers.count && samples.map(\.marker).sorted() == markers.sorted(),
+                "the bare samples name \(samples.map(\.marker)), not the marker list \(markers)")
+        // R2: bounded by the fixed list.
+        for sample in samples {
+            let held = markers.filter(sample.line.contains)
+            #expect(held == [sample.marker], "`\(sample.line)` holds \(held), not its marker alone")
+            #expect(purposeNamed(in: [sample.line]) == [false], "a bare `\(sample.marker)` call must be reported")
+        }
+    }
+
+    /// For each line of `lines` that opens a primitive call, whether its window names a purpose: the
+    /// wall's own reading, over a sample.
+    private func purposeNamed(in lines: [String]) -> [Bool] {
+        lines.indices.filter { CryptographicWallScan.isPrimitiveCall(lines[$0]) }
+            .map { hasPurpose(CryptographicWallScan.context(around: $0, in: lines)) }
     }
 
     // MARK: - Declared framing vs. the real transcript builders
@@ -44,8 +110,8 @@ struct CryptographicPurposeBoundaryTests {
     /// remaining `fernlet.canonical.*` types share that same writer and their own round-trip suites.
     @Test func canonicalSerializerTranscriptsMatchTheirDeclaredFraming() {
         let envelopePurpose = FernletCryptoPurpose.Signature.identityEnvelopeV2
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(repeating: 1, count: 32),
             senderKeyAgreementPublicKey: Data(repeating: 2, count: 32),

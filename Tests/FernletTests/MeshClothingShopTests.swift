@@ -56,11 +56,11 @@ struct MeshClothingShopTests {
         displayName: String,
         items: [CustomizationItem],
         designerID: UUID = UUID()
-    ) throws -> (envelope: FernletIdentityEnvelope, plaintext: Data) {
+    ) throws -> (envelope: ProximityIdentityEnvelope, plaintext: Data) {
         let payload = ClothingCatalogPayload(designerID: designerID, displayName: displayName, items: items)
         let plaintext = try JSONEncoder().encode(payload)
-        let envelope = FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+        let envelope = ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),
@@ -163,9 +163,9 @@ struct MeshClothingShopTests {
 
     /// An inbound `clothingCatalogRequest` shell — it carries no payload body; the verified sender
     /// identity (the dispatch `from:` argument) is the whole message.
-    private func requestEnvelope(displayName: String) -> FernletIdentityEnvelope {
-        FernletIdentityEnvelope(
-            schemaVersion: FernletIdentityEnvelope.currentSchemaVersion,
+    private func requestEnvelope(displayName: String) -> ProximityIdentityEnvelope {
+        ProximityIdentityEnvelope(
+            schemaVersion: ProximityIdentityEnvelope.currentSchemaVersion,
             envelopeID: UUID(),
             senderSigningPublicKey: Data(),
             senderKeyAgreementPublicKey: Data(),
@@ -646,7 +646,7 @@ struct MeshClothingShopTests {
             peer: peer, transport: transport, ranging: MockRangingProvider()
         )
 
-        let intro = try FernletIdentityEnvelope.signed(
+        let intro = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Revoked",
             payloadType: .identityIntroduction,

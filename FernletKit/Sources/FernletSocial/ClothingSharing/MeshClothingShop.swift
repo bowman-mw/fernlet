@@ -94,7 +94,7 @@ public final class MeshClothingShop {
     /// dispatch this once named retired with P5 item 13); `verifiedFingerprint` is the
     /// transport-authenticated identity, never a wire-claimed value — catalogs are keyed by it exclusively.
     public func receiveCatalog(
-        _ envelope: FernletIdentityEnvelope,
+        _ envelope: ProximityIdentityEnvelope,
         plaintext: Data,
         verifiedFingerprint: String,
         now: Date = Date()

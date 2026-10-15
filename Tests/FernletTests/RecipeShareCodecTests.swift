@@ -291,7 +291,7 @@ struct RecipeShareCodecTests {
             peer: peer, transport: transport, ranging: MockRangingProvider()
         )
 
-        let intro = try FernletIdentityEnvelope.signed(
+        let intro = try ProximityIdentityEnvelope.signed(
             identityService: remote,
             senderDisplayName: "Revoked",
             payloadType: .identityIntroduction,

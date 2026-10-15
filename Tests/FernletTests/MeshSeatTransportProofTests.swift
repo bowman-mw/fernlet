@@ -103,7 +103,7 @@ struct MeshSeatTransportProofTests {
     /// `remote`'s signed identity introduction, encoded as it crosses a link — a device's own, or a
     /// copy another device replays. It carries no recipient, as on the QUIC radio.
     private func introduction(from remote: IdentityService) throws -> Data {
-        try JSONEncoder().encode(FernletIdentityEnvelope.signed(
+        try JSONEncoder().encode(ProximityIdentityEnvelope.signed(
             identityService: remote, senderDisplayName: "",
             payloadType: .identityIntroduction, payloadSummary: PayloadSummary(title: "Hello"), payload: Data()
         ))
@@ -111,7 +111,7 @@ struct MeshSeatTransportProofTests {
 
     /// One mesh frame carrying `payload`, signed by `sender` — whoever that is, which is the point.
     private func frame(_ payload: some Encodable, type: PayloadType, signedBy sender: IdentityService) throws -> Data {
-        try JSONEncoder().encode(FernletIdentityEnvelope.signed(
+        try JSONEncoder().encode(ProximityIdentityEnvelope.signed(
             identityService: sender, senderDisplayName: "",
             payloadType: type, payloadSummary: PayloadSummary(title: type.rawValue),
             payload: try JSONEncoder().encode(payload)
@@ -425,7 +425,7 @@ struct MeshSeatTransportProofTests {
         wire.simulateConnected(peer: toward)
         await waitUntil { !wire.sentData.isEmpty }
         let sent = try #require(wire.sentData.first?.0, "their coordinator introduces itself on connect")
-        let envelope = try JSONDecoder().decode(FernletIdentityEnvelope.self, from: sent)
+        let envelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: sent)
         #expect(envelope.payloadType == .identityIntroduction)
         #expect(envelope.senderSigningPublicKey == proven.signingPublicKey,
                 "one device, one key: the identity introduction carries exactly the key its tunnel proved")

@@ -149,7 +149,7 @@ enum MeshP3Acceptance {
         from sender: IdentityService,
         over coordinator: ProximityCoordinator
     ) throws {
-        let envelope = try FernletIdentityEnvelope.signed(
+        let envelope = try ProximityIdentityEnvelope.signed(
             identityService: sender,
             senderDisplayName: "Peer",
             payloadType: type,

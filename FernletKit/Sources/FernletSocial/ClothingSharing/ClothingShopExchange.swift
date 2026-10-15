@@ -207,7 +207,7 @@ final class ClothingShopExchange {
         guard let mesh else { return }
         // DO NOT LOCALIZE "Clothing catalog request" — as the doc comment above says, the summary is
         // the whole body here, so this literal is signed wire bytes AND the receiving peer's
-        // Inspector row. See `FernletIdentityEnvelope.payloadSummary`.
+        // Inspector row. See `ProximityIdentityEnvelope.payloadSummary`.
         await mesh.sendFeatureEnvelope(
             PayloadType.clothingCatalogRequest.rawValue,
             encodable: PayloadSummary(title: "Clothing catalog request"), via: slot

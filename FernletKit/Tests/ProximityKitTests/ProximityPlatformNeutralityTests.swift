@@ -31,7 +31,10 @@
 //      seam's every import sits in its `#if` branch, never in its `#else`; a whole-file seam's file
 //      opens with its `#if` and closes with its `#endif`, and holds no other `#if`. And no `#if` or
 //      `#elseif` tests the platform with `os(…)` but a seam row's own guard: a platform branch is
-//      policy the iOS run never executes and the macOS build compiles;
+//      policy the iOS run never executes and the macOS build compiles. And no file names a refused
+//      module at all, whatever row is written, read in the raw text too: `CloudKit`, the cloud half of
+//      the S3 pair, since a CloudKit call from inside ProximityKit would put the peer identities and
+//      payloads it holds on a server without its host's seal;
 //   2. no file names a source of the device's or its user's name (`UIDevice`, `Host.current`, `NSHost`,
 //      `hostName`, `NSFullUserName` and `NSUserName`, the BSD account calls and record fields
 //      (`getlogin`, `getpwuid`, `pw_name`, `pw_gecos`), the SystemConfiguration, CoreServices and BSD
@@ -71,10 +74,10 @@
 import Foundation
 import Testing
 
-/// ProximityKit imports only neutral modules and its declared platform seams, branches on the platform
-/// only in their guards, reads no device name, computes no platform directory and defaults no fact only
-/// its host may state, and every channel-ready door of its own asks its host for each connection's
-/// ranging provider: five cells, the first three rules exact both ways over rows that are all permanent,
+/// ProximityKit imports only neutral modules and its declared platform seams, and never CloudKit,
+/// branches on the platform only in their guards, reads no device name, computes no platform directory
+/// and defaults no fact only its host may state, and every channel-ready door of its own asks its host
+/// for each connection's ranging provider: five cells, the first three rules exact both ways over rows that are all permanent,
 /// and their readers fixtured both ways.
 @Suite struct ProximityPlatformNeutralityTests {
 
@@ -203,6 +206,22 @@ import Testing
                 guarded: .wholeFile("os(iOS)"), exit: nil)
     ]
 
+    /// The modules no ProximityKit file may import or test for with `canImport`, whatever row is
+    /// written, each with its reason, which W1 names when one is used: none of them may also be a
+    /// baseline module or a seam row's module. `CloudKit` is the cloud half of the S3 pair, which no
+    /// compiler wall can hold, since an SDK framework needs no package edge (in the Fernlet repository,
+    /// its grep wall holds FernletProximityUI, FernletConnections and FernletSocial, the modules that ride
+    /// ProximityKit, to the same rule, and CloudKitSync to importing none of ProximityKit,
+    /// FernletConnections and FernletSocial).
+    static let refusedModules: [String: String] = [
+        "CloudKit": """
+            ProximityKit holds transport-verified peer identities and unsealed peer payloads, so a CloudKit \
+            call from inside it would put them on a server without its host's seal; a host that syncs \
+            injects its own transport (Fernlet's heart dead-drop takes `HeartDropTransporting`). The \
+            CloudKit half of the S3 pair, never even a seam row
+            """
+    ]
+
     /// Every source of the device's name within a module's reach: UIKit's `UIDevice`, Foundation's
     /// `Host.current`, `NSHost` and `hostName`, and its `NSFullUserName()` and `NSUserName()`, which on a
     /// Mac return the person's own full and short account names, and the BSD routes to the same two
@@ -232,10 +251,8 @@ import Testing
     /// directory among them), the three Foundation functions, the search-path call, an app-group or
     /// ubiquity container, and the lookups by a search-path directory by their first label (`FileManager`'s
     /// two and `URL`'s initializer). A path spelled in a literal is not code a lexed reader sees, since
-    /// the lexer empties literals: the needles hold the APIs, not every string. In the Fernlet repository,
-    /// Fernlet's `ProximityPlatformBoundaryTests` keeps the same list, which its selector wall
-    /// (`CIGateSelectorBoundaryTests`) reads as this target's location needles and holds equal to this
-    /// declaration, line for line.
+    /// the lexer empties literals: the needles hold the APIs, not every string. This target's
+    /// `PackageTestHygieneTests` (rule I9) reads this list as the package tests' location needles.
     static let directoryNeedles: [Needle] = [
         .identifier("applicationSupportDirectory"), .identifier("documentDirectory"),
         .identifier("documentsDirectory"), .identifier("cachesDirectory"), .identifier("libraryDirectory"),
@@ -279,21 +296,35 @@ import Testing
     /// `#if` from its first code line to its last. A platform framework enters ProximityKit only as a
     /// row with its guard and, unless it is a permanent mechanism seam, the step that removes it. And
     /// no `#if` or `#elseif` names `os(…)` but a seam row's own guard in that row's file, so no branch
-    /// holds a platform answer the iOS run never executes and the macOS build compiles.
+    /// holds a platform answer the iOS run never executes and the macOS build compiles. A module of
+    /// ``refusedModules`` is named nowhere, whatever row is written, with its reason
+    /// (``expectNoRefusedModule(_:)``, before and apart from the unlisted check), read in the lexed code
+    /// and again in the raw text at the walk's floor (``rawRefusedUses(in:)``), so no misreading of the
+    /// lexer's can hide one.
     @Test func proximityKitImportsOnlyNeutralModulesAndItsDeclaredSeams() throws {
         let sources = try ProximityNamespaceBoundaryTests.proximitySources()
         #expect(sources.count >= Self.minimumFilesWalked, "walked only \(sources.count) ProximityKit files")
         var named: Set<String> = []
         var imported: Set<String> = []
         var branches: Set<String> = []
+        var refused: [(module: String, site: String)] = []
         // R2: bounded by the module's files.
         for source in sources {
-            let uses = try Self.moduleUses(in: source.lexed.code).filter { !Self.baselineModules.contains($0.module) }
+            let all = try Self.moduleUses(in: source.lexed.code)
+            refused += all.filter { Self.refusedModules[$0.module] != nil }
+                .map { (module: $0.module, site: "\(source.path):\($0.line)") }
+            let uses = all.filter { !Self.baselineModules.contains($0.module) }
             named.formUnion(uses.map { Self.key(source.path, $0.module) })
             imported.formUnion(uses.filter(\.isImport).map { Self.key(source.path, $0.module) })
             branches.formUnion(try Self.platformConditions(in: source.lexed.code).map { Self.key(source.path, $0) })
             Self.expectPlacement(of: uses, in: source)
         }
+        let raw = try PackageSwiftFiles.sources()
+        #expect(raw.count >= PackageSwiftFiles.sourceFloor, """
+            W1's raw read walked \(raw.count) ProximityKit files (floor \(PackageSwiftFiles.sourceFloor)): the \
+            walk is broken, not the module clean
+            """)
+        Self.expectNoRefusedModule(refused + (try Self.rawRefusedUses(in: raw)))
         let unlisted = named.subtracting(Self.seamRows.map { Self.key($0.path, $0.module) }).sorted()
         #expect(unlisted.isEmpty, """
             ProximityKit names a module that is neither a neutral baseline module nor a declared seam: \
@@ -338,6 +369,56 @@ import Testing
                 another condition or none) on line(s) \(misplaced)
                 """)
         }
+    }
+
+    /// W1's refusals: no module of ``refusedModules`` is also a baseline module or a seam row's module,
+    /// and none is named in ProximityKit's code, where `refused` lists every import of one and every
+    /// `canImport` of one (`<path>:<line>`), each site once however many reads found it; each failure
+    /// names the module's reason.
+    static func expectNoRefusedModule(_ refused: [(module: String, site: String)]) {
+        // R2: bounded by the refused modules.
+        for (module, reason) in refusedModules.sorted(by: { $0.key < $1.key }) {
+            let doubled = baselineModules.contains(module) || seamRows.contains { $0.module == module }
+            #expect(!doubled, "`\(module)` is refused and also a baseline module or a seam row: delete it from one")
+            let sites = Set(refused.filter { $0.module == module }.map(\.site)).sorted()
+            #expect(sites.isEmpty, "ProximityKit names `\(module)` at \(sites): \(reason)")
+        }
+    }
+
+    /// Every import of a ``refusedModules`` module in `files`' raw text, at a line's start or after a `;`,
+    /// and every `canImport` of one on an `#if` or `#elseif` line, whole-line `//` comments dropped
+    /// (``rawCode(_:)``), as `<path>:<line>`. The refusal's second read, beside the lexed one: a construct
+    /// the lexer misreads as a comment or a literal cannot hide a refused import from text read line by
+    /// line, the reading Fernlet's grep wall gave this rule before it moved here. It drops no other
+    /// comment and no literal: a `canImport` counts only on a condition line, anywhere on it, so prose
+    /// that names one after code, in a `/* … */` or in a string elsewhere is not read, while an import's
+    /// text at a line's start or after a `;` is refused wherever it stands, in a multi-line literal or
+    /// comment too.
+    static func rawRefusedUses(in files: [PackageSwiftFiles.File]) throws -> [(module: String, site: String)] {
+        var refused: [(module: String, site: String)] = []
+        // R2: bounded by the module's files.
+        for file in files {
+            let code = rawCode(file.text)
+            let conditions = conditionLines(in: code)
+            refused += try moduleUses(in: code)
+                .filter { refusedModules[$0.module] != nil && ($0.isImport || conditions.contains($0.line)) }
+                .map { (module: $0.module, site: "\(file.path):\($0.line)") }
+        }
+        return refused
+    }
+
+    /// `source` with every line whose text starts with `//` blanked, line breaks kept so line numbers
+    /// still match the file: the raw read's only comment handling.
+    static func rawCode(_ source: String) -> String {
+        source.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces).hasPrefix("//") ? "" : $0 }
+            .joined(separator: "\n")
+    }
+
+    /// The 1-based lines of `code` that open with `#if` or `#elseif`, where a `canImport` is a condition.
+    static func conditionLines(in code: String) -> Set<Int> {
+        let lines = code.components(separatedBy: "\n").enumerated()
+        return Set(lines.filter { ["if", "elseif"].contains(directive(of: $0.element)) }.map { $0.offset + 1 })
     }
 
     /// The lines on which `uses` imports `module` anywhere but in the branch of `#if <condition>`.
@@ -395,6 +476,7 @@ import Testing
     /// and a protocol's requirement are not. A whole-file guard is told from a partial one.
     @Test func theReadersReadCodeAsSwiftDoes() throws {
         try Self.expectModuleReadersFixtured()
+        try Self.expectTheRawRefusalReaderFixtured()
         Self.expectWholeFileReaderFixtured()
         try Self.expectPlatformBranchReaderFixtured()
         try Self.expectTokenReadersFixtured()
@@ -446,6 +528,26 @@ import Testing
                 "an import after `#else` is outside the guard")
         #expect(misplacedImports(of: "UIKit", under: "os(iOS)", in: branches) == [2, 4],
                 "an import under another condition is outside this guard")
+    }
+
+    /// The refusal's raw read: a refused import and a refused `canImport` on an `#if` and an `#elseif`
+    /// line are read in the raw text by their lines, after a regex literal holding `/*`, and a whole-line
+    /// comment, a trailing comment and a string naming a refused `canImport` are not; a module no row
+    /// refuses is not reported.
+    static func expectTheRawRefusalReaderFixtured() throws {
+        let file = PackageSwiftFiles.File(path: "Raw.swift", text: """
+            func slashes(_ s: String) -> Bool { s.contains(#/a/*/#) }
+            import CloudKit
+            // #if canImport(CloudKit)
+            import UIKit
+            #if canImport(CloudKit)
+            #elseif canImport(CloudKit)
+            #endif
+            let note = "canImport(CloudKit)" // canImport(CloudKit)
+            """)
+        let sites = try rawRefusedUses(in: [file])
+        #expect(sites.map(\.site) == ["Raw.swift:2", "Raw.swift:5", "Raw.swift:6"], "the raw read found \(sites)")
+        #expect(sites.allSatisfy { $0.module == "CloudKit" }, "the raw read reported a module no row refuses: \(sites)")
     }
 
     /// The whole-file reader: one `#if` from the first code line to the last is whole; a file with code

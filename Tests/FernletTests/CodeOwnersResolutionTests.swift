@@ -111,6 +111,20 @@ struct CodeOwnersResolutionTests {
         "/.github/CODEOWNERS",
         // The suite inventory CIGateSelectorBoundaryTests holds to the tree (ProximityKit plan step A0.8).
         "/Tests/suite-inventory.tsv",
+        // The package's own hygiene suite and its own inventory, which it holds to the declared tests and
+        // CIGateSelectorBoundaryTests holds this repository's package rows to (plan step A1.1.13).
+        "/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift",
+        "/FernletKit/Tests/ProximityKitTests.tsv",
+        // The package's own tree walls: the one install of its audit sink, its stores' scopes, ML5 and the
+        // digest homes over its tests (plan step A1.1.14).
+        "/FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift",
+        // The source walls over ProximityKit's own code: its launch hooks inside `#if DEBUG` and its keychain
+        // rows device-bound and never synchronizable (plan step A1.1.15), a purpose named at every raw
+        // cryptographic call and its escape hatches pinned (plan step A1.1.16), and no identity built in its
+        // code (plan step A1.1.17).
+        "/FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift",
+        // The memory-lifecycle wall over ProximityKit's own code: ML1-ML4 (plan step A1.1.17).
+        "/FernletKit/Tests/ProximityKitTests/ProximityMemoryLifecycleTests.swift",
         // The workspace the strict build and every CI test run go through (ProximityKit plan step A0.8).
         "/Fernlet.xcworkspace/",
         "/.github/workflows/s3-wall.yml",

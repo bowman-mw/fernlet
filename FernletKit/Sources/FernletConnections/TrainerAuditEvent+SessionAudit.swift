@@ -22,7 +22,7 @@ nonisolated extension TrainerAuditEvent {
     ///
     /// A token this build does not know becomes no payload type, and nothing is parked
     /// (`unknownPayloadTypeToken` stays `nil`): the row records what this module's typed view of the
-    /// envelope's token, `FernletIdentityEnvelope.payloadType`, reads for it, and its message still
+    /// envelope's token, `ProximityIdentityEnvelope.payloadType`, reads for it, and its message still
     /// names the token.
     ///
     /// `nonisolated` against this module's `defaultIsolation(MainActor.self)`, like the value types
