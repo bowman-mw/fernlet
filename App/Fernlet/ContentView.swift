@@ -419,7 +419,10 @@ struct ContentView: View {
             // If the app stayed resident across local midnight, roll the store over to the new
             // day FIRST (flushes yesterday under its own key, re-keys "today") so the widget/
             // coin refreshers below and any subsequent logging operate on the correct day.
-            store.refreshCurrentDayIfNeeded()
+            if store.refreshCurrentDayIfNeeded() {
+                // A new day may be a silly-stat day: the launch pick was made for yesterday.
+                Task { await store.refreshSillyStats() }
+            }
             Task { await store.processSharedRecipeImportQueue() }
             // Apply widget "+1 water" taps that arrived while backgrounded (also refreshes
             // the mirrored snapshot across day rollovers).
@@ -646,6 +649,8 @@ struct ContentView: View {
             // Deterministic runs: never start with the companion already settled
             // from petting in a previous test on the same simulator.
             PetInteractionGovernor.clearPersistentState()
+            // Same for the silly stats' companion pacing: every seeded run starts with a mention due.
+            SillyStatsCompanionPacer.clearPersistentState()
         }
         // Period log suite: cycle sharing OFF (the shipped default) whatever an earlier suite left
         // in this simulator's keychain. Before the sheet hook below presents anything.
@@ -1129,7 +1134,7 @@ struct ContentView: View {
         case .meal, .recipe, .water, .sleep, .journal,
              .workout, .workoutSuggestion, .goals, .hygiene:
             loggingSheet(for: sheet)
-        case .settings, .recipeBook, .trends, .milestones, .stressExplainer, .firstAid:
+        case .settings, .recipeBook, .trends, .milestones, .sillyStats, .stressExplainer, .firstAid:
             librarySheet(for: sheet)
         case .logPeriod, .logIntimacy:
             privateSheet(for: sheet)
@@ -1231,6 +1236,9 @@ struct ContentView: View {
             // NavigationStack so the keepsake shelf pushes inside the sheet's own stack.
             MilestonesView(store: store)
                 .fernletSheetChrome(anchor: "sheet.milestones", detents: [.large])
+        case .sillyStats:
+            SillyStatsView(store: store)
+                .fernletSheetChrome(anchor: "sheet.sillyStats", detents: [.large])
         case .stressExplainer:
             StressExplainerSheet(assessment: stressService.assessment, onFirstAid: {
                 // Chain into First Aid via the dismiss-then-represent pattern (single-active sheet).

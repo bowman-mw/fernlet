@@ -349,6 +349,8 @@ enum FernletSheet: Identifiable {
     /// Lifetime milestones as a large sheet (2026-08-21 artboard 3f): one rule for read-only
     /// destinations from Home — they present as sheets, matching Trends, First aid and the gear.
     case milestones
+    /// The silly stats page, as a large sheet like Milestones (same read-only-from-Home rule).
+    case sillyStats
     case stressExplainer
     /// Calm first-aid tools (breathing / grounding / worry box); the optional tool deep-links
     /// straight into one of them (gentle-offer cards use it).
@@ -378,6 +380,7 @@ enum FernletSheet: Identifiable {
         case .recipeBook: "recipeBook"
         case .trends: "trends"
         case .milestones: "milestones"
+        case .sillyStats: "sillyStats"
         case .stressExplainer: "stressExplainer"
         case .firstAid: "firstAid"
         case .logPeriod: "logPeriod"

@@ -22,6 +22,7 @@ struct SettingsDecodeCompatTests {
           "proximityDisplayName": "Compat",
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "homeWidgets": ["companion", "weatherOutlook", "quickLog"],
           "quickLogItems": ["meal", "futureShortcut", "water"]
         }
@@ -39,12 +40,13 @@ struct SettingsDecodeCompatTests {
 
     @Test func unknownTokensCoexistWithWidgetMigration() throws {
         // Legacy blob (no migration markers) that ALSO carries a future token: BOTH one-time appends
-        // (Milestones/First-aid, then Recent bites) run, and the future token is parked, not thrown on.
+        // (Milestones/First-aid, then Recent bites, then Silly stats) run, and the future token is parked,
+        // not thrown on.
         let settings = try decode("""
         {"homeWidgets": ["companion", "futureWidget"]}
         """)
 
-        #expect(settings.homeWidgets == [.companion, .firstAid, .milestones, .mealPhotos])
+        #expect(settings.homeWidgets == [.companion, .firstAid, .milestones, .mealPhotos, .sillyStats])
         #expect(settings.didMigrateMilestonesFirstAidWidgets)
         #expect(settings.didMigrateMealPhotosWidget)
         #expect(settings.unknownHomeWidgetTokens == ["futureWidget"])
@@ -57,6 +59,7 @@ struct SettingsDecodeCompatTests {
         {
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "homeWidgets": ["companion", "weatherOutlook", "quickLog"],
           "quickLogItems": ["meal", "futureShortcut", "water"]
         }
@@ -85,6 +88,7 @@ struct SettingsDecodeCompatTests {
         {
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "homeWidgets": ["companion"],
           "unknownHomeWidgetTokens": ["firstAid"],
           "quickLogItems": ["meal", "water"],
@@ -107,6 +111,7 @@ struct SettingsDecodeCompatTests {
         {
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "homeWidgets": ["companion", "quickLog", "macros"],
           "quickLogItems": ["meal", "water", "move", "sleep", "journal", "care"]
         }
@@ -140,7 +145,7 @@ struct SettingsDecodeCompatTests {
         let migrated = try decode("""
         {"homeWidgets": ["companion"], "quickLogItems": ["meal"]}
         """)
-        #expect(migrated.homeWidgets == [.companion, .firstAid, .milestones, .mealPhotos])
+        #expect(migrated.homeWidgets == [.companion, .firstAid, .milestones, .mealPhotos, .sillyStats])
         #expect(migrated.didMigrateMilestonesFirstAidWidgets)
         #expect(migrated.didMigrateMealPhotosWidget)
 
@@ -154,11 +159,12 @@ struct SettingsDecodeCompatTests {
 
     @Test func recentBitesWidgetMigrationAppendsOnceForExistingUsers() throws {
         // An existing user who already migrated Milestones/First-aid but predates the Recent bites
-        // widget (#11): only the mealPhotos append fires, appended after their kept widgets.
+        // widget (#11): the mealPhotos append fires (then the later Silly stats one), after their kept
+        // widgets.
         let settings = try decode("""
         {"didMigrateMilestonesFirstAidWidgets": true, "homeWidgets": ["companion", "macros"]}
         """)
-        #expect(settings.homeWidgets == [.companion, .macros, .mealPhotos])
+        #expect(settings.homeWidgets == [.companion, .macros, .mealPhotos, .sillyStats])
         #expect(settings.didMigrateMealPhotosWidget)
 
         // Removing it sticks — the append does not refire once the marker has flipped true.
@@ -284,6 +290,7 @@ struct SettingsDecodeCompatTests {
           "bottleOz": 30,
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "futureScalarFlag": true,
           "futureCount": 7,
           "futureString": "hello",
@@ -372,6 +379,7 @@ struct SettingsDecodeCompatTests {
         {
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "someFutureVisibilityGate": false,
           "intimacyTrackingVisible": true
         }
@@ -395,6 +403,7 @@ struct SettingsDecodeCompatTests {
         {
           "didMigrateMilestonesFirstAidWidgets": true,
           "didMigrateMealPhotosWidget": true,
+          "didMigrateSillyStatsWidget": true,
           "bottleOz": 24,
           "homeWidgets": ["companion", "quickLog"]
         }

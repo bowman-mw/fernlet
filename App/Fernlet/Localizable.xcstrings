@@ -63,6 +63,9 @@
         }
       }
     },
+    "%@ CPD" : {
+      "comment" : "Silly stat headline: cookies per day"
+    },
     "%@ asked to remove %@ from this session. A different participant must second the decision." : {
       "localizations" : {
         "en" : {
@@ -106,6 +109,29 @@
     },
     "%@ logged" : {
 
+    },
+    "%@ of one hen's whole year of work." : {
+      "comment" : "Silly stat: eggs as a share of a hen's yearly eggs"
+    },
+    "%@ of the English Channel" : {
+      "comment" : "Silly stat: swim distance as a share of the English Channel"
+    },
+    "%@ of the Tour de France" : {
+      "comment" : "Silly stat: ride distance as a share of the Tour de France"
+    },
+    "%@ of the way to the Moon" : {
+      "comment" : "Silly stat headline: share of the Earth–Moon distance walked"
+    },
+    "%@ on foot — ^[%@ lap](inflect: true) around the Earth." : {
+      "comment" : "Silly stat: distance walked and laps of the Earth",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ on foot — ^[%2$@ lap](inflect: true) around the Earth."
+          }
+        }
+      }
     },
     "%@ on this device, behind your app lock." : {
 
@@ -278,6 +304,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$lld grams protein, %3$lld grams carbs, %4$lld grams fat"
+          }
+        }
+      }
+    },
+    "%@, ^[%lld time](inflect: true). It's your signature dish now. I don't make the rules." : {
+      "comment" : "Companion line about the most-logged homemade recipe; the first value is the recipe's name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, ^[%2$lld time](inflect: true). It's your signature dish now. I don't make the rules."
           }
         }
       }
@@ -1032,6 +1069,9 @@
     "AI activity log" : {
 
     },
+    "About ^[%lld song](inflect: true) performed. The acoustics remain incredible." : {
+      "comment" : "Silly stat: songs sung in the shower"
+    },
     "About this day" : {
 
     },
@@ -1255,7 +1295,13 @@
     "Analyzing your photo" : {
 
     },
+    "Animal cracker, each" : {
+
+    },
     "Anthropic, with your own key" : {
+
+    },
+    "Any other cookie" : {
 
     },
     "Any restriction on sharing your designs" : {
@@ -1369,6 +1415,12 @@
     "Backups" : {
 
     },
+    "Bananas eaten, at about 18 cm each." : {
+      "comment" : "Silly stat: how bananas are counted"
+    },
+    "Bananas for Scale" : {
+      "comment" : "Silly stat title"
+    },
     "Barcode lookup on Open Food Facts" : {
 
     },
@@ -1380,6 +1432,9 @@
     },
     "Basal body temperature: %@ °F" : {
 
+    },
+    "Bathtub Index" : {
+      "comment" : "Silly stat title"
     },
     "Be a recovery device" : {
 
@@ -1470,6 +1525,9 @@
     },
     "Bring your recovery device" : {
 
+    },
+    "Brush Marathon" : {
+      "comment" : "Silly stat title: total time brushing teeth"
     },
     "Building your workout…" : {
 
@@ -1676,6 +1734,9 @@
     "Code captured" : {
 
     },
+    "Coffee Tower" : {
+      "comment" : "Silly stat title"
+    },
     "Collision policy" : {
 
     },
@@ -1704,6 +1765,9 @@
 
     },
     "Completed" : {
+
+    },
+    "Completely useless numbers, lovingly counted." : {
 
     },
     "Conditioning / mobility — walked as a single step, no rest timer." : {
@@ -1789,6 +1853,12 @@
     },
     "Cook for %lld" : {
 
+    },
+    "Cookies Per Day" : {
+      "comment" : "Silly stat title (CPD)"
+    },
+    "Cookies per day, over every day you've had Fernlet. Homemade is always a whole cookie; everything else follows the cookie table." : {
+      "comment" : "Silly stat: how cookies per day is counted"
     },
     "Cooking action" : {
 
@@ -1925,6 +1995,9 @@
         }
       }
     },
+    "Counted on this iPhone only." : {
+      "comment" : "Silly stat: pats are counted on this device only"
+    },
     "Counting every sealed surface…" : {
 
     },
@@ -1960,6 +2033,9 @@
     },
     "Crypto format census (test-only view)" : {
 
+    },
+    "Cups of coffee and tea, stacked at about 12 cm a cup." : {
+      "comment" : "Silly stat: how cups are counted"
     },
     "Current level" : {
 
@@ -2073,6 +2149,9 @@
     },
     "Days per week" : {
 
+    },
+    "Days since your first log, in three-day gastrotrich lifetimes." : {
+      "comment" : "Silly stat: how gastrotrich lifetimes are counted"
     },
     "Days you were unwell" : {
 
@@ -2250,6 +2329,9 @@
     "Distance (mi)" : {
 
     },
+    "Distance on foot from your steps, at about 1,300 a kilometer, or from your logged walks and runs." : {
+      "comment" : "Silly stat: how walking distance is counted"
+    },
     "Done" : {
 
     },
@@ -2264,6 +2346,9 @@
     },
     "Drag to reorder. Tap one to swap it." : {
 
+    },
+    "Dream Cinema" : {
+      "comment" : "Silly stat title: dream sleep measured in films"
     },
     "Duplicate policy" : {
 
@@ -2337,6 +2422,12 @@
     "Effort · %lld of 10" : {
 
     },
+    "Egg-onomics" : {
+      "comment" : "Silly stat title (a pun on economics)"
+    },
+    "Eggs eaten, against the 300 or so a hen lays in a year." : {
+      "comment" : "Silly stat: how eggs are counted"
+    },
     "Email the developer at %@" : {
 
     },
@@ -2387,6 +2478,12 @@
     },
     "Energy (kcal)" : {
 
+    },
+    "English Channel crossing: %@ complete." : {
+      "comment" : "Companion line about swimming"
+    },
+    "Enough floss to measure %@." : {
+      "comment" : "Silly stat: floss length compared with a length"
     },
     "Enough to feel it, not enough to drain." : {
 
@@ -2759,6 +2856,9 @@
     "Fields sent, names only: %@" : {
 
     },
+    "Fig Newtons (legally a cookie)" : {
+
+    },
     "Film remaining: %lld" : {
 
     },
@@ -2798,6 +2898,12 @@
     },
     "First day of cycle" : {
 
+    },
+    "Floss Rope" : {
+      "comment" : "Silly stat title: floss used, laid end to end"
+    },
+    "Flossing days, at about 45 cm of floss each." : {
+      "comment" : "Silly stat: how floss is counted"
     },
     "Flow level" : {
 
@@ -2840,6 +2946,9 @@
 
     },
     "Forget corrected searches?" : {
+
+    },
+    "Fortune cookie (mostly fortune)" : {
 
     },
     "Found %lld meal logs, %lld journal entries, %lld workouts in this iCloud account." : {
@@ -2913,6 +3022,15 @@
     "From recipe" : {
 
     },
+    "Fur shininess: +%@ (estimate)." : {
+      "comment" : "Silly stat: a made-up fur shininess figure"
+    },
+    "Gastrotrich Lifetimes" : {
+      "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal"
+    },
+    "Giant bakery cookie" : {
+
+    },
     "Give access" : {
 
     },
@@ -2957,6 +3075,9 @@
     },
     "Grams in one %@" : {
 
+    },
+    "Grand Tours" : {
+      "comment" : "Silly stat title: swimming and cycling distance against famous routes"
     },
     "Ground" : {
 
@@ -3045,11 +3166,17 @@
     "Home widgets" : {
 
     },
+    "Homemade, any size" : {
+
+    },
     "Hours (e.g. 7.5)" : {
 
     },
     "Hours (optional)" : {
 
+    },
+    "Hours slept, in koala days of 20 hours." : {
+      "comment" : "Silly stat: how koala days are counted"
     },
     "How Fernlet estimates this" : {
 
@@ -3327,6 +3454,12 @@
     "Kind" : {
 
     },
+    "Koala Days" : {
+      "comment" : "Silly stat title: sleep measured in koala days"
+    },
+    "Laid end to end: %@ of banana." : {
+      "comment" : "Silly stat: banana length comparison"
+    },
     "Last heartbeat" : {
 
     },
@@ -3375,6 +3508,12 @@
     },
     "Library" : {
 
+    },
+    "Lifetime pizza: ^[%@ pizza](inflect: true). I made you a pie chart. It's also a pizza." : {
+      "comment" : "Companion line about pizza"
+    },
+    "Lifetime steps, one per word. Hamlet is about 30,557 words." : {
+      "comment" : "Silly stat: how Shakespeare steps are counted"
     },
     "Likely next period" : {
 
@@ -3538,6 +3677,9 @@
     },
     "Macros, per serving" : {
 
+    },
+    "Made ^[%lld time](inflect: true). It's your signature dish now." : {
+      "comment" : "Silly stat: how often the top homemade recipe was logged"
     },
     "Made by %@, for your companion." : {
 
@@ -3709,6 +3851,9 @@
     "Mood: %@" : {
 
     },
+    "Moonwalk" : {
+      "comment" : "Silly stat title: distance on foot compared with a trip to the Moon"
+    },
     "More logs will make trends useful." : {
 
     },
@@ -3716,6 +3861,9 @@
 
     },
     "More sets" : {
+
+    },
+    "More stats turn up as life happens." : {
 
     },
     "Move" : {
@@ -4045,6 +4193,9 @@
     "Nothing saved in Fernlet for this day." : {
 
     },
+    "Nothing silly to report yet. Stats turn up on their own as you log — no hurry." : {
+
+    },
     "Nothing was changed. Please try pasting the plan again." : {
 
     },
@@ -4122,6 +4273,9 @@
     },
     "One space saved." : {
 
+    },
+    "One step, one word: your feet have written %@." : {
+      "comment" : "Silly stat: steps compared with Shakespeare's word counts"
     },
     "One tap notes how today feels. No writing needed." : {
 
@@ -4202,6 +4356,9 @@
 
     },
     "Options for %@" : {
+
+    },
+    "Oreos and other sandwich cookies" : {
 
     },
     "Other cycle sample" : {
@@ -4350,6 +4507,9 @@
     "Path policy" : {
 
     },
+    "Pats Given" : {
+      "comment" : "Silly stat title: times the user patted the companion"
+    },
     "Pattern" : {
 
     },
@@ -4469,6 +4629,9 @@
     },
     "Pick up your last session" : {
 
+    },
+    "Pizza Pie Chart" : {
+      "comment" : "Silly stat title"
     },
     "Plan" : {
 
@@ -4652,6 +4815,9 @@
     },
     "Quick-log shortcuts" : {
 
+    },
+    "REM sleep from Apple Health, in two-hour films." : {
+      "comment" : "Silly stat: how dream films are counted"
     },
     "REPS" : {
 
@@ -5112,6 +5278,9 @@
     "Rework today's plan" : {
 
     },
+    "Ridden so far: %@." : {
+      "comment" : "Silly stat: ride share only"
+    },
     "Room for a little more" : {
 
     },
@@ -5128,6 +5297,9 @@
 
     },
     "Safety code" : {
+
+    },
+    "Samoas, Tagalongs (they're doing a lot)" : {
 
     },
     "Save" : {
@@ -5463,11 +5635,17 @@
     "Sets" : {
 
     },
+    "Sets × reps × weight in your logged exercises. A line without a weight doesn't add any." : {
+      "comment" : "Silly stat: how weight lifted is counted"
+    },
     "Setting up the recovery ceremony" : {
 
     },
     "Settings" : {
 
+    },
+    "Shakespeare Steps" : {
+      "comment" : "Silly stat title: steps compared with words Shakespeare wrote"
     },
     "Share" : {
 
@@ -5550,6 +5728,12 @@
     "Show my code" : {
 
     },
+    "Shower Concerts" : {
+      "comment" : "Silly stat title"
+    },
+    "Shower concerts performed: %lld. Acoustics: incredible." : {
+      "comment" : "Companion line about showers"
+    },
     "Shown" : {
 
     },
@@ -5562,7 +5746,13 @@
     "Signals" : {
 
     },
+    "Signature Dish" : {
+      "comment" : "Silly stat title"
+    },
     "Signed control stream verified" : {
+
+    },
+    "Silly stats" : {
 
     },
     "Six tiles on Home" : {
@@ -5594,6 +5784,9 @@
     },
     "Sleep, heart and temperature signals, for recovery context." : {
 
+    },
+    "Slices eaten, eight to a pizza." : {
+      "comment" : "Silly stat: how pizza is counted"
     },
     "Slide ↓" : {
 
@@ -5675,6 +5868,15 @@
     },
     "Sport" : {
 
+    },
+    "Stacked up, your cups stand %@ tall." : {
+      "comment" : "Silly stat: stacked cups compared with a height"
+    },
+    "Stair-machine minutes, at about 10 m of climb a minute." : {
+      "comment" : "Silly stat: how climbing height is counted"
+    },
+    "Stairway to Somewhere" : {
+      "comment" : "Silly stat title: height climbed on a stair machine"
     },
     "Start" : {
 
@@ -5849,6 +6051,9 @@
     "Swap ingredient" : {
 
     },
+    "Swim and ride distances from your logged workouts." : {
+      "comment" : "Silly stat: how swim and ride distance is counted"
+    },
     "Swipe →" : {
 
     },
@@ -5860,6 +6065,20 @@
     },
     "Switching…" : {
 
+    },
+    "Swum so far: %@." : {
+      "comment" : "Silly stat: swim share only"
+    },
+    "Swum: %@. Ridden: %@." : {
+      "comment" : "Silly stat: both swim and ride shares",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Swum: %1$@. Ridden: %2$@."
+          }
+        }
+      }
     },
     "Symptoms" : {
 
@@ -5924,8 +6143,23 @@
     "That workout has already started or changed. Close this and open it again to edit." : {
 
     },
+    "That's %@ of brushing." : {
+      "comment" : "Silly stat: brushing time compared with a duration"
+    },
+    "That's %@ of water." : {
+      "comment" : "Silly stat: water drunk compared with buckets, bathtubs or hot tubs"
+    },
+    "That's %@, and you never once saw the view." : {
+      "comment" : "Silly stat: height climbed compared with a landmark"
+    },
+    "That's %@, moved one rep at a time." : {
+      "comment" : "Silly stat: lifted weight compared with a heavy thing"
+    },
     "That's a good thing. Write one above whenever something feels heavy." : {
 
+    },
+    "That's enough floss to lasso %@." : {
+      "comment" : "Companion line about flossing"
     },
     "That's enough. Take the calm with you — there's nothing else to do." : {
 
@@ -5959,6 +6193,9 @@
     },
     "The connection to %@ dropped while sending, so they may not have it. You can try again." : {
       "comment" : "Why a recipe share may not have arrived: the connection dropped partway through sending. %@ is the person's name."
+    },
+    "The cookie table" : {
+
     },
     "The cycle backup saved from your other iPhone stays in iCloud." : {
 
@@ -6048,6 +6285,9 @@
 
     },
     "They're recovering — scan their next code" : {
+
+    },
+    "Thin Mints, Trefoils, Do-si-dos" : {
 
     },
     "Thinking of swaps…" : {
@@ -6170,6 +6410,9 @@
     "Thought" : {
 
     },
+    "Three songs per shower. Assumed, obviously." : {
+      "comment" : "Silly stat: how shower concerts are counted"
+    },
     "Tier 2 memories are inferred context records. In production these will not be readable. This view exists for prototype inspection only." : {
 
     },
@@ -6225,8 +6468,14 @@
     "Together, in person." : {
 
     },
+    "Total Tonnage" : {
+      "comment" : "Silly stat title: total weight lifted"
+    },
     "Total today" : {
 
+    },
+    "Tour de France: %@ ridden. Nobody tell the peloton." : {
+      "comment" : "Companion line about cycling"
     },
     "Train here" : {
 
@@ -6327,6 +6576,9 @@
     "Turning this off stops every kind below" : {
 
     },
+    "Two minutes per brushing." : {
+      "comment" : "Silly stat: how brushing time is counted"
+    },
     "Type %@ to confirm" : {
 
     },
@@ -6417,6 +6669,9 @@
     "Use values" : {
 
     },
+    "Useless numbers, lovingly counted. They turn up as you log." : {
+
+    },
     "User plan" : {
 
     },
@@ -6450,6 +6705,9 @@
     "Water" : {
 
     },
+    "Water you've logged, at your bottle size." : {
+      "comment" : "Silly stat: how water is counted"
+    },
     "We found the backup key from your other device. To keep your encrypted backups in sync across devices, this device can switch to it. Backups made only on this device may need to be re-uploaded." : {
 
     },
@@ -6458,6 +6716,12 @@
     },
     "We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good." : {
 
+    },
+    "We've been friends for ^[%@ gastrotrich lifetime](inflect: true). They're tiny and live about three days." : {
+      "comment" : "Companion line about how long the user has had the app"
+    },
+    "We've known each other ^[%lld day](inflect: true). A gastrotrich, a tiny pond animal, lives about three." : {
+      "comment" : "Silly stat: days known, compared with a gastrotrich's lifespan"
     },
     "Weather-aware recovery prompts" : {
 
@@ -6712,6 +6976,9 @@
     "You'll stop hosting it for everyone here." : {
 
     },
+    "You're %@ of the way to the Moon. Pack snacks." : {
+      "comment" : "Companion line about distance walked"
+    },
     "You're here." : {
 
     },
@@ -6737,8 +7004,32 @@
     "You're resting right now, so there's no set to finish yet." : {
 
     },
+    "You've brushed your teeth for %@. Window seat, I hope." : {
+      "comment" : "Companion line about brushing teeth"
+    },
+    "You've climbed %@ without leaving the gym." : {
+      "comment" : "Companion line about stair-machine climbing"
+    },
+    "You've dreamed ^[%@ feature film](inflect: true). Reviews pending." : {
+      "comment" : "Companion line about dream sleep"
+    },
+    "You've drunk %@ of water. Please don't picture it." : {
+      "comment" : "Companion line about water"
+    },
+    "You've eaten %@ of a hen's whole year of work. She says you're welcome." : {
+      "comment" : "Companion line about eggs"
+    },
+    "You've eaten %@ of banana, end to end. I measured." : {
+      "comment" : "Companion line about bananas"
+    },
+    "You've eaten ^[%@ hen-year](inflect: true) of eggs. The hens are unionizing." : {
+      "comment" : "Companion line about eggs"
+    },
     "You've joined" : {
 
+    },
+    "You've moved %@ so far. Gently, I hope." : {
+      "comment" : "Companion line about weight lifted"
     },
     "You've saved %lld locations — remove one to add another." : {
 
@@ -6746,8 +7037,14 @@
     "You've set your own calorie target, so the deficit isn't used. Clear the Calories field to use it again." : {
 
     },
+    "You've slept ^[%@ koala day](inflect: true). The koalas approve." : {
+      "comment" : "Companion line about sleep"
+    },
     "You: %@" : {
 
+    },
+    "Your CPD is %@. Scientists (me) are thrilled." : {
+      "comment" : "Companion line about cookies per day"
     },
     "Your app lock" : {
 
@@ -6763,6 +7060,9 @@
     },
     "Your closet is empty" : {
 
+    },
+    "Your coffee tower is %@ tall. Please don't climb it." : {
+      "comment" : "Companion line about coffee and tea"
     },
     "Your companion gets sleepy at bedtime and wakes with you. It never mentions food or water in the last hour and a half before bed." : {
 
@@ -6817,6 +7117,9 @@
     },
     "Your entry" : {
 
+    },
+    "Your feet have out-written %@. One step, one word." : {
+      "comment" : "Companion line about steps"
     },
     "Your friends list" : {
 
@@ -6908,6 +7211,9 @@
     "Your meal, recipe and progress photos will be encrypted with a key that never leaves this device. They'll come back on a new phone only through your encrypted photo backup, never from a device backup. This can't be undone." : {
 
     },
+    "Your most-logged homemade recipe." : {
+      "comment" : "Silly stat: how the signature dish is picked"
+    },
     "Your name" : {
 
     },
@@ -6968,11 +7274,132 @@
     "Your verification code, as a QR code for the person you're connecting with to scan" : {
 
     },
+    "^[%@ Burj Khalifa](inflect: true)" : {
+      "comment" : "Silly stats comparison unit: the world's tallest building"
+    },
+    "^[%@ Eiffel Tower](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ Hamlet](inflect: true)" : {
+      "comment" : "Silly stats comparison unit: the play, about 30,557 words"
+    },
+    "^[%@ Mount Everest](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ Statue of Liberty](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ banana](inflect: true)" : {
+      "comment" : "Silly stat headline: bananas eaten"
+    },
+    "^[%@ bathtub](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ blue whale](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ bucket](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ cookie](inflect: true) over ^[%lld day](inflect: true)." : {
+      "comment" : "Silly stat: lifetime cookie-equivalents over days known",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$@ cookie](inflect: true) over ^[%2$lld day](inflect: true)."
+          }
+        }
+      }
+    },
+    "^[%@ copy](inflect: true) of the complete works of Shakespeare" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ cup](inflect: true)" : {
+      "comment" : "Silly stat headline: cups of coffee or tea"
+    },
+    "^[%@ dachshund](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ egg](inflect: true)" : {
+      "comment" : "Silly stat headline: eggs eaten"
+    },
+    "^[%@ elephant](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ feature film](inflect: true)" : {
+      "comment" : "Silly stat headline: REM sleep in two-hour films\nSilly stats comparison unit"
+    },
+    "^[%@ flight](inflect: true) from New York to LA" : {
+      "comment" : "Silly stats comparison unit: a six-hour flight"
+    },
+    "^[%@ giraffe](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ golden retriever](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ grand piano](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ hen-year](inflect: true) of work." : {
+      "comment" : "Silly stat: eggs in years of one hen's laying"
+    },
+    "^[%@ hot tub](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ hour](inflect: true) asleep. A koala sleeps about 20 a day." : {
+      "comment" : "Silly stat: total hours slept"
+    },
+    "^[%@ koala day](inflect: true)" : {
+      "comment" : "Silly stat headline: total sleep in 20-hour koala days"
+    },
+    "^[%@ lifetime](inflect: true)" : {
+      "comment" : "Silly stat headline: gastrotrich lifetimes"
+    },
+    "^[%@ minute](inflect: true) of dream sleep. None of it had a plot." : {
+      "comment" : "Silly stat: REM sleep minutes"
+    },
+    "^[%@ pizza](inflect: true)" : {
+      "comment" : "Silly stat headline: whole pizzas eaten"
+    },
+    "^[%@ school bus](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ sitcom episode](inflect: true)" : {
+      "comment" : "Silly stats comparison unit"
+    },
+    "^[%@ slice](inflect: true). The chart is also a pizza." : {
+      "comment" : "Silly stat: pizza slices, beside a pie chart drawn as a pizza"
+    },
+    "^[%@ trip](inflect: true) to the space station" : {
+      "comment" : "Silly stats comparison unit: the height of the International Space Station's orbit"
+    },
+    "^[%lld concert](inflect: true)" : {
+      "comment" : "Silly stat headline: showers, as concerts"
+    },
     "^[%lld ingredient](inflect: true) not counted in this estimate" : {
 
     },
     "^[%lld ingredient](inflect: true) weighed by a USDA typical size (estimate)" : {
 
+    },
+    "^[%lld pat](inflect: true)" : {
+      "comment" : "Silly stat headline: lifetime pats"
+    },
+    "^[%lld pat](inflect: true) so far. My fur is %@ shinier (estimate)." : {
+      "comment" : "Companion line about being patted",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld pat](inflect: true) so far. My fur is %2$@ shinier (estimate)."
+          }
+        }
+      }
+    },
+    "^[%lld step](inflect: true)" : {
+      "comment" : "Silly stat headline: lifetime steps"
     },
     "^[%lld tasks](inflect: true)" : {
 

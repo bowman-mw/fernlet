@@ -99,8 +99,10 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
     case milestones
     case firstAid
     case mealPhotos
+    /// The silly stats card (cookies per day, the Moonwalk, …), which opens the stats page.
+    case sillyStats
 
-    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends, .firstAid, .milestones, .mealPhotos]
+    nonisolated public static let defaultWidgets: [HomeWidget] = [.companion, .todaySummary, .todayIntent, .ambient, .quickLog, .macros, .trends, .firstAid, .milestones, .mealPhotos, .sillyStats]
 
     public var id: String { rawValue }
 
@@ -127,6 +129,9 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .milestones: "Milestones"
         case .firstAid: "First aid"
         case .mealPhotos: "Recent bites"
+        case .sillyStats:
+            String(localized: "homeWidget.sillyStats", defaultValue: "Silly stats", bundle: .module,
+                   comment: "Home widget name: the card of deliberately useless lifetime stats")
         }
     }
 
@@ -150,6 +155,7 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         case .milestones: "seal"
         case .firstAid: "heart.circle"
         case .mealPhotos: "photo.stack"
+        case .sillyStats: "face.smiling"
         }
     }
 
@@ -157,7 +163,7 @@ public nonisolated enum HomeWidget: String, Codable, CaseIterable, Identifiable,
         switch self {
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .hygiene, .trends:
             true
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats:
             false
         }
     }

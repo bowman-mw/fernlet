@@ -76,6 +76,13 @@ final class PetInteractionGovernor {
         /// The settled period (its end timestamp) whose soft line has already shown,
         /// so the line appears at most once per settle — even across relaunches.
         static let settledLineShownFor = "fernlet.companionPets.settledLineShownFor"
+        /// Every pet ever, settled or not — the silly stats' Pats Given. Device-local like the rest.
+        static let lifetimePats = "fernlet.companionPets.lifetime"
+    }
+
+    /// Pets ever given on this device, for the silly stats.
+    static func lifetimePats(in defaults: UserDefaults = .standard) -> Int {
+        max(defaults.integer(forKey: Key.lifetimePats), 0)
     }
 
     /// Whether the companion is currently resting in its settled/content period.
@@ -87,6 +94,8 @@ final class PetInteractionGovernor {
     /// Records one pet and returns how the companion should respond.
     func registerPet() -> Response {
         let now = self.now()
+        let lifetime = defaults.integer(forKey: Key.lifetimePats)
+        if lifetime < Int.max { defaults.set(lifetime + 1, forKey: Key.lifetimePats) }
 
         if let until = date(forKey: Key.settledUntil), now < until {
             let marker = until.timeIntervalSinceReferenceDate
@@ -129,6 +138,7 @@ final class PetInteractionGovernor {
         defaults.removeObject(forKey: Key.windowStart)
         defaults.removeObject(forKey: Key.settledUntil)
         defaults.removeObject(forKey: Key.settledLineShownFor)
+        defaults.removeObject(forKey: Key.lifetimePats)
     }
 
     // MARK: - Date <-> defaults plumbing

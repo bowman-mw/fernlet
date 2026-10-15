@@ -221,6 +221,9 @@ struct PrivacyWipeCoverageTests {
         // Companion petting counts + window/settle timestamps. `clearPersistentState` existed and
         // its only caller was a `#if DEBUG` UI-test seam, so RELEASE never cleared it.
         "PetInteractionGovernor.clearPersistentState",
+        // The silly stats' companion pacing — which stat was last mentioned, when, and the number
+        // it said (some Health-derived), all device-local `UserDefaults`.
+        "SillyStatsCompanionPacer.clearPersistentState",
         // Keychain identity + at-rest keys (the Increment 1 gap fixes)
         "wipeIdentityForDeleteAll",
         // The consequence of the row above, and the reason it is a separate token: rotating the

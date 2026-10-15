@@ -444,6 +444,9 @@ final class FernletStore {
         return manager
     }()
     @ObservationIgnored let derivedSignalsService = DerivedSignalsService()
+    /// The silly stats page and the companion's every-few-days mention: in memory only, rebuilt on
+    /// read (some of it comes from Apple Health, which never reaches synced state).
+    @ObservationIgnored let sillyStats = SillyStatsService()
     @ObservationIgnored private let healthKitService: (any HealthKitServicing)?
     @ObservationIgnored private lazy var healthSyncCoordinator = HealthSyncCoordinator(host: self, healthKitService: healthKitService)
     /// Persisted tombstones for locally-removed workouts, so the workout observer can delete-and-skip an
@@ -3350,6 +3353,32 @@ final class FernletStore {
 
     func backfillWorkoutsFromHealthIfNeeded(defaults: UserDefaults = .standard) async {
         await healthSyncCoordinator.backfillWorkoutsFromHealthIfNeeded(defaults: defaults)
+    }
+
+    /// Lifetime steps from Apple Health since `start`, for the silly stats — nil when the daily
+    /// activity capability is not on, or the read fails.
+    ///
+    /// Read on demand and held only in memory by ``SillyStatsService``: a Health value never
+    /// reaches synced state. The window is capped at ``FernletDate/maxDayKeySpan`` days (R3) and
+    /// bucketed by year, so the read is a handful of statistics whatever the history's length.
+    func lifetimeHealthSteps(since start: Date, now: Date = .now) async -> Int? {
+        guard let healthKitService, healthKitService.isCapabilityRequestedAndEnabled(.activityContext) else { return nil }
+        let calendar = Calendar.current
+        let earliest = calendar.date(byAdding: .day, value: -FernletDate.maxDayKeySpan, to: now) ?? now
+        let anchor = calendar.startOfDay(for: min(max(start, earliest), now))
+        let statistics: [HKStatistics]
+        do {
+            statistics = try await healthKitService.statistics(
+                for: HKQuantityType(.stepCount), options: .cumulativeSum, interval: DateComponents(year: 1), anchor: anchor)
+        } catch {
+            // R7: named, not swallowed. The step stats fall back to the step counts this device
+            // already kept per day; nothing else reads this total.
+            FernletAuditLog.log("sillyStats.stepsReadFailed", context: ["error": String(describing: type(of: error))])
+            return nil
+        }
+        let total = statistics.reduce(0.0) { $0 + ($1.sumQuantity()?.doubleValue(for: .count()) ?? 0) }
+        guard total.isFinite, total >= 0 else { return nil }
+        return Int(min(total, 1_000_000_000))
     }
 
     func stopHealthKitWorkoutObservation() {
@@ -6405,6 +6434,11 @@ final class FernletStore {
         // its only caller was a `#if DEBUG` UI-test seam, so in RELEASE nothing cleared it. Plain
         // `UserDefaults` removals, so no failure signal and no incomplete store.
         PetInteractionGovernor.clearPersistentState()
+        // The silly stats' companion pacing (`fernlet.sillyStats.*`): which stat was last mentioned,
+        // when, and the number it said — some of them Health-derived. Plain `UserDefaults` removals,
+        // like the petting state above; the in-memory tally goes with them.
+        SillyStatsCompanionPacer.clearPersistentState()
+        sillyStats.clear()
 
         // The device-local AI audit log (Ladder §7.2) — a per-device ledger of AI-call metadata, never
         // synced/snapshot/exported. Clear the persisted file directly (guaranteed even if the actor sink

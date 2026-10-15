@@ -360,6 +360,8 @@ struct HomeView: View {
             firstAidAction
         case .mealPhotos:
             mealPhotosStrip
+        case .sillyStats:
+            SillyStatsHomeCard(stats: store.sillyStats) { activeSheet = .sillyStats }
         case .logFood, .recipeBook, .newRecipe, .workout, .journal, .sleep, .water, .trends:
             HomeActionWidget(widget: widget) {
                 handleHomeWidget(widget)
@@ -886,6 +888,11 @@ struct HomeView: View {
     private var ambientThought: String {
         if let last = store.day.journals.last {
             return "You marked today as \(last.tag.label.lowercased()). Let that be enough information for now."
+        }
+        // Every two or three days the companion brings up a silly stat. The pacer already kept it
+        // off rest, sick and needs-gentleness days, so it never talks over those lines.
+        if let line = store.sillyStats.companionLine {
+            return line
         }
         // BEFORE the companion thought, not after it. `companionThought` falls back to a
         // deterministic line ("A few ordinary care notes are already here") that is never nil, so on
@@ -1459,7 +1466,7 @@ struct HomeView: View {
             activeSheet = .hygiene
         case .trends:
             activeSheet = .trends
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos:
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats:
             break
         }
     }
@@ -2677,7 +2684,7 @@ struct HomeActionWidget: View {
         case .water: "Update hydration."
         case .hygiene: "Open care tasks."
         case .trends: "Review local signals."
-        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos: ""
+        case .companion, .todaySummary, .todayIntent, .quickLog, .macros, .ambient, .milestones, .firstAid, .mealPhotos, .sillyStats: ""
         }
     }
 }
