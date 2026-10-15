@@ -213,6 +213,7 @@ struct PrivacyWipeCoverageTests {
         "widgetSnapshotMirror",
         "pendingWidgetActionQueue.clear",
         "aiCallQuotaStore.reset",
+        "WeatherKitService.shared.clearRequestHistory",
         "aiAuditLogStore.clear",
         // The record of which Apple Health prompts have ever been shown — `cycleTracking` and
         // `intimateLogging` among them. A plaintext `UserDefaults` array cleared by nothing until

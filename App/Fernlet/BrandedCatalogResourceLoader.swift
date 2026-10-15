@@ -18,10 +18,16 @@ import FoodCatalog
 ///      asset resident, open it from the request's bundle.
 ///
 /// NOTE (setup / validation boundary):
-///   • Assigning the `branded-food-catalog` ODR tag to `FoodCatalogBranded.sqlite` is an Xcode project
-///     setting ("On Demand Resource Tags" on the resource) — it can't be done in source.
-///   • Real ODR *download* and *purge* behavior is only fully observable on a device / TestFlight; the
-///     bundle-first path above is what covers Simulator and automated tests.
+///   • The `branded-food-catalog` tag is assigned in the project: `ODRAssets/` is a synchronized folder of
+///     the app target whose exception set tags `FoodCatalogBranded.sqlite` (`assetTagsByRelativePath`).
+///     The database itself is gitignored (178 MB), so a clone without it builds an EMPTY placeholder pack
+///     (the target's "Ensure branded catalog ODR source" phase; Release refuses to). An empty file opens
+///     as a valid SQLite database with no `food` table, so `attach` refuses a source with zero rows rather
+///     than attaching a catalog that answers nothing. See `ODRAssets/README.md`.
+///   • Real ODR *download* and *purge* behavior is only fully observable on a device / TestFlight.
+///     Simulator Debug builds embed the pack in the app (`EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE` for the
+///     simulator SDK), so the ODR path itself runs there however the app was installed; without that,
+///     only a launch from the Xcode IDE could reach the development pack server.
 @MainActor
 final class BrandedCatalogResourceLoader {
     static let odrTag = "branded-food-catalog"
@@ -72,6 +78,9 @@ final class BrandedCatalogResourceLoader {
             try await req.beginAccessingResources()
             guard let url = req.bundle.url(forResource: Self.resourceName, withExtension: Self.resourceExtension),
                   attach(from: url, into: catalog) else {
+                // The pack arrived but holds no usable catalog: the placeholder a build without the
+                // database ships (see the type's NOTE), or a file that would not open.
+                FernletAuditLog.log("brandedCatalog.odr.packUnusable")
                 req.endAccessingResources()
                 return
             }
@@ -101,6 +110,9 @@ final class BrandedCatalogResourceLoader {
             skipPriorityOrder: true,
             candidateCap: Self.candidateCap
         ) else { return false }
+        // An empty placeholder opens fine and counts zero rows (no `food` table); attaching it would
+        // put a source that answers nothing ahead of the fallback.
+        guard source.count > 0 else { return false }
         catalog.attachBrandedSource(source)
         attached = true
         return true

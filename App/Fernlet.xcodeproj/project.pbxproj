@@ -140,6 +140,16 @@
 			);
 			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
 		};
+		F0DC00000000000000000002 /* Exceptions for "../ODRAssets" folder in "Fernlet" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			assetTagsByRelativePath = {
+				FoodCatalogBranded.sqlite = ("branded-food-catalog", );
+			};
+			membershipExceptions = (
+				README.md,
+			);
+			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -185,6 +195,14 @@
 				68FE5E00000000000000B002 /* Exceptions for "FernletWidgets" folder in "FernletWidgets" target */,
 			);
 			path = FernletWidgets;
+			sourceTree = "<group>";
+		};
+		F0DC00000000000000000001 /* ../ODRAssets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F0DC00000000000000000002 /* Exceptions for "../ODRAssets" folder in "Fernlet" target */,
+			);
+			path = ../ODRAssets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -248,6 +266,7 @@
 				68FE5E00000000000000A001 /* FernletShareExtension */,
 				68FE5E00000000000000B001 /* FernletWidgets */,
 				4D5347000000000000000001 /* FernletMessagesExtension */,
+				F0DC00000000000000000001 /* ../ODRAssets */,
 				6869C2E32FB8D39D0098A0F3 /* Products */,
 				6869C37B2FBBF3450098A0F3 /* ../Docs */,
 			);
@@ -311,6 +330,7 @@
 			buildPhases = (
 				6869C2DE2FB8D39D0098A0F3 /* Sources */,
 				6869C2DF2FB8D39D0098A0F3 /* Frameworks */,
+				F0DC00000000000000000003 /* Ensure branded catalog ODR source */,
 				6869C2E02FB8D39D0098A0F3 /* Resources */,
 				68FE5E00000000000000A018 /* Embed Foundation Extensions */,
 			);
@@ -323,6 +343,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				6869C2E42FB8D39D0098A0F3 /* Fernlet */,
+				F0DC00000000000000000001 /* ../ODRAssets */,
 			);
 			name = Fernlet;
 			packageProductDependencies = (
@@ -431,6 +452,9 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
+				KnownAssetTags = (
+					"branded-food-catalog",
+				);
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
@@ -531,6 +555,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F0DC00000000000000000003 /* Ensure branded catalog ODR source */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Ensure branded catalog ODR source";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/../ODRAssets/FoodCatalogBranded.sqlite",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# ODRAssets/FoodCatalogBranded.sqlite is gitignored (178 MB), so a fresh clone or CI has none, and\n# the tagged resource's copy would fail. Debug builds get an empty placeholder pack, which\n# BrandedCatalogResourceLoader refuses (zero rows), so the app stays on the base catalog. A Release\n# build refuses to ship that placeholder. See ODRAssets/README.md.\nf=\"${SCRIPT_OUTPUT_FILE_0}\"\nif [ -s \"$f\" ]; then\n  exit 0\nfi\nif [ \"${CONFIGURATION}\" = \"Release\" ] && [ \"${FERNLET_ALLOW_MISSING_BRANDED_CATALOG:-NO}\" != \"YES\" ]; then\n  echo \"error: ODRAssets/FoodCatalogBranded.sqlite is missing or empty, so this Release build would ship the branded-food-catalog on-demand resource without its database. Regenerate it (ODRAssets/README.md), or set FERNLET_ALLOW_MISSING_BRANDED_CATALOG=YES to build without it.\"\n  exit 1\nfi\nif [ ! -e \"$f\" ]; then\n  : > \"$f\"\nfi\necho \"note: ODRAssets/FoodCatalogBranded.sqlite is absent; the branded-food-catalog pack holds an empty placeholder and the app uses the base catalog.\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4D5347000000000000000012 /* Sources */ = {
@@ -670,6 +716,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Fernlet/Fernlet.entitlements;
+				"EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE[sdk=iphonesimulator*]" = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3RTUPF8FFH;

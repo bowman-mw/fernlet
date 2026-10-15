@@ -7,15 +7,24 @@ import FernletDomainModel
 /// database (`ODRAssets/FoodCatalogBranded.sqlite`, ~364k products) to the live bundled base
 /// `FoodCatalog` and verifies barcode + search resolution and graceful fallback on detach.
 ///
-/// Skips cleanly when the ODR asset isn't present on disk (e.g. a checkout where Git LFS wasn't
-/// pulled), so a lean CI without the large file still passes. When present it exercises the whole
-/// data + multi-source pipeline end to end against the real database.
+/// Skips cleanly when the ODR asset is absent or is the app build's empty placeholder (the 178 MB
+/// file is gitignored, so a fresh clone or CI never has it), so a lean CI without the large file
+/// still passes. When present it exercises the whole data + multi-source pipeline end to end
+/// against the real database.
 struct BrandedODRCatalogTests {
     private static var odrURL: URL? {
         // repo root -> ODRAssets/FoodCatalogBranded.sqlite (mirrors FoodCatalogGenerationTests).
-        let repoRoot = RepoRoot.url
-        let url = repoRoot.appendingPathComponent("ODRAssets/FoodCatalogBranded.sqlite")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        usableBrandedDatabase(at: RepoRoot.url("ODRAssets/FoodCatalogBranded.sqlite"))
+    }
+
+    /// `url` when it names a branded database worth opening, else nil. A missing file is a checkout
+    /// that never generated the catalog; an EMPTY one is the placeholder the app target's "Ensure
+    /// branded catalog ODR source" build phase writes there on every build without it, which opens
+    /// as valid SQLite with no rows (`BrandedCatalogResourceLoader` refuses it the same way). The
+    /// replay probes read the same file through this.
+    static func usableBrandedDatabase(at url: URL) -> URL? {
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        return size > 0 ? url : nil
     }
 
     /// A GTIN that lives ONLY in the ODR set — the branded split is disjoint from the base's curated
@@ -23,7 +32,7 @@ struct BrandedODRCatalogTests {
     private static let odrOnlyBarcode = "01633636543505"   // "Granola, Cinnamon, Raisin"
 
     @Test func brandedODRAttachesResolvesBarcodeAndFallsBackOnDetach() throws {
-        guard let odrURL = Self.odrURL else { return }   // asset absent (LFS not pulled) — skip
+        guard let odrURL = Self.odrURL else { return }   // asset absent or placeholder — skip
 
         let catalog = FoodCatalog.bundled()
         let baseCount = catalog.bundledCount

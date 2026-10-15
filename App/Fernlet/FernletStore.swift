@@ -6419,6 +6419,11 @@ final class FernletStore {
         // has no failure signal (a plain UserDefaults removal), so it reports no incomplete store.
         aiCallQuotaStore.reset()
 
+        // The device-local WeatherKit call budget (a day and a count, no location or conditions)
+        // and the in-memory conditions snapshot it bought. Usage history like the AI counter above,
+        // with the same plain-removal shape and no failure signal.
+        WeatherKitService.shared.clearRequestHistory()
+
         // The record of which Apple Health prompts have ever been shown — including `cycleTracking`
         // and `intimateLogging`. A plaintext `UserDefaults` array until 2026-08-20, cleared by
         // nothing, so a wiped phone still held a claim about the user's body; it is a device-only
