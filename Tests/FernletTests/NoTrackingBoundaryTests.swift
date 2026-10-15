@@ -33,7 +33,7 @@ import Testing
 ///
 /// Eleven enforcement tests plus six pure-matcher fixtures:
 /// - ``noAdvertisingOrTrackingSDKIsReferencedAnywhere()`` — banned frameworks/symbols in any Swift file.
-/// - ``thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage()`` — the SPM/pbxproj dependency sets.
+/// - ``packageDependenciesAreExactlyTheAllowedPackages()`` — the SPM/pbxproj dependency sets.
 /// - ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()`` — every hardcoded host in shipping code.
 /// - ``onlyThePinnedWebImportersMayHoldAnHTTPClient()`` — where an HTTP client may exist at all.
 /// - ``onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI()`` — where Network.framework's
@@ -58,9 +58,10 @@ struct NoTrackingBoundaryTests {
     // MARK: - Scan roots & floors
 
     /// Every root holding Swift source in this repo — app, package modules, all three extensions, and
-    /// every test target: the app's two and, since ProximityKit plan step A0.8, the package's under
-    /// `FernletKit/Tests`. Test code is included deliberately: an analytics SDK linked "only for tests"
+    /// both test targets. Test code is included deliberately: an analytics SDK linked "only for tests"
     /// is still a dependency in the project file and still a thing a contributor can promote later.
+    /// (ProximityKit's package tests, under `FernletKit/Tests` from plan step A0.8, left with the
+    /// package at A1.3; its repository holds them, and their sources, to the same rules.)
     ///
     /// `App/FernletMessagesExtension` joined on 2026-09-23. It had shipped since `a814ac4` outside
     /// this wall — and outside the manifest pin below — while being the one extension a process
@@ -73,7 +74,6 @@ struct NoTrackingBoundaryTests {
         "App/FernletShareExtension",
         "App/FernletMessagesExtension",
         "Tests/FernletTests",
-        "FernletKit/Tests",
         "Tests/FernletUITests"
     ]
 
@@ -160,15 +160,20 @@ struct NoTrackingBoundaryTests {
 
     // MARK: - Dependency allowlist
 
-    /// The ONLY third-party package this project may depend on, in the local SPM manifest and in the
-    /// Xcode project's remote-package references alike.
+    /// The ONLY packages from outside this repository the project may depend on, in the local SPM
+    /// manifest and in the Xcode project's remote-package references alike.
     ///
     /// CryptoSwift supplies the memory-hard Scrypt KDF behind `FernletLock`'s passphrase derivation —
-    /// pure local computation, no network code. Any other package URL fails here, whether or not its
-    /// name is on ``bannedSDKModules``: the banned list can only catch SDKs someone thought to name,
-    /// while this exact-set rule catches the ones nobody has heard of yet.
+    /// pure local computation, no network code. ProximityKit is Fernlet's own peer-to-peer subsystem,
+    /// moved with its history to a repository of its own and pinned at exactly 0.1.0 since plan step
+    /// A1.3: it depends on nothing, names no internet host, and its repository's CI holds its code to
+    /// the same rules (no tracking SDK or symbol, no HTTP client, and Network.framework's local-link API
+    /// in its three radio files alone). Any other package URL fails here, whether or not its name is on
+    /// ``bannedSDKModules``: the banned list can only catch SDKs someone thought to name, while this
+    /// exact-set rule catches the ones nobody has heard of yet.
     private static let allowedPackageURLs: Set<String> = [
-        "https://github.com/krzyzanowskim/CryptoSwift"
+        "https://github.com/krzyzanowskim/CryptoSwift",
+        "https://github.com/bowman-mw/proximitykit"
     ]
 
     // MARK: - Destination allowlist
@@ -304,9 +309,9 @@ struct NoTrackingBoundaryTests {
 
     // MARK: - Local-link API allowlist
 
-    /// Markers naming Network.framework's **local-link** surface — the TN3213 API the ProximityKit
-    /// mesh transport is built on (`NetworkConnection` / `NetworkListener` / `NetworkBrowser`), plus
-    /// the parameter and TXT-record types that come with it.
+    /// Markers naming Network.framework's **local-link** surface — the TN3213 API ProximityKit's
+    /// radios are built on (`NetworkConnection` / `NetworkListener` / `NetworkBrowser`), plus the
+    /// parameter and TXT-record types that come with it.
     ///
     /// A SECOND, SEPARATE family from ``httpClientMarkers``, with its own permit set, and the
     /// separation is the whole design. These names passed straight through the wall: the HTTP list
@@ -324,23 +329,17 @@ struct NoTrackingBoundaryTests {
         "NWListener", "NWParameters", "NWParametersBuilder", "NWTXTRecord"
     ]
 
-    /// The four files in shipping code that may name a local-link Network.framework API.
+    /// The one file in this repository's shipping code that may name a local-link Network.framework
+    /// API.
     ///
-    /// All four are link-local by construction and cannot reach a host at all: they advertise and
-    /// browse a Bonjour service type over QUIC with `prohibitedInterfaceTypes = [.cellular]`, and
-    /// every byte they carry is a signed/sealed Fernlet envelope between two phones in the same
-    /// room. None appears in ``permittedHTTPClientFiles``, and none may — see
-    /// ``theTwoNetworkPermitSetsAreDisjoint()``.
+    /// It is link-local by construction and cannot reach a host at all: it advertises and browses a
+    /// Bonjour service type over QUIC with `prohibitedInterfaceTypes = [.cellular]`. It does not appear
+    /// in ``permittedHTTPClientFiles``, and may not — see ``theTwoNetworkPermitSetsAreDisjoint()``.
+    /// ProximityKit's three radios (the QUIC mesh transport, the presence radio and the pair session's
+    /// radio), listed here until plan step A1.3, are its repository's since, where its own local-link
+    /// scan permits them and nothing else; the app's declared Bonjour types stay this wall's
+    /// (``theRetiredRadiosBonjourTypesAreGoneFromThePlist()``).
     private static let permittedLocalLinkFiles: Set<String> = [
-        // ProximityKit's QUIC mesh transport (plan §7): listener, browser, per-peer connections.
-        "NetworkMeshSession.swift",
-        // ProximityKit's QUIC presence radio (plan §17.1): the same three, advertising under a
-        // PresenceEpochPosture that is replaced whole at every 900 s epoch boundary.
-        "NetworkPresenceSession.swift",
-        // ProximityKit's QUIC recipe-share radio (plan §17.1): the same three, advertising under a
-        // ProximityPairPosture minted per start and per resume, and standing the listener AND the
-        // browser down for as long as a pairing is held.
-        "NetworkPairSession.swift",
         // The DEBUG-only feasibility spike, compiled out of Release entirely.
         "NetworkMeshFeasibilityProbe.swift"
     ]
@@ -483,12 +482,12 @@ struct NoTrackingBoundaryTests {
         )
     }
 
-    /// The project depends on exactly one third-party package, in both manifests.
+    /// The project depends on no package outside ``allowedPackageURLs``, in both manifests.
     ///
     /// The banned-name list catches SDKs someone thought to enumerate; this catches the rest. Adding
     /// ANY package — to `FernletKit/Package.swift` or as an `XCRemoteSwiftPackageReference` in the
     /// pbxproj — fails until it is deliberately allowlisted here, which is the review moment.
-    @Test func thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage() throws {
+    @Test func packageDependenciesAreExactlyTheAllowedPackages() throws {
         let repoRoot = Self.repoRoot()
         for relativePath in ["FernletKit/Package.swift", "App/Fernlet.xcodeproj/project.pbxproj"] {
             let url = repoRoot.appendingPathComponent(relativePath)
@@ -624,8 +623,8 @@ struct NoTrackingBoundaryTests {
         }
     }
 
-    /// Network.framework's local-link API lives in exactly the three proximity radio files, and
-    /// nowhere else.
+    /// Network.framework's local-link API lives in exactly the pinned files (the DEBUG feasibility
+    /// probe, since ProximityKit's three radios left with it at plan step A1.3), and nowhere else.
     ///
     /// The second marker family, and the reason it is a family of its own: TN3213 renamed the API
     /// this repo's peer-to-peer mesh is being migrated onto, so `NetworkConnection` /
@@ -667,7 +666,7 @@ struct NoTrackingBoundaryTests {
         let unexpected = holders.subtracting(Self.permittedLocalLinkFiles).sorted()
         #expect(
             unexpected.isEmpty,
-            "\(unexpected) name(s) a local-link Network.framework API. That surface lives in exactly \(Self.permittedLocalLinkFiles.sorted()) — the mesh transport, the presence radio and the DEBUG probe. A new one needs an entry here AND a row in Docs/No-Tracking-Wall.md §4c, in the same commit."
+            "\(unexpected) name(s) a local-link Network.framework API. That surface lives in exactly \(Self.permittedLocalLinkFiles.sorted()) — the DEBUG probe; ProximityKit's radios are its own repository's. A new one needs an entry here AND a row in Docs/No-Tracking-Wall.md §4c, in the same commit."
         )
         let missing = Self.permittedLocalLinkFiles.subtracting(holders).sorted()
         #expect(
@@ -1223,6 +1222,8 @@ struct NoTrackingBoundaryTests {
 
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"        .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),"#)
             == ["https://github.com/krzyzanowskim/CryptoSwift"])
+        #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"        .package(url: "https://github.com/bowman-mw/proximitykit", exact: "0.1.0"),"#)
+            == ["https://github.com/bowman-mw/proximitykit"])
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"\#t\#t\#trepositoryURL = "https://github.com/firebase/firebase-ios-sdk";"#)
             == ["https://github.com/firebase/firebase-ios-sdk"])
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"// .package(url: "https://example.com/commented-out"),"#).isEmpty)

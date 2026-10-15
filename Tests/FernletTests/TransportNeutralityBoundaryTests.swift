@@ -14,20 +14,24 @@ import Testing
 /// deletion round (2026-09-22) removed the two files. The wall stays because the risk it names never
 /// went away: a stray framework type in a manager would compile clean today exactly as it would
 /// have in P2, and this scan is still the only thing that would notice.
+///
+/// ProximityKit's own sources, where the radios and their wire and engine live, are a package
+/// dependency since ProximityKit plan step A1.3: its package suite of this name holds them to the same
+/// three rules. This wall holds the Fernlet code that builds on its radios.
 struct TransportNeutralityBoundaryTests {
 
-    /// Everything that must stay free of the framework. The three radio managers are the ones that
-    /// actually dropped their import in P1; the wire and engine roots are scanned so a new file
-    /// cannot introduce one. The modules that build on ProximityKit's radios are scanned with it:
-    /// `FernletProximityUI` holds the review screens that left ProximityKit's `UI/` folder
-    /// (ProximityKit plan step A0.1), `FernletConnections` Fernlet's connection rules over the mesh,
-    /// and `FernletSocial` the features that leave ProximityKit for it (ProximityKit plan step A0.4).
-    private static let scanRoots = [
-        "FernletKit/Sources/ProximityKit",
-        "FernletKit/Sources/FernletProximityUI",
-        "FernletKit/Sources/FernletConnections",
-        "FernletKit/Sources/FernletSocial",
-        "App/Fernlet"
+    /// Everything that must stay free of the framework, each root with the fewest Swift files it may
+    /// hold (four fifths of its count, measured at ProximityKit plan step A1.3: 4, 17, 52 and 248), so a
+    /// root that stops resolving fails rather than scanning nothing. The modules that build on
+    /// ProximityKit's radios: `FernletProximityUI` holds the review screens that left ProximityKit's
+    /// `UI/` folder (ProximityKit plan step A0.1), `FernletConnections` Fernlet's connection rules over
+    /// the mesh, `FernletSocial` the features that left ProximityKit for it (ProximityKit plan step
+    /// A0.4), the presence and recipe-share managers among them, and the app.
+    private static let scanRoots: [(root: String, floor: Int)] = [
+        (root: "FernletKit/Sources/FernletProximityUI", floor: 3),
+        (root: "FernletKit/Sources/FernletConnections", floor: 13),
+        (root: "FernletKit/Sources/FernletSocial", floor: 41),
+        (root: "App/Fernlet", floor: 198)
     ]
 
     /// The files allowed to name MultipeerConnectivity types, by repo-relative path. **Empty, and
@@ -62,16 +66,19 @@ struct TransportNeutralityBoundaryTests {
         "MCError"
     ]
 
-    /// A hard floor: these files were neutralized in P1 and must stay scanned. If one is renamed out
-    /// of the roots the scan would silently stop covering it, which is how a wall quietly stops
-    /// being one.
+    /// A hard floor: these files must stay scanned, one or more per root. The presence manager was
+    /// neutralized in P1; the recipe-share manager drives the recipe radio, the review sheet shows a
+    /// mesh session's photos, the pair profiles name each radio's row, and the rejection-matrix harness
+    /// drives the mesh from the app. If one is renamed out of the roots the scan would silently stop
+    /// covering it, which is how a wall quietly stops being one. ProximityKit's own floor files (the
+    /// coordinator, the mesh manager, the pair session and the transport surface) are its package
+    /// suite's.
     private static let floorFiles = [
-        "FernletKit/Sources/ProximityKit/Engine/ProximityCoordinator.swift",
-        "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
         "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
-        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift",
-        "FernletKit/Sources/ProximityKit/Transport/PeerTransport.swift",
-        "FernletKit/Sources/ProximityKit/Transport/PeerHandle.swift"
+        "FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift",
+        "FernletKit/Sources/FernletProximityUI/FriendPhotoReviewSheet.swift",
+        "FernletKit/Sources/FernletConnections/FernletPairProfiles.swift",
+        "App/Fernlet/Proximity/Feasibility/MeshRejectionMatrixHarness.swift"
     ]
 
     @Test func multipeerConnectivityIsNotImportedAnywhere() throws {
@@ -128,17 +135,18 @@ struct TransportNeutralityBoundaryTests {
 
     // MARK: - Scanning
 
-    /// Repo-relative paths of every Swift file under ``scanRoots``.
+    /// Repo-relative paths of every Swift file under ``scanRoots``, each root held to its floor: a root
+    /// that does not resolve, or holds fewer files than its floor, is recorded as an issue rather than
+    /// skipped, so no cell can pass over a walk that lost a root.
     private static func scannedSwiftFiles() throws -> [String] {
         var found: [String] = []
-        for root in scanRoots {
+        // R2: bounded by the four roots and each root's finite file list.
+        for (root, floor) in scanRoots {
             let rootURL = RepoRoot.url.appendingPathComponent(root)
-            guard let walker = FileManager.default.enumerator(
-                at: rootURL, includingPropertiesForKeys: nil
-            ) else { continue }
-            for case let url as URL in walker where url.pathExtension == "swift" {
-                found.append(repoRelativePath(url))
-            }
+            let walker = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil)
+            let files = (walker?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+            #expect(files.count >= floor, "the scan saw \(files.count) Swift files under \(root), below its floor \(floor)")
+            found += files.map(repoRelativePath)
         }
         return found
     }

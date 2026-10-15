@@ -95,36 +95,23 @@ struct CodeOwnersResolutionTests {
         "/Tests/FernletTests/LocalizationBoundaryTests.swift",
         "/Tests/FernletTests/CIGateSelectorBoundaryTests.swift",
         "/Tests/FernletTests/IdentityProvisioningReadTests.swift",
-        // ProximityKit's platform wall and the native-macOS build it rides on (plan step A0.6.5): the
-        // source half (a package test since plan step A1.1.8), Fernlet's half that pins the build, the
-        // check and its negative test, named in Docs/Verifiability.md.
-        "/FernletKit/Tests/ProximityKitTests/ProximityPlatformNeutralityTests.swift",
+        // The Mac-ready set's native-macOS build (plan step A0.6.5): Fernlet's half of the platform wall
+        // that pins the build, the check and its negative test, named in Docs/Verifiability.md. The
+        // source half over ProximityKit's own code, and the walls over its keychain funnel, its tests and
+        // their inventory, are ProximityKit's own repository's since plan step A1.3, where its CODEOWNERS
+        // requires them.
         "/Tests/FernletTests/ProximityPlatformBoundaryTests.swift",
-        // ProximityKit's keychain funnel, whose Debug-only backend door its package tests install their
-        // in-memory store through, and the wall that holds that door (plan step A1.1.10).
-        "/FernletKit/Sources/ProximityKit/Support/ProximityKeychainItem.swift",
-        "/FernletKit/Tests/ProximityKitTests/ProximityKeychainDoorTests.swift",
         "/Scripts/macos-build-check.sh",
         "/Scripts/macos-build-selftest.sh",
         "/Scripts/run-gated-suites.sh",
         "/FernletKit/Package.swift",
+        // The two resolved files that pin one revision of each outside package, ProximityKit's tag among
+        // them, which CIGateSelectorBoundaryTests holds equal (plan step A1.3).
+        "/FernletKit/Package.resolved",
+        "/App/Fernlet.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
         "/.github/CODEOWNERS",
         // The suite inventory CIGateSelectorBoundaryTests holds to the tree (ProximityKit plan step A0.8).
         "/Tests/suite-inventory.tsv",
-        // The package's own hygiene suite and its own inventory, which it holds to the declared tests and
-        // CIGateSelectorBoundaryTests holds this repository's package rows to (plan step A1.1.13).
-        "/FernletKit/Tests/ProximityKitTests/PackageTestHygieneTests.swift",
-        "/FernletKit/Tests/ProximityKitTests.tsv",
-        // The package's own tree walls: the one install of its audit sink, its stores' scopes, ML5 and the
-        // digest homes over its tests (plan step A1.1.14).
-        "/FernletKit/Tests/ProximityKitTests/PackageTestTreeWallTests.swift",
-        // The source walls over ProximityKit's own code: its launch hooks inside `#if DEBUG` and its keychain
-        // rows device-bound and never synchronizable (plan step A1.1.15), a purpose named at every raw
-        // cryptographic call and its escape hatches pinned (plan step A1.1.16), and no identity built in its
-        // code (plan step A1.1.17).
-        "/FernletKit/Tests/ProximityKitTests/ProximitySourceWallTests.swift",
-        // The memory-lifecycle wall over ProximityKit's own code: ML1-ML4 (plan step A1.1.17).
-        "/FernletKit/Tests/ProximityKitTests/ProximityMemoryLifecycleTests.swift",
         // The workspace the strict build and every CI test run go through (ProximityKit plan step A0.8).
         "/Fernlet.xcworkspace/",
         "/.github/workflows/s3-wall.yml",

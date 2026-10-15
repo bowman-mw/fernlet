@@ -914,9 +914,16 @@ struct MeshP3InteropAcceptanceTests {
     /// `MeshMembershipEventWireTests.noShippingSourceEmitsAGoodbye` is the same wall; the battery
     /// re-affirms it here because "parsed, never emitted" is half of the acceptance line and the
     /// scenario above can only show the parsed half.
+    ///
+    /// Over every shipping root of this repository, floored at 448 files (four fifths of the 561
+    /// measured at ProximityKit plan step A1.3), so a walk that lost a root reds rather than passing
+    /// on what is left. ProximityKit's own code, which holds the mesh's one sender, is its package
+    /// suite of this name's to sweep.
     @Test func theGoodbyeGrepWallStillHolds() throws {
+        let files = try CryptographicWallScan.sourceFiles()
+        #expect(files.count >= 448, "the goodbye wall read only \(files.count) shipping files")
         var offenders: [String] = []
-        for url in try CryptographicWallScan.sourceFiles() {
+        for url in files {
             let source = try String(contentsOf: url, encoding: .utf8)
             for line in source.components(separatedBy: .newlines)
             where line.contains("sendEnvelope(.sessionGoodbye") {

@@ -684,6 +684,12 @@ struct RecipeShareOverQUICTests {
     /// **A withdrawn Bonjour registration republishes.** P8 item 0's device finding (b) in its
     /// exact shape: this radio publishes once per `start()`/resume and owns no timer, so a silent
     /// `.remove` leaves nothing on the air with `isListening` still answering yes, forever.
+    ///
+    /// The source needle beside it, `theRegistrationRemoveBranchIsNotABareAssignment` (the `.remove`
+    /// branch is not a bare assignment: the shape the whole finding is, a state flag cleared and
+    /// nothing else done about it), reads the pair session's source, so it is ProximityKit's package
+    /// copy of this suite since plan step A1.3. The branch never fires on a Simulator, so that shape
+    /// assertion is its only stand-in, which `MeshP9HonestyAcceptanceTests` keeps named here.
     @Test func aWithdrawnRegistrationRepublishesUnderAFreshPosture() throws {
         let radio = NetworkPairSession()
         let first = try radio.runWithoutRadiosForTesting()
@@ -698,20 +704,6 @@ struct RecipeShareOverQUICTests {
                 "back on the air under a fresh name — a name that went away and came back is a link")
         #expect(radio.advertisedSessionID != first.sessionID)
         #expect(radio.advertisedCertificateForTesting != first.tlsIdentity.certificateDER)
-    }
-
-    /// And the source needle that the `.remove` branch is not a bare assignment — the shape the
-    /// whole finding is: a state flag cleared and nothing else done about it.
-    @Test func theRegistrationRemoveBranchIsNotABareAssignment() throws {
-        let code = MeshRoutedSourceScan.codeOnly(try Self.sessionSource())
-        let body = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "func listenerRegistrationChanged(", in: code),
-            "listenerRegistrationChanged is gone or its braces do not close"
-        )
-        let removeIndex = try #require(body.range(of: "case .remove:")?.upperBound,
-                                       "the `.remove` branch is gone")
-        #expect(body[removeIndex...].contains("republishListener()"),
-                "a withdrawn registration is silent again: nothing on the air, isListening still true")
     }
 
     // MARK: - The per-transfer stream
@@ -892,87 +884,16 @@ struct RecipeShareOverQUICTests {
         #expect(manager.transferForTesting?.completionCount == 1)
     }
 
-    // MARK: - Rule-7 gates
-
-    /// The listener and browser task bodies check for cancellation before they report.
-    ///
-    /// A source claim because it has to be: `NetworkListener.run` is a framework call a unit test
-    /// cannot make throw. The order is the whole of it — `pauseDiscovery()` cancels the listener
-    /// task every time a pairing forms, so a `CancellationError` reported as a start failure would
-    /// stand the radio down on the very event that is supposed to keep it up and quiet.
-    @Test func theListenerAndBrowserTasksDoNotReportTheirOwnCancellation() throws {
-        let code = MeshRoutedSourceScan.codeOnly(try Self.sessionSource())
-        // The browser's door is `reportBrowserFailure(` since the runtime-failure fix — a browser
-        // failure is not a start failure — so each task is pinned to the door it actually uses.
-        let doors = [
-            "func startListener() throws": "report(",
-            "func startBrowser()": "reportBrowserFailure("
-        ]
-        for (signature, door) in doors.sorted(by: { $0.key < $1.key }) {
-            let body = try #require(
-                MeshRoutedSourceScan.bracedBody(after: signature, in: code),
-                "\(signature) is gone or its braces do not close"
-            )
-            let guardIndex = try #require(
-                body.range(of: "guard !Task.isCancelled else { return }")?.lowerBound,
-                "\(signature)'s task body reports without checking for its own cancellation first"
-            )
-            let reportIndex = try #require(
-                body.range(of: door)?.lowerBound, "\(signature) no longer reports at all"
-            )
-            #expect(guardIndex < reportIndex, "\(signature) guards AFTER it reports, which guards nothing")
-        }
-    }
-
-    /// **The rule-7 gate for pass 2.** Pass 1 changed nothing on the air, so the only mechanical
-    /// proof that pass 2 RAN is that the retired radio is gone from the manager, the new service
-    /// type is declared, and the session binds its own ALPN.
-    ///
-    /// Pinned in both directions — a file that names neither has been renamed or emptied, not
-    /// cleaned.
-    ///
-    /// Vacuous by design since the deletion round (2026-09-22): the framework is gone from the tree,
-    /// so these needles can no longer match anything. Kept anyway — they cost nothing and they are
-    /// the per-manager half of the tree-wide wall (`TransportNeutralityBoundaryTests`).
-    @Test func theManagerNoLongerNamesTheRetiredRadio() throws {
-        let source = try Self.managerSource()
-        let code = MeshRoutedSourceScan.codeOnly(source)
-        for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",
-                       "PeerChannelTransport", "shouldAcceptInvitation", "hasPendingConnections",
-                       "disconnectPeer"] {
-            #expect(!code.contains(needle), "ProximityPairSession still names `\(needle)` in code")
-        }
-        // One FILE is not the unit: an `extension ProximityPairSession` in a new file, or a
-        // `typealias`, reintroduces every needle above without reddening a scan of this one. The
-        // subtree is, and `displayHint` joins the list — under QUIC the hint is empty, so a reader
-        // that still prefers it renders nothing where a name belongs.
-        for (path, other) in try Self.pairSessionSources() where path != Self.managerPath {
-            let otherCode = MeshRoutedSourceScan.codeOnly(other)
-            for needle in ["MeshMultipeerSession", "MCPeerID", "MCSession", "MultipeerConnectivity",
-                           "displayHint"] {
-                #expect(!otherCode.contains(needle), "\(path) names `\(needle)` in code")
-            }
-        }
-        #expect(!code.contains("displayHint"),
-                "a user-visible line names a peer by the transport hint again — see displayName(for peer:)")
-        #expect(code.contains("ProximityPairRadioSession"), "and it drives the QUIC recipe radio's seam")
-        #expect(code.contains("NetworkPairSession"), "whose production conformer it builds")
-        #expect(code.contains("ProximityPairAdvertisement"), "through the recipe TXT vocabulary")
-
-        // Comments get the narrower rule the presence retirement drew: a framework API TYPE name in
-        // prose describes machinery this file no longer has, while the framework's NAME describes
-        // history and is the sentence that explains why the posture is ephemeral at all.
-        for needle in ["MCPeerID", "MCSession", "MCNearbyServiceAdvertiser", "MCNearbyServiceBrowser"] {
-            #expect(!source.contains(needle),
-                    "a ProximityPairSession comment still describes `\(needle)` machinery")
-        }
-    }
+    // MARK: - The service type
 
     /// The recipe radio's service type and ALPN are its own, and the Info.plist carries the type.
     ///
     /// A service type missing from `NSBonjourServices` fails discovery silently on device, and a
     /// shared ALPN would let a recipe dial complete a TLS handshake with a mesh or presence
-    /// listener.
+    /// listener. That the radio reads its ALPN off its pair profile's radio and binds it reads
+    /// ProximityKit's source and is the package suite of this name's, beside the radio's other source
+    /// walls (the remove branch's republish, the task bodies' cancellation order, and no retired radio
+    /// named in the pair session's subtree).
     @Test func theRecipeServiceTypeIsItsOwnAndIsDeclared() throws {
         let radios = ProximityNamespace.fernlet.family.radios
         #expect(radios.pair.serviceType == "_fernlet-recipe2._udp")
@@ -983,10 +904,6 @@ struct RecipeShareOverQUICTests {
         #expect(radios.pair.alpn != radios.presence.alpn)
         let plist = try RepoRoot.source("App/Fernlet/Info.plist")
         #expect(plist.contains("<string>\(radios.pair.serviceType)</string>"))
-        let session = try Self.sessionSource()
-        #expect(session.contains("alpn = profile.radio.alpn"),
-                "the session reads its ALPN off its pair profile's radio, the host namespace's recipe row")
-        #expect(session.contains("alpn: alpn"), "the session must actually bind its ALPN")
     }
 
     // MARK: - Helpers
@@ -1003,41 +920,5 @@ struct RecipeShareOverQUICTests {
             updatedAt: createdAt
         )
         return RecipeShareCodec.proximityPayload(for: recipe, foodItems: [])
-    }
-
-    /// The recipe radio's owner, ProximityKit's pair session (the recipe-share manager's mechanism
-    /// until plan step A0.7.3, when the manager left for FernletSocial over it).
-    private static let managerPath =
-        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
-
-    private static func managerSource() throws -> String {
-        try RepoRoot.source(managerPath)
-    }
-
-    /// Every Swift file under `PairSession/`, plus any file ANYWHERE in ProximityKit that
-    /// extends the pair session — the unit the rule-7 scan has to cover, because one file is not it.
-    private static func pairSessionSources() throws -> [(String, String)] {
-        let root = "FernletKit/Sources/ProximityKit"
-        let directory = RepoRoot.url(root)
-        let names = try FileManager.default
-            .contentsOfDirectory(atPath: directory.appendingPathComponent("PairSession").path)
-            .filter { $0.hasSuffix(".swift") }
-            .sorted()
-        #expect(names.count >= 3, "the PairSession directory moved or emptied — the scan would pass vacuously")
-        var sources = try names.prefix(64).map {
-            ("\(root)/PairSession/\($0)", try RepoRoot.source("\(root)/PairSession/\($0)"))
-        }
-        let all = FileManager.default.enumerator(atPath: directory.path)?
-            .compactMap { $0 as? String }.filter { $0.hasSuffix(".swift") } ?? []
-        for relative in all.sorted().prefix(512) where !relative.hasPrefix("PairSession/") {
-            let source = try RepoRoot.source("\(root)/\(relative)")
-            guard source.contains("extension ProximityPairSession") else { continue }
-            sources.append(("\(root)/\(relative)", source))
-        }
-        return sources
-    }
-
-    private static func sessionSource() throws -> String {
-        try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkPairSession.swift")
     }
 }

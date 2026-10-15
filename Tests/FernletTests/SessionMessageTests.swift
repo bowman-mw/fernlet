@@ -547,32 +547,12 @@ struct SessionMessageTests {
     /// **…and nowhere else** (plan step A0.5.9): the generation has ONE writer,
     /// `advanceTranscriptGeneration()`, which adds one, and that writer has exactly three callers — the
     /// forming commit, the session's end and the privacy wipe's begin — each before its session
-    /// observer moment. The composition drops the chat's transcript in exactly those three observer
-    /// legs, in the order the manager ran them (the formation's between the shop's reset and its
-    /// send-tracking clear, the end's after the shop's window), and the chat in one place. A source
-    /// pin, because "never elsewhere" is a claim about every path, which no behaviour enumerates.
+    /// observer moment; those counts read ProximityKit's manager and are its package suite of this
+    /// name's. The composition drops the chat's transcript in exactly those three observer legs, in the
+    /// order the manager runs them (the formation's between the shop's reset and its send-tracking
+    /// clear, the end's after the shop's window), and the chat in one place: that half is held here. A
+    /// source pin, because "never elsewhere" is a claim about every path, which no behaviour enumerates.
     @Test func theGenerationHasOneWriterWhoseThreeCallersPrecedeTheirObserverMoments() throws {
-        let engine = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"))
-        #expect(engine.components(separatedBy: "transcriptGeneration +=").count - 1 == 1,
-                "the generation is advanced in exactly one place")
-        #expect(engine.components(separatedBy: "transcriptGeneration = ").count - 1 == 1,
-                "and assigned only by its declaration")
-        let writer = try #require(MeshRoutedSourceScan.bracedBody(
-            after: "private func advanceTranscriptGeneration(", in: engine), "the generation's writer is gone")
-        #expect(writer.contains("transcriptGeneration += 1"), "the writer advances it by one")
-        #expect(engine.components(separatedBy: "advanceTranscriptGeneration()").count - 1 == 4,
-                "the writer's declaration and exactly three callers")
-        let moments = [("func noteSlotCommittedForShop(", "sessionObserver?.meshSlotDidCommit("),
-                       ("private func endSessionIfEnded(", "sessionObserver?.meshSessionDidEnd("),
-                       ("public func beginPrivacyWipe(", "sessionObserver?.meshPrivacyWipeDidBegin(")]
-        // R2: bounded by the three moments.
-        for (site, observer) in moments {
-            let body = try #require(MeshRoutedSourceScan.bracedBody(after: site, in: engine), "\(site) is gone")
-            let advance = try #require(body.range(of: "advanceTranscriptGeneration()"), "\(site) advances nothing")
-            let told = try #require(body.range(of: observer), "\(site) tells no observer")
-            #expect(advance.upperBound <= told.lowerBound, "\(site) advances after its observer moment")
-        }
         let composition = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/FernletMeshFeatures.swift"))
         #expect(composition.components(separatedBy: "chat.clearTranscript()").count - 1 == 3,

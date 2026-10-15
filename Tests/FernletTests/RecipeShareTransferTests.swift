@@ -17,7 +17,9 @@
 // Tier 1: no rig, no radio, no simulator, no clock. The manager cells drive the production helpers
 // with `markRunningForTesting` over a `FakeRecipeShareRadioSession` that is never `start()`ed,
 // exactly as ProximityRecipeShareCapTests does, so pause/resume toggle a flag and nothing goes on
-// the air.
+// the air. That the pair session touches discovery through the gate alone, and caps the advertised
+// name by its bytes and nothing else, are source walls over ProximityKit's pair session: its package
+// suite of this name.
 
 @testable import ProximityKit
 import FernletSocial
@@ -485,57 +487,11 @@ struct RecipeShareTransferTests {
         #expect(name.utf8.count <= ProximityPairAdvertisedName.maxByteCount)
     }
 
-    // MARK: - Rule-7 needles for pass 2
-
-    /// The gate is the ONLY door to the radio's discovery. Pass 2 swaps the session out; a bare
-    /// `pauseDiscovery()` added back beside it would leave the contract with two owners again, and
-    /// the table would stop being the contract.
-    ///
-    /// Counting whole-file occurrences alone does not say that: deleting the call from inside the
-    /// gate and adding one back in `registerConnection` keeps the count at 1 while handing the
-    /// contract two owners. So the count is paired with CONTAINMENT — every occurrence must sit
-    /// inside `applyDiscoveryGate`'s brace-matched body — which is what reddens on a relocation.
-    /// (The usual grep-wall caveat stands: `let radio = session; radio.pauseDiscovery()` evades
-    /// both halves. The wall is against drift, not against a determined author.)
-    @Test func theManagerTouchesDiscoveryThroughTheGateAlone() throws {
-        let source = MeshRoutedSourceScan.codeOnly(try Self.managerSource())
-        let gateBody = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "private func applyDiscoveryGate(", in: source),
-            "applyDiscoveryGate is gone — the discovery contract has no door"
-        )
-        for verb in ["session.pauseDiscovery()", "session.resumeDiscovery()"] {
-            let whole = Self.occurrences(of: verb, in: source)
-            let insideGate = Self.occurrences(of: verb, in: gateBody)
-            #expect(whole == 1, "\(verb) is called \(whole) times; the gate is the one door")
-            #expect(insideGate == whole, "\(verb) is called outside applyDiscoveryGate's own body")
-        }
-    }
-
-    /// The advertised name's cap is the byte bound and nothing else: the Character cap it replaced
-    /// must not come back beside it.
-    @Test func theAdvertisementNameHasNoCharacterCap() throws {
-        let source = try Self.managerSource()
-        #expect(source.contains("ProximityPairAdvertisedName.publishable(displayName, in: namespace)"))
-        #expect(source.contains("displayName.prefix(") == false,
-                "a Character cap is back on the advertised name")
-    }
-
     // MARK: - Helpers
 
     private static func applied(_ events: [ProximityPairTransfer.Event]) -> ProximityPairTransfer {
         var transfer = ProximityPairTransfer(recipientID: UUID())
         for event in events { transfer.apply(event) }
         return transfer
-    }
-
-    /// The recipe radio's owner's source: ProximityKit's pair session (the recipe-share manager's
-    /// mechanism until plan step A0.7.3, when the manager left for FernletSocial over it).
-    private static func managerSource() throws -> String {
-        let path = "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift"
-        return try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
-    }
-
-    private static func occurrences(of needle: String, in source: String) -> Int {
-        source.components(separatedBy: needle).count - 1
     }
 }

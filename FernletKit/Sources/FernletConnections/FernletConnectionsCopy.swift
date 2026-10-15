@@ -16,7 +16,8 @@
 //
 // DO NOT put wire vocabulary in this file. Every `PayloadSummary` title, every mesh token and
 // every canonical-signature byte is FROZEN ENGLISH and must never reach `String(localized:)` —
-// see `ProximityKit.md` §"Localization: nothing on the wire is display copy". This vault is
+// see ProximityKit's landing page, `ProximityKit.md` in its repository, §"Localization: nothing on
+// the wire is display copy". This vault is
 // display copy only: what a person reads, never what a peer parses. The namespace's values in this
 // module (`ProximityNamespace.fernlet`) are data and never come here, the peer-name floor "A friend"
 // among them, which a session can write into a roster and the trust vault as a peer's name.

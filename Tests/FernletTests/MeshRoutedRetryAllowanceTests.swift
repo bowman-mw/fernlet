@@ -8,7 +8,9 @@
 // `MeshRoutedRetryRotation` as the value types they are: no mesh, no store, no item and no clock,
 // which is what lets the split be stated exhaustively rather than sampled. `MeshRoutedRetryAllowance`
 // `Tests` then drives the two real lists through `MeshRoutedDrainRig` and the manager's own
-// `applyRoutedAccessGate` edge, because a plan nobody spends is not a fix.
+// `applyRoutedAccessGate` edge, because a plan nobody spends is not a fix. That the planner names no
+// routed type, registry or store is a source wall over ProximityKit's planner, the package suite
+// `MeshRoutedRetryPlanTests`.
 //
 // Two fixture facts the rig cells rest on, both paid for by earlier suites:
 //
@@ -235,27 +237,6 @@ struct MeshRoutedRetryPlanTests {
             enumerated at every pass is shuffled to the back on each one and the rotation it feeds \
             never advances
             """)
-    }
-
-    /// **The planner is type-agnostic, and that is a wall rather than a claim** (item 5.2).
-    ///
-    /// Item 6 supplies its heart predicate to `MeshNetworkManager.ackableNow(_:in:judgement:)`, the
-    /// filter-before-plan seam, and never here: a planner that could see a type token would be a
-    /// second per-type source beside the registry, which `noShippingCodeBranchesOnARoutedTypeToken`
-    /// exists to forbid. The needles are matched against CODE only, so the file's own doc comments
-    /// may name what the code may not.
-    @Test func thePlannerNamesNoRoutedTypeNoRegistryAndNoStore() throws {
-        let path = "FernletKit/Sources/ProximityKit/Mesh/MeshRoutedRetryPlan.swift"
-        let source = try RepoRoot.source(path)
-        #expect(source.count > 2_000, "the source scan must not be reading an empty file")
-        let code = MeshRoutedSourceScan.codeOnly(source)
-        #expect(code.contains("MeshRoutedRetryPlan"), "the scan must be reading the right file")
-        // R2: bounded by the needle list.
-        for needle in ["MeshRoutedTypeToken", "typeToken", "routedTypes", "contentScope",
-                       "entry(for:", "requiresForeground", "MeshRoutedManifest",
-                       "MeshRoutedStore(", "MeshRoutedIndex(", "ProximityAudit"] {
-            #expect(code.contains(needle) == false, "the planner acquired something it must not see")
-        }
     }
 }
 

@@ -279,12 +279,17 @@ struct PrivacyWipeCoverageTests {
     ]
 
     /// The three identity holders whose live in-memory identity caches must die with the keychain
-    /// rows: the mesh manager, the presence manager and the recipe pair session (whose owner, the
-    /// recipe-share manager, forwards the store's wipe to it).
-    private static let identitySeamFiles = [
-        "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift",
-        "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
-        "FernletKit/Sources/ProximityKit/PairSession/ProximityPairSession.swift",
+    /// rows, each by the Fernlet file that reaches its wipe seam and the declaration or call it spells
+    /// there: the presence manager (FernletSocial) declares its own; the mesh manager and the recipe
+    /// pair session are ProximityKit's, whose package suite holds their seams, so Fernlet holds the
+    /// calls that reach them — the store's funnel calls the mesh manager's, and the recipe-share
+    /// manager forwards the store's wipe to its pair session's.
+    private static let identitySeams: [(file: String, needle: String)] = [
+        (file: "App/Fernlet/FernletStore.swift", needle: "meshNetworkManager.wipeIdentityForDeleteAll()"),
+        (file: "FernletKit/Sources/FernletSocial/Presence/PresenceManager.swift",
+         needle: "public func wipeIdentityForDeleteAll() throws {"),
+        (file: "FernletKit/Sources/FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift",
+         needle: "pairSession.wipeIdentityForDeleteAll()")
     ]
 
     /// The functions that together ARE the wipe path, keyed by a unique substring of their
@@ -795,11 +800,15 @@ struct PrivacyWipeCoverageTests {
         }
     }
 
+    /// Every live identity cache has a wipe seam that delete-all reaches: each row of
+    /// ``identitySeams`` spells its declaration or call in code (whole-line comments dropped).
     @Test func everyLiveIdentityCacheHasAWipeSeam() throws {
-        let root = RepoRoot.url
-        for file in Self.identitySeamFiles {
-            let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
-            #expect(source.contains("func wipeIdentityForDeleteAll"), "\(file) owns a live IdentityService but lost its wipe seam.")
+        #expect(Self.identitySeams.count == 3, "the identity-holder list holds \(Self.identitySeams.count) rows")
+        // R2: bounded by the three holders.
+        for seam in Self.identitySeams {
+            let code = MeshRoutedSourceScan.codeOnly(try RepoRoot.source(seam.file))
+            #expect(code.contains(seam.needle),
+                    "\(seam.file) no longer spells `\(seam.needle)`: a live IdentityService cache lost its wipe seam")
         }
     }
 

@@ -5,8 +5,8 @@
 # Scripts/git-hooks directory. Run once per clone. Idempotent.
 #
 # This installs the pre-push hook, whose two build legs are the S3 privacy-wall check
-# (Scripts/spm-wall-check.sh) and ProximityKit's native-macOS build check (Scripts/macos-build-check.sh,
-# plan step A0.6). Bypass one leg for a single push with:
+# (Scripts/spm-wall-check.sh) and the Mac-ready set's native-macOS build check
+# (Scripts/macos-build-check.sh, plan step A0.6). Bypass one leg for a single push with:
 #   SKIP_S3_WALL_CHECK=1 git push       (the S3 wall check)
 #   SKIP_MACOS_BUILD_CHECK=1 git push   (the macOS build check)
 set -euo pipefail

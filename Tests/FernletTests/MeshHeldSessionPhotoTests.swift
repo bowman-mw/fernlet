@@ -585,34 +585,23 @@ struct MeshHeldSessionPhotoTests {
     /// engine asks BEFORE the body is opened (no decrypt) and so before the quota (spent inside the
     /// canonical write), and the ending's memory move never names a store (I6).
     ///
-    /// Three brace-matched bodies since plan step A0.5.2, because the order is now held in three
-    /// places: `dispatchRoutedPlaintext` asks the handler's `.verdictBeforeOpen(` before it invokes
-    /// the box's open-then-project step; that step, built by `registerRoutedProjectionHandler`,
-    /// opens through `MeshRoutedItemDelivery.openBody(` before it calls the handler's
-    /// `.projectRoutedItem(`; and the photo handler's `verdictBeforeOpen` is the settlement. The first
-    /// two are the engine's, in the manager; the third is the session photos' projection adapter's,
-    /// in `MeshSessionPhotos.swift`, since plan step A0.5.11 (the manager's built-in's before it).
+    /// Three brace-matched bodies since plan step A0.5.2, because the order is held in three places:
+    /// `dispatchRoutedPlaintext` asks the handler's `.verdictBeforeOpen(` before it invokes the box's
+    /// open-then-project step; that step, built by `registerRoutedProjectionHandler`, opens through
+    /// `MeshRoutedItemDelivery.openBody(` before it calls the handler's `.projectRoutedItem(`; and the
+    /// photo handler's `verdictBeforeOpen` is the settlement. The first two are the engine's, in
+    /// ProximityKit's manager, and its package suite of this name holds them (with the manager naming
+    /// no wall-first hold and no header-read liveness); the third is the session photos' projection
+    /// adapter's, in `MeshSessionPhotos.swift`, since plan step A0.5.11, and is held here.
     @Test func theRoutedRefusalPrecedesTheDecryptAndTheQuota() throws {
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-        )
         let photos = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/FernletSocial/Mesh/MeshSessionPhotos.swift")
         )
-        let dispatch = try #require(MeshRoutedSourceScan.bracedBody(after: "private func dispatchRoutedPlaintext(", in: source))
-        let verdict = try #require(dispatch.range(of: ".verdictBeforeOpen(delivery)"))
-        let open = try #require(dispatch.range(of: ".openThenProject("))
-        #expect(verdict.lowerBound < open.lowerBound, "the pre-open verdict is read before anything is decrypted")
-        let register = try #require(MeshRoutedSourceScan.bracedBody(after: "func registerRoutedProjectionHandler<", in: source))
-        let decrypt = try #require(register.range(of: "MeshRoutedItemDelivery.openBody("))
-        let write = try #require(register.range(of: ".projectRoutedItem("))
-        #expect(decrypt.lowerBound < write.lowerBound, "the open precedes the canonical write, and the quota inside it")
         let photo = try #require(MeshRoutedSourceScan.bracedBody(after: "private final class PhotoProjector", in: photos))
         let settle = try #require(MeshRoutedSourceScan.bracedBody(after: "func verdictBeforeOpen(", in: photo))
         #expect(settle.contains("routedPhotoSettlement(delivery)"), "the photo row's pre-open verdict is the tombstone read")
-        #expect(!source.contains("cachePhoto(") && !photos.contains("cachePhoto("),
-                "the wall-first hold is gone for both producers")
-        #expect(!source.contains("isPhotoFromCurrentSession") && !photos.contains("isPhotoFromCurrentSession"),
+        #expect(!photos.contains("cachePhoto("), "the wall-first hold is gone from the session photos")
+        #expect(!photos.contains("isPhotoFromCurrentSession"),
                 "live is the signed mesh id's call, never the header's")
     }
 }

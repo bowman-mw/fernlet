@@ -3,7 +3,7 @@
 //
 // Grep-wall keeping every test `MeshRoutedStore` on its OWN scope — directory AND keychain service —
 // in the idiom of `MeshSessionStoreIsolationTests` and `PhotoDirectoryIsolationTests`; plus the
-// one-construction-site wall over `MeshCustodyDurabilityWitness`. "Test" means the app's unit tests;
+// FernletSocial halves of the routed gates' walls. "Test" means the app's unit tests;
 // ProximityKit's own package tests hold the same rules over theirs (`PackageTestTreeWallTests`).
 //
 // The shared-disk-root flake family is a well-documented cross-suite hazard in this tree: XCTest and
@@ -18,11 +18,15 @@
 // `MeshRoutedStore(scope: .production(for: namespace, directory: root, installBinding: binding))`
 // compiles, passes in isolation every time, and lands its damage in somebody else's suite.
 //
-// The witness wall is a different kind of claim and lives here because it is the same tool. The
-// compile-time gate on `MeshCustodyDurabilityWitness` is `fileprivate`, which is FILE scope — so it
-// holds only while the type and its one minting verb share a file that holds nothing else. Moving
-// the type would widen the gate silently, with no compile error and no failing behaviour test. This
-// is the wall that notices.
+// The gate walls are a different kind of claim and live here because they are the same tool. The
+// compile-time gates on the engine's witnesses are `fileprivate`, which is FILE scope — so they hold
+// only while each type and its one minting verb share a file that holds nothing else, and moving a
+// type would widen its gate silently, with no compile error and no failing behaviour test. The walls
+// that notice read ProximityKit's sources and are its package suite of this name, as are the ack
+// path's (no decryption seam) and the one registry and ack-stage table the engine builds. What stays
+// here is FernletSocial's half: the module the engine calls by token mints no witness, builds no
+// second registry or table, branches on no routed type token, and vends the heart ledger's proof only
+// from the ledger's own file.
 
 import FernletConnections
 import FernletSocial
@@ -420,125 +424,37 @@ struct MeshRoutedStoreIsolationTests {
         #expect(unscopedRootedDoubles(exempt).isEmpty, "the exempt double was refused")
     }
 
-    // MARK: - The durability gate
+    // MARK: - The witness and proof gates (FernletSocial's halves)
 
-    /// `MeshCustodyDurabilityWitness` has exactly one construction site, and it is the file holding
-    /// `committingCustody` and nothing else.
+    /// No FernletSocial file constructs a `MeshRecipientDeliveryWitness`: a host may not mint the
+    /// engine's delivery witness at all.
     ///
-    /// The compile-time gate is `fileprivate`, so this wall is not redundant with it — it is what
-    /// notices when someone MOVES the type, which widens the gate with no compile error. If the
-    /// witness ever has to become `internal`, this wall is the replacement for the guarantee that is
-    /// lost, and it must then be tightened rather than deleted.
-    @Test func theDurabilityWitnessHasExactlyOneConstructionSite() throws {
-        let root = RepoRoot.url("FernletKit/Sources/ProximityKit")
-        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
-        let files = (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
-        var scanned = 0
-        var constructionSites: [String] = []
-        for file in files.sorted(by: { $0.path < $1.path }) {
-            scanned += 1
-            let source = try String(contentsOf: file, encoding: .utf8)
-            let code = MeshRoutedSourceScan.codeOnly(source)
-            if code.contains("MeshCustodyDurabilityWitness(") {
-                constructionSites.append(file.lastPathComponent)
-            }
-        }
-        #expect(scanned >= 8, "the ProximityKit sweep found only \(scanned) files — scanner broken?")
-        #expect(
-            constructionSites == ["MeshRoutedCustodyCommit.swift"],
-            """
-            `MeshCustodyDurabilityWitness(` is constructed in \(constructionSites) — it must be built \
-            in exactly one file, the one holding `committingCustody` and nothing else. A second site \
-            means a receipt can be minted for bytes no durable write returned.
-            """
-        )
-    }
-
-    /// The file that holds the witness holds the commit verb and nothing else — the property that
-    /// makes `fileprivate` a real gate rather than a comment.
-    @Test func theCommitFileHoldsOnlyTheWitnessAndItsVerb() throws {
-        let source = try RepoRoot.source(
-            "FernletKit/Sources/ProximityKit/Mesh/MeshRoutedCustodyCommit.swift"
-        )
-        let code = MeshRoutedSourceScan.codeOnly(source)
-        #expect(code.contains("struct MeshCustodyDurabilityWitness"))
-        #expect(code.contains("fileprivate init("))
-        #expect(code.contains("func committingCustody("))
-        // The write token's own gate is in another file, so this one cannot mint one either.
-        #expect(code.contains("LoadToken(fileURL:") == false,
-                "the commit file must not be able to mint a write token")
-        let store = try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedStore.swift")
-        #expect(MeshRoutedSourceScan.codeOnly(store).contains("fileprivate init(fileURL:"))
-    }
-
-    // MARK: - The delivery gate (P5 item 4)
-
-    /// `MeshRecipientDeliveryWitness` has exactly one construction site, and it is the file holding
-    /// `committingDelivery` and nothing else.
-    ///
-    /// Same claim, same reason as the custody witness above: the compile-time gate is `fileprivate`,
-    /// so this wall is what notices when someone MOVES the type, which widens the gate with no
-    /// compile error.
+    /// The compile-time gate is `fileprivate`, so the walls that notice when someone MOVES the type,
+    /// which widens the gate with no compile error, are ProximityKit's package suite of this name: one
+    /// construction site, in the file holding `committingDelivery` and nothing else. This half sweeps the
+    /// one Fernlet module the engine calls by token, held to its floor in ``socialSources()``.
     @Test func theRecipientWitnessCanOnlyBeMintedInItsOwnFile() throws {
         var constructionSites: [String] = []
-        for (file, code) in try Self.proximitySources() where code.contains("MeshRecipientDeliveryWitness(") {
+        for (file, code) in try Self.socialSources() where code.contains("MeshRecipientDeliveryWitness(") {
             constructionSites.append(file)
         }
         #expect(
-            constructionSites == ["MeshRoutedDeliveryCommit.swift"],
+            constructionSites.isEmpty,
             """
-            `MeshRecipientDeliveryWitness(` is constructed in \(constructionSites) — it must be built \
-            in exactly one file, the one holding `committingDelivery` and nothing else. A second site \
-            means a recipient receipt can be minted for an acknowledgement no durable write returned.
+            `MeshRecipientDeliveryWitness(` is constructed in \(constructionSites) — only the engine's \
+            delivery commit file may build one. A FernletSocial site means a recipient receipt can be \
+            minted for an acknowledgement no durable write returned.
             """
         )
-    }
-
-    /// The file that holds the delivery witness holds the commit verb and nothing else — the property
-    /// that makes `fileprivate` a real gate rather than a comment.
-    @Test func theDeliveryCommitFileHoldsTheWitnessAndTheVerbAndNothingElse() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedDeliveryCommit.swift")
-        )
-        #expect(code.contains("struct MeshRecipientDeliveryWitness"))
-        #expect(code.contains("fileprivate init("))
-        #expect(code.contains("func committingDelivery("))
-        // The write token's own gate is in another file, so this one cannot mint one either.
-        #expect(code.contains("LoadToken(fileURL:") == false,
-                "the delivery commit file must not be able to mint a write token")
-        // And it holds no OTHER store verb: the ingest door lives next door on purpose.
-        #expect(code.contains("func recordingRecipientReceipt(") == false)
-        #expect(code.contains("func committingCustody(") == false)
-    }
-
-    /// The commit verb writes no delivery rung — the source half of the invariant its behavioural
-    /// twin asserts.
-    ///
-    /// Cheap, and it is what stops the split being quietly re-merged by a later edit: the
-    /// `delivered` rung has exactly ONE writer, and it takes a signed receipt whose signer is that
-    /// destination.
-    @Test func theCommitVerbWritesNoDeliveryRung() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedDeliveryCommit.swift")
-        )
-        #expect(code.contains("advancing(") == false,
-                "the delivery commit file advances a rung — only the receipt door may")
-        #expect(code.contains("MeshRoutedDeliveryRecord(encoding:") == false,
-                "the delivery commit file re-encodes a delivery map — only the receipt door may")
-        let ingest = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshRoutedDeliveryIngest.swift")
-        )
-        #expect(ingest.contains("advancing(receipt.recipientFingerprint, to: .delivered)"),
-                "the receipt door is where a rung moves, on the SIGNER's own destination")
     }
 
     /// `MeshHeartLedgerProof` can only be built inside the ledger's own file — the heart half of
     /// durable-before-acknowledged, gated the same way. The ledger is FernletSocial's
-    /// (`HeartSharing/ProximityHeartLedger.swift`), and the sweep reads both modules, so a
-    /// construction in either is seen.
+    /// (`HeartSharing/ProximityHeartLedger.swift`), so the sweep over FernletSocial finds its one
+    /// construction there; that ProximityKit builds none is its package suite's half.
     @Test func theHeartLedgerProofCanOnlyBeMintedInTheLedgersOwnFile() throws {
         var constructionSites: [String] = []
-        for (file, code) in try Self.proximitySources() where code.contains("MeshHeartLedgerProof(") {
+        for (file, code) in try Self.socialSources() where code.contains("MeshHeartLedgerProof(") {
             constructionSites.append(file)
         }
         #expect(
@@ -555,7 +471,7 @@ struct MeshRoutedStoreIsolationTests {
         #expect(ledger.contains("fileprivate init(giftID:"))
     }
 
-    /// Shipping code names exactly ONE ack-stage table.
+    /// FernletSocial builds no ack-stage table and names none of its members.
     ///
     /// Injection alone does not deliver "a recipient cannot claim a weaker rule" — the table is a
     /// door parameter, so a second shipping value would be a second policy. A fixture table is a
@@ -563,25 +479,20 @@ struct MeshRoutedStoreIsolationTests {
     ///
     /// The construction half uses the same paren-matching scanner the store walls above use, not a
     /// `contains("MeshRoutedAckStageTable(rows:")`: the literal form is blind to a construction
-    /// wrapped between the paren and the `rows:` label, and this wall is the ONLY thing standing
-    /// between a caller and a table mapping `…routed-type.heart.v1` to `.durableRecipientStorage` —
-    /// a heart reported delivered on ciphertext alone, with no foreground decrypt and no ledger
-    /// commit. Unlike the witness and the ledger proof, the table has no `fileprivate` gate.
+    /// wrapped between the paren and the `rows:` label, and this wall is what stands between a feature
+    /// and a table mapping `…routed-type.heart.v1` to `.durableRecipientStorage` — a heart reported
+    /// delivered on ciphertext alone, with no foreground decrypt and no ledger commit. Unlike the
+    /// witness and the ledger proof, the table has no `fileprivate` gate.
     ///
-    /// **P5 item 11 moved the construction site, and the wall moved with it in the same commit.**
-    /// The table is now a PROJECTION of `MeshRoutedTypeRegistry`'s rows, so the one place a table is
-    /// built is the registry's own file — and the sentence above stays true word for word, with the
-    /// registry standing where the ack file used to. **The member half has no exemption**: no
-    /// shipping file — ProximityKit's or FernletSocial's, the registry's included — names any
-    /// `MeshRoutedAckStageTable.` member at all (the `increment1` table is the test target's binding,
-    /// over Fernlet's rows, for the suites); the one table a door is handed is the registry's
-    /// `ackStages` (which is why the registry
-    /// declares its own `maxEntries` rather than reading `maxRows` across — the equality is pinned
-    /// from the test target by `theRegistrysCapEqualsTheAckTablesCap`).
+    /// The table is a PROJECTION of `MeshRoutedTypeRegistry`'s rows, built once, in the registry's own
+    /// file in ProximityKit; that one construction, and that no ProximityKit file names a
+    /// `MeshRoutedAckStageTable.` member, are the package suite's half. **The member half here has no
+    /// exemption**: no FernletSocial file names any member at all (the `increment1` table is the test
+    /// target's binding, over Fernlet's rows, for the suites).
     @Test func shippingCodeNamesOneAckStageTable() throws {
         var constructionSites: [String] = []
         var otherValues: [String] = []
-        for (file, code) in try Self.proximitySources() {
+        for (file, code) in try Self.socialSources() {
             for _ in MeshSessionStoreIsolationTests.constructionArguments(
                 of: "MeshRoutedAckStageTable(", in: code
             ) {
@@ -591,32 +502,26 @@ struct MeshRoutedStoreIsolationTests {
                 otherValues.append("\(file): …MeshRoutedAckStageTable.\(fragment.prefix(24))")
             }
         }
-        #expect(constructionSites == ["MeshRoutedTypeRegistry.swift"],
-                "a second shipping `MeshRoutedAckStageTable(rows:)` is a second policy: \(constructionSites)")
+        #expect(constructionSites.isEmpty,
+                "a FernletSocial `MeshRoutedAckStageTable(rows:)` is a second policy: \(constructionSites)")
         #expect(otherValues.isEmpty,
-                "shipping code names an ack-stage table member, a second value beside the registry's: \(otherValues)")
+                "FernletSocial names an ack-stage table member, a second value beside the registry's: \(otherValues)")
     }
 
-    /// Shipping code names exactly ONE routed type registry (P5 item 11).
+    /// FernletSocial builds no routed type registry and names none of its members (P5 item 11).
     ///
     /// The ack-stage wall's exact shape, one level up. The registry is the single source of the
     /// verifier's accepted-token set, the ack-stage projection, the mint's per-type guards and the
     /// four forwarding gates — so a second shipping registry would be a second answer to "is this
-    /// type known", and that is the one question plan §11 says must have one answer everywhere.
-    ///
-    /// The construction half is why `MeshNetworkManager`'s `init` spells the registry it builds out in
-    /// full (`MeshRoutedTypeRegistry(entries: store.meshRoutedTypeEntries)`, its host's rows alone): a
-    /// leading-dot `.init(entries:)` is invisible to this scanner. The member half admits no member at
-    /// all: the registry has no builder, only that one construction from the host's rows. The sweep
-    /// reads FernletSocial too, where Fernlet's rows are declared, so the host's rows cannot become a
-    /// second registry there either. The mint takes its registry with no default, so the registry the
-    /// manager builds is the one value position left.
-    /// `theTypeRegistryScannersMatchAcrossLines` fixtures that blind spot from both sides, asserting
-    /// the manager's file still names the type in full.
+    /// type known", and that is the one question plan §11 says must have one answer everywhere. The
+    /// registry is built once, by `MeshNetworkManager`'s `init` from its host's rows, and that one
+    /// construction is the package suite's half. FernletSocial, where Fernlet's rows are declared, is
+    /// swept here so the host's rows cannot become a second registry there.
+    /// `theTypeRegistryScannersMatchAcrossLines` fixtures the scanners' blind spot.
     @Test func shippingCodeNamesOneTypeRegistry() throws {
         var constructionSites: [String] = []
         var otherValues: [String] = []
-        for (file, code) in try Self.proximitySources() {
+        for (file, code) in try Self.socialSources() {
             for _ in MeshSessionStoreIsolationTests.constructionArguments(
                 of: "MeshRoutedTypeRegistry(", in: code
             ) {
@@ -626,23 +531,23 @@ struct MeshRoutedStoreIsolationTests {
                 otherValues.append("\(file): …MeshRoutedTypeRegistry.\(fragment.prefix(24))")
             }
         }
-        #expect(constructionSites == ["MeshNetworkManager.swift"],
-                "a second shipping `MeshRoutedTypeRegistry(entries:)` is a second policy: \(constructionSites)")
+        #expect(constructionSites.isEmpty,
+                "a FernletSocial `MeshRoutedTypeRegistry(entries:)` is a second policy: \(constructionSites)")
         #expect(otherValues.isEmpty,
-                "shipping code names a type registry other than the manager's one construction: \(otherValues)")
+                "FernletSocial names a type registry member beside the manager's one construction: \(otherValues)")
     }
 
-    /// No shipping code branches on a routed type token — the registry IS the only per-type switch.
+    /// No FernletSocial code branches on a routed type token — the registry IS the only per-type switch.
     ///
     /// The allowlist is **per substring**, not per file, because the spelling needles have different
     /// single-source rules. The tokens are the host's: a routed type may be read off the namespace's
     /// routed types (`routedTypes.photo` and its three siblings) only where rows are built from them —
-    /// FernletSocial's host rows, every row the mesh registers — and in the namespace's own soundness
-    /// rules, which name each field's path. No
-    /// ProximityKit or FernletSocial file may spell one: the raw `fernlet.mesh.routed-type.` literal
-    /// lives in FernletConnections, which spells Fernlet's, and the old `MeshRoutedTypeToken.`
-    /// constants are gone (the test target's binding keeps that spelling for the suites), so typing a
-    /// spelling straight into a row would give one token two sources that drift silently.
+    /// FernletSocial's host rows, every row the mesh registers. No FernletSocial file may spell the raw
+    /// `fernlet.mesh.routed-type.` literal, which lives in FernletConnections, and the old
+    /// `MeshRoutedTypeToken.` constants are gone (the test target's binding keeps that spelling for
+    /// the suites), so typing a spelling straight into a row would give one token two sources that
+    /// drift silently. The same rules over ProximityKit's sources, where the namespace's soundness rules
+    /// are the other field home, are its package suite's.
     ///
     /// Legal by construction, and it must stay legal: passing `manifest.typeToken` as a **lookup
     /// argument**, logging it as a context value, and branching on a **resolved** value
@@ -653,9 +558,15 @@ struct MeshRoutedStoreIsolationTests {
     /// (which is what makes the literal needle work at all) and so do trailing comments on code
     /// lines — a `let x = y  // see fernlet.mesh.routed-type.photo.v1` would be a false positive
     /// here. Noted rather than designed around: it fails loudly and the fix is to move the comment.
+    ///
+    /// The field home must be among the files read, so a sweep that lost it cannot pass on the rest.
     @Test func noShippingCodeBranchesOnARoutedTypeToken() throws {
+        let sources = try Self.socialSources()
+        let read = Set(sources.map(\.0))
+        #expect(Self.routedTypeFieldHomes.isSubset(of: read),
+                "the sweep no longer reads the routed-type field home: \(Self.routedTypeFieldHomes.subtracting(read))")
         var violations: [String] = []
-        for (file, code) in try Self.proximitySources() {
+        for (file, code) in sources {
             for (needle, files) in Self.routedTokenNeedles
             where code.contains(needle) && !files.contains(file) {
                 violations.append("\(file): \(needle)")
@@ -686,13 +597,10 @@ struct MeshRoutedStoreIsolationTests {
         "typeToken.hasPrefix(": []
     ]
 
-    /// The two files that may read a single routed type off the namespace's routed types: the
-    /// namespace's soundness rules, whose field paths spell each one, and FernletSocial's host rows,
-    /// which build every row Fernlet declares through its host (`ProximityHost.meshRoutedTypeEntries`).
-    /// The registry builds no row of its own, so it is no home.
-    private static let routedTypeFieldHomes: Set<String> = [
-        "ProximityNamespace+Soundness.swift", "FernletRoutedTypes.swift"
-    ]
+    /// The one FernletSocial file that may read a single routed type off the namespace's routed types:
+    /// the host rows, which build every row Fernlet declares through its host
+    /// (`ProximityHost.meshRoutedTypeEntries`). The registry builds no row of its own, so it is no home.
+    private static let routedTypeFieldHomes: Set<String> = ["FernletRoutedTypes.swift"]
 
     /// The four bare per-type branch forms, each written so that EXACTLY ONE needle catches it.
     ///
@@ -716,10 +624,10 @@ struct MeshRoutedStoreIsolationTests {
     /// dictionary, or widening `"fernlet.mesh.routed-type."`'s empty allowlist to admit any file,
     /// fails HERE rather than silently narrowing what wall 3 catches.
     ///
-    /// The scanners' blind spot is fixtured from both sides: a leading-dot `= .init(entries: …)` is
-    /// invisible to both (the negative), and the one shipping file that holds a registry value in a
-    /// **type-inferred position** is asserted to spell the type out in full (the positive) — which is
-    /// the only thing keeping the blind spot documented rather than occupied.
+    /// The scanners' blind spot is fixtured here as the negative: a leading-dot `= .init(entries: …)`
+    /// is invisible to both. Its positive, that the one shipping file holding a registry value in a
+    /// **type-inferred position** (ProximityKit's manager) spells the type out in full, reads
+    /// ProximityKit's source and is the package suite's.
     @Test func theTypeRegistryScannersMatchAcrossLines() throws {
         let oneLine = "static let x = MeshRoutedTypeRegistry(entries: [row])"
         let wrapped = """
@@ -742,20 +650,15 @@ struct MeshRoutedStoreIsolationTests {
             ).isEmpty,
             "the registry scanner counted a dot-member read as a construction"
         )
-        try Self.expectTheMemberScannersBlindSpotIsStillEmpty()
+        Self.expectTheMemberScannersBlindSpotIsStillEmpty()
         Self.expectTheWallsNeedlesStillDiscriminate()
     }
 
-    /// The blind spot, both ways: the inferred form is invisible to both scanners, and no shipping
-    /// value-position read has moved into it.
-    ///
-    /// `MeshNetworkManager.swift` (the registry its `init` builds) is the one place a registry value
-    /// stands where a leading dot would compile — and where `shippingCodeNamesOneTypeRegistry` would
-    /// then see nothing at all. The manifest mint's `types:` takes no default, so it holds none.
-    ///
-    /// The positive needle is the construction spelled in full, `MeshRoutedTypeRegistry(entries:`: the
-    /// manager builds its registry from its host's rows directly, with no builder between them.
-    private static func expectTheMemberScannersBlindSpotIsStillEmpty() throws {
+    /// The blind spot: the inferred form is invisible to both scanners. A registry value written
+    /// `.init(entries:)` where a leading dot compiles would be invisible to
+    /// `shippingCodeNamesOneTypeRegistry`, which is why the package suite pins the manager's one
+    /// construction spelled in full.
+    private static func expectTheMemberScannersBlindSpotIsStillEmpty() {
         let inferred = "self.hostRoutedTypeRegistry = .init(entries: store.meshRoutedTypeEntries)"
         #expect(inferred.components(separatedBy: "MeshRoutedTypeRegistry.").count == 1,
                 "the member scanner's blind spot moved: an inferred member is now visible to it")
@@ -763,13 +666,6 @@ struct MeshRoutedStoreIsolationTests {
                     of: "MeshRoutedTypeRegistry(", in: inferred
                 ).isEmpty,
                 "the construction scanner's blind spot moved: an inferred construction is now visible to it")
-        let sources = try proximitySources()
-        for name in ["MeshNetworkManager.swift"] {
-            let code = try #require(sources.first { $0.0 == name }?.1,
-                                    "the sweep no longer reaches a file that holds a registry value")
-            #expect(code.contains("MeshRoutedTypeRegistry(entries:"),
-                    "\(name) shortened its registry value to a form the one-registry wall cannot see")
-        }
     }
 
     /// Wall 3's needles, driven as data: each bare branch form is caught by exactly its own needle, a
@@ -796,7 +692,7 @@ struct MeshRoutedStoreIsolationTests {
         #expect(routedTokenNeedles.keys.contains { rawInRegistry.contains($0) },
                 "the raw-literal needle stopped matching a spelling written into a row")
         #expect(routedTokenNeedles["fernlet.mesh.routed-type."] == [],
-                "the raw literal may now be typed into a ProximityKit file")
+                "the raw literal may now be typed into a FernletSocial file")
     }
 
     /// The ack-table scanner itself, fixtured BOTH ways — the wall's matcher is the wall.
@@ -828,48 +724,29 @@ struct MeshRoutedStoreIsolationTests {
         )
     }
 
-    /// The ack path calls no decryption seam: a photo or a text is final on durable CIPHERTEXT, and
-    /// the store never unwraps a content key.
-    @Test func theAckPathNamesNoDecryptSeam() throws {
-        let files = [
-            "MeshRoutedAck.swift", "MeshRecipientReceipt.swift", "MeshRecipientReceiptVerifier.swift",
-            "MeshRoutedDeliveryCommit.swift", "MeshRoutedDeliveryIngest.swift"
-        ]
-        for name in files {
-            let code = MeshRoutedSourceScan.codeOnly(
-                try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/\(name)")
-            )
-            #expect(code.contains("MeshRoutedContentKeyWrapper") == false, "\(name)")
-            #expect(code.contains(".unwrap(") == false, "\(name)")
-            #expect(code.contains("openKey()") == false, "\(name)")
-        }
-    }
-
     // MARK: - Scanner
 
-    /// Every `.swift` file under ProximityKit and FernletSocial, as `(filename, code-only source)`,
-    /// ProximityKit's first. FernletSocial is swept because the routed-type rows come from it
-    /// (`FernletRoutedTypes.swift`) and so do the projection handlers and the ledger judge the engine
-    /// calls by token, so a feature that built a second registry or table, or branched on a token, is
-    /// seen in the module it lives in.
-    private static func proximitySources() throws -> [(String, String)] {
+    /// Every `.swift` file under FernletSocial, as `(filename, code-only source)`. FernletSocial is the
+    /// module the routed walls sweep because the routed-type rows come from it (`FernletRoutedTypes.swift`)
+    /// and so do the projection handlers and the ledger judge the engine calls by token, so a feature
+    /// that built a second registry or table, minted a witness, or branched on a token, is seen in the
+    /// module it lives in. ProximityKit's own sources are its package suite's to sweep.
+    ///
+    /// Floored at 41 files, four fifths of the 52 measured at plan step A1.3, so a lost folder reds
+    /// rather than letting a zero-list pass over what is left.
+    private static func socialSources() throws -> [(String, String)] {
         var sources: [(String, String)] = []
-        let roots = [
-            RepoRoot.url("FernletKit/Sources/ProximityKit"),
-            RepoRoot.url("FernletKit/Sources/FernletSocial")
-        ]
-        // R2: bounded by the two module roots and each one's file list.
-        for root in roots {
-            let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
-            let files = (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
-            for file in files.sorted(by: { $0.path < $1.path }) {
-                sources.append((
-                    file.lastPathComponent,
-                    MeshRoutedSourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
-                ))
-            }
+        let root = RepoRoot.url("FernletKit/Sources/FernletSocial")
+        let enumerator = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+        // R2: bounded by the module's file list.
+        for file in files.sorted(by: { $0.path < $1.path }) {
+            sources.append((
+                file.lastPathComponent,
+                MeshRoutedSourceScan.codeOnly(try String(contentsOf: file, encoding: .utf8))
+            ))
         }
-        #expect(sources.count >= 8, "the ProximityKit sweep found only \(sources.count) files")
+        #expect(sources.count >= 41, "the FernletSocial sweep found only \(sources.count) files")
         return sources
     }
 

@@ -462,7 +462,8 @@ struct MeshP7HonestyAcceptanceTests {
 
     /// No scene, no continuation task, no device lock and no UI run here; `.continuingInBackground`
     /// is reached by no path P7 owns — P8 item 5 gave the two scene events one shipping raiser
-    /// each, so this cell pins that pair rather than a zero; the app feeds the run policy no
+    /// each, in ProximityKit's manager, a pair the package suite of this name pins rather than a zero;
+    /// the app feeds the run policy no
     /// continuation LITERAL at all since P8 item 6, which is the claim's own state reaching it
     /// through one line of the funnel; the run vocabulary has four values; and the two
     /// determinism digests keep their one home. Written in a session with no toolchain: its first
@@ -471,6 +472,7 @@ struct MeshP7HonestyAcceptanceTests {
         #expect(ProximityRunState.allCases.count == 4, "run, foregroundOnly, hold, stop — hold is P7's recorded deviation from §13")
         #expect(ProximityContinuationState.allCases.count == 4, "not requested, running, refused, expired")
         let app = try MeshP7Acceptance.sources(under: "App")
+        #expect(app.count >= 100, "the App scan lost its files")
         #expect(MeshP7Acceptance.homes(of: "continuation: .running", in: app).isEmpty,
                 "the app never feeds a LITERAL running task — what reaches the policy is the claim's own state")
         #expect(MeshP7Acceptance.homes(of: "continuation: .notRequested", in: app).isEmpty,
@@ -483,17 +485,6 @@ struct MeshP7HonestyAcceptanceTests {
         #expect(MeshP7Acceptance.homes(of: "continuation: meshContinuationState.feed", in: app)
                 == ["FernletStore.swift"],
                 "fed exactly once, in the run-policy core, from the store's own projection")
-        let kit = try MeshP7Acceptance.sources(under: "FernletKit/Sources/ProximityKit")
-        #expect(kit.count >= 100, "the ProximityKit scan lost its files")
-        let raised = MeshP7Acceptance.homes(of: "applySessionEvent(.backgrounded", in: kit)
-            + MeshP7Acceptance.homes(of: "applySessionEvent(.foregrounded", in: kit)
-        #expect(raised == ["MeshNetworkManager.swift", "MeshNetworkManager.swift"], """
-            P8 item 5 gave the two scene events their first shipping raisers — the public \
-            beginBackgroundContinuation() / endBackgroundContinuation() pair, one each, in the \
-            manager — so .continuingInBackground is reachable from a shipping path as of that item \
-            and P7's unreachable claim retired with it. The live count lives in \
-            MeshContinuationRaiseWallTests
-            """)
         let me = MeshRoutedSourceScan.codeOnly(try RepoRoot.source("Tests/FernletTests/MeshP7AcceptanceTests.swift"))
         let spellsADigest = me.contains("ca898" + "bcc") || me.contains("594b6" + "f77")
         #expect(!spellsADigest, "the two determinism digests keep their one home in MeshP5DeterminismAcceptanceTests")

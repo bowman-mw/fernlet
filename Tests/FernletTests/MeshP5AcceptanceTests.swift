@@ -1067,13 +1067,14 @@ struct MeshP5HonestyAcceptanceTests {
     /// three **pre-store refusal channels** — `notADestinationOrHandoff`,
     /// `unknownItemNotFromOrigin` and `unregisteredTypeChunk` — unbounded in count; the P5 review's
     /// correction bounded them per authenticated sender (`MeshRoutedRefusalBudget`, asserted in
-    /// `MeshRoutedRefusalBudgetTests`, not here), and the three names still stand in the source as
-    /// the refusals that budget charges. D-12.15 leaves a receipt re-mint staleness (a re-minted
+    /// `MeshRoutedRefusalBudgetTests`, not here), and the three names still stand in ProximityKit's
+    /// source as the refusals that budget charges, which the package suite of this name pins beside the
+    /// budget's spend line. D-12.15 leaves a receipt re-mint staleness (a re-minted
     /// custody receipt can quote an instant older than the frame that prompted it). Item 9's
     /// reclaim never fires for an item **all** of whose destinations departed, so such an item is
     /// held to its expiry rather than dropped. Neither of those two is asserted here, and neither
     /// is asserted away either.
-    @Test func theBatteryNamesWhatItDoesNotClaim() throws {
+    @Test func theBatteryNamesWhatItDoesNotClaim() {
         #expect(MeshRoutedEventToken.vocabulary.count == 14, """
             the routed vocabulary is fourteen tokens — P5's nine plus P6 item 9's five (the key \
             advertisement, the text origination, the age-gated receiver, the heart origination and \
@@ -1085,22 +1086,6 @@ struct MeshP5HonestyAcceptanceTests {
                 "increment 1 registers three routed types, and the fourth is P6's")
         #expect(MeshRoutedTypeRegistry.increment1.entry(for: MeshRoutedTypeToken.control) == nil,
                 "the control token is reserved and deliberately unregistered")
-        // The three refusal channels are named in the shipping source, not in an enum this file can
-        // read, so the record is pinned the way the grep-wall pins the other unassertable facts:
-        // a rename or a deletion moves this line, and the doc comment above stops being true. Since
-        // the P5 review's correction each is charged to the sender's budget, whose spend line is
-        // pinned beside them.
-        let source = try MeshP5Acceptance.codeLines(
-            of: "FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift"
-        ).joined(separator: "\n")
-        // R2: a fixed three-element list.
-        for reason in ["notADestinationOrHandoff", "unknownItemNotFromOrigin",
-                       "unregisteredTypeChunk"] {
-            #expect(source.contains(reason),
-                    "a pre-store refusal D-12.14 named is no longer named")
-        }
-        #expect(source.contains("mesh.routedDrain.refusalBudgetSpent"),
-                "the per-sender bound the review added to D-12.14's channels is gone")
     }
 }
 

@@ -4,7 +4,7 @@
 // The grep-wall for debug/test hooks, sibling of the S3, no-tracking, Power-of-10 and
 // memory-lifecycle walls:
 //
-//  TH1  Every non-comment source line in a shipping root (ProximityKit's own folder aside) that reads
+//  TH1  Every non-comment source line in a shipping root that reads
 //       a launch hook from any of the six families in `hookTokens` — Fernlet's `FERNLET_UI_TEST_`,
 //       `FERNLET_SKIP_`, `FERNLET_MESH`, `FERNLET_PROBE` and ProximityKit's `PROXIMITYKIT_UI_TEST_`,
 //       `PROXIMITYKIT_MESH` — must sit inside an open `#if DEBUG` region.
@@ -35,10 +35,10 @@
 // transport's console mirror and the two chaos keys (`PROXIMITYKIT_MESH_CONSOLE_LOG`,
 // `PROXIMITYKIT_MESH_CHAOS`, `PROXIMITYKIT_MESH_CHAOS_BARRED`), which the app's rejection-matrix
 // banner echoes. ProximityKit's own reads of them are its own package suite's to hold
-// (`ProximitySourceWallTests`, since plan step A1.1.15), so this wall reads every shipping root but
-// ProximityKit's folder (`ProximityKitSources.folder`), and TH1 holds what Fernlet's own code reads of
-// the two families to the same rule: the banner's two echoes, and any app-side read of a UI-test flag,
-// of which there is none today.
+// (`ProximitySourceWallTests`, since plan step A1.1.15); ProximityKit is a package dependency since
+// plan step A1.3, not one of this repository's shipping roots, and TH1 holds what Fernlet's own code
+// reads of the two families to the same rule: the banner's two echoes, and any app-side read of a
+// UI-test flag, of which there is none today.
 //
 // The scan discovers its inputs from the file system and carries hard FLOORS — global and PER
 // FAMILY, so a matcher that stops seeing one family cannot hide behind the others (a moved root
@@ -133,14 +133,13 @@ struct TestHookBoundaryTests {
 
     static let sharedScan: TreeScan = scan(repoRoot: RepoRoot.url)
 
-    /// Scans the five shipping roots but ProximityKit's own folder (``ProximityKitSources/folder``),
-    /// whose reads ProximityKit's own package suite, `ProximitySourceWallTests`, holds to the same rule.
-    /// Never throws or traps: unreadable files are listed for the enforcement tests to fail on.
+    /// Scans the five shipping roots. ProximityKit's reads are its own package suite's,
+    /// `ProximitySourceWallTests`, which holds them to the same rule. Never throws or traps: unreadable
+    /// files are listed for the enforcement tests to fail on.
     static func scan(repoRoot: URL) -> TreeScan {
         var result = TreeScan()
         for root in shippingRoots {
-            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot)
-            where !ProximityKitSources.holds(path) {
+            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot) {
                 guard let source = try? String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8) else {
                     result.unreadable.append(path)
                     continue
@@ -345,16 +344,6 @@ struct TestHookBoundaryTests {
         #expect(uiTestMeshReads.map(\.token) == ["FERNLET_UI_TEST_"],
                 "FERNLET_UI_TEST_MESH_* is a UI-test flag, and must score to that family exactly once")
         Self.expectProximityKitFamiliesTrip()
-        // The scan's exclusion holds ProximityKit's folder, by a repository-relative path or an
-        // absolute one, and no neighbour: a module whose name only starts like it, or the app's banner.
-        let excluded = ProximityKitSources.holds("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-            && ProximityKitSources.holds("/checkout/FernletKit/Sources/ProximityKit/Transport/MeshTransportDebugHooks.swift")
-        let neighbours = ["FernletKit/Sources/FernletProximityUI/MeshReviewView.swift",
-                          "FernletKit/Sources/ProximityKitExtras/Hook.swift",
-                          "App/Fernlet/Proximity/Feasibility/MeshRejectionMatrixHarness.swift"]
-        let caught = neighbours.filter { ProximityKitSources.holds($0) }
-        #expect(excluded, "the scan's exclusion missed a ProximityKit source, repository-relative or absolute")
-        #expect(caught.isEmpty, "the scan's exclusion caught a file outside ProximityKit's folder: \(caught)")
     }
 
     /// ProximityKit's two families, fixtured the same way as Fernlet's, each in the exact shape its

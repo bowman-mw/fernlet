@@ -44,8 +44,8 @@
 //       are held to the same rule. ProximityKit's own package tests hold its two holders'
 //       constructions in their tests (`PackageTestTreeWallTests`), so that half travels with the package.
 //
-// ML1-ML4 read the five shipping roots but ProximityKit's own folder (`ProximityKitSources.folder`):
-// ProximityKit's package suite `ProximityMemoryLifecycleTests` holds its code to the same four rules
+// ML1-ML4 read the five shipping roots; ProximityKit is a package dependency, not one of them (plan
+// step A1.3): its package suite `ProximityMemoryLifecycleTests` holds its code to the same four rules
 // (since ProximityKit plan step A1.1.17), its one sanctioned `withObservationTracking` home and its two
 // `unowned` host holders, the mesh manager and the pair session, among them, so that half travels with
 // the package.
@@ -281,16 +281,15 @@ struct MemoryLifecycleBoundaryTests {
         return result
     }
 
-    /// Scans the five shipping roots but ProximityKit's own folder (``ProximityKitSources/folder``), whose
-    /// code its package suite `ProximityMemoryLifecycleTests` holds to ML1-ML4 (since plan step A1.1.17).
+    /// Scans the five shipping roots. ProximityKit's code is its package suite
+    /// `ProximityMemoryLifecycleTests`' to hold to ML1-ML4 (since plan step A1.1.17).
     /// Never throws or traps: unreadable files are listed for the enforcement tests to fail on.
     static func scan(repoRoot: URL) -> TreeScan {
         var result = TreeScan()
         // R2: bounded by the five shipping roots.
         for root in shippingRoots {
             // R2: bounded by the Swift files under the root.
-            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot)
-            where !ProximityKitSources.holds(path) {
+            for path in PowerOfTenBoundaryTests.swiftFiles(under: root, repoRoot: repoRoot) {
                 guard let source = try? String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8) else {
                     result.unreadable.append(path)
                     continue

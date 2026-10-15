@@ -1,18 +1,13 @@
 // SwiftSourceLexer.swift
 //
 // The source walls' small Swift lexer, which reads a file's code apart from its comments and string
-// literals as the compiler does. A twin (ProximityKit plan step A1.1): the same file at Tests/FernletTests
-// and FernletKit/Tests/ProximityKitTests/TestSupport, held identical but for its imports by
-// CIGateSelectorBoundaryTests.everyTwinMatchesItsOriginal(), because ProximityKit's namespace, platform
-// and keychain-door walls, its tests' hygiene, its tree walls and its source walls' identity rule
-// (ProximityNamespaceBoundaryTests, ProximityPlatformNeutralityTests, ProximityKeychainDoorTests and,
-// since ProximityKit plan step A1.1.13, PackageTestHygieneTests, since A1.1.14, PackageTestTreeWallTests
-// and, since A1.1.17, ProximitySourceWallTests, in ProximityKit's package tests) read ProximityKit's
-// sources and tests through it and Fernlet's own source walls read theirs (the key-custody,
+// literals as the compiler does. Fernlet's own source walls read their code through it (the key-custody,
 // store-isolation, photo-directory, audit-bridge and continuation task-host walls, the platform wall's
-// presence door and the feature golden's recipe-copy scan), and a test target cannot import another.
-// Each target holds its copy to the same fixtures: the namespace wall's lexer cell in the package,
-// `SwiftSourceLexerTests` in FernletTests.
+// presence door and the feature golden's recipe-copy scan), and `SwiftSourceLexerTests` holds it to its
+// fixtures. Extracted from ProximityNamespaceBoundaryTests.swift at ProximityKit plan step A1.1.7, when
+// that wall moved into ProximityKit's package tests with a copy of this file, which its walls read
+// ProximityKit's sources through; the two were twins until plan step A1.3 took the package's tests to its
+// own repository, and this one is Fernlet's own since.
 
 /// A small Swift lexer for the source walls. It tells code from comments and string literals the way
 /// the compiler does, so a wall can read code without the prose about it, and literals without the

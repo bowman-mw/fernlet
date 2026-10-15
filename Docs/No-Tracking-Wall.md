@@ -81,16 +81,26 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 
 | Test | What it forbids | How it fails |
 |---|---|---|
-| `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, every package module, all three extensions, and every test target (the app's two and, since ProximityKit plan step A0.8, the package's under `FernletKit/Tests`). | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
-| `thirdPartyPackageDependenciesAreExactlyTheOneAllowedPackage` | Any package dependency other than CryptoSwift, in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
+| `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, every package module, all three extensions, and both test targets (ProximityKit's package tests, here from plan step A0.8, left with the package at A1.3; its repository's own scan holds them). | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
+| `packageDependenciesAreExactlyTheAllowedPackages` | Any package dependency other than the two below (CryptoSwift and ProximityKit), in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
 | `hardcodedNetworkDestinationsAreExactlyTheAllowlist` | Any hardcoded host in shipping code outside the §3 allowlist — **and** any stale allowlist entry the code no longer uses. | `URL(string: "https://telemetry.fernlet.com/v1/events")`. |
 | `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the three pinned fetchers (the two web importers and the Open Food Facts client) and the session factory they share — and, per file, any hardcoded host other than that file's own exact set (DuckDuckGo's two hosts in the product importer, `world.openfoodfacts.org` in the Open Food Facts client, none elsewhere). | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close; or an allowlisted host drifting into a client it was never reviewed for. |
-| `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI` | Network.framework's **local-link** surface (`NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord`) anywhere in shipping code except the three QUIC radios and the DEBUG feasibility probe. A **second marker family with its own permit set** — see §4c. | A new `NetworkListener` in a feature that "just needs to see nearby devices" — a new local-network capability nobody reviewed. |
+| `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI` | Network.framework's **local-link** surface (`NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord`) anywhere in this repository's shipping code except the DEBUG feasibility probe (ProximityKit's three QUIC radios, permitted here until plan step A1.3, are its repository's, whose own scan permits them and nothing else). A **second marker family with its own permit set** — see §4c. | A new `NetworkListener` in a feature that "just needs to see nearby devices" — a new local-network capability nobody reviewed. |
 | `theTwoNetworkPermitSetsAreDisjoint` | Any file holding **both** network permissions, and any marker on both families' lists. | Fixing the marker gap by appending the TN3213 names to `httpClientMarkers`, which would have handed the mesh transport a `URLSession` too. |
 | `everyOutboundFetchUsesTheEphemeralPrivateTabSession` | `URLSession.shared`, `URLSessionConfiguration.default`, or `.background` **anywhere** in shipping code; a `URLSession(configuration:)` built outside the one reviewed factory or without `.ephemeral`; a factory that has quietly stopped setting one of its seven privacy knobs; a pinned fetcher that no longer routes through it. See §2a. | Someone "just quickly" fetching something with `URLSession.shared`, which silently re-attaches the process-wide cookie jar. |
 | `noPersistentWebViewExistsAndInAppBrowsersArePinned` | Any `WKWebView` / `WKWebViewConfiguration` / `WKProcessPool` / `WKHTTPCookieStore` in shipping code (there are none), and, forward-compatibly, any that appears without `WKWebsiteDataStore.nonPersistent()`. Plus an exact-set pin on which file may present an out-of-process browser. | Adding a `WKWebView` for an OAuth flow or a help page — its default data store is an on-disk cookie/localStorage jar shared app-wide. |
 | `privacyManifestsDeclareNoTrackingOrAdvertising` | `NSPrivacyTracking: true`, a non-empty `NSPrivacyTrackingDomains`, or a collected data type flagged for tracking / third-party advertising / developer advertising / analytics, in any of the four `PrivacyInfo.xcprivacy` files (the Messages extension's joined the pin on 2026-09-23). | Flipping the manifest to match a newly added SDK — which is what an SDK's own integration guide tells you to do. |
 | `plistFamilyFilesDeclareNoTrackingPermissionOrForeignContainer` | `NSUserTrackingUsageDescription`, `SKAdNetworkItems`, or `NSAdvertisingAttributionReportEndpoint` in any Info.plist/entitlements, plus any iCloud container other than the user's own `iCloud.MBO.Fernlet`. | Adding the ATT usage string, or repointing sync at somebody else's CloudKit container. |
+
+**The two package dependencies.** `allowedPackageURLs` holds exactly two URLs, each declared in
+`FernletKit/Package.swift` and as an `XCRemoteSwiftPackageReference` in the app project, and
+`CIGateSelectorBoundaryTests` holds the workspace's and the project's `Package.resolved` to one
+revision of each:
+
+| Package | URL | Requirement | Why it may be here |
+|---|---|---|---|
+| CryptoSwift | `https://github.com/krzyzanowskim/CryptoSwift` | up to next minor from 1.10.0 | `FernletLock`'s memory-hard Scrypt KDF: pure local computation, no network code. |
+| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.1.0` (plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing and names no internet host, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). |
 
 ### Two design decisions worth knowing
 
@@ -241,11 +251,18 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 
 | Path | Where | Service types |
 |---|---|---|
-| **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | `ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
-| **Network.framework / QUIC** — **the friend mesh's transport**, since the cutover of 2026-09-21 (the factory it flipped left the tree with the MultipeerConnectivity radio on 2026-09-22; there is one radio now and nothing selects it); migrated per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | `ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
-| **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | `ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
-| **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held | `ProximityKit/Transport/NetworkPairSession.swift` | `_fernlet-recipe2._udp` |
+| **NearbyInteraction** — UWB ranging; exchanges opaque `Data` tokens inside the already-signed introduction | ProximityKit's `Sources/ProximityKit/Ranging/` | none (no Bonjour advertisement of its own) |
+| **Network.framework / QUIC** — **the friend mesh's transport**, since the cutover of 2026-09-21 (the factory it flipped left the tree with the MultipeerConnectivity radio on 2026-09-22; there is one radio now and nothing selects it); migrated per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §7 | ProximityKit's `Sources/ProximityKit/Transport/NetworkMeshSession.swift` | `_fernlet-mesh2._udp` |
+| **Network.framework / QUIC** — the standing presence radio, migrated off MultipeerConnectivity per [the ProximityKit network migration](Plan-ProximityKit-Network-Migration-2026-08-27.md) §17.1 | ProximityKit's `Sources/ProximityKit/Transport/NetworkPresenceSession.swift` | `_fernlet-near2._udp` |
+| **Network.framework / QUIC** — the recipe-share radio, migrated off MultipeerConnectivity per the same plan §17.1; one pairing at a time, and the listener AND browser stand down for as long as it is held | ProximityKit's `Sources/ProximityKit/Transport/NetworkPairSession.swift` | `_fernlet-recipe2._udp` |
 | **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
+
+The ranging session and the three QUIC radios are ProximityKit's, which Fernlet consumes from its own
+repository at exactly `0.1.0` since plan step A1.3 (§2); that repository's local-link scan permits the
+local-link API in those three files and nowhere else, and this repository's `permittedLocalLinkFiles`
+holds the DEBUG probe alone. The service types they advertise are Fernlet's: its namespace
+(`ProximityNamespace.fernlet`, in FernletConnections) supplies them, and this wall pins them in the
+app's Info.plist (below).
 
 All service types are declared in `App/Fernlet/Info.plist` under `NSBonjourServices`; a type missing
 from that list fails discovery silently on device, which is why the list is exhaustive rather than
@@ -294,7 +311,7 @@ and a test (`theTwoNetworkPermitSetsAreDisjoint`) asserting that no file and no 
 | Family | Markers | Permitted files | Capability granted |
 |---|---|---|---|
 | `httpClientMarkers` | `URLSession`, `URLRequest`, `NSURLConnection`, `NWConnection`, `NWBrowser`, `CFURLRequest`, `WKWebView` | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `OpenFoodFactsClient.swift`, `EphemeralWebSession.swift` | Outbound HTTP to the internet, under §3's host allowlist (pinned per file) and §2a's private-tab rule |
-| `localLinkMarkers` | `NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord` | `NetworkMeshSession.swift`, `NetworkPresenceSession.swift`, `NetworkMeshFeasibilityProbe.swift` | Bonjour advertise/browse and QUIC tunnels **on the local link only** |
+| `localLinkMarkers` | `NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord` | `NetworkMeshFeasibilityProbe.swift` (ProximityKit's three radios, here until plan step A1.3, are permitted by its repository's own scan) | Bonjour advertise/browse and QUIC tunnels **on the local link only** |
 
 The legacy `NWConnection` / `NWBrowser` spellings deliberately stay on the *first* list: nothing in
 this repo may use them, and moving them across would hand them the mesh transport's permission.
@@ -442,8 +459,9 @@ xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet 
 2026-08-12 restructure — and used the disk path `Tests/FernletTests/…`, which `-only-testing:` matches
 to nothing, so the run "passed" having executed zero tests. `Docs/Verifiability.md` §2 explains both.
 Since ProximityKit plan step A0.8 the root holds `Fernlet.xcworkspace`, which the block above names
-with `-workspace`; `-project App/Fernlet.xcodeproj` still builds the app but cannot see a package
-test target.)
+with `-workspace`; the strict build and every gated run go through it, and it is kept for developing
+ProximityKit beside Fernlet (plan step A1.5), so a run through `-project App/Fernlet.xcodeproj` reads
+other derived data than that build made.)
 
 It runs as part of `FernletTests`, needs no simulator state, and should be a **required status
 check** alongside [`.github/workflows/s3-wall.yml`](../.github/workflows/s3-wall.yml) — the same
@@ -457,12 +475,12 @@ Coverage at the time of writing (2026-08-09; the manifest and plist-family rows 
 | All Swift, all targets | 536 | 400 | 0 banned SDKs, 0 banned symbols |
 | Shipping Swift (app + package + extensions) | 345 | 250 | 5 hardcoded hosts, all allowlisted (6 since 2026-09-24: `world.openfoodfacts.org`) |
 | Raw HTTP clients in shipping code | 3 (4 since 2026-09-24) | pinned by name, hosts pinned per file | `FoodProductWebImporter.swift`, `RecipeWebImporter.swift`, `EphemeralWebSession.swift`, and `OpenFoodFactsClient.swift` |
-| Local-link Network.framework APIs in shipping code | 2 | pinned by name | `NetworkMeshSession.swift`, `NetworkMeshFeasibilityProbe.swift` — disjoint from the row above |
+| Local-link Network.framework APIs in shipping code | 1 (since plan step A1.3) | pinned by name | `NetworkMeshFeasibilityProbe.swift` — disjoint from the row above; ProximityKit's three radios are its repository's |
 | `URLSession.shared` / `.default` / `.background` in shipping code | 0 | banned outright | every fetch goes through `EphemeralWebSession.shared` |
 | Files constructing a `URLSession` | 1 | exact set | `EphemeralWebSession.swift`, on `.ephemeral`, with all 7 privacy settings present |
 | WebKit web views in shipping code | 0 | forward rule | none exist; the first one must use `WKWebsiteDataStore.nonPersistent()` |
 | Out-of-process in-app browsers | 1 | exact set | `FoodView.swift` (`SFSafariViewController`) |
-| Package manifests | 2 | must be non-empty | 1 dependency: CryptoSwift |
+| Package manifests | 2 | must be non-empty | 2 dependencies: CryptoSwift and, since plan step A1.3, ProximityKit |
 | `PrivacyInfo.xcprivacy` | 4 | pinned by path | tracking `false`, 0 tracking domains, 0 collected data types |
 | Info.plist + entitlements + manifests | 12 | 8 | no ATT key, no ad network, 1 iCloud container (`iCloud.MBO.Fernlet`) |
 

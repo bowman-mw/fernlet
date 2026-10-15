@@ -12,10 +12,10 @@ import Testing
 ///
 /// The roots, the primitive markers and the context window live in ``CryptographicWallScan``, shared
 /// with ``CryptographicEscapeHatchCensusTests`` so the pinned escape-hatch count cannot describe a
-/// different set of bytes than the wall enforces over. Both read every shipping root but ProximityKit's
-/// folder (``CryptographicWallScan/fernletSourceFiles()``), whose raw calls ProximityKit's own package
-/// suite, `ProximitySourceWallTests`, holds to the same markers and window (ProximityKit plan step
-/// A1.1.16).
+/// different set of bytes than the wall enforces over. Both read every shipping root of this
+/// repository (``CryptographicWallScan/sourceFiles()``); ProximityKit is a package dependency, and its
+/// own package suite, `ProximitySourceWallTests`, holds its raw calls to the same markers and window
+/// (ProximityKit plan step A1.1.16).
 struct CryptographicPurposeBoundaryTests {
 
     /// The fewest primitive-call lines the wall may read in Fernlet's code: about four fifths of the
@@ -25,13 +25,13 @@ struct CryptographicPurposeBoundaryTests {
     static let primitiveCallFloor = 18
 
     /// Every line of Fernlet's code that opens a raw primitive call names a purpose within the window
-    /// around it, over every shipping root but ProximityKit's folder, and at least
+    /// around it, over every shipping root, and at least
     /// ``primitiveCallFloor`` such lines are read; the matcher is held to its samples first
     /// (``expectThePurposeMatcherTripsOnPlantedCalls()``).
     @Test func rawCryptographicCallsNameAPurpose() throws {
         expectThePurposeMatcherTripsOnPlantedCalls()
         var callLines = 0
-        for sourceURL in try CryptographicWallScan.fernletSourceFiles() {
+        for sourceURL in try CryptographicWallScan.sourceFiles() {
             let lines = try String(contentsOf: sourceURL, encoding: .utf8)
                 .components(separatedBy: .newlines)
             let path = CryptographicWallScan.repoRelativePath(sourceURL)

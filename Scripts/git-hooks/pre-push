@@ -20,14 +20,16 @@
 #      package warnings un-suppressed — Docs/Power-of-10-Swift.md §R10), every Swift file in the tree is
 #      wall-relevant too: the widgets, the share extension, and every test target can each introduce a
 #      warning. Since ProximityKit plan step A0.8 the build goes through Fernlet.xcworkspace, so the
-#      workspace, the shared schemes (whose testables decide what it compiles) and the package's own
-#      test folder, FernletKit/Tests/, are wall-relevant too.
+#      workspace and the shared schemes (whose testables decide what it compiles) are wall-relevant
+#      too; and since A1.3, when ProximityKit became a pinned dependency (exactly 0.1.0, from its own
+#      repository), both Package.resolved files are, since the revision they pin is code the strict
+#      build compiles.
 #   3. The macOS build check (Scripts/macos-build-check.sh: the Mac-ready set built for native macOS 26
 #      with warnings as errors, plan step A0.6) runs ONLY when the push touches what that build reads:
-#      the package manifest, the four modules its `MacReady` product names (ProximityKit, FernletCrypto,
-#      FernletDomainModel, FernletFoundation) or either macOS script. ProximityPlatformBoundaryTests
-#      pins its invocation, its default (on unless SKIP_MACOS_BUILD_CHECK=1) and that its pattern
-#      covers the manifest and ProximityKit's sources.
+#      the package manifest and its resolved file, the three modules its `MacReady` product names
+#      (FernletCrypto, FernletDomainModel, FernletFoundation) or either macOS script.
+#      ProximityPlatformBoundaryTests pins its invocation, its default (on unless
+#      SKIP_MACOS_BUILD_CHECK=1) and that its pattern covers the manifest and FernletFoundation's sources.
 #
 # githooks(5) passes the ref updates on stdin. They are read once, before either build leg decides
 # whether it is relevant, so a skipped leg never hides the other.
@@ -48,8 +50,8 @@ else
   echo "[pre-push] Power-of-10 scan passed."
 fi
 
-wall_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/|FernletKit/Tests/|App/.*\.swift|Tests/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|App/Fernlet\.xcodeproj/xcshareddata/xcschemes/|Fernlet\.xcworkspace/|.*\.xcprivacy|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
-macos_relevant_regex='^(FernletKit/Package\.swift|FernletKit/Sources/(ProximityKit|FernletCrypto|FernletDomainModel|FernletFoundation)/|Scripts/macos-build-(check|selftest)\.sh)'
+wall_relevant_regex='^(FernletKit/Package\.(swift|resolved)|FernletKit/Sources/|App/.*\.swift|Tests/.*\.swift|App/Fernlet\.xcodeproj/project\.pbxproj|App/Fernlet\.xcodeproj/project\.xcworkspace/xcshareddata/swiftpm/Package\.resolved|App/Fernlet\.xcodeproj/xcshareddata/xcschemes/|Fernlet\.xcworkspace/|.*\.xcprivacy|Scripts/spm-wall-check\.sh|Scripts/spm-wall-selftest\.sh)'
+macos_relevant_regex='^(FernletKit/Package\.(swift|resolved)|FernletKit/Sources/(FernletCrypto|FernletDomainModel|FernletFoundation)/|Scripts/macos-build-(check|selftest)\.sh)'
 zero="0000000000000000000000000000000000000000"
 
 changed_files=""

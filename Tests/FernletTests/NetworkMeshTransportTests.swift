@@ -16,7 +16,9 @@ import Testing
 //
 // The session actor itself — listener, browser, connections — needs two radios and is covered by
 // the runbook's device lanes, not by anything in this file. What IS covered here is every decision
-// that actor makes, which is the whole reason those decisions do not live inside it.
+// that actor makes, which is the whole reason those decisions do not live inside it. The source walls
+// over the transport's own file (the wire guards, the accept path, the task bodies' cancellation
+// order, the logged diagnostics) are ProximityKit's package copies of these suites.
 //
 // **No test in this file sleeps.** Time is a `VirtualClock` a test advances by hand, matching the
 // rule the deterministic fabric in Mocks/FakePeerTransport.swift was built around: a scenario either
@@ -1022,19 +1024,6 @@ struct NetworkMeshWireTests {
         #expect(!NetworkMeshSession.withinWireCeiling(Int.max), "and so must anything absurd")
     }
 
-    /// Both wire directions consult the predicate at their guard, spelled exactly so — the datagram
-    /// receive path (a DROP, `mesh.quic.droppedOversizedDatagram`) and `send` (an outbound refusal).
-    @Test func bothWireDirectionsAskThePredicateAtTheirGuard() throws {
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"))
-        #expect(source.contains("guard Self.withinWireCeiling(payload.count) else {"),
-                "the datagram receive path no longer gates on withinWireCeiling(_:)")
-        #expect(source.contains("guard Self.withinWireCeiling(data.count) else {"),
-                "send(_:to:mode:) no longer gates on withinWireCeiling(_:)")
-        #expect(!source.contains("count <= Self.maxInboundWireBytes"),
-                "an inline comparison against the ceiling bypasses the one predicate the cells pin")
-    }
-
     /// Every failure the transport can raise says something. This is the surface that makes a dead
     /// radio visible instead of silent, so an unnamed case would defeat its own purpose.
     @Test func everyTransportErrorCarriesADiagnostic() {
@@ -1186,26 +1175,6 @@ struct NetworkMeshSessionTests {
         }
     }
 
-    /// The source itself never constructs a discovered state. The publisher test above can only
-    /// cover the paths it drives; this covers the ones nobody has written yet.
-    @Test func theTransportSourceNeverConstructsADiscoveredState() throws {
-        let path = "FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"
-        let source = try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
-        let offenders = source
-            .components(separatedBy: .newlines)
-            .enumerated()
-            .filter { _, line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { return false }
-                return line.contains(".discovered(") || line.contains("PeerTransportState.discovered")
-            }
-            .map { "\(path):\($0.offset + 1)" }
-        #expect(
-            offenders.isEmpty,
-            "the QUIC transport constructs PeerTransportState.discovered at \(offenders) — see the type's docs"
-        )
-    }
-
     /// A frame delivered to the channel reaches its inbound publisher with the peer and byte count
     /// the coordinator's size gate reads.
     @Test func inboundFramesCarryTheirPeerAndByteCount() {
@@ -1306,9 +1275,10 @@ struct NetworkMeshSessionTests {
     ///
     /// Tier 1 cannot start this radio (a real listener, and the Local Network permission with it),
     /// so the behaviour is asserted on the shape tier 1 does own — a radio that never started takes
-    /// the same early return — plus the ORDER of the three statements, which is the whole rule. The
-    /// proof behind a live listener is owed to the tier-2 lane.
-    @Test func aRepublishIsRememberedRatherThanReMintedWhileDiscoveryIsPaused() throws {
+    /// the same early return. The ORDER of the three statements, which is the whole rule, and the
+    /// re-arm funnel's early return read ProximityKit's sources and are the package suite of this
+    /// name's. The proof behind a live listener is owed to the tier-2 lane.
+    @Test func aRepublishIsRememberedRatherThanReMintedWhileDiscoveryIsPaused() {
         let session = NetworkMeshSession()
         session.pauseDiscovery()
         #expect(!session.isDiscoveryPausedForTesting,
@@ -1322,28 +1292,6 @@ struct NetworkMeshSessionTests {
         #expect(session.advertisedFieldsForTesting["memberCount"] == "3")
         session.stop()
         #expect(!session.isDiscoveryPausedForTesting, "and a stop clears the pause with the rest")
-
-        let quic = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
-        )
-        let republish = try #require(MeshRoutedSourceScan.bracedBody(
-            after: "func updateDiscoveryInfo(_ discoveryInfo:", in: quic
-        ))
-        let recorded = try #require(republish.range(of: "advertisedFields = MeshLinkAdvertisement"))
-        let held = try #require(republish.range(of: "guard !isDiscoveryPaused else { return }"))
-        let reMint = try #require(republish.range(of: "cancelListener()"))
-        #expect(recorded.upperBound < held.lowerBound,
-                "record the caller's fields FIRST, or a held radio resumes onto stale ones")
-        #expect(held.upperBound < reMint.lowerBound,
-                "and refuse while held BEFORE the re-mint, or the pause is silently undone")
-
-        let selection = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/MeshTransportSelection.swift")
-        )
-        #expect(selection.contains("updateDiscoveryInfo(discoveryInfo)\n            resumeDiscovery()"), """
-            and the one re-arm funnel's early return records the caller's fields before resuming, \
-            instead of resuming onto whatever was advertised when the radio last started
-            """)
     }
 
     /// A connection that never finishes its introduction is dropped, not held forever.
@@ -1373,64 +1321,6 @@ struct NetworkMeshSessionTests {
             "a pending seat must never be scarcer than a roster seat, or a member is refused before a stranger"
         )
         #expect(session.linkTableForTesting.occupiedSlotCount == 0, "a pending connection holds no roster slot")
-    }
-
-    /// The accept path cannot be reached without a verified peer.
-    ///
-    /// Item 5 left exactly one `peerSessionID: nil` in the transport, which made every inbound
-    /// tunnel ``MeshDialPreference/unranked``. This pins the closure: the only `admitInbound` call in
-    /// the file takes its `sid` from a ``MeshVerifiedPeer``, so an unauthenticated connection can no
-    /// longer reach duplicate-tunnel suppression at all — the publisher test above can only cover
-    /// paths it drives, and this covers the one nobody can drive without two radios.
-    @Test func theAcceptPathIsUnreachableWithoutAVerifiedPeer() throws {
-        let path = "FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift"
-        let source = try String(contentsOf: RepoRoot.url.appendingPathComponent(path), encoding: .utf8)
-        let lines = source.components(separatedBy: .newlines)
-        let code = lines.filter { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("///")
-        }
-        #expect(
-            !code.contains { $0.contains("peerSessionID: nil") },
-            "the QUIC transport still admits an inbound tunnel with no peer session id — item 5's residual is open"
-        )
-        let admissions = code.filter { $0.contains("links.admitInbound(") }
-        #expect(admissions.count == 1, "expected exactly one inbound admission site, found \(admissions.count)")
-        #expect(
-            code.contains { $0.contains("peerSessionID: verified.sessionID") },
-            "the inbound admission must rank on the session id the signed introduction verified"
-        )
-    }
-
-    /// The listener and browser task bodies check for cancellation before they report.
-    ///
-    /// A source claim because it has to be: `NetworkListener.run` is a framework call a unit test
-    /// cannot make throw. The order is the whole of it — `updateDiscoveryInfo(_:)` cancels the
-    /// listener task on EVERY republish (a mesh-mode change, a merge, a member-count change) and
-    /// `pauseDiscovery()` cancels both at every hold, because re-creating the listener is the only
-    /// way to withdraw a Bonjour registration. The owner's only reader is `discoveryError`, the
-    /// Friends-screen banner: the republish path never clears it, and the hold and stop paths clear
-    /// it BEFORE the cancel lands, so a `CancellationError` reported as a failure is a "discovery
-    /// failed" banner pinned over a healthy search until the user leaves the tab. Mirrors
-    /// `PresenceOverQUICTests.theListenerAndBrowserTasksDoNotReportTheirOwnCancellation`.
-    @Test func theListenerAndBrowserTasksDoNotReportTheirOwnCancellation() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
-        )
-        for signature in ["func startListener() throws", "func startBrowser()"] {
-            let body = try #require(
-                MeshRoutedSourceScan.bracedBody(after: signature, in: code),
-                "\(signature) is gone or its braces do not close"
-            )
-            let guardIndex = try #require(
-                body.range(of: "guard !Task.isCancelled else { return }")?.lowerBound,
-                "\(signature)'s task body reports without checking for its own cancellation first"
-            )
-            let reportIndex = try #require(
-                body.range(of: "report(")?.lowerBound, "\(signature) no longer reports at all"
-            )
-            #expect(guardIndex < reportIndex, "\(signature) guards AFTER it reports, which guards nothing")
-        }
     }
 
     /// A session identity is minted once per endpoint and both halves are minted together, so a
@@ -1473,183 +1363,6 @@ struct NetworkMeshSessionTests {
 
         map.removeAll()
         #expect(map.trackedCount == 0)
-    }
-
-    /// **The browse transcript logs its COUNT publicly and its peer NAMES privately.**
-    ///
-    /// Plan §8.7 finding 1's "one item owed before QUIC ships", taken in the cutover that made this
-    /// radio the shipping one (2026-09-21). Until then `noteBrowseSet` built one string and logged
-    /// it whole at `privacy: .public`, so every nearby device's Bonjour instance name went into the
-    /// system log — and into a sysdiagnose, off the device, naming who else was in the room.
-    ///
-    /// **Hygiene, not a leak fix.** A mesh instance name is `MeshLinkAdvertisement`'s random
-    /// per-session token: it identifies no device across sessions and says nothing a scanner on the
-    /// same link could not read for itself. What the downgrade buys is that the transcript stops
-    /// being where a stable-looking identifier would accumulate if that ever changed.
-    ///
-    /// Source, not behaviour, and deliberately so: `os.Logger`'s redaction happens inside the
-    /// unified logging system and a unit test cannot observe which interpolation was public. What
-    /// IS observable is the shape of the call, and the shape is the whole decision — one
-    /// interpolation each, count public, names private, and the string never re-assembled and
-    /// logged whole. The DEBUG console echo is checked in the OTHER direction: it must still carry
-    /// the names, because it is the transcript the runbook's Simulator lanes grep and a lane that
-    /// could not see them could not tell the three-node star from the mesh.
-    @Test func theBrowseTranscriptLogsItsCountPubliclyAndItsPeerNamesPrivately() throws {
-        let quic = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
-        )
-        let body = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "func noteBrowseSet(_ keys: Set<MeshLinkKey>)", in: quic),
-            "noteBrowseSet is gone — the browse transcript this cell walls has no home"
-        )
-        #expect(body.contains("privacy: .private)]\")"), """
-            the browsed-peers line no longer redacts its peer names. Nearby devices' Bonjour \
-            instance names must interpolate at `privacy: .private`; plan §8.7 finding 1 is the \
-            item this closed, and re-opening it puts a transcript of who was nearby into every \
-            sysdiagnose
-            """)
-        #expect(body.contains("browsed peers=\\(keys.count, privacy: .public)"), """
-            and the COUNT is no longer public. The count identifies nobody and is the whole reason \
-            a reader opens this transcript — redacting it to `<private>` would cost the diagnostic \
-            and buy nothing
-            """)
-        #expect(!body.contains("\\(line, privacy: .public)"), """
-            the line is re-assembled and logged whole again, which is exactly the shape the \
-            downgrade removed — one public interpolation carrying both halves
-            """)
-        #expect(body.contains("MeshTransportConsoleLog.echo(\"browsed peers=\\(keys.count) [\\(names)]\")"), """
-            the DEBUG console echo lost the peer names. That echo is a no-op outside DEBUG and is \
-            the transcript the runbook's Simulator lanes grep: a lane that cannot see the names \
-            cannot tell a three-node star from a three-node mesh, which is the defect this line \
-            was added for
-            """)
-    }
-
-    // MARK: Peer-derived values in the shipping radio's system log
-
-    /// The literal a public interpolation ends with, and the marker the scan walks.
-    static let publicInterpolationMarker = ", privacy: .public)"
-
-    /// How a peer-derived value is spelled on this radio: the browsed endpoint id and its
-    /// `rawValue`, the ``MeshLinkKey`` it is wrapped in, the advertised instance name, and the
-    /// verified identity fingerprint.
-    static let peerDerivedTokens = [
-        "key", "endpoint", "rawvalue", "fingerprint", "instance", "name", "peer"
-    ]
-
-    /// Every expression interpolated at `privacy: .public` on one line of Swift.
-    ///
-    /// Walks to each marker and takes the nearest `\(` *before* it, so a line carrying a public
-    /// and a private interpolation yields only the public one — which is exactly the shape
-    /// `noteTunnelEnded` writes, and reading it per-LINE rather than per-INTERPOLATION would
-    /// condemn the fix for the leak it closed.
-    static func publicInterpolations(in line: String) -> [String] {
-        var found: [String] = []
-        var rest = Substring(line)
-        // R2: every pass consumes at least the marker, and the line is finite.
-        while let marker = rest.range(of: publicInterpolationMarker) {
-            let head = rest[rest.startIndex..<marker.lowerBound]
-            if let open = head.range(of: "\\(", options: .backwards) {
-                found.append(String(head[open.upperBound...]))
-            }
-            rest = rest[marker.upperBound...]
-        }
-        return found
-    }
-
-    /// Whether one publicly-interpolated expression carries a value derived from a peer.
-    ///
-    /// Two exemptions, and both are the point of the fix rather than holes in it:
-    /// ``NetworkMeshSession/peerLabel(for:)`` is the sanctioned labeller (its own call names two
-    /// forbidden tokens), and a `.count` identifies nobody — `browsed peers=\(keys.count)` is the
-    /// one peer-shaped interpolation the cutover deliberately KEPT public.
-    static func isPeerDerived(_ expression: String) -> Bool {
-        let normalized = expression.lowercased()
-        guard !normalized.contains("peerlabel(") else { return false }
-        guard !normalized.hasSuffix(".count") else { return false }
-        return peerDerivedTokens.contains { normalized.contains($0) }
-    }
-
-    /// **Nothing peer-derived reaches the shipping radio's system log.**
-    ///
-    /// The cutover (2026-09-21) made `NetworkMeshSession` the radio every launch gets, and moved
-    /// none of its diagnostics. Ten of them interpolated `MeshLinkKey.rawValue` — the browsed
-    /// Bonjour endpoint id, which contains the peer's advertised instance name verbatim — at
-    /// `privacy: .public`, and `noteTunnelEnded` interpolated the peer's **stable** 16-character
-    /// identity fingerprint, the value the ledger and the moderation record are keyed on, at
-    /// `.public` on every single teardown. `409b714` redacted only `browsed peers=`. The two
-    /// sibling radios had run on a salted, session-scoped `peerLabel(for:)` since they shipped;
-    /// this radio now does too, and this is the wall that keeps it there.
-    ///
-    /// Source, not behaviour, and deliberately so — `os.Logger`'s redaction happens inside the
-    /// unified logging system and a unit test cannot observe which interpolation was public. What
-    /// IS observable is the shape of the call, and the shape is the whole decision.
-    ///
-    /// Three claims, because one alone leaves the hole the leak actually came through:
-    ///
-    /// 1. No `privacy: .public` interpolation names a peer-derived token.
-    /// 2. `peerLines(_:key:detail:)` still builds its two halves differently — the logged one
-    ///    through the label, the echoed one through the raw id. Collapse them and claim 1 stays
-    ///    green while every line goes back to naming peers.
-    /// 3. Outside those two builders, no string literal in the file interpolates the raw endpoint
-    ///    id at all — which is the indirection that let `let line = "… \(key.rawValue)"` followed
-    ///    by `\(line, privacy: .public)` read as clean to a per-interpolation scan.
-    @Test func noPublicDiagnosticOnTheShippingRadioCarriesAPeerDerivedValue() throws {
-        let code = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Transport/NetworkMeshSession.swift")
-        )
-
-        var offenders: [String] = []
-        for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
-            let text = String(line)
-            for expression in Self.publicInterpolations(in: text) where Self.isPeerDerived(expression) {
-                offenders.append("\(expression) — in: \(text.trimmingCharacters(in: .whitespaces))")
-            }
-        }
-        #expect(offenders.isEmpty, """
-            the shipping mesh radio logs a peer-derived value at `privacy: .public` again. Every \
-            such value — the link key, the browsed endpoint id, the advertised instance name, the \
-            identity fingerprint — must interpolate through `peerLabel(for:)`, which is salted \
-            per session and gone with it. Counts, causes, capacities and durations stay public. \
-            Offending interpolations:
-            \(offenders.joined(separator: "\n"))
-            """)
-
-        let builder = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "private func peerLines(", in: code),
-            "peerLines is gone — the split between the logged line and the echoed one has no home"
-        )
-        #expect(builder.contains("logged: \"\\(body) for \\(peerLabel(for: key))\\(tail)\""), """
-            the LOGGED half of a peer-scoped line no longer names the peer by its session label. \
-            That half goes to `os.Logger`, is persisted, and leaves the device in a sysdiagnose
-            """)
-        #expect(builder.contains("echoed: \"\\(body) for \\(key.rawValue)\\(tail)\""), """
-            the ECHOED half lost the raw endpoint id. That half goes to \
-            `MeshTransportConsoleLog`, which is an empty function outside DEBUG, and it is the \
-            transcript the runbook's Simulator lanes grep — a lane that cannot match a tunnel \
-            line against its own `browsed peers=` list cannot tell a star from a mesh
-            """)
-
-        let tunnelEnded = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "private func noteTunnelEnded(", in: code),
-            "noteTunnelEnded is gone — the teardown line that leaked the fingerprint has no home"
-        )
-        #expect(tunnelEnded.contains("fingerprint=\\(fingerprint, privacy: .private)"), """
-            the teardown line stopped redacting the peer's identity fingerprint. It is STABLE — \
-            the ledger, the roster and the moderation record are keyed on it — and it was public \
-            on every teardown of the shipping radio until the cutover's fix
-            """)
-
-        let remainder = code
-            .replacingOccurrences(of: builder, with: "")
-            .replacingOccurrences(of: tunnelEnded, with: "")
-        #expect(!remainder.contains("\\(key.rawValue)"), """
-            a string literal outside `peerLines` and `noteTunnelEnded` interpolates the raw \
-            endpoint id. That is the indirection the leak travelled through: a `let line = "… \
-            \\(key.rawValue)"` logged as `\\(line, privacy: .public)` names a peer while \
-            reading as clean to a per-interpolation scan. Build peer-scoped lines with \
-            `peerLines(_:key:detail:)`
-            """)
     }
 }
 

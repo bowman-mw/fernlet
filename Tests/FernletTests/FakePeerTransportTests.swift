@@ -1,102 +1,20 @@
+// FakePeerTransportTests.swift
+// FernletTests
+//
+// The check of Fernlet's copy of the deterministic peer fabric, `Mocks/FakePeerTransport.swift`
+// (`VirtualClock`, `FakePeerNetwork`, `FakePeerTransport`), which Fernlet's mesh acceptance batteries
+// and partition scenarios build on. ProximityKit's repository holds the same suite over its own copy of
+// the fabric, in its package tests (`PeerTransportNeutralityTests.swift`, with `PeerHandleIdentityTests`,
+// the `PeerHandle.isSameEndpoint(as:)` rule, which is ProximityKit's alone); since plan step A1.3, when
+// Fernlet began consuming ProximityKit's tag and the package's tests left this repository, this copy
+// keeps Fernlet's fabric checked on the `mesh-batteries` line for as long as the batteries ride it: a
+// fake nobody checks is a source of false confidence. The two copies of the fabric are no longer held
+// identical, so each suite checks the copy its own batteries use.
+
 import Combine
 import Foundation
-import ProximityKit
 import Testing
 @testable import ProximityKit
-
-/// The identity rule the seven "same device?" call sites depend on, which had **no test at all**
-/// before transport neutrality made it nameable.
-///
-/// Until this file existed, every test peer was built with its own fresh `MCPeerID`, and two
-/// separately constructed `MCPeerID`s are never equal — so no test ever constructed two peer values
-/// that stood for one device. The `$0.peer.id == peer.id || $0.peer.underlying == peer.underlying`
-/// disjunct those sites were written with could have been deleted outright and the whole suite would
-/// have stayed green. That is the worst possible state for a check whose failure mode is silent:
-/// a slot that is never removed on disconnect keeps its seat and its coordinator is never cancelled,
-/// so ranging is never invalidated and the foreground Live Activity anchor is orphaned until the
-/// system's time cap; and a returning partner is refused by the very cap it already occupies.
-///
-/// The rule now lives in one place — ``PeerHandle/isSameEndpoint(as:)`` — and is tested here.
-@MainActor
-@Suite(.serialized)
-struct PeerHandleIdentityTests {
-
-    /// The property `==` does not have. A device re-discovered after the transport's peer cache
-    /// missed comes back under a **new `id`** and the **same endpoint**, and every record matched
-    /// against a transport event has to recognize it.
-    @Test func aReDiscoveredPeerIsTheSameEndpointDespiteANewID() {
-        let endpoint = PeerEndpointKey(UUID())
-        let first = makeHandle(named: "Robin", endpoint: endpoint)
-        let reDiscovered = makeHandle(named: "Robin", endpoint: endpoint)
-
-        #expect(first.id != reDiscovered.id, "the fixture must model a re-mint, not a copy")
-        #expect(first != reDiscovered, "`==` compares id — this is exactly the false negative")
-        #expect(first.isSameEndpoint(as: reDiscovered))
-        #expect(reDiscovered.isSameEndpoint(as: first), "the relation must be symmetric")
-    }
-
-    /// The other half: two genuinely different devices must never collapse into one, however
-    /// similar their advertisements. A false positive here would seat one peer in another's slot.
-    @Test func differentEndpointsAreNeverTheSameDevice() {
-        let a = makeHandle(named: "Robin", endpoint: PeerEndpointKey(UUID()))
-        let b = makeHandle(named: "Robin", endpoint: PeerEndpointKey(UUID()))
-
-        #expect(!a.isSameEndpoint(as: b))
-        #expect(a != b)
-    }
-
-    /// Equal `id` implies equal endpoint in production, so keeping the `id` disjunct can only add a
-    /// match a cache miss would otherwise lose. This pins the direction that matters: a handle is
-    /// always the same endpoint as itself, and the `id` arm alone is enough to say so.
-    @Test func aHandleIsAlwaysTheSameEndpointAsItself() {
-        let handle = makeHandle(named: "Robin", endpoint: PeerEndpointKey(UUID()))
-        #expect(handle.isSameEndpoint(as: handle))
-
-        // Same id, different endpoint key cannot arise from a real transport — but if it ever did,
-        // the id arm still answers "same device", which is the conservative direction.
-        let sameIDDifferentEndpoint = PeerHandle(
-            id: handle.id,
-            displayHint: handle.displayHint,
-            discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            endpoint: PeerEndpointKey(UUID())
-        )
-        #expect(handle.isSameEndpoint(as: sameIDDifferentEndpoint))
-    }
-
-    /// Hashing and equality stay keyed on `id` alone. Changing that would silently re-key every
-    /// `Set<PeerHandle>` and dictionary in the three radio managers, so it is pinned rather than
-    /// assumed.
-    @Test func equalityAndHashingRemainKeyedOnTheDiscoveryID() {
-        let id = UUID()
-        let first = PeerHandle(id: id, displayHint: "A", discoveryInfo: ["v": "1"], advertisedFingerprint: nil)
-        let refreshed = PeerHandle(id: id, displayHint: "A", discoveryInfo: ["v": "2"], advertisedFingerprint: "fp")
-
-        #expect(first == refreshed, "an advertisement update must not make it a different peer")
-        #expect(Set([first, refreshed]).count == 1)
-    }
-
-    /// A default-constructed handle gets its own endpoint, so the ~20 fixtures across the suite that
-    /// omit the argument cannot accidentally alias each other into one device.
-    @Test func defaultConstructedHandlesDoNotShareAnEndpoint() {
-        let handles = (0..<8).map { makeHandle(named: "Peer \($0)") }
-        for outer in handles.indices {
-            for inner in handles.indices where inner != outer {
-                #expect(!handles[outer].isSameEndpoint(as: handles[inner]))
-            }
-        }
-    }
-
-    private func makeHandle(named name: String, endpoint: PeerEndpointKey = PeerEndpointKey()) -> PeerHandle {
-        PeerHandle(
-            id: UUID(),
-            displayHint: name,
-            discoveryInfo: nil,
-            advertisedFingerprint: nil,
-            endpoint: endpoint
-        )
-    }
-}
 
 /// The deterministic fabric plan §16.2's partition matrix is built on, tested as a thing in its own
 /// right — a fake nobody has checked is a source of false confidence, not signal.

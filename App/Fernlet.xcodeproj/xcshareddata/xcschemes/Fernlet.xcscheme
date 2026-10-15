@@ -49,16 +49,6 @@
                ReferencedContainer = "container:Fernlet.xcodeproj">
             </BuildableReference>
          </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ProximityKitTests"
-               BuildableName = "ProximityKitTests"
-               BlueprintName = "ProximityKitTests"
-               ReferencedContainer = "container:../FernletKit">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

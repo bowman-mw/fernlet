@@ -105,6 +105,8 @@ final class MeshNameWithholdingRig {
 }
 
 /// The mesh door withholds every name from a slot this device has not committed — and only from it.
+/// That the manager's disclosure subscriber is wired to rename only (never to record, which appends a
+/// roster row) reads its source and is ProximityKit's package suite of this name.
 @MainActor
 @Suite(.serialized)
 struct MeshNameWithholdingTests {
@@ -278,21 +280,6 @@ struct MeshNameWithholdingTests {
             throw CancellationError()
         }
         return coordinator
-    }
-
-    /// **The disclosure subscriber stays rename-only** — the WIRING, not just the helper: rewiring it
-    /// back to `recordSessionParticipant` (which appends) passed every suite (the re-verify's FIX).
-    /// A refused stranger's named frame in the teardown window must not mint it a roster row.
-    @Test func theDisclosureSubscriberIsWiredToRenameOnly() throws {
-        let source = MeshRoutedSourceScan.codeOnly(
-            try RepoRoot.source("FernletKit/Sources/ProximityKit/Mesh/MeshNetworkManager.swift")
-        )
-        let closure = try #require(
-            MeshRoutedSourceScan.bracedBody(after: "coordinator.onPeerDisplayNameDisclosed =", in: source),
-            "the manager no longer subscribes to the coordinator's disclosure"
-        )
-        #expect(closure.contains("renameSessionParticipant("), "the subscriber renames")
-        #expect(!closure.contains("recordSessionParticipant("), "and never records — recording appends a row")
     }
 
     /// Each name-bearing payload blanks exactly its names: every key, id, fingerprint and instant

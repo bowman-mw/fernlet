@@ -1,8 +1,8 @@
 # Plan: Fernlet Coach, a standalone ProximityKit, and coach plan links (2026-10-01)
 
 **Status:** detailed plan, owner decisions recorded through O17 and, for A1, where they apply. Of
-workstream A (§4), A0, A1.0 and A1.1's prep are built in this repository; the split and the steps
-after it are not.
+workstream A (§4), A0, A1.0, A1.1 (its prep, the split and batch A), A1.2 and A1.3 are built, and
+`proximitykit` is tagged `0.1.0`; the steps after them are not.
 **Supersedes in part:** [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md)
 (see §2) and §5 of [Data-Provenance-Coach-Trust-2026-07-12.md](Data-Provenance-Coach-Trust-2026-07-12.md)
 (App Attest).
@@ -666,6 +666,33 @@ umbrella entry:
   `Docs/Release-Process.md` and `Docs/Power-of-10-Swift.md` (the macOS check's modules); the owner
   updates the local, untracked CLAUDE.md and AGENTS.md (the S3 wall paragraph names the Proximity
   subtree; both are gitignored).
+
+*Built (2026-10-15).* **Copies first (owner decision 2026-10-15):** every Fernlet cell that read
+ProximityKit's sources was copied into the package before this commit deleted it, as batch D, a
+tests-only package PR (bowman-mw/proximitykit#4: 38 suites, 104 tests, the package then 98 suites
+and 618 tests), so a cell here is deleted only where the package holds its copy, or cut to its
+Fernlet half with a floor or a positive anchor so it cannot pass on what is left. Fernlet depends on
+the tag exactly; the 136 files of ProximityKit's source folder, its 33 package-test files and their
+inventory, and `ProximityKitSources.swift` are gone; 60 cells left with their copies (56 on
+mesh-batteries, `MeshRoutedCustodyHandoffWallTests`' nine among them, one each on crypto-goldens,
+key-custody and s3-grep, and one on no line), the selector wall's two cells over the package's tests
+retired, and Fernlet keeps its own `FakePeerTransportTests` (10). The lines, re-measured on the
+tree: the `proximitykit` line retired; crypto-goldens 7 names, floor 357 → 313; mesh-batteries 152
+names, floor 1379 → 1309; s3-grep 96 tests and key-custody 54 (their floors the shared 1);
+privacy-wipe 43, memory-lifecycle 8 and mesh-features 536 held; the inventory 628 rows. A full
+`FernletTests` run against the tag (A1.4's open item) ran 6,881 tests: 6,877 passed, 3 skipped
+(`HealthKitWorkoutTests`' three cells, disabled for want of the HealthKit entitlement) and one
+wall-clock bound in `OpenFoodFactsLookupTests` failed under the full run's load and passed alone.
+
+The censuses found four things the steps above miss: `wallLines` also pinned
+`ProximityNamespaceSoundnessTests` on crypto-goldens; the runner self-test's `both.json` tree fed
+assertions 3 to 6, not only the two-target ones (5 and 6 moved to `fernlet-only.json`, and the tree
+became `two.json`, two FernletTests suites); the 30 files hold 34 such suites, not 28 (the 28 leave
+out batch A's six); and beyond the two walks named above, five zero-lists would have passed
+vacuously on what was left (`MeshKeyAgreementSchemaTests`, `MeshLegacyGoodbyeInteropTests`, on no
+line, `MeshP3InteropAcceptanceTests`, `MeshRoutedStoreIsolationTests`, whose floor of 8
+FernletSocial alone met, and `MeshRoutedLockedDeviceTests`' W4): each is the package's copy, and
+each Fernlet walk that stays is floored.
 
 **A1.4 `@testable` across repos (verified 2026-10-14).** 122 `FernletTests` files import
 ProximityKit with `@testable` (counted 2026-10-14: the files holding that import line; two more spell

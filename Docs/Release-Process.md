@@ -25,11 +25,14 @@ On `main`, enable branch protection with:
    `AccessibilityBoundaryTests`, `MemoryLifecycleBoundaryTests`, `MessagesExtensionBoundaryTests`
    and `CodeOwnersResolutionTests` — the mesh line carries the newest mesh security suites, and
    every `…GoldenTests` wire-vector suite in the tree is on a line (`CIGateSelectorBoundaryTests`
-   demands it). Since 2026-10-09 (ProximityKit plan step A0.6.5) it also builds ProximityKit's
-   closure for native macOS 26 with warnings as errors, through `Scripts/macos-build-selftest.sh`,
-   which first proves the check is a native macOS build (an `import UIKit` it plants in ProximityKit
-   must fail it), so an iOS-only API reaching ProximityKit cannot merge green either; the two macOS
-   scripts are code-owned like the S3 ones.
+   demands it). Since 2026-10-09 (ProximityKit plan step A0.6.5) it also builds the Mac-ready set
+   (FernletFoundation, FernletCrypto and FernletDomainModel since plan step A1.3) for native macOS 26
+   with warnings as errors, through `Scripts/macos-build-selftest.sh`, which first proves the check
+   is a native macOS build (an `import UIKit` it plants in FernletFoundation must fail it), so an
+   iOS-only API reaching the set cannot merge green either; the two macOS scripts are code-owned like
+   the S3 ones. ProximityKit itself is a pinned dependency since plan step A1.3 (exactly `0.1.0`,
+   from its own repository), whose CI builds and tests it on macOS and iOS; the strict build here
+   compiles the tag with warnings as errors.
    **Every test step runs through `Scripts/run-gated-suites.sh`**,
    which reads the step's result bundle and refuses a green run that executed fewer tests than the
    step's floor: `-only-testing:` matches suite names exactly, matches nothing on a misspelling or a
@@ -43,16 +46,17 @@ On `main`, enable branch protection with:
    because a deployment target above the runner's SDK is a hard build error.
 2. **Require review from Code Owners.** [`.github/CODEOWNERS`](../.github/CODEOWNERS) lists
    exactly the wall-load-bearing paths (the boundary tests, wall scripts and hooks, the CI
-   workflow, the privacy documents, `FernletKit/Package.swift`, and the `PrivacyInfo.xcprivacy`
-   manifests). With this switch on, no change to a wall file merges without the owner's explicit
-   approval.
+   workflow, the privacy documents, `FernletKit/Package.swift` and the two `Package.resolved` files
+   that pin each outside package's revision, and the `PrivacyInfo.xcprivacy` manifests). With this
+   switch on, no change to a wall file merges without the owner's explicit approval.
 3. **Require signed commits** (optional but recommended once the repo is public) and disallow
    force pushes to `main`.
 
 Local complement: every clone runs `Scripts/install-git-hooks.sh` once, so the committed
 `pre-push` hook runs `Scripts/spm-wall-check.sh` before wall-touching pushes, and
-`Scripts/macos-build-check.sh` before pushes that touch the Mac-ready set (ProximityKit,
-FernletCrypto, FernletDomainModel, FernletFoundation), the package manifest or the macOS scripts.
+`Scripts/macos-build-check.sh` before pushes that touch the Mac-ready set (FernletCrypto,
+FernletDomainModel, FernletFoundation), the package manifest or its resolved file, or the macOS
+scripts.
 
 ## 2. Per-release checklist
 

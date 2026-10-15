@@ -1,16 +1,14 @@
 // MeshEpochFixtures.swift
 //
 // The epoch fixtures: refs minted at a counter by a coordinator in a mesh, fixture group keys and the
-// instant every clock-bearing epoch test measures from. A twin (ProximityKit plan step A1.1): the same
-// file at Tests/FernletTests and FernletKit/Tests/ProximityKitTests, held identical but for its imports
-// by CIGateSelectorBoundaryTests.everyTwinMatchesItsOriginal(), because the package's four epoch suites
-// (MeshEpochModelTests.swift) and three FernletTests files (the P3 acceptance, rotation trigger and
-// session store suites) build fixtures with it, and a test target cannot import another. Its one mint,
-// `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)`, is a test binding, so each half mints
-// under its own target's namespace: in FernletTests through ProximityNamespaceTestBindings.swift, under
-// Fernlet's labels (`.fernlet`, the values the staying suites always saw), and in ProximityKit's package
-// tests through TestSupport/PackageTestBindings.swift, under the package tests' namespace
-// (`.packageTest`).
+// instant every clock-bearing epoch test measures from, which three FernletTests files (the P3
+// acceptance, rotation trigger and session store suites) build fixtures with. Extracted from
+// MeshEpochModelTests.swift at ProximityKit plan step A1.1, when that file's four suites moved into
+// ProximityKit's package tests with a copy of this file; the copies were twins until plan step A1.3 took
+// the package's tests to its own repository, and this one is Fernlet's own since. Its one mint,
+// `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)`, is a test binding, through
+// ProximityNamespaceTestBindings.swift, under Fernlet's labels (`.fernlet`, the values these suites
+// always saw).
 
 import Foundation
 import Testing

@@ -74,7 +74,8 @@ at the app and check that the published egress list is the whole list.
 | Path | What lives there |
 | --- | --- |
 | [`App/Fernlet/`](App/Fernlet) | The app target — composition root, `FernletStore`, and the tab surfaces. |
-| [`FernletKit/`](FernletKit) | Local SPM package: 28 modules (domain, persistence, crypto, the sealed `Private*` stores, the walled `AIProviders` + `CloudKitSync`, `ProximityKit` with Fernlet's connection rules and social features on top of it, UI kits, services). |
+| [`FernletKit/`](FernletKit) | Local SPM package: 27 modules (domain, persistence, crypto, the sealed `Private*` stores, the walled `AIProviders` + `CloudKitSync`, Fernlet's connection rules and social features on top of `ProximityKit`, UI kits, services). |
+| [`bowman-mw/proximitykit`](https://github.com/bowman-mw/proximitykit) | `ProximityKit`, the peer-to-peer subsystem (radios, identity, sealing, the mesh engine), in a repository of its own: FernletKit depends on its tag `0.1.0`, exactly, and its own CI builds and tests it. |
 | [`App/FernletWidgets/`](App/FernletWidgets), [`App/FernletShareExtension/`](App/FernletShareExtension) | Widget and recipe-share extension targets. |
 | [`Tests/FernletTests/`](Tests/FernletTests), [`Tests/FernletUITests/`](Tests/FernletUITests) | Unit tests (including the grep-walls) and UI tests. |
 | [`Site/`](Site) | The whole public web presence — static files only. See [`Site/README.md`](Site/README.md). |
@@ -91,18 +92,21 @@ every type in the codebase carries a `///` doc comment, and
 ## Build and test
 
 Open and build `Fernlet.xcworkspace`, which holds the app project and the FernletKit package side by
-side; the project alone cannot see ProximityKit's package test target, `ProximityKitTests`.
+side; the strict build and every CI test line go through it. ProximityKit resolves from its own
+repository at the pinned tag; to work on it beside Fernlet, drag a local checkout of it into the
+workspace (a local override that is never committed: CI always builds the tag).
 
 ```bash
 xcodebuild build-for-testing -workspace Fernlet.xcworkspace -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 ```bash
-xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests -only-testing:ProximityKitTests
+xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:FernletTests
 ```
 
-`-project App/Fernlet.xcodeproj` builds and runs `FernletTests` green but silently leaves the
-package's tests out.
+A build through `-project App/Fernlet.xcodeproj` (a release archive's container) lands in other
+derived data than the workspace's, so run tests through the container you built with.
+ProximityKit's own tests run in its repository.
 
 The full suite takes several minutes; run it in batches by suite when iterating.
 
