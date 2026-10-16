@@ -106,6 +106,12 @@ public enum FriendPhotoReviewWorkingMessage: Equatable, Sendable {
 /// cover INSTEAD of the grid, so the app-switcher snapshot never holds a photo nobody chose (the
 /// switcher can be entered without a background transition, hence `!= .active`).
 ///
+/// **Report… (App Review guideline 1.2, 2026-10-15).** A tile the host says `canReport` — another
+/// person's photo, never this device's own — carries a "Report…" context-menu item and the same
+/// VoiceOver action, which hand the photo to `requestReport` (not while an answer runs). The sheet reports nothing itself: the
+/// host runs the app's people-report flow for the photo's sender and removes the photo the way
+/// declining it would, so it leaves the grid.
+///
 /// The actions are explicitly `@MainActor`-typed so their bodies stay on the main actor after an
 /// `await` resumes.
 public struct FriendPhotoReviewSheet: View {
@@ -137,6 +143,11 @@ public struct FriendPhotoReviewSheet: View {
     let notNow: (@MainActor () -> Void)?
     /// Loads a held photo's bytes for its tile (the host's gated seam); nil draws a placeholder.
     var loadImageData: ((FriendPhotoPayload) -> Data?)? = nil
+    /// Whether a tile offers Report…: the host's answer, true only for another person's photo whose
+    /// sender it can report.
+    let canReport: (FriendPhotoPayload) -> Bool
+    /// Starts the host's report flow for a photo's sender; the host removes the photo.
+    let requestReport: (FriendPhotoPayload) -> Void
     @State private var isSaving = false
     /// "Delete all" deletes every shown picture from this device — on a sheet that (in the
     /// disconnect flow) can't even be swiped away. It asks first.
@@ -172,6 +183,8 @@ public struct FriendPhotoReviewSheet: View {
     ///   - discardAll: Deletes every shown photo (after the sheet's own confirmation).
     ///   - notNow: Hides the review answering nothing; nil hides the header button.
     ///   - loadImageData: The tile loader.
+    ///   - canReport: Whether a tile offers Report…; no tile does by default.
+    ///   - requestReport: Starts the host's report flow for a photo's sender.
     public init(
         photos: [FriendPhotoPayload],
         selectedIDs: Binding<Set<UUID>>,
@@ -186,7 +199,9 @@ public struct FriendPhotoReviewSheet: View {
         keepSelected: @escaping @MainActor () async -> Void,
         discardAll: @escaping @MainActor () async -> Void,
         notNow: (@MainActor () -> Void)? = nil,
-        loadImageData: ((FriendPhotoPayload) -> Data?)? = nil
+        loadImageData: ((FriendPhotoPayload) -> Data?)? = nil,
+        canReport: @escaping (FriendPhotoPayload) -> Bool = { _ in false },
+        requestReport: @escaping (FriendPhotoPayload) -> Void = { _ in }
     ) {
         self.photos = photos
         self._selectedIDs = selectedIDs
@@ -202,6 +217,8 @@ public struct FriendPhotoReviewSheet: View {
         self.discardAll = discardAll
         self.notNow = notNow
         self.loadImageData = loadImageData
+        self.canReport = canReport
+        self.requestReport = requestReport
     }
 
     /// The explainer, the selectable photo grid, and the keep-friends section.
@@ -233,6 +250,10 @@ public struct FriendPhotoReviewSheet: View {
                         PeerNameDisplay.shown(photo.senderName, fingerprint: photo.senderFingerprint, placeholder: .met, in: .fernlet)
                     )))
                     .accessibilityHint(Text(verbatim: FernletProximityUICopy.Review.tileHint))
+                    .modifier(ReportablePhotoTile(
+                        isReportable: canReport(photo),
+                        report: { if !isBusy { requestReport(photo) } }
+                    ))
                 }
             }
 
@@ -420,6 +441,35 @@ public struct FriendPhotoReviewSheet: View {
             selectedIDs.remove(id)
         } else {
             selectedIDs.insert(id)
+        }
+    }
+}
+
+/// Report… on one review tile, when the host offers it: a destructive context-menu item and the
+/// same named VoiceOver action, both handing the photo to the host's report flow (the sheet drops a
+/// request made while an answer runs). A tile that is not reportable — this device's own photo — gets
+/// neither. Reportability is a fact about the photo, so a tile never changes branch, and its loaded
+/// image is never torn down by one.
+private struct ReportablePhotoTile: ViewModifier {
+    let isReportable: Bool
+    let report: () -> Void
+
+    func body(content: Content) -> some View {
+        if isReportable {
+            content
+                .contextMenu {
+                    Button(role: .destructive, action: report) {
+                        Label {
+                            Text(verbatim: FernletProximityUICopy.Review.report)
+                        } icon: {
+                            Image(systemName: "flag")
+                        }
+                    }
+                    .accessibilityIdentifier("friends.review.report")
+                }
+                .accessibilityAction(named: Text(verbatim: FernletProximityUICopy.Review.report), report)
+        } else {
+            content
         }
     }
 }

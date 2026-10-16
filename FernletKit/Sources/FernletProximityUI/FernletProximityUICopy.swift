@@ -132,6 +132,13 @@ enum FernletProximityUICopy {
                    comment: "VoiceOver hint on one photo in the session review grid: double-tapping ticks or unticks it for keeping. Its selected state is announced separately.")
         }
 
+        /// The context-menu item (and the VoiceOver action) on another person's photo that starts
+        /// the app's report flow for its sender (App Review guideline 1.2, 2026-10-15).
+        static var report: String {
+            String(localized: "proximity.review.report", defaultValue: "Report…", bundle: .module,
+                   comment: "Context-menu item and VoiceOver action on a photo another person shared in the session review grid. Opens the report sheet for the person who took it; reporting blocks them on this phone and removes the photo. The ellipsis says a sheet follows.")
+        }
+
         /// The accessibility label of the opaque cover drawn over the review while the app is not
         /// frontmost (the app-switcher snapshot must not hold a photo nobody chose yet).
         static var snapshotCover: String {

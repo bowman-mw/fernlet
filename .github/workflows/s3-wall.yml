@@ -1582,9 +1582,21 @@ jobs:
         # of ActivityTests, ModerationTests and FriendStateTests), 0 failed, 0 skipped, no `Restarting
         # after unexpected exit` line, the suite census silent. Re-run AT 536: passed, and shown red once
         # at 537.
+        # RAISED 536 -> 550 on 2026-10-15 (App Review guideline 1.2, Report + a small filter), MEASURED
+        # on a Mac (a private iPhone 17 simulator, iOS 26.5): the two new suites joined the line, so the
+        # NAME count is 50 — SessionMessageFilterTests (the chat's on-device send filter, its hashed
+        # list's shape and the send path's `.filtered` refusal) and SessionContentReportTests (Report…
+        # on a session message or photo through the people report) — and this exact 50-name list ran at
+        # floor 1 through Fernlet.xcworkspace after the strict build-for-testing (WALL CHECK PASSED),
+        # read off its own result bundle: 550 tests in 50 suites (515 Swift Testing cells in 47 suites,
+        # "passed after 19.331 seconds", and the 35 XCTest cases of ActivityTests, ModerationTests and
+        # FriendStateTests), 0 failed, 0 skipped, no `Restarting after unexpected exit` line. Re-run AT
+        # 550: passed, and shown red once at 551. 536 + 8 (SessionMessageFilterTests) + 6
+        # (SessionContentReportTests) = 550 is the ARITHMETIC CHECK, never the source;
+        # RoutedShareRefusalCopyTests and SessionMessageTests gained expectations, not cells.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-features 536 \
+          Scripts/run-gated-suites.sh mesh-features 550 \
             ActivityTests \
             AgeGateWiringTests \
             ClothingShareCodecTests \
@@ -1632,7 +1644,9 @@ jobs:
             SessionMessageUnreadTests \
             SessionPhotoReviewCoordinatorTests \
             SessionPhotoReviewDoor3Tests \
-            SessionPhotoReviewOverlayTests
+            SessionPhotoReviewOverlayTests \
+            SessionMessageFilterTests \
+            SessionContentReportTests
 
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md

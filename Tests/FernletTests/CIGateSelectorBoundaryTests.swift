@@ -383,6 +383,10 @@ import Testing
     /// `mesh-batteries` 153 → 152 in the same step, for `MeshRoutedCustodyHandoffWallTests`, whose nine
     /// cells all read ProximityKit's sources and are the package's copy of that suite now (no Fernlet
     /// half). This is the retirement argued. Counted off the lines.
+    ///
+    /// RAISED on 2026-10-15 (App Review guideline 1.2, Report + a small filter): `mesh-features` 48 → 50,
+    /// for `SessionMessageFilterTests` and `SessionContentReportTests`, the two suites that hold the
+    /// chat's send filter and Report… on a session message or photo. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 1,
@@ -399,7 +403,7 @@ import Testing
         "recipe-wire": 1,
         "food-search": 13,
         "mesh-batteries": 152,
-        "mesh-features": 48
+        "mesh-features": 50
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -1098,8 +1102,9 @@ import Testing
     /// batteries build on; and 629 → 628 in the same step for `MeshRoutedCustodyHandoffWallTests`, every
     /// cell of which read ProximityKit's sources (the package holds the suite). A suite deleted with its
     /// row lowers it with the retirement argued, the ``measuredSuiteNameCounts`` rule; a new row raises it
-    /// in the same commit.
-    static let measuredInventoryRows = 628
+    /// in the same commit. 628 → 630 on 2026-10-15 (App Review guideline 1.2) for the two suites that
+    /// joined `mesh-features`, `SessionMessageFilterTests` and `SessionContentReportTests`.
+    static let measuredInventoryRows = 630
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has three

@@ -15,8 +15,8 @@ import ProximityKit
 ///    text, mints a routed item for it through the engine's origination door, and appends the local
 ///    echo here **only once the mint staged**.
 ///  - **Inbound** — the chat's projection handler for the temporary-message row calls
-///    ``receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:in:)``, which dedupes
-///    by ``MeshContentKey`` (author **and** id), sanitizes, caps, and returns which of the three
+///    ``receiveIncoming(id:senderFingerprint:senderSigningPublicKey:senderDisplayName:text:sentAt:seenAt:in:)``,
+///    which dedupes by ``MeshContentKey`` (author **and** id), sanitizes, caps, and returns which of the three
 ///    things it did. The author's fingerprint
 ///    is the origin's signed one resolved against the admission ledger, with the block list and the
 ///    removal set applied **before** the content key is unwrapped; the display name is the body's
@@ -53,11 +53,13 @@ import ProximityKit
 /// marked final → gone for the session, while its sender saw `.staged`. The key is local: nothing
 /// about the manifest or the body changed.
 ///
-/// The gate value arrives through ``refreshGates(chatAllowed:isRefused:)``, which the chat's text
-/// arm calls at every ingest — **and only there**. A block or an age-gate flip therefore re-renders
-/// at the NEXT ingest, not at the flip: the arm that folds the gates is the text projection itself,
-/// and it is unreachable while `isChatAllowed` is false, so a mid-session flip changes nothing
-/// visible until another message arrives. That is display only, and deliberately so — the
+/// The gate value arrives through ``refreshGates(chatAllowed:isRefused:)``, which the chat folds
+/// (`MeshSessionChat.refreshVisibleTranscript()`) at every ingest and when the app reports or blocks
+/// from inside the session — Report… on a message re-renders at once (App Review guideline 1.2,
+/// 2026-10-15). Any other block or an age-gate flip re-renders at the NEXT ingest, not at the flip:
+/// the arm that folds the gates is the text projection itself, and it is unreachable while
+/// `isChatAllowed` is false, so such a flip changes nothing visible until another message arrives.
+/// That is display only, and deliberately so — the
 /// *projection* is fail-closed at both ends (the engine's projectable set omits the text row while
 /// the gate is shut, and the chat's pre-open verdict marks a gated item final), which is the
 /// load-bearing half and is tested. Its `isRefused` half is `ProximityHost.isBlockedFingerprint` and **not** yet
@@ -96,6 +98,10 @@ public final class SessionMessageStore {
         public let messageID: UUID
         /// Transport-VERIFIED sender fingerprint (local fingerprint for outgoing). Never a wire claim.
         public let senderFingerprint: String
+        /// The author's signing key as the routed delivery verified it (the origin's signed manifest
+        /// resolved against the admission ledger) — the key a Report of this row names. Empty for
+        /// this device's own rows, which are never reported, and for a row built without one.
+        public let senderSigningPublicKey: Data
         public let senderDisplayName: String
         public let text: String
         /// The message's ordering instant: the sender's claim, **clamped** to ±10 minutes of when
@@ -105,9 +111,14 @@ public final class SessionMessageStore {
         public let sentAt: Date
         public let isOutgoing: Bool
 
+        /// Whether the panel offers Report… on this row (App Review guideline 1.2): another
+        /// person's message whose author key the delivery verified — never this device's own.
+        public var canBeReported: Bool { !isOutgoing && !senderSigningPublicKey.isEmpty }
+
         public init(
             messageID: UUID,
             senderFingerprint: String,
+            senderSigningPublicKey: Data = Data(),
             senderDisplayName: String,
             text: String,
             sentAt: Date,
@@ -115,6 +126,7 @@ public final class SessionMessageStore {
         ) {
             self.messageID = messageID
             self.senderFingerprint = senderFingerprint
+            self.senderSigningPublicKey = senderSigningPublicKey
             self.senderDisplayName = senderDisplayName
             self.text = text
             self.sentAt = sentAt
@@ -192,7 +204,7 @@ public final class SessionMessageStore {
     @ObservationIgnored private var held: MeshContentSet<MeshMergedMessage> = .empty
 
     /// What ``held`` cannot carry, per ``MeshContentKey``: the display name the message arrived
-    /// with and whether it was ours.
+    /// with, its author's verified signing key (empty for ours) and whether it was ours.
     ///
     /// ``MeshMergedMessage`` is the merge layer's value and holds no display name and no direction —
     /// correctly, because neither participates in the order or the union. Pruned to ``held``'s own
@@ -200,7 +212,7 @@ public final class SessionMessageStore {
     /// the id so two authors' rows carrying one id cannot overwrite each other's name and
     /// direction (P1-1).
     @ObservationIgnored private var attributionByKey:
-        [MeshContentKey: (displayName: String, isOutgoing: Bool)] = [:]
+        [MeshContentKey: (displayName: String, signingPublicKey: Data, isOutgoing: Bool)] = [:]
 
     /// This member's own view gates — the 13+ chat gate and the local block/ban set — folded from
     /// the live seams by ``refreshGates(chatAllowed:isRefused:)``.
@@ -242,6 +254,7 @@ public final class SessionMessageStore {
                 claimedSentAt: sentAt, firstSeenAt: sentAt
             ),
             displayName: senderDisplayName,
+            signingPublicKey: Data(),
             isOutgoing: true
         )
     }
@@ -256,7 +269,9 @@ public final class SessionMessageStore {
     /// applied the block list and the removal set before the content key was unwrapped, re-applied
     /// the 13+ gate, judged the session live, and spent the per-origin routed quota.
     /// `senderDisplayName` is the body's own display claim and is re-moderated here, under the
-    /// peer-name policy of `namespace`, the host's.
+    /// peer-name policy of `namespace`, the host's. `senderSigningPublicKey` is the delivery's
+    /// verified author key, kept beside the row so a Report of it names the right person; it is
+    /// defaulted empty for callers that hold none, and such a row is simply not reportable.
     ///
     /// Applies, in order: dedup by `(senderFingerprint, id)`, sanitize + length-cap (empty after
     /// sanitize is refused). The dedup key is the PAIR and not the id, because the id is the
@@ -274,6 +289,7 @@ public final class SessionMessageStore {
     func receiveIncoming(
         id: UUID,
         senderFingerprint: String,
+        senderSigningPublicKey: Data = Data(),
         senderDisplayName: String,
         text rawText: String,
         sentAt: Date,
@@ -294,6 +310,7 @@ public final class SessionMessageStore {
                 claimedSentAt: sentAt, firstSeenAt: seenAt
             ),
             displayName: ProximityDisplayName.peerDisplayName(senderDisplayName, in: namespace),
+            signingPublicKey: senderSigningPublicKey,
             isOutgoing: false
         )
         // TF b19 item 6: a message that arrives while the panel is closed is unread. While the panel is
@@ -374,7 +391,9 @@ public final class SessionMessageStore {
     /// Coerce untrusted (wire-received or user-typed) message text into a safe shape WITHOUT throwing:
     /// drop control / zero-width / bidi-override scalars, collapse whitespace runs to single spaces,
     /// trim, and cap length. Mirrors `ItemNameModeration.sanitizedName`'s never-throw boundary coercion
-    /// but at the message length cap. Does NOT screen profanity — chat is not a listed cosmetic label.
+    /// but at the message length cap. Does NOT screen profanity — chat is not a listed cosmetic label —
+    /// and does not filter: the send path's `SessionMessageFilter` runs on its output, on this
+    /// device's own drafts only.
     public static func sanitize(_ raw: String) -> String {
         let kept = raw.unicodeScalars.filter { scalar in
             !CharacterSet.controlCharacters.contains(scalar)
@@ -415,9 +434,11 @@ public final class SessionMessageStore {
     /// The 500-row cap is the SET's (`MeshMergedMessage.setCapacity`), which keeps the newest k
     /// under §10.3's order rather than the last k to arrive — the same statement the old
     /// `removeFirst` made, with the correct result on a backlog that drains out of send order.
-    private func hold(_ message: MeshMergedMessage, displayName: String, isOutgoing: Bool) {
+    private func hold(
+        _ message: MeshMergedMessage, displayName: String, signingPublicKey: Data, isOutgoing: Bool
+    ) {
         held = held.inserting(message)
-        attributionByKey[message.mergeKey] = (displayName, isOutgoing)
+        attributionByKey[message.mergeKey] = (displayName, signingPublicKey, isOutgoing)
         let kept = held.mergeKeys
         // R3: the attribution table is pruned to the set's own keys, so it is bounded by the same
         // `setCapacity` and an evicted row cannot leak an entry for the session's lifetime.
@@ -429,7 +450,7 @@ public final class SessionMessageStore {
     /// "re-derive transcript (§10.3 ordering), re-apply age gate + moderation", as one expression.
     ///
     /// A held row whose attribution is somehow missing is dropped from the VIEW rather than shown
-    /// with an invented name: `hold(_:displayName:isOutgoing:)` writes both together and prunes
+    /// with an invented name: `hold(_:displayName:signingPublicKey:isOutgoing:)` writes both together and prunes
     /// them together, so the case is unreachable, and answering it by omission keeps that true
     /// without a trap.
     private func rederiveTranscript() {
@@ -440,6 +461,7 @@ public final class SessionMessageStore {
                 return Message(
                     messageID: merged.messageID,
                     senderFingerprint: merged.senderFingerprint,
+                    senderSigningPublicKey: who.signingPublicKey,
                     senderDisplayName: who.displayName,
                     text: merged.text,
                     sentAt: merged.orderingInstant,

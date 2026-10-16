@@ -89,6 +89,9 @@
     "%@ didn't answer. Their Fernlet may be closed, locked, or busy sharing with someone else. Nothing was sent." : {
       "comment" : "Why a recipe share did not go out: the other phone never answered. %@ is the person's name."
     },
+    "%@ is blocked on this phone. If something needs more than a report, you can email the developer." : {
+
+    },
     "%@ is in your foods now — scan it again and it'll log in a tap." : {
 
     },
@@ -1033,7 +1036,13 @@
     "A heart is tucked away for %@ — delivered when they next open Fernlet." : {
 
     },
+    "A kind, safe space" : {
+
+    },
     "A mood, never a number." : {
+
+    },
+    "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a session. Session messages are never stored — they disappear for everyone when the session ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them." : {
 
     },
     "A quick mood check-in." : {
@@ -2368,6 +2377,9 @@
     "Duress password" : {
 
     },
+    "During a session, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone." : {
+
+    },
     "Each exercise as logged, most recent first." : {
 
     },
@@ -2427,6 +2439,9 @@
     },
     "Eggs eaten, against the 300 or so a hen lays in a year." : {
       "comment" : "Silly stat: how eggs are counted"
+    },
+    "Email the developer" : {
+
     },
     "Email the developer at %@" : {
 
@@ -2562,6 +2577,9 @@
 
     },
     "Everything deleted" : {
+
+    },
+    "Everything friends share with you happens in person: custom companion clothing, the photos you take together, messages during a session, recipes, and the activities you start. Objectionable content and abusive behavior aren't welcome here." : {
 
     },
     "Everything here is cumulative. Nothing resets." : {
@@ -2749,6 +2767,9 @@
     },
     "Fernlet couldn't set up a secure connection with %@, so nothing was sent." : {
       "comment" : "Why a recipe share did not go out: the secure connection could not be completed. %@ is the person's name."
+    },
+    "Fernlet doesn't send some of the words in this message. You can change them and send it again." : {
+
     },
     "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app." : {
 
@@ -3281,6 +3302,12 @@
 
     },
     "Imports a Fernlet recipe file after showing its details." : {
+
+    },
+    "In Friends & Blocks, swipe a person or open their card to Report or Block them. During a session, tap the ••• beside someone in the People list to block them there and then. Blocking hides their content from you and yours from them." : {
+
+    },
+    "In a friend's shop, tap the ••• on any item and choose “Report item.” The item is hidden from you right away and its sender is blocked on your device." : {
 
     },
     "In use" : {
@@ -4612,6 +4639,9 @@
     "Photos from your hangouts will appear here." : {
 
     },
+    "Photos, messages and activities" : {
+
+    },
     "Pick a code you have not used as your passcode. Fernlet will not accept the same one for both." : {
 
     },
@@ -5156,16 +5186,56 @@
     "Report" : {
 
     },
+    "Report a message or a photo" : {
+
+    },
+    "Report a shared item" : {
+
+    },
     "Report item…" : {
+
+    },
+    "Report or block a person" : {
 
     },
     "Report this item?" : {
 
     },
+    "Report this message?" : {
+
+    },
     "Report this person?" : {
 
     },
+    "Report this photo?" : {
+
+    },
+    "Report this picture" : {
+
+    },
+    "Reported" : {
+
+    },
     "Reporting %@ blocks them and flags their shared content on your device." : {
+
+    },
+    "Reporting %@ for the message “%@” blocks them and hides their messages on this phone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Reporting %1$@ for the message “%2$@” blocks them and hides their messages on this phone."
+          }
+        }
+      }
+    },
+    "Reporting %@ for this photo blocks them and deletes the photo from this phone." : {
+
+    },
+    "Reports are handled on your device — there is no server that sees your data. A report of a person, a message or a photo stays on your phone. Reports of shop items also travel to friends you meet in person, signed by your device, so several people reporting the same item can be counted together; the person you reported is one of the friends who may receive it. They are never uploaded anywhere. When the same item is reported enough, it can no longer be sold; a maker whose items are repeatedly reported loses their shop for a while." : {
+
+    },
+    "Report…" : {
 
     },
     "Reps" : {
@@ -6754,6 +6824,9 @@
 
     },
     "What happened today?" : {
+
+    },
+    "What happens next" : {
 
     },
     "What it does" : {

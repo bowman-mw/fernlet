@@ -204,6 +204,18 @@
         }
       }
     },
+    "proximity.review.report" : {
+      "comment" : "Context-menu item and VoiceOver action on a photo another person shared in the session review grid. Opens the report sheet for the person who took it; reporting blocks them on this phone and removes the photo. The ellipsis says a sheet follows.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Report…"
+          }
+        }
+      }
+    },
     "proximity.review.savingToPhotos" : {
       "comment" : "Status line on the photo review sheet while kept photos are copied to the system Photos library; the buttons are disabled meanwhile.",
       "extractionState" : "extracted_with_value",

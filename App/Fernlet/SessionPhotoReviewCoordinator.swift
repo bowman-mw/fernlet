@@ -150,10 +150,12 @@ nonisolated enum SessionPhotoReviewGate {
 // MARK: - SessionPhotoReviewHost
 
 /// What ``SessionPhotoReviewCoordinator`` reads from, and hands to, the app's store — the trust
-/// vault for the keep-as-friend half, two lifecycle facts, and the one-sided mint.
+/// vault for the keep-as-friend half, two lifecycle facts, the one-sided mint, and Report… on a
+/// photo (App Review guideline 1.2, 2026-10-15): whose key a photo's report names, and the people
+/// report it files.
 ///
 /// A protocol rather than a `FernletStore` reference so the coordinator holds its owner WEAKLY
-/// (the store owns the coordinator) and so the protocol states exactly the four things it touches.
+/// (the store owns the coordinator) and so the protocol states exactly the six things it touches.
 ///
 /// Concurrency: `@MainActor` — the store is main-actor state.
 @MainActor
@@ -170,6 +172,17 @@ protocol SessionPhotoReviewHost: AnyObject {
     ///   - candidates: The candidates the review offered.
     ///   - keptFingerprints: The ones the person chose to keep.
     func keepProximityFriends(from candidates: [MeshSessionRosterEntry], keptFingerprints: Set<String>)
+    /// The key a Report of `photo` names, nil for this device's own photo or an unreportable one.
+    ///
+    /// - Parameter photo: A photo the review shows.
+    /// - Returns: The sender's key, or nil.
+    func reportableSenderKey(of photo: FriendPhotoPayload) -> Data?
+    /// Files the people report against a photo's sender (recorded on this device, the sender blocked).
+    ///
+    /// - Parameters:
+    ///   - subject: The photo's sender.
+    ///   - reason: The reason the person chose.
+    func reportSessionPeer(_ subject: PeerReportSubject, reason: ReportReason)
 }
 
 extension FernletStore: SessionPhotoReviewHost {}
@@ -639,6 +652,74 @@ final class SessionPhotoReviewCoordinator {
         await finish(after: answer)
         ownAnswerInFlight = false
         endAnswer()
+    }
+
+    // MARK: Report… on one photo (App Review guideline 1.2)
+
+    /// Whether the review offers Report… on `photo`: another person's photo whose sender the host
+    /// can name — never this device's own.
+    ///
+    /// - Parameter photo: A photo the snapshot shows.
+    /// - Returns: true when the tile carries Report….
+    func canReport(_ photo: FriendPhotoPayload) -> Bool {
+        host?.reportableSenderKey(of: photo) != nil
+    }
+
+    /// The subject Report… on `photo` opens the people-report flow with, or nil when it is not
+    /// reportable.
+    ///
+    /// - Parameter photo: A photo the snapshot shows.
+    /// - Returns: The photo's sender as a report subject.
+    func reportSubject(for photo: FriendPhotoPayload) -> PeerReportSubject? {
+        PeerReportSubject.photo(photo, senderKey: host?.reportableSenderKey(of: photo))
+    }
+
+    /// The person reported a shown photo's sender: the host files the people report (recording it on
+    /// this device and blocking the sender), then the photo is answered as declined — deleted for
+    /// good, as an unticked one is — and leaves the snapshot with its tick, and the sender leaves the
+    /// keep-as-friend rows. A review left with nothing to show finishes as an answer does: it waits for
+    /// a running leave and hides, and a batch still carrying candidates goes to the Friends surface's
+    /// keep-as-friends prompt. Refused while this review's own answer runs, and for a photo the
+    /// snapshot does not show.
+    ///
+    /// - Parameters:
+    ///   - subject: The photo's sender, with the photo's id as its content.
+    ///   - reason: The reason the person chose.
+    func reportPhoto(_ subject: PeerReportSubject, reason: ReportReason) async {
+        guard isShowing, !ownAnswerInFlight, case .photo(let photoID) = subject.content,
+              let photo = photos.first(where: { $0.id == photoID }) else { return }
+        ownAnswerInFlight = true
+        beginAnswer()
+        host?.reportSessionPeer(subject, reason: reason)
+        if !sessionPhotos.removeReportedPhoto(photoID) {
+            FernletAuditLog.log("sessionPhotoReview.reportedPhotoStillHeld")
+        }
+        dropReported(photo, sender: subject.signingPublicKey)
+        if photos.isEmpty {
+            leaveEndedMeshIfHeld()
+            await awaitLeave()
+            hide()
+        }
+        ownAnswerInFlight = false
+        endAnswer()
+    }
+
+    /// Takes a reported photo out of the snapshot — the grid, the ticks — and its sender out of the
+    /// keep-as-friend rows, so nothing the person reported is offered again in this review.
+    ///
+    /// - Parameters:
+    ///   - photo: The reported photo.
+    ///   - sender: Its sender's signing key.
+    private func dropReported(_ photo: FriendPhotoPayload, sender: Data) {
+        photos.removeAll { $0.id == photo.id }
+        selectedIDs.remove(photo.id)
+        let fingerprint = photo.senderFingerprint ?? ""
+        let dropped = candidates.filter { candidate in
+            candidate.signingPublicKey == sender
+                || (!fingerprint.isEmpty && IdentityService.fingerprintsMatch(candidate.fingerprint, fingerprint))
+        }
+        candidates.removeAll { dropped.contains($0) }
+        keptFriendFingerprints.subtract(dropped.map(\.fingerprint))
     }
 
     /// The friend half: mints the kept candidates and consumes the batch's candidates — once; the

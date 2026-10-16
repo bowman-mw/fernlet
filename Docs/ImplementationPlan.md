@@ -817,6 +817,7 @@ Tasks:
 - Verify usage descriptions, including `NSPhotoLibraryAddUsageDescription` for the "Save to Photos" action.
 - Verify HealthKit guideline compliance.
 - Verify UGC moderation story for in-person shops.
+  - **2026-10-15 (App Review guideline 1.2, owner decision "Report + a small filter", all on device):** every UGC surface now has a report path through the ONE people-report flow (`App/Fernlet/PeerReportFlow.swift`): shop items (as before), people in Friends & Blocks, and — new — each live-session chat message from another person (touch and hold, "Report…") and each session photo from another person (the review's context menu, the wall viewer's flag). A report records what Friends & Blocks always recorded (the trust vault's report on this device), blocks the sender, removes the reported photo the way declining it would, hides the sender's messages at once, and then offers the developer contact route. The chat's send path refuses a draft holding a word from a short hashed list of English slurs (`SessionMessageFilter`, whole-word, normalized); received messages are not filtered — the receiver can Report. Reports stay on the device, so the privacy policy is unchanged. Safety & reporting explains all of it. Tests: `SessionMessageFilterTests`, `SessionContentReportTests` (both on the `mesh-features` CI line).
 - Add data export and delete controls, including a "Delete all iCloud data" action that removes CloudKit records and sealed backup blobs without deleting local data.
 
 Exit criteria:
