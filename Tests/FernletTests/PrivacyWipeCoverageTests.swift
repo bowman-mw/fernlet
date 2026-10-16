@@ -171,6 +171,9 @@ struct PrivacyWipeCoverageTests {
         // This device's HealthKit residue cache (2026-09-23): the steps, sleep, heart-rate readings and
         // Apple Health workouts per day that the storage strip keeps out of every synced write.
         "deviceHealthResidueStore.clearAll",
+        // This device's AI day summaries (2026-10-15): the persisted score history never carries them,
+        // so they live in their own device-local file, which the wipe removes.
+        "deviceDaySummaryStore.clearAll",
         "worryBoxResetHook",
         "BarcodeServingMemory.clearAll",
         "RecentActivityTypeMemory.clearAll",

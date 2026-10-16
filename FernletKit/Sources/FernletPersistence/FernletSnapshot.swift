@@ -146,7 +146,8 @@ public struct SanitizedSnapshot {
 
     /// Applies the storage strip and wraps the result: blanks sealed-journal text (today + previous
     /// journals), removes every HealthKit-derived value from today's day, and strips cycle-derived
-    /// `periodPhase` and the HealthKit scoring contexts from daily scores. `sealedJournalIDs` is the
+    /// `periodPhase`, the HealthKit scoring contexts and the day summaries from daily scores
+    /// (`FernletSnapshot.storedDailyScores`). `sealedJournalIDs` is the
     /// set of sealed journal entry ids (sealing state lives in the app, passed in as pure data).
     public static func sanitizing(_ snapshot: FernletSnapshot, sealedJournalIDs: Set<UUID>) -> SanitizedSnapshot {
         var stripped = snapshot
@@ -223,17 +224,20 @@ public extension FernletSnapshot {
         return SanitizedSnapshot.sanitizing(raw, sealedJournalIDs: sealedJournalIDs)
     }
 
-    /// Strips `DailyHealthScore.periodPhase` (cycle-derived) and the two HealthKit scoring contexts
-    /// (`healthActivityContext`, `healthBodyContext` — values read from HealthKit) from every score.
-    /// The in-memory rows keep them as this device's audit; only the persisted copy loses them. Pure.
+    /// Strips `DailyHealthScore.periodPhase` (cycle-derived), the two HealthKit scoring contexts
+    /// (`healthActivityContext`, `healthBodyContext` — values read from HealthKit) and the AI
+    /// `daySummaryText` (2026-10-15: day summaries stay on the device that wrote them, kept by a
+    /// ``DeviceDaySummaryStoring`` store) from every score. The in-memory rows keep them on this
+    /// device; only the persisted copy loses them. Pure.
     static func storedDailyScores(_ scores: [DailyHealthScore]) -> [DailyHealthScore] {
         scores.map { score in
             guard score.periodPhase != nil || score.healthActivityContext != nil
-                    || score.healthBodyContext != nil else { return score }
+                    || score.healthBodyContext != nil || score.daySummaryText != nil else { return score }
             var s = score
             s.periodPhase = nil
             s.healthActivityContext = nil
             s.healthBodyContext = nil
+            s.daySummaryText = nil
             return s
         }
     }

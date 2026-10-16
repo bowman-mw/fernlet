@@ -220,7 +220,6 @@ struct MindfulSessionSaveTests {
         func authorizationRequestStatus(toShare shareTypes: Set<HKSampleType>, read readTypes: Set<HKObjectType>) async -> HKAuthorizationRequestStatus { .unknown }
         func delete(_ samples: [HKSample]) async throws {}
         func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int { 0 }
-        func disableBackgroundDelivery(for type: HKObjectType) async throws {}
     }
 
     private struct Harness {

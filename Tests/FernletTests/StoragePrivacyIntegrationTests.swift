@@ -343,7 +343,6 @@ private final class HKDisableHarness {
 private final class MockHKStoreController: HealthKitStoreControlling {
     private(set) var executedQueries: [HKQuery] = []
     private(set) var stoppedQueries: [HKQuery] = []
-    private(set) var disabledBackgroundDeliveryIdentifiers: [String] = []
     private(set) var deleteCallCount = 0
 
     func requestAuthorization(toShare: Set<HKSampleType>, read: Set<HKObjectType>) async throws {}
@@ -358,9 +357,6 @@ private final class MockHKStoreController: HealthKitStoreControlling {
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
         deletedObjectTypeIdentifiers.append(type.identifier)
         return 0
-    }
-    func disableBackgroundDelivery(for type: HKObjectType) async throws {
-        disabledBackgroundDeliveryIdentifiers.append(type.identifier)
     }
 }
 

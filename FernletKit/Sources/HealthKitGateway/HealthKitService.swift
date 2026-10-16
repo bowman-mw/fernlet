@@ -93,7 +93,8 @@ public protocol HealthKitServicing {
     func disableIntegration() async throws
     /// Flips the master toggle on and restarts any registered observations.
     func enableIntegration() async throws
-    /// Deep-links to the Health privacy settings for Fernlet (best effort).
+    /// Opens Fernlet's own page in Settings, the public route toward its Health access (best effort;
+    /// no private settings URL).
     func openHealthPrivacySettings() async
 }
 
@@ -443,8 +444,6 @@ public protocol HealthKitStoreControlling: AnyObject {
     ///   whether it really removed an older Apple Health copy (period-data design 2026-09-30, §6.3).
     @discardableResult
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int
-    /// Turns off background delivery registered for a type (part of integration teardown).
-    func disableBackgroundDelivery(for type: HKObjectType) async throws
 }
 
 /// Production ``HealthKitStoreControlling`` conformer: a direct pass-through to `HKHealthStore`.
@@ -561,10 +560,6 @@ final class SystemHealthKitStoreController: HealthKitStoreControlling {
     func deleteObjects(of type: HKObjectType, predicate: NSPredicate) async throws -> Int {
         guard let sampleType = type as? HKSampleType else { return 0 }
         return try await healthStore.deleteObjects(of: sampleType, predicate: predicate)
-    }
-
-    func disableBackgroundDelivery(for type: HKObjectType) async throws {
-        try await healthStore.disableBackgroundDelivery(for: type)
     }
 }
 
@@ -1812,8 +1807,9 @@ public final class HealthKitService: HealthKitServicing {
         }
     }
 
-    /// Turns the HealthKit integration off, fail-closed: stops every query, disables background
-    /// delivery, purges the cached HealthKit-derived values via the cache clearer, deletes all
+    /// Turns the HealthKit integration off, fail-closed: stops every query (there is no background
+    /// delivery to disable — Fernlet never enables it and holds no entitlement for it), purges the
+    /// cached HealthKit-derived values via the cache clearer, deletes all
     /// stored anchors and the ``HealthCapabilityRequestLedger``, and only then flips the master
     /// toggle off and resets the per-capability opt-ins. Throws (before any teardown) when no cache
     /// clearer is available, and rethrows any step's failure so the opt-out never half-applies;
@@ -1846,10 +1842,11 @@ public final class HealthKitService: HealthKitServicing {
             activeQueriesByType.removeAll()
             changeQueriesByType.removeAll()
             changeObservationRegistrations.removeAll()
-
-            for type in observedObjectTypes() {
-                try await storeController.disableBackgroundDelivery(for: type)
-            }
+            // No background-delivery teardown: Fernlet never enables HealthKit background delivery
+            // (no `enableBackgroundDelivery` call in any build), and since 2026-10-15 it holds no
+            // background-delivery entitlement — without which HealthKit refuses even
+            // `disableBackgroundDelivery` ("Missing com.apple.developer.healthkit.background-delivery
+            // entitlement", measured on the simulator), so the call would fail this opt-out for everyone.
 
             try cacheCleaner.clearHealthKitCachedValues()
             HealthKitAnchorKeychain.deleteAll(for: observedObjectTypes().map(\.identifier))
@@ -1890,18 +1887,16 @@ public final class HealthKitService: HealthKitServicing {
         FernletAuditLog.log("healthkit.enable.completed")
     }
 
-    /// Best-effort deep link to Fernlet's row in Health privacy settings (private `App-Prefs:`
-    /// scheme first, then the app's own Settings page). No-op on platforms without UIKit.
+    /// Opens the app's own page in Settings (`UIApplication.openSettingsURLString`), the one public
+    /// route toward its Health access; full revocation lives in the Health app. No private
+    /// `App-Prefs:` URL is tried (App Review guideline 2.5.1). A refused open is audited. No-op on
+    /// platforms without UIKit.
     public func openHealthPrivacySettings() async {
         #if canImport(UIKit)
-        let candidateURLs = [
-            URL(string: "App-Prefs:HEALTH&path=SOURCES_ITEM_Fernlet"),
-            URL(string: UIApplication.openSettingsURLString)
-        ].compactMap { $0 }
-        for url in candidateURLs {
-            if await UIApplication.shared.open(url) {
-                return
-            }
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        guard await UIApplication.shared.open(url) else {
+            FernletAuditLog.log("healthkit.settings.open.failed")
+            return
         }
         #endif
     }
@@ -2156,7 +2151,7 @@ public final class HealthKitService: HealthKitServicing {
     }
 
     /// Deduplicated union of every registered observation type and every capability's share+read
-    /// types — the full set whose background delivery and anchors the disable path must clear.
+    /// types — the full set whose anchors the disable path must clear.
     private func observedObjectTypes() -> [HKObjectType] {
         var types: [HKObjectType] = observationRegistrations.values.map(\.type)
         types.append(contentsOf: changeObservationRegistrations.values.map(\.type))
