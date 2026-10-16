@@ -819,7 +819,10 @@ struct PrivacyWipeCoverageTests {
     /// presence or recipe-share wipe did not; the funnel keeps that only by where the call sits, and the
     /// manifest's `photos.invalidateEncryptionKeyCaches` token says only that the call is in the funnel.
     /// Comments and string bodies blanked, so neither prose nor a log line stands in for a call, and the
-    /// `do`'s braces matched, so a call moved past its `catch` is outside it.
+    /// `do`'s braces matched, so a call moved past its `catch` is outside it. The recipe-share manager's
+    /// wipe is a needle of the same `do` (since ProximityKit plan step A1.3's review fixes): it is the
+    /// call that reaches the pair session's identity cache, whose forward ``identitySeams`` pins in the
+    /// manager, and nothing else held that the funnel still makes it.
     @Test func theSessionPhotoKeyCachesDropBetweenTheMeshAndPresenceIdentityWipes() throws {
         let store = try Self.fernletStoreSource()
         let leg = Self.strippingCommentsAndStringLiteralBodies(
@@ -836,6 +839,8 @@ struct PrivacyWipeCoverageTests {
                 "the key caches drop before the mesh's identity wipe: a throwing mesh wipe no longer skips them")
         #expect(caches.upperBound <= presence.lowerBound,
                 "the key caches drop after presence's identity wipe: a throwing presence wipe now skips them")
+        #expect(identity.contains("recipeShareManager.wipeIdentityForDeleteAll()"),
+                "the recipe-share identity wipe left the identity `do`: the pair session's identity cache outlives delete-all")
     }
 
     /// The rebuild hook is nil-tolerant in the funnel (an unwired TEST store must not report a

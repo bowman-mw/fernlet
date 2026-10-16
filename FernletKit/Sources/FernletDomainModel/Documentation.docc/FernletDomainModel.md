@@ -11,9 +11,10 @@ cosmetics, and the proximity wire/audit DTOs.
 and no crypto — just `Codable`/`Sendable` value types plus deterministic pure functions
 (economies, scoring inputs, search relevance, recipe math, program rendering). Nearly every other
 module in the package sits above it: `FernletScoring`, `FoodCatalog`, `FernletPersistence`,
-`LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, `ProximityKit` and the
-modules over it (`FernletConnections`, `FernletSocial`, `FernletProximityUI`), `DiaryStore`, and
-`FernletUI` all import it.
+`LocalPersistence`, the `Private*` stores, `AIProviders`, `CloudKitSync`, the modules over
+ProximityKit (`FernletConnections`, `FernletSocial`, `FernletProximityUI`), `DiaryStore`, and
+`FernletUI` all import it. ProximityKit itself does not: it is a package of its own (from its own
+repository since ProximityKit plan step A1.3) that depends on nothing.
 
 That position dictates its three hard rules. First, the S3 privacy wall: because the walled
 `AIProviders` and `CloudKitSync` targets import this module, **nothing sensitive may be nameable

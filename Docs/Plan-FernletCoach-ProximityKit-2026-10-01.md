@@ -1,8 +1,8 @@
 # Plan: Fernlet Coach, a standalone ProximityKit, and coach plan links (2026-10-01)
 
 **Status:** detailed plan, owner decisions recorded through O17 and, for A1, where they apply. Of
-workstream A (§4), A0, A1.0, A1.1 (its prep, the split and batch A), A1.2 and A1.3 are built, and
-`proximitykit` is tagged `0.1.0`; the steps after them are not.
+workstream A (§4), A0, A1.0, A1.1 (its prep, the split and batch A), A1.2 and A1.3 are built, A1.4
+is verified, and `proximitykit` is tagged `0.1.0`; the steps after them are not.
 **Supersedes in part:** [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md)
 (see §2) and §5 of [Data-Provenance-Coach-Trust-2026-07-12.md](Data-Provenance-Coach-Trust-2026-07-12.md)
 (App Attest).
@@ -705,7 +705,9 @@ internals ran green on a simulator (79 tests). Xcode builds a remote package's D
 with `-enable-testing`, so no setting changes; under the strict build's flags it also compiles the
 package with warnings as errors and without `-suppress-warnings`, so the package's CI builds under the
 same flags (A1.1). `@_spi(Testing)` is no fallback: it would have to mark about 560 declarations. A
-full `FernletTests` run against the tag is A1.3's to measure.
+full `FernletTests` run against the tag, the one item left open here, ran at A1.3 (its *Built* note
+above: 6,881 tests, 6,877 passed, three skipped and one wall-clock bound that failed under the full
+run's load and passed alone).
 
 **A1.5 Developing across repos.** Develop with a local package override (a sibling checkout dragged
 into the root `Fernlet.xcworkspace`). Never commit the override, and CI always builds the tag.
