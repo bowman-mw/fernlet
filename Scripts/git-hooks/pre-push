@@ -37,6 +37,16 @@ set -u
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# git hands a hook its repository's environment (GIT_DIR, GIT_INDEX_FILE and the rest that
+# `git rev-parse --local-env-vars` lists), and every process the legs start inherits it, SwiftPM's own
+# `git` calls included. Those run inside SwiftPM's checkout of each package, so with GIT_DIR set they read
+# THIS repository instead, find no proximitykit tag, and a build whose derived data is cold fails "no
+# versions of 'proximitykit' match the requirement" (a warm one makes no git call and passed). The build
+# scripts drop the variables too, since a hook from another checkout may run them; dropped here, the
+# hook's own git calls find this repository from its root, where githooks(5) starts a hook anyway.
+unset $(git rev-parse --local-env-vars)
+cd "$REPO_ROOT" || exit 99
+
 if [ "${SKIP_P10_SCAN:-0}" = "1" ]; then
   echo "[pre-push] SKIP_P10_SCAN=1 — skipping Power-of-10 scan (CI still enforces it)."
 else

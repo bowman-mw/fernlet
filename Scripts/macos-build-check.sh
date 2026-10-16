@@ -55,6 +55,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED="${FERNLET_MACOS_DERIVED_DATA:-$REPO_ROOT/FernletKit/build/macos-check}"
 
 cd "$REPO_ROOT/FernletKit" || exit 99
+# Run from a git hook (the pre-push leg), this script inherits GIT_DIR and the rest of the hook's git
+# environment, and so would SwiftPM's own `git` calls in its package checkouts, which would then read this
+# repository and fail to resolve proximitykit from cold derived data. Nothing here needs them.
+unset $(git rev-parse --local-env-vars)
 
 echo "==> The Mac-ready set for native macOS 26 (MacReady: FernletFoundation, FernletCrypto, FernletDomainModel)"
 echo "    derived data: $DERIVED"

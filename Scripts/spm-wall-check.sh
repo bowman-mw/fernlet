@@ -63,6 +63,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DESTINATION="${FERNLET_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
 
 cd "$REPO_ROOT" || exit 99
+# Run from a git hook (the pre-push leg), this script inherits GIT_DIR and the rest of the hook's git
+# environment, and so would SwiftPM's own `git` calls in its package checkouts, which would then read this
+# repository and fail to resolve proximitykit from cold derived data. Nothing here needs them.
+unset $(git rev-parse --local-env-vars)
 
 echo "==> SPM S3 wall check (+ Power-of-10 rule 10: warnings are errors)"
 echo "    repo:        $REPO_ROOT"
