@@ -44,12 +44,15 @@ struct HealthKitCloudBoundaryTests {
         "syncedAt", "activity", "body", "cycle", "mindfulness", "intimate", "healthKitSleepLogHours"
     ]
 
-    /// `DailyHealthScore`: the two raw HealthKit contexts and the cycle label are stripped before
-    /// storage; the rest is the app's own computation and bookkeeping and syncs (the composite
-    /// score/components are an app index, not HealthKit data — see the round report).
-    private static let strippedScoreFields: Set<String> = ["healthActivityContext", "healthBodyContext", "periodPhase"]
+    /// `DailyHealthScore`: the two raw HealthKit contexts, the cycle label and (since 2026-10-15) the
+    /// AI day summary are stripped before storage — the summary stays on the device that wrote it
+    /// (`DaySummaryDeviceLocalTests`); the rest is the app's own computation and bookkeeping and syncs
+    /// (the composite score/components are an app index, not HealthKit data — see the round report).
+    private static let strippedScoreFields: Set<String> = [
+        "healthActivityContext", "healthBodyContext", "periodPhase", "daySummaryText"
+    ]
     private static let keptScoreFields: Set<String> = [
-        "id", "dateKey", "score", "companionState", "unknownCompanionStateToken", "daySummaryText",
+        "id", "dateKey", "score", "companionState", "unknownCompanionStateToken",
         "computedAt", "componentScores", "weightVector", "sicknessOverride"
     ]
 

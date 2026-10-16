@@ -34,10 +34,13 @@ struct FernletSnapshotRoundTripTests {
 
         // An in-memory HealthKit residue cache: `load`'s nil default is the PRODUCTION file, which this
         // hermetic round trip must neither read nor write. Empty, so the overlay adds nothing and the
-        // (raw, pre-strip) healthContext round-trips exactly.
+        // (raw, pre-strip) healthContext round-trips exactly. The day-summary store likewise: empty, so
+        // the first attach keeps the raw blob's summaries (the one-time legacy capture) and the score
+        // rows round-trip exactly too.
         let reloadedStore = try await FernletStore.load(
             date: date, repository: repository, savedRecipeRepository: savedRecipeRepository,
-            deviceHealthResidueStore: InMemoryDeviceHealthResidueStore()
+            deviceHealthResidueStore: InMemoryDeviceHealthResidueStore(),
+            deviceDaySummaryStore: InMemoryDeviceDaySummaryStore()
         )
         assertStore(reloadedStore, equals: snapshot)
         #expect(reloadedStore.savedRecipes.sorted(by: sortSavedRecipes) == savedRecipes.sorted(by: sortSavedRecipes))
@@ -45,7 +48,8 @@ struct FernletSnapshotRoundTripTests {
 
     /// The `SanitizedSnapshot.sanitizing` strip (the type-enforced storage boundary) must remove
     /// EVERY HealthKit-derived value — the whole health context, HealthKit's sleep hours, the scores'
-    /// HealthKit contexts — and cycle-derived `periodPhase` before they can reach the blob.
+    /// HealthKit contexts — and cycle-derived `periodPhase` before they can reach the blob, and since
+    /// 2026-10-15 the scores' day summaries too (they stay on the device that wrote them).
     ///
     /// Until 2026-09-23 this cell pinned the opposite for the non-sensitive groups ("activity still
     /// round-trips"); the owner decided no HealthKit information is stored in iCloud, so the whole
@@ -61,6 +65,7 @@ struct FernletSnapshotRoundTripTests {
         #expect(snapshot.day.healthContext?.cycle != nil)
         #expect(snapshot.day.healthContext?.activity != nil)
         #expect(snapshot.day.sleep?.hours == snapshot.day.healthContext?.body?.sleepHours)
+        #expect(snapshot.dailyScores.allSatisfy { $0.daySummaryText != nil })
 
         #expect(repository.saveSnapshot(SanitizedSnapshot.sanitizing(snapshot, sealedJournalIDs: [])))
         let reloaded = repository.loadSnapshot(todayKey: todayKey)
@@ -68,6 +73,7 @@ struct FernletSnapshotRoundTripTests {
         #expect(reloaded.day.healthContext == nil)
         #expect(reloaded.dailyScores.allSatisfy {
             $0.periodPhase == nil && $0.healthActivityContext == nil && $0.healthBodyContext == nil
+                && $0.daySummaryText == nil
         })
         // The baseline's sleep hours equal HealthKit's reading, so they go; the user's rating and
         // note on the same log are theirs and stay.

@@ -742,7 +742,6 @@ final class WriteRecordingStoreController: HealthKitStoreControlling {
         deletedObjectTypes.append(type.identifier)
         return deleteObjectsCount
     }
-    func disableBackgroundDelivery(for type: HKObjectType) async throws { }
 }
 
 /// A `WorkoutSyncContext` that holds nothing and records nothing — for driving the sync's outbound

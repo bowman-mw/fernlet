@@ -113,7 +113,8 @@ public final class DiaryStore {
     /// recipe methods.
     public var recipes: [RecipeDefinition]
     /// The persisted per-day score history; ``dailyHealthScore(for:day:)`` prefers a stored
-    /// row over recomputing.
+    /// row over recomputing. Its day summaries are this device's own: the persisted copy never
+    /// carries them, and ``attachDaySummaryStore(_:)`` puts them back.
     public var dailyScores: [DailyHealthScore]
     /// The companion's current transient thought-bubble text. In-memory only — set without a
     /// save and cleared on relaunch.
@@ -361,11 +362,17 @@ public final class DiaryStore {
 
     // MARK: - Day summary / companion thought
 
-    /// Caches a generated day summary (trimmed, capped at 300 characters) on the day's score
-    /// row, minting the row first if the day has no stored score yet. Empty text is ignored.
+    /// The most characters a stored day summary keeps (R3) — applied by ``storeDaySummary(_:for:)``
+    /// and by the device-local summary store on write and on read.
+    public static let maxDaySummaryCharacters = 300
+
+    /// Caches a generated day summary (trimmed, capped at ``maxDaySummaryCharacters``) on the day's
+    /// score row, minting the row first if the day has no stored score yet, and records it in this
+    /// device's day-summary store — the persisted score history never carries it (2026-10-15). Empty
+    /// text is ignored.
     public func storeDaySummary(_ text: String, for dateKey: String) {
         assert(!dateKey.isEmpty, "date key required")
-        let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300))
+        let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.maxDaySummaryCharacters))
         guard !trimmed.isEmpty else { return }
         batchSnapshotPersistence {
             if let index = dailyScores.firstIndex(where: { $0.dateKey == dateKey }) {
@@ -378,12 +385,15 @@ public final class DiaryStore {
                 dailyScores = Self.boundedDailyScores(dailyScores)   // R3: bounded growth
             }
         }
+        recordDeviceDaySummary(trimmed, for: dateKey)
     }
 
-    /// Clears the cached day summary for `dateKey` so it regenerates after the day's content
-    /// changes (called by every meal/workout append and removal).
+    /// Clears the cached day summary for `dateKey` — on the score row and in this device's
+    /// day-summary store — so it regenerates after the day's content changes (called by every
+    /// meal/workout append and removal).
     public func invalidateDaySummary(for dateKey: String) {
         assert(!dateKey.isEmpty, "date key required")
+        recordDeviceDaySummary(nil, for: dateKey)
         guard let index = dailyScores.firstIndex(where: { $0.dateKey == dateKey }) else { return }
         dailyScores[index].daySummaryText = nil
         scheduleSnapshotSave()
@@ -487,6 +497,88 @@ public final class DiaryStore {
     private func withDeviceHealthKitValues(_ day: FernletDay) -> FernletDay {
         guard let store = healthKitResidueStore else { return day }
         return day.overlayingHealthKitResidue(store.residue(for: day.date))
+    }
+
+    // MARK: - Device-local day summaries
+
+    /// This device's day-summary store (never synced; owner decision 2026-10-15). Nil until the
+    /// facade attaches it; a store without one still strips every summary from its writes
+    /// (`FernletSnapshot.storedDailyScores`), it just cannot give them back after a reload.
+    @ObservationIgnored private var daySummaryStore: (any DeviceDaySummaryStoring)?
+
+    /// Installs the device-local day-summary store and overlays it onto ``dailyScores`` at once (the
+    /// rows came from a persisted score history, which no longer carries summaries). Called once by
+    /// the app-side facade during startup wiring, before any read.
+    ///
+    /// The first attach on a device keeps the summaries a build before 2026-10-15 left in the loaded
+    /// rows (once, through the store's capture marker). A loaded row that still carries a summary
+    /// schedules a save, so the persisted copy — the iCloud-mirrored blob included — is rewritten
+    /// without it.
+    ///
+    /// - Parameter store: The store every installed score history is overlaid from, and every
+    ///   stored or invalidated summary is recorded into.
+    public func attachDaySummaryStore(_ store: any DeviceDaySummaryStoring) {
+        daySummaryStore = store
+        let carried = Self.daySummaries(in: dailyScores)
+        if !store.legacySummariesCaptured {
+            Self.captureLegacyDaySummaries(carried, into: store)
+        }
+        dailyScores = withDeviceDaySummaries(dailyScores, fallback: carried)
+        if !carried.isEmpty { scheduleSnapshotSave() }
+    }
+
+    /// The one-time capture: records each carried summary the store does not hold yet, then marks the
+    /// capture done — only when the store read and every write landed, so a locked device retries on
+    /// the next launch. Audited on failure.
+    private static func captureLegacyDaySummaries(_ carried: [String: String], into store: any DeviceDaySummaryStoring) {
+        guard let held = store.allSummaries() else {
+            PersistenceFailureAudit.record("diary.daySummary.legacyCaptureUnreadable")
+            return
+        }
+        var everyWriteLanded = true
+        // R2: bounded by the carried rows (at most `maxDailyScoreDays`).
+        for (dateKey, summary) in carried where held[dateKey] == nil {
+            if !store.record(summary, for: dateKey) { everyWriteLanded = false }
+        }
+        guard everyWriteLanded, store.markLegacySummariesCaptured() else {
+            PersistenceFailureAudit.record("diary.daySummary.legacyCaptureFailed")
+            return
+        }
+    }
+
+    /// `scores` with this device's day summaries put back: the store's when one is attached and it
+    /// reads, else `fallback` (what this session already holds) — so a locked device keeps showing
+    /// what it showed rather than blanking it.
+    private func withDeviceDaySummaries(_ scores: [DailyHealthScore], fallback: [String: String]) -> [DailyHealthScore] {
+        let summaries = daySummaryStore?.allSummaries() ?? fallback
+        return scores.map { score in
+            guard score.daySummaryText != summaries[score.dateKey] else { return score }
+            var overlaid = score
+            overlaid.daySummaryText = summaries[score.dateKey]
+            return overlaid
+        }
+    }
+
+    /// The non-empty summaries `scores` carry, keyed by day (the first row wins a duplicated key).
+    static func daySummaries(in scores: [DailyHealthScore]) -> [String: String] {
+        var summaries: [String: String] = [:]
+        // R2: bounded by the score rows (at most `maxDailyScoreDays`).
+        for score in scores {
+            guard let text = score.daySummaryText, !text.isEmpty, summaries[score.dateKey] == nil else { continue }
+            summaries[score.dateKey] = text
+        }
+        return summaries
+    }
+
+    /// Records `summary` (nil removes it) in this device's store. A failed write is audited; nothing
+    /// leaks either way, the cost is the summary missing (or a stale one returning) after a relaunch
+    /// until the backfill writes the day's again.
+    private func recordDeviceDaySummary(_ summary: String?, for dateKey: String) {
+        guard let store = daySummaryStore else { return }
+        guard store.record(summary, for: dateKey) else {
+            PersistenceFailureAudit.record("diary.daySummary.recordFailed")
+            return
+        }
     }
 
     /// Whether intimate-activity logging is available — a direct read of the fail-closed
@@ -1921,8 +2013,10 @@ public final class DiaryStore {
         workshop = snapshot.workshop
         foodItems = snapshot.foodItems.filter { $0.source != .usda }
         recipes = snapshot.recipes
-        // R3: a synced blob must not be able to reinstate an unbounded score history.
-        dailyScores = Self.boundedDailyScores(snapshot.dailyScores)
+        // R3: a synced blob must not be able to reinstate an unbounded score history. Its rows carry
+        // no day summaries (they stay on the device that wrote them); put this device's back.
+        dailyScores = withDeviceDaySummaries(Self.boundedDailyScores(snapshot.dailyScores),
+                                             fallback: Self.daySummaries(in: dailyScores))
         // Also add this device's id + guarantee localDesignerID is non-nil, so the getter never lazily mints
         // (mutating observed state) mid-render.
         ensureLocalDesignerID()

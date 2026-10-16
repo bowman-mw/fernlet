@@ -2,9 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- NSPersistentCloudKitContainer's silent pushes need this key. Xcode writes "development" here
+	     and substitutes "production" from the distribution profile at archive/export, so it is never
+	     hand-edited. -->
 	<key>aps-environment</key>
-	<string>development</string>
-	<key>com.apple.developer.aps-environment</key>
 	<string>development</string>
 	<key>com.apple.developer.declared-age-range</key>
 	<true/>
@@ -12,12 +13,15 @@
 	<string>NSFileProtectionComplete</string>
 	<key>com.apple.developer.healthkit</key>
 	<true/>
-	<key>com.apple.developer.healthkit.background-delivery</key>
-	<true/>
 	<key>com.apple.developer.icloud-container-identifiers</key>
 	<array>
 		<string>iCloud.MBO.Fernlet</string>
 	</array>
+	<!-- CloudDocuments and the ubiquity container below stay although the app opens no document
+	     container: the iCloud-availability check reads FileManager.ubiquityIdentityToken
+	     (Persistence.swift, PrivacyDataSettingsView.swift, MultiDeviceSyncWarning), and that token
+	     needs the iCloud Documents entitlement. Removing either would silently turn sync off for
+	     every user (owner decision 2026-10-15). -->
 	<key>com.apple.developer.icloud-services</key>
 	<array>
 		<string>CloudKit</string>

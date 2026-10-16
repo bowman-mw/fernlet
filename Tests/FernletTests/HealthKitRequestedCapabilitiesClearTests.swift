@@ -263,7 +263,6 @@ private final class RecordingHealthKitStoreController: HealthKitStoreControlling
         deletedObjectTypeIdentifiers.append(type.identifier)
         return 0
     }
-    func disableBackgroundDelivery(for type: HKObjectType) async throws { }
 }
 
 /// `disableIntegration()` is fail-closed without a clearer; these tests care about the ledger leg,

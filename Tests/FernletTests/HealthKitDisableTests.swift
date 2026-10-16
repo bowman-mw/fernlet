@@ -63,7 +63,11 @@ struct HealthKitDisableTests {
         #expect(harness.controller.executedQueries.isEmpty)
     }
 
-    @Test func disableCancelsObserversAndDisablesBackgroundDelivery() async throws {
+    /// Disable stops every observer query and flips the master toggle. It touches no background
+    /// delivery: Fernlet never enables it, and without the background-delivery entitlement (dropped
+    /// 2026-10-15) HealthKit refuses `disableBackgroundDelivery` too — the store seam no longer has
+    /// the call, so this cannot regress silently.
+    @Test func disableCancelsObserversAndFlipsTheMasterToggle() async throws {
         let harness = HealthKitDisableHarness()
         defer { harness.cleanup() }
         let type = try HealthKitService.quantityType(.stepCount)
@@ -73,7 +77,7 @@ struct HealthKitDisableTests {
 
         #expect(harness.controller.executedQueries.count == 1)
         #expect(harness.controller.stoppedQueries.count == 1)
-        #expect(harness.controller.disabledBackgroundDeliveryIdentifiers.contains(type.identifier))
+        #expect(harness.controller.stoppedQueries.first?.objectType?.identifier == type.identifier)
         #expect(harness.preferences.preferences.healthKitMasterEnabled == false)
     }
 
@@ -303,7 +307,6 @@ struct HealthKitDisableTests {
 
         // Fail-closed: the opt-out did NOT half-apply — no teardown, master switch still ON.
         #expect(controller.stoppedQueries.isEmpty)
-        #expect(controller.disabledBackgroundDeliveryIdentifiers.isEmpty)
         #expect(preferences.preferences.healthKitMasterEnabled == true)
         #expect(audit.contains("healthkit.disable.attempt"))
         #expect(audit.contains("healthkit.disable.failed"))
@@ -379,7 +382,6 @@ private final class HealthKitDisableHarness {
 private final class MockHealthKitStoreController: HealthKitStoreControlling {
     private(set) var executedQueries: [HKQuery] = []
     private(set) var stoppedQueries: [HKQuery] = []
-    private(set) var disabledBackgroundDeliveryIdentifiers: [String] = []
     private(set) var deleteCallCount = 0
     var authorizationStatuses: [String: HKAuthorizationStatus] = [:]
 
@@ -417,10 +419,6 @@ private final class MockHealthKitStoreController: HealthKitStoreControlling {
         if let deleteObjectsError { throw deleteObjectsError }
         deletedObjectTypeIdentifiers.append(type.identifier)
         return 0
-    }
-
-    func disableBackgroundDelivery(for type: HKObjectType) async throws {
-        disabledBackgroundDeliveryIdentifiers.append(type.identifier)
     }
 }
 

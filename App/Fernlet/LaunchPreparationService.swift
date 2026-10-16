@@ -346,6 +346,8 @@ final class LaunchPreparationService {
     /// per-run cap. Gated to run at most once per calendar day per device (first open after midnight);
     /// remaining days are picked up on subsequent days. When Foundation Models is unavailable the day's
     /// slot is intentionally left empty (spec) rather than filled with deterministic fallback text.
+    /// Summaries stay on the device that wrote them (2026-10-15), so this is also how a new device or
+    /// a restore gets its own.
     private func backfillDaySummaries(for store: FernletStore) async {
         let todayKey = store.todayKey
         if UserDefaults.standard.string(forKey: Self.daySummaryRunKeyDefault) == todayKey { return }
@@ -357,9 +359,10 @@ final class LaunchPreparationService {
         for key in dayKeys {
             if let existing = store.dailyScores.first(where: { $0.dateKey == key })?.daySummaryText,
                !existing.isEmpty { continue }
-            // The summary is stored in the synced score history, so the prompt must not see a value
-            // read from HealthKit (sleep hours, imported workout names) that the model could echo
-            // into iCloud. The day's own logs are enough for a warm observation.
+            // The prompt does not see a value read from HealthKit (sleep hours, imported workout
+            // names). The rule dates from when the summary rode the synced score history; since
+            // 2026-10-15 it stays on this device, and the conservative prompt is kept — the day's own
+            // logs are enough for a warm observation.
             let day = store.loadDay(for: key).strippingHealthKitValues()
             guard !day.meals.isEmpty || !day.workouts.isEmpty else { continue }
             if generated >= Self.daySummaryBackfillPerRunCap { break }
