@@ -482,7 +482,8 @@ say what it found, and it is pinned as such in `ColumnCryptoDeviceBindingTests`.
 
 ### `CryptographicPurposeBoundaryTests` — a grep wall
 
-It scans the five shipping roots (see below) but ProximityKit's folder for nine primitive markers
+It scans the five shipping roots (see below), which hold no ProximityKit source since plan step A1.3
+(a package of its own, from its own repository), for nine primitive markers
 (`signature(for:`, `isValidSignature(`, `hkdfDerivedSymmetricKey`, `HKDF<`, `HMAC<`,
 `ChaChaPoly.seal/open`, `AES.GCM.seal/open`) and requires a purpose to be named within an asymmetric
 window: three lines above the call, six below (a multi-line call names its purpose inside its own
@@ -520,9 +521,10 @@ reviewer would have to remember the policy.
   (verified 2026-08-27, checked by nothing), which is what happened to the Messages extension under
   the localization wall (see
   [MessagesExtensionReleaseChecklist.md](MessagesExtensionReleaseChecklist.md) §Localization).
-  ProximityKit's folder inside `FernletKit/Sources` is not scanned here either: its own package
-  suite reads it instead (above). A root that stops resolving to Swift now throws
-  `CryptographicWallScan.MissingRoot` rather than scanning an empty directory and reporting green —
+  ProximityKit's sources are in none of them: since plan step A1.3 they are a package of their own,
+  from its own repository, and its own package suite reads them instead (above). A root that stops
+  resolving to Swift now throws `CryptographicWallScan.MissingRoot` rather than scanning an empty
+  directory and reporting green —
   the one failure a grep-wall cannot survive. A sixth shipping target is still invisible until
   someone adds it to `CryptographicWallScan.roots`.
 - **Escape-hatch abuse — now counted, and no longer any debt.** `// cryptographic-domain: …`
@@ -679,7 +681,8 @@ Since ProximityKit plan step A0.2 ([Plan-FernletCoach-ProximityKit-2026-10-01.md
 own protocol uses — 21 signature transcripts (the verify-only legacy pair included), three HKDF
 salts, the QUIC channel binding's TLS exporter label, two column seals, five AEAD labels and seven
 hash domains — is a field of `ProximityNamespace`
-(`FernletKit/Sources/ProximityKit/Namespace/`), a value the host builds once and hands down. Every
+(`Sources/ProximityKit/Namespace/` in its own repository since plan step A1.3), a value the host
+builds once and hands down. Every
 ProximityKit reader takes its label from a copy it already holds: a manager's stored namespace, an
 identity's `purposes`, a storage scope's namespace, a verifier's own copy (the membership verifier
 keeps the whole family, its record kinds beside its labels, and the inventory digest and the ledger

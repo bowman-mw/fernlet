@@ -277,9 +277,10 @@ struct MeshRoutedTextBodyTests {
     // MARK: - The epoch wall's own claim, for the new file
 
     /// The routed text body names no epoch, group key, branch or partition symbol — the same
-    /// precondition `theRoutedPathNamesNoEpochSymbol` states for the manager's routed sections,
-    /// asserted for the file the body lives in (FernletSocial's since plan step A0.5.9) because an
-    /// epoch inside a routed body would put back exactly what P5 item 13 retired.
+    /// precondition `theRoutedPathNamesNoEpochSymbol` (ProximityKit's package suite) states for the
+    /// manager's routed sections, asserted for the file the body lives in (FernletSocial's since plan
+    /// step A0.5.9) because an epoch inside a routed body would put back exactly what P5 item 13
+    /// retired.
     @Test func theRoutedTextBodyNamesNoEpoch() throws {
         let source = MeshRoutedSourceScan.codeOnly(
             try RepoRoot.source("FernletKit/Sources/FernletSocial/Messaging/MeshRoutedTextBody.swift")

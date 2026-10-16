@@ -229,7 +229,7 @@ features' payload and capability tokens are their own — Fernlet's `PayloadType
 their labels: the activities', the moderation report's and the heart dead-drop's are FernletSocial's and
 the sealed-backup escrow's two the app's, with its escrow; the heart dead-drop's keychain service and
 the moderation ban store's are FernletSocial's too. ProximityKit refuses an unsound namespace at run
-time (`Support/ProximityNamespaceGate.swift`, below). The host hands it in
+time (its `ProximityNamespaceGate`, which its own repository documents since A1.3). The host hands it in
 (`ProximityHost.proximityNamespace`) beside its install binding and audit sink; the column seal and the
 keychain mechanism are ProximityKit's own copies. ProximityKit holds no instance and offers no default.
 `ProximityNamespaceSoundnessTests` (in ProximityKit's package test target, with its five framing byte
@@ -791,7 +791,7 @@ all its crypto lives on the sealed side of the S3 wall, and the injected `HeartD
 conformer (`CloudKitSync/HeartDropCloudTransport`) only ever sees a rotating day tag and ciphertext.
 Opt-in via `heartsAwayDelivery`, default OFF. It records into the heart ledger (`ProximityHeartLedger`,
 below), gossips ProximityKit's `ProximityPrekeyBundle` and loads its sidecars through ProximityKit's
-`ProtectedSidecar` (see "Hearts" above).
+`ProtectedSidecar` (both documented in ProximityKit's own repository since A1.3).
 
 ### `FernletSocial/Mesh/FernletMeshFeatures.swift`
 
@@ -807,7 +807,7 @@ each moment is written.
 | Member | What It Does |
 | --- | --- |
 | `init(host:)` | The app's composition: one identity from the host's door, the mesh over the host's radio, then the features — the activity manager first (attached to the mesh), the session photos right after it, then the rest. The internal `init(…)` is the test rig's seam (an injected identity, the pending corpus's key provider and a mesh over a fake radio). |
-| `mesh` / `capabilities` / `vouchList` / `clothingShop` / `moderation` / `friendState` / `activities` / `chat` / `hearts` / `photos` | The engine and the features, each its own section below. |
+| `mesh` / `capabilities` / `vouchList` / `clothingShop` / `moderation` / `friendState` / `activities` / `chat` / `hearts` / `photos` | The engine and the features: each feature its own section below, and the engine, ProximityKit's `MeshNetworkManager`, documented in ProximityKit's own repository since A1.3. |
 | `onFriendSessionCommitted` | Phase 5: a friend session committed with this fingerprint (an in-person meeting) — feeds closeness. Called first at every slot commit, before any other feature's commit leg. |
 | `refusedRoutedRegistrations` | The routed registrations the mesh refused while the composition installed its roles, by token: always empty for Fernlet's own rows, which the host declares beside the handlers and the judge; each refusal also writes one `meshFeatures.registrationRefused` line. Internal, for the test rig, which holds it empty. |
 | the observer's `meshSlotDidCommit(_:)` | A slot committed: the closeness hook first; on a formation, the shop's new session, the chat transcript's drop and the shop's send tracking cleared (the mesh advanced its session-content generation just before); then the shop's catalog offer to the slot, this device's own moderation reports and its friend state, each send spawned in that order; and, last, the activities this device hosts, offered with a roster version digest. |
@@ -1062,7 +1062,7 @@ one type. Persistence rides ProximityKit's `ProtectedSidecar`.
 ### `FernletSocial/HeartSharing/HeartPrekeyStore.swift`
 
 Its `Bundle`, `PrekeyEntry` and `SignedPrekey` are typealiases of ProximityKit's wire type
-`ProximityPrekeyBundle` (`Wire/ProximityPrekeyBundle.swift`, under "Hearts") and its two nested
+`ProximityPrekeyBundle` (documented in ProximityKit's own repository since A1.3) and its two nested
 types, so the bundle the store mints is the very type the identity introduction carries, and the
 keychain blob (under `com.fernlet.heartdrop`, through FernletFoundation's `KeychainItem`) and the
 peer-bundle sidecar hold its JSON.
@@ -1211,7 +1211,7 @@ credits almost nothing, and the reboot-gap credit is capped). It is deliberately
 
 The presence radio's owner: KEPT friends recognize each other nearby without connecting, and hearts are
 delivered over on-demand pairwise connections formed on that recognition. It drives ProximityKit's
-presence radio (see "Presence And Nearby Friends" above) through its public presence engine,
+presence radio (documented in ProximityKit's own repository since A1.3) through its public presence engine,
 `ProximityPresenceSession` (`presenceSession`, built in `init`, its hooks wired there once), and builds
 each heart connection's `ProximityCoordinator` over the `ProximityPeerChannel` the engine hands up,
 marking the channel connected once the coordinator has begun, and calls the coordinator's public token
@@ -1356,7 +1356,7 @@ formations, the shop window survives searches but not formations.
 ### `FernletSocial/RecipeSharing/ProximityRecipeShareManager.swift`
 
 Fernlet's recipe share over ProximityKit's `ProximityPairSession` (`FernletSocial`'s since ProximityKit plan
-step A0.7.3; the mechanism is the session's, indexed under "Photos And Recipe Sharing"). The share
+step A0.7.3; the mechanism is the session's, documented in ProximityKit's own repository since A1.3). The share
 sheet's observables are the session's, read through (`nearbyRecipients`, `sendState`, `lastShareOutcome`,
 `engagedRecipientID`), and so is `isListening`, which is not observed: the run-policy seam reads it on each
 run. Its own state is the diagnostics ring and the inbound queue.
@@ -1565,7 +1565,7 @@ The rest of the function index should not be one long alphabetical dump. Group i
 | AI, memory, audit context | `MemoryAgent.swift`, `AIContextPayload.swift`, `AIAuditLog.swift`, `AIRetryQueueService.swift`, Foundation model helper files | AI context, retry, audit, and memory payloads should be indexed together because errors often come from repeated prompt/context assembly. | Is context assembly duplicated in views? Are retry and audit paths consistently using the existing queue/log types? |
 | Social, friends, camera UI | `ConnectView.swift`, `SocialHubView.swift`, `FriendListView.swift`, `JoinPromptSheet.swift` (the shared generic join/admission sheet that replaced `MeshAdmissionPromptSheet.swift` and `ActivityJoinPromptSheet.swift`), `DisposableCameraView.swift` | This sits above the proximity layer already indexed. It owns user-facing session/photo/friend flows and should reference the proximity index instead of restating internals. | Is UI state duplicating `MeshNetworkManager` state? Are friend/block/session actions routed through proximity/trust managers? |
 | Cloud and external data | `CloudKitDataService.swift`, importers, repository sync/load helpers | CloudKit, web import, and external product data all handle outside data normalization and error boundaries. | Are remote/local merge rules duplicated? Are web/product importers converging on shared recipe/food models? |
-| Tests and mocks | `FernletTests`, ProximityKit's `ProximityKitTests`, `FernletUITests`, proximity mocks | Tests document expected behavior and often contain reusable fakes/harnesses. | Are new tests creating another mock when `Mocks/MockMultipeerTransport.swift` or similar exists? Are edge cases already covered by an adjacent test file? Does a helper both unit-test targets need already have a twin held by `CIGateSelectorBoundaryTests`? |
+| Tests and mocks | `FernletTests`, `FernletUITests`, proximity mocks (ProximityKit's `ProximityKitTests` are its own repository's since A1.3) | Tests document expected behavior and often contain reusable fakes/harnesses. | Are new tests creating another mock when `Mocks/MockMultipeerTransport.swift` or similar exists? Are edge cases already covered by an adjacent test file, or by ProximityKit's package suite of the same name? |
 
 ### Recommended Order
 

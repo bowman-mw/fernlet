@@ -5,7 +5,8 @@ Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `
 ## Overview
 
 `FernletConnections` is where Fernlet's side of the ProximityKit split lives. ProximityKit is
-becoming a drop-in package any app can use, with nothing Fernlet-specific in its API
+a drop-in package any app can use (its own repository's since plan step A1.3, which Fernlet pins at
+exactly 0.1.0), with nothing Fernlet-specific in its API
 (`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` §3.2); owner decision O3 puts Fernlet's own
 connection types and rules in FernletKit instead, on top of ProximityKit's mechanisms. This module
 is that place.
@@ -251,8 +252,9 @@ returns, so the unified log and every test that captures a ProximityKit event th
 ProximityKit object, and unconditionally, since the unit tests are hosted in the app.
 `ProximityAuditBridgeTests` (on the `s3-grep` CI line) is the canary: a ProximityKit line must reach
 a `FernletAuditLog` capture handler verbatim before the call returns, or every test asserting that
-an event was NOT logged would pass vacuously; it also holds ProximityKit's code to naming
-`FernletAuditLog` nowhere.
+an event was NOT logged would pass vacuously. ProximityKit's package suite of the same name holds
+ProximityKit's code to naming `FernletAuditLog` nowhere (since plan step A1.3, when its sources left
+this repository).
 
 **The session rules.** ProximityKit is mechanism: which peers a session trusts, how
 a coach pairs and what the coach channel carries are Fernlet's rules, and the records they are judged
@@ -366,15 +368,16 @@ FernletKit after ProximityKit leaves for its own repository (plan A1), consuming
 envelope's typed view read `PayloadType` too), `TrainerAuditEvent`, `ProximityMode` and `ProximityTrustedPeerRecord`, which the
 policies and the review read and the vault builds and keeps (the audit conversion builds
 `TrainerAuditEvent`, and the mode conversion `ProximityMode`), and `ItemNameModeration`, whose name cap the peer-name policy reads. It imports
-nothing else but Foundation, Observation (the vault is `@Observable`) and Security. Through ProximityKit it reaches
-`PrivateMediaStore` transitively, which puts it on the protected side of the S3 wall: the walled `AIProviders` and
+nothing else but Foundation, Observation (the vault is `@Observable`) and Security. It reaches no
+sealed `Private*` store, through ProximityKit or otherwise: ProximityKit depends on nothing (its last
+`PrivateMediaStore` edge went at plan step A0.5.10). The walled `AIProviders` and
 `CloudKitSync` targets have no edge to it, and
-`S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's own pair
-of rules (nothing here imports CloudKit, and CloudKitSync never imports this module).
+`S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to a pair of rules (nothing
+here imports CloudKit, and CloudKitSync never imports this module).
 `BackgroundRefreshBoundaryTests` forbids the companion refresh handler from importing it, as it
-forbids ProximityKit. The directory is code-owned (`.github/CODEOWNERS`) beside FernletCrypto and
-ProximityKit's `Namespace/`: a changed literal here is a wire, keychain or on-disk format change for
-every device already in the field.
+forbids ProximityKit. The directory is code-owned (`.github/CODEOWNERS`) beside FernletCrypto
+(ProximityKit's `Namespace/` is its own repository's CODEOWNERS' since plan step A1.3): a changed
+literal here is a wire, keychain or on-disk format change for every device already in the field.
 
 **Isolation.** The module is main-actor by default (`defaultIsolation(MainActor.self)` in
 `Package.swift`), matching ProximityKit, and every extension, static and type here is `nonisolated`

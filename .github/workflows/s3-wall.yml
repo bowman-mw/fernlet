@@ -688,6 +688,15 @@ jobs:
         # `mesh-batteries` 155 -> 152. No suite joined or left this line, and the line, MEASURED on a Mac on
         # that tree (iPhone 17 simulator, iOS 26.5), ran 96 tests in 11 suites (99 - 2 - 1, the ARITHMETIC
         # CHECK; CIGateSelectorBoundaryTests 8, ProximityAuditBridgeTests 4); its floor stays the shared `1`.
+        #
+        # ProximityKit plan step A1.3's review fixes (2026-10-15) change one suite of this line and add no
+        # cell. `CIGateSelectorBoundaryTests`' resolution pin refuses any identity outside `cryptoswift`
+        # and `proximitykit` in either Package.resolved (until then a third pin passed), so a package a
+        # later ProximityKit tag depended on, which neither manifest would name, cannot reach the resolved
+        # graph unreviewed; its fixture expects that pin refused, shown red once against the old check.
+        # No suite joined or left this line, and the line, MEASURED on a Mac on that tree (iPhone 17
+        # simulator, iOS 26.5), ran 96 tests in 11 suites (CIGateSelectorBoundaryTests 8); its floor stays
+        # the shared `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -1326,6 +1335,15 @@ jobs:
         # build-for-testing (WALL CHECK PASSED), read off its own result bundle: "43 tests in 4 suites"
         # (18 + 1 + 1 + 23), 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite
         # census silent. Re-run AT 43: passed, and shown red once at 44.
+        # At ProximityKit plan step A1.3's review fixes (2026-10-15) the coverage suite's identity-`do` cell
+        # gains the recipe-share manager's wipe as a needle: the funnel's call that reaches the pair
+        # session's identity cache was held by nothing (the identity-seam cell pins the manager's forward
+        # only). No cell added or removed, so the floor stays 43. HELD at 43, MEASURED on a Mac,
+        # 2026-10-15 (iPhone 17 simulator, iOS 26.5): this exact four-name list run at its floor after the
+        # strict build-for-testing (WALL CHECK PASSED), read off its own result bundle: "43 tests in 4
+        # suites", 0 failed, 0 skipped, no `Restarting after unexpected exit` line, the suite census
+        # silent; and the cell shown red once with the call dropped from FernletStore, and once with it
+        # moved past the `do`'s `catch`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh privacy-wipe 43 \
@@ -2310,6 +2328,17 @@ jobs:
         # CIGateSelectorBoundaryTests 8, FakePeerTransportTests 10), 0 failed, 0 skipped, no `Restarting
         # after unexpected exit` line, the suite census silent. Re-run AT 1309: passed, and shown red once
         # at 1310. 1379 - 22 + 10 - 2 - 9 - 47 = 1309 is the ARITHMETIC CHECK, never the source.
+        # ProximityKit plan step A1.3's review fixes (2026-10-15) add no cell and move no suite:
+        # MeshRoutedLockedDeviceTests' W1 Fernlet half floors its FernletKit walk at 231 of 289 files (it
+        # read `> 100`), MeshP9McRetirementAcceptanceTests' framework-import cell its App/Fernlet walk at
+        # 198 of 248 (it read 140 of 185), each shown red once at its count + 1;
+        # MeshP9HonestyAcceptanceTests says the package's suite of that name holds the `.remove`
+        # stand-in's existence and Fernlet only its record; CIGateSelectorBoundaryTests refuses a third
+        # resolved pin (see the s3-grep step); and four doc lines name ProximityKit's package suite where
+        # they cite a cell it holds. HELD at 1309, MEASURED on a Mac, 2026-10-15 (iPhone 17 simulator,
+        # iOS 26.5): this exact 152-name list run at its floor after the strict build-for-testing (WALL
+        # CHECK PASSED), read off its own result bundle: totalTestCount 1309 in 152 suites, 0 failed, 0
+        # skipped, no `Restarting after unexpected exit` line, the suite census silent.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1309 \

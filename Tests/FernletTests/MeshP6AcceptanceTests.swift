@@ -472,8 +472,8 @@ struct MeshP6TextRoutingAcceptanceTests {
 ///
 /// Cites `MeshRoutedRetryAllowanceTests.aNewItemProjectsOnItsFirstPassBehindAFullAllowanceOfRetries`,
 /// `…aNewReceiptIsFiledOnItsFirstPassBehindAFullAllowanceOfHearts` and
-/// `MeshRoutedRetryPlanTests.thePlannerNamesNoRoutedTypeNoRegistryAndNoStore` for the exhaustive
-/// space. What it adds is one scenario over **both** lists on a run that really converged.
+/// `MeshRoutedRetryPlanTests.thePlannerNamesNoRoutedTypeNoRegistryAndNoStore` (ProximityKit's package
+/// suite) for the exhaustive space. What it adds is one scenario over **both** lists on a run that really converged.
 @MainActor
 @Suite(.serialized)
 struct MeshP6ProjectionRetryAcceptanceTests {
