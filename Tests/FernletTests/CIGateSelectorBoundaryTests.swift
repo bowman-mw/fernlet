@@ -390,6 +390,10 @@ import Testing
     /// without the web-nutrition-lookup consent, the exact request, the cap, the deadline, no retries
     /// and the audit line at dispatch. Each compiles clean when it breaks, and it ran on no line. The
     /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RAISED on 2026-10-15 (App Review guideline 1.2, Report + a small filter): `mesh-features` 48 → 50,
+    /// for `SessionMessageFilterTests` and `SessionContentReportTests`, the two suites that hold the
+    /// chat's send filter and Report… on a session message or photo. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 2,
