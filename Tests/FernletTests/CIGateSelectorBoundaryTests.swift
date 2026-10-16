@@ -384,12 +384,15 @@ import Testing
     /// cells all read ProximityKit's sources and are the package's copy of that suite now (no Fernlet
     /// half). This is the retirement argued. Counted off the lines.
     ///
-    /// RAISED on 2026-10-15 (App Review guideline 1.2, Report + a small filter): `mesh-features` 48 → 50,
-    /// for `SessionMessageFilterTests` and `SessionContentReportTests`, the two suites that hold the
-    /// chat's send filter and Report… on a session message or photo. Counted off the line.
+    /// RE-MEASURED at the Open Food Facts deadline fix (2026-10-11, landed after plan step A1.3):
+    /// `no-tracking` 1 → 2, for `OpenFoodFactsLookupTests`, which holds the conditions
+    /// Docs/No-Tracking-Wall.md §3 attaches to `world.openfoodfacts.org` beyond its host pin: no request
+    /// without the web-nutrition-lookup consent, the exact request, the cap, the deadline, no retries
+    /// and the audit line at dispatch. Each compiles clean when it breaks, and it ran on no line. The
+    /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
-        "no-tracking": 1,
+        "no-tracking": 2,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
@@ -423,7 +426,7 @@ import Testing
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
                     "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
-        "no-tracking": ["NoTrackingBoundaryTests"],
+        "no-tracking": ["NoTrackingBoundaryTests", "OpenFoodFactsLookupTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
         "key-custody": ["KeyCustodyBoundaryTests", "ColumnCryptoDeviceBindingTests",
@@ -817,10 +820,14 @@ import Testing
         "App/Fernlet.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
     ]
 
-    /// The packages both of ``resolvedFiles`` must pin, each once and to a released version:
-    /// CryptoSwift, the Scrypt KDF behind FernletLock (ProximityKit plan step A0.8.1), and ProximityKit,
-    /// the peer-to-peer subsystem, from its own repository at exactly 0.1.0 (A1.3). The floor that
-    /// keeps ``expectOneRevisionPerSharedPin()`` from passing on two files that pin nothing in common.
+    /// The packages both of ``resolvedFiles`` must pin, each once and to a released version, and the
+    /// only ones either may pin: CryptoSwift, the Scrypt KDF behind FernletLock (ProximityKit plan step
+    /// A0.8.1), and ProximityKit, the peer-to-peer subsystem, from its own repository at exactly 0.1.0
+    /// (A1.3). The floor that keeps ``expectOneRevisionPerSharedPin()`` from passing on two files that
+    /// pin nothing in common, and, since A1.3's review fixes, the ceiling that refuses a third pin: a
+    /// package a later ProximityKit tag depended on would reach Fernlet as one more pin in both files
+    /// and nowhere else, since neither manifest would name it (`NoTrackingBoundaryTests` reads the
+    /// manifests, `Docs/No-Tracking-Wall.md` §2).
     static let sharedPinIdentities = ["cryptoswift", "proximitykit"]
 
     /// A shell script's code: every line whose trimmed text starts `#` dropped (the script's own
@@ -908,8 +915,8 @@ import Testing
     }
 
     /// Both of ``resolvedFiles`` parse (``pins(inResolved:path:)``), and the two agree
-    /// (``sharedPinProblems(_:_:)``): each pins every one of ``sharedPinIdentities``, and every
-    /// identity both pin is pinned alike in both.
+    /// (``sharedPinProblems(_:_:)``): each pins every one of ``sharedPinIdentities`` and nothing else,
+    /// and every identity both pin is pinned alike in both.
     private static func expectOneRevisionPerSharedPin() throws {
         var tables: [[String: [String]]] = []
         // R2: bounded by the two files.
@@ -920,22 +927,31 @@ import Testing
         }
         let problems = tables.count == 2 ? sharedPinProblems(tables[0], tables[1]) : ["read \(tables.count) files"]
         #expect(problems.isEmpty, """
-            \(resolvedFiles[0]) and \(resolvedFiles[1]) disagree. CI builds through the workspace, which \
-            resolves from the first; a release archive builds through the project, which resolves from \
-            the second. Re-resolve both, in the same commit:
+            \(resolvedFiles[0]) and \(resolvedFiles[1]) disagree, or pin a package outside \
+            \(sharedPinIdentities). CI builds through the workspace, which resolves from the first; a \
+            release archive builds through the project, which resolves from the second. Re-resolve both, \
+            in the same commit:
             \(problems.joined(separator: "\n"))
             """)
     }
 
-    /// The ways two resolved files' pins (``pins(inResolved:path:)``, the workspace's first) disagree:
-    /// an identity of ``sharedPinIdentities`` either file lacks, and an identity both pin to different
-    /// (location, revision, version) triples. A pin one file holds alone is not compared: only what
-    /// both pin can differ between CI and a release.
+    /// The ways two resolved files' pins (``pins(inResolved:path:)``, the workspace's first) fall short:
+    /// an identity of ``sharedPinIdentities`` either file lacks, an identity outside them either file
+    /// pins (the set is exact, so a dependency of a dependency, which no manifest names, cannot arrive
+    /// unreviewed), and an identity both pin to different (location, revision, version) triples.
     static func sharedPinProblems(_ workspace: [String: [String]], _ project: [String: [String]]) -> [String] {
         var problems: [String] = []
         // R2: bounded by the required identities.
         for identity in sharedPinIdentities where workspace[identity] == nil || project[identity] == nil {
             problems.append("`\(identity)` is not pinned in both files: each must pin all of \(sharedPinIdentities)")
+        }
+        // R2: bounded by the two files' pins.
+        for identity in Set(workspace.keys).union(project.keys).sorted() where !sharedPinIdentities.contains(identity) {
+            problems.append("""
+                `\(identity)` is pinned outside \(sharedPinIdentities): every package of the resolved \
+                graph, a dependency of a dependency included, needs an entry in NoTrackingBoundaryTests' \
+                allowlist and in Docs/No-Tracking-Wall.md, and one here, before it ships
+                """)
         }
         // R2: bounded by the first file's pins.
         for (identity, triple) in workspace.sorted(by: { $0.key < $1.key }) {
@@ -1339,7 +1355,8 @@ import Testing
     /// its triple beside a branch-pinned reference, which reads with an empty version; a file that is
     /// not JSON, one that pins an identity twice and one whose `cryptoswift` pin has no version are each
     /// a named problem; two files that pin alike pass, while an identity of ``sharedPinIdentities`` one
-    /// lacks and a pin they hold to different revisions are each named; and a shell script's comment
+    /// lacks, a pin outside them one holds (since A1.3's review fixes; until then it passed) and a pin
+    /// they hold to different revisions are each named; and a shell script's comment
     /// lines, indented or not, are not its code.
     private static func expectResolutionReaderFixtured() {
         let pin = #"{"identity":"cryptoswift","location":"L","state":{"revision":"R","version":"1.10.0"}}"#
@@ -1357,8 +1374,9 @@ import Testing
             #expect(!pins(inResolved: data, path: "b").problems.isEmpty, "a resolved file the pin cannot read was read")
         }
         let shared = ["cryptoswift": ["L", "R", "1.10.0"], "proximitykit": ["K", "T", "0.1.0"]]
-        #expect(sharedPinProblems(shared, shared.merging(["extra": ["E", "X", ""]]) { first, _ in first }).isEmpty,
-                "two files that pin alike, one with a pin of its own, were refused")
+        #expect(sharedPinProblems(shared, shared).isEmpty, "two files that pin alike were refused")
+        let extra = sharedPinProblems(shared, shared.merging(["extra": ["E", "X", ""]]) { first, _ in first })
+        #expect(extra.contains { $0.contains("`extra` is pinned outside") }, "a pin outside the allowed set was not named: \(extra)")
         let lacking = sharedPinProblems(shared, shared.filter { $0.key != "proximitykit" })
         #expect(lacking.contains { $0.contains("`proximitykit` is not pinned in both") }, "a missing shared pin was not named: \(lacking)")
         let moved = sharedPinProblems(shared, shared.merging(["proximitykit": ["K", "U", "0.1.0"]]) { _, second in second })

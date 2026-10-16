@@ -53,6 +53,17 @@ so does the facade's period-visibility default, which stays observation-tracked 
 a stored property here. `resetDiary()` drops it and `reloadHealthImportedBodyProfile()` re-reads it
 after the HealthKit opt-out emptied the cache.
 
+Day summaries stay on the device that wrote them too (owner decision 2026-10-15): the persisted score
+history never carries `daySummaryText` (`FernletSnapshot.storedDailyScores` strips it). The facade
+attaches this device's day-summary store with `attachDaySummaryStore(_:)` (a `DeviceDaySummaryStoring`
+from `FernletPersistence`; the file-backed conformer lives in the app target), and `dailyScores` has its
+summaries overlaid at attach and on `applyDiarySlice` — the store's when it reads, else what the session
+already shows, so a locked device does not blank them. `storeDaySummary(_:for:)` and
+`invalidateDaySummary(for:)` record into the store. The first attach on a device keeps the summaries an
+older build left in the loaded rows (once, through the store's capture marker), and a loaded row that
+still carries one schedules a save, so the persisted copy is rewritten without it. The facade's wipe
+empties the store.
+
 Construction is two-phase. The facade builds the store with `init` (which filters USDA rows out
 of the snapshot's food items and seeds the injected `FoodCatalog`'s user-item index), then calls
 `rewireHooks(scheduleSnapshotSave:periodAdjustment:stressModifier:sealedJournalIDs:)` to swap

@@ -148,7 +148,7 @@ struct MeshNetworkFeasibilityTests {
         #expect(taskIdentifiers.contains(NetworkMeshFeasibilityProbe.backgroundTaskIdentifierPattern))
         #expect(NetworkMeshFeasibilityProbe.backgroundTaskRegistrationIdentifier == NetworkMeshFeasibilityProbe.backgroundTaskIdentifier)
         #expect(NetworkMeshFeasibilityProbe.backgroundTaskRegistrationIdentifier != NetworkMeshFeasibilityProbe.backgroundTaskIdentifierPattern)
-        #expect(localNetworkCopy.contains("mesh photos"))
+        #expect(localNetworkCopy.contains("photos"))
         #expect(localNetworkCopy.contains("background"))
     }
 

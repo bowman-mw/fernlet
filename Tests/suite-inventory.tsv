@@ -6,7 +6,7 @@
 # whose column-0 line declares it); lines (the workflow labels whose selectors name it, sorted, comma-joined, or -).
 # Rows sorted by suite. A suite that is renamed or deleted, or joins or leaves a line, edits its row in the same
 # commit; the wall's row count changes only with an argued, measured change. A new suite needs a row only when a line
-# names it. ProximityKit's package tests, which held rows here from A0.8.2 to A1.1.17, are its own repository's since
+# names it. ProximityKit's package tests, which held rows here from A0.8.2 to A1.3, are its own repository's since
 # plan step A1.3, counted in that repository's own inventory.
 suite	file	lines
 AIAuditLogScreenTests	Tests/FernletTests/AIAuditLogScreenTests.swift	-
@@ -472,7 +472,7 @@ NutritionPlausibilityTests	Tests/FernletTests/NutritionPlausibilityTests.swift	-
 NutritionTargetOverrideTests	Tests/FernletTests/NutritionTargetOverrideTests.swift	-
 ObservationLoopLifecycleTests	Tests/FernletTests/MemoryLifecycleTests.swift	-
 OnboardingIntimacyChoiceTests	Tests/FernletTests/OnboardingIntimacyChoiceTests.swift	-
-OpenFoodFactsLookupTests	Tests/FernletTests/OpenFoodFactsLookupTests.swift	-
+OpenFoodFactsLookupTests	Tests/FernletTests/OpenFoodFactsLookupTests.swift	no-tracking
 OwnPhotoKeyBindingTests	Tests/FernletTests/OwnPhotoKeyBindingTests.swift	-
 PastDayJournalScrubMigrationTests	Tests/FernletTests/PastDayJournalScrubMigrationTests.swift	-
 PastDayJournalSealingTests	Tests/FernletTests/PastDayJournalSealingTests.swift	-

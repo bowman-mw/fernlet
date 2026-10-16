@@ -868,10 +868,11 @@ struct MeshP9McRetirementAcceptanceTests {
     @Test func theFrameworkImportHasNoHomeAndNoFrameworkTypeIsNamed() throws {
         let social = try MeshP7Acceptance.sources(under: "FernletKit/Sources/FernletSocial")
         let app = try MeshP7Acceptance.sources(under: "App/Fernlet")
-        // MEASURED floors: 52 FernletSocial files at ProximityKit plan step A1.3 (four fifths, 41), and
-        // 185 app files after the deletion (NOTE 4), so a walk that lost a folder reds.
+        // MEASURED floors at ProximityKit plan step A1.3, each four fifths of the count: 52 FernletSocial
+        // files (41) and 248 App/Fernlet files (198, TransportNeutralityBoundaryTests' floor for that
+        // root), so a walk that lost a quarter of either root reds.
         #expect(social.count >= 41, "the FernletSocial scan lost its files (52 when this was measured)")
-        #expect(app.count >= 140, "the app-target scan lost its files (185 when this was measured)")
+        #expect(app.count >= 198, "the app-target scan lost its files (248 when this was measured)")
         let homes = Set(MeshP7Acceptance.homes(of: "import MultipeerConnectivity", in: social + app)).sorted()
         #expect(homes.isEmpty, """
             MultipeerConnectivity is imported in \(homes). The framework left the tree in the \
@@ -1096,8 +1097,10 @@ struct MeshP9HonestyAcceptanceTests {
     /// drift: `RecipeShareOverQUICTests.theRegistrationRemoveBranchIsNotABareAssignment` holds the
     /// `.remove` branch as a source assertion precisely because no execution reaches it, and this
     /// battery names that substitution out loud. The assertion reads the pair session's source, so
-    /// since ProximityKit plan step A1.3 it is ProximityKit's package copy of that suite; Fernlet's
-    /// recipe suite keeps the record of where it stands, beside the behavioural republish cell.
+    /// since ProximityKit plan step A1.3 it is ProximityKit's package copy of that suite, and the
+    /// package's own `MeshP9HonestyAcceptanceTests` holds that it still exists. Fernlet holds only the
+    /// record: its recipe suite names the stand-in and where it stands, beside the behavioural
+    /// republish cell, and this cell holds that record.
     @Test func everyLaneRowThisBatteryCannotRunIsStillNamedInItsRecord() throws {
         let runbook = try RepoRoot.source("Docs/Mesh-Network-Feasibility-Runbook.md")
         // R2: bounded by the three lane headings.
@@ -1123,9 +1126,10 @@ struct MeshP9HonestyAcceptanceTests {
                     && recipeTests.contains("func aWithdrawnRegistrationRepublishesUnderAFreshPosture("), """
             the record of the source-level stand-in for the `.remove` → republish branch is gone from \
             Fernlet's recipe suite, or the republish cell beside it is. The stand-in is a SHAPE \
-            assertion, not an execution, ProximityKit's package copy of the suite since plan step \
-            A1.3: it exists because the branch never fires on a Simulator, and losing track of it \
-            leaves the branch covered by nothing anyone reads
+            assertion, not an execution, in ProximityKit's package copy of the suite since plan step \
+            A1.3, and the package's own MeshP9HonestyAcceptanceTests holds that it exists; Fernlet \
+            holds only this record of it, kept because the branch never fires on a Simulator, and \
+            losing it leaves Fernlet naming nothing that stands in for the branch
             """)
         #expect(ledger.contains("P9-2-B") && ledger.contains("third friend"), """
             the accepted residual is gone: a sole-friend pair never surfaces in presence (layer-3 \

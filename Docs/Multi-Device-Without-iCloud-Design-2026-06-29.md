@@ -43,7 +43,7 @@ second-device warning. `iCloudAvailable = ubiquityIdentityToken != nil`;
 
 **Device identity (for same-user pairing) — mostly already there.** Stable per-device Ed25519 signing key
 (keychain, `ThisDeviceOnly`) is a strong device id, and a **backup-escrow X25519 key already syncs across a
-user's devices via iCloud Keychain** ([ProximityKit/IdentityService.swift:74](../FernletKit/Sources/ProximityKit/Identity/IdentityService.swift))
+user's devices via iCloud Keychain** ([ProximityKit/IdentityService.swift:74](https://github.com/bowman-mw/proximitykit/blob/0.1.0/Sources/ProximityKit/Identity/IdentityService.swift))
 — "multi-device same-user" is already a modeled concept. Gap: `ProximityTrustedPeerRecord` has no
 relationship type, so a paired own-device is treated like a friend. Add `relationshipType: .ownedDevice`.
 

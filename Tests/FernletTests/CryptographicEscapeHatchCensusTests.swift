@@ -110,7 +110,8 @@ struct CryptographicEscapeHatchCensusTests {
     /// Moved 3 → 4 by the QUIC mesh transport, whose `EphemeralMeshTLSIdentity.swift` signs an X.509
     /// certificate's bytes under the `x509-self-signature` hatch. Moved 4 → **3** at ProximityKit plan
     /// step A1.1.16 (2026-10-14): that hatch's file is ProximityKit's, whose own package suite counts it,
-    /// and this census reads every shipping root but ProximityKit's folder. The three are the three above.
+    /// and this census then read every shipping root but ProximityKit's folder (since plan step A1.3 it
+    /// reads them whole: the folder left with ProximityKit's sources). The three are the three above.
     private static let pinnedFileCount = 3
 
     /// Prose that merely names the marker, by repo-relative path. Not hatches — but not free either,

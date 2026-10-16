@@ -367,6 +367,9 @@ public nonisolated struct DailyHealthScore: Identifiable, Codable, Equatable {
     /// the blob's `dailyScores` bricks the whole store into read-only recovery). Recomputing the
     /// score on this device constructs a fresh record, which naturally drops the token.
     public var unknownCompanionStateToken: String? = nil
+    /// The on-device AI summary of the day, kept on THIS device only (owner decision 2026-10-15):
+    /// `FernletSnapshot.storedDailyScores` strips it from every persisted copy, and the device-local
+    /// day-summary store gives it back. Another device writes its own.
     public var daySummaryText: String?
     public var computedAt: Date
     /// Per-component sub-scores (journal/meal/workout/sleep/hydration/hygiene) that produced `score`.

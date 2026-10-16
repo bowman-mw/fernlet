@@ -22,7 +22,7 @@
 		<string>_fernlet-recipe2._udp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Fernlet connects with nearby friends for mesh photos, temporary text, and heart gifts during a user-started session, which may continue in the background.</string>
+	<string>Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>MBO.Fernlet.mesh-continuation.*</string>

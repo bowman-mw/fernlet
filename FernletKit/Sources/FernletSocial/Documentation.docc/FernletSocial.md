@@ -4,7 +4,8 @@ Fernlet's social features over ProximityKit's mechanisms: the mesh features the 
 
 ## Overview
 
-ProximityKit is becoming a drop-in package any app can use, with nothing Fernlet-specific in its
+ProximityKit is a drop-in package any app can use (its own repository's since plan step A1.3,
+which Fernlet pins at exactly 0.1.0), with nothing Fernlet-specific in its
 API (`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` §3.2). Fernlet's rules on top of it, its
 namespace, trust vault and session policies, live in `FernletConnections`; Fernlet's features live
 here, every byte they put on the wire, in the keychain or on disk the one Fernlet shipped (pinned
@@ -448,9 +449,11 @@ session heart carries; and on `PrivateMediaStore`, for the session photos' frien
 pending corpus, their keychain key providers and the capture's resize. It imports nothing else but
 Foundation, Observation, Security, CryptoKit and UIKit, whose `UIImage` the capture's resize reads.
 So it builds for iOS alone: the native macOS build plan step A0.6 added covers the Mac-ready set
-(ProximityKit, FernletFoundation, FernletCrypto and FernletDomainModel), not this module, whose photo path (and `PrivateMediaStore`'s encoders under it) would need a UIKit-free
+(FernletFoundation, FernletCrypto and FernletDomainModel since plan step A1.3; ProximityKit's own
+repository's CI builds it for macOS), not this module, whose photo path (and `PrivateMediaStore`'s encoders under it) would need a UIKit-free
 twin, with goldens of its own, before a Mac host could link it.
-Its `PrivateMediaStore` edge puts it on the protected side of the S3 wall, as ProximityKit is: the walled
+Its `PrivateMediaStore` edge puts it on the protected side of the S3 wall (ProximityKit, which depends
+on nothing, has reached no sealed store since plan step A0.5.10): the walled
 `AIProviders` and `CloudKitSync` targets have no edge to it, and
 `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's pair of
 rules (nothing here imports CloudKit, and CloudKitSync never imports this module): the dead-drop's

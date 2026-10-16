@@ -166,11 +166,15 @@ struct NoTrackingBoundaryTests {
     /// CryptoSwift supplies the memory-hard Scrypt KDF behind `FernletLock`'s passphrase derivation —
     /// pure local computation, no network code. ProximityKit is Fernlet's own peer-to-peer subsystem,
     /// moved with its history to a repository of its own and pinned at exactly 0.1.0 since plan step
-    /// A1.3: it depends on nothing, names no internet host, and its repository's CI holds its code to
-    /// the same rules (no tracking SDK or symbol, no HTTP client, and Network.framework's local-link API
-    /// in its three radio files alone). Any other package URL fails here, whether or not its name is on
-    /// ``bannedSDKModules``: the banned list can only catch SDKs someone thought to name, while this
-    /// exact-set rule catches the ones nobody has heard of yet.
+    /// A1.3: it depends on nothing, and its repository's CI holds its code to the same rules (no
+    /// tracking SDK or symbol, no HTTP client, and Network.framework's local-link API in its three radio
+    /// files alone). That it names no internet host is its own no-tracking scan's to hold
+    /// (`Scripts/no-tracking-scan.py` there, which refuses a `scheme://` literal on any code line of its
+    /// sources): ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()`` reads Fernlet's code only. Any
+    /// other package URL fails here, whether or not its name is on ``bannedSDKModules``: the banned
+    /// list can only catch SDKs someone thought to name, while this allowlist catches the ones nobody
+    /// has heard of yet (and `CIGateSelectorBoundaryTests` refuses a third pin in either resolved file,
+    /// where a dependency of a dependency would appear).
     private static let allowedPackageURLs: Set<String> = [
         "https://github.com/krzyzanowskim/CryptoSwift",
         "https://github.com/bowman-mw/proximitykit"

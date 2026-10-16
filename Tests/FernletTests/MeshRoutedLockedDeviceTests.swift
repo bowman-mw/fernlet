@@ -737,9 +737,12 @@ extension MeshRoutedLockedDeviceTests {
     /// **W1, Fernlet's half.** Each of the three predicates is defined exactly once, in ProximityKit's
     /// manager (the package suite of the same name holds that count), and no Fernlet module defines a
     /// second one to answer it more weakly: one question, one answer.
+    ///
+    /// The FernletKit walk is floored at 231 files, four fifths of the 289 measured at ProximityKit
+    /// plan step A1.3, so its zero-list cannot pass over a walk that lost a module.
     @Test func theAccessPredicatesEachHaveExactlyOneDefinition() throws {
         let sources = try Self.codeSources(under: "FernletKit/Sources")
-        #expect(sources.count > 100, "the package source sweep found too few files")
+        #expect(sources.count >= 231, "the package source sweep found too few files")
         for predicate in ["var mayDecryptRoutedContent",
                           "var mayMutateCanonicalStoreWithRoutedContent",
                           "var mayCommitRoutedHeartLedgerJudgement"] {
@@ -1026,9 +1029,9 @@ extension MeshRoutedLockedDeviceTests {
     ///
     /// Counted across every Swift file under `App/` (the extensions and the DEBUG harnesses
     /// included) rather than asserted about one file, and the one write is located by
-    /// brace-matching the funnel's own body — `theDrainFiresOnlyFromTheMergeDoor`'s shape, which
-    /// is why P5's drain door survived three phases. A second writer anywhere in the app target
-    /// reddens this by name.
+    /// brace-matching the funnel's own body — `theDrainFiresOnlyFromTheMergeDoor`'s shape
+    /// (ProximityKit's package suite), which is why P5's drain door survived three phases. A second
+    /// writer anywhere in the app target reddens this by name.
     @Test func theGateHasExactlyOneWriterOutsideProximityKit() throws {
         var writers: [String] = []
         var assemblies: [String] = []

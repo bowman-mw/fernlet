@@ -57,8 +57,9 @@
 import Foundation
 import Testing
 
-/// Grep-wall for the five memory-lifecycle disciplines (ML1-ML5). Scans the five shipping roots but
-/// ProximityKit's folder once (``sharedScan``); every enforcement test reads from that immutable value.
+/// Grep-wall for the five memory-lifecycle disciplines (ML1-ML5). Scans the five shipping roots whole
+/// once (``sharedScan``), none of which holds ProximityKit's sources since ProximityKit plan step A1.3;
+/// every enforcement test reads from that immutable value.
 struct MemoryLifecycleBoundaryTests {
 
     // MARK: - Scope, floors, allowlist

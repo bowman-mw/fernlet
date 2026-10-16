@@ -31,8 +31,9 @@ which they hand it so it hides Fernlet's QUIC instance-name prefix and shows a n
 peer-name cap). Only the app target consumes it.
 **The edge runs from the UI to ProximityKit,
 never the reverse**: ProximityKit cannot name anything here, so a module below can never call up
-into a screen. Through ProximityKit it reaches `PrivateMediaStore` transitively, which puts it on
-the protected side of the S3 wall: the walled `AIProviders` and `CloudKitSync` targets have no edge
+into a screen. Through FernletSocial it reaches `PrivateMediaStore` transitively (ProximityKit, which
+depends on nothing, has reached no sealed store since plan step A0.5.10), which puts it on the
+protected side of the S3 wall: the walled `AIProviders` and `CloudKitSync` targets have no edge
 to it, and `S3BoundaryTests.proximityAndCloudSyncDoNotImportEachOther()` holds it to ProximityKit's
 own rule that nothing here imports CloudKit. It has no persistence and no cryptography of its own,
 and it never reads a held photo's bytes itself: tiles load through the host's `loadImageData` seam,

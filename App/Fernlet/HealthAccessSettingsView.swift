@@ -421,7 +421,8 @@ struct HealthAccessSettingsView: View {
         }
     }
 
-    /// Full revocation lives in the Health app; this is the one-tap route there.
+    /// Full revocation lives in the Health app; this opens Fernlet's own Settings page, the one
+    /// public route toward it (no private settings URL, App Review guideline 2.5.1).
     private var openHealthSettingsButton: some View {
         Button {
             Task { await makeHealthKitService().openHealthPrivacySettings() }

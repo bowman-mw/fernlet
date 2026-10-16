@@ -226,6 +226,7 @@ func makeTestStore(
     foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
+    deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil,
     healthKitService: (any HealthKitServicing)? = nil
 ) -> FernletStore {
     makeTestStoreWithRepositories(
@@ -241,6 +242,7 @@ func makeTestStore(
         foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
         sharedRecipeImportQueueFileURL: sharedRecipeImportQueueFileURL,
         deviceHealthResidueStore: deviceHealthResidueStore,
+        deviceDaySummaryStore: deviceDaySummaryStore,
         healthKitService: healthKitService
     ).store
 }
@@ -266,6 +268,7 @@ func makeTestStoreWithRepositories(
     foodSearchCorrectionDefaults: UserDefaults = uniqueFoodSearchCorrectionDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
     deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
+    deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil,
     healthKitService: (any HealthKitServicing)? = nil,
     wrapNarrativeStore: (JournalNarrativeRepository) -> any JournalNarrativeStoring = { $0 }
 ) -> (store: FernletStore, repository: CoreDataFernletRepository, narratives: JournalNarrativeRepository) {
@@ -336,7 +339,9 @@ func makeTestStoreWithRepositories(
         foodSearchCorrectionDefaults: foodSearchCorrectionDefaults,
         // This device's HealthKit residue cache. Nil = the store's own fresh in-memory cache (the
         // sync initializer's hermetic default); pass one to share it across a simulated relaunch.
-        deviceHealthResidueStore: deviceHealthResidueStore
+        deviceHealthResidueStore: deviceHealthResidueStore,
+        // This device's day summaries, the same rule: nil = a fresh in-memory store.
+        deviceDaySummaryStore: deviceDaySummaryStore
     )
     // The recipe editor's "grams in one" memory (F4b) is a defaults SUITE too; nothing reads it during
     // init, so a fresh suite set here keeps every test store off `.standard`.
@@ -383,7 +388,8 @@ func makeStoreSharingStores(
     aiQuotaDefaults: UserDefaults = uniqueAIQuotaDefaults(),
     sensitiveVisibilityDefaults: UserDefaults = uniqueSensitiveVisibilityDefaults(),
     sharedRecipeImportQueueFileURL: URL = uniqueSharedRecipeImportQueueURL(),
-    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil
+    deviceHealthResidueStore: (any DeviceHealthResidueStoring)? = nil,
+    deviceDaySummaryStore: (any DeviceDaySummaryStoring)? = nil
 ) -> FernletStore {
     let legacyURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -411,7 +417,8 @@ func makeStoreSharingStores(
         proximitySupportDirectory: proximitySupportDirectory,
         heartDropKeychainService: heartDropKeychainService,
         aiQuotaDefaults: aiQuotaDefaults,
-        deviceHealthResidueStore: deviceHealthResidueStore
+        deviceHealthResidueStore: deviceHealthResidueStore,
+        deviceDaySummaryStore: deviceDaySummaryStore
     )
 }
 

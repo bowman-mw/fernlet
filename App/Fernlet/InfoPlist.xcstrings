@@ -25,7 +25,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet uses your camera to scan nutrition labels and to take photos during in-person sharing sessions."
+            "value" : "Fernlet uses your camera to scan barcodes and nutrition labels, photograph meals, take progress photos, and take photos during sessions with friends."
           }
         }
       }
@@ -69,7 +69,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet connects with nearby friends for mesh photos, temporary text, and heart gifts during a user-started session, which may continue in the background."
+            "value" : "Fernlet connects directly with nearby friends to share recipes and, during a session you start, photos, short-lived messages and hearts. A session may continue in the background."
           }
         }
       }
@@ -91,7 +91,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fernlet uses Ultra Wideband to precisely measure distance when connecting with a nearby trainer or friend."
+            "value" : "Fernlet uses Ultra Wideband to measure the distance to a nearby friend while you connect."
           }
         }
       }
@@ -103,17 +103,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fernlet saves the shared pictures you choose after a friend session."
-          }
-        }
-      }
-    },
-    "NSPhotoLibraryUsageDescription" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fernlet accesses your photo library to scan nutrition labels from saved photos."
           }
         }
       }

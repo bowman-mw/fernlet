@@ -82,7 +82,7 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 | Test | What it forbids | How it fails |
 |---|---|---|
 | `noAdvertisingOrTrackingSDKIsReferencedAnywhere` | 45 banned SDK/framework module names and 11 banned tracking symbols, in **every** Swift file of **every** target — app, every package module, all three extensions, and both test targets (ProximityKit's package tests, here from plan step A0.8, left with the package at A1.3; its repository's own scan holds them). | `import FirebaseAnalytics`, `#if canImport(AppTrackingTransparency)`, `ASIdentifierManager.shared().advertisingIdentifier`, `identifierForVendor`. |
-| `packageDependenciesAreExactlyTheAllowedPackages` | Any package dependency other than the two below (CryptoSwift and ProximityKit), in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an exact-set match, not a blocklist. |
+| `packageDependenciesAreExactlyTheAllowedPackages` | Any package dependency other than the two below (CryptoSwift and ProximityKit), in `FernletKit/Package.swift` **or** the pbxproj's `XCRemoteSwiftPackageReference` / `packageProductDependencies`. | Adding *any* new SPM dependency, named or not — the rule is an allowlist, not a blocklist: no package URL outside the two in either manifest, and (`CIGateSelectorBoundaryTests`) exactly their two identities pinned in both `Package.resolved` files, so a dependency of a dependency, which no manifest names, fails too. |
 | `hardcodedNetworkDestinationsAreExactlyTheAllowlist` | Any hardcoded host in shipping code outside the §3 allowlist — **and** any stale allowlist entry the code no longer uses. | `URL(string: "https://telemetry.fernlet.com/v1/events")`. |
 | `onlyThePinnedWebImportersMayHoldAnHTTPClient` | A raw HTTP/socket client (`URLSession`, `URLRequest`, `NWConnection`, `WKWebView`, …) anywhere in shipping code except the three pinned fetchers (the two web importers and the Open Food Facts client) and the session factory they share — and, per file, any hardcoded host other than that file's own exact set (DuckDuckGo's two hosts in the product importer, `world.openfoodfacts.org` in the Open Food Facts client, none elsewhere). | A new `URLSession` in a "TelemetryUploader.swift" — *even if its hostname is assembled at runtime*, which is the gap the host allowlist alone cannot close; or an allowlisted host drifting into a client it was never reviewed for. |
 | `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI` | Network.framework's **local-link** surface (`NetworkConnection`, `NetworkListener`, `NetworkBrowser`, `NWListener`, `NWParameters`, `NWParametersBuilder`, `NWTXTRecord`) anywhere in this repository's shipping code except the DEBUG feasibility probe (ProximityKit's three QUIC radios, permitted here until plan step A1.3, are its repository's, whose own scan permits them and nothing else). A **second marker family with its own permit set** — see §4c. | A new `NetworkListener` in a feature that "just needs to see nearby devices" — a new local-network capability nobody reviewed. |
@@ -95,12 +95,14 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 **The two package dependencies.** `allowedPackageURLs` holds exactly two URLs, each declared in
 `FernletKit/Package.swift` and as an `XCRemoteSwiftPackageReference` in the app project, and
 `CIGateSelectorBoundaryTests` holds the workspace's and the project's `Package.resolved` to one
-revision of each:
+revision of each and to nothing else: since plan step A1.3's review fixes either file pinning a third
+identity fails, which is where a package a later ProximityKit tag depended on would first appear,
+since neither manifest would name it:
 
 | Package | URL | Requirement | Why it may be here |
 |---|---|---|---|
 | CryptoSwift | `https://github.com/krzyzanowskim/CryptoSwift` | up to next minor from 1.10.0 | `FernletLock`'s memory-hard Scrypt KDF: pure local computation, no network code. |
-| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.1.0` (plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing and names no internet host, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). |
+| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.1.0` (plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). It names no internet host: its own no-tracking scan (`Scripts/no-tracking-scan.py` there, run by its CI's Walls step) refuses a `scheme://` literal on any code line of its sources, and a web view or in-app browser, the pasteboard and app-wide defaults there too, while `hardcodedNetworkDestinationsAreExactlyTheAllowlist` and this repository's web-view, pasteboard and persisted-surface walls read Fernlet's code only since plan step A1.3. |
 
 ### Two design decisions worth knowing
 
@@ -288,7 +290,7 @@ adds the fourth row (`UIBackgroundModes`) and closes the third's "still inert" n
 
 | Key | Value | What backs it today |
 |---|---|---|
-| `NSLocalNetworkUsageDescription` | The mesh copy naming photos, temporary text, heart gifts, and background continuation | Required the moment *any* local-network API runs, which the three QUIC radios do. Not new with the QUIC work. |
+| `NSLocalNetworkUsageDescription` | The copy naming direct recipe sharing with nearby friends and, in a session the user starts, photos, short-lived messages and hearts, plus background continuation (reworded 2026-10-15) | Required the moment *any* local-network API runs, which the three QUIC radios do. Not new with the QUIC work. |
 | `NSBonjourServices` → `_fernlet-mesh2._udp`, `_fernlet-near2._udp`, `_fernlet-recipe2._udp` | Three added entries | All genuinely used: `NetworkMeshSession` advertises and browses the first in Release (the DEBUG probe uses the same one), `NetworkPresenceSession` the second and `NetworkPairSession` the third. A service type is a name, not a destination — declaring one grants no reach beyond the local link. |
 | `BGTaskSchedulerPermittedIdentifiers` | `MBO.Fernlet.mesh-continuation.*` (the mandatory wildcard notation) and, since P10 item 3, `MBO.Fernlet.companion-refresh` | **No longer inert.** The mesh's wildcard is still only exercised by the DEBUG probe and by the P8 host's runtime registration of the concrete `MBO.Fernlet.mesh-continuation.<meshID>`; the wildcard is only the plist's way of permitting that family. The companion identifier is a WHOLE identifier, not a prefix — there is exactly one companion refresh per process — and `CompanionRefreshCoordinator` registers it on every launch. A permitted identifier still grants nothing on its own: it widens what the app may ASK for, and iOS decides whether an opportunistic refresh ever runs. Neither task sends anything anywhere; the companion refresh makes no network request at all, which `BackgroundRefreshBoundaryTests` enforces by forbidding every networking module under `App/Fernlet/CompanionRefresh/`. |
 | `UIBackgroundModes` | `remote-notification`, and since P10 item 3 `fetch` | `fetch` is what lets iOS deliver a `BGAppRefreshTask` at all; without it the identifier is registered and the task is never launched. It buys the app an occasional short opportunistic wake to roll the day, recompute the companion and refresh the widget — all of it local. **It is not a networking permission and not a location one:** the handler may never reach the mesh, HealthKit, a CloudKit force-sync or Foundation Models, which is a repository gate (plan §16.4) rather than a promise. `remote-notification` is unchanged. No `processing` mode is declared; neither background task in this app is a `BGProcessingTask`. |
@@ -363,9 +365,11 @@ unpleasant enough that someone routes around it.
      fetch through `EphemeralWebSession.shared`, never a session of your own (§2a);
    - put the egress behind an explicit, off-by-default user setting whose copy names the destination,
      the way `webNutritionLookupEnabled` does.
-4. **A new SPM dependency** additionally needs a `allowedPackageURLs` entry. Adding *any* package
-   fails the wall, not just a recognised tracker — the blocklist can only catch SDKs someone thought
-   to name, so the dependency rule is an exact-set match instead.
+4. **A new SPM dependency** additionally needs an `allowedPackageURLs` entry and its identity in
+   `CIGateSelectorBoundaryTests.sharedPinIdentities`; a dependency of a dependency, which no manifest
+   names, needs the second and a row in §2's table. Adding *any* package fails the wall, not just a
+   recognised tracker — the blocklist can only catch SDKs someone thought to name, so the dependency
+   rule is an allowlist instead, and the resolved graph an exact set.
 5. **A new *local-link* API — Bonjour, QUIC, a listener — is a different permission and a different
    list.** It fails `onlyThePinnedMeshTransportsMayHoldALocalLinkNetworkAPI`, not the HTTP rule, and
    it is fixed by adding the file to `permittedLocalLinkFiles` plus a row in §4c — never by adding
@@ -481,6 +485,7 @@ Coverage at the time of writing (2026-08-09; the manifest and plist-family rows 
 | WebKit web views in shipping code | 0 | forward rule | none exist; the first one must use `WKWebsiteDataStore.nonPersistent()` |
 | Out-of-process in-app browsers | 1 | exact set | `FoodView.swift` (`SFSafariViewController`) |
 | Package manifests | 2 | must be non-empty | 2 dependencies: CryptoSwift and, since plan step A1.3, ProximityKit |
+| `Package.resolved` (since plan step A1.3's review fixes) | 2 | exact set (`CIGateSelectorBoundaryTests`) | 2 pins each, `cryptoswift` and `proximitykit`, one revision of each |
 | `PrivacyInfo.xcprivacy` | 4 | pinned by path | tracking `false`, 0 tracking domains, 0 collected data types |
 | Info.plist + entitlements + manifests | 12 | 8 | no ATT key, no ad network, 1 iCloud container (`iCloud.MBO.Fernlet`) |
 

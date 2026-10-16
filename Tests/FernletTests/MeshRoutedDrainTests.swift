@@ -1806,8 +1806,8 @@ struct MeshRoutedDrainTests {
     ///
     /// **Its own non-vacuity is in the cell**: the untouched slot's verdict. An un-record that
     /// forgot the *sender* rather than the frame (`forget(senderFingerprint:)`, which
-    /// `theRoutedWindowNeverForgetsASender` bans on this path) would pass every other assertion
-    /// here and fail that one.
+    /// `theRoutedWindowNeverForgetsASender` (ProximityKit's package suite) bans on this path) would
+    /// pass every other assertion here and fail that one.
     @Test func aRepairedSlotRefilledByADepartedOriginsCustodianIsNotReplayed() async throws {
         let rig = try MeshRoutedDrainRig.build(4, label: "replay-handoff")
         defer { rig.teardown() }
