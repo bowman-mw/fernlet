@@ -77,6 +77,9 @@ enum RoutedShareRefusalCopy {
     /// Two outcomes say nothing on purpose: `.staged`, because the row appearing in the transcript
     /// IS the feedback, and `.empty`, because the send control is already disabled for it.
     ///
+    /// `.filtered` (App Review guideline 1.2, 2026-10-15) is the send filter's refusal: one calm
+    /// sentence that names no word and blames no one, with the draft kept so it can be reworded.
+    ///
     /// - Parameter outcome: What the send decided.
     /// - Returns: a `LocalizedStringKey`, or nil for the two silent outcomes.
     static func chatNotice(_ outcome: MeshTextSendOutcome) -> LocalizedStringKey? {
@@ -87,6 +90,8 @@ enum RoutedShareRefusalCopy {
             return "Nobody has joined this session yet — that message wasn't sent. Try again in a moment."
         case .ageGated:
             return "Messages are turned off for this account."
+        case .filtered:
+            return "Fernlet doesn't send some of the words in this message. You can change them and send it again."
         case .refused(let refusal):
             return chatMessage(refusal)
         }

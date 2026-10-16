@@ -36,10 +36,11 @@ import ProximityKit
 /// keeping the draft so "send again" is the retry.
 ///
 /// Deliberately **not** `@discardableResult`: an unread outcome here is a message the user believes
-/// was sent (R7, the mesh's `sendEnvelope(_:encodable:via:sealed:)`'s own precedent). The five cases
+/// was sent (R7, the mesh's `sendEnvelope(_:encodable:via:sealed:)`'s own precedent). The six cases
 /// are frozen and each reaches a different sentence or none; `staged` and `empty` are the two the
 /// panel says nothing about, the first because the echo in the transcript IS the feedback and the
-/// second because the send control is already disabled for it.
+/// second because the send control is already disabled for it. `filtered` joined the five on
+/// 2026-10-15 (App Review guideline 1.2).
 public nonisolated enum MeshTextSendOutcome: Equatable, Sendable {
 
     /// The item is in this device's routed store, complete, and pushed once to every committed
@@ -55,6 +56,10 @@ public nonisolated enum MeshTextSendOutcome: Equatable, Sendable {
     /// Nothing survived the sanitizer and the wire byte bound — including the case the bound
     /// creates, a single grapheme cluster wider than the whole allowance.
     case empty
+    /// The on-device send filter (`SessionMessageFilter`) found a listed word in the draft, so
+    /// nothing was framed or minted. The panel says so in place, gently, and keeps the draft so the
+    /// person can reword it.
+    case filtered
 }
 
 // MARK: - MeshSessionChat
@@ -125,6 +130,11 @@ public final class MeshSessionChat {
     /// the meaning so the retirement wall can pin the old one at zero.
     @ObservationIgnored var onTextSendForTesting: ((MeshTextSendOutcome) -> Void)?
 
+    /// The list the send filter consults: ``SessionMessageFilter/List/shipping``, always, in the app.
+    /// Test seam: a cell swaps in a list built from placeholder words, because the shipping list's
+    /// words are kept out of the repository — its tests included — so no cell can type one.
+    @ObservationIgnored var sendFilterList: SessionMessageFilter.List = .shipping
+
     /// How many messages one origin may project into one mesh's transcript. See
     /// ``allowIncomingRoutedText(_:from:)`` for why this replaced a per-second token bucket and for
     /// everything else that bounds a hostile origin.
@@ -182,10 +192,14 @@ public final class MeshSessionChat {
     /// linked right now is sealed, wrapped and custodied until a link forms, which is the whole point
     /// of the routed store.
     ///
-    /// Three things the sanitizer and the sender do in order, and the order matters: sanitize (500
-    /// `Character`s), byte-bound for the wire (`MeshRoutedTextBody.boundedText(_:)`), then
-    /// re-check emptiness — because the byte bound can empty a message the Character cap admitted,
-    /// and minting an empty body would echo an empty row the user cannot dismiss.
+    /// Four things the sanitizer and the sender do in order, and the order matters: sanitize (500
+    /// `Character`s), byte-bound for the wire (`MeshRoutedTextBody.boundedText(_:)`), re-check
+    /// emptiness — because the byte bound can empty a message the Character cap admitted, and
+    /// minting an empty body would echo an empty row the user cannot dismiss — then the send filter
+    /// (`SessionMessageFilter`, App Review guideline 1.2) over the WHOLE sanitized draft, so the
+    /// byte bound cannot cut a listed word in half and let it through, and before anything is
+    /// framed, so a refused draft never reaches the mesh. The filter's refusal is not audited: a
+    /// line saying a person typed a listed word would itself be a record about them.
     ///
     /// **The byte bound TRUNCATES rather than refuses, and it is audited when it bites** (P6 item 4
     /// fix review, P3-4). "Never a surprise refusal for honest input" is bought with a silent edit:
@@ -217,6 +231,9 @@ public final class MeshSessionChat {
         let sanitized = SessionMessageStore.sanitize(rawText)
         let text = MeshRoutedTextBody.boundedText(sanitized)
         guard !text.isEmpty else { return noteTextSendOutcome(.empty) }
+        guard !SessionMessageFilter.refuses(sanitized, list: sendFilterList) else {
+            return noteTextSendOutcome(.filtered)
+        }
         if text != sanitized {
             FernletAuditLog.log(
                 "mesh.routedShare.textByteBounded",
@@ -271,6 +288,22 @@ public final class MeshSessionChat {
     private func noteTextSendOutcome(_ outcome: MeshTextSendOutcome) -> MeshTextSendOutcome {
         onTextSendForTesting?(outcome)
         return outcome
+    }
+
+    /// Re-folds the transcript's view gates — the 13+ gate and the block list — from the live seams
+    /// and re-derives what the panel shows. The text arm calls it at every ingest; the app calls it
+    /// right after a Report or a block made from inside the session (App Review guideline 1.2), so
+    /// the person's own action hides the author's rows at once rather than at the next message.
+    ///
+    /// Folded here so the gate value cannot disagree with the seam it came from.
+    /// `isBlockedFingerprint` ONLY: `ModerationBanStore.isPeerBanned` is not reachable from
+    /// `ProximityHost`, so the routed path consults the block half and not the ban half — inherited
+    /// from the photo arm, which has the same gap, and named rather than papered over. Closing it is a
+    /// host-protocol widening, not an item-4 edit.
+    public func refreshVisibleTranscript() {
+        sessionMessages.refreshGates(chatAllowed: isChatAllowed) { [meshHost] fingerprint in
+            meshHost.host.isBlockedFingerprint(fingerprint)
+        }
     }
 
     // MARK: - The session's moments (called by the composition's session observer)
@@ -344,17 +377,11 @@ public final class MeshSessionChat {
         guard allowIncomingRoutedText(body.header.id, from: delivery.quotaKey) else {
             return .refusedForGood
         }
-        // Folded at the call site so the gate value cannot disagree with the seam it came from.
-        // `isBlockedFingerprint` ONLY: `ModerationBanStore.isPeerBanned` is not reachable from
-        // `ProximityHost`, so the routed path consults the block half and not the ban half —
-        // inherited from the photo arm, which has the same gap, and named rather than papered over.
-        // Closing it is a host-protocol widening, not an item-4 edit.
-        sessionMessages.refreshGates(chatAllowed: isChatAllowed) { [meshHost] fingerprint in
-            meshHost.host.isBlockedFingerprint(fingerprint)
-        }
+        refreshVisibleTranscript()
         let accepted = sessionMessages.receiveIncoming(
             id: body.header.id,
             senderFingerprint: delivery.author.fingerprint,
+            senderSigningPublicKey: delivery.author.signingPublicKey,
             senderDisplayName: body.header.senderName,
             text: body.text,
             sentAt: body.header.sentAt,

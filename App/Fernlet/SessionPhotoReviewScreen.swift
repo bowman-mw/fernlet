@@ -23,9 +23,15 @@ import FernletProximityUI
 /// Tiles load through the session photos' gated seam (`reviewThumbnailData(for:)`), which answers nothing
 /// under duress or while the device is locked; they reload when that seam reopens. The root is
 /// modal to VoiceOver, and VoiceOver's escape gesture is "Not now" (the sheet wires it).
+///
+/// Report… on another person's photo (App Review guideline 1.2, 2026-10-15) opens the app's
+/// people-report flow (`peerReportFlow`) here, over the review; the coordinator files it and
+/// removes the photo (``SessionPhotoReviewCoordinator/reportPhoto(_:reason:)``).
 struct SessionPhotoReviewScreen: View {
     /// The coordinator whose snapshot and actions this renders.
     @Bindable var coordinator: SessionPhotoReviewCoordinator
+    /// The photo sender the report flow is open for, if any.
+    @State private var reportSubject: PeerReportSubject?
 
     var body: some View {
         ZStack {
@@ -44,9 +50,14 @@ struct SessionPhotoReviewScreen: View {
                 keepSelected: { await coordinator.keepSelected() },
                 discardAll: { await coordinator.discardAll() },
                 notNow: { Task { await coordinator.notNow() } },
-                loadImageData: { coordinator.sessionPhotos.reviewThumbnailData(for: $0) }
+                loadImageData: { coordinator.sessionPhotos.reviewThumbnailData(for: $0) },
+                canReport: { coordinator.canReport($0) },
+                requestReport: { reportSubject = coordinator.reportSubject(for: $0) }
             )
             .environment(\.scenePhase, coordinator.scenePhase)
+            .peerReportFlow($reportSubject) { subject, reason in
+                Task { await coordinator.reportPhoto(subject, reason: reason) }
+            }
             .photoSaveFailureAlert("Couldn't Save Photos", failure: $coordinator.photoSaveError)
             // The alert closing — either button, or the system taking it down — releases an answer
             // waiting on it; so does the screen going away, so a hide never strands one.

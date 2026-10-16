@@ -97,6 +97,9 @@ import ProximityKit
                 "but `.noDestinations` MUST speak for text: destinations are frozen at the mint and there is no offline queue")
         #expect(RoutedShareRefusalCopy.chatNotice(.ageGated) != nil)
         #expect(RoutedShareRefusalCopy.chatNotice(.ageGated) != noRecipients)
+        // App Review guideline 1.2 (2026-10-15): the send filter's refusal speaks, in its own sentence.
+        let filtered = RoutedShareRefusalCopy.chatNotice(.filtered)
+        #expect(filtered != nil && filtered != noRecipients && filtered != RoutedShareRefusalCopy.chatNotice(.ageGated))
     }
 
     /// The package composes no sentence and the camera presents the typed cause. The package's half

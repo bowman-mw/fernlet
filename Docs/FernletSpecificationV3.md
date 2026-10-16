@@ -636,8 +636,20 @@ peers skip the device in the room broadcast; sends refuse; and inbound messages 
 modified build or holding capabilities cached from an earlier session can still transmit. A guardian's
 `communicationLimits` closes the feature independently of age.
 
+**Report and the send filter (App Review guideline 1.2, 2026-10-15).** Every message from another
+person offers "Report…" (touch and hold, and a VoiceOver action); a session photo from another person
+offers it in the photo review and the wall viewer. Report runs the same people-report flow as Friends &
+Blocks: the report is recorded on this device only, the sender is blocked, their messages leave the
+transcript at once, a reported photo is deleted the way declining it would delete it, and the
+developer contact route is offered. A device never offers Report on its own messages or photos. On
+send, a draft holding a word from a short list of widely recognized English slurs (stored as SHA-256
+digests; whole-word matching after case, diacritic, substitution and repeated-letter folding; ordinary
+profanity is not on it) is not sent, and the panel says so gently with the draft kept. Received
+messages are not filtered: the sender's device filters, and the receiver can report.
+
 > **Spec gap:** the wire format, dedup/rate-limit, and sanitization rules for this feature are
-> implemented but not yet written up here. Only the age gate is specified above.
+> implemented but not yet written up here. Only the age gate and the report/filter rules are specified
+> above.
 
 ### Trainer and Nutritionist Sharing
 

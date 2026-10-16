@@ -62,4 +62,30 @@ final class SessionPhotoReviewFirstUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["friends.pendingReview.card"].exists,
                        "and nothing is waiting any more")
     }
+
+    /// App Review guideline 1.2 (2026-10-15): Report… is offered only on ANOTHER person's photo. The
+    /// seeded photos are this device's own captures, so touching and holding one opens no Report…
+    /// item; the review still answers as before. (Report… on a peer's photo needs a peer, so its
+    /// behaviour is `SessionContentReportTests`'.)
+    @MainActor
+    func testYourOwnPhotosOfferNoReport() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-completeOnboarding", "-uitestSeedHeldSessionPhotos", "1"]
+        app.launch()
+
+        let overlay = app.descendants(matching: .any)["friends.review.overlay"].firstMatch
+        XCTAssertTrue(overlay.waitForExistence(timeout: 60), "the review is up")
+        let tile = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Photo from")).firstMatch
+        XCTAssertTrue(tile.waitForExistence(timeout: 10), "with its photo")
+        tile.press(forDuration: 1.2)
+        XCTAssertFalse(app.descendants(matching: .any)["friends.review.report"].waitForExistence(timeout: 2),
+                       "your own photo offers no Report…")
+        XCTAssertFalse(app.buttons["Report…"].exists)
+
+        // A long press that opens no menu may land as a tap on release and untick the photo.
+        let keep = app.buttons["friends.review.saveSelected"]
+        if !keep.isEnabled { tile.tap() }
+        keep.tap()
+        XCTAssertTrue(overlay.waitForNonExistence(timeout: 15), "and Keep selected still answers the review")
+    }
 }

@@ -60,12 +60,26 @@ engine through its public seams.
   `PrivateMediaStore`-backed wall; unchosen ones only in the pending corpus, under a device-bound key.
   ``MeshSessionPhotos/purgeHeldSessionPhotosForDeleteAll()`` and
   ``MeshSessionPhotos/invalidateEncryptionKeyCaches()`` are its legs of the delete-all funnel.
-- ``MeshSessionChat`` (`Messaging/MeshSessionChat.swift`, with ``SessionMessageStore`` and the routed
-  text body in `Messaging/`): the live-session transcript, the 13+ gate (`chatAllowedProvider`), the
-  text sender (``MeshSessionChat/sendTempMessage(_:)``, which answers ``MeshTextSendOutcome`` and
-  publishes nothing), the per-origin message budget, and the temporary-message row's projection
-  handler — the 13+ gate before the engine opens an item, then the session liveness the engine
-  computed, the budget and the transcript. The transcript is memory-only and vanishes: the composition's
+  ``MeshSessionPhotos/removeReportedPhoto(_:)`` is the photo's half of Report… (App Review guideline
+  1.2, 2026-10-15): a held photo is answered as declined, deleted for good as an unticked one is, and a
+  wall photo is deleted with its tombstone; reporting the sender is the app's people report.
+- ``MeshSessionChat`` (`Messaging/MeshSessionChat.swift`, with ``SessionMessageStore``, the send
+  filter and the routed text body in `Messaging/`): the live-session transcript, the 13+ gate
+  (`chatAllowedProvider`), the text sender (``MeshSessionChat/sendTempMessage(_:)``, which answers
+  ``MeshTextSendOutcome`` and publishes nothing), the per-origin message budget, and the
+  temporary-message row's projection handler — the 13+ gate before the engine opens an item, then the
+  session liveness the engine computed, the budget and the transcript. **App Review guideline 1.2
+  (2026-10-15).** The sender runs the on-device send filter, `SessionMessageFilter`
+  (`Messaging/SessionMessageFilter.swift`), over the whole sanitized draft before anything is framed
+  or minted, and answers ``MeshTextSendOutcome/filtered`` for a draft holding a word from its short list
+  of slurs — stored as SHA-256 digests, because the repository is public, and matched as whole words
+  after case, diacritic, substitution and repeated-letter folding. Only this device's own drafts are
+  filtered: a received message is not, because its receiver can Report it. Each transcript row
+  carries its author's verified signing key (`SessionMessageStore.Message.senderSigningPublicKey`, empty
+  for this device's own rows, which `canBeReported` never offers), the key the app's Report… on a
+  message names, and ``MeshSessionChat/refreshVisibleTranscript()`` re-folds the view gates at once
+  after such a report, so the reported author's rows leave the transcript without waiting for the next
+  message. The transcript is memory-only and vanishes: the composition's
   observer drops it at a session's formation, its end and a privacy wipe's start, each right after the
   engine advances its session-content generation, which is what the liveness reads.
 - ``MeshSessionHearts`` (`HeartSharing/MeshSessionHearts.swift`): the in-session heart to one
@@ -467,7 +481,7 @@ dedup store and peer-bundle cache main-actor classes, as the main-actor store th
 UI that observes them are; presence's pair secret and tag are main-actor members, as the identity
 whose key they read is. ``FernletRoutedTypes``, the routed bodies, the review values, the feature
 payloads, the recipe payload and its shapes, the diagnostics ring, the ban record, ``CachedFriendState``,
-``ModerationContentHash``, ``TempMessagePayload``,
+``ModerationContentHash``, ``TempMessagePayload``, the chat's send filter,
 the ledgers' persisted shapes, ``HeartDropSealer``, ``HeartDropStorageScope``,
 ``HeartDropSidecarFormatCensus``, the heart-drop tag statics, the presence tag length, presence's
 pure first-name and heart-affordance statics and the mesh-scope derivations are `nonisolated`, so a

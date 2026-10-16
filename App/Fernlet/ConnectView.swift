@@ -208,6 +208,7 @@ struct FriendsView: View {
                     posts: filteredPhotoWallPosts,
                     initialPostID: selectedAlbumPostID,
                     photos: features.photos,
+                    store: store,
                     onDismiss: { selectedAlbumPostID = nil }
                 )
         }
@@ -1085,14 +1086,22 @@ struct FriendsView: View {
 /// The full-screen, vertically scrolling feed of photo-wall posts, opened from the album grid.
 ///
 /// Scrolls to `initialPostID` on appear and renders each post as a
-/// ``FriendPhotoCarouselPostView``. Dismisses itself when the last photo is deleted so the
-/// viewer never sits on a blank screen.
+/// ``FriendPhotoCarouselPostView``. Dismisses itself when the last photo is deleted (or reported)
+/// so the viewer never sits on a blank screen.
+///
+/// Hosts the people-report flow for every post's flag (App Review guideline 1.2, 2026-10-15) — here
+/// rather than on a post, so a post emptied by its report does not take the "Reported" note with it.
 private struct FriendPhotoFeedView: View {
     let posts: [FriendPhotoWallPost]
     let initialPostID: UUID?
     /// The session photos whose wall the feed shows (the composition's `photos`).
     let photos: MeshSessionPhotos
+    /// The store a photo's Report… files through (App Review guideline 1.2).
+    let store: FernletStore
     let onDismiss: () -> Void
+
+    /// The photo sender the report flow is open for, if any.
+    @State private var reportSubject: PeerReportSubject?
 
     var body: some View {
         GeometryReader { geometry in
@@ -1103,7 +1112,9 @@ private struct FriendPhotoFeedView: View {
                             FriendPhotoCarouselPostView(
                                 post: post,
                                 photos: photos,
-                                width: geometry.size.width
+                                width: geometry.size.width,
+                                reportSubject: { PeerReportSubject.photo($0, senderKey: store.reportableSenderKey(of: $0)) },
+                                requestReport: { reportSubject = $0 }
                             )
                             .id(post.id)
                         }
@@ -1131,6 +1142,7 @@ private struct FriendPhotoFeedView: View {
             }
         }
         .background(Color.parchment)
+        .peerReportFlow($reportSubject) { subject, reason in store.reportWallPhoto(subject, reason: reason) }
         .onChange(of: posts.isEmpty) { _, isEmpty in
             // Deleting the last remaining photo empties the feed; dismiss instead of leaving the
             // viewer on a blank screen.
@@ -1140,7 +1152,11 @@ private struct FriendPhotoFeedView: View {
 }
 
 /// One post in the full-screen feed: a paged carousel of a session's photos with save, favorite,
-/// and delete actions.
+/// delete and — on another person's photo — report actions.
+///
+/// The flag (App Review guideline 1.2, 2026-10-15) asks the feed to open the app's people-report
+/// flow for the photo's sender; filing it blocks them on this phone and deletes the photo from the
+/// wall (`FernletStore.reportWallPhoto(_:reason:)`). This device's own photos carry no flag.
 ///
 /// Tracks its own selected page and auto-fading chrome (page counter + dots), and re-anchors the
 /// selection when a deletion removes the current page — the post id is stable for aggregated
@@ -1152,6 +1168,10 @@ private struct FriendPhotoCarouselPostView: View {
     /// The session photos whose wall holds this post (the composition's `photos`).
     let photos: MeshSessionPhotos
     let width: CGFloat
+    /// A photo's sender as a report subject; nil for this device's own photo (no flag).
+    let reportSubject: (FriendPhotoPayload) -> PeerReportSubject?
+    /// Opens the feed's report flow for a subject.
+    let requestReport: (PeerReportSubject) -> Void
 
     @State private var selectedPhotoID: UUID
     @State private var chromeVisible = true
@@ -1162,10 +1182,16 @@ private struct FriendPhotoCarouselPostView: View {
     /// Photos with a save Task already running — the per-photo in-flight cap (R3).
     @State private var inFlightSaveIDs: Set<UUID> = []
 
-    init(post: FriendPhotoWallPost, photos: MeshSessionPhotos, width: CGFloat) {
+    init(
+        post: FriendPhotoWallPost, photos: MeshSessionPhotos, width: CGFloat,
+        reportSubject: @escaping (FriendPhotoPayload) -> PeerReportSubject?,
+        requestReport: @escaping (PeerReportSubject) -> Void
+    ) {
         self.post = post
         self.photos = photos
         self.width = width
+        self.reportSubject = reportSubject
+        self.requestReport = requestReport
         self._selectedPhotoID = State(initialValue: post.photos.first?.id ?? post.coverPhoto.id)
     }
 
@@ -1309,6 +1335,14 @@ private struct FriendPhotoCarouselPostView: View {
                         tint: .white,
                         accessibilityLabel: "Delete this picture"
                     ) { pendingDeletePhotoID = photo.id }
+
+                    if let subject = reportSubject(photo) {
+                        circleActionButton(
+                            systemName: "flag",
+                            tint: .white,
+                            accessibilityLabel: "Report this picture"
+                        ) { requestReport(subject) }
+                    }
                 }
                 .padding(14)
             }

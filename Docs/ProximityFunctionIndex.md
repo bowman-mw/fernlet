@@ -486,7 +486,7 @@ file never imports FernletSocial.
 | Function | What It Does |
 | --- | --- |
 | `PresenceManager.firstName(of:)` | The hearts copy's first name, hiding `.fernlet`'s mesh instance-name prefix. |
-| `SessionMessageStore.receiveIncoming(id:senderFingerprint:senderDisplayName:text:sentAt:seenAt:)` | The session message store's ingest under `.fernlet`'s peer-name policy. |
+| `SessionMessageStore.receiveIncoming(id:senderFingerprint:senderSigningPublicKey:senderDisplayName:text:sentAt:seenAt:in:)` | The session message store's ingest under `.fernlet`'s peer-name policy. |
 | `MeshRoutedTypeRegistry.increment1(_:)` / `increment1`, `MeshRoutedAckStageTable.increment1(_:)` / `increment1` | The shipping registry and its ack-stage projection as values over Fernlet's host rows (`FernletRoutedTypes.entries`), over the routed types handed in or `.fernlet`'s. |
 | `MeshSessionChat.allowIncomingRoutedText(_:from:)` with a manifest | The chat's per-origin message budget in the manifest shape the cells were written against, counted against `MeshRoutedOriginQuotaKey(manifest)`. |
 | `ProximityHost.meshRoutedTypeEntries` (a test-only extension) | The host doubles' routed-type rows, which the requirement does not default: Fernlet's host rows over the double's own namespace's routed types. The app's `FernletStore` answers for itself. |
@@ -908,6 +908,7 @@ The live roster and its custody are the engine's, which drains them into the end
 | `beginNewPhotoSession()` / `forgetPhotoSession()` / `noteScopeChange(_:)` / `dropRemovedMemberFromReview(fingerprint:)` / `applyAccessGate(isRising:now:)` | The observer's other photo legs: a new search resets the film and its mesh pin, moves a photo still listed into the pending review — never dropping it — and only then mints the new photo session's ids; a left session forgets those ids, after the ending stamped its photos with them; a scope change moves the film's mesh pin; an approved removal takes the member out of any unconsumed batch; a changed access gate re-reads the indexes on a rising edge before the re-entry pass the edge owes, and recomputes `heldPhotosCanBeShown`. The gate itself is never copied: every held-photo decision reads the mesh's own `routedAccessGate` (`.closed` with no mesh), which the mesh stores before it logs the change or tells the observer (plan step A0.5.13). |
 | `deleteAllSessionPhotos()` | Finishes the session while keeping no photos. |
 | `deletePhoto(_:)` | Permanently removes one KEPT photo from the wall: drops it from `meshPhotos`, clears any wall preference that pointed at it, re-saves the index so the store's orphan sweep deletes its files, and tombstones its identity (sender fingerprint + id) for 24 hours so a routed copy still in custody cannot come back. |
+| `removeReportedPhoto(_:)` | **App Review guideline 1.2 (2026-10-15)**: the photo's half of Report… — a HELD photo is answered as declined (`applyPhotoAnswers` with it discarded: deleted for good, gone from both memory lists), a wall photo goes through `deletePhoto(_:)` with its tombstone. Answers whether nothing of it is left; reporting the sender is the app's people report. |
 | `imageData(for:)` | Reads full image data for a WALL photo (never a held one — see `reviewImageData(for:)`). |
 | `thumbnailData(for:)` | Reads or generates thumbnail data for a cached photo. |
 | `thumbnailData(forPhotoID:)` | Looks up a cached photo by ID and returns thumbnail data. |
@@ -972,6 +973,8 @@ adapter, the temporary-message row's projection handler.
 | `makeProjector()` (the text row's projection handler) / `routedCanonicalDispatch(…)` | The handler the composition registers under the host's text row's token (plan step A0.5.9, S9). Its `isProjectable` and pre-open verdict are the 13+ gate's legs 4 and 3 — FINAL, and before the unwrap, so a device below the line decrypts nothing — and its write, the text arm (P6 item 4), produces the effects the legacy `.tempMessage` handler produced, through `SessionMessageStore.receiveIncoming`: dedup, the sanitizer, the display-name moderation, the cap and §10.3's ordering all stay in the store, and the arm adds only what the store cannot know — the delivery's `sessionLiveness` (the engine's `transcriptLiveness`) and `allowIncomingRoutedText`. Takes no clock. W2's FernletSocial half pins the arm to its handler's write. |
 | `allowIncomingRoutedText(_:from:)` / `routedOriginTextQuota` / `maxTextMessagesPerSenderPerSession` | The TEXT quota (P6 item 4, 200 per origin per mesh) is a **policy act**: it replaces the live-arrival token bucket, which was wrong twice over on a store-and-forward path — a drain answer carries up to 16 items, so a burst allowance of 5 flood-dropped 11 legitimate messages, and a fixed per-item first-seen makes the refill interval zero forever. A per-second rate limit is therefore replaced by a per-session TOTAL; the drain's 16-item answer and its pacing are the rate. Keyed on the item's signed mesh (`MeshRoutedDelivery.quotaKey`), re-sends of an accepted id free, bounded at 1024 keys × 200 ids, and `internal` rather than `private` so its three legs have a behavioural cell (`MeshRoutedTextDeliveryTests.theIncomingTextQuotaRefusesPastItsCapAndIsFreeForAReSend`). |
 | `clearTranscript()` | Drops the live transcript (messages vanish): the composition's observer calls it at a session's end, the next formation and a privacy wipe's start, each right after the mesh advanced its session-content generation there, so an item offered before the drop never projects into what follows it. Memory only. |
+| `refreshVisibleTranscript()` | Re-folds the transcript's view gates (13+ and the block list) from the live seams and re-derives it: the text arm calls it at every ingest, and the app right after an in-session Report (2026-10-15), so the reported author's rows leave at once. |
+| `sendFilterList` / `MeshTextSendOutcome.filtered` | **App Review guideline 1.2 (2026-10-15)**: `sendTempMessage(_:)` runs `SessionMessageFilter.refuses(_:list:)` over the sanitized draft after the empty check and before the frame and mint, answering `.filtered` (not audited). `sendFilterList` is `.shipping` in the app — a test seam for placeholder lists. |
 
 ### `FernletSocial/Messaging/MeshRoutedTextBody.swift`
 
@@ -993,8 +996,21 @@ structurally impossible for a message to enter a `FernletSnapshot` (same techniq
 | `appendOutgoing(...)` | The local echo for `MeshSessionChat.sendTempMessage(_:)`, appended **only on `.staged`** since P6 item 4: a photo's echo is unconditional because it is on the user's own wall either way, but a row in a transcript is a claim that the message was sent and the transcript has no failed-row state. Own messages need no clamp — claimed and first-seen are both this device's clock. |
 | `receiveIncoming(...)` | Inbound from the text row's projection handler since P6 item 4 (the chat's arm, `MeshSessionChat`; the author is the signed `manifest.originFingerprint` resolved against `admissions − removals`, with the block list applied **before** the unwrap; the legacy `.tempMessage` dispatch and its per-sender token bucket are retired): de-dupes by **`(senderFingerprint, id)`** — the pair, not the id, since item 4's fix review found that keying on the id alone let one admitted member consume another's dedup slot — sanitizes, caps, re-moderates the body's display-name claim under the peer-name policy of the namespace it is handed last (the chat's host's), and answers a three-way `Acceptance`. `seenAt` is required, never defaulted. |
 | `sanitize(_:)` (`static`) | The one text-coercion point for both directions. |
+| `Message.senderSigningPublicKey` / `Message.canBeReported` | The author's verified signing key, threaded from the projection's `delivery.author` (2026-10-15; empty for this device's own rows) — the key the app's Report… names; `canBeReported` is inbound-and-keyed. |
 | `hasUnread` / `beginViewing()` / `endViewing()` / `markAllRead()` | Unread signalling for the Friends tab. |
 | `clear()` | Reached only through the chat's `clearTranscript()`, which the composition's session observer calls right after the mesh advances its session-content generation: every session-end path, the next session formation, and the app's delete-all via the mesh's `beginPrivacyWipe()`. Unlike the shop's post-session window, messages do not outlive the session. |
+
+### `FernletSocial/Messaging/SessionMessageFilter.swift`
+
+App Review guideline 1.2 (2026-10-15): the chat's on-device send filter. The list is SHA-256 digests
+of each entry's matching form (the repository is public); received messages are not filtered.
+
+| Function Or Type | What It Does |
+| --- | --- |
+| `refuses(_:list:)` | Whether a draft holds a listed whole word; `.shipping` by default. Empty and whitespace input answers false. |
+| `words(in:)` / `word(from:)` / `Word` | The normalization: NFKC, case and diacritic folding, split at every scalar not a letter, digit or `@ $ !`; per word, edge `!` dropped, substitutions undone, runs of a repeated letter collapsed (`hadRepeatedLetter`). Bounded at `maxScannedScalars`. |
+| `List` (`anySpelling`, `doubledSpelling`, `init(words:)`, `contains(_:)`, `.shipping`) | The digest sets; a doubled-spelling entry matches only a word that held a repeated letter, so no innocent single-letter spelling collapses onto it. `init(words:)` is for tests' placeholder words only. |
+| `entry(for:)` / `digest(of:)` | The extension tool: one word's digest and set; lowercase hex SHA-256 of the form's UTF-8. |
 
 ### `FernletSocial/HeartSharing/MeshSessionHearts.swift`
 

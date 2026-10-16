@@ -1,5 +1,6 @@
 import SwiftUI
 import ProximityKit
+import FernletDomainModel
 import FernletSocial
 import FernletUI
 
@@ -16,9 +17,19 @@ import FernletUI
 /// A send that did not stage is said **in place**, at the top of the compose bar — above the text
 /// field, between it and the transcript — with the draft kept: the
 /// compose bar is deliberately not gated on "is there anybody to send to", because that would need
-/// a second published mirror of the mint's own answer and would flicker on every link blip.
+/// a second published mirror of the mint's own answer and would flicker on every link blip. A draft
+/// the chat's send filter refuses (`MeshTextSendOutcome.filtered`, App Review guideline 1.2) is said
+/// the same way, gently, with the draft kept so it can be reworded.
+///
+/// **Report… (App Review guideline 1.2, 2026-10-15).** Touch and hold another person's message —
+/// never your own — for "Report…", which is also the row's VoiceOver action. It opens the app's one
+/// people-report flow (`peerReportFlow`, the Friends & Blocks sheet) naming the message by a short
+/// excerpt; `onReport` files it through the store, which blocks the sender and re-folds the
+/// transcript so their messages leave it at once.
 struct SessionChatPanel: View {
     var chat: MeshSessionChat
+    /// Files a report of a message's sender (the store's `reportSessionPeer`).
+    var onReport: (PeerReportSubject, ReportReason) -> Void
     var onDone: () -> Void
 
     @State private var draft = ""
@@ -28,6 +39,8 @@ struct SessionChatPanel: View {
     /// `DisposableCameraView`, which this panel is presented OVER, so firing it here would present
     /// on a covered presenter and its copy is photo-worded in every arm.
     @State private var sendNotice: LocalizedStringKey?
+    /// The message sender the report flow is open for, if any.
+    @State private var reportSubject: PeerReportSubject?
     @FocusState private var composeFocused: Bool
 
     private var messages: [SessionMessageStore.Message] { chat.sessionMessages.messages }
@@ -57,6 +70,7 @@ struct SessionChatPanel: View {
             composeFocused = true
         }
         .onDisappear { chat.sessionMessages.endViewing() }
+        .peerReportFlow($reportSubject, onReport: onReport)
     }
 
     // MARK: - Transcript
@@ -138,6 +152,7 @@ struct SessionChatPanel: View {
                 ? "You: \(message.text)"
                 : "\(message.senderDisplayName): \(message.text)"
         )
+        .modifier(ReportableMessageRow(subject: PeerReportSubject.message(message)) { reportSubject = $0 })
     }
 
     // MARK: - Compose
@@ -211,5 +226,32 @@ struct SessionChatPanel: View {
         // The draft survives anything but a staged send, so "send again" is the retry.
         guard outcome == .staged else { return }
         draft = ""
+    }
+}
+
+/// Report… on one transcript row, when the row is another person's message: a destructive
+/// context-menu item (touch and hold) and the same named VoiceOver action, both opening the panel's
+/// report flow. A row with no subject — this device's own message — gets neither.
+private struct ReportableMessageRow: ViewModifier {
+    /// The message's sender as a report subject; nil for a row that is not reportable.
+    let subject: PeerReportSubject?
+    /// Opens the report flow for the subject.
+    let report: (PeerReportSubject) -> Void
+
+    func body(content: Content) -> some View {
+        if let subject {
+            content
+                .contextMenu {
+                    Button(role: .destructive) {
+                        report(subject)
+                    } label: {
+                        Label("Report…", systemImage: "flag")
+                    }
+                    .accessibilityIdentifier("session.chat.report")
+                }
+                .accessibilityAction(named: "Report…") { report(subject) }
+        } else {
+            content
+        }
     }
 }

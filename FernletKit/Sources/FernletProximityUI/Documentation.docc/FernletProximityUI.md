@@ -57,6 +57,15 @@ answers nothing and is also VoiceOver's escape gesture there) and the camera's D
 passes nil and keeps its own swipe-down). Tiles are labelled "Photo from" the sender's name through
 `PeerNameDisplay`, never a fingerprint.
 
+**Report… on another person's photo (App Review guideline 1.2, 2026-10-15).** A tile the host's
+`canReport` answers true for — another person's photo whose sender it can name, never this device's
+own, and never while an answer runs — carries a destructive "Report…" context-menu item and the same
+named VoiceOver action, both handing the photo to the host's `requestReport`. The sheet reports
+nothing and removes nothing itself: both hosts open the app's one people-report flow over it, file the
+report through the store (the sender is recorded and blocked on this device) and remove the photo the
+way declining it would (`MeshSessionPhotos.removeReportedPhoto(_:)`), so it leaves the grid with its
+tick and its sender leaves the keep-as-friend rows.
+
 **The Photos saver must stay off the main actor.** ``FriendPhotoLibrarySaver/save(_:)`` is
 `nonisolated` with an explicit `@Sendable` change block: `PHPhotoLibrary.performChanges` runs on
 Photos' own serial queue, and a block inheriting this module's `MainActor` default trips the Swift
@@ -78,12 +87,13 @@ view spells the hex out for VoiceOver. `PeerNameDisplayTests` pins that no conne
 
 **Localization.** The module owns a `Localizable.xcstrings` and one copy vault,
 `FernletProximityUICopy` (the review, keep-friends and save-failure copy), and every lookup passes
-`bundle: .module`; `NothingSavedError`'s message is the one key written inline. These 28 keys moved
-here from ProximityKit's catalog byte for byte, because a key is a token: a renamed key strands its
-translations. The camera's hold-failure line is `FernletSocial`'s (`FernletSocialCopy` and that
+`bundle: .module`; `NothingSavedError`'s message is the one key written inline. The 28 keys that
+moved here from ProximityKit's catalog moved byte for byte, because a key is a token: a renamed key
+strands its translations; the review's `proximity.review.report` (2026-10-15) is the one key added
+since. The camera's hold-failure line is `FernletSocial`'s (`FernletSocialCopy` and that
 module's catalog), and the two `PeerNameDisplay` placeholders the screens show are
 `FernletConnections`' (`FernletConnectionsCopy` and that module's catalog); ProximityKit hands
-out no copy. The `friends.review.*`,
+out no copy. The `friends.review.*` (`friends.review.report` among them, the Report… item),
 `friends.keepFriend.*` and `friends.keepFriends.done` accessibility identifiers are frozen tokens
 that the UI tests drive. One gap came over unchanged: the Delete all confirmation's title and message
 are English literals handed to `confirmDestructive`, which takes already-resolved strings, so they

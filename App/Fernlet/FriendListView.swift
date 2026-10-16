@@ -24,7 +24,9 @@ private enum FriendListFilter: String, CaseIterable, Identifiable {
 /// dates, status timestamps, and the collapsed "Safety code": the one place the app still shows a
 /// fingerprint) whose actions mirror the swipe actions; all
 /// mutations go through ``FernletStore`` (`blockProximityPeer`, `revokeTrustedProximityPeer`,
-/// `reportProximityPeer`, …). The screen also owns the user's mesh display name — committed only
+/// `reportProximityPeer`, …). Report runs the app's one people-report flow (`peerReportFlow`, shared
+/// since 2026-10-15 with Report… on a session message or photo): the reason sheet, then a note
+/// offering the developer contact route. The screen also owns the user's mesh display name — committed only
 /// on Return / focus loss / disappear, never per keystroke, because the name rides the discovery
 /// broadcast and a half-typed value must never persist — and the "Send good vibes" heart flow:
 /// live presence sends via `PresenceManager`, plus the consent-gated away-hearts dead-drop path
@@ -43,7 +45,8 @@ struct FriendListView: View {
     /// The friend a "Remove …?" confirmation is about. Removing revokes trust and forgets their
     /// cached state — you have to meet in person again — so it asks first, exactly as Block does.
     @State private var peerToRemove: ProximityTrustedPeerRecord?
-    @State private var peerToReport: ProximityTrustedPeerRecord?
+    /// The person the report flow is open for, if any.
+    @State private var reportSubject: PeerReportSubject?
     // Away hearts (bitchat adoptions Increment 3): the first-use consent target + the local
     // status line for queue outcomes (separate from the live-send heartSendState pipeline).
     @State private var awayConsentPeer: ProximityTrustedPeerRecord?
@@ -73,17 +76,7 @@ struct FriendListView: View {
         // Inline, matching the two sibling pushes off the same header (Activities, Safety &
         // reporting). A large title here sat flush against x=0 while every field below is inset 20pt.
         .navigationBarTitleDisplayMode(.inline)
-        // An `alert`, not a `confirmationDialog`: on iOS 26 the dialog renders as a popover that
-        // suppresses the `.cancel`-role button, leaving a list of red reasons and no way out.
-        .alert(
-            "Report this person?",
-            isPresented: $peerToReport.isPresent(),
-            presenting: peerToReport
-        ) { peer in
-            reportDialogActions(peer)
-        } message: { peer in
-            Text("Reporting \(shownName(peer)) blocks them and flags their shared content on your device.")
-        }
+        .peerReportFlow($reportSubject) { subject, reason in fileReport(subject, reason: reason) }
         .onAppear {
             displayName = store.settings.proximityDisplayName
             store.recomputeCloseFriendsIfNeeded()
@@ -281,7 +274,7 @@ struct FriendListView: View {
 
         if peer.reportedAt == nil {
             Button {
-                peerToReport = peer
+                reportSubject = personSubject(for: peer)
             } label: {
                 Label("Report", systemImage: "flag")
             }
@@ -289,17 +282,16 @@ struct FriendListView: View {
         }
     }
 
-    /// One destructive button per report reason, plus Cancel.
-    @ViewBuilder
-    private func reportDialogActions(_ peer: ProximityTrustedPeerRecord) -> some View {
-        ForEach(ReportReason.allCases) { reason in
-            Button(reason.label, role: .destructive) {
-                store.reportProximityPeer(signingPublicKey: peer.signingPublicKey, reason: reason)
-                if selected?.id == peer.id { selected = nil }
-                peerToReport = nil
-            }
-        }
-        Button("Cancel", role: .cancel) { peerToReport = nil }
+    /// The report flow's subject for one person: their key and the name this list shows.
+    private func personSubject(for peer: ProximityTrustedPeerRecord) -> PeerReportSubject? {
+        PeerReportSubject.person(signingPublicKey: peer.signingPublicKey, displayName: shownName(peer))
+    }
+
+    /// Files a person's report — recorded in the trust vault on this device, the person blocked —
+    /// and closes their open card.
+    private func fileReport(_ subject: PeerReportSubject, reason: ReportReason) {
+        store.reportProximityPeer(signingPublicKey: subject.signingPublicKey, reason: reason)
+        if selected?.signingPublicKey == subject.signingPublicKey { selected = nil }
     }
 
     /// Confirm/cancel for the remove alert. Removing revokes trust and forgets the friend's cached
@@ -481,7 +473,7 @@ struct FriendListView: View {
                     .buttonStyle(ActionPillButtonStyle(.destructive))
 
                 if peer.reportedAt == nil {
-                    Button("Report") { peerToReport = peer }
+                    Button("Report") { reportSubject = personSubject(for: peer) }
                         .buttonStyle(ActionPillButtonStyle(.destructive))
                 }
             }

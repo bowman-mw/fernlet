@@ -708,6 +708,32 @@ public final class MeshSessionPhotos {
         tombstoneDeletedWallPhoto(removed)
     }
 
+    /// Removes a photo the person REPORTED (App Review guideline 1.2, 2026-10-15), wherever it is,
+    /// the way declining it would: a HELD photo — offered by a review, live or awaiting — is answered
+    /// as declined, deleted for good exactly as an unticked one is, and leaves both memory lists; a
+    /// photo already on the wall is deleted with ``deletePhoto(_:)``, its tombstone included. Reporting
+    /// its sender is the app's (it blocks them first); this is the photo's half.
+    ///
+    /// The answer needs the routed access gate open and the pending index readable, which is also
+    /// what ``heldPhotosCanBeShown`` requires before any review draws a held photo, so a photo the
+    /// person could see to report is a photo this can remove. A host still drops it from its own
+    /// snapshot when this answers false, so a reported photo is never left on screen.
+    ///
+    /// - Parameter photoID: The photo's local id.
+    /// - Returns: true when nothing of the photo is held or on the wall any more.
+    public func removeReportedPhoto(_ photoID: UUID) -> Bool {
+        guard heldPhotoIndex.heldPhoto(localID: photoID) != nil else {
+            deletePhoto(photoID)
+            return !meshPhotos.contains { $0.id == photoID }
+        }
+        let answer = applyPhotoAnswers(kept: [], discarded: [photoID], now: Date())
+        FernletAuditLog.log(
+            "mesh.heldPhotos.reportedPhotoRemoved",
+            context: ["applied": answer.notApplied.isEmpty ? "true" : "false"]
+        )
+        return answer.notApplied.isEmpty && heldPhotoIndex.heldPhoto(localID: photoID) == nil
+    }
+
     /// The tombstone half of ``deletePhoto(_:)``: a wall photo from an older build, deleted inside a
     /// routed window after the upgrade, must not be re-projected as a NEW held photo. Skipped while
     /// the pending index cannot be read (nothing writes it then) and for a photo with no sender.

@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import UIKit
 import FernletDomainModel
+import FernletFoundation
 import ProximityKit
 import FernletConnections
 import FernletSocial
@@ -626,6 +627,9 @@ struct DisposableCameraView: View {
     /// The session member a "Block …?" confirmation is about — the in-session menu used to block
     /// instantly while the roster's Block asked first.
     @State private var participantToBlock: MeshSessionParticipant?
+    /// The sender of a Develop review photo the people-report flow is open for (App Review guideline
+    /// 1.2, 2026-10-15).
+    @State private var photoReportSubject: PeerReportSubject?
     /// At most one in-flight session-message notification post (R3: the trigger is peer-driven).
     @State private var messageNotificationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
@@ -697,7 +701,11 @@ struct DisposableCameraView: View {
         .sheet(isPresented: $reviewPresented, onDismiss: resumeCameraAfterCancelledReview) { reviewSheet }
         .sheet(isPresented: $showInfo) { infoSheet }
         .sheet(isPresented: $showChat) {
-            SessionChatPanel(chat: features.chat, onDone: { showChat = false })
+            SessionChatPanel(
+                chat: features.chat,
+                onReport: { store.reportSessionPeer($0, reason: $1) },
+                onDone: { showChat = false }
+            )
         }
         .modifier(SessionPromptsModifier(
             manager: manager,
@@ -1461,8 +1469,11 @@ struct DisposableCameraView: View {
             tileReloadToken: features.photos.heldPhotosCanBeShown ? 1 : 0,
             keepSelected: { await keepSelectedSessionPhotos() },
             discardAll: { await discardAllSessionPhotos() },
-            loadImageData: { features.photos.reviewThumbnailData(for: $0) }
+            loadImageData: { features.photos.reviewThumbnailData(for: $0) },
+            canReport: { store.reportableSenderKey(of: $0) != nil },
+            requestReport: { photoReportSubject = PeerReportSubject.photo($0, senderKey: store.reportableSenderKey(of: $0)) }
         )
+        .peerReportFlow($photoReportSubject) { subject, reason in reportDevelopPhoto(subject, reason: reason) }
         .photoSaveFailureAlert("Couldn't Save Photos", failure: $photoSaveError)
         // The alert closing — either button, or the system taking it down — releases an answer
         // waiting on it; so does the sheet going away, so a torn-down sheet never strands one.
@@ -1524,6 +1535,32 @@ struct DisposableCameraView: View {
         let answer = features.photos.finishSessionPhotos(keeping: [], of: developReviewIDs)
         finalizeFriendKeeps()
         await finishDevelopReview(after: answer)
+    }
+
+    /// Report… on a Develop review photo (App Review guideline 1.2, 2026-10-15): files the people
+    /// report against its sender (recorded on this device, the sender blocked), removes the photo the
+    /// way declining it would (`MeshSessionPhotos.removeReportedPhoto(_:)`), and takes it out of this
+    /// review — its id, its tick — and its sender out of the keep-as-friend rows. A review left with
+    /// no photo closes as a swipe-down does, answering nothing else: the camera resumes, and Develop
+    /// again ends the session with the friend question asked by the Friends surface. Refused while an
+    /// answer of this review runs (its export, or the answer itself).
+    ///
+    /// - Parameters:
+    ///   - subject: The photo's sender, with the photo's id as its content.
+    ///   - reason: The reason the person chose.
+    private func reportDevelopPhoto(_ subject: PeerReportSubject, reason: ReportReason) {
+        guard case .photo(let photoID) = subject.content, developReviewIDs.contains(photoID),
+              reviewWorking == nil, !reviewCoordinator.answerInFlight else { return }
+        store.reportSessionPeer(subject, reason: reason)
+        if !features.photos.removeReportedPhoto(photoID) {
+            FernletAuditLog.log("camera.developReview.reportedPhotoStillHeld")
+        }
+        developReviewIDs.remove(photoID)
+        selectedForSave.remove(photoID)
+        friendCandidates.removeAll { $0.signingPublicKey == subject.signingPublicKey }
+        keptFriendFingerprints.formIntersection(Set(friendCandidates.map(\.fingerprint)))
+        guard developReviewPhotos.isEmpty else { return }
+        reviewPresented = false
     }
 
     /// After an answer: stay up when it left photos held (`notApplied`) — the grid already shows

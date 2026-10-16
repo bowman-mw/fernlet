@@ -592,6 +592,8 @@ SecureEnclaveWrapTests	Tests/FernletTests/SecureEnclaveWrapTests.swift	-
 SensitiveNotesRetirementTests	Tests/FernletTests/SensitiveNotesRetirementTests.swift	-
 SensitiveSurfaceGateDecodeTests	Tests/FernletTests/SensitiveSurfaceGateTests.swift	-
 SensitiveSurfaceGateTests	Tests/FernletTests/SensitiveSurfaceGateTests.swift	-
+SessionContentReportTests	Tests/FernletTests/SessionContentReportTests.swift	mesh-features
+SessionMessageFilterTests	Tests/FernletTests/SessionMessageFilterTests.swift	mesh-features
 SessionMessageTests	Tests/FernletTests/SessionMessageTests.swift	mesh-features
 SessionMessageUnreadTests	Tests/FernletTests/SessionMessageUnreadTests.swift	mesh-features
 SessionPhotoReviewCoordinatorTests	Tests/FernletTests/SessionPhotoReviewCoordinatorTests.swift	mesh-features
