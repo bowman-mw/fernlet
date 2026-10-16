@@ -697,13 +697,27 @@ jobs:
             ProximityAuditBridgeTests SwiftSourceLexerTests \
             ProximityPlatformBoundaryTests
 
-      - name: No-tracking wall (NoTrackingBoundaryTests)
+      - name: No-tracking wall (NoTrackingBoundaryTests, OpenFoodFactsLookupTests)
         # Independent of the S3 wall: this one has no compiler half, because a tracking SDK is an
         # honest new dependency that compiles clean. The test IS the enforcement, so it must run
         # even when the S3 steps above pass. See Docs/No-Tracking-Wall.md.
+        # `OpenFoodFactsLookupTests` joined at the Open Food Facts deadline fix (2026-10-11; landed
+        # 2026-10-15, after plan step A1.3). NoTrackingBoundaryTests pins
+        # `world.openfoodfacts.org` as a host and its client by file; this suite holds the rest of
+        # that host's §3 row: no request is built without the web-nutrition-lookup consent
+        # (re-checked inside the client), the exact request (one GET, the barcode digits, fixed
+        # headers, no cookie), the 128 KB cap, the deadline, no retries, and the audit line at
+        # dispatch. Each compiles clean when it breaks, and until now it ran on no line
+        # (Docs/Verifiability.md named it as a by-hand command). Not on `food-search`: that line is
+        # the ingredient-search measuring stick over the committed catalog, and one of these cells
+        # is about ranking. The deadline cell proves by order, not by wall clock, so this step's
+        # parallel load cannot flake it. The floor stays the shared `1`; both suites are pinned by
+        # name in CIGateSelectorBoundaryTests' `wallLines`. The line, MEASURED on a Mac on that tree
+        # (iPhone 17 simulator, iOS 26.5), ran 43 tests in 2 suites (NoTrackingBoundaryTests 17,
+        # OpenFoodFactsLookupTests 26), 0 failed, and refused a floor of 44.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh no-tracking 1 NoTrackingBoundaryTests
+          Scripts/run-gated-suites.sh no-tracking 1 NoTrackingBoundaryTests OpenFoodFactsLookupTests
 
       - name: Power-of-10 grep-wall (PowerOfTenBoundaryTests)
         # The Swift port of Scripts/power-of-10-scan.py (Docs/Power-of-10-Swift.md): function

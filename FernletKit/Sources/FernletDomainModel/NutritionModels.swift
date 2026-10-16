@@ -2103,6 +2103,7 @@ extension RecipeServingConversion {
         // "N servings" is a multiplier on the food's own declared serving and needs no unit arithmetic,
         // so it is answered BEFORE the serving unit has to be one this converter reads: an IU, MC or
         // survey-unit serving ("1 sandwich") still means one serving (ingredient-search round, F1(a)).
+        // A serving declared AS servings is divided by its count (``declaredServing(quantity:foodItem:)``).
         if requestedUnit == .serving {
             return declaredServing(quantity: quantity, foodItem: foodItem)
         }
@@ -2147,8 +2148,15 @@ extension RecipeServingConversion {
         )
     }
 
+    /// "N servings" of the food's declared serving. A declared serving itself counted in servings holds
+    /// `servingSize` of them — the shape a custom editor row and every imported `fernlet.recipe` line
+    /// mint: the line's amount as the serving, the WHOLE line's grams as the food's — so N servings are
+    /// N / servingSize of it ("2 servings" of a food declaring "2 servings" is that food once, not
+    /// twice; 2026-10-01). Any other serving (grams, an IU, a survey "sandwich") is one serving, and
+    /// every catalog row served in servings declares exactly 1, so N servings stay N of it.
     private static func declaredServing(quantity: Double, foodItem: FoodItem) -> RecipeServingConversion? {
-        guard let scale = validScale(quantity) else { return nil }
+        let servingsDeclared = RecipeUnit.normalized(foodItem.servingUnit) == .serving ? foodItem.servingSize : 1
+        guard let scale = validScale(quantity / servingsDeclared) else { return nil }
         return RecipeServingConversion(
             foodItemID: foodItem.id, componentQuantity: quantity, componentUnit: RecipeUnit.serving.rawValue,
             servingScale: scale, grams: grams(quantity: foodItem.servingSize, unit: foodItem.servingUnit, foodItem: foodItem),

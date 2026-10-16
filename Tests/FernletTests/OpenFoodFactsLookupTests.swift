@@ -232,15 +232,39 @@ struct OpenFoodFactsLookupTests {
         }
     }
 
+    /// How long the stalled server in ``aStalledServerHitsTheWholeLookupDeadline()`` takes to answer
+    /// on its own. A hang guard, never the proof: if the deadline broke, the cell fails with a found
+    /// product after this long instead of hanging the run. It sits far beyond the worst queue the
+    /// cooperative pool has been measured holding a timer in a full run (see that cell).
+    static let stalledServerAnswersAfter: Duration = .seconds(600)
+
+    /// A server that never answers ends the lookup at the whole-lookup deadline, and the lookup
+    /// cancels its request rather than waiting it out.
+    ///
+    /// Proved by what happened, not by how long it took. The transport answers only after
+    /// ``stalledServerAnswersAfter``, 3 000 times the 0.2 s deadline, so `.timedOut` can only be the
+    /// deadline's. The recorded cancellation shows the lookup tore the request down: the deadline's
+    /// task group waits for its cancelled child before it returns, so a transport left waiting would
+    /// still hold the lookup open, and one that answered would be recorded as never cancelled.
+    ///
+    /// **No wall-clock bound, deliberately** (2026-10-11). This cell used to require the lookup back
+    /// within 10 s. Four full FernletTests runs measured 85 s against it, while the suite alone
+    /// passed. Probes in a full run on an iOS 26.5 simulator showed why: Swift Testing runs every suite
+    /// in parallel in one process, and there a bare 0.2 s `Task.sleep` woke 8.4 s late and the
+    /// deadline's own timer 9–57 s late. That is the cooperative pool's queue, and no deadline can
+    /// outrun it, because the caller resumes on the same pool. Quiet, the same lookup returns in
+    /// 0.23 s. A wall clock here measured the queue, not the lookup (the `ConnectionInspectorTests`
+    /// lesson).
     @Test func aStalledServerHitsTheWholeLookupDeadline() async throws {
         let code = try #require(Self.clifCode)
+        let recorder = RequestRecorder()
         let transport = CannedTransport(
-            recorder: RequestRecorder(), reply: .success(Self.ok(Self.clifJSON)), delay: .seconds(30))
-        let started = ContinuousClock.now
+            recorder: recorder, reply: .success(Self.ok(Self.clifJSON)), delay: Self.stalledServerAnswersAfter)
         let outcome = await OpenFoodFactsClient.lookUp(
             code, under: Self.settings(permitted: true), appVersion: "1", transport: transport, deadlineSeconds: 0.2)
-        #expect(outcome == .failed(.timedOut))
-        #expect(ContinuousClock.now - started < .seconds(10), "the deadline, not the transport, ends the lookup")
+        #expect(outcome == .failed(.timedOut), "the deadline, not the transport, ends the lookup")
+        #expect(await recorder.count == 1)
+        #expect(await recorder.cancelledCount == 1, "the deadline cancels the stalled request instead of waiting it out")
     }
 
     @Test func anOversizeBodyIsRefusedEvenIfATransportLetsItThrough() throws {
@@ -480,18 +504,27 @@ struct OpenFoodFactsLookupTests {
     }
 }
 
-/// Counts the requests a canned transport received — the witness for "no request without consent".
+/// Counts the requests a canned transport received — the witness for "no request without consent" —
+/// and the ones cancelled while it was still waiting to answer, the witness that a deadline tears a
+/// stalled request down rather than waiting it out.
 actor RequestRecorder {
     private(set) var requests: [URLRequest] = []
+    private(set) var cancelledCount = 0
 
     var count: Int { requests.count }
 
     func record(_ request: URLRequest) {
         requests.append(request)
     }
+
+    func recordCancellation() {
+        cancelledCount += 1
+    }
 }
 
-/// An offline transport answering every request with one canned reply, optionally after a delay.
+/// An offline transport answering every request with one canned reply, optionally after a delay;
+/// a delay cut short by cancellation is recorded and rethrown, as `URLSession` throws on a cancelled
+/// task.
 struct CannedTransport: OpenFoodFactsTransporting {
     let recorder: RequestRecorder
     let reply: Result<OpenFoodFactsHTTPResponse, OpenFoodFactsTransportError>
@@ -506,7 +539,12 @@ struct CannedTransport: OpenFoodFactsTransporting {
     func response(for request: URLRequest, maxBytes: Int) async throws -> OpenFoodFactsHTTPResponse {
         await recorder.record(request)
         if let delay {
-            try await Task.sleep(for: delay)
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                await recorder.recordCancellation()
+                throw error
+            }
         }
         return try reply.get()
     }
