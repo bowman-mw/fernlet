@@ -131,9 +131,10 @@ struct FriendPhotoCorpusFiles {
     }
 
     /// Deletes files whose id is not in `ids`. Only ever called after the owner's index write
-    /// committed: the on-disk index is the corpus's file manifest, and a sweep keyed on a set that
-    /// was not committed deletes files the committed index still names. A file that cannot be
-    /// removed is logged and the sweep continues.
+    /// committed, or (with an empty set) after the index proved unrecoverable — a key that is present
+    /// still cannot open it, so it names nothing anyone can read: the on-disk index is the corpus's
+    /// file manifest, and a sweep keyed on a set that was not committed deletes files a readable
+    /// committed index still names. A file that cannot be removed is logged and the sweep continues.
     func removeOrphanedFiles(keeping ids: Set<UUID>) {
         for directoryURL in [imageDirectoryURL, thumbnailDirectoryURL] {
             guard FileManager.default.fileExists(atPath: directoryURL.path) else { continue }

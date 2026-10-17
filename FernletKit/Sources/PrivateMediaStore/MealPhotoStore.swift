@@ -125,6 +125,7 @@ public struct MealPhotoStore {
     public func save(_ data: Data) -> UUID? {
         guard data.count <= Self.maxIncomingPhotoBytes else { return nil }
         guard let normalized = Self.normalizedJPEG(from: data) else { return nil }
+        ensureDirectory()
         let id = UUID()
         guard keyProvider.sealAndWrite(normalized, to: url(for: id), purpose: atRestPurpose) else { return nil }
         return id
@@ -142,6 +143,7 @@ public struct MealPhotoStore {
     public func save(_ data: Data, forID id: UUID) -> Bool {
         guard data.count <= Self.maxIncomingPhotoBytes else { return false }
         guard let normalized = Self.normalizedJPEG(from: data) else { return false }
+        ensureDirectory()
         return keyProvider.sealAndWrite(normalized, to: url(for: id), purpose: atRestPurpose)
     }
 
@@ -339,11 +341,29 @@ public struct MealPhotoStore {
         guard FileManager.default.fileExists(atPath: directory.path) else { return true }
         do {
             try FileManager.default.removeItem(at: directory)
-            // Recreate so the store stays usable for the rest of the session without a relaunch.
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            return true
         } catch {
             return false
+        }
+        // The corpus IS empty from here on, so the answer is true even if the recreate fails —
+        // reporting false used to claim the photos survived. The recreate is only for the rest of
+        // this session's saves, and each save also re-ensures the folder (`ensureDirectory()`), so a
+        // failed recreate no longer leaves meal-photo saves failing until the next launch.
+        ensureDirectory()
+        return true
+    }
+
+    /// Creates the store's folder if it is missing, naming a failure.
+    ///
+    /// Called before every write. `deleteAll()` removes the folder and recreates it, and a recreate
+    /// that failed used to strand every later save (the sealed write has no folder to land in) until
+    /// a relaunch built a new store. `withIntermediateDirectories: true` does not throw for an
+    /// existing folder, so this is cheap on the normal path; a throw is a real permissions or disk
+    /// failure, and the write that follows then fails closed on its own.
+    private func ensureDirectory() {
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            FernletAuditLog.log("mealPhotoStore.directoryCreateFailed", context: ["error": "\(error)"])
         }
     }
 

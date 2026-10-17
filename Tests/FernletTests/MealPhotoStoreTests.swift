@@ -297,6 +297,25 @@ struct MealPhotoStoreTests {
         let afterRead = try #require(try? Data(contentsOf: fileURL(dir, id)))
         #expect(afterRead == plaintext, "unsealed bytes were laundered into authentic ciphertext")
     }
+    // MARK: - Anomaly re-triage 2026-10-17: the folder heals itself
+
+    /// `deleteAll()` removes the store's folder and recreates it; a recreate that failed used to strand
+    /// every later save (nothing to write into) until a relaunch built a new store. Each save now
+    /// re-ensures the folder. The folder vanishing out from under a live store stands in for a failed
+    /// recreate, which a test cannot force without also blocking the removal.
+    @Test func aSaveAfterTheFolderVanishedRecreatesItAndLands() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(store.deleteAll())
+        try FileManager.default.removeItem(at: dir)
+
+        let id = try #require(store.save(jpeg(width: 120, height: 120)), "a save after the folder vanished wrote nothing")
+        #expect(store.imageData(for: id) != nil)
+
+        let keyed = UUID()
+        try FileManager.default.removeItem(at: dir)
+        #expect(store.save(jpeg(width: 120, height: 120), forID: keyed), "the id-keyed save did not heal the folder")
+    }
 }
 
 /// A key provider that never yields a key — exercises the fail-closed save path.

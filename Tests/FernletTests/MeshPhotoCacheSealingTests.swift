@@ -449,4 +449,25 @@ struct MeshPhotoCacheSealingTests {
             atPath: directory.appendingPathComponent("MeshPhotoThumbnails/\(kept.id.uuidString).jpg").path
         ))
     }
+
+    // MARK: - Anomaly re-triage 2026-10-17: an unrecoverable index takes its files with it
+
+    /// A wall index that a PRESENT key still cannot open names nothing anyone can ever read. Its
+    /// sealed photo files used to stay on disk, and in device backups, until some later save swept
+    /// them, which might never come. The read now sweeps them, as the pending corpus already did. A
+    /// keyless (deferred) read still touches nothing: `sealedIndexWithoutAKeyDefersAndIsNeverOverwritten`.
+    @Test func anUnrecoverableWallIndexSweepsItsPhotoFiles() throws {
+        let directory = makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = PrivateMediaStore(indexURL: legacyIndexURL(in: directory), keyProvider: InMemoryPrivateMediaKeyProvider())
+        let kept = photo(named: "Alice", fingerprint: "fp-alice", at: Date())
+        store.save([kept])
+        let image = imageFileURL(in: directory, id: kept.id)
+        #expect(FileManager.default.fileExists(atPath: image.path))
+
+        let otherKey = PrivateMediaStore(indexURL: legacyIndexURL(in: directory), keyProvider: InMemoryPrivateMediaKeyProvider())
+        #expect(otherKey.loadIndex() == .unrecoverable)
+        #expect(!FileManager.default.fileExists(atPath: image.path), "an unrecoverable index left its photo file on disk")
+    }
 }
+
