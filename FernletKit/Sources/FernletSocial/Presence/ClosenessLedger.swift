@@ -20,7 +20,8 @@ import ProximityKit
 /// so it is a warmth signal, never a who-met-whom surveillance log. Closeness derives via
 /// `ClosenessMath` over age-bucketed daily counts; `evaluateSlots` runs at most once per day and
 /// persists `slotState` so hysteresis dwell survives relaunch. Persistence is a JSON sidecar in
-/// Application Support (`.completeFileProtection`), NEVER in the synced snapshot; retention is 31
+/// Application Support (`.completeFileProtection`, excluded from iCloud device backups), NEVER in
+/// the synced snapshot; retention is 31
 /// days and at most 64 tracked friends (least-close dropped). Day keys pin one timezone-stable
 /// formatter/calendar pair so bucketing and diffing always agree. `remove` is wired from
 /// block/revoke; `clearAll` from reset-everything. `@MainActor @Observable`.
@@ -46,7 +47,9 @@ public final class ClosenessLedger {
     ///     proximity sidecar root; a test passes a file of its own.
     ///   - now: The clock its day buckets and slot evaluations are keyed by.
     public init(fileURL: URL, now: @escaping () -> Date = Date.init) {
-        self.file = JSONSidecarFile(fileURL: fileURL)
+        // Out of iCloud device backups: friend fingerprints × days × counts is a dated co-presence
+        // log (bug confirmation 2026-10-15 §5).
+        self.file = JSONSidecarFile(fileURL: fileURL, excludedFromBackup: true)
         self.now = now
         load()
     }

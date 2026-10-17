@@ -1756,6 +1756,9 @@ struct ContentView: View {
                 return false
             }
         }
+        // The sealed backups iCloud holds, found by existence: a new iPhone's backup switches start
+        // off, so they alone never named the old phone's backups (bug confirmation 2026-10-15 §2).
+        store.sealedBackupPresenceHook = { try await CloudKitDataService().sealedBackupPresence() }
     }
 
     /// Persists the per-payload re-upload deferral so the obligation survives relaunch. Routed through

@@ -1,7 +1,7 @@
 import Testing
 import CoreData
 import Foundation
-import CloudKitSync
+@testable import CloudKitSync
 import FernletDomainModel
 import FernletPersistence
 
@@ -45,22 +45,34 @@ struct DayRecordRepositoryTests {
         #expect(days["2026-05-01"]?.bottleCount == 9)
     }
 
-    @Test func loadCollapsesDuplicateRowsKeepingNewestAndSelfHeals() {
-        // CloudKit can mirror two rows for one dateKey (it keys by record identity, not the attribute).
-        // Insert two raw rows directly, then loadAll must keep the newer and delete the loser.
+    @Test func loadMergesDuplicateRowsIntoTheNewestAndSelfHeals() throws {
+        // CloudKit can mirror two rows for one dateKey (it keys by record identity, not the attribute):
+        // two devices that each first-wrote the day before import settled. Bug confirmation 2026-10-15
+        // §3: the read kept the newer row WHOLE and deleted the other, so breakfast logged on the iPhone
+        // vanished from both devices once the iPad's lunch row synced. The read now merges the rows by
+        // entry id, writes the merge into the newest row and only then deletes the older one.
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 1, updatedAt: stamp)
-        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 7, updatedAt: stamp.addingTimeInterval(60))
-        try? context.save()
+        let breakfast = makeMeal("Breakfast")
+        let lunch = makeMeal("Lunch")
+        let journal = JournalEntry(text: "", tag: .good)
+        insertRawDayRow(in: context, FernletDay(date: "2026-05-01", meals: [breakfast], bottleCount: 1), updatedAt: stamp)
+        insertRawDayRow(in: context, FernletDay(date: "2026-05-01", meals: [lunch], journals: [journal], bottleCount: 7),
+                        updatedAt: stamp.addingTimeInterval(60))
+        try context.save()
 
         let repo = DayRecordRepository(controller: controller)
-        let days = repo.loadAll()
-        #expect(days.count == 1)
-        #expect(days["2026-05-01"]?.bottleCount == 7)  // newer updatedAt wins
+        let day = try #require(repo.loadAll()["2026-05-01"])
+        #expect(Set(day.meals.map(\.id)) == [breakfast.id, lunch.id], "a device's meal was dropped by the collapse")
+        #expect(day.journals.map(\.id) == [journal.id])
+        #expect(day.bottleCount == 7)
 
-        // Self-heal: the losing duplicate row is deleted, so a raw count is now 1.
+        // Self-heal: the older duplicate row is deleted — and the surviving row holds the merge, so a
+        // fresh read (another launch, the other device after the sync) still has both meals.
         #expect(rawRowCount(in: context) == 1)
+        let reread = try #require(DayRecordRepository(controller: controller).loadAll()["2026-05-01"])
+        #expect(Set(reread.meals.map(\.id)) == [breakfast.id, lunch.id], "the merge was not written before the delete")
+        #expect(rawUpdatedAts(in: context) == [stamp.addingTimeInterval(60)], "the heal re-stamped the surviving row")
     }
 
     @Test func loadKeepsBothRowsOnEqualUpdatedAtTieAndCollapsesDeterministically() {
@@ -77,7 +89,8 @@ struct DayRecordRepositoryTests {
         let repo = DayRecordRepository(controller: controller)
         let days = repo.loadAll()
         #expect(days.count == 1)                        // collapsed to one in the returned dict
-        // Deterministic: repeated reads return the SAME winner (no flip-flop).
+        #expect(days["2026-05-01"]?.bottleCount == 8)   // the merge takes the larger water count
+        // Deterministic: repeated reads return the SAME merge (no flip-flop).
         #expect(repo.loadAll()["2026-05-01"]?.bottleCount == days["2026-05-01"]?.bottleCount)
 
         // The critical invariant: NEITHER row was deleted — both survive on disk, so two devices can never
@@ -85,18 +98,65 @@ struct DayRecordRepositoryTests {
         #expect(rawRowCount(in: context) == 2)
     }
 
-    @Test func loadStillDeletesStaleLoserWhenUpdatedAtIsStrictlyNewer() {
-        // The strict-winner self-heal must still fire: a genuinely older duplicate (strictly smaller
-        // updatedAt) is deleted so a real conflict collapses to one row.
+    @Test func aTieAtTheTopReturnsBothRowsEntriesAndWritesNothing() throws {
+        // The tie case keeps both rows on disk (the mutual-delete guard) — and the read must still serve
+        // what BOTH hold, not one row's day chosen by the tiebreak.
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 1, updatedAt: stamp)
-        insertRawDayRow(in: context, dateKey: "2026-05-01", bottleCount: 7, updatedAt: stamp.addingTimeInterval(60))
-        try? context.save()
+        let breakfast = makeMeal("Breakfast")
+        let lunch = makeMeal("Lunch")
+        insertRawDayRow(in: context, FernletDay(date: "2026-05-01", meals: [breakfast]), updatedAt: stamp)
+        insertRawDayRow(in: context, FernletDay(date: "2026-05-01", meals: [lunch]), updatedAt: stamp)
+        try context.save()
 
-        let repo = DayRecordRepository(controller: controller)
-        #expect(repo.loadAll()["2026-05-01"]?.bottleCount == 7)  // strictly newer wins
-        #expect(rawRowCount(in: context) == 1)                   // the older loser was deleted
+        let day = try #require(DayRecordRepository(controller: controller).loadAll()["2026-05-01"])
+        #expect(Set(day.meals.map(\.id)) == [breakfast.id, lunch.id])
+        #expect(rawRowCount(in: context) == 2)
+        #expect(!context.hasChanges, "a tie staged a write")
+    }
+
+    @Test func loadStillDeletesTheOlderRowOnceItsEntriesAreMerged() throws {
+        // The strict-winner self-heal must still fire: a genuinely older duplicate (strictly smaller
+        // updatedAt) is deleted so a real conflict collapses to one row — but what it held is kept: the
+        // older row's journal entry and its hygiene tick survive in the newer row (bug confirmation
+        // 2026-10-15 §3). A copy of the SAME entry in both rows is the newer row's.
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        var shared = makeMeal("Toast")
+        let olderJournal = JournalEntry(text: "", tag: .good)
+        insertRawDayRow(in: context, FernletDay(date: "2026-05-01", meals: [shared], journals: [olderJournal],
+                                                bottleCount: 4, hygiene: [.floss]), updatedAt: stamp)
+        shared.name = "Toast with jam"
+        insertRawDayRow(in: context, FernletDay(date: "2026-05-01", meals: [shared], bottleCount: 2, hygiene: [.shower]),
+                        updatedAt: stamp.addingTimeInterval(60))
+        try context.save()
+
+        let day = try #require(DayRecordRepository(controller: controller).loadAll()["2026-05-01"])
+        #expect(day.meals.map(\.name) == ["Toast with jam"])  // one entry, the newer copy
+        #expect(day.journals.map(\.id) == [olderJournal.id])
+        #expect(day.bottleCount == 4)
+        #expect(day.hygiene == [.floss, .shower])
+        #expect(rawRowCount(in: context) == 1)                  // the older row was deleted
+    }
+
+    @Test func theMergeUnionsEveryEntryKindByID() {
+        // The rule itself, over values: every entry list unions by id with the newer copy winning, water
+        // takes the larger count, sets union, and the plan unions by recipe id.
+        let recipeA = UUID(), recipeB = UUID()
+        let newerWorkout = makeWorkout("Run")
+        let olderWorkout = makeWorkout("Swim")
+        let newer = FernletDay(date: "2026-05-01", workouts: [newerWorkout], bottleCount: 1,
+                               plannedRecipeIDs: [recipeA], plannedMeals: [PlannedMealEntry(recipeID: recipeA, mealType: .lunch)])
+        let older = FernletDay(date: "2026-05-01", workouts: [olderWorkout, newerWorkout], sleep: SleepLog(hours: 7, quality: .good, note: ""),
+                               bottleCount: 3, completedPersonalCareTaskIDs: ["stretch"], plannedRecipeIDs: [recipeB])
+        let merged = DuplicateDayRows.merged(newestFirst: [newer, older])
+        #expect(merged?.workouts.map(\.id) == [newerWorkout.id, olderWorkout.id])
+        #expect(merged?.sleep?.hours == 7)
+        #expect(merged?.bottleCount == 3)
+        #expect(merged?.completedPersonalCareTaskIDs.contains("stretch") == true)
+        #expect(merged?.plannedRecipeIDs == [recipeA, recipeB])
+        #expect(merged?.plannedMeals?.map(\.recipeID) == [recipeA])
+        #expect(DuplicateDayRows.merged(newestFirst: []) == nil)
     }
 
     @Test func loadByDateKeysReturnsOnlyRequested() {
@@ -133,11 +193,15 @@ struct DayRecordRepositoryTests {
     // MARK: - Raw-row helpers (white-box, to simulate CloudKit-mirrored duplicates)
 
     private func insertRawDayRow(in context: NSManagedObjectContext, dateKey: String, bottleCount: Int, updatedAt: Date) {
+        insertRawDayRow(in: context, FernletDay(date: dateKey, bottleCount: bottleCount), updatedAt: updatedAt)
+    }
+
+    private func insertRawDayRow(in context: NSManagedObjectContext, _ day: FernletDay, updatedAt: Date) {
         let record = NSEntityDescription.insertNewObject(forEntityName: "DayRecord", into: context)
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let payload = try? encoder.encode(FernletDay(date: dateKey, bottleCount: bottleCount))
-        record.setValue(dateKey, forKey: "dateKey")
+        let payload = try? encoder.encode(day)
+        record.setValue(day.date, forKey: "dateKey")
         record.setValue(payload, forKey: "payloadData")
         record.setValue(updatedAt, forKey: "updatedAt")
     }
@@ -145,5 +209,22 @@ struct DayRecordRepositoryTests {
     private func rawRowCount(in context: NSManagedObjectContext) -> Int {
         let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
         return (try? context.fetch(request).count) ?? -1
+    }
+
+    private func rawUpdatedAts(in context: NSManagedObjectContext) -> [Date] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "DayRecord")
+        return ((try? context.fetch(request)) ?? []).compactMap { $0.value(forKey: "updatedAt") as? Date }
+    }
+
+    /// A workout with a fresh id.
+    private func makeWorkout(_ name: String) -> Workout {
+        Workout(name: name, type: .upper, exercises: "", rpe: nil, notes: "", duration: 20, intensity: .moderate)
+    }
+
+    /// A meal with a fresh id — the entry identity the merge unions by.
+    private func makeMeal(_ name: String) -> Meal {
+        let macros = Macros(protein: 10, carbs: 20, fat: 5)
+        return Meal(name: name, mealType: .lunch, macros: macros, quality: .good,
+                    confidence: "high", note: "", source: "manual")
     }
 }

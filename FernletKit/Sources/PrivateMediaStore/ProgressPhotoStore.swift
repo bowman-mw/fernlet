@@ -281,6 +281,30 @@ public struct ProgressPhotoStore {
         return persist(records)
     }
 
+    /// Joins a restored timeline index to this device's LIVE one: the escrow restore into a progress
+    /// corpus that already holds a timeline of its own — photos taken on a new phone before its photo
+    /// backup was turned on (bug confirmation 2026-10-15 §2). Only the restored records whose bodies
+    /// actually landed (`restoredIDs`) and whose ids the live index does not already hold join it; the
+    /// live index keeps every record it had, so a capture is never overwritten and no row is added for a
+    /// photo that is not on disk. With no live index (absent, or dead bytes) it is
+    /// ``restoreIndexPayload(_:)`` exactly.
+    ///
+    /// - Returns: whether the index now holds what it should — true when nothing needed to join.
+    ///   False when the payload is refused (oversize, undecodable, over the record cap) or the write
+    ///   fails. R7: deliberately not `@discardableResult`, like ``restoreIndexPayload(_:)``.
+    public func mergeRestoredIndexPayload(_ payload: Data, restoredIDs: Set<UUID>) -> Bool {
+        guard case .records(let live) = readIndex() else { return restoreIndexPayload(payload) }
+        // R5: a restore boundary — validate the caller-supplied bytes before decoding them.
+        guard payload.count <= Self.maxIndexPayloadBytes,
+              let restored = try? decoder.decode([ProgressPhotoRecord].self, from: payload),
+              restored.count <= Self.maxRecords else { return false }
+        let liveIDs = Set(live.map(\.id))
+        let joining = restored.filter { restoredIDs.contains($0.id) && !liveIDs.contains($0.id) }
+        guard !joining.isEmpty else { return true }
+        guard live.count + joining.count <= Self.maxRecords else { return false }
+        return persist(live + joining)
+    }
+
     /// Seals ALREADY-NORMALIZED restored bytes under `id` in the inner photo store — see
     /// ``MealPhotoStore/restoreSealedPhoto(_:forID:)`` for why the normalization pass is skipped.
     ///

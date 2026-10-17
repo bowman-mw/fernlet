@@ -61,10 +61,15 @@ custom-item stores are thin wrappers over one internal load/upsert engine (`Appe
 parameterized by entity name and labels); the engine deliberately has no delete method, so each
 repository's deletion policy stays visible on the repository type itself.
 Because CloudKit mirrors by record identity rather than by logical id, two devices can produce
-duplicate rows for one logical key; only ``DayRecordRepository`` collapses duplicates itself (most
-recent `updatedAt` wins, with a deliberately tie-conservative self-heal that makes a mutual
-cross-device wipe impossible) — the ledgers and items are union-merged by their aggregation
-services instead. ``MilestoneLedgerRepository``'s one delete is `deleteAll()`, the
+duplicate rows for one logical key; only ``DayRecordRepository`` collapses duplicates itself — the
+rows for a day MERGE by entry id (meals, workouts, planned workouts and journal entries union, the
+newer row's copy of an id winning; water takes the larger count; hygiene and tasks union), and the
+self-heal writes that merge into the newest row in the same save that deletes an older one, with a
+deliberately tie-conservative rule that makes a mutual cross-device wipe impossible. That merge is
+the read-side stop-gap of bug confirmation 2026-10-15 §3: it keeps what each device logged on a day
+both first-wrote, but ONE row that both devices rewrite whole is still last-writer-wins until the
+write side merges too — the ledgers and items are union-merged by their aggregation services
+instead. ``MilestoneLedgerRepository``'s one delete is `deleteAll()`, the
 delete-everything wipe path (added 2026-08-20, when the wipe stopped keeping the milestone trail —
 reversing the earlier survive-a-reset rule); its protocol still exposes no delete, so only the
 app's deletion funnel, which narrows to the concrete type, can reach it.
@@ -82,7 +87,12 @@ which is what lets the persisted-surface wipe wall see them; the encoding is sha
 
 The third tier is direct CloudKit, bypassing the Core Data mirror. ``CloudKitDataService`` handles
 what `NSPersistentCloudKitContainer` cannot: counting the data already in an iCloud account (feeding
-``MultiDeviceSyncWarning``'s pure three-way classification of the "your devices will drift" banner),
+``MultiDeviceSyncWarning``'s pure three-way classification of the "your devices will drift" banner)
+and asking which sealed backups it holds — ``SealedBackupPresence``, each payload's head and each
+photo corpus's manifest fetched by name with nothing downloaded or opened
+(``CloudKitDataService/sealedBackupPresence()``), which detection carries beside its counts so a new
+iPhone, whose backup switches all start off, can offer the restore, and which "delete everything"
+asks so it deletes what is there whatever the switches say (bug confirmation 2026-10-15 §2),
 performing the confirmed, audited delete-everything sweep, and reading/writing chunked sealed
 backups. A sealed backup's head keeps the bare name `sealed-backup.<payload>`; a v1 set's suffix
 chunks are `…chunk.<i>`, and a Sealed backup v2 set's are scoped to their set,

@@ -142,7 +142,9 @@ public final class ProximityActivityManager {
     ) {
         self.store = store
         self.identity = identity
-        self.file = JSONSidecarFile(fileURL: fileURL)
+        // Out of iCloud device backups: the activities joined, with their rosters, are device-local
+        // social data (bug confirmation 2026-10-15 §5).
+        self.file = JSONSidecarFile(fileURL: fileURL, excludedFromBackup: true)
         self.now = now
         load()
         gcExpired()

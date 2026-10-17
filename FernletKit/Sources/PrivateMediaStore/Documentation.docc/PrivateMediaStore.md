@@ -238,6 +238,11 @@ supplies only the local seam it needs, and each piece is shaped by a hazard:
   their dates and captions render as an invisible timeline. Export answers **nil** for a
   present-but-unreadable index so the caller skips the corpus rather than uploading "you have no
   photos" over a good copy; import refuses when an index already exists.
+- ``ProgressPhotoStore/mergeRestoredIndexPayload(_:restoredIDs:)`` — the import a corpus with a
+  timeline of its own takes instead: a new phone's progress photos, taken before its photo backup was
+  turned on, keep their rows, and the restored rows join them — only for bodies that actually landed,
+  so no row names a photo that is not on disk (bug confirmation 2026-10-15 §2). With no live index it
+  is ``ProgressPhotoStore/restoreIndexPayload(_:)`` exactly.
 
 ### Position relative to the S3 wall
 
