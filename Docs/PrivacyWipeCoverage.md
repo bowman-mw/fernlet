@@ -174,16 +174,16 @@ general proof against arbitrarily renamed storage.
 | Day summaries — this device's on-device AI summary of each logged day (`DailyHealthScore.daySummaryText`), kept here since 2026-10-15 because the persisted score history (the local blob and the iCloud-mirrored one) never carries them; another device or a restore writes its own. `resetDiary` empties the in-memory score rows; this is the file, plus its one-time legacy-capture marker | `Application Support/FernletDeviceDaySummaries/day-summaries.json` (`FileDeviceDaySummaryStore`, device-local, backup-excluded, complete file protection, ≤ 370 days, each summary ≤ 300 characters) | `deviceDaySummaryStore.clearAll` (in `resetAll`, so both wipe paths cover it; the HealthKit opt-out does not touch it) |
 | Worry Box rows, **and** the lifetime release counter `worryBox.lifetimeLetGoCount` | Sealed store + UserDefaults | `worryBoxResetHook` (`releaseAll()` sets the count to zero and the property's `didSet` writes that through, so the key survives holding 0 rather than being removed — cleared in the sense the dialog promises) |
 | Heart ledger | JSON sidecar | `heartLedger.clearAll` |
-| Moderation ledger | Sidecar | `moderationLedger.clearAll` |
-| Friend fuzzy-state cache | Sidecar | `friendStateCache.clearAll` |
-| Closeness ledger | Sidecar | `closenessLedger.clearAll` |
+| Moderation ledger, **and** its `ModerationLedger.json.corrupt` quarantine — an undecodable ledger moved aside before the next report was written (bug confirmation 2026-10-15 §4; who reported whom, so it goes with the ledger) | Sidecar (excluded from iCloud device backups) | `moderationLedger.clearAll` |
+| Friend fuzzy-state cache | Sidecar (excluded from iCloud device backups) | `friendStateCache.clearAll` |
+| Closeness ledger | Sidecar (excluded from iCloud device backups) | `closenessLedger.clearAll` |
 | Barcode serving memory | UserDefaults `fernlet.barcodeLastServings.v1` | `BarcodeServingMemory.clearAll` |
 | Log-activity "Recent" chips — the last five workout types picked | UserDefaults `fernlet.recentActivityTypes` (`RecentActivityTypeMemory`, device-local, never synced) | `RecentActivityTypeMemory.clearAll` (plain UserDefaults removal — no failure signal) |
 | Recipe web-image one-attempt memory | UserDefaults `fernlet.recipeWebImageAttempts.v1` | `RecipeWebImageAttemptMemory.clearAll` |
 | Local food-search correction memory — the searches the user corrected once (normalized query → the food id they picked in "Adjust meal"), research §26 fix 1.10; since ingredient-search round F9b also the recipe picks (normalized query → the food they chose from below the top of a recipe ingredient list, saved with the recipe), in the same key | UserDefaults `fernlet.foodSearchCorrections.v1` (`FoodSearchCorrectionMemory`, device-local: never in the synced snapshot and never in CloudKit, but — like the two `UserDefaults` sidecars above — it rides an encrypted device backup and returns with a restore of this device; capped at 200 entries of both kinds ≈ 17–22 KB, recipe picks evicted before corrections, oldest first) | `FoodSearchCorrectionMemory.clearAll` (plain UserDefaults removal — no failure signal), immediately followed by `foodCatalog.setSearchAliases` and `foodCatalog.setRecipeSearchPicks` with empty maps, because the live catalog holds an in-memory copy of each kind that would otherwise keep answering until relaunch. It also has its OWN user-facing clear — "Forget corrected searches" in Privacy & data (`FernletStore.forgetAllFoodSearchCorrections`, which counts and clears both kinds), added because a correction is invisible, permanent and individually unremovable, so "delete everything" used to be the only way to unlearn one |
 | Recipe editor "grams in one" memory — the grams this person gave for one of a food (food id + portion label, such as "fruit" or "medium") in place of a USDA typical size, ingredient-search round F4b. Written only when a recipe is saved; saved recipe lines carry their own grams and label, so clearing it changes no recipe — only which sizes the editor offers under "Your size" | UserDefaults `fernlet.recipePortionGrams.v1` (`RecipePortionGramsMemory`, device-local: never in the synced snapshot and never in CloudKit; like the sidecars above it rides an encrypted device backup and returns with a restore of this device; capped at 200 entries ≈ 18 KB, oldest evicted first) | `RecipePortionGramsMemory.clearAll` (plain UserDefaults removal — no failure signal), in `resetAll`, which `deleteAllData` reaches |
 | Workout tombstone ring — up to 200 UUIDs of removed workouts whose app-authored Health delete never confirmed | UserDefaults `fernlet.workout.tombstones` (`WorkoutTombstoneStore`) | `workoutTombstones.clearAll` (correct for both Health answers: the delete path already removed the samples, the keep path wants re-import — a surviving tombstone would delete a kept sample on the next re-enable) |
-| Group-activity rosters (persisted) | Sidecar | `activities.clearAll` |
+| Group-activity rosters (persisted) | Sidecar (`ActivityLedger.json`, excluded from iCloud device backups) | `activities.clearAll` |
 | Guided-workout run state + Live Activity | App group + ActivityKit | `guidedRunStateStore.clear` |
 | Cooking run state + Live Activity | App group + ActivityKit | `cookingRunStateStore.clear` |
 | Sensitive-visibility resolution | UserDefaults (`SensitiveVisibilityKeys`, device-local, non-synced): `sensitiveVisibilityResolved`, `sensitiveVisibilityResolvedPeriodVisible`, `sensitiveVisibilityResolvedIntimacyVisible` — the store's injectable `sensitiveVisibilityDefaults`, `.standard` in production. This column said "Memory" until 2026-08-20; it was wrong, and the difference matters — a memory-only resolution could not survive a wipe, and these keys can | `clearSensitiveVisibilityResolution` |
@@ -528,6 +528,12 @@ preprocessor conditional at all inside the wipe path throws.
   non-silently on next enable, so nothing is stranded.
 
 ## Audit trail
+
+- **2026-10-16 — bug fixes E, privacy/sync (bug confirmation 2026-10-15 §4, §5).** One row widened,
+  no row added or removed. The **moderation ledger** row gains its `.corrupt` quarantine, which
+  `clearAll` removes with the file. The three ledger rows (moderation, friend state, closeness) and the
+  group-activity rosters' row are now excluded from iCloud device backups at every write, so what this
+  funnel clears no longer also sits in last night's iCloud Backup.
 
 - **2026-08-21 — the discovery wall was attacked and hardened (round Part 4.4, adversary pass).**
   Four independent adversaries wrote working evasions against the wall built the day before, and
