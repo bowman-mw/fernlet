@@ -414,3 +414,44 @@ struct RecipeReimportTests {
         store.deleteSavedRecipe(replacement)
     }
 }
+
+// MARK: - A pasted link refused for today's AI budget is queued for tomorrow
+
+extension RecipeReimportTests {
+
+    /// The paste-a-link import shows "I'll try this recipe again tomorrow" when today's AI budget is
+    /// spent. That promise is now kept: the link joins the shared import queue already stamped
+    /// deferred for today, so today's drain skips it (no fetch, no attempt spent: the loopback host
+    /// would have failed the SSRF guard and spent one) and tomorrow's retries it. Pasting it again
+    /// re-stamps the row rather than adding a second.
+    @Test func aPastedLinkRefusedForTodaysBudgetIsQueuedForTomorrow() async {
+        let store = makeTestStore()
+        let queue = SharedRecipeImportQueue(fileURL: scratchQueueURL("budget"))
+        store.sharedRecipeImportQueue = queue
+        let url = URL(string: "https://127.0.0.1/recipes/stew")!
+
+        #expect(store.deferPastedRecipeImportUntilTomorrow(url))
+        #expect(store.deferPastedRecipeImportUntilTomorrow(url), "a second paste must still answer queued")
+        var records = queue.records()
+        #expect(records.count == 1, "a repeat paste added a second row")
+        #expect(records.first?.budgetDeferredDayKey == store.todayKey)
+        #expect(records.first?.attemptCount == 0)
+
+        await store.processSharedRecipeImportQueue()
+        records = queue.records()
+        #expect(records.count == 1, "today's drain dropped a link deferred for tomorrow")
+        #expect(records.first?.attemptCount == 0, "today's drain fetched a link deferred for today")
+        #expect(queue.clear(), "teardown: the shared import queue must clear")
+    }
+
+    /// A link over the queue's byte cap is refused, so the caller shows the "paste it again" sentence
+    /// instead of promising a retry that the drain would drop on sight.
+    @Test func anOversizedPastedLinkIsNotQueued() {
+        let queue = SharedRecipeImportQueue(fileURL: scratchQueueURL("oversize"))
+        let path = String(repeating: "a", count: SharedRecipeImportQueue.maxURLByteCount)
+        let url = URL(string: "https://example.com/\(path)")!
+        #expect(!queue.enqueueBudgetDeferred(url, now: Date(), dayKey: "2026-10-17"))
+        #expect(queue.records().isEmpty)
+    }
+}
+

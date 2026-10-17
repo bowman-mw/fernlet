@@ -191,6 +191,7 @@ IngredientSearchCorpusTests	Tests/FernletTests/IngredientSearchCorpusTests.swift
 IngredientSearchReplayProbeTests	Tests/FernletTests/IngredientSearchReplayProbeTests.swift	-
 IngredientSearchWarmReplayProbeTests	Tests/FernletTests/IngredientSearchWarmReplayProbeTests.swift	-
 IngredientSubstitutionTests	Tests/FernletTests/IngredientSubstitutionTests.swift	-
+IntimacyHealthWriteTests	Tests/FernletTests/IntimacyHealthWriteTests.swift	-
 IntimacyLogRepositoryTests	Tests/FernletTests/IntimacyLogRepositoryTests.swift	-
 IslandViewfinderMetricsTests	Tests/FernletTests/IslandViewfinderMetricsTests.swift	-
 ItemNameModerationTests	Tests/FernletTests/ItemNameModerationTests.swift	-

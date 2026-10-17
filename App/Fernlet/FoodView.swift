@@ -1003,6 +1003,16 @@ private struct RecipeImportSheet: View {
                     return
                 }
                 finishImport(named: importedRecipe.name)
+            } catch RecipeWebImportError.aiBudgetExhausted {
+                // The error's own sentence promises a retry tomorrow. Make it true by queueing the
+                // link for the foreground drain, as a shared link is; if the queue cannot take it,
+                // say plainly that nothing will retry.
+                notice = store.deferPastedRecipeImportUntilTomorrow(url)
+                    ? RecipeWebImportError.aiBudgetExhausted.errorDescription
+                    : String(localized: "recipeImport.error.aiBudgetExhaustedNotQueued",
+                             defaultValue: "The quiet helper is resting for today. Paste this link again tomorrow and I'll try it then.",
+                             comment: "Shown when a pasted recipe link needs on-device AI, today's AI budget is spent, AND the link could not be saved for a retry tomorrow — so, unlike the usual resting message, it asks the person to paste it again.")
+                isImportingURL = false
             } catch {
                 notice = (error as? LocalizedError)?.errorDescription
                     ?? String(localized: "recipeImport.error.fallback",

@@ -203,6 +203,32 @@ public struct SharedRecipeImportQueue {
     /// wipe that ignores it lets a recipe shared before the wipe import itself back afterwards.
     public func clear() -> Bool { save([]) }
 
+    /// Queues a link the app itself could not import today because the daily AI budget is spent,
+    /// already stamped deferred for `dayKey`, so the drain skips it today and tries it tomorrow.
+    ///
+    /// The paste-a-link import tells the person "I'll try this recipe again tomorrow"; before this
+    /// existed only a SHARED link was queued, and a pasted one was simply dropped. A link already in
+    /// the queue is re-stamped rather than added twice. Same byte cap and oldest-out trim as a share.
+    ///
+    /// - Parameters:
+    ///   - url: The pasted recipe link.
+    ///   - now: The queue time the drain's seven-day age limit counts from.
+    ///   - dayKey: Today's day key; the drain retries once its own day key differs.
+    /// - Returns: whether the link is now queued (false: over the byte cap, or the rewrite did not land).
+    public func enqueueBudgetDeferred(_ url: URL, now: Date, dayKey: String) -> Bool {
+        guard url.absoluteString.utf8.count <= Self.maxURLByteCount else { return false }
+        let didWrite = modifyRecords { records in
+            if let index = records.firstIndex(where: { $0.urlString == url.absoluteString }) {
+                records[index].budgetDeferredDayKey = dayKey
+                return
+            }
+            records.append(SharedRecipeImportRecord(url: url, queuedAt: now, budgetDeferredDayKey: dayKey))
+            records = Array(records.suffix(Self.maxQueuedImports))
+        }
+        logIfRewriteFailed(didWrite, operation: "enqueueBudgetDeferred")
+        return didWrite
+    }
+
     /// Records a failed import attempt (timestamp + error text). A record that reaches
     /// ``maxImportAttempts`` attempts is removed outright, so a permanently broken page cannot
     /// retry forever.

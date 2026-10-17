@@ -107,6 +107,7 @@ struct PhotoDirectoryIsolationTests {
     private static let sharedRecipeInboxTriggers = [
         "sharedRecipeImportQueue", "SharedRecipeImportQueue", "SharedRecipeImportRecord",
         "processSharedRecipeImportQueue", "shared recipe inbox",
+        "deferPastedRecipeImportUntilTomorrow", "enqueueBudgetDeferred",
         "deleteAllData",
     ]
 

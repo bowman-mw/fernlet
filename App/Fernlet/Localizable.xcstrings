@@ -8143,6 +8143,18 @@
     "intervals, distance, notes" : {
 
     },
+    "intimacy.save.healthSavedLinkFailed" : {
+      "comment" : "Shown after an intimacy log was sealed and its Apple Health sample was written, but Fernlet failed to mark its own row as saved to Health. Both saves happened; only the label on the day's detail page will be missing.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Private note saved and sent to Apple Health. Fernlet couldn't record that link, so this entry won't show “Saved to Apple Health”."
+          }
+        }
+      }
+    },
     "labelScan.error.fallback" : {
       "comment" : "Shown in the nutrition-label camera sheet when the scan fails and the thrown error carries no description of its own.",
       "extractionState" : "extracted_with_value",
@@ -8843,6 +8855,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fernlet could not identify a product on that page."
+          }
+        }
+      }
+    },
+    "recipeImport.error.aiBudgetExhaustedNotQueued" : {
+      "comment" : "Shown when a pasted recipe link needs on-device AI, today's AI budget is spent, AND the link could not be saved for a retry tomorrow — so, unlike the usual resting message, it asks the person to paste it again.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The quiet helper is resting for today. Paste this link again tomorrow and I'll try it then."
           }
         }
       }

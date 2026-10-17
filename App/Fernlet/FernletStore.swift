@@ -2994,6 +2994,21 @@ final class FernletStore {
         FernletAuditLog.log("recipe.shareExtensionImport.queueRewriteFailed", context: ["operation": operation])
     }
 
+    /// Queues a pasted recipe link that could not be imported because today's AI budget is spent,
+    /// so the foreground drain (``processSharedRecipeImportQueue()``) tries it tomorrow, the same way
+    /// it retries a shared link. This is what makes the "I'll try this recipe again tomorrow" notice
+    /// true for a paste.
+    ///
+    /// - Returns: whether the link is queued. False means the caller must not promise a retry.
+    func deferPastedRecipeImportUntilTomorrow(_ url: URL) -> Bool {
+        let queued = sharedRecipeImportQueue.enqueueBudgetDeferred(url, now: Date(), dayKey: todayKey)
+        FernletAuditLog.log("recipe.pastedImport.deferred", context: [
+            "host": url.host() ?? "unknown",
+            "queued": queued ? "true" : "false"
+        ])
+        return queued
+    }
+
     func processSharedRecipeImportQueue() async {
         guard !isProcessingSharedRecipeImportQueue else { return }
         isProcessingSharedRecipeImportQueue = true
