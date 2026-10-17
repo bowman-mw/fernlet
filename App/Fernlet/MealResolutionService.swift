@@ -254,15 +254,26 @@ final class MealResolutionService {
             recipes: host.recipes,
             foodItems: candidates.map(\.foodItem) + host.foodCatalog.items(forRecipes: host.recipes)
         ), result.meals.isEmpty == false else { return nil }
-        // The plan's unmatched split items ride along: `MealResolution.needsReview` treats partial
-        // coverage as review-worthy, so a meal missing half of what was typed pauses instead of
-        // committing at high confidence.
-        return MealResolution(
+        return Self.planResolution(result, confidence: confidence, unmatchedItems: plan.unmatchedItems)
+    }
+
+    /// The resolution a plan tier hands out: its meals, its multi-ingredient recipes as OFFERS for the
+    /// review (never `createdRecipes`, which a commit mints), and the plan's unmatched split items —
+    /// `MealResolution.needsReview` treats partial coverage as review-worthy, so a meal missing half of
+    /// what was typed pauses instead of committing at high confidence. Static so a test can hold the
+    /// offer rule without a host (bug confirmation 2026-10-15, food-ai §4).
+    static func planResolution(
+        _ result: MealBuilder.PlanResult,
+        confidence: MealResolutionConfidence,
+        unmatchedItems: [String]
+    ) -> MealResolution {
+        MealResolution(
             meals: result.meals,
-            createdRecipes: result.createdRecipes,
+            createdRecipes: [],
             confidence: confidence,
             isFallback: false,
-            unmatchedItems: plan.unmatchedItems
+            unmatchedItems: unmatchedItems,
+            offeredRecipes: result.offeredRecipes
         )
     }
 
@@ -425,7 +436,8 @@ final class MealResolutionService {
             confidence: resolution.confidence,
             isFallback: resolution.isFallback,
             suggestedRecipe: resolution.suggestedRecipe,
-            unmatchedItems: resolution.unmatchedItems
+            unmatchedItems: resolution.unmatchedItems,
+            offeredRecipes: resolution.offeredRecipes
         )
     }
 
@@ -505,7 +517,8 @@ final class MealResolutionService {
             confidence: .low,
             isFallback: resolution.isFallback,
             suggestedRecipe: resolution.suggestedRecipe,
-            unmatchedItems: resolution.unmatchedItems
+            unmatchedItems: resolution.unmatchedItems,
+            offeredRecipes: resolution.offeredRecipes
         )
     }
 }

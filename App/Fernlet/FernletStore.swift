@@ -2649,8 +2649,10 @@ final class FernletStore {
         await mealResolutionService.resolveMeals(from: description, type: type, date: date)
     }
 
-    /// Commits a resolved meal set to the diary: registers any created recipes, appends each meal,
-    /// and queues a background AI retry for fabricated fallback meals.
+    /// Commits a resolved meal set to the diary: mints the recipes the person confirmed in the pre-log
+    /// review (`createdRecipes`, which only the review fills), appends each meal, and queues a background
+    /// AI retry for fabricated fallback meals. A resolution's OFFERED recipes (`suggestedRecipe`,
+    /// `offeredRecipes`) are never minted here, so an auto-commit or a background retry adds no recipe.
     @discardableResult func commitResolution(_ resolution: MealResolution, date: String? = nil) -> [Meal] {
         // Day-rollover safety: if the app has stayed resident across local midnight, advance the store's
         // notion of "today" BEFORE resolving the default date, so a meal committed just after midnight

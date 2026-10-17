@@ -209,6 +209,11 @@ packet never carries it.
 
 ### Meal resolution and AI selection
 
+A ``MealResolution`` carries the recipes the resolver built as offers (``MealResolution/suggestedRecipe``,
+``MealResolution/offeredRecipes``) and the ones the person kept in the pre-log review as
+``MealResolution/createdRecipes``, the only field a commit mints (2026-10-16), so a quick log that
+commits without a review adds no recipe.
+
 - ``MealResolution``
 - ``ResolvedMeal``
 - ``MealResolutionConfidence``

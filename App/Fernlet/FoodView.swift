@@ -2883,8 +2883,8 @@ struct MealSheet: View {
         MealReviewSheet(
             resolution: context.resolution,
             store: store,
-            onConfirm: { reviewedMeals, confirmedRecipe in
-                confirmReviewedMeals(reviewedMeals, confirmedRecipe: confirmedRecipe, context: context)
+            onConfirm: { reviewedMeals, confirmedRecipes in
+                confirmReviewedMeals(reviewedMeals, confirmedRecipes: confirmedRecipes, context: context)
             },
             onDiscard: {
                 // Leave the log sheet open with the original text so the user can adjust and retry.
@@ -2896,22 +2896,20 @@ struct MealSheet: View {
         .presentationCornerRadius(20)
     }
 
-    /// Commits the user's reviewed meals (and any confirmed recipe), attaches the held photo, and
+    /// Commits the user's reviewed meals (and the recipes they kept), attaches the held photo, and
     /// either dismisses or disarms Save when only the photo failed.
     private func confirmReviewedMeals(
         _ reviewedMeals: [Meal],
-        confirmedRecipe: RecipeDefinition?,
+        confirmedRecipes: [RecipeDefinition],
         context: MealReviewContext
     ) {
-        // User reviewed it: commit their version, never re-queue an AI retry over it. Any
-        // legacy auto-mint recipes ride along as before; the decomposition tier's reviewed
-        // recipe (confirmedRecipe) is minted here — and ONLY here — through the same
-        // diary.recipes path, so it never reaches the book without an explicit confirm.
-        let recipesToMint = context.resolution.createdRecipes + (confirmedRecipe.map { [$0] } ?? [])
+        // User reviewed it: commit their version, never re-queue an AI retry over it. The recipes the
+        // sheet offered and the user kept are minted here — and ONLY here — through the same
+        // diary.recipes path, so no recipe reaches the book without an explicit confirm.
         let committed = store.commitResolution(
             MealResolution(
                 meals: reviewedMeals,
-                createdRecipes: recipesToMint,
+                createdRecipes: confirmedRecipes,
                 confidence: context.resolution.confidence,
                 isFallback: false
             )
@@ -5192,23 +5190,21 @@ private nonisolated struct EditableReviewMeal: Identifiable {
 /// The pre-log review sheet for low-confidence or fabricated resolutions — nothing reaches the diary
 /// until the user confirms here.
 ///
-/// Each resolved meal is editable in place (name, type, macros or component quantities), and when the
-/// decomposition tier suggested a recipe the sheet offers it with an editable name and yield. On "Log
-/// meal" the reviewed meals plus the optionally confirmed recipe are handed back through `onConfirm`,
-/// so the caller commits both through the same `commitResolution` path — the recipe is minted only on
-/// this confirm, never at resolve time. `isLogging` one-shots the button so a fast double-tap can't
-/// log the meal twice.
+/// Each resolved meal is editable in place (name, type, macros or component quantities), and every
+/// recipe the resolution offers — the decomposition tier's suggested recipe and the plan tiers' recipes
+/// for multi-ingredient items — is shown with a switch and an editable name and yield
+/// (``MealReviewRecipeOffer``). On "Log meal" the reviewed meals plus the recipes still switched on are
+/// handed back through `onConfirm`, so the caller commits both through the same `commitResolution`
+/// path — a recipe is minted only on this confirm, never at resolve time. `isLogging` one-shots the
+/// button so a fast double-tap can't log the meal twice.
 private struct MealReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
     private let confidence: MealResolutionConfidence
-    /// The decomposition tier's built recipe, offered here for review. `nil` when the resolution
-    /// carried no recipe (every non-decomposition tier, single-ingredient decompositions).
-    private let suggestedRecipe: RecipeDefinition?
-    /// Confirmed recipe (may be nil when the user opts out) is passed back alongside the reviewed meals
-    /// so the caller can persist it through the SAME `commitResolution`/`diary.recipes` path — minting
-    /// happens only on this confirm, never at resolve time.
-    var onConfirm: ([Meal], RecipeDefinition?) -> Void
+    /// The recipes the person kept (empty when they switched every offer off) are passed back
+    /// alongside the reviewed meals so the caller can persist them through the SAME
+    /// `commitResolution`/`diary.recipes` path — minting happens only on this confirm.
+    var onConfirm: ([Meal], [RecipeDefinition]) -> Void
     var onDiscard: () -> Void
     /// Items the user typed that the resolver bound nothing to (`MealResolution.unmatchedItems`).
     /// Named on screen so a dropped ingredient is visible before the meal is logged, not discovered
@@ -5218,66 +5214,29 @@ private struct MealReviewSheet: View {
     /// One-shot guard so a fast double-tap on "Log meal" can't fire onConfirm twice — which would
     /// append the same meal id twice and double its macros.
     @State private var isLogging = false
-    /// Editable recipe offer state (used only when `suggestedRecipe != nil`).
-    @State private var saveAsRecipe: Bool
-    @State private var recipeName: String
-    @State private var recipeServings: Int
+    /// Every recipe the resolution offers, with the person's choices; empty when it offers none.
+    @State private var recipeOffers: [MealReviewRecipeOffer]
 
     init(
         resolution: MealResolution,
         store: FernletStore,
-        onConfirm: @escaping ([Meal], RecipeDefinition?) -> Void,
+        onConfirm: @escaping ([Meal], [RecipeDefinition]) -> Void,
         onDiscard: @escaping () -> Void
     ) {
         self.store = store
         self.confidence = resolution.confidence
-        self.suggestedRecipe = resolution.suggestedRecipe
         self.unmatchedItems = resolution.unmatchedItems
         self.onConfirm = onConfirm
         self.onDiscard = onDiscard
         _meals = State(initialValue: resolution.meals.map(EditableReviewMeal.init(base:)))
-        _saveAsRecipe = State(initialValue: resolution.suggestedRecipe != nil)
-        _recipeName = State(initialValue: resolution.suggestedRecipe?.name ?? "")
-        _recipeServings = State(initialValue: max(resolution.suggestedRecipe?.servings ?? 4, 1))
+        _recipeOffers = State(initialValue: MealReviewRecipeOffer.offers(for: resolution))
     }
 
-    /// The recipe to mint, with the user's name + yield edits applied — or nil when there is no
-    /// suggested recipe or the user turned the offer off.
-    ///
-    /// The ingredient quantities are rebuilt from the user's REVIEWED per-serving component grams (each
-    /// × the chosen yield gives the full batch), not from the model's original decomposition. Components
-    /// can only be re-quantified in review, never added or removed, so their `foodItemId` set maps 1:1
-    /// onto the recipe's ingredients — keeping the promised invariant (per-serving == the plate) true
-    /// even when the user corrected a component's grams, instead of silently minting the pre-edit amounts.
-    private var confirmedRecipe: RecipeDefinition? {
-        guard saveAsRecipe, let base = suggestedRecipe else { return nil }
-        var recipe = base
-        let oldYield = max(base.servings, 1)
-        let newYield = max(recipeServings, 1)
-        // The reviewed per-serving grams, keyed by the catalog item they bound to.
-        var editedPerServing: [UUID: MealComponentCorrectionInput] = [:]
-        for component in meals.flatMap(\.components) {
-            if let foodItemId = component.foodItemId { editedPerServing[foodItemId] = component }
-        }
-        recipe.ingredients = base.ingredients.map { ingredient in
-            if let edited = editedPerServing[ingredient.foodItemId] {
-                return RecipeIngredient(
-                    id: ingredient.id,
-                    foodItemId: ingredient.foodItemId,
-                    quantity: edited.quantity * Double(newYield),
-                    unit: edited.unit
-                )
-            }
-            // No matching reviewed component (not expected for a decomposition recipe) — fall back to
-            // yield-scaling the model's original batch quantity so nothing is dropped.
-            let factor = Double(newYield) / Double(oldYield)
-            return RecipeIngredient(id: ingredient.id, foodItemId: ingredient.foodItemId, quantity: ingredient.quantity * factor, unit: ingredient.unit)
-        }
-        recipe.servings = newYield
-        let trimmed = recipeName.trimmingCharacters(in: .whitespacesAndNewlines)
-        recipe.name = trimmed.isEmpty ? base.name : trimmed
-        recipe.updatedAt = Date()
-        return recipe
+    /// The recipes to mint: every offer still switched on, rebuilt from the reviewed component grams
+    /// with the person's name and yield (``MealReviewRecipeOffer/confirmedRecipe(reviewedComponents:)``).
+    private var confirmedRecipes: [RecipeDefinition] {
+        let reviewedComponents = meals.flatMap(\.components)
+        return recipeOffers.compactMap { $0.confirmedRecipe(reviewedComponents: reviewedComponents) }
     }
 
     var body: some View {
@@ -5330,7 +5289,7 @@ private struct MealReviewSheet: View {
                         }
                     }
 
-                    if suggestedRecipe != nil {
+                    if !recipeOffers.isEmpty {
                         recipeOfferSection
                     }
                 }
@@ -5341,7 +5300,7 @@ private struct MealReviewSheet: View {
             SheetSaveBar(label: "Log meal", disabled: isLogging) {
                 guard !isLogging else { return }
                 isLogging = true
-                onConfirm(meals.map(\.applied), confirmedRecipe)
+                onConfirm(meals.map(\.applied), confirmedRecipes)
             }
         }
         .background(Color.parchment)
@@ -5351,43 +5310,56 @@ private struct MealReviewSheet: View {
         .keyboardDoneToolbar()
     }
 
-    /// Offers the decomposition-built recipe for saving to the recipe book: an opt-out toggle plus an
-    /// editable name and yield. Nothing here is persisted until the user taps "Log meal" (the offer is
-    /// carried back through `confirmedRecipe`), so declining or editing costs nothing.
+    /// Offers each recipe the resolution built for saving to the recipe book: an opt-out toggle plus an
+    /// editable name and yield per recipe, the built name above each when there is more than one. Nothing
+    /// here is persisted until the user taps "Log meal" (the offers are carried back through
+    /// `confirmedRecipes`), so declining or editing costs nothing.
     @ViewBuilder private var recipeOfferSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Toggle(isOn: $saveAsRecipe) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Save as a recipe")
-                        .font(.fernlet(.label))
-                        .foregroundStyle(Color.bark)
-                    Text("Keep this in your recipe book to log again later.")
-                        .font(.fernlet(.bodySmall))
+        ForEach($recipeOffers) { $offer in
+            VStack(alignment: .leading, spacing: 14) {
+                if recipeOffers.count > 1 {
+                    Text(verbatim: offer.base.name)
+                        .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
-                        .fernletWrappingText()
                 }
-            }
-            .tint(Color.moss)
-            .accessibilityIdentifier("mealReview.saveAsRecipe")
+                Toggle(isOn: $offer.isSaved) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Save as a recipe")
+                            .font(.fernlet(.label))
+                            .foregroundStyle(Color.bark)
+                        Text("Keep this in your recipe book to log again later.")
+                            .font(.fernlet(.bodySmall))
+                            .foregroundStyle(Color.slate)
+                            .fernletWrappingText()
+                    }
+                }
+                .tint(Color.moss)
+                .accessibilityIdentifier("mealReview.saveAsRecipe")
 
-            if saveAsRecipe {
-                SheetField("Recipe name") {
-                    TextField("Recipe", text: $recipeName)
-                        .sheetTextInput()
-                        .accessibilityIdentifier("mealReview.recipeName")
-                }
-                SheetField("Makes") {
-                    Stepper(
-                        "\(recipeServings) serving\(recipeServings == 1 ? "" : "s")",
-                        value: $recipeServings,
-                        in: 1...24
-                    )
-                    .accessibilityIdentifier("mealReview.recipeServings")
+                if offer.isSaved {
+                    recipeOfferFields($offer)
                 }
             }
+            .padding(16)
+            .background(Color.cream.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .padding(16)
-        .background(Color.cream.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// The name and yield of one offer the person is keeping.
+    @ViewBuilder private func recipeOfferFields(_ offer: Binding<MealReviewRecipeOffer>) -> some View {
+        SheetField("Recipe name") {
+            TextField("Recipe", text: offer.name)
+                .sheetTextInput()
+                .accessibilityIdentifier("mealReview.recipeName")
+        }
+        SheetField("Makes") {
+            Stepper(
+                "\(offer.wrappedValue.servings) serving\(offer.wrappedValue.servings == 1 ? "" : "s")",
+                value: offer.servings,
+                in: 1...24
+            )
+            .accessibilityIdentifier("mealReview.recipeServings")
+        }
     }
 
     /// Names the words nothing was found for, as chips, above the meal being reviewed. Nothing is

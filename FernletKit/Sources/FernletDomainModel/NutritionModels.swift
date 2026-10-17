@@ -643,9 +643,17 @@ public nonisolated struct ResolvedMeal {
     public var suggestedRecipe: RecipeDefinition?
 }
 
-/// The full outcome of resolving a quick-log description: the meals (not yet committed), any
-/// recipes that were created as a side effect, overall confidence, and whether the keyword-heuristic
-/// fallback was used. `needsReview` decides whether the UI pauses for a pre-log review.
+/// The full outcome of resolving a quick-log description: the meals (not yet committed), the recipes
+/// the resolver built and only OFFERS for review, the recipes the person confirmed (which the commit
+/// mints), overall confidence, and whether the keyword-heuristic fallback was used. `needsReview`
+/// decides whether the UI pauses for a pre-log review.
+///
+/// **No recipe reaches the book without a confirm (2026-10-16).** The resolver fills
+/// ``suggestedRecipe`` and ``offeredRecipes``, never ``createdRecipes``; the pre-log review sheet offers
+/// them and hands the confirmed ones back as ``createdRecipes``, the one field a commit mints. Until
+/// then the plan tiers minted a recipe for every multi-ingredient item through ``createdRecipes`` and
+/// logged the meal as one serving of it, so an auto-committed log added a recipe nobody saw and the
+/// meal row said "From your recipe" (bug confirmation 2026-10-15, food-ai §4).
 public nonisolated struct MealResolution {
 
     public init(
@@ -654,7 +662,8 @@ public nonisolated struct MealResolution {
         confidence: MealResolutionConfidence,
         isFallback: Bool,
         suggestedRecipe: RecipeDefinition? = nil,
-        unmatchedItems: [String] = []
+        unmatchedItems: [String] = [],
+        offeredRecipes: [RecipeDefinition] = []
     ) {
         self.meals = meals
         self.createdRecipes = createdRecipes
@@ -662,10 +671,11 @@ public nonisolated struct MealResolution {
         self.isFallback = isFallback
         self.suggestedRecipe = suggestedRecipe
         self.unmatchedItems = unmatchedItems
+        self.offeredRecipes = offeredRecipes
     }
     public var meals: [Meal]
-    /// Recipes auto-minted as a side effect of resolution and persisted silently on commit (the legacy
-    /// multi-ingredient auto-mint). Distinct from `suggestedRecipe`, which is review-gated.
+    /// Recipes the person confirmed in the pre-log review, which `commitResolution` mints into the
+    /// recipe book. The resolver never fills it; only the review sheet's confirm does.
     public var createdRecipes: [RecipeDefinition]
     public var confidence: MealResolutionConfidence
     public var isFallback: Bool
@@ -678,6 +688,10 @@ public nonisolated struct MealResolution {
     /// toast"). Carried up from ``FoodSelectionPlan/unmatchedItems`` so the review sheet can name
     /// what was missed. Empty means every item the splitter produced ended up in the meal.
     public var unmatchedItems: [String] = []
+    /// The recipes the plan tiers built for multi-ingredient items (`MealBuilder`), offered in the
+    /// pre-log review beside ``suggestedRecipe`` and never minted on their own: a resolution that
+    /// auto-commits (no review) adds no recipe, and the meal is logged as the matched foods it is.
+    public var offeredRecipes: [RecipeDefinition] = []
 
     /// Whether the quick-log flow must pause on the "Check this meal" sheet instead of committing.
     ///
