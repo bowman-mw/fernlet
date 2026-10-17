@@ -548,4 +548,57 @@ struct MoveRefactorTests {
         #expect(draft.speed.isEmpty && draft.incline.isEmpty && draft.details.isEmpty)
         #expect(draft.resetToken == tokenBefore + 1)
     }
+
+    // MARK: - Anomaly re-triage 2026-10-17: duration and treadmill round-trip
+
+    /// A fractional duration ("30.5", pasted or from a hardware keyboard into the number pad) used to
+    /// parse as no duration: an activity log's Save stayed disabled and a strength log dropped the
+    /// value on save. Every Duration field now reads whole minutes, rounding to the nearest.
+    @Test func aFractionalDurationEnablesSaveAndRoundsToWholeMinutes() {
+        #expect(WorkoutSheetRules.durationMinutes(from: "30.5") == 31)
+        #expect(WorkoutSheetRules.durationMinutes(from: "30,4") == 30)
+        #expect(WorkoutSheetRules.durationMinutes(from: "45") == 45)
+        #expect(WorkoutSheetRules.durationMinutes(from: "") == nil)
+        #expect(WorkoutSheetRules.durationMinutes(from: "-5") == nil)
+        #expect(!WorkoutSheetRules.saveDisabled(mode: .activity, workoutName: "", exerciseRows: [], selectedActivityType: .running, duration: "30.5", distance: ""))
+        #expect(WorkoutSheetRules.saveDisabled(mode: .activity, workoutName: "", exerciseRows: [], selectedActivityType: .running, duration: "0.4", distance: ""))
+    }
+
+    /// A planned treadmill line is written as "Treadmill walk 3.5 mph 6% incline". Reopening it used to
+    /// put both values into its free-text details, leaving speed and incline empty; they now come back
+    /// into their fields and the line re-writes identically. An older line with the speed after "@"
+    /// still yields it.
+    @Test func aTreadmillLineRoundTripsItsSpeedAndIncline() throws {
+        let walk = try #require(WorkoutExerciseCatalog.search("Treadmill walk").first)
+        #expect(walk.inputKind == .treadmill)
+        let written = WorkoutExerciseEntry(
+            exercise: walk, sets: "", reps: "", weight: "", speed: "3.5", incline: "6", details: ""
+        ).summary
+        let reopened = try #require(WorkoutSheetRules.exerciseEntries(from: written).first)
+        #expect(reopened.exercise.name == walk.name)
+        #expect(reopened.speed == "3.5")
+        #expect(reopened.incline == "6")
+        #expect(reopened.details.isEmpty, "the values were left in details: \(reopened.details)")
+        #expect(reopened.summary == written)
+
+        let legacy = try #require(WorkoutSheetRules.exerciseEntries(from: "Treadmill walk @3.2").first)
+        #expect(legacy.speed == "3.2")
+        #expect(legacy.details.isEmpty)
+    }
+
+    /// The root of the treadmill loss: a written line was looked up with a search that needs an
+    /// exercise's NAME to contain the WHOLE line, so any line carrying its numbers matched nothing and
+    /// reopened as no row at all. A strength line now comes back with its sets, reps and weight; the
+    /// longest name wins ("Incline bench press" is not "Bench press"); and a line naming no catalog
+    /// exercise is still skipped rather than invented.
+    @Test func aWrittenStrengthLineReopensAsItsRow() throws {
+        let rows = WorkoutSheetRules.exerciseEntries(from: "Bench press 3x8 @95 lb\nIncline bench press 4x10\nMystery move 3x5")
+        #expect(rows.count == 2, "lines with numbers must reopen; an unknown line must not be invented")
+        let bench = try #require(rows.first)
+        #expect(bench.exercise.name == "Bench press")
+        #expect(bench.sets == "3" && bench.reps == "8" && bench.weight == "95 lb")
+        #expect(rows.last?.exercise.name == "Incline bench press")
+        #expect(rows.last?.sets == "4" && rows.last?.reps == "10")
+    }
 }
+

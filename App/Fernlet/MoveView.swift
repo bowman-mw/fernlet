@@ -1166,7 +1166,7 @@ struct WorkoutSheet: View {
             exercises: logMode == .strengthTraining ? exerciseText : "",
             rpe: logMode == .strengthTraining ? LocaleTolerantNumber.double(from: rpe) : nil,
             notes: notes,
-            duration: LocaleTolerantNumber.int(from: duration),
+            duration: WorkoutSheetRules.durationMinutes(from: duration),
             distanceMiles: logMode == .activity ? LocaleTolerantNumber.double(from: distance) : nil,
             activeEnergyKcal: logMode == .activity ? LocaleTolerantNumber.double(from: energyKcal) : nil,
             effort: logMode == .activity ? LocaleTolerantNumber.int(from: effort) : nil,
@@ -1260,10 +1260,23 @@ enum WorkoutSheetRules {
             return workoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !hasExercises
         case .activity:
             guard selectedActivityType != nil else { return true }
-            let parsedDuration = LocaleTolerantNumber.int(from: duration) ?? 0
+            let parsedDuration = durationMinutes(from: duration) ?? 0
             let parsedDistance = LocaleTolerantNumber.double(from: distance) ?? 0
             return parsedDuration <= 0 && parsedDistance <= 0
         }
+    }
+
+    /// Whole minutes from a Duration field, rounding a fractional entry to the nearest minute.
+    ///
+    /// The field shows a number pad, but a pasted or hardware-keyboard "30.5" still arrives. Parsed as
+    /// an integer it read as no duration at all: an activity log's Save stayed disabled with nothing
+    /// saying why, and a strength log saved with its duration silently dropped. Every Duration field in
+    /// this file reads through here, so the save gate and the saved value cannot disagree.
+    ///
+    /// - Returns: nil for empty, negative, unparseable or unrepresentable text.
+    static func durationMinutes(from text: String) -> Int? {
+        guard let minutes = LocaleTolerantNumber.double(from: text), minutes >= 0 else { return nil }
+        return Int(exactly: minutes.rounded())
     }
 
     static func aggregatedMuscleGroups(from exerciseRows: [WorkoutExerciseEntry]) -> Set<MuscleGroup> {
@@ -1273,7 +1286,7 @@ enum WorkoutSheetRules {
         }
     }
 
-    /// Best-effort parse of free-text exercise lines ("Squat 3x8 @60") back into structured rows.
+    /// Best-effort parse of free-text exercise lines ("Back squat 3x8 @60") back into structured rows.
     ///
     /// Shared by ``WorkoutPlanSheet`` (re-hydrating "Plan steps" on open) and ``WorkoutSheet``'s
     /// "Log it again" prefill (MOVE-08) — one parser, so the two sheets can never disagree about
@@ -1281,8 +1294,7 @@ enum WorkoutSheetRules {
     static func exerciseEntries(from text: String) -> [WorkoutExerciseEntry] {
         text.components(separatedBy: .newlines).compactMap { line in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty,
-                  let exercise = WorkoutExerciseCatalog.search(trimmed).first else {
+            guard !trimmed.isEmpty, let exercise = catalogExercise(namedBy: trimmed) else {
                 return nil
             }
 
@@ -1292,12 +1304,11 @@ enum WorkoutSheetRules {
                 .dropFirst()
                 .first
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
+            let treadmill = exercise.inputKind == .treadmill ? treadmillFields(in: trimmed) : nil
             var details = trimmed.replacingOccurrences(of: exercise.name, with: "")
-            if let fullMatch = setRep.fullMatch {
-                details = details.replacingOccurrences(of: fullMatch, with: "")
-            }
-            if !weight.isEmpty {
-                details = details.replacingOccurrences(of: "@\(weight)", with: "")
+            let consumed = [setRep.fullMatch, weight.isEmpty ? nil : "@\(weight)"] + (treadmill?.consumed ?? [])
+            for match in consumed.compactMap({ $0 }) {
+                details = details.replacingOccurrences(of: match, with: "")
             }
             details = details.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -1306,11 +1317,42 @@ enum WorkoutSheetRules {
                 sets: setRep.groups.first ?? "",
                 reps: setRep.groups.dropFirst().first ?? "",
                 weight: exercise.inputKind == .strength ? weight : "",
-                speed: exercise.inputKind == .treadmill ? weight : "",
-                incline: "",
+                // `summary` writes "5.5 mph"; an older line carried the speed after "@".
+                speed: treadmill.map { $0.speed.isEmpty ? weight : $0.speed } ?? "",
+                incline: treadmill?.incline ?? "",
                 details: details
             )
         }
+    }
+
+    /// The catalog exercise a written line names: the longest catalog name the line starts with
+    /// (case-insensitive, ending at a word boundary), since ``WorkoutExerciseEntry/summary`` always
+    /// writes the name first.
+    ///
+    /// The lookup used to be `WorkoutExerciseCatalog.search(line)`, which matches only when an
+    /// exercise's NAME contains the whole line. Any line carrying its numbers ("Bench press 3x8 @95",
+    /// "Treadmill walk 3.5 mph") therefore matched nothing and was dropped on reopen. That search is
+    /// kept as the fallback, so a line that is just a name (or that only it matched before) still
+    /// resolves as it did.
+    private static func catalogExercise(namedBy line: String) -> ExerciseTarget? {
+        let lower = line.lowercased()
+        let named = WorkoutExerciseCatalog.allExercises.filter { exercise in
+            let name = exercise.name.lowercased()
+            guard !name.isEmpty, lower.hasPrefix(name) else { return false }
+            return lower.dropFirst(name.count).first.map { !$0.isLetter } ?? true
+        }
+        return named.max { $0.name.count < $1.name.count } ?? WorkoutExerciseCatalog.search(line).first
+    }
+
+    /// The speed and incline a treadmill line's ``WorkoutExerciseEntry/summary`` wrote ("5.5 mph",
+    /// "2% incline"), with the matched text so the caller can keep it out of `details`.
+    ///
+    /// Without this a reopened treadmill line lost both values into its free-text details, and a
+    /// re-typed speed then appeared twice in the saved line.
+    private static func treadmillFields(in text: String) -> (speed: String, incline: String, consumed: [String?]) {
+        let speed = firstMatch(in: text, pattern: #"(\d+(?:[.,]\d+)?)\s*mph"#)
+        let incline = firstMatch(in: text, pattern: #"(-?\d+(?:[.,]\d+)?)\s*%\s*incline"#)
+        return (speed.groups.first ?? "", incline.groups.first ?? "", [speed.fullMatch, incline.fullMatch])
     }
 
     /// The first regex match in `text`, as (whole match, capture groups) — nil-safe on both ends.
@@ -2423,7 +2465,7 @@ struct EditWorkoutSheet: View {
         var updated = workout
         updated.name = trimmedName
         updated.intensity = intensity
-        updated.duration = LocaleTolerantNumber.int(from: duration)
+        updated.duration = WorkoutSheetRules.durationMinutes(from: duration)
         // Blank clears the RPE rather than pinning the old one — the field is how you correct it.
         updated.rpe = LocaleTolerantNumber.double(from: rpe)
         updated.notes = notes
@@ -4445,7 +4487,7 @@ struct WorkoutPlanSheet: View {
                 exercises: exerciseText,
                 muscleGroups: plannedMuscleGroups,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                duration: LocaleTolerantNumber.int(from: duration),
+                duration: WorkoutSheetRules.durationMinutes(from: duration),
                 targetDistanceMiles: LocaleTolerantNumber.double(from: distance),
                 targetEnergyKcal: LocaleTolerantNumber.double(from: energyKcal),
                 targetEffort: LocaleTolerantNumber.int(from: effort),
