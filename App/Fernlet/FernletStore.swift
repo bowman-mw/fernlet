@@ -5545,8 +5545,13 @@ final class FernletStore {
     /// the count is the growth cap; the servings/quantity bounds keep a hostile payload from turning
     /// every later macro computation into a nonsense (or non-finite) number.
     enum RecipeImportLimits {
-        /// Most ingredients one imported recipe may carry (extras are refused / dropped).
-        static let maxIngredients = 60
+        /// Most ingredients one imported recipe may carry (extras are refused / dropped): the wire
+        /// cap itself, which the editor (`RecipeLimits`), the decoders, the exchange validator and the
+        /// web importer all hold, so a recipe Fernlet lets anyone build or send is one it imports whole.
+        /// It was a second constant, 60, until 2026-10-16: a recipe of 61 to 100 ingredients was
+        /// refused by paste, a nearby `.local` share, a Messages card and a Shortcuts file, and a
+        /// nearby `.saved` share kept only its first 60 lines.
+        static let maxIngredients = SharedRecipeLimits.maxIngredients
         /// Most servings one imported recipe may claim.
         static let maxServings = 100
         /// Largest per-ingredient quantity accepted from a share.

@@ -1253,7 +1253,9 @@ public enum RecipeWebImporter {
 
     /// Ingredient lines kept from one imported page (R3: page-controlled input). No real recipe
     /// approaches 100 lines, and each kept line costs one catalog search during a user-visible import.
-    nonisolated public static let maxImportedIngredients = 100
+    /// Deliberately EQUAL to the wire cap: a web-imported recipe can be shared over the mesh, and every
+    /// import path keeps exactly that many lines (`FernletStore.RecipeImportLimits`).
+    nonisolated public static let maxImportedIngredients = SharedRecipeLimits.maxIngredients
 
     /// Ordered steps kept from one imported page (R3: page-controlled input). A real recipe is far
     /// below this; the cap exists because these steps are persisted and then serialised into the
