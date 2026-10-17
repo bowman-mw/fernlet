@@ -1,5 +1,26 @@
 # Fernlet — Meal Estimation Overhaul (Restaurant & Composite Dishes)
 
+> **Status (2026-10-17): built, most of it in June.** All six phases are in the tree. M5 departs
+> from its text in one way, and M3's storage has since moved. Most of the work arrived in three bulk
+> commits: `a8074058` (2026-06-03: the dish lexicon and the decomposition model), then `a6757b77`
+> and `d8069361` (2026-06-12: the store wiring, the FDC-format catalog, the web-lane gate and the
+> image discovery).
+>
+> | Phase | State | Where it is now |
+> |---|---|---|
+> | M1a preparation bias | Built (`a6757b77`) | `preparationBias` in `FernletKit/Sources/FernletDomainModel/FoodItemSearch.swift:730`, added into the score at `:680` |
+> | M1 AI dish decomposition | Built (`a8074058`, wired in `a6757b77`) | `App/Fernlet/FoundationDishDecomposition.swift` (`FoundationDishDecompositionModel`, `MealDecompositionResolver`); `MealDecompositionPayload` at `FernletKit/Sources/AIContext/AIContextPayload.swift:68`. It is the first AI tier of `MealResolutionService` (`App/Fernlet/MealResolutionService.swift:118`, moved out of the store in `e1a62c96`). The item-count guard went in `a6757b77`. Later: a quick log is one meal (`47937b72`), a calorie plausibility gate (`c86cffb6`), a whole-description catalog probe that runs before this tier (`dcee2ecb`), and a dish of several foods offers its recipe in the review (`ae7930cd`, `2702a391`) |
+> | M2 lexicon + portions | Built (`a8074058`) | `App/Fernlet/DishTemplates.json` (29 dishes, `version` 1) and `DishTemplateLexicon.swift`; `CompositeFoodLexicon` removed (`cbb29921`); bind confidence and unit-word count parsing (`8c55627f`, `5ee31f0d`) |
+> | M3 per-100 g catalog | Built (`a6757b77`, `d8069361`), then re-housed | FDC `foodNutrients`/`foodPortions` ingestion, `FoodDataType.survey`, the `food_catalog_v2` cache bump and a curated survey set. The catalog moved to SQLite in `c2d800bb` (2026-06-24), which retired the plist cache. The bundled `FoodCatalog.sqlite` holds 8,888 SR Legacy rows (8,834 on a 100 g basis, 7,783 with household portions) and 202 `survey` rows. Branded rows keep the label basis, except a load-time shim that reads the 59,227 compact-source rows per 100 g (`bab6c3fa`). Full FNDDS is F8 in [Ingredient-Search-Deep-Research-2026-09-29.md](Ingredient-Search-Deep-Research-2026-09-29.md), still waiting on the owner |
+> | M4 web lane | Built (`a6757b77`, `d8069361`; explicit consent `ae3c91c7`) | `shouldSearch` consults `FoodBrandLexicon` (`App/Fernlet/FoodProductWebImporter.swift:63`). `webNutritionLookupEnabled` defaults to off and also needs consent and AI on (`FernletKit/Sources/FernletDomainModel/SettingsModel.swift:69`, `:80`). `AIDestination.webNutritionLookup` exists, and `html.duckduckgo.com` is allowlisted in [No-Tracking-Wall.md](No-Tracking-Wall.md) |
+> | M5 correction | Built, with one departure | `MealRow` shows the component breakdown inline (`meal.componentSnapshots`), and tapping the row or its "Adjust ›" line opens Adjust meal (`onCorrect` from `a6757b77`; the row redesigned in `ff176c71`). A replaced match is remembered (`FoodSearchCorrectionMemory`, `9aa090a9`). The departure: only a confident log saves in one tap. A low-confidence or partial resolution opens a pre-log review first (`MealResolution.needsReview`, `App/Fernlet/FoodView.swift:3440`) |
+> | M6 label-image discovery | Built (`d8069361`) | `candidateImageURLs(from:sourceURL:)` scores and de-duplicates the page's images, and at most 8 are scanned (`App/Fernlet/FoodProductWebImporter.swift:417`, `:640`, `:701`). No SKU-specific image URL is left in production code |
+>
+> The `file:line` citations below come from the 2026-06-02 tree, before the SPM carve-up and the
+> `App/` move, and most no longer resolve; use [FileIndex.md](FileIndex.md). For food search, the
+> ingredient-search research doc linked above is the live record. The header below is the original
+> 2026-06-02 one, kept.
+
 **Date:** 2026-06-02
 **Scope:** Replace the lexical, candidate-constrained quick-log matcher with **on-device AI dish decomposition** as the primary route (model determines primary ingredients + per-component grams from its own knowledge, catalog supplies macros). Back it with deterministic fallbacks (dish lexicon JSON + dish-aware portions + preparation-aware scoring). Fix the USDA portion data by reverting to the original FoodData Central format (per-100 g nutrients + rich `foodPortions`). Fold in the already-built web product importer, extend it to chain restaurants behind a privacy gate, and replace hardcoded nutrition-label image URLs with dynamic product-page image discovery.
 **Method:** Source audit of the current meal pipeline against the uploaded files. Findings cite `file:line`. This is a planning document — it specifies *what to build and in what order*; it does not change code.

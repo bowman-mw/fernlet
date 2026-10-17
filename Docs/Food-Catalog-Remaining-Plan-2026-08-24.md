@@ -1,5 +1,31 @@
 # Food catalog remaining plan — 2026-08-24
 
+> **Status (2026-10-17): most of the dependency-ordered list is built. Item 10's compact
+> projection, and the two owner gates it needs, are still open.** This doc was committed
+> (`0cbfe4b1`, 2026-08-24) minutes after the round it plans had merged its first half
+> (`67d2785f`), so some steps were already done when it landed. Its eleven steps against the tree:
+>
+> | Step | State | Evidence |
+> |---|---|---|
+> | 1–4 item 13 tooling | Committed; the generated catalog never shipped | `Scripts/food-catalog/` plus the `FoodDataSource/` manifest and evidence (`940332d2`). Its README describes the staged generation and the atomic publish. The shipped `FoodCatalog.sqlite` is unchanged since `7bb3e576` (2026-07-12) and is still 59,748,352 bytes. Later catalog fixes are applied at load time (F1(a) `4784fe74`, F2 `bab6c3fa`, F6 `bb49f29a`), not by a regenerated binary |
+> | 5 item 12 units | Built, then extended | `0ba40d90`. The 12-US-fl-oz glass is `FernletKit/Sources/FernletDomainModel/NutritionModels.swift:2168` (354.882 mL). The ingredient-search round extended it: volume amounts from agreeing portion densities and a tap default that always converts (F1(b) `112d844d`, F1(c) `ee822edf`); "1 banana" through a tolerant portion reader (F4a `9793fd77`); and each food's USDA portions in the recipe editor's unit menu, a cited 76-entry typical-size table badged "USDA typical size, estimate" that the web importer also reads, and a per-food "grams in one" the editor remembers (F4b `826ffb5b`, `3797ec7d`, `4b1c944a`) |
+> | 6 item 17 score-first | Not built; replaced | Its slot produced generic-first ranking instead (`ee3d3361`). The owner then chose F5: an ingredient-identity key on the recipe editor and the swap sheet only (`090869f2`, `3e9ed6d8`). Quick-log and the meal resolver keep their order |
+> | 7 item 9d personalization | Built | `905e73d4` (`FoodIngredientPersonalization.swift`, `RecentIngredientSpecializationTests`), merged in `e0bc94ac` |
+> | 8 `confidentBindScore` | Recalibrated, but on a ranking step 6 never changed | `93df2064` (after 9d) set it from 250 to 368, and it is still 368 (`FoodItemSearch.swift:164`). The research doc's §7 asks for a re-derivation after any ranking change. F5 left the resolver's order alone, and no re-derivation is in git |
+> | 9 item 16 partial matching | Built, then narrowed | `ab6e573d`, then `ab466c7f`. It fires only on typed queries that return nothing (research doc §7) |
+> | 10 compact runtime/ODR projection | Not designed | Instead, PR #15 (`4d7032c0`, merged `cdcc7bf1` on 2026-10-15) ships the existing 178 MB branded catalog, this doc's "existing optional branded ODR experiment" row, as the tagged On-Demand Resource `branded-food-catalog`. That is Option A of [Food-Catalog-Runtime-ODR-Options-2026-08-24.md](Food-Catalog-Runtime-ODR-Options-2026-08-24.md). Both owner gates at the end of this doc stay open, and F8 (the FNDDS generic layer, which is item 13's runtime projection) waits on them |
+> | 11 food-item improvements | Partly | F7's curated alias table (`7c5c3964`) and F4b's badged typical sizes touch the P2 alias row and the P0 portion-provenance row. The other rows have not been started |
+>
+> The ingredient-search round of 2026-09-29/30 (F1–F7, F9, F9b, F10, F11, F4a, F4b) was planned
+> outside this list's numbering. Its live record is
+> [Ingredient-Search-Deep-Research-2026-09-29.md](Ingredient-Search-Deep-Research-2026-09-29.md):
+> §8, and its two "Update 2026-09-30" sections. Still open there: F8, and a branded-category gate
+> for names that put the flavor last. On sources, this doc's "CNF is rejected" is still the text in
+> force. The research doc's §9 Q7 asks the owner to confirm it against a brief that listed CNF as
+> approved, and no answer is recorded in the tree.
+>
+> *Original status (2026-08-24), kept:*
+
 This is the canonical execution plan for food-catalog work remaining after items 9–11. It
 supersedes older ordering and source recommendations where they conflict. It is a plan only: no
 runtime implementation or generated catalog is authorized by this document.

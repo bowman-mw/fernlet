@@ -3,7 +3,7 @@
 **Item:** Fernlet, iOS application (bundle identifier `MBO.Fernlet`)
 **Classification:** **ECCN 5D992.c** — mass market encryption software
 **Authorization:** License Exception ENC, self-classification under **15 CFR §740.17(b)(1)**
-**Determined:** 2026-08-19
+**Determined:** 2026-08-19 · **Revision 2 drafted:** 2026-10-17 — *unsigned until the owner signs it below*
 **Determined by:** Michael Bowman Olay, sole developer *(confirm the legal name/entity exactly as it appears on the App Store listing before this is relied on)*
 **Retention:** five years past the date of the last export — 15 CFR §762.6(a)
 
@@ -14,6 +14,17 @@
 > warrant counsel.
 >
 > Supporting analysis, with citations: [Export-Compliance-Encryption.md](Export-Compliance-Encryption.md).
+
+> **Revision 2 (draft, 2026-10-17) — why it exists.** §9 requires this memorandum to be re-issued when a
+> new cryptographic protocol is introduced. Since revision 1 was signed on 2026-08-23 the peer-to-peer
+> link moved from MultipeerConnectivity to **QUIC with TLS 1.3** over Apple's Network.framework, with
+> app-minted self-signed P-256 certificates (MultipeerConnectivity left the source on 2026-09-22). The
+> peer-to-peer code also moved into its own public Apache-2.0 repository, and new sealed surfaces were
+> added: every period log in a sealed store, Sealed backup v2, session photos held until chosen, sealed
+> photo backup, and rotating presence tags. §2, §3, §5, §6 and §9 are revised and §10 lists every change.
+> **The determination does not change**: every primitive and the new transport protocol are published
+> standards, and the source of every bespoke protocol is public. The signed revision 1 is preserved as
+> `20d404b8:Docs/Export-Self-Classification-Memo.md`.
 
 ---
 
@@ -41,17 +52,23 @@ sleep, cycle, journaling and hygiene signals.
 It operates with **no backend of its own**. Its uses of cryptography are:
 
 1. **At-rest confidentiality** on the user's own device for sensitive personal content — journal
-   text, menstrual-cycle narratives, intimate-activity notes, and photos — so that this material is
+   text, every menstrual-cycle log, intimate-activity notes, and photos (including photos from an
+   in-person session, held sealed until the user chooses which to keep) — so that this material is
    protected independently of the device passcode.
 2. **End-to-end encrypted peer-to-peer exchange** between users who have met in person, over a
-   short-range local link (MultipeerConnectivity with NearbyInteraction ranging): recipe sharing,
-   friend photos, companion clothing, group activities, and short "heart" messages.
-3. **Client-side encryption of backups** and of an offline "heart drop" delivered through a CloudKit
-   public database, which the developer cannot read.
+   short-range local link: QUIC with TLS 1.3 (Apple's Network.framework) on the local Wi-Fi network or
+   Apple peer-to-peer Wi-Fi, with NearbyInteraction ranging. It carries recipe sharing, friend photos,
+   companion clothing, group activities, short "heart" messages, and the presence signal between
+   friends. Inside the TLS channel the application signs and seals its own messages (§3).
+3. **Client-side encryption of backups** in the user's own iCloud account — journal, cycle and
+   intimacy records and the user's own photos — and of an offline "heart drop" delivered through a
+   CloudKit public database. The developer can read none of it.
 
 Distribution is via the Apple App Store, **free of charge**, with no purchase price, subscription,
 in-app purchase or advertising. The complete source, including all cryptographic source code, is
-published under the Apache License 2.0 at <https://github.com/bowman-mw/fernlet>. Both of these are
+published under the Apache License 2.0 at <https://github.com/bowman-mw/fernlet>, and the
+peer-to-peer package the app links, ProximityKit, at <https://github.com/bowman-mw/proximitykit>
+(Apache-2.0; the app pins one tagged release, `0.1.1` at the date of revision 2). Both of these are
 permanent product commitments, not launch conditions.
 
 ---
@@ -63,24 +80,31 @@ hash, key-derivation function or key schedule.
 
 | Component | Primitive | Standard | Purpose |
 |---|---|---|---|
-| `FernletCrypto/ColumnCrypto` | ChaCha20-Poly1305, HKDF-SHA256 | RFC 8439, RFC 5869 | Per-column sealing of journal / worry / menstrual / intimacy text |
-| `PrivateMediaStore/MediaAtRestCrypto` | AES-256-GCM | NIST SP 800-38D | At-rest sealing of meal, progress and private photos |
-| `FernletLock/FernletLockService` | scrypt (N=65536, r=8, p=1), via CryptoSwift | RFC 7914 | Passcode → content-key wrapping key |
-| `FernletLock/SecureEnclaveContentKeyWrap` | ECIES over Secure Enclave P-256 | SEC 1, NIST P-256 | Hardware device-binding of the content key |
-| `ProximityKit/IdentityService` | Ed25519 signing, X25519 ECDH | RFC 8032, RFC 7748 | Per-device peer identity, session key agreement |
-| `ProximityKit/HeartDropSealer` | X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305, one-time prekeys | RFC 7748, 5869, 8439 | Sealed-sender offline heart-drop envelopes |
-| `ProximityKit/Wire`, `Moderation` | SHA-256, SHA-512, HMAC | FIPS 180-4, RFC 2104 | Envelope integrity, content hashing |
-| Sealed backup / escrow | AES-256-GCM, X25519, HKDF-SHA256 | as above | Client-side-encrypted backup blobs; escrow key held in iCloud Keychain |
-| `WebScrapingKit/EphemeralWebSession` | TLS, via `URLSession` | — | The only OS-level cryptography; exempt in its own right |
+| `FernletCrypto/ColumnCrypto` | ChaCha20-Poly1305, HKDF-SHA256 | RFC 8439, RFC 5869 | Per-column sealing of journal / worry / intimacy text and of every period log in the sealed cycle store |
+| `PrivateMediaStore/MediaAtRestCrypto` | AES-256-GCM | NIST SP 800-38D | At-rest sealing of meal, progress, private and held session photos |
+| `FernletLock/FernletLockService` | scrypt (N=65536, r=8, p=1), via CryptoSwift; ChaCha20-Poly1305 key wrap; SHA-256 verifier | RFC 7914, RFC 8439, FIPS 180-4 | Passcode (and duress PIN) → content-key wrapping key |
+| `FernletLock/SecureEnclaveContentKeyWrap` | ECIES over a Secure Enclave P-256 key (X9.63 KDF with SHA-256, AES-GCM), via the Security framework | SEC 1, NIST P-256 | Hardware device-binding of the content key |
+| `ProximityKit` transport (all three radios) | QUIC with TLS 1.3, via Network.framework; app-minted, never-persisted self-signed X.509 certificates, ECDSA P-256 with SHA-256, valid 24 hours, minted fresh for each session or presence epoch | RFC 9000, RFC 9001, RFC 8446, RFC 5280, FIPS 186 | Encrypted local channel between nearby devices |
+| `ProximityKit` mesh channel introduction | Ed25519 signatures over both peers' keys and nonces and a SHA-256 hash of the TLS 1.3 exporter secret | RFC 8446 §7.5, RFC 8032, FIPS 180-4 | Peer authentication bound to the specific TLS channel (TLS itself accepts any certificate; the application authenticates) |
+| `ProximityKit/IdentityService` | Ed25519 signing; X25519 ECDH; sealing = ephemeral X25519 → HKDF-SHA256 → ChaCha20-Poly1305; group-key wrap = X25519 → HKDF-SHA256 → AES-GCM | RFC 8032, RFC 7748, RFC 5869, RFC 8439, SP 800-38D | Per-device peer identity, signed and sealed envelopes, pair secret |
+| `ProximityKit` mesh content | AES-256-GCM; per-recipient content-key wrap X25519 → HKDF-SHA256 → AES-GCM | SP 800-38D, RFC 7748, RFC 5869 | Group metadata and routed items (friend photos) |
+| `FernletSocial` presence tags | HMAC-SHA256 over an X25519 pair secret and a 15-minute epoch, truncated | RFC 2104, RFC 7748 | Rotating identifiers that let only friends recognise each other |
+| `FernletSocial/HeartDropSealer` | X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305, one-time prekeys; HMAC-SHA256 record tag | RFC 7748, 5869, 8439, 2104 | Sealed-sender offline heart-drop envelopes |
+| Sealed backup v1/v2, sealed photo backup | AES-256-GCM under a key from HKDF-SHA256 over a random 32-byte escrow secret (stored as an X25519 key in iCloud Keychain; no key agreement is performed); SHA-256 writer tags and content hashes | SP 800-38D, RFC 5869, FIPS 180-4 | Client-side-encrypted backup sets in the user's iCloud |
+| Duress recovery | The content key sealed to a custodian with `IdentityService` sealing | as above | Recovery after a duress lock |
+| Moderation, message filter, exchange packets, fingerprints | SHA-256 | FIPS 180-4 | Content hashing (no secret) |
+| `WebScrapingKit/EphemeralWebSession` | TLS, via `URLSession` | — | Outbound web lookups; Apple OS cryptography |
 
 **Key lengths exceed the Cryptographic Note thresholds** — symmetric keys are 256-bit and asymmetric
 key agreement/signature is Curve25519 and P-256 — so the item falls within Category 5 Part 2 and the
 below-threshold route is unavailable.
 
-**Not solely Apple operating-system cryptography.** Although CryptoKit provides most primitives, the
-application implements its own key hierarchy and wire formats above them, and links **CryptoSwift**, a
-third-party cryptographic library, for scrypt. The "OS encryption only, no documentation required"
-treatment therefore does not apply.
+**Not solely Apple operating-system cryptography.** Apple frameworks provide most primitives —
+CryptoKit, the Security framework (Secure Enclave ECIES, certificate identities) and Network.framework
+(QUIC/TLS 1.3, `URLSession` TLS). But the application implements its own key hierarchy, wire formats
+and X.509 certificate encoder above them, and links **CryptoSwift**, a third-party cryptographic
+library, for scrypt. The "OS encryption only, no documentation required" treatment therefore does not
+apply.
 
 ---
 
@@ -117,13 +141,16 @@ Each exemption was assessed against the shipping source.
 *proprietary or unpublished* functionality, including algorithms **or protocols** not adopted by a
 recognized standards body **"and have not otherwise been published."** The test is conjunctive.
 
-Fernlet's *algorithms* are published international standards without exception. Several of its
-*protocols* are bespoke — the heart-drop sealed-sender envelope, the wire framing, and the identity
-and trust ceremony — and these are Noise-inspired rather than any standards-body protocol. However,
-they are constructed entirely from published primitives, contain no secret or proprietary component,
-and are **published in full**: the complete source is public under Apache-2.0, and the wire formats
-are documented in the in-repository DocC documentation. The second prong of the definition is
-therefore not met, and the item is not non-standard cryptography.
+Fernlet's *algorithms* are published international standards without exception, and since revision 2
+so is its peer-to-peer *transport protocol*: QUIC and TLS 1.3 are IETF standards, provided by the
+operating system. Several of its *application-layer protocols* are bespoke — the heart-drop
+sealed-sender envelope, the wire framing, the identity and trust ceremony, the mesh channel
+introduction bound to the TLS exporter, and the presence-tag derivation — and these are Noise-inspired
+rather than any standards-body protocol. However, they are constructed entirely from published
+primitives, contain no secret or proprietary component, and are **published in full**: the complete
+source of both repositories is public under Apache-2.0, and the wire formats are documented in each
+repository's DocC documentation. The second prong of the definition is therefore not met, and the item
+is not non-standard cryptography.
 
 Accordingly the item is eligible for **self-classification under §740.17(b)(1)**, rather than falling
 into §740.17(b)(3)(ii), which would require a classification request and a 30-day waiting period.
@@ -137,8 +164,8 @@ BIS guidance states that a mass-market application made available free of charge
 available, and that once the mass-market requirement has been satisfied by self-classification — a
 step completed **once** — the item is then no longer subject to the EAR.
 
-Independently, the corresponding **source code** is publicly available under Apache-2.0
-(§742.15(b)(1)), which extends to the corresponding object code under §734.7(b) and the Note to
+Independently, the corresponding **source code** — the app's and ProximityKit's — is publicly
+available under Apache-2.0 (§742.15(b)(1)), which extends to the corresponding object code under §734.7(b) and the Note to
 §734.3(b)(2)–(3).
 
 **Ordering.** The Note to §740.17(b) provides that a mass-market item remains subject to the EAR
@@ -194,8 +221,9 @@ This memorandum must be re-issued if any of the following changes:
 
 - **Fernlet ceases to be free** — a purchase price, subscription or in-app purchase would remove the
   publicly-available basis in §6.
-- **The source ceases to be published** — this would revive the "not otherwise published" prong in §5
-  and could make the item non-standard cryptography.
+- **The source ceases to be published** — either repository, or a ProximityKit release the app pins
+  whose source is not public. This would revive the "not otherwise published" prong in §5 and could
+  make the item non-standard cryptography.
 - **A new cryptographic algorithm, library or protocol is introduced**, or an existing one is
   replaced with a proprietary or unpublished construction.
 - **A paid or closed-source companion application** is distributed under this classification. Fernlet
@@ -203,5 +231,36 @@ This memorandum must be re-issued if any of the following changes:
 
 ---
 
-**Signature** Michael Bowman Olay  
+## 10. Revision history
+
+**Revision 1** — determined 2026-08-19, signed 08/23/2026. Preserved as
+`20d404b8:Docs/Export-Self-Classification-Memo.md`.
+
+**Revision 2** — drafted 2026-10-17 against `main` 20d404b8 and ProximityKit `0.1.1` (e09affe4). It records
+these changes:
+
+- **Transport.** MultipeerConnectivity → QUIC/TLS 1.3 through Network.framework, with app-minted
+  self-signed ECDSA P-256 certificates. The mesh is the friend radio cut over on 2026-09-21; the presence
+  and recipe radios moved under the same plan; MultipeerConnectivity was deleted on 2026-09-22.
+- **New P-256 use.** P-256 now also signs the TLS certificates (ECDSA), not only the Secure Enclave key.
+- **New protocols over published primitives.** The mesh channel introduction (Ed25519 bound to the TLS
+  exporter) and the presence tags (HMAC-SHA256).
+- **New sealed surfaces using primitives already listed.** Every period log in the sealed cycle store,
+  Sealed backup v2, held session photos, sealed photo backup, and duress recovery.
+- **Corrections to revision 1's table.** The sealed backup's escrow key is used only as an HKDF input,
+  with no X25519 key agreement. SHA-512 is not used. `HeartDropSealer` lives in FernletKit's
+  `FernletSocial`. `URLSession` TLS is not the only OS-level cryptography.
+- **Source location.** ProximityKit moved to its own public Apache-2.0 repository; §2, §6 and §9 now name
+  both repositories.
+
+The classification, the authorization and every filing answer in §7 are unchanged. The transport
+change alters none of App Store Connect's four encryption questions: QUIC/TLS is Apple OS encryption,
+and no proprietary algorithm was added.
+
+---
+
+**Revision 1 — Signature** Michael Bowman Olay  
 **Date** 08/23/2026
+
+**Revision 2 — Signature** ______________________ *(unsigned draft — the owner signs and dates to re-issue)*  
+**Date** ______________________

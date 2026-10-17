@@ -4,6 +4,43 @@ Network migration **P7** (the app-layer run policy, the poller, the resume surfa
 **two to three physical iOS devices**, plus the §15 hardware gates P8 owns, as one checklist with a
 results table. Written 2026-09-18 at the P7 boundary.
 
+> **Status (2026-10-17): runnable, and sections A–E are still unrun.** P7 compiles. The round's
+> first Mac compile fixed five errors and turned the app and test targets green (`cb34622a`,
+> 2026-09-18). The P8 item 0 gauntlet then ran the mesh-batteries list at **316 ran, 0 failed**
+> (`4b46f6ba`) and marked plan §13 BUILT (`e6a3b48:Docs/Mesh-Migration-Loop-Ledger-P8.md`, item 0),
+> so the precondition in the original status below is met. P7's six acceptance suites
+> (`MeshP7RunPolicyAcceptanceTests` through `MeshP7HonestyAcceptanceTests`, 13 `@Test`s in
+> `Tests/FernletTests/MeshP7AcceptanceTests.swift`) run on the S3-wall step "Mesh acceptance
+> batteries (P3 – P9)" (`.github/workflows/s3-wall.yml:2439-2444`). That step was green on `main` at
+> `487f99dc` (2026-10-17). Since this plan was written, P8, P9 and P10 landed, the transport flipped
+> to QUIC (`5d882475`), the MultipeerConnectivity deletion build closed (`d88062cc`), and the mesh
+> moved into the external `proximitykit` package, which Fernlet pins at `0.1.1`
+> (`FernletKit/Package.swift:65`). Most of the Console tokens under *Evidence* below
+> (`mesh.sessionPoll.moved`, `mesh.sessionCeiling.armedFromAdoptedMesh`, `mesh.session.linksHeld`,
+> `mesh.sessionState.rejoinBarred`) are now written by that package. `FernletAuditBridge` hands them
+> to `FernletAuditLog` (`App/Fernlet/FernletApp.swift:87`), so the `subsystem:com.fernlet` filter
+> still finds them.
+>
+> **The one device round (2026-09-22, one phone, build `d88062c`) touched only section F.** F11
+> passed twice: Lane D on 2026-09-21, and the unseeded first meeting on 2026-09-22. Those are the
+> two filled F11 lines in *Results*. F1–F9 and F12 were each named UNREACHABLE or NOT RUN with one
+> phone, and F10 (Wi-Fi Aware) stayed the owner's call, in the runbook's Lane B
+> (`Docs/Mesh-Migration-Loop-Ledger-Device-2026-09-22.md` item 2; plan §28.9). The same round's
+> read-back saw the continued-processing task granted at every first commit (ledger item 4). That
+> meets part of the F1/F9 precondition but runs none of their rows.
+> **No row of sections A–E has been run.** There are 26 such rows: E5 and E6 are pre-marked tier 1
+> only and B4 is optional, which leaves **23 device rows, 0 run**. Their Result cells are blank.
+>
+> **Read before running.** (1) Row B1's Expected column is out of date. Owner call P9-3-A removed
+> the app-lock leg from the presence and recipe-share rows (`4d1fa0bc`, 2026-09-22;
+> `App/Fernlet/ProximityRunPolicy.swift:481`), so a configured Fernlet lock no longer stops those
+> radios. Record B1 against that behaviour, not against the column. (2) The device ledger's rule
+> still stands: nothing from `4d1fa0b` or later goes on the phone before the §15.3 soak has run
+> (ledger, *Decisions taken*). No soak read-out has been committed since, so ask the owner which
+> build a run should use. (3) Section F's §15.1 and §15.2 rows still need a second phone, and a
+> third or fourth for the partition walks.
+
+> *Original status (2026-09-18), kept; the 2026-10-17 status above supersedes it:*
 > **Status: this plan cannot be run yet.** Every P7 file was written in a session with **no Swift
 > toolchain**; nothing in P7 has compiled, and no P7 test has run. Before any row below is attempted,
 > the Mac gauntlet in `e6a3b48:Docs/Mesh-Migration-Loop-Ledger-P7.md` § "Owed to a Mac" must be green

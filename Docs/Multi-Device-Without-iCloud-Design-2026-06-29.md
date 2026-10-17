@@ -1,6 +1,14 @@
 # Multi-Device Without iCloud — Design Review
 
-**Status:** design review / options, 2026-06-29 (revised same day, after Increment 3). Captures the problem,
+**Status (2026-10-17):** still deliberately deferred design. Phase 1 has shipped (see the
+2026-07-19 update below). Phases 2 and 3 are unbuilt: no `ownedDevice` or `relationshipType` exists
+in Fernlet or in `proximitykit` 0.1.1. Two facts below are corrected in place: the mesh now runs on
+QUIC (Network.framework) inside the external `proximitykit` package, and the escrow key now lives in
+the app. Since this doc was written, the backup has become Sealed backup v2, covering period data,
+the intimate log and the journal (`6b9790dc`, `f18a9be4`, `dc4c599f`). It is still not
+whole-account.
+
+*Original status, kept:* **Status:** design review / options, 2026-06-29 (revised same day, after Increment 3). Captures the problem,
 the grounded options, and a recommended phased path so multi-device usage degrades gracefully when iCloud
 sync is off — with an offline **mesh sync** as the eventual goal. **Update:** the items/recipes append-only
 fix from Phase 1 has since shipped (commit `3250d33`).
@@ -43,13 +51,25 @@ second-device warning. `iCloudAvailable = ubiquityIdentityToken != nil`;
 
 **Device identity (for same-user pairing) — mostly already there.** Stable per-device Ed25519 signing key
 (keychain, `ThisDeviceOnly`) is a strong device id, and a **backup-escrow X25519 key already syncs across a
-user's devices via iCloud Keychain** ([ProximityKit/IdentityService.swift:74](https://github.com/bowman-mw/proximitykit/blob/0.1.0/Sources/ProximityKit/Identity/IdentityService.swift))
-— "multi-device same-user" is already a modeled concept. Gap: `ProximityTrustedPeerRecord` has no
+user's devices via iCloud Keychain** ([SealedBackupEscrowKey.swift](../App/Fernlet/SealedBackupEscrowKey.swift))
+— "multi-device same-user" is already a modeled concept. *(Corrected 2026-10-17: this link used to
+cite `ProximityKit/IdentityService.swift:74` at proximitykit `0.1.0`. The escrow key left
+`IdentityService` for the app in `d141bf9b` (2026-10-03), and at both `0.1.0` and `0.1.1`
+`IdentityService` says ProximityKit "keeps no such key". The ThisDeviceOnly signing identity is
+still in [IdentityService.swift at 0.1.1](https://github.com/bowman-mw/proximitykit/blob/0.1.1/Sources/ProximityKit/Identity/IdentityService.swift).)* Gap: `ProximityTrustedPeerRecord` has no
 relationship type, so a paired own-device is treated like a friend. Add `relationshipType: .ownedDevice`.
 
-**Mesh transport — proven for bulk.** The friend-photo manifest+chunk flow and the sealed-backup chunker
-(250-record segments) already move large data device-to-device over MultipeerConnectivity (reliable). A
-"data sync" payload mirrors that pattern; no transport research blocker.
+**Mesh transport — proven for bulk.** The friend-photo manifest+chunk flow already moves large data
+device-to-device over the mesh. Since `0a33bc78` (2026-09-05) a friend photo is a sealed routed item:
+a signed manifest plus origin-signed chunks of at most 256 KiB (`MeshChunk.swift:63` in `proximitykit`
+0.1.1), carried over the QUIC mesh (`NetworkMeshSession`). It was seen crossing both ways on a
+physical radio, phone ↔ Simulator, in the runbook's Lane D run 4 (2026-09-21). The sealed-backup
+chunker (250 records per chunk, now `SealedBackupV2Engine.chunkSize`) chunks the backup for
+CloudKit; no backup has crossed the mesh, which is Option C below. A "data sync" payload mirrors the
+photo pattern; no transport research blocker. *(Corrected 2026-10-17. MultipeerConnectivity was
+deleted at `d88062cc` (2026-09-22), after the flip to QUIC at `5d882475`. The original sentence,
+kept: "The friend-photo manifest+chunk flow and the sealed-backup chunker (250-record segments)
+already move large data device-to-device over MultipeerConnectivity (reliable).")*
 
 **Mergeability of each data class — the crux for live sync:**
 

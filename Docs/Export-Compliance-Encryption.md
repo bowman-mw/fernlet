@@ -1,6 +1,7 @@
 # Export Compliance — Encryption Documentation
 
-**Status:** determination 2026-08-13, **materially revised 2026-08-19 and 2026-08-23**. Supersedes the one-paragraph
+**Status:** determination 2026-08-13, **materially revised 2026-08-19 and 2026-08-23**; inventory and transport
+facts **revised 2026-10-17** (the determination is unchanged). Supersedes the one-paragraph
 "Encryption" section in [App-Privacy-Nutrition-Labels.md](App-Privacy-Nutrition-Labels.md) and the
 compliance bullet in `e6a3b48:Docs/RemainingWork-2026-07-19.md` §1.
 
@@ -25,6 +26,21 @@ compliance bullet in `e6a3b48:Docs/RemainingWork-2026-07-19.md` §1.
 > `ITSAppUsesNonExemptEncryption = NO` in both configurations, and has no
 > `ITSEncryptionExportComplianceCode`. This is an Apple documentation determination, not a claim that
 > Fernlet has no cryptography. It supersedes this document's prior `YES` guidance.
+
+> **2026-10-17 revision — the transport changed; the determination did not.** The peer-to-peer link is
+> now **QUIC with TLS 1.3** over Apple's Network.framework (the friend mesh cut over on 2026-09-21,
+> MultipeerConnectivity was deleted on 2026-09-22, and the presence and recipe radios moved under the
+> same plan). Each listener presents an app-minted, never-persisted, self-signed ECDSA **P-256**
+> certificate, valid 24 hours. TLS accepts any certificate, and the application authenticates the
+> peer: the mesh binds an Ed25519-signed channel introduction to the TLS 1.3 exporter, and the
+> pair and presence radios carry signed, sealed envelopes. The peer-to-peer code is now the
+> separate public Apache-2.0 repository `bowman-mw/proximitykit`, pinned at `0.1.1`. §3 is
+> re-inventoried against `main` 20d404b8 and ProximityKit 0.1.1, and corrects four errors in the old
+> table: SHA-512 is unused, the backup escrow key feeds HKDF with no key agreement, `HeartDropSealer`
+> is in `FernletSocial`, and `URLSession` TLS is not the only OS-level cryptography. §7 and §10.4
+> follow. Every primitive and the new transport are published standards, and every bespoke protocol is
+> published, so 5D992.c stands. The signed memo's §9 still requires a **re-issue**: its revision 2 is
+> drafted for the owner's signature.
 
 > Not legal advice. Export classification is the developer's own responsibility — Apple explicitly
 > disclaims it, and a wrong classification is a customs/BIS matter, not an App Review matter. The
@@ -100,35 +116,42 @@ Rather than answering per submission, the answer can live in the build:
 
 In this project the key is set from the build settings, not the `Info.plist` file — currently
 `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` in both the Debug and Release configurations of the
-`Fernlet` target ([App/Fernlet.xcodeproj/project.pbxproj:531](../App/Fernlet.xcodeproj/project.pbxproj#L531)
-and `:588`). There is no `ITSEncryptionExportComplianceCode` setting, because App Store Connect did not
+`Fernlet` target ([App/Fernlet.xcodeproj/project.pbxproj:735](../App/Fernlet.xcodeproj/project.pbxproj#L735)
+and `:792`). There is no `ITSEncryptionExportComplianceCode` setting, because App Store Connect did not
 require a document or issue a code for the current distribution.
 
 ---
 
 ## 3. What Fernlet actually ships
 
-Every item below is real, first-party code (or a linked third-party package), not OS-level TLS:
+Every item below is first-party code, a linked third-party package, or an Apple framework the app drives
+with its own keys and formats (re-inventoried 2026-10-17 against `main` 20d404b8 and ProximityKit `0.1.1`):
 
 | Where | Primitive | Standard | Purpose |
 |---|---|---|---|
-| `FernletCrypto/ColumnCrypto` | ChaCha20-Poly1305, HKDF-SHA256 | RFC 8439, RFC 5869 | Per-column sealing of journal / worry / menstrual / intimacy text |
-| `PrivateMediaStore/MediaAtRestCrypto` | AES-256-GCM | NIST SP 800-38D | At-rest sealing of meal, progress, and private photos |
-| `FernletLock/FernletLockService` | **scrypt** (N=65536, r=8, p=1) via **CryptoSwift** | RFC 7914 | Passcode → content-key wrapping key |
-| `FernletLock/SecureEnclaveContentKeyWrap` | ECIES over Secure Enclave **P-256** | SEC 1 / NIST P-256 | Hardware device-binding of the content key |
-| `ProximityKit/IdentityService` | **Ed25519** signing, **X25519** ECDH | RFC 8032, RFC 7748 | Per-device peer identity, session key agreement |
-| `ProximityKit/HeartDropSealer` | X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305, one-time prekeys | RFC 7748/5869/8439 | Sealed-sender offline "heart drop" envelopes |
-| `ProximityKit/Wire`, `Moderation` | SHA-256 / SHA-512, HMAC | FIPS 180-4, RFC 2104 | Envelope integrity, content hashing |
-| Sealed backup / escrow | AES-256-GCM, X25519, HKDF | as above | Client-side-encrypted backup blobs; escrow key in iCloud Keychain |
-| `WebScrapingKit/EphemeralWebSession` | TLS via `URLSession` | — | The only *OS-level* crypto; exempt on its own |
+| `FernletCrypto/ColumnCrypto` | ChaCha20-Poly1305, HKDF-SHA256 | RFC 8439, RFC 5869 | Per-column sealing of journal / worry / intimacy text and of every period log in the sealed cycle store |
+| `PrivateMediaStore/MediaAtRestCrypto` | AES-256-GCM | NIST SP 800-38D | At-rest sealing of meal, progress, private and held session photos |
+| `FernletLock/FernletLockService` | scrypt (N=65536, r=8, p=1), via CryptoSwift; ChaCha20-Poly1305 key wrap; SHA-256 verifier | RFC 7914, RFC 8439, FIPS 180-4 | Passcode (and duress PIN) → content-key wrapping key |
+| `FernletLock/SecureEnclaveContentKeyWrap` | ECIES over a Secure Enclave P-256 key (X9.63 KDF with SHA-256, AES-GCM), via the Security framework | SEC 1, NIST P-256 | Hardware device-binding of the content key |
+| `ProximityKit` transport (all three radios) | QUIC with TLS 1.3, via Network.framework; app-minted, never-persisted self-signed X.509 certificates, ECDSA P-256 with SHA-256, valid 24 hours, minted fresh for each session or presence epoch | RFC 9000, RFC 9001, RFC 8446, RFC 5280, FIPS 186 | Encrypted local channel between nearby devices |
+| `ProximityKit` mesh channel introduction | Ed25519 signatures over both peers' keys and nonces and a SHA-256 hash of the TLS 1.3 exporter secret | RFC 8446 §7.5, RFC 8032, FIPS 180-4 | Peer authentication bound to the specific TLS channel (TLS itself accepts any certificate; the application authenticates) |
+| `ProximityKit/IdentityService` | Ed25519 signing; X25519 ECDH; sealing = ephemeral X25519 → HKDF-SHA256 → ChaCha20-Poly1305; group-key wrap = X25519 → HKDF-SHA256 → AES-GCM | RFC 8032, RFC 7748, RFC 5869, RFC 8439, SP 800-38D | Per-device peer identity, signed and sealed envelopes, pair secret |
+| `ProximityKit` mesh content | AES-256-GCM; per-recipient content-key wrap X25519 → HKDF-SHA256 → AES-GCM | SP 800-38D, RFC 7748, RFC 5869 | Group metadata and routed items (friend photos) |
+| `FernletSocial` presence tags | HMAC-SHA256 over an X25519 pair secret and a 15-minute epoch, truncated | RFC 2104, RFC 7748 | Rotating identifiers that let only friends recognise each other |
+| `FernletSocial/HeartDropSealer` | X25519 ECDH → HKDF-SHA256 → ChaCha20-Poly1305, one-time prekeys; HMAC-SHA256 record tag | RFC 7748, 5869, 8439, 2104 | Sealed-sender offline heart-drop envelopes |
+| Sealed backup v1/v2, sealed photo backup | AES-256-GCM under a key from HKDF-SHA256 over a random 32-byte escrow secret (stored as an X25519 key in iCloud Keychain; no key agreement is performed); SHA-256 writer tags and content hashes | SP 800-38D, RFC 5869, FIPS 180-4 | Client-side-encrypted backup sets in the user's iCloud |
+| Duress recovery | The content key sealed to a custodian with `IdentityService` sealing | as above | Recovery after a duress lock |
+| Moderation, message filter, exchange packets, fingerprints | SHA-256 | FIPS 180-4 | Content hashing (no secret) |
+| `WebScrapingKit/EphemeralWebSession` | TLS, via `URLSession` | — | Outbound web lookups; Apple OS cryptography |
 
 Two facts matter for classification:
 
 1. **Every algorithm is a published international standard.** Nothing here is a home-grown cipher,
    hash, or KDF.
-2. **The app is not merely using OS encryption.** CryptoKit is Apple-provided but the app implements
-   its own key hierarchy and wire formats on top of it, and **CryptoSwift** is a third-party crypto
-   library linked into the app (scrypt, used by the lock). So the "Apple OS encryption only, no
+2. **The app is not merely using OS encryption.** CryptoKit, the Security framework and
+   Network.framework (QUIC/TLS 1.3) are Apple-provided, but the app implements its own key hierarchy,
+   wire formats and X.509 certificate encoder on top of them, and **CryptoSwift** is a third-party
+   crypto library linked into the app (scrypt, used by the lock). So the "Apple OS encryption only, no
    documentation required" row of §2.2 does **not** apply.
 
 ---
@@ -349,9 +372,11 @@ EAR Part 772 defines **non-standard cryptography** as:
 
 The phrase "or protocols" is the catch. Fernlet's **algorithms** are unambiguously standard, but
 several of its **protocols** are bespoke: the heart-drop sealed-sender envelope (its own version byte,
-prekey ID, HKDF salt `fernlet.heartdrop.seal.v1`, and AAD construction), the wire2 framing, and the
-identity/trust ceremony. These are Noise-inspired but are not the Noise spec, TLS, or any other
-standards-body protocol.
+prekey ID, HKDF salt `fernlet.heartdrop.seal.v1`, and AAD construction), the wire2 framing, the
+identity/trust ceremony, the mesh channel introduction (Ed25519 over a hash of the TLS exporter secret,
+label `fernlet.mesh.tls-exporter.v1`), and the presence-tag derivation. These are Noise-inspired but
+are not the Noise spec or any other standards-body protocol. *(2026-10-17: the transport beneath them is
+now one — QUIC and TLS 1.3 are IETF standards, provided by the OS.)*
 
 Read strictly, a bespoke protocol is "non-standard cryptography", and mass-market items using
 non-standard cryptography are **not** eligible for self-classification under §740.17(b)(1) — they need
@@ -362,8 +387,10 @@ and E2EE consumer apps self-classify as 5D992.c on that basis.
 
 Three things materially strengthen the second reading for Fernlet, and are worth doing regardless:
 
-1. **The source is public and Apache-2.0 licensed.** Nothing about the protocol is unpublished — which
-   goes to the "and have not otherwise been published" clause of the definition.
+1. **The source is public and Apache-2.0 licensed** — both `bowman-mw/fernlet` and `bowman-mw/proximitykit`
+   (the package the app has linked since 2026-10-15), which holds the transport, identity and mesh protocols. Nothing about the
+   protocol is unpublished — which goes to the "and have not otherwise been published" clause of the
+   definition.
 2. **The wire formats are documented** in the DocC headers and the proximity docs, so a reviewer can
    read the construction without reverse-engineering the binary.
 3. **No secret sauce**: no custom cipher, no custom hash, no obscured key schedule.
@@ -426,6 +453,8 @@ non-France distribution, but the separate BIS assessment remains the developer's
       compliance artifact; nothing is filed to create it. **Still open for the owner:** confirm the
       legal name/entity as it appears on the App Store listing, then sign and date it. Retain **five
       years** past the last export (§762.6(a)).
+- [ ] **Sign revision 2 of the memo** (drafted 2026-10-17 for the QUIC/TLS 1.3 transport and the new
+      sealed surfaces — its §10 lists every change). Revision 1 stays retained beside it.
 - [ ] **Do this before the first overseas TestFlight tester** — see §6A.4. Self-classifying first is
       what keeps the beta out of 5D002/EI territory.
 - [ ] **Send the §742.15(b)(2) notification** to `crypt@bis.doc.gov` and `enc@nsa.gov` with the
@@ -482,21 +511,23 @@ factual, no marketing.
 > Fernlet uses cryptography solely to protect the user's own personal data on the user's own devices
 > and between devices the user controls. It implements no cryptography of its own design: all
 > primitives are published international standards — AES-256-GCM (NIST SP 800-38D) and
-> ChaCha20-Poly1305 (RFC 8439) for data at rest, HKDF-SHA256 (RFC 5869) and scrypt (RFC 7914) for key
-> derivation, X25519 (RFC 7748) for key agreement, Ed25519 (RFC 8032) for signatures, ECIES over
-> NIST P-256 in the device's secure element for hardware key binding, and SHA-256/SHA-512 and HMAC
-> for integrity. Implementations are Apple's CryptoKit and Security frameworks plus the open-source
-> CryptoSwift library (scrypt only).
+> ChaCha20-Poly1305 (RFC 8439) for data at rest and in transit, HKDF-SHA256 (RFC 5869) and scrypt
+> (RFC 7914) for key derivation, X25519 (RFC 7748) for key agreement, Ed25519 (RFC 8032) and ECDSA
+> P-256 (FIPS 186) for signatures, ECIES over NIST P-256 in the device's secure element for hardware
+> key binding, and SHA-256 and HMAC-SHA256 for integrity. Nearby devices connect over QUIC with TLS 1.3
+> (RFC 9000, 9001, 8446). Implementations are Apple's CryptoKit, Security and Network frameworks plus
+> the open-source CryptoSwift library (scrypt only).
 >
 > The cryptography serves four purposes: (1) encrypting the user's private journal, worry-box,
 > menstrual and intimate-activity entries at rest under a key derived from a user passcode; (2)
 > encrypting photos at rest; (3) client-side encryption of optional backups placed in the user's own
 > iCloud account, to which the developer has no access; and (4) end-to-end encrypted, signed messages
-> exchanged directly between nearby users' devices over Bluetooth/Wi-Fi peer-to-peer links. There is
+> exchanged directly between nearby users' devices over the local Wi-Fi network or Apple peer-to-peer
+> Wi-Fi, inside a TLS 1.3 channel. There is
 > no developer-operated server and no key escrow: the developer holds no keys and can decrypt nothing.
 >
-> The application source code is publicly available under the Apache 2.0 licence, including the wire
-> formats and key-derivation constructions.
+> The application source code, and that of its peer-to-peer package, is publicly available under the
+> Apache 2.0 licence, including the wire formats and key-derivation constructions.
 
 ### 10.5 BIS Supplement No. 8 row (CSV)
 

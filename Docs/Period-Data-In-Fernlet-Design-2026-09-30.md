@@ -1,5 +1,18 @@
 # Period data in Fernlet — Option B design (2026-09-30, revision 2)
 
+> **Status (2026-10-17): BUILT.** Units U1–U5 and their fix rounds landed and were merged into `main` on
+> 2026-10-01 as `0e6e64b6`, together with the journal and intimacy Sealed backup v2
+> ([Sealed-Backup-V2-Journal-Intimacy-Design-2026-09-30.md](Sealed-Backup-V2-Journal-Intimacy-Design-2026-09-30.md)).
+> Milestones: U2 the passwordless tap gate and the journal fold under the hub key (`85647171`, `bab22e7e` —
+> VER-3's re-keying), U3 the sealed cycle record and its two registered purposes (`c32e2ef0`, `9ac961c5`), U4 Apple
+> Health as a mirror (`08914578`), U5 the period Sealed backup v2 and Privacy & Data behind a fresh Face ID / iPhone
+> passcode check (`24b59005`, `6474d340`). The spec and landing pages were synced in `84cc7ca7`. Still open:
+> the owner's sign-off on the defaults this design built to (Q1–Q14, notably Q4, Q7, Q9 and Q13), which the
+> tracker lists as an owner decision, and the FDS1 run on the enclave iPhone (device work). The `file:line`
+> citations below are from `3c8c9313` and have moved. Read the code, not this survey, for today's behaviour.
+>
+> *Original status, kept:*
+
 Status: DESIGN, read-only survey of `main` at `3c8c9313`. Nothing here is built. Revision 2 folds in the
 two adversarial review rounds (R1: 10 findings, R2: 13 findings); §15 records, per finding, what was
 verified in the code, what changed, and where this design disagrees. An implementer should be able to

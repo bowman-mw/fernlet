@@ -1,5 +1,16 @@
 # Journal and intimacy Sealed backup v2: design (2026-09-30, revision 2)
 
+> **Status (2026-10-17): BUILT.** B1–B3 and their fix rounds landed and were merged into `main` on 2026-10-01 as
+> `0e6e64b6`, together with period data in Fernlet
+> ([Period-Data-In-Fernlet-Design-2026-09-30.md](Period-Data-In-Fernlet-Design-2026-09-30.md)). B1 moved the
+> period backup onto the one `SealedBackupV2Engine` (`6b9790dc`; fix rounds `eb39126b`, `564a3cd2`), B2 the
+> intimate-log backup (`f18a9be4`, `85e48e99`), B3 the journal backup (`dc4c599f`; fix rounds `bb67479a`, `0ffbd2bc`).
+> The track's verification commits pin BV7, BV21, BV23 and BV24 (`0c2137e8`, `8e5315c8`, `0ba980d5`, `c51daff9`).
+> Still open: the owner's sign-off on Q-B1–Q-B7 (built to their defaults), listed in the tracker as an owner
+> decision. The `file:line` citations below are from the `claude/r0930-period` branch and have moved.
+>
+> *Original status, kept:*
+
 Status: DESIGN, read-only survey. Nothing here is built. It builds on the reviewed period design
 (`r0930/period/design.md`, revision 2): §2.5, §5.3, §9.10, §10.6, §11 (I15, I16, I28 to I30), §13 unit 5,
 Q9, Q14 and §15 R2-F1, R2-F3, R2-F4, R2-F12. Revision 2 answers the adversarial review of revision 1
