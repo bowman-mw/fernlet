@@ -183,10 +183,11 @@ also the difference between honest copy and a promise the UI breaks.
 **A duress code can never open Settings → App lock.** `FernletLockService` refuses to grant the
 `.appLockSettings` scope on the duress path: the response still fires, then the unlock is refused
 with the ordinary `invalidPasscode` error, so ``FernletLockView`` shows what a mistype shows and no
-attempt is recorded. That refusal is what makes `configureDuress(pin:mode:)`'s "real-PIN-gated by
-construction" premise TRUE — without it, the duress code opened the one screen that says a duress
-code exists, names the armed response, and offers to change it, remove it, enrol a recovery device,
-or reset the lock. The gate modifier needs no duress awareness of its own; it asks the service
+attempt is recorded. That refusal is what keeps the page real-passcode gated — without it, the
+duress code opened the one screen that says a duress code exists, names the armed response, and
+offers to change it, remove it, enrol a recovery device, or reset the lock. (The page being open is
+not proof enough for a credential operation on it: `configureDuress(pin:mode:current:)` takes the
+real passcode again and checks it on the same counted door as an unlock — DPA-76.) The gate modifier needs no duress awareness of its own; it asks the service
 whether the scope is unlocked, and for a duress entry the answer is simply no.
 
 The decoy's second invariant belongs to the app rather than to this module, and is stated here
@@ -196,8 +197,8 @@ the existing sensitive-visibility machinery through an in-memory flag mirrored i
 would turn a reversible decoy into silent data hiding and could reach the sealed-backup toggles that
 delete the iCloud copy. Configuration lives in the app target's `DuressPINSetupView` under Settings →
 App lock — a `.appLockSettings` surface the user must already have unlocked with the real passcode,
-which is what makes `configureDuress(pin:mode:)` real-PIN-gated by construction rather than by a
-re-prompt — and it emits no audit event at all, since an event NAME reaching the unified log would
+and whose entry sheet asks for that passcode once more, on the counted door, before a duress code
+can be chosen (`configureDuress(pin:mode:current:)`) — and it emits no audit event at all, since an event NAME reaching the unified log would
 itself disclose that a duress code exists.
 
 Relative to the S3 privacy wall, `FernletLockUI` lives on the protected side but is not

@@ -164,7 +164,7 @@ struct DuressSetupAvailabilityTests {
         #expect(!availability.hasRecoveryCustodian)
         #expect(!availability.isSelectable(.recoveryLock))
 
-        try await fixture.service.configureDuress(pin: "654321", mode: .silentWipe)
+        try await fixture.service.configureDuress(pin: "654321", mode: .silentWipe, current: "123456")
         availability = DuressSetupAvailability(lockService: fixture.service)
         #expect(availability.hasDuressConfigured)
         #expect(availability.configuredMode == .silentWipe)
@@ -175,7 +175,7 @@ struct DuressSetupAvailabilityTests {
         #expect(availability.isSelectable(.recoveryLock))
         #expect(availability.canRemoveRecoveryCustodian, "the armed response is the wipe, which needs no custodian")
 
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         availability = DuressSetupAvailability(lockService: fixture.service)
         #expect(availability.configuredMode == .recoveryLock)
         #expect(!availability.canRemoveRecoveryCustodian)
@@ -200,7 +200,7 @@ struct DuressSetupSurfacingTests {
         defer { fixture.cleanup() }
 
         do {
-            try await fixture.service.configureDuress(pin: "123456", mode: .decoy)
+            try await fixture.service.configureDuress(pin: "123456", mode: .decoy, current: "123456")
             Issue.record("the duress code was allowed to equal the real passcode")
         } catch {
             // What the entry sheet puts on screen, character for character.
@@ -218,7 +218,7 @@ struct DuressSetupSurfacingTests {
         defer { fixture.cleanup() }
 
         do {
-            try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+            try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
             Issue.record("the recovery lock was armed with no device able to undo it")
         } catch {
             #expect(error.localizedDescription == FernletLockService.duressRecoveryCustodianRequiredMessage)
@@ -233,7 +233,7 @@ struct DuressSetupSurfacingTests {
         defer { fixture.cleanup() }
         let service = fixture.service
 
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         #expect(service.configuredDuressMode == .decoy)
 
         try service.removeDuress()
@@ -258,9 +258,9 @@ struct DuressSetupSurfacingTests {
         let fixture = try await DuressSetupFixture()
         defer { fixture.cleanup() }
 
-        try await fixture.service.configureDuress(pin: "654321", mode: .decoy)
+        try await fixture.service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         #expect(fixture.service.configuredDuressMode == .decoy)
-        try await fixture.service.configureDuress(pin: "654321", mode: .silentWipe)
+        try await fixture.service.configureDuress(pin: "654321", mode: .silentWipe, current: "123456")
         #expect(fixture.service.configuredDuressMode == .silentWipe)
     }
 
@@ -272,7 +272,7 @@ struct DuressSetupSurfacingTests {
         defer { fixture.cleanup() }
 
         try await fixture.enrollCustodianDirectly()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
 
         do {
             try fixture.service.removeRecoveryCustodian()
@@ -283,7 +283,7 @@ struct DuressSetupSurfacingTests {
         #expect(fixture.service.hasRecoveryCustodian)
 
         // Changing the response first is the way out the copy points at, and it works.
-        try await fixture.service.configureDuress(pin: "654321", mode: .decoy)
+        try await fixture.service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         #expect(DuressSetupAvailability(lockService: fixture.service).canRemoveRecoveryCustodian)
         try fixture.service.removeRecoveryCustodian()
         #expect(!fixture.service.hasRecoveryCustodian)
@@ -455,7 +455,7 @@ struct DuressCeremonyRelayTests {
         try await runMutualAuth(primary: primary, custodian: custodian, purpose: .enroll, fixture: fixture)
 
         // Arm and fire the recovery lock.
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         fixture.service.lock(reason: .manual)
         _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
         #expect(fixture.service.isDuressSessionActive)
@@ -512,7 +512,7 @@ struct DuressCeremonyRelayTests {
             lockService: custodianHarness.makeService()
         )
         try await runMutualAuth(primary: primary, custodian: custodian, purpose: .enroll, fixture: fixture)
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         fixture.service.lock(reason: .manual)
         _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
 

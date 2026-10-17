@@ -52,7 +52,8 @@ public protocol FernletLockServicing: PeriodLockContext {
     /// verifies the Secure-Enclave wrap — and on enclave hardware deletes the scrypt-wrapped item,
     /// so the install is born HARD-BOUND — then unlocks `grantingScope`, that surface only.
     func configure(credential: FernletLockCredential, grantingScope: FernletLockScope) async throws
-    /// Re-keys the credential in place, preserving the content key (no sealed-data loss).
+    /// Re-keys the credential in place, preserving the content key (no sealed-data loss). A wrong
+    /// `current` is counted on the attempt ladder, exactly as an unlock's mistype.
     func changeCredential(current: String, new: FernletLockCredential) async throws
     /// Verifies the passcode, unwraps the content key, and unlocks FOR ONE SURFACE (`scope`).
     func unlock(passcode: String, for scope: FernletLockScope) async throws -> UnlockResult
@@ -65,7 +66,8 @@ public protocol FernletLockServicing: PeriodLockContext {
     func revokeUnlockOutside(_ scope: FernletLockScope)
     /// Destroys all lock keychain state AND purges the sealed narrative entities.
     func reset() throws
-    /// Enables or disables biometric unlock; enabling requires the current passcode.
+    /// Enables or disables biometric unlock; enabling requires the current passcode, and a wrong one
+    /// is counted on the attempt ladder, exactly as an unlock's mistype.
     func setBiometricEnabled(_ enabled: Bool, passcode: String) async throws
     /// The unwrapped content key, released only to `.privateHub` while that scope holds the
     /// unlock; `nil` for every other scope and whenever locked.
@@ -1084,7 +1086,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///
     /// **Lifetime is load-bearing.** Cleared ONLY by an act that PROVES the real credential — a
     /// real-passcode unlock success, ``configure(credential:grantingScope:)``, ``reset()``,
-    /// ``configureDuress(pin:mode:)``,
+    /// ``configureDuress(pin:mode:current:)``,
     /// ``enrollRecoveryCustodian(passcode:signingPublicKey:keyAgreementPublicKey:ownKeyAgreementPublicKey:sealingContentKeyTo:)``
     /// or ``reestablishLocalUnlock(contentKey:credential:grantingScope:)`` — and **never** by
     /// ``lock(reason:)``.
@@ -1844,7 +1846,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     /// Re-keys the lock under a new credential while preserving the content key.
     ///
-    /// Verifies `current` (accepting the legacy raw-key verifier), recovers the content
+    /// Verifies `current` on the counted door every typed passcode uses (accepting the legacy
+    /// raw-key verifier; a wrong one counts on the attempt ladder and re-locks), recovers the content
     /// key, re-derives the credential records under a fresh salt, and rewrites the verifier
     /// in digest form. Refreshes the biometric-bypass item when biometrics are enabled.
     /// Because the content key is unchanged, sealed data never needs re-encryption.
@@ -1882,14 +1885,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             await performDuressResponse(mode, passcode: current, scope: state.unlockedScope ?? .appLockSettings)
             return
         }
-        let custody = contentKeyCustody()
-
-        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: current, salt: saltData, n: storedScryptN())
-        // Accept either the current digest verifier or a legacy raw-key verifier; re-keying below
+        // Counted like an unlock (DPA-76). Either verifier format is accepted; re-keying below
         // rewrites it in the new digest format regardless, so no separate migration step is needed.
-        if case .none = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier) {
-            throw FernletLockError.invalidPasscode
-        }
+        let (custody, computedVerifier, _) = try await verifyRealPasscodeCounted(
+            current, salt: saltData, storedVerifier: storedVerifier
+        )
         try await rejectDuressConflicts(with: new)
 
         let contentKeyData: Data
@@ -2066,20 +2066,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
             }
             return result
         }
-        guard !requiresReset else { throw FernletLockError.resetRequired }
-        if let deadline = activeCooldownDeadline() {
-            state = .locked(cooldownDeadline: deadline)
-            throw FernletLockError.cooldownActive(deadline: deadline)
-        }
-        let custody = contentKeyCustody()
-
-        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
-        let match = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier)
-        if case .none = match {
-            try recordFailedAttempt()
-            FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
-            throw FernletLockError.invalidPasscode
-        }
+        // Reset, cooldown, custody read, derivation and the counted mistype, in that order: the one
+        // door every typed real passcode goes through (`verifyRealPasscodeCounted`, DPA-76).
+        let (custody, computedVerifier, match) = try await verifyRealPasscodeCounted(
+            passcode, salt: saltData, storedVerifier: storedVerifier
+        )
         // A correct passcode HAS been entered in this process, whatever key recovery does next.
         // Recorded here (not in the unlock tail) so a hard-bound recovery failure cannot strand
         // the biometric repair path; PIN-before-biometrics is untouched because only a verifier
@@ -2425,7 +2416,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     /// Enables or disables biometric unlock.
     ///
-    /// Enabling verifies the passcode, then stores the raw content key behind a
+    /// Enabling verifies the passcode on the counted door every typed passcode uses (a wrong one
+    /// counts on the attempt ladder and re-locks, DPA-76), then stores the raw content key behind a
     /// `.biometryCurrentSet` access control and sets the enabled flag; disabling deletes
     /// both items. Also opportunistically migrates a legacy verifier (see `unlock`).
     ///
@@ -2454,13 +2446,11 @@ public final class FernletLockService: @MainActor FernletLockServicing {
                 await performDuressResponse(mode, passcode: passcode, scope: state.unlockedScope ?? .appLockSettings)
                 return
             }
-            let custody = contentKeyCustody()
-
-            let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
-            let match = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier)
-            if case .none = match {
-                throw FernletLockError.invalidPasscode
-            }
+            // Counted like an unlock (DPA-76): this sheet sits on an already-unlocked App-lock page,
+            // so an uncounted compare here was a brute-force door around the ladder.
+            let (custody, computedVerifier, match) = try await verifyRealPasscodeCounted(
+                passcode, salt: saltData, storedVerifier: storedVerifier
+            )
 
             let contentKeyData: Data
             switch custody {
@@ -2566,8 +2556,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Gated on ``hasDuressConfigured`` rather than reading the mode row alone, so a stale byte left
     /// by a partially-removed configuration can never be read as an armed response. It discloses
     /// nothing a keychain reader could not already see, and only a caller that already holds the
-    /// real credential ever reaches it (see ``configureDuress(pin:mode:)`` on why that gate is by
-    /// construction).
+    /// real credential ever reaches it (the `.appLockSettings` gate, which a duress PIN can never
+    /// open; ``configureDuress(pin:mode:current:)`` re-checks the passcode on the counted door).
     public var configuredDuressMode: DuressMode? {
         guard hasDuressConfigured else { return nil }
         return storedDuressMode() ?? .decoy
@@ -2749,15 +2739,19 @@ public final class FernletLockService: @MainActor FernletLockServicing {
 
     /// Configures — or replaces — the single duress PIN and the one response it triggers.
     ///
-    /// **Real-PIN-gated by construction, not by a re-prompt.** The only entry point is Settings →
+    /// **Real-passcode gated by a counted re-entry (DPA-76).** The only entry point is Settings →
     /// App lock, a `.appLockSettings` surface the user must already have unlocked with the REAL
-    /// passcode: biometrics can never be the first factor after launch (PIN-before-biometrics), they
-    /// are suppressed outright during a duress session, and — the load-bearing half —
-    /// ``handleDuress(_:passcode:scope:)`` refuses to grant `.appLockSettings` to a duress PIN at
-    /// all. Reaching this call therefore already proves the real credential, which is why it takes
-    /// no `current` passcode of its own. The `isDuressSessionActive` guard below is the belt to that
-    /// braces: if a decoy session ever did reach this screen, changing the duress code from inside
-    /// one must not be a way to disarm it.
+    /// passcode, and ``handleDuress(_:passcode:scope:)`` refuses that scope to a duress PIN. That is
+    /// not enough on its own: a page left open is held by whoever picks the phone up, and the
+    /// "must be different from your passcode" refusal below answered "is this the passcode?" for
+    /// every candidate with nothing counted. So `current` is required and goes through the same
+    /// door as an unlock: a duress PIN typed there runs its response and throws `invalidPasscode`
+    /// (the ``removeCredential(current:)`` shape — a reported success that set nothing would be a
+    /// tell), and a wrong one is counted on the ladder, re-locking the state. Only then is `pin`
+    /// compared with it, so the refusal is given exclusively to someone who has just proved they
+    /// hold the passcode. The `isDuressSessionActive` guard below is the belt to those braces: if a
+    /// decoy session ever did reach this screen, changing the duress code from inside one must not
+    /// be a way to disarm it.
     ///
     /// **Emits no audit event, deliberately.** `FernletAuditLog` event names reach the unified log
     /// with `.auto` privacy, so a `lock.duressConfigured` line would survive in a sysdiagnose and
@@ -2770,13 +2764,16 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///   - pin: The duress secret, validated against ``credentialKind`` because the lock renders
     ///     exactly one entry surface and a PIN that cannot be typed there is not a duress PIN.
     ///   - mode: The response a duress entry triggers.
-    /// - Throws: `FernletLockError.notConfigured` when no lock exists;
-    ///   `FernletLockError.invalidCredential` when a duress session is in force, when the PIN does
+    ///   - current: The REAL passcode, verified through `verifyRealPasscodeCounted` after the duress
+    ///     compare.
+    /// - Throws: `FernletLockError.notConfigured` when no lock exists; `.invalidPasscode` for a
+    ///   wrong or duress `current`; `.resetRequired` or `.cooldownActive(deadline:)` while the
+    ///   ladder refuses; `FernletLockError.invalidCredential` when a duress session is in force, when the PIN does
     ///   not fit the configured credential's format, when it EQUALS the real passcode (which would
     ///   make every unlock a duress unlock and strand the real content key), or when
     ///   ``DuressMode/recoveryLock`` is chosen with no enrolled custodian or over a superseded
     ///   recovery blob; `FernletLockError.keychainFailure` when a row cannot be written.
-    public func configureDuress(pin: String, mode: DuressMode) async throws {
+    public func configureDuress(pin: String, mode: DuressMode, current: String) async throws {
         try refuseDuringDuressSession()
         guard let saltData = keychainLoad(.salt, keychainService),
               let storedVerifier = keychainLoad(.verifier, keychainService),
@@ -2795,19 +2792,18 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         guard mode != .recoveryLock || !hasSupersededRecoveryBlob else {
             throw FernletLockError.invalidCredential(Self.recoveryCustodianSupersededMessage)
         }
+        // DURESS FIRST, then the counted door (DPA-76): see the doc comment.
+        if let duress = await duressMode(for: current) {
+            await performDuressResponse(duress, passcode: current, scope: .appLockSettings)
+            throw FernletLockError.invalidPasscode
+        }
+        _ = try await verifyRealPasscodeCounted(current, salt: saltData, storedVerifier: storedVerifier)
         // A duress PIN equal to the real passcode is a data-loss trap rather than a nuisance: the
         // duress compare runs FIRST in unlock(), so the real content key would become permanently
-        // unreachable the moment this was accepted. Checked through the same verifierMatch the real
-        // unlock path uses, so a legacy raw-key verifier is caught too.
-        let derivedUnderPrimarySalt = try await cryptoProvider.deriveVerifier(
-            passcode: pin,
-            salt: saltData,
-            n: storedScryptN()
-        )
-        switch verifierMatch(computedVerifier: derivedUnderPrimarySalt, storedVerifier: storedVerifier) {
-        case .none:
-            break  // Distinct from the real passcode — proceed.
-        case .current, .legacy:
+        // unreachable the moment this was accepted. `current` has just matched the stored verifier
+        // (either format), so "is `pin` the passcode?" is now plain equality with it — and the
+        // answer goes only to someone who proved they already know.
+        guard pin != current else {
             throw FernletLockError.invalidCredential(Self.duressPINMatchesPasscodeMessage)
         }
 
@@ -2839,8 +2835,8 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Removes the configured duress PIN, its mode and its kind.
     ///
     /// The salt row goes too; the next unlock re-mints a dummy in its place, restoring the
-    /// unconditional-derivation shape. Silent for the same reason ``configureDuress(pin:mode:)``
-    /// is. Idempotent — deleting a missing keychain item is not an error.
+    /// unconditional-derivation shape. Silent for the same reason
+    /// ``configureDuress(pin:mode:current:)`` is. Idempotent — deleting a missing keychain item is not an error.
     ///
     /// **Refuses during a duress session**, like every other duress mutator: "delete the duress
     /// code" is the first thing a coercer who worked out that one exists would reach for, and the
@@ -3021,11 +3017,12 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// Runs the configured duress response and enters whichever session `scope` allows, WITHOUT
     /// producing an unlock result.
     ///
-    /// The shape the three settings-side entry points (change passcode, enable biometrics, enrol a
-    /// recovery custodian) need: a coerced user who typed their duress code at any prompt gets the
-    /// response they armed, and the operation they were being coerced into performs nothing. They
-    /// return to the caller as an ordinary success, which is the point — the screen must not
-    /// announce that anything special happened.
+    /// The shape the settings-side entry points need: a coerced user who typed their duress code at
+    /// any prompt gets the response they armed, and the operation they were being coerced into
+    /// performs nothing. Change passcode, enable biometrics and enrol a recovery custodian return to
+    /// the caller as an ordinary success, which is the point — the screen must not announce that
+    /// anything special happened; removing the passcode and setting a duress code, whose success
+    /// would be visible on the page, throw the ordinary `invalidPasscode` instead.
     private func performDuressResponse(_ mode: DuressMode, passcode: String, scope: FernletLockScope) async {
         switch mode {
         case .decoy:
@@ -3090,7 +3087,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     ///   would destroy exactly what the custodian is holding the key for.
     ///
     /// Fails CLOSED on missing recovery material, and on material that is present but **cannot be
-    /// turned back into this device's live content key**. `configureDuress(pin:mode:)` refuses this
+    /// turned back into this device's live content key**. `configureDuress(pin:mode:current:)` refuses this
     /// mode without an enrolled custodian, but the rows could still be gone by the time the PIN is
     /// entered (a keychain that lost them, a partially-swept install), and the blob could have been
     /// superseded by a lock minted after a recovery-lock fired
@@ -3411,7 +3408,7 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// already unlocked with the real passcode; the explicit re-entry here is what actually recovers
     /// the key, since `.appLockSettings` deliberately keeps none resident.)
     ///
-    /// **Emits no audit event**, for the same reason ``configureDuress(pin:mode:)`` does not: an
+    /// **Emits no audit event**, for the same reason ``configureDuress(pin:mode:current:)`` does not: an
     /// event name reaches the unified log with `.auto` privacy and survives a sysdiagnose, and
     /// "this device enrolled a recovery custodian" is a near-synonym for "this device has a duress
     /// PIN" — the single fact the feature depends on hiding.
@@ -3422,8 +3419,9 @@ public final class FernletLockService: @MainActor FernletLockServicing {
     /// be armed over an unrecoverable device.
     ///
     /// - Parameters:
-    ///   - passcode: The REAL passcode. Verified through the same `verifierMatch` the unlock path
-    ///     uses (so a legacy raw-key verifier is accepted and migrated).
+    ///   - passcode: The REAL passcode. Verified on the same counted door the unlock path uses
+    ///     (`verifyRealPasscodeCounted`: a wrong one counts on the attempt ladder; a legacy raw-key
+    ///     verifier is accepted and migrated).
     ///   - signingPublicKey: The custodian's Ed25519 public key, ceremony-proven by the caller.
     ///   - keyAgreementPublicKey: The custodian's X25519 public key — what the blob is sealed to.
     ///   - ownKeyAgreementPublicKey: THIS device's own X25519 public key, i.e. the sender key the
@@ -3459,10 +3457,10 @@ public final class FernletLockService: @MainActor FernletLockServicing {
               ownKeyAgreementPublicKey.count == Self.recoveryCustodianPublicKeyByteCount else {
             throw FernletLockError.invalidCredential(Self.recoveryCustodianInvalidKeyMessage)
         }
-        let custody = contentKeyCustody()
-        let computedVerifier = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: saltData, n: storedScryptN())
-        let match = verifierMatch(computedVerifier: computedVerifier, storedVerifier: storedVerifier)
-        if case .none = match { throw FernletLockError.invalidPasscode }
+        // Counted like an unlock (DPA-76).
+        let (custody, computedVerifier, match) = try await verifyRealPasscodeCounted(
+            passcode, salt: saltData, storedVerifier: storedVerifier
+        )
 
         let contentKeyData: Data
         switch custody {
@@ -4112,6 +4110,46 @@ public final class FernletLockService: @MainActor FernletLockServicing {
         }
     }
 
+    /// The ONE door every typed real passcode goes through (DPA-76): ``unlock(passcode:for:)``,
+    /// ``removeCredential(current:)``, ``changeCredential(current:new:)``,
+    /// ``setBiometricEnabled(_:passcode:)`` when enabling, ``enrollRecoveryCustodian(passcode:signingPublicKey:keyAgreementPublicKey:ownKeyAgreementPublicKey:sealingContentKeyTo:)``
+    /// and ``configureDuress(pin:mode:current:)``. In order: a required reset refuses, an active
+    /// cooldown refuses (and surfaces its deadline), the passcode is derived under the stored salt,
+    /// and a mismatch is counted on the escalation ladder and audited exactly as an unlock's mistype
+    /// is. A door that derived and compared on its own would be a passcode oracle with no ladder —
+    /// the Face ID re-enable sheet was one — so no caller derives against the primary verifier itself.
+    ///
+    /// Callers run their duress compare BEFORE this (a duress entry never reaches the counter). The
+    /// key custody is read here, after the two refusals and before the derivation, which is the
+    /// order `unlock` always had. A match neither forgives nor penalizes: only a completed unlock
+    /// clears the counter. A refusal here re-locks the state, and the in-memory content key is
+    /// scrubbed with it, so a wrong entry on an unlocked screen never leaves a key resident under a
+    /// `.locked` state.
+    /// - Returns: The custody in force, the derived key (the scrypt wrapping key for a legacy
+    ///   custody) and which verifier format it matched, for callers that unwrap or migrate.
+    /// - Throws: `.resetRequired`, `.cooldownActive(deadline:)`, `.invalidPasscode`, or whatever the
+    ///   derivation or the attempt record throws.
+    private func verifyRealPasscodeCounted(
+        _ passcode: String,
+        salt: Data,
+        storedVerifier: Data
+    ) async throws -> (custody: ContentKeyCustody, derivedKey: Data, match: VerifierMatch) {
+        guard !requiresReset else { throw FernletLockError.resetRequired }
+        if let deadline = activeCooldownDeadline() {
+            scrubContentKey()
+            state = .locked(cooldownDeadline: deadline)
+            throw FernletLockError.cooldownActive(deadline: deadline)
+        }
+        let custody = contentKeyCustody()
+        let derivedKey = try await cryptoProvider.deriveVerifier(passcode: passcode, salt: salt, n: storedScryptN())
+        let match = verifierMatch(computedVerifier: derivedKey, storedVerifier: storedVerifier)
+        guard case .none = match else { return (custody, derivedKey, match) }
+        scrubContentKey()
+        try recordFailedAttempt()
+        FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
+        throw FernletLockError.invalidPasscode
+    }
+
     /// Persists the attempt count as a single clamped byte.
     private func storeAttemptCount(_ count: Int) throws {
         try storeVerified(Data([UInt8(min(count, 255))]), for: .attemptCount)
@@ -4268,18 +4306,9 @@ extension FernletLockService {
             await performDuressResponse(mode, passcode: current, scope: .appLockSettings)
             throw FernletLockError.invalidPasscode
         }
-        guard !requiresReset else { throw FernletLockError.resetRequired }
-        if let deadline = activeCooldownDeadline() {
-            state = .locked(cooldownDeadline: deadline)
-            throw FernletLockError.cooldownActive(deadline: deadline)
-        }
-        let custody = contentKeyCustody()
-        let derivedKey = try await cryptoProvider.deriveVerifier(passcode: current, salt: saltData, n: storedScryptN())
-        if case .none = verifierMatch(computedVerifier: derivedKey, storedVerifier: storedVerifier) {
-            try recordFailedAttempt()
-            FernletAuditLog.log("lock.failedAttempt", context: ["cooldownLevel": "\(loadCooldownLevel())"])
-            throw FernletLockError.invalidPasscode
-        }
+        let (custody, derivedKey, _) = try await verifyRealPasscodeCounted(
+            current, salt: saltData, storedVerifier: storedVerifier
+        )
         try refuseRemovalWhileRecoveryDeviceHoldsEarlierKey()
         let contentKeyData = try recoverPasscodeCustodyKey(custody, derivedKey: derivedKey)
         try writeDeviceCustodyRow(contentKeyData)

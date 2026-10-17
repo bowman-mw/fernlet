@@ -6,9 +6,12 @@
 // It lives under Settings → App lock, which is a `.appLockSettings` surface the user must already
 // have unlocked with the REAL passcode — biometrics can never be the first factor after launch
 // (PIN-before-biometrics), they are suppressed outright during a duress session, and the duress path
-// REFUSES to grant `.appLockSettings` at all (`FernletLockService.handleDuress`). So every call this
-// screen makes is real-PIN-gated by construction rather than by a re-prompt of its own, which is
-// exactly why `FernletLockService.configureDuress(pin:mode:)` takes no `current:` argument.
+// REFUSES to grant `.appLockSettings` at all (`FernletLockService.handleDuress`). That gate alone
+// once stood in for a re-prompt, and it was not enough (DPA-76): a page left open is held by whoever
+// picks the phone up, and the "must be different from your passcode" refusal answered "is this the
+// passcode?" for every guess, uncounted. So the entry sheet now opens on the real passcode, checked
+// on the same counted door as an unlock, and `FernletLockService.configureDuress(pin:mode:current:)`
+// requires it.
 //
 // That premise used to be an assumption, and it was false: a decoy session granted whatever scope
 // the duress code was typed on, including this one, which put "a duress code is set, and here is the
@@ -668,16 +671,19 @@ struct DuressPINSetupView: View {
 
 // MARK: - Duress code entry
 
-/// Enter-then-confirm sheet that commits a duress code for one chosen response.
+/// Passcode, then enter-then-confirm: the sheet that commits a duress code for one chosen response.
 ///
 /// Mirrors the change-passcode flow's shape (`FernletNumericPad` for PINs, a `SecureField` for the
 /// alphanumeric kind, auto-advance when the digit count fills) so the duress code is entered the same
-/// way the real one is — a different-looking entry screen would be a tell in a screenshot.
+/// way the real one is — a different-looking entry screen would be a tell in a screenshot. Like that
+/// flow it opens on the real passcode (DPA-76), checked at once through a counted `.appLockSettings`
+/// unlock: an App-lock page left open must not let whoever holds it test passcode guesses for free.
 ///
-/// The entered secret exists only in this view's `@State` and is cleared on every submission, match
-/// failure and service error. Committing goes through `FernletLockService.configureDuress(pin:mode:)`,
-/// which is what rejects a duress code equal to the real passcode; this view surfaces that rejection
-/// verbatim instead of restating it, so the two can never disagree.
+/// The entered secrets exist only in this view's `@State` and are cleared on every submission, match
+/// failure and service error. Committing goes through
+/// `FernletLockService.configureDuress(pin:mode:current:)`, which re-checks the passcode on the same
+/// counted door and is what rejects a duress code equal to the real passcode; this view surfaces that
+/// rejection verbatim instead of restating it, so the two can never disagree.
 private struct DuressPINEntrySheet: View {
     /// How the sheet finished, reported to the parent so the error can be shown on the screen the
     /// user returns to rather than lost with the sheet.
@@ -694,11 +700,14 @@ private struct DuressPINEntrySheet: View {
     @Environment(FernletLockService.self) private var lockService
     @Environment(\.dismiss) private var dismiss
 
+    /// The real passcode, typed on the first step and handed to `configureDuress` at commit.
+    @State private var current = ""
     @State private var entry = ""
     @State private var confirmation = ""
-    @State private var step: Step = .enter
+    @State private var step: Step = .verify
     @State private var errorMessage: String?
-    /// True while a `configureDuress` call is in flight — the one-at-a-time guard for Continue.
+    /// True while the passcode check or the `configureDuress` call is in flight — the one-at-a-time
+    /// guard for Continue.
     @State private var isSubmitting = false
 
     var body: some View {
@@ -707,10 +716,10 @@ private struct DuressPINEntrySheet: View {
                 Color.parchment.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        Text(step == .enter ? "Choose your duress code" : "Enter it again")
+                        Text(stepTitle)
                             .font(.fernlet(.header))
                             .foregroundStyle(Color.bark)
-                        Text(DuressModeCopy.detail(mode))
+                        stepExplanation
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
                             .fernletWrappingText()
@@ -749,13 +758,50 @@ private struct DuressPINEntrySheet: View {
         .tint(Color.moss)
     }
 
+    /// The heading for the step in progress.
+    private var stepTitle: LocalizedStringKey {
+        switch step {
+        case .verify: "Enter your passcode"
+        case .enter: "Choose your duress code"
+        case .confirm: "Enter it again"
+        }
+    }
+
+    /// Why the step asks what it asks: the passcode step says why it is asked again seconds after
+    /// the gate accepted it (an unexplained re-prompt reads as the app not having listened); the
+    /// two duress steps repeat what the chosen response does.
+    @ViewBuilder private var stepExplanation: some View {
+        if step == .verify {
+            Text("Your real passcode first, so only you can set or change a duress code.")
+        } else {
+            Text(DuressModeCopy.detail(mode))
+        }
+    }
+
+    /// The secret the step in progress is typing into.
+    private var activeEntry: Binding<String> {
+        switch step {
+        case .verify: $current
+        case .enter: $entry
+        case .confirm: $confirmation
+        }
+    }
+
+    /// The password field's placeholder for the step in progress (the alphanumeric kind only).
+    private var fieldPlaceholder: LocalizedStringKey {
+        switch step {
+        case .verify: "Current password"
+        case .enter: "Duress password"
+        case .confirm: "Confirm duress password"
+        }
+    }
+
     @ViewBuilder private var entryField: some View {
         let kind = lockService.credentialKind ?? .pin6
         if kind == .alphanumeric {
             VStack(alignment: .leading, spacing: 16) {
-                SecureField(step == .enter ? "Duress password" : "Confirm duress password",
-                            text: step == .enter ? $entry : $confirmation)
-                    .textContentType(.newPassword)
+                SecureField(fieldPlaceholder, text: activeEntry)
+                    .textContentType(step == .verify ? .password : .newPassword)
                     .sheetTextInput()
                     .accessibilityIdentifier("duress.entry.field")
                 Button("Continue") { advance() }
@@ -775,7 +821,7 @@ private struct DuressPINEntrySheet: View {
             // Dots high, pad low (see `numericPadInset`) — the lock gate's shape, so the duress
             // code is typed exactly where the real passcode is. Being indistinguishable from a
             // normal unlock is the feature.
-            duressPinDots(current: step == .enter ? entry : confirmation, total: pinLength)
+            duressPinDots(current: activeEntry.wrappedValue, total: pinLength)
                 .frame(maxWidth: .infinity)
         }
     }
@@ -797,11 +843,14 @@ private struct DuressPINEntrySheet: View {
     /// into a `SecureField` with the system keyboard instead.
     @ViewBuilder private var numericPadInset: some View {
         if (lockService.credentialKind ?? .pin6) != .alphanumeric {
-            FernletNumericPad(value: step == .enter ? $entry : $confirmation, maxLength: pinLength)
+            FernletNumericPad(value: activeEntry, maxLength: pinLength)
                 .dynamicTypeSize(...Self.padTypeSizeCap)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
                 .background(Color.parchment)
+                .onChange(of: current) { _, new in
+                    if step == .verify, new.count == pinLength { advance() }
+                }
                 .onChange(of: entry) { _, new in
                     if step == .enter, new.count == pinLength { advance() }
                 }
@@ -816,9 +865,11 @@ private struct DuressPINEntrySheet: View {
         (lockService.credentialKind ?? .pin6) == .pin4 ? 4 : 6
     }
 
-    /// Advances from entry to confirmation, or commits.
+    /// Checks the passcode, advances from entry to confirmation, or commits.
     private func advance() {
         switch step {
+        case .verify:
+            verifyCurrent()
         case .enter:
             errorMessage = nil
             step = .confirm
@@ -832,35 +883,64 @@ private struct DuressPINEntrySheet: View {
         }
     }
 
+    /// The change-passcode flow's `advanceFromVerifyOld` shape (DPA-76): the passcode is checked
+    /// through a counted `.appLockSettings` unlock before a duress code can be chosen, so a wrong
+    /// one costs an attempt on the ladder — and re-locks the page — instead of being free. A duress
+    /// code typed here is answered exactly as at the lock screen.
+    private func verifyCurrent() {
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        let passcode = current
+        Task { @MainActor in
+            defer { isSubmitting = false }
+            do {
+                _ = try await lockService.unlock(passcode: passcode, for: .appLockSettings)
+                errorMessage = nil
+                step = .enter
+            } catch {
+                current = ""
+                errorMessage = error.localizedDescription
+                // A pad entry that did not verify only empties its dots; say why out loud.
+                FernletAnnouncer.system.announce(.error, resolved: error.localizedDescription)
+            }
+        }
+    }
+
     private func commit() {
         // R3 (bounded task fan-out): one commit in flight at a time. A second Continue before the
         // first `await` returns would call `configureDuress` — and `onFinish`/`dismiss` — twice.
         guard !isSubmitting else { return }
         isSubmitting = true
         let pin = entry
+        let passcode = current
         Task { @MainActor in
             defer { isSubmitting = false }
             do {
-                try await lockService.configureDuress(pin: pin, mode: mode)
-                entry = ""
-                confirmation = ""
+                try await lockService.configureDuress(pin: pin, mode: mode, current: passcode)
+                clearSecrets()
                 onFinish(.configured)
                 dismiss()
             } catch {
-                // Back to the first step with both fields cleared: the rejection is almost always
-                // "that is your passcode" or a format rule, and both mean the whole code must be
-                // re-chosen rather than re-confirmed.
-                entry = ""
-                confirmation = ""
-                step = .enter
+                // Back to the first step with every field cleared: the rejection is almost always
+                // "that is your passcode" or a format rule, which mean the whole code must be
+                // re-chosen, and the passcode is not kept in memory past a failed submission.
+                clearSecrets()
+                step = .verify
                 errorMessage = error.localizedDescription
                 onFinish(.failed(error.localizedDescription))
             }
         }
     }
 
-    /// The two sequential steps: choose the code, then re-enter it.
-    private enum Step { case enter, confirm }
+    /// Empties every secret this sheet holds.
+    private func clearSecrets() {
+        current = ""
+        entry = ""
+        confirmation = ""
+    }
+
+    /// The three sequential steps: the real passcode, then choose the code, then re-enter it.
+    private enum Step { case verify, enter, confirm }
 }
 
 /// The filled/empty dot row above the numeric pad, matching the change-passcode flow's.
