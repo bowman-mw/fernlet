@@ -159,7 +159,10 @@ The wall's ``PrivateMediaStore/loadIndex()`` also treats an index file that EXIS
 read as ``PrivateMediaStore/IndexLoad/deferred``, never as an empty wall: the key row is
 `AfterFirstUnlock` while the file is `.completeFileProtection`, so a locked background launch has
 the key and still cannot read the file, and an empty read there let the next save sweep every kept
-photo.
+photo. An index that a PRESENT key still cannot open is the opposite case,
+``PrivateMediaStore/IndexLoad/unrecoverable``: nothing can ever name its photo files again, so the read
+sweeps them at once (2026-10-17), as the pending corpus already purges in the same case, rather than
+leaving sealed friend photos on disk, and in device backups, until some later save happens to sweep them.
 
 ### The binding gate (step 5c)
 

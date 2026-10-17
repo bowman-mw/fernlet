@@ -150,6 +150,13 @@ public struct PrivateMediaStore {
             FernletAuditLog.log("privateMedia.indexDeferred", context: ["reason": reason])
             return .deferred
         case .unrecoverable:
+            // A key IS available and the index still will not open or decode (corruption, or a key
+            // row the duress wipe swept): nothing can ever name these photo files again, and the
+            // owner starts an empty wall. Sweep them now rather than leaving sealed friend photos on
+            // disk, and in device backups, until some later save happens to sweep them — the pending
+            // corpus purges in this same case. Only UUID-named image and thumbnail files are touched;
+            // the dead index stays until the next save replaces it.
+            files.removeOrphanedFiles(keeping: [])
             FernletAuditLog.log("privateMedia.indexUnrecoverable")
             return .unrecoverable
         }

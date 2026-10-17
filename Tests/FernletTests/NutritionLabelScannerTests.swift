@@ -262,6 +262,25 @@ struct NutritionLabelScannerTests {
             )
         }
     }
+
+    /// Anomaly re-triage 2026-10-17: a dual-column ("as prepared") label prints servings per container
+    /// ONCE for both columns. The second column is parsed at `matchIndex: 1`, found no second number,
+    /// and came back without a servings count; it now reads the shared one. A line that does carry two
+    /// numbers still gives each column its own.
+    @Test func theSecondColumnReadsTheSharedServingsPerContainer() {
+        let lines = [
+            "Serving size 1/4 cup (30g)",
+            "Servings per container about 10",
+            "Calories 110 190",
+            "Protein 2g 6g"
+        ]
+        let perServing = NutritionLabelScanner.parse(lines: lines, matchIndex: 0)
+        let asPrepared = NutritionLabelScanner.parse(lines: lines, matchIndex: 1)
+        #expect(perServing.servingsPerContainer == 10)
+        #expect(asPrepared.servingsPerContainer == 10, "the second column lost the shared servings count")
+        #expect(perServing.calories == 110)
+        #expect(asPrepared.calories == 190)
+    }
 }
 
 /// The fix-1.14 gate as it sees an OCR result: absent stays absent all the way from the scanner's

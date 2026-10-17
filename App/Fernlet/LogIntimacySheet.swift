@@ -212,24 +212,25 @@ struct LogIntimacySheet: View {
             }
 
             let externalUUID = UUID()
-            do {
-                try await HealthKitService(preferencesStore: storagePreferencesStore).saveIntimacyEvent(
-                    date: eventDate,
-                    protectionUsed: protectionUsed,
-                    externalUUID: externalUUID
-                )
-                try intimacyStore.markSavedToHealthKit(id: log.id, externalUUID: externalUUID)
-            } catch {
-                // The note IS sealed; only the Health sample failed. Say so and STAY — the sentence
-                // is the whole point of the branch, and a 1.8 s window with the cursor elsewhere is
-                // not a way of telling anyone anything.
-                savedWithCaveat = true
-                // `.success`: the sealed note IS on disk — only the Health sample failed.
-                report(String(localized: "Private note saved, but Apple Health was not updated: \(error.localizedDescription)"),
-                       kind: .success)
+            let healthOutcome = await IntimacyHealthWrite.run(
+                save: {
+                    try await HealthKitService(preferencesStore: storagePreferencesStore).saveIntimacyEvent(
+                        date: eventDate,
+                        protectionUsed: protectionUsed,
+                        externalUUID: externalUUID
+                    )
+                },
+                link: { try intimacyStore.markSavedToHealthKit(id: log.id, externalUUID: externalUUID) }
+            )
+            guard let caveat = healthOutcome.caveat else {
+                dismiss()
                 return
             }
-            dismiss()
+            // The note IS sealed; only part of the Health half went wrong. Say exactly which part and
+            // STAY — the sentence is the whole point of the branch, and a 1.8 s window with the cursor
+            // elsewhere is not a way of telling anyone anything. `.success`: the sealed note is on disk.
+            savedWithCaveat = true
+            report(caveat, kind: .success)
         } catch is IntimacyTrackingHiddenError {
             // The derived gate flipped to hidden while this sheet was open (a Settings toggle or a
             // profile edit mid-session) and the funnel refused the seal. A raw Foundation error string
@@ -274,5 +275,65 @@ struct LogIntimacySheet: View {
     private func report(_ message: String, kind: FernletAnnouncementKind = .status) {
         statusMessage = message
         FernletAnnouncer.system.announce(kind, resolved: message)
+    }
+}
+
+/// The Health half of an intimacy save, judged in two steps so the sheet says which one failed.
+///
+/// The sample write and the local link mark (`IntimacyLogStore.markSavedToHealthKit`) used to share
+/// one `catch`. A sample that landed in Apple Health, followed by a link mark that threw, read as
+/// "Apple Health was not updated", which was false: the sample was there, and what Fernlet lost was
+/// only its own record of it (the "Saved to Apple Health" line on the day's detail page). The two
+/// failures are told apart here, and only a sample that actually failed says Health was not updated.
+///
+/// Pure over its two closures, so the decision is testable without HealthKit or a sealed store.
+enum IntimacyHealthWrite {
+
+    /// What the Health half did, with the sentence the sheet shows for each partial outcome.
+    enum Outcome: Equatable {
+        /// The sample landed and the sealed row now carries its Health link.
+        case saved
+        /// The sample did not land, so Apple Health was not updated. Carries the error's description.
+        case healthNotUpdated(reason: String)
+        /// The sample landed, but the local link mark threw: Apple Health has the event, and the
+        /// sealed row will not show "Saved to Apple Health".
+        case savedButUnlinked
+
+        /// The caveat sentence for a partial outcome; nil when everything landed.
+        var caveat: String? {
+            switch self {
+            case .saved:
+                return nil
+            case .healthNotUpdated(let reason):
+                return String(localized: "Private note saved, but Apple Health was not updated: \(reason)")
+            case .savedButUnlinked:
+                return String(
+                    localized: "intimacy.save.healthSavedLinkFailed",
+                    defaultValue: "Private note saved and sent to Apple Health. Fernlet couldn't record that link, so this entry won't show “Saved to Apple Health”.",
+                    comment: "Shown after an intimacy log was sealed and its Apple Health sample was written, but Fernlet failed to mark its own row as saved to Health. Both saves happened; only the label on the day's detail page will be missing."
+                )
+            }
+        }
+    }
+
+    /// Writes the sample, then marks the link — the mark runs only after the sample landed.
+    ///
+    /// - Parameters:
+    ///   - save: The Apple Health sample write.
+    ///   - link: Records the sample's external UUID on the sealed row.
+    /// - Returns: Which of the three outcomes happened.
+    static func run(save: () async throws -> Void, link: () throws -> Void) async -> Outcome {
+        do {
+            try await save()
+        } catch {
+            return .healthNotUpdated(reason: error.localizedDescription)
+        }
+        do {
+            try link()
+        } catch {
+            FernletAuditLog.log("intimacy.healthLink.failed", context: ["error": "\(type(of: error))"])
+            return .savedButUnlinked
+        }
+        return .saved
     }
 }

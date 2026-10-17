@@ -1274,7 +1274,9 @@ import Testing
     /// same names and with the same cells (161 tests; owner default 6 of the ProximityKit remainder
     /// proposal), left FernletTests with their rows, and its CI runs them. The other 16 copied suites
     /// stay: the 11 `mesh-batteries` gates, the four store suites and `IdentityServiceTests`.
-    static let measuredInventoryRows = 607
+    /// 607 → 608 on 2026-10-17 for `IntimacyHealthWriteTests` (on no line), the anomaly re-triage's fix
+    /// that tells a failed Apple Health sample from a failed link mark after an intimacy save.
+    static let measuredInventoryRows = 608
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has three

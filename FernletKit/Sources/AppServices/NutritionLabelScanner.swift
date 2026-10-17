@@ -507,7 +507,11 @@ public final class NutritionLabelScanner {
             return true
         }
         if lower.contains("servings per container") || lower.contains("servings per package") {
+            // One package, one count: a dual-column label prints this once for both columns, so the
+            // second column (matchIndex 1) finds no second number and reads the shared one instead of
+            // coming back empty.
             result.servingsPerContainer = extractInt(from: lower, matchIndex: matchIndex)
+                ?? (matchIndex > 0 ? extractInt(from: lower, matchIndex: 0) : nil)
             return true
         }
         if lower.hasPrefix("calories") && lower.contains("from fat") == false {

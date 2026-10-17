@@ -244,4 +244,36 @@ struct GuidedWorkoutRunStoreTests {
         #expect(store.guidedRunState?.currentSet == 1)
         store.clearGuidedRun()
     }
+
+    // MARK: An intent's "Done set" reaches the open in-app run at once
+
+    /// A Lock Screen or Siri "Done set" runs in the app's process but writes only the app-group file.
+    /// It now posts `.guidedWorkoutRunAdvancedByIntent`, and the store (its widget bridge active)
+    /// reconciles from the file straight away, so the next in-app tap acts on the intent's set instead
+    /// of writing a stale run over it. Before the fix the in-app run stayed on set 1: "Skip rest" did
+    /// nothing, the next "Done set" wrote set 2 over the intent's set 2, and one finished set was lost.
+    @Test func anIntentDoneSetReachesTheOpenInAppRunAtOnce() async throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let s = session("Push", [PrescribedExercise(name: "Bench", sets: 4, reps: "8", role: .main, fromCatalog: true)])
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        store.activateWidgetBridge()
+        #expect(store.guidedRunState?.currentSet == 1)
+
+        let outcome = await GuidedWorkoutIntentRunner.markSetDone(directory: appGroupDirectory)
+        #expect(outcome == .applied(.resting))
+        // The observer is on the main queue; give it its turn (bounded, no wall clock).
+        for _ in 0..<50 where store.guidedRunState?.phase != .resting {
+            await Task.yield()
+        }
+        #expect(store.guidedRunState?.phase == .resting, "the in-app run never saw the intent's set")
+        #expect(store.guidedRunState?.currentSet == 2)
+
+        store.guidedSkipRest()
+        store.guidedMarkSetDone()
+        let file = try #require(GuidedWorkoutRunStateStore(directory: appGroupDirectory).read())
+        #expect(file.currentSet == 3, "an in-app tap wrote a stale run over the intent's set")
+        store.clearGuidedRun()
+    }
 }
