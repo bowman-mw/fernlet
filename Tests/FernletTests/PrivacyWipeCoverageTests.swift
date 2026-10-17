@@ -306,6 +306,9 @@ struct PrivacyWipeCoverageTests {
         "func deleteAllData(includingHealthKitSamples",
         "func stopWritersForWipe()",
         "func deleteSealedCloudBackups(",
+        // Leg 2's probe of what iCloud holds (bug confirmation 2026-10-15 §2): it only asks a hook,
+        // but it is a private helper the wipe path calls, so its body is scanned like any leg's.
+        "func sealedBackupsFoundInICloud()",
         "func deleteSealedRows(",
         "func deleteHealthSamplesIfRequested(",
         "func deletePhotoCorpora(",

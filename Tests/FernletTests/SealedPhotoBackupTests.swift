@@ -578,8 +578,10 @@ struct SealedPhotoBackupTests {
                 "the photo did not restore onto the empty device")
         #expect(hostTwo.outcomes.last == .restored(1))
 
-        // Device 3: already holds its OWN different photo → must NOT be restored into, and must
-        // upload rather than be overwritten.
+        // Device 3: already holds its OWN different photo, and has never uploaded — a new iPhone that
+        // took a photo before its backup was turned on. It must never be written OVER, and it must
+        // upload; and since bug confirmation 2026-10-15 §2 it restores AROUND its own photo instead of
+        // being left out of the restore for good (the gate used to read "not empty" as "restored").
         let deviceThree = temporaryDocumentsDirectory()
         defer { try? FileManager.default.removeItem(at: deviceThree) }
         let localID = try #require(mealStore(in: deviceThree).save(jpeg(width: 80, height: 80, color: .systemPink)))
@@ -595,10 +597,10 @@ struct SealedPhotoBackupTests {
         _ = await coordinatorThree.synchronize(preferenceOverride: true)
 
         #expect(mealStore(in: deviceThree).imageData(for: localID) == localBytes,
-                "a non-empty corpus was restored into")
-        #expect(mealStore(in: deviceThree).imageData(for: uploadedID) == nil,
-                "the other device's photo was restored over a corpus that was already in use")
-        #expect(mealStore(in: deviceThree).storedPhotoIDs() == [localID])
+                "the restore wrote over this device's own photo")
+        #expect(mealStore(in: deviceThree).imageData(for: uploadedID) == uploadedBytes,
+                "a corpus holding a photo of its own never restored the backup's")
+        #expect(Set(mealStore(in: deviceThree).storedPhotoIDs()) == [localID, uploadedID])
         // ...and its own photo reached the cloud, joining rather than replacing the committed set.
         #expect(database.recordNames(withPrefix: "sealed-photo.meal.").count == 3)
         var restored: Set<UUID> = []
@@ -1106,7 +1108,8 @@ struct SealedPhotoBackupTests {
         database.replaceCiphertext(named: "sealed-photo.meal.manifest", with: Data("not openable".utf8))
         let corrupted = try #require(database.ciphertext(named: "sealed-photo.meal.manifest"))
 
-        // Device 2 holds its own photo, so it never restores — it goes straight to the upload leg.
+        // Device 2 holds its own photo but has never uploaded, so it restores first (bug confirmation
+        // 2026-10-15 §2) — and a manifest it cannot read stops the corpus there, before any upload.
         let deviceTwo = temporaryDocumentsDirectory()
         defer { try? FileManager.default.removeItem(at: deviceTwo) }
         _ = try #require(mealStore(in: deviceTwo).save(jpeg(width: 60, height: 60, color: .systemPink)))
@@ -1119,7 +1122,8 @@ struct SealedPhotoBackupTests {
                 "a manifest this device could not read was replaced by one naming only its own ids")
         #expect(database.record(named: "sealed-photo.meal.\(committedID.uuidString)") != nil,
                 "the other device's committed body lost the only thing that named it")
-        #expect(two.host.uploadFailures.last == true, "the refusal was silent")
+        #expect(two.host.outcomes.last?.needsAttention == true, "the refusal was silent")
+        #expect(two.host.outcomes.last?.isRetryable == true)
     }
 
     /// A corpus the user has EMPTIED is empty for the opposite reason a fresh device's is. Restoring
@@ -1834,7 +1838,9 @@ struct SealedPhotoBackupTests {
         let mealVerdict = try verdict(.meal, in: pass)
         #expect(!mealVerdict.committed)
         #expect(!mealVerdict.examined, "a leg that never reached the manifest reported an answer")
-        #expect(pass.uploadFailed)
+        // The never-uploaded corpus restores first (bug confirmation 2026-10-15 §2), so the unreadable
+        // manifest stops it at the restore leg — a retryable outcome the banner shows — not at upload.
+        #expect(host.outcomes.contains { $0.needsAttention && $0.isRetryable })
         database.unfetchableRecordNames = []
         let generation = try await committedManifestGeneration(database: database)
         #expect(generation == 1, "a manifest this device could not read was rewritten anyway")
@@ -2443,6 +2449,211 @@ struct SealedPhotoBackupTests {
         #expect(route.coordinator.lastFullPassVerdicts == nil)
         #expect(route.coordinator.lastFullPassCompletedAt == nil)
     }
+
+    // MARK: - 10. A failed enable (bug confirmation 2026-10-15 §1)
+
+    /// A live store whose own-photo coordinator runs over `database` and `identity` through the
+    /// store's coordinator seam, on its own photo root and scopes — for the legs that live on the
+    /// STORE: the enable's bookkeeping, Retry, and the wipe.
+    private func makeBackupStore(
+        identity: IdentityService,
+        database: MockPhotoRecordDatabase,
+        defaults: UserDefaults
+    ) -> FernletStore {
+        let store = makeTestStore()
+        store.ownPhotoBackupCoordinatorFactory = { host in
+            OwnPhotoBackupCoordinator(
+                host: host,
+                documentsDirectory: host.photoDocumentsDirectory,
+                identityFactory: { identity },
+                cloudFactory: { self.makeCloud(database) },
+                defaults: defaults
+            )
+        }
+        return store
+    }
+
+    /// A failed enable leaves the switch OFF, and the banner's Retry used to run the ordinary photo
+    /// pass — which stops at that off switch and does nothing — under a line ("We'll keep trying, or
+    /// tap Retry") written for the ENABLED route's upload failure. Retry now re-runs the enable the
+    /// user consented to, and the store names the failed enable instead of the upload failure.
+    @Test func retryAfterAFailedEnableRunsTheEnableAgain() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        database.failSaves = true
+        let store = makeBackupStore(identity: identity, database: database, defaults: isolatedDefaults())
+        defer { try? FileManager.default.removeItem(at: store.photoDocumentsDirectory) }
+        _ = try #require(mealStore(in: store.photoDocumentsDirectory).save(jpeg(width: 100, height: 100)))
+
+        #expect(await store.setOwnPhotoBackupEnabled(true) == false)
+        #expect(store.ownPhotoBackupEnableFailed)
+        #expect(!store.ownPhotoBackupUploadFailed,
+                "the enabled route's upload-failure line ('We'll keep trying') shows over a route that is off")
+        let attemptsAfterEnable = database.saveAttempts
+        #expect(attemptsAfterEnable > 0)
+
+        database.failSaves = false
+        #expect(await store.retrySealedBackups() == true, "Retry did not run the enable again")
+        #expect(database.saveAttempts > attemptsAfterEnable, "Retry ran no pass at all")
+        #expect(database.recordNames(withPrefix: "sealed-photo.meal.").count == 2)
+        #expect(!store.ownPhotoBackupEnableFailed)
+    }
+
+    /// A failed enable can commit one corpus before another's upload fails, and the switch still
+    /// reads off — so "delete everything", which ran the photo leg only for an ON switch, left that
+    /// corpus's sealed records in iCloud under an escrow key the same wipe deletes.
+    @Test func deleteEverythingReachesTheCorpusAFailedEnableCommitted() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let store = makeBackupStore(identity: identity, database: database, defaults: isolatedDefaults())
+        defer { try? FileManager.default.removeItem(at: store.photoDocumentsDirectory) }
+        _ = try #require(mealStore(in: store.photoDocumentsDirectory).save(jpeg(width: 100, height: 100)))
+        _ = try #require(progressStore(in: store.photoDocumentsDirectory)
+            .add(jpeg(width: 80, height: 80), caption: "week 1", capturedAt: Date()))
+        // The meal corpus commits — its body, then its manifest — and the progress corpus's upload,
+        // the next save, fails.
+        database.failSavesAfterCallCount = 2
+
+        #expect(await store.setOwnPhotoBackupEnabled(true) == false)
+        #expect(database.recordNames(withPrefix: "sealed-photo.meal.").count == 2,
+                "precondition: the meal corpus committed before the enable failed")
+        #expect(!StoragePreferencesStore.currentPreferences().sealedBackupOwnPhotosEnabled,
+                "precondition: the switch reads off")
+
+        database.failSavesAfterCallCount = nil
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+        #expect(database.recordNames(withPrefix: "sealed-photo.").isEmpty,
+                "the committed corpus outlived Delete Everything")
+    }
+
+    // MARK: - 11. A new iPhone (bug confirmation 2026-10-15 §2)
+
+    /// Uploads `count` meal photos from a device of its own and returns their ids and bytes — the old
+    /// phone whose backup a new one restores.
+    private func uploadMealPhotos(
+        _ count: Int,
+        identity: IdentityService,
+        database: MockPhotoRecordDatabase
+    ) async throws -> [UUID: Data] {
+        let device = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: device) }
+        var uploaded: [UUID: Data] = [:]
+        // R2: bounded by `count`.
+        for index in 0..<count {
+            let id = try #require(mealStore(in: device).save(jpeg(width: 60 + index, height: 60)))
+            let bytes = try #require(mealStore(in: device).imageData(for: id))
+            uploaded[id] = bytes
+        }
+        let route = makeCoordinator(documents: device, identity: identity, database: database, defaults: isolatedDefaults())
+        #expect(await route.coordinator.setEnabled(true))
+        return uploaded
+    }
+
+    /// The restore gate read "this corpus is not empty" as "this device has restored", so the first
+    /// photo a new iPhone took before its backup was turned on closed the restore for good: the old
+    /// phone's photos were carried forward in the manifest and never came down. A device that has never
+    /// uploaded now restores around its own photos — every id it lacks comes down, its own stay.
+    @Test func aNewPhonesOwnPhotoDoesNotCloseTheRestore() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let uploaded = try await uploadMealPhotos(3, identity: identity, database: database)
+
+        let newPhone = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: newPhone) }
+        let localID = try #require(mealStore(in: newPhone).save(jpeg(width: 90, height: 90, color: .systemPink)))
+        let localBytes = try #require(mealStore(in: newPhone).imageData(for: localID))
+        let route = makeCoordinator(documents: newPhone, identity: identity, database: database, defaults: isolatedDefaults())
+        #expect(await route.coordinator.setEnabled(true))
+
+        for (id, bytes) in uploaded {
+            #expect(mealStore(in: newPhone).imageData(for: id) == bytes, "an old phone's photo never came down")
+        }
+        #expect(mealStore(in: newPhone).imageData(for: localID) == localBytes, "the restore wrote over this phone's photo")
+        #expect(route.host.outcomes.contains(.restored(3)))
+        // ...and the new phone's photo joined the backup beside them.
+        #expect(database.recordNames(withPrefix: "sealed-photo.meal.").count == 5)
+    }
+
+    /// The restore into a corpus with photos of its own fetches only the ids it lacks: a photo already
+    /// here under an id the manifest names is this phone's to keep, never overwritten by the cloud copy.
+    @Test func aRestoreIntoANewPhoneNeverWritesOverAnIDItHolds() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let uploaded = try await uploadMealPhotos(2, identity: identity, database: database)
+        let sharedID = try #require(uploaded.keys.sorted { $0.uuidString < $1.uuidString }.first)
+
+        let newPhone = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: newPhone) }
+        let localJPEG = jpeg(width: 70, height: 70, color: .systemPink)
+        #expect(mealStore(in: newPhone).restoreSealedPhoto(localJPEG, forID: sharedID))
+        let localBytes = try #require(mealStore(in: newPhone).imageData(for: sharedID))
+        let route = makeCoordinator(documents: newPhone, identity: identity, database: database, defaults: isolatedDefaults())
+        _ = await route.coordinator.synchronize(preferenceOverride: true)
+
+        #expect(mealStore(in: newPhone).imageData(for: sharedID) == localBytes, "the cloud copy overwrote a local photo")
+        #expect(route.host.outcomes.last == .restored(1))
+    }
+
+    /// The progress corpus restores its timeline with its bodies, and a new phone with a timeline of
+    /// its own keeps it: the restored rows JOIN it (only for bodies that landed) instead of the restore
+    /// refusing the index and leaving the old phone's photos rendering nowhere.
+    @Test func aNewPhonesTimelineGainsTheRestoredProgressPhotos() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        let oldPhone = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: oldPhone) }
+        let oldRecord = try #require(progressStore(in: oldPhone).add(jpeg(width: 80, height: 80), caption: "week 1", capturedAt: Date()))
+        let oldRoute = makeCoordinator(documents: oldPhone, identity: identity, database: database, defaults: isolatedDefaults())
+        #expect(await oldRoute.coordinator.setEnabled(true))
+
+        let newPhone = temporaryDocumentsDirectory()
+        defer { try? FileManager.default.removeItem(at: newPhone) }
+        let newRecord = try #require(progressStore(in: newPhone).add(jpeg(width: 50, height: 50), caption: "today", capturedAt: Date()))
+        let route = makeCoordinator(documents: newPhone, identity: identity, database: database, defaults: isolatedDefaults())
+        #expect(await route.coordinator.setEnabled(true))
+
+        let timeline = progressStore(in: newPhone).records()
+        #expect(Set(timeline.map(\.id)) == [oldRecord.id, newRecord.id], "the restored photo has no row in the timeline")
+        #expect(timeline.first { $0.id == oldRecord.id }?.caption == "week 1")
+        #expect(progressStore(in: newPhone).imageData(for: oldRecord.id) != nil)
+    }
+
+    /// "Delete everything" ran the photo leg only for an ON switch (or, since §1, a corpus this install
+    /// uploaded), so a new iPhone whose switch never went on left the old phone's photo backup in
+    /// iCloud. The funnel now deletes what the presence probe finds.
+    @Test func deleteEverythingDeletesAPhotoBackupFoundInICloud() async throws {
+        let (identity, keychainService) = try plantedIdentity()
+        defer { KeychainItem.deleteAll(service: keychainService) }
+        let database = MockPhotoRecordDatabase()
+        _ = try await uploadMealPhotos(1, identity: identity, database: database)
+        #expect(!database.recordNames(withPrefix: "sealed-photo.meal.").isEmpty)
+
+        let store = makeBackupStore(identity: identity, database: database, defaults: isolatedDefaults())
+        defer { try? FileManager.default.removeItem(at: store.photoDocumentsDirectory) }
+        store.sealedBackupPresenceHook = { SealedBackupPresence(photoCorpora: [.meal]) }
+        _ = await store.deleteAllData(includingHealthKitSamples: false)
+        #expect(database.recordNames(withPrefix: "sealed-photo.").isEmpty,
+                "the old phone's photo backup outlived the new phone's Delete Everything")
+    }
+
+    /// ...and the Sealed backups it finds join the ones this install's switches name — the retired
+    /// sensitive-notes copy included, which a new iPhone's launch sweep never deletes either.
+    @Test func deleteEverythingDeletesEverySealedBackupFoundInICloud() {
+        let switchesOff = StoragePreferences()
+        #expect(FernletStore.sealedBackupPayloadsToDelete(preferences: switchesOff, found: SealedBackupPresence()).isEmpty)
+        let found = SealedBackupPresence(payloads: [.journalNarratives, .sensitiveNotes])
+        #expect(FernletStore.sealedBackupPayloadsToDelete(preferences: switchesOff, found: found)
+                == [.sensitiveNotes, .journalNarratives])
+        var periodOn = StoragePreferences()
+        periodOn.sealedBackupPeriodEnabled = true
+        #expect(FernletStore.sealedBackupPayloadsToDelete(preferences: periodOn, found: found)
+                == [.sensitiveNotes, .periodData, .journalNarratives])
+    }
 }
 
 // MARK: - Test doubles
@@ -2524,6 +2735,8 @@ private final class MockPhotoRecordDatabase: CloudKitRecordDatabase {
     var failSavesAfterCallCount: Int?
     /// `saveRecords` calls that have succeeded so far — what `failSavesAfterCallCount` counts.
     private(set) var saveCallCount = 0
+    /// Every `saveRecords` call, failed or not — the evidence a pass ran while saves fail.
+    private(set) var saveAttempts = 0
 
     /// The failure `failSaves` / `failSavesAfterCallCount` / `unfetchableRecordNames` inject.
     struct InjectedFailure: Error {}
@@ -2547,6 +2760,7 @@ private final class MockPhotoRecordDatabase: CloudKitRecordDatabase {
     }
 
     func saveRecords(_ incoming: [CKRecord]) async throws {
+        saveAttempts += 1
         if failSaves { throw InjectedFailure() }
         if let failSavesAfterCallCount, saveCallCount >= failSavesAfterCallCount { throw InjectedFailure() }
         saveCallCount += 1

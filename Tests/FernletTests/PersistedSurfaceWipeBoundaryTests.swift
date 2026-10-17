@@ -511,8 +511,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         // One line: `await ownPhotoBackupCoordinator.tearDownForDeleteAll()`. The clearest live
         // instance of the one-hop ceiling — the removal it certifies happens two files away.
         "deleteOwnPhotoEscrowBackups",
-        // A pure predicate over StoragePreferences; reads four Bools and touches no store.
-        "hasSealedBackup",
+        // A pure function of StoragePreferences and the presence probe's answer — which Sealed backups
+        // leg 2 deletes (bug confirmation 2026-10-15 §2). It filters the payload cases through
+        // `hasSealedBackup` (a predicate reading four Bools) and the found set, and touches no store.
+        "sealedBackupPayloadsToDelete",
         // Records the deferred-reupload flag for one sealed payload type.
         "recordSealedBackupReuploadDeferred",
         // Drops the in-memory Sealed backup v2 statuses (an observable dictionary; no persisted

@@ -87,7 +87,12 @@ which is what lets the persisted-surface wipe wall see them; the encoding is sha
 
 The third tier is direct CloudKit, bypassing the Core Data mirror. ``CloudKitDataService`` handles
 what `NSPersistentCloudKitContainer` cannot: counting the data already in an iCloud account (feeding
-``MultiDeviceSyncWarning``'s pure three-way classification of the "your devices will drift" banner),
+``MultiDeviceSyncWarning``'s pure three-way classification of the "your devices will drift" banner)
+and asking which sealed backups it holds — ``SealedBackupPresence``, each payload's head and each
+photo corpus's manifest fetched by name with nothing downloaded or opened
+(``CloudKitDataService/sealedBackupPresence()``), which detection carries beside its counts so a new
+iPhone, whose backup switches all start off, can offer the restore, and which "delete everything"
+asks so it deletes what is there whatever the switches say (bug confirmation 2026-10-15 §2),
 performing the confirmed, audited delete-everything sweep, and reading/writing chunked sealed
 backups. A sealed backup's head keeps the bare name `sealed-backup.<payload>`; a v1 set's suffix
 chunks are `…chunk.<i>`, and a Sealed backup v2 set's are scoped to their set,

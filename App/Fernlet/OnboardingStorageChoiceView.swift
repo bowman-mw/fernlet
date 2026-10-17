@@ -12,7 +12,10 @@ import FernletUI
 /// a tap here writes `StoragePreferences` immediately (via the environment's
 /// `StoragePreferencesStore`): `iCloudSyncEnabled`, and `cloudCopyKept` when local-only is chosen
 /// while the account already holds data — the marker that keeps a stranded cloud copy reachable by
-/// the delete-everything funnel. Continue stays disabled until a card is picked.
+/// the delete-everything funnel. Continue stays disabled until a card is picked. When the account
+/// holds a Sealed backup or a photo backup, a note says so and how to restore it — every backup switch
+/// is device-only, so a new iPhone starts with all of them off and nothing else would mention it (bug
+/// confirmation 2026-10-15 §2).
 struct OnboardingStorageChoiceView: View {
     var stepText: String
     let detector: any ExistingCloudDataDetecting
@@ -54,7 +57,7 @@ struct OnboardingStorageChoiceView: View {
                     VStack(spacing: 12) {
                         storageCard(
                             choice: .icloud,
-                            title: existingDataSummary == nil ? "Sync to iCloud" : "Restore from iCloud",
+                            title: existingDataSummary?.hasData == true ? "Restore from iCloud" : "Sync to iCloud",
                             copy: iCloudCopy,
                             systemImage: "icloud.fill"
                         )
@@ -71,6 +74,9 @@ struct OnboardingStorageChoiceView: View {
                         if selectedStorage == .localOnly, existingDataSummary?.hasData == true {
                             localOnlyDataWarning
                         }
+                        if existingDataSummary?.sealedBackups.offersRestore == true {
+                            sealedBackupFoundNote
+                        }
                         if detectionFailed {
                             detectionFailedNote
                         }
@@ -84,7 +90,7 @@ struct OnboardingStorageChoiceView: View {
     }
 
     private var iCloudCopy: String {
-        guard let existingDataSummary else {
+        guard let existingDataSummary, existingDataSummary.hasData else {
             return "Your daily logs are saved to iCloud and appear on your other Fernlet devices."
         }
         return "Restore from iCloud — we found \(existingDataSummary.mealLogCount) meal logs, \(existingDataSummary.journalEntryCount) journal entries, \(existingDataSummary.workoutCount) workouts from a previous device."
@@ -106,6 +112,19 @@ struct OnboardingStorageChoiceView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.sun.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .accessibilityIdentifier("onboarding.storage.localWarning")
+    }
+
+    /// Shown when the account holds an encrypted backup a switch would restore — journal text, cycle
+    /// notes, intimate logs or photos. Those restore only through their own switches, all of which
+    /// start off on a new iPhone, so without this a returning user's "Restore from iCloud" brings the
+    /// day logs back and never mentions the rest.
+    private var sealedBackupFoundNote: some View {
+        Text("This iCloud account also holds an encrypted backup of your journal, cycle, intimate logs or photos. To restore it to this iPhone, turn on its backup in Settings › Privacy & Data after setup.")
+            .font(.fernlet(.bodySmall))
+            .foregroundStyle(Color.bark)
+            .fernletWrappingText()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("onboarding.storage.sealedBackupFound")
     }
 
     /// Shown when the iCloud probe failed: the choices below are being offered without knowing

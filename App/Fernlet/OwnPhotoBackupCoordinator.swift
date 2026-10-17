@@ -53,7 +53,11 @@ protocol OwnPhotoBackupContext: AnyObject {
 ///   can open is restored INTO, exactly like an empty one. The stranded files are never deleted to
 ///   achieve that — "unopenable" also covers truncated files and the meal corpus's legitimate
 ///   pre-sealing plaintext, which the read path still returns; the restore simply writes the
-///   corpus's real photos back over their own ids.
+///   corpus's real photos back over their own ids. Neither half may close the restore on a corpus
+///   this install has NEVER uploaded to: a new phone's first photo, taken before its backup was
+///   turned on, made the corpus "in use" and its backup never came down (bug confirmation 2026-10-15
+///   §2). Such a corpus is restored AROUND what it holds — only ids it lacks are fetched, its own are
+///   never written over, and the progress timeline gains the restored rows instead of refusing them.
 /// - **Repair after a partial restore.** Per-photo failures are isolated by design, but the first
 ///   successful write makes the corpus non-empty — so without a repair path the ids that failed
 ///   could never be fetched again on any launch or Retry, while their sealed bodies sat intact in
@@ -155,7 +159,8 @@ final class OwnPhotoBackupCoordinator {
         let holdsOnlyUnopenableFiles: () -> Bool
         let carriesSidecar: Bool
         let sidecar: () -> Data?
-        let restoreSidecar: (Data) -> Bool
+        /// Lands a restored sidecar given the ids whose bodies this restore wrote.
+        let restoreSidecar: (Data, Set<UUID>) -> Bool
     }
 
     /// The own-photos key plus the pre-split key as the read-path dual-open fallback — the same
@@ -228,7 +233,7 @@ final class OwnPhotoBackupCoordinator {
                 holdsOnlyUnopenableFiles: { store.holdsOnlyUnopenableFiles() },
                 carriesSidecar: false,
                 sidecar: { nil },
-                restoreSidecar: { _ in true }
+                restoreSidecar: { _, _ in true }
             )
         case .progress:
             let store = progressStore()
@@ -244,7 +249,10 @@ final class OwnPhotoBackupCoordinator {
                 holdsOnlyUnopenableFiles: { store.holdsOnlyUnopenableFiles() },
                 carriesSidecar: true,
                 sidecar: { store.backupIndexPayload() },
-                restoreSidecar: { store.restoreIndexPayload($0) }
+                // A merge, not a replace: a corpus with a timeline of its own keeps it and gains the
+                // restored rows whose bodies landed (bug confirmation 2026-10-15 §2); with no live
+                // index this is the whole-index restore it always was.
+                restoreSidecar: { store.mergeRestoredIndexPayload($0, restoredIDs: $1) }
             )
         }
     }
@@ -623,12 +631,15 @@ final class OwnPhotoBackupCoordinator {
     /// One corpus: restore into it when it needs restoring, then upload from it when it has
     /// something to say.
     ///
-    /// "Needs restoring" is three cases, not one:
-    /// 1. the corpus is EMPTY **and this device has never uploaded to it** — an empty corpus is
-    ///    "not restored yet" only for a device that has not participated. A device whose upload
-    ///    ledger exists and is now empty is empty for the opposite reason: the user deleted their
-    ///    photos. Restoring there would write every deleted photo back to disk as an unreferenced
-    ///    orphan — invisible, undeletable, and re-uploaded forever (see
+    /// "Needs restoring" is three cases, not one (``fullRestorePlan(access:corpus:ledger:)``):
+    /// 1. **this device has never uploaded to the corpus** — it has not restored yet, whatever it
+    ///    holds. Empty, the whole set comes down. Holding photos of its OWN — taken on a new phone
+    ///    before its backup was turned on — the set comes down AROUND them: only ids the corpus lacks
+    ///    are fetched, and a local photo is never written over (bug confirmation 2026-10-15 §2; the
+    ///    gate used to read "not empty" as "restored", so the first new photo closed the restore for
+    ///    good). A device whose upload ledger exists and is now empty is empty for the opposite
+    ///    reason: the user deleted their photos. Restoring there would write every deleted photo back
+    ///    to disk as an unreferenced orphan — invisible, undeletable, and re-uploaded forever (see
     ///    ``OwnPhotoUploadLedger/hasUploaded(for:)``);
     /// 2. the corpus holds files but nothing this install can OPEN — the device-backup-onto-a-new-
     ///    phone case, where a presence-only gate would decline the restore the route exists for;
@@ -649,14 +660,13 @@ final class OwnPhotoBackupCoordinator {
         var result = CorpusResult()
         let uploadLedger = OwnPhotoUploadLedger(defaults: defaults)
         let repairIDs = OwnPhotoRestoreRepairLedger(defaults: defaults).pendingIDs(for: corpus)
-        let needsFullRestore = access.isEmpty()
-            ? !uploadLedger.hasUploaded(for: corpus)
-            : access.holdsOnlyUnopenableFiles()
-        if needsFullRestore || !repairIDs.isEmpty {
+        let fullRestoreKeeping = fullRestorePlan(access: access, corpus: corpus, ledger: uploadLedger)
+        if fullRestoreKeeping != nil || !repairIDs.isEmpty {
             let restored = await restore(
                 corpus: corpus,
                 access: access,
-                limitedTo: needsFullRestore ? nil : repairIDs
+                limitedTo: fullRestoreKeeping == nil ? repairIDs : nil,
+                keeping: fullRestoreKeeping ?? []
             )
             result.outcome = restored.outcome
             // The restore leg is the only honest source of "no committed manifest exists" — a nil
@@ -726,6 +736,25 @@ final class OwnPhotoBackupCoordinator {
         return result
     }
 
+    /// Whether a corpus needs a FULL restore this pass, and around which of its own ids: nil for none,
+    /// else the ids it already holds and must keep (empty = restore every id). See the three cases on
+    /// ``synchronize(corpus:fullVerification:)``.
+    ///
+    /// A never-uploaded corpus whose ids cannot be listed is NOT restored into this pass (nil): with
+    /// its own ids unknown, a restore could write over them. The pass after the directory lists again
+    /// does it.
+    private func fullRestorePlan(
+        access: CorpusAccess,
+        corpus: SealedPhotoCorpus,
+        ledger: OwnPhotoUploadLedger
+    ) -> Set<UUID>? {
+        guard !access.isEmpty() else { return ledger.hasUploaded(for: corpus) ? nil : [] }
+        // Stranded bytes (the device-backup-onto-a-new-phone case) are written over by id, as always.
+        guard !access.holdsOnlyUnopenableFiles() else { return [] }
+        guard !ledger.hasUploaded(for: corpus), let localIDs = access.ids() else { return nil }
+        return Set(localIDs)
+    }
+
     /// Threads one manifest-minimum observation into the corpus result AND runs the Phase 2.1
     /// latch invalidation: any pass — ambient included — that observes a manifest whose minimum is
     /// still the legacy value has just seen a foreign (or pre-marker) write the latch's proof did
@@ -759,8 +788,11 @@ final class OwnPhotoBackupCoordinator {
     /// that failed before the manifest read reports `examined: false` — absence of evidence,
     /// which the migration latch treats as blocking.
     ///
-    /// - Parameter limitedTo: When non-nil, only these manifest ids are fetched — the REPAIR pass
-    ///   for photos a previous restore could not land. Nil restores the whole committed set.
+    /// - Parameters:
+    ///   - limitedTo: When non-nil, only these manifest ids are fetched — the REPAIR pass for photos a
+    ///     previous restore could not land. Nil restores the whole committed set.
+    ///   - keeping: Ids the corpus already holds and must keep — never fetched or written over (the
+    ///     restore into a never-uploaded corpus with photos of its own, bug confirmation 2026-10-15 §2).
     ///
     /// Only `summary.failed` — the RETRYABLE failures — reaches the repair ledger.
     /// `summary.unverifiableLegacyDigest` is terminal by construction and is audit-logged instead;
@@ -768,7 +800,8 @@ final class OwnPhotoBackupCoordinator {
     private func restore(
         corpus: SealedPhotoCorpus,
         access: CorpusAccess,
-        limitedTo: Set<UUID>? = nil
+        limitedTo: Set<UUID>? = nil,
+        keeping: Set<UUID> = []
     ) async -> (outcome: SealedBackupRestoreOutcome, examined: Bool, observedMinimum: Int?) {
         guard let prepared = makeIdentity(escrowMode: .forOpening) else {
             FernletAuditLog.log("sealedPhoto.restoreNotProvisioned", context: ["corpus": corpus.rawValue])
@@ -782,11 +815,18 @@ final class OwnPhotoBackupCoordinator {
         }
         let service = makeService(identity: prepared.identity)
         let repairLedger = OwnPhotoRestoreRepairLedger(defaults: defaults)
+        // The ids whose bodies this restore wrote — the only ones a merged timeline index may name.
+        var landed = Set<UUID>()
         do {
             guard let summary = try await service.restore(
                 corpus: corpus,
                 limitedTo: limitedTo,
-                write: access.write
+                skipping: keeping,
+                write: { id, bytes in
+                    guard access.write(id, bytes) else { return false }
+                    landed.insert(id)
+                    return true
+                }
             ) else {
                 // No manifest at all: nothing was ever committed, so there is nothing left owed.
                 // Examined with no minimum — the vacuous evidence the migration latch accepts.
@@ -800,11 +840,13 @@ final class OwnPhotoBackupCoordinator {
             // NO body arrived would poison the emptiness gate and lock the corpus out of the very
             // restore it still needs. It comes from the summary — i.e. from the very manifest whose
             // generation was just checked — not from a second fetch that could be served an
-            // older-but-authentic index. `restoreIndexPayload` re-checks emptiness at the write
-            // point, so a raced local capture is never overwritten (and a repair pass finding the
-            // index already correct is refused there, harmlessly).
+            // older-but-authentic index. `mergeRestoredIndexPayload` re-reads the index at the write
+            // point: with none it writes the restored one whole, and with a live one — this device's
+            // own timeline, or a raced local capture — it keeps every row and adds only those for
+            // bodies this restore wrote (`landed`), so a repair pass whose rows are already there
+            // adds nothing.
             if access.carriesSidecar, summary.restored > 0, let sidecar = summary.sidecar,
-               !access.restoreSidecar(sidecar) {
+               !access.restoreSidecar(sidecar, landed) {
                 FernletAuditLog.log("sealedPhoto.restoreSidecarRefused", context: ["corpus": corpus.rawValue])
             }
             // Terminal, never queued: an entry whose recorded hash version is legacy and whose
@@ -928,6 +970,15 @@ final class OwnPhotoBackupCoordinator {
     }
 
     // MARK: - Teardown
+
+    /// Whether this install has committed any own-photo corpus to iCloud — the upload ledger's record of
+    /// it, kept until teardown. "Delete everything" asks this beside the preference (bug confirmation
+    /// 2026-10-15 §1): a FAILED enable can commit one corpus before another's upload fails, leaving
+    /// sealed records in iCloud while the switch reads off.
+    var hasUploadedAnyCorpus: Bool {
+        let ledger = OwnPhotoUploadLedger(defaults: defaults)
+        return SealedPhotoCorpus.allCases.contains { ledger.hasUploaded(for: $0) }
+    }
 
     /// Deletes every own-photo escrow record — all three corpora, bodies and manifests — and reports
     /// whether every corpus cleared.
