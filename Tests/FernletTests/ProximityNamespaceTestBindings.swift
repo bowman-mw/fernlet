@@ -30,8 +30,8 @@
 // binding passes `.fernlet` for a `ProximityNamespace.Purposes`: FernletConnections'
 // `ProximityNamespace.Purposes.fernlet`, the very value `ProximityNamespace.fernlet.family.purposes`
 // holds (ProximityNamespaceGoldenTests pins the two equal). Where it takes the family, because it
-// needs the vocabulary's record kinds beside the labels (the membership verifier, the ledger adoption
-// and the inventory digest), the binding passes `.fernlet` for a `ProximityNamespace.Family`:
+// needs the vocabulary's record kinds beside the labels (the membership verifier and the inventory
+// digest), the binding passes `.fernlet` for a `ProximityNamespace.Family`:
 // `ProximityNamespace.Family.fernlet`, the value `ProximityNamespace.fernlet.family` holds (pinned
 // equal beside the purposes). Where it takes a vocabulary group (the routed type registry and its ack
 // projection, a peer's capability gate), the binding reads the group off
@@ -125,23 +125,6 @@ extension MeshMembershipRecordVerifier {
     }
 }
 
-/// The joiner's two ledger steps in the shapes the suites were written against, restored over their
-/// `in family:` forms with Fernlet's family (plan steps A0.2.4 and A0.3.3).
-extension MeshLedgerAdoption {
-
-    /// `bootstrapVerifier(meshID:ownAdmission:in: .fernlet)`.
-    static func bootstrapVerifier(meshID: UUID, ownAdmission: SignedAdmissionRecord) -> MeshLedgerAdoptionOutcome {
-        bootstrapVerifier(meshID: meshID, ownAdmission: ownAdmission, in: .fernlet)
-    }
-
-    /// `adopt(offered:ownAdmission:meshID:in: .fernlet)`.
-    static func adopt(
-        offered: MeshMembershipLedger, ownAdmission: SignedAdmissionRecord, meshID: UUID
-    ) -> MeshLedgerAdoptionOutcome {
-        adopt(offered: offered, ownAdmission: ownAdmission, meshID: meshID, in: .fernlet)
-    }
-}
-
 /// The digest initializer the suites were written against, restored over
 /// `init(meshID:ledger:family:)` with Fernlet's family (plan steps A0.2.4 and A0.3.3).
 extension MeshInventoryDigest {
@@ -210,8 +193,10 @@ func canonicalBytes(for payload: MeshRoutedDrainAnswerPayload) -> Data {
 // MARK: - Signed transcripts II: the verifiers and the exchange (A0.2.5)
 //
 // The six routed verifiers and the channel-introduction exchange each keep a copy of the labels they
-// check under (a trailing `purposes:` since step A0.2.5); each old initializer comes back here,
-// keeping Fernlet's labels as that copy.
+// check under (a trailing `purposes:` since step A0.2.5); each old initializer a suite here still
+// calls comes back here, keeping Fernlet's labels as that copy. The chunk door's left at the re-pin
+// to ProximityKit 0.1.1 (2026-10-17) with the one suite that called it, `MeshChunkerTests`, which the
+// package's tests hold.
 
 /// The manifest door's initializer the suites were written against (plan step A0.2.5).
 extension MeshRoutedManifestVerifier {
@@ -220,15 +205,6 @@ extension MeshRoutedManifestVerifier {
     init(meshID: UUID, hardDeadline: Date, ledger: MeshMembershipLedger, acceptedTypeTokens: Set<String>) {
         self.init(meshID: meshID, hardDeadline: hardDeadline, ledger: ledger,
                   acceptedTypeTokens: acceptedTypeTokens, purposes: .fernlet)
-    }
-}
-
-/// The chunk door's initializer the suites were written against (plan step A0.2.5).
-extension MeshChunkVerifier {
-
-    /// `init(meshID:hardDeadline:ledger:manifest:purposes: .fernlet)`.
-    init(meshID: UUID, hardDeadline: Date, ledger: MeshMembershipLedger, manifest: MeshRoutedManifest?) {
-        self.init(meshID: meshID, hardDeadline: hardDeadline, ledger: ledger, manifest: manifest, purposes: .fernlet)
     }
 }
 
@@ -312,10 +288,11 @@ extension ProximityVerifySignature {
 // MARK: - Hashes, AEAD, salts, epoch: the routed digests and ids (A0.2.6)
 //
 // Step A0.2.6 moved the routed family's hash and id domains onto the namespace. The three
-// `MeshRoutedContentDigest` statics, the streaming hasher's initializer and the assembly's two verbs
-// come back here in their old shapes, and the three ids that used to be computed properties come
-// back as properties — `chunk.chunkID`, `receipt.receiptID` — each over its `in:` form with
-// Fernlet's labels.
+// `MeshRoutedContentDigest` statics and the assembly's two verbs come back here in their old shapes,
+// and the three ids that used to be computed properties come back as properties — `chunk.chunkID`,
+// `receipt.receiptID` — each over its `in:` form with Fernlet's labels. The streaming hasher's
+// argument-less initializer left at the re-pin to ProximityKit 0.1.1 (2026-10-17) with the suite
+// that called it, `MeshRoutedVocabularyTests`, which the package's tests hold.
 
 /// The routed digests in the shapes the suites were written against (plan step A0.2.6).
 extension MeshRoutedContentDigest {
@@ -355,15 +332,6 @@ extension MeshRecipientReceipt {
 
     /// `receiptID(in: .fernlet)`.
     var receiptID: UUID { receiptID(in: .fernlet) }
-}
-
-/// The streaming content hasher's initializer the suites were written against (plan step A0.2.6).
-extension MeshRoutedContentHasher {
-
-    /// `MeshRoutedContentHasher(purposes: .fernlet)`.
-    init() {
-        self.init(purposes: .fernlet)
-    }
 }
 
 /// The in-memory reassembler's two verbs in the shapes the suites were written against (plan step

@@ -708,6 +708,9 @@ jobs:
         # left this line, and the line, MEASURED on a Mac on the branch's last tree (iPhone 17 simulator,
         # iOS 26.5), ran 97 tests in 11 suites (CIGateSelectorBoundaryTests 9); its floor stays the shared
         # `1`.
+        # In the same branch 23 suites on no line left FernletTests, because ProximityKit's package tests
+        # hold them under the same names and cells, and `CIGateSelectorBoundaryTests`' inventory pin falls
+        # 630 -> 607 with their rows; no cell of this line moved.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -2373,6 +2376,9 @@ jobs:
         # totalTestCount 1310 in 152 suites, all FernletTests (CIGateSelectorBoundaryTests 9), 0 failed, 0
         # skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT 1310:
         # passed, and shown red once at 1311. 1309 + 1 = 1310 is the ARITHMETIC CHECK, never the source.
+        # The 23 suites the same branch drops from FernletTests rode no line. MeshP9HonestyAcceptanceTests'
+        # census loses one of them, `MeshEvictionReleasesTransportLinkTests` (49 -> 48 suites, eight ->
+        # seven unrun), and no cell of this line moves: HELD at 1310.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1310 \

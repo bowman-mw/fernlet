@@ -1269,7 +1269,12 @@ import Testing
     /// row lowers it with the retirement argued, the ``measuredSuiteNameCounts`` rule; a new row raises it
     /// in the same commit. 628 → 630 on 2026-10-15 (App Review guideline 1.2) for the two suites that
     /// joined `mesh-features`, `SessionMessageFilterTests` and `SessionContentReportTests`.
-    static let measuredInventoryRows = 630
+    /// LOWERED, deliberately, 630 → 607 at the re-pin to ProximityKit 0.1.1 (2026-10-17): the 23
+    /// pure-logic suites on no line whose copies ProximityKit's package tests hold at that tag, under the
+    /// same names and with the same cells (161 tests; owner default 6 of the ProximityKit remainder
+    /// proposal), left FernletTests with their rows, and its CI runs them. The other 16 copied suites
+    /// stay: the 11 `mesh-batteries` gates, the four store suites and `IdentityServiceTests`.
+    static let measuredInventoryRows = 607
 
     /// Reads the inventory's text into its rows and its format problems by line (rule I1): `#` lines
     /// are comments; the first other line is exactly ``inventoryHeader``; every data line has three

@@ -21,6 +21,10 @@
 //
 // Every test runs on its OWN scope (temp directory + `com.fernlet.mesh-routed.test.<uuid>` keychain
 // service). `MeshRoutedStoreIsolationTests` is the grep-wall that keeps it that way.
+//
+// Since the re-pin to ProximityKit 0.1.1 (2026-10-17) the vocabulary parity with P3's and the derived
+// hash (`MeshRoutedVocabularyTests`) are ProximityKit's package suite of the same name and cells, which
+// its own CI runs; the load, the caps and the durability ladder stay here.
 
 import CryptoKit
 import FernletConnections
@@ -689,148 +693,6 @@ private struct WrongSchemaIndexWire: Encodable {
     let schemaVersion: Int
     /// An empty item list, so the refusal is unambiguously about the version.
     let items: [MeshRoutedItemRecord] = []
-}
-
-// MARK: - Vocabulary parity and the derived hash
-
-/// The routed store's error vocabulary against P3's, and the streaming digest against the one-shot.
-@MainActor
-@Suite(.serialized)
-struct MeshRoutedVocabularyTests {
-
-    /// One vocabulary, two types: `MeshSessionSealRefusal.summary` hard-codes "mesh session
-    /// context", so the routed store needs its own type — and a same-named case set that drifted
-    /// would be two vocabularies wearing one name.
-    @Test func theRoutedVocabularyMatchesTheSessionStoresExactly() {
-        #expect(
-            Set(MeshRoutedSealRefusal.Cause.allCases.map(\.rawValue))
-                == Set(MeshSessionSealRefusal.Cause.allCases.map(\.rawValue))
-        )
-        #expect(
-            Set(MeshRoutedSealRefusal.Operation.allCases.map(\.rawValue))
-                == Set(MeshSessionSealRefusal.Operation.allCases.map(\.rawValue))
-        )
-        #expect(
-            Set(MeshRoutedDeferral.Reason.allCases.map(\.rawValue))
-                == Set(MeshSessionDeferral.Reason.allCases.map(\.rawValue))
-        )
-    }
-
-    /// The corruption details have associated values and no raw type, so there is no `allCases` set
-    /// to compare, the way ``theRoutedVocabularyMatchesTheSessionStoresExactly`` compares one.
-    ///
-    /// The case-set half is therefore **compile-enforced, not list-enforced**: `name(_:)` and its
-    /// session twin below are exhaustive `switch`es with no `default`, so a fifth case on either
-    /// side fails to build THIS file. (A hand-written list of four on each side could not: two
-    /// identical literal arrays stay equal no matter what the enums grow.) The
-    /// `String(describing:)` comparison stays beside it because it is the half that catches an
-    /// associated-value LABEL drift, which an exhaustive switch does not see.
-    ///
-    /// - Note: enum growth needs a clean build to be seen across module boundaries; that hazard is
-    ///   the codebase's, not this test's.
-    @Test func theCorruptionDetailsAreTheSameFourCases() {
-        let routed: [MeshRoutedCorruption.Detail] = [
-            .emptyFile, .undecodableJSON("x"), .unsupportedSchemaVersion(3), .authenticationFailed
-        ]
-        let session: [MeshSessionCorruption.Detail] = [
-            .emptyFile, .undecodableJSON("x"), .unsupportedSchemaVersion(3), .authenticationFailed
-        ]
-        #expect(routed.map { Self.name($0) } == session.map { Self.name($0) })
-        #expect(routed.map { String(describing: $0) } == session.map { String(describing: $0) })
-    }
-
-    /// The routed detail's case name, as an exhaustive `switch` with **no `default`** — adding a
-    /// case to `MeshRoutedCorruption.Detail` fails to compile here.
-    private static func name(_ detail: MeshRoutedCorruption.Detail) -> String {
-        switch detail {
-        case .emptyFile: return "emptyFile"
-        case .undecodableJSON: return "undecodableJSON"
-        case .unsupportedSchemaVersion: return "unsupportedSchemaVersion"
-        case .authenticationFailed: return "authenticationFailed"
-        }
-    }
-
-    /// The session twin, same shape and same reason: a fifth case on P3's side has to break P5's
-    /// parity claim at build time, not slip past two matching literal lists.
-    private static func name(_ detail: MeshSessionCorruption.Detail) -> String {
-        switch detail {
-        case .emptyFile: return "emptyFile"
-        case .undecodableJSON: return "undecodableJSON"
-        case .unsupportedSchemaVersion: return "unsupportedSchemaVersion"
-        case .authenticationFailed: return "authenticationFailed"
-        }
-    }
-
-    /// One contract behind two same-named accessors: a refusal is retried, because the dominant
-    /// cause at this seam is the pre-first-unlock window that self-heals on unlock.
-    @Test func theRetryabilityAnswerMatchesP3sForTheSameState() {
-        let refusal = MeshRoutedSealRefusal(operation: .seal, cause: .installBindingUnavailable)
-        let sessionRefusal = MeshSessionSealRefusal(operation: .seal, cause: .installBindingUnavailable)
-        #expect(
-            MeshRoutedUnavailability.refused(refusal).isRetryable
-                == MeshSessionRestoreOutcome.retryAfterRefusal(sessionRefusal).isRetryable
-        )
-        let deferral = MeshRoutedDeferral(reason: .fileUnreadable, detail: "x")
-        let sessionDeferral = MeshSessionDeferral(reason: .fileUnreadable, detail: "x")
-        #expect(
-            MeshRoutedUnavailability.deferred(deferral).isRetryable
-                == MeshSessionRestoreOutcome.retryAfterUnlock(sessionDeferral).isRetryable
-        )
-        let corruption = MeshRoutedCorruption(detail: .emptyFile)
-        #expect(
-            MeshRoutedUnavailability.corrupt(corruption).isRetryable
-                == MeshSessionRestoreOutcome.quarantineCorruptFile(
-                    MeshSessionCorruption(detail: .emptyFile)
-                ).isRetryable
-        )
-        #expect(MeshRoutedRetryBounds.maxAttempts == MeshSessionRestoreBounds.maxAttempts)
-    }
-
-    @Test func everyUnavailabilityNamesItselfInItsLogToken() {
-        #expect(
-            MeshRoutedUnavailability.deferred(
-                MeshRoutedDeferral(reason: .fileUnreadable, detail: "x")
-            ).logToken == "deferred:fileUnreadable"
-        )
-        #expect(
-            MeshRoutedUnavailability.refused(
-                MeshRoutedSealRefusal(operation: .open, cause: .installBindingUnavailable)
-            ).logToken == "refused:installBindingUnavailable"
-        )
-        #expect(MeshRoutedUnavailability.notWritten("x").logToken == "notWritten")
-    }
-
-    /// One domain, two shapes. A second domain for the streamed form would mean a custodian's
-    /// whole-item check and the origin's manifest field measured different things.
-    @Test func theStreamingContentHasherAgreesWithTheOneShotDigest() {
-        let blob = MeshRoutedCustodyFixtures.blob(byteCount: 5_000)
-        for split in [0, 1, 999, 2_500, 4_999, 5_000] {
-            var hasher = MeshRoutedContentHasher()
-            hasher.update(blob.prefix(split))
-            hasher.update(blob.dropFirst(split))
-            #expect(hasher.finalized() == MeshRoutedContentDigest.contentHash(of: blob), "split \(split)")
-        }
-        var single = MeshRoutedContentHasher()
-        single.update(blob)
-        #expect(single.finalized() == MeshRoutedContentDigest.contentHash(of: blob))
-    }
-
-    /// The two caps that happen to be equal, and the one constant that is deliberately reused.
-    @Test func theCapsReuseTheConstantsTheyAreDerivedFrom() {
-        #expect(MeshRoutedStoreFormat.maxContentBytes == MeshRoutedManifestFormat.maxContentByteCount)
-        #expect(MeshRoutedStoreFormat.maxChunksPerItem == MeshChunkFormat.maxChunkCount)
-        #expect(MeshRoutedStoreFormat.maxReceiptsPerItem == MeshMembershipBounds.maxRosterMembers)
-        #expect(MeshRoutedStoreFormat.maxItems == 1024)
-        #expect(MeshRoutedStoreFormat.maxHeldChunkFiles == 4096)
-        #expect(MeshRoutedIndexSchema.current == 2, "P5 item 4 bumped the routed index schema")
-        #expect(
-            MeshSessionContextSchema.current == 3,
-            """
-            P6 item 1 moved the session schema (the key advertisements). The routed sidecar still must
-            not move it: this pin is here so a routed-index bump cannot ride along on one.
-            """
-        )
-    }
 }
 
 // MARK: - Durable before acknowledged

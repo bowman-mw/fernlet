@@ -1757,7 +1757,7 @@ struct MeshKeyAdvertisementDeliveryTests {
         // UNSCOPED, deliberately. The emitter DOES go through `heldMeshAuditContext(_:)`, but this
         // is the launch-restore path and `restoreSessionContextAtLaunch` leaves `currentMesh` nil on
         // purpose — "restoring is not reconnecting", pinned by `MeshSessionLifecycleManagerTests`
-        // (declared in MeshSessionStateMachineTests.swift, which declares four suites and no type of
+        // (declared in MeshSessionStateMachineTests.swift, which declares three suites and no type of
         // that name) — so the door omits the key. The fold's own context cannot stand in: that
         // rule is counts only, never a fingerprint. Scoping this would mean restoring a mesh at
         // launch, which is a behaviour change, not a test fix.

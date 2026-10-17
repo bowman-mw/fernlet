@@ -135,7 +135,7 @@ struct MeshChunkAssemblyTests {
     /// CryptoKit's Ed25519 signing is hedged, so two mints of one logical chunk differ in the
     /// 64-byte signature alone, and answering `.conflictingChunk` — an integrity claim — for those
     /// bytes would make an honest origin look like an attacker. The real re-mint is exercised in
-    /// `MeshChunkerTests`; this pins the rule with no keychain.
+    /// ProximityKit's package suite `MeshChunkerTests`; this pins the rule with no keychain.
     @Test func aChunkDifferingOnlyInItsSignatureIsADuplicate() throws {
         let source = twoChunkItem()
         var assembly = try #require(MeshChunkAssembly.forManifest(source.manifest))
