@@ -98,6 +98,8 @@ testable binding/parsing helpers are explicitly `nonisolated`. The module holds 
 persists nothing — every entry point returns a value to an app-side caller, which owns storage.
 Capability rungs beyond the on-device model (Private Cloud Compute, BYOK) are iOS 27 APIs and
 report unavailable via ``SystemLanguageModelCapabilityProvider``, the single slot-in point for them.
+The same provider maps the system model's unavailable reason (not eligible, Apple Intelligence off,
+not ready) onto `OnDeviceModelAvailability` for the app's Settings row.
 
 Note: three further AI files (`FoundationDishDecomposition`, `FoodProductWebImporter`,
 `LaunchPreparationService`) still live in the app target — they need app-side helpers a package

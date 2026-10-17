@@ -107,6 +107,12 @@ final class FernletStore {
     var effectiveAIStatus: AIStatus {
         AIStatusOverlay.effectiveStatus(intent: settings.aiStatus, quota: aiCallQuotaStore.currentQuota())
     }
+    /// What Settings says about the helper today: `effectiveAIStatus`, unless this iPhone cannot run the
+    /// on-device model, when it says why (`AIStatusPresentation`). Read this for the AI status label and
+    /// voice line, never `effectiveAIStatus` alone — its counter never moves on an incapable device.
+    var aiStatusPresentation: AIStatusPresentation {
+        AIStatusPresentation(effective: effectiveAIStatus, availability: aiCapabilityProvider.onDeviceAvailability)
+    }
     var recentMeals: [Meal] {
         get { diary.recentMeals }
         set { diary.recentMeals = newValue }
@@ -342,8 +348,9 @@ final class FernletStore {
     /// Reports which AI rungs this device can physically reach (the cloud rungs report `false` on this
     /// SDK). Built by `FernletAIComposition` — the concrete provider type is named ONLY in that helper
     /// file, never here, so this store (which references many sealed `Private*` stores) is not flagged
-    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device.
-    @ObservationIgnored private(set) lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
+    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device: the setter
+    /// is internal for that, and nothing in the app assigns it.
+    @ObservationIgnored lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
     /// The routing gate every AI call site funnels through — the capability-capped `FernletModelRouter`
     /// plus the device-local quota store plus the *current* stored AI intent. Rebuilt on each read so a
     /// mid-session AI toggle is always reflected, and so the effective status is derived from the live
