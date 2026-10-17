@@ -2379,6 +2379,9 @@ jobs:
         # The 23 suites the same branch drops from FernletTests rode no line. MeshP9HonestyAcceptanceTests'
         # census loses one of them, `MeshEvictionReleasesTransportLinkTests` (49 -> 48 suites, eight ->
         # seven unrun), and no cell of this line moves: HELD at 1310.
+        # RecipeShareOverQUICTests' two inbound-gate cells are reworded in the same branch, unchanged in
+        # behaviour: 0.1.1's seam books a connection whose hello has been read, the one stage its
+        # connecting window counts. HELD at 1310.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-batteries 1310 \

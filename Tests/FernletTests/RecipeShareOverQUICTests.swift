@@ -46,12 +46,15 @@ final class FakeRecipeShareRadioSession: ProximityPairRadioSession, NetworkChann
     /// Peers the owner should consider mid-connect, so the connecting-window gate is drivable.
     var connectingPeers: [PeerHandle] = []
 
-    /// Inbound connections booked but not yet resolved to a peer, and the one being adjudicated.
+    /// Pending inbound connections whose dial hello has been read, not yet resolved to a peer, and the
+    /// one being adjudicated.
     ///
-    /// The real radio books a pending inbound BEFORE the hello can be read and asks the owner's
-    /// gate while it is still booked, so a fake that models no pending inbound at all cannot see
-    /// the gate refusing the very connection it is ruling on. Keyed by an opaque token because
-    /// nothing about a pending connection is resolvable to a peer yet.
+    /// Since ProximityKit 0.1.1 these are the only pending connections the real radio's connecting
+    /// window counts: one booked on arrival that has not yet delivered a readable hello counts for
+    /// nothing. The real radio asks the owner's gate while the connection it is ruling on is still
+    /// pending, so a fake that models no pending inbound at all cannot see the gate refusing the very
+    /// connection it is ruling on. Keyed by an opaque token because nothing about a pending connection
+    /// is resolvable to a peer yet.
     var pendingInboundKeys: Set<String> = []
 
     /// The pending connection currently under adjudication, excluded from the window.
@@ -94,7 +97,8 @@ final class FakeRecipeShareRadioSession: ProximityPairRadioSession, NetworkChann
     func endTunnel(_ peer: PeerHandle) { endedTunnels.append(peer) }
 
     func hasConnectingPeers(besides peer: PeerHandle?) -> Bool {
-        // Same two populations, and the same exclusion, as the production radio.
+        // The production radio's two populations, dials in flight and pending connections whose hello
+        // has been read (the keys above), and its exclusion of the one being ruled on.
         guard pendingInboundKeys.allSatisfy({ $0 == adjudicatingInboundKey }) else { return true }
         return connectingPeers.contains { candidate in
             guard let peer else { return true }
@@ -510,7 +514,8 @@ struct RecipeShareOverQUICTests {
     /// The cell this pass did not have, and the one defect it would have caught outright: a QUIC
     /// responder has to BOOK a pending connection before it can read anything off it, so by the
     /// time the owner's gate is asked, the connection being ruled on is already sitting in the
-    /// connecting window. A window that counted it answered "something else is mid-connect" about
+    /// connecting window (since ProximityKit 0.1.1 as a connection whose hello has been read, the one
+    /// stage the window counts). A window that counted it answered "something else is mid-connect" about
     /// the connection itself and refused every inbound dial there is — end to end, both users see
     /// the sender's 12 s "that Fernlet may be busy sharing with someone else".
     ///
@@ -530,7 +535,8 @@ struct RecipeShareOverQUICTests {
 
         let pending = MeshLinkKey("inbound-connection")
         radio.bookPendingInboundForTesting(pending)
-        #expect(radio.pendingInboundCountForTesting == 1, "booked before the hello, as the radio books it")
+        #expect(radio.pendingInboundCountForTesting == 1,
+                "booked with its hello read, as the radio holds the connection it is ruling on")
 
         let admitted = radio.adjudicateInboundForTesting(
             ProximityPairDialHello(sessionID: "friend-sid"), pendingKey: pending
@@ -542,8 +548,13 @@ struct RecipeShareOverQUICTests {
         #expect(radio.pendingInboundCountForTesting == 0, "an admitted connection stops being pending")
     }
 
-    /// And its sibling, which is the half the exclusion must not cost: a SECOND dialer arriving
-    /// while one is still mid-hello is refused, so two devices cannot race past the cap.
+    /// And its sibling, which is the half the exclusion must not cost: a SECOND connection whose hello
+    /// has been read refuses the first one's hello, so two devices cannot race past the cap.
+    ///
+    /// "Mid-hello" means a hello read and being ruled on. Since ProximityKit 0.1.1 the seam books a
+    /// connection at exactly that stage, and a connection booked before any hello no longer counts
+    /// (a dialer's silent twin used to refuse its hello); the package's
+    /// `aStreamlessPendingConnectionDoesNotRefuseTheHelloOfTheDialerBesideIt` holds that opposite.
     @Test func aSecondDialerArrivingWhileOneIsMidHelloIsRefused() throws {
         let radio = NetworkPairSession()
         try radio.runWithoutRadiosForTesting()
@@ -563,12 +574,12 @@ struct RecipeShareOverQUICTests {
 
         #expect(radio.adjudicateInboundForTesting(
             ProximityPairDialHello(sessionID: "friend-sid"), pendingKey: first
-        ) == nil, "a second connection mid-hello is a connecting peer and the cap must hold")
+        ) == nil, "a second connection whose hello has been read is a connecting peer and the cap must hold")
         #expect(radio.pendingInboundCountForTesting == 2, "a refusal does not drop the OTHER connection")
     }
 
-    /// The owner's own gate, over the seam: a booked pending inbound that is the one being
-    /// adjudicated does not refuse itself, and a second booked connection does refuse it.
+    /// The owner's own gate, over the seam: a pending inbound whose hello has been read and that is the
+    /// one being adjudicated does not refuse itself, and a second such connection does refuse it.
     @Test func theOwnersGateRulesOnAPendingInboundWithoutCountingIt() {
         let host = RecipeQUICTestHost()
         let radio = FakeRecipeShareRadioSession()
@@ -582,7 +593,7 @@ struct RecipeShareOverQUICTests {
 
         radio.pendingInboundKeys = ["inbound-1", "inbound-2"]
         #expect(!manager.shouldAcceptDialerForTesting(dialer),
-                "a second connection mid-hello must still refuse the cap's fourth layer")
+                "a second connection whose hello has been read must still refuse the cap's fourth layer")
     }
 
     // MARK: - What a user is allowed to read

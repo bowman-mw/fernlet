@@ -79,10 +79,13 @@ public nonisolated enum DeviceBindingID {
         /// Behave as whatever `binding` currently answers — the MUTABLE override for tests that
         /// must change the install binding *mid-operation*. The pins it was added for (the Phase
         /// 2.6 environment-break and binding-read-error cases, which flipped the answer between
-        /// the format migrator's seal and its read-back) went with that migrator in Phase 3, so
-        /// it currently has no caller; it survives because "the answer changes mid-flight" is a
-        /// scenario the three static cases below cannot express at all. Those stay the default
-        /// idiom; reach for this only when a fixed answer cannot express the scenario.
+        /// the format migrator's seal and its read-back) went with that migrator in Phase 3; two
+        /// cells call it now, each flipping the answer mid-flight: a joiner's re-assert whose
+        /// seal finds the binding gone (`MeshSessionLifecycleManagerTests`) and Fernlet's install
+        /// binding adapter answering at each read (`ProximityNamespaceGoldenTests`). It exists
+        /// because "the answer changes mid-flight" is a scenario the three static cases above
+        /// cannot express at all. Those stay the default idiom; reach for this only when a fixed
+        /// answer cannot express the scenario.
         case scripted(ScriptedBinding)
     }
 
