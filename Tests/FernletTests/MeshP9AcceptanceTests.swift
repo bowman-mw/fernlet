@@ -1010,11 +1010,13 @@ struct MeshP9McRetirementAcceptanceTests {
 /// 4. **Two owner decisions**: P9-3-A (a configured Fernlet Lock parks both 1:1 radios permanently —
 ///    pre-existing, and a run-policy row is a P7 bug fix, not a P9 edit; ANSWERED and fixed
 ///    2026-09-22, the fact retired) and 9.4-LATER's D-4.1/D-4.3.
-/// 5. **Eight P9-touched suites CI does not run**, each with its reason in ``ungatedByDesign`` —
-///    seven timed weak-reference polls and item 1's own wall. It was ELEVEN until P10 item 5: the
+/// 5. **Seven P9-touched suites CI does not run**, each with its reason in ``ungatedByDesign`` —
+///    six timed weak-reference polls and item 1's own wall. It was ELEVEN until P10 item 5: the
 ///    three routed behaviour suites item 7 only re-scoped are on the mesh line now, and their rows
-///    left that map in the same commit. The accounting over them is total, so a ninth cannot
-///    appear quietly.
+///    left that map in the same commit. It was eight until the re-pin to ProximityKit 0.1.1
+///    (2026-10-17): `MeshEvictionReleasesTransportLinkTests` left FernletTests, its one cell held by
+///    ProximityKit's package suite of that name, and its row left the map in the same commit. The
+///    accounting over them is total, so an eighth cannot appear quietly.
 /// 6. **Two coverage holes of this phase's own walls**: item 8's ratchet is checked for staleness
 ///    on CI and for accuracy nowhere (the UI target never runs there), and TWENTY unscoped
 ///    `count(of:)` audit reads survive item 7's sweep and P10 item 5's — a ratchet, not a zero.
@@ -1026,7 +1028,10 @@ struct MeshP9HonestyAcceptanceTests {
     /// DERIVED at item 9's fix review (2026-09-20), never remembered:
     /// `git diff --name-only bb454fe..HEAD -- Tests/FernletTests` (bb454fe is P8's close) gives the
     /// eighteen files the phase edited, and each file's top-level declarations holding at least one
-    /// `@Test` are these forty-nine. **Declarations, not files**: `-only-testing:` names a STRUCT,
+    /// `@Test` were forty-nine, these forty-eight since the re-pin to ProximityKit 0.1.1 (2026-10-17),
+    /// when `MeshEvictionReleasesTransportLinkTests` left with the 22 other pure-logic copies of suites
+    /// ProximityKit's package tests hold under the same names and cells.
+    /// **Declarations, not files**: `-only-testing:` names a STRUCT,
     /// and `NetworkMeshTransportTests.swift` alone declares sixteen suites and no type of that name
     /// at all — a workflow line naming the file would match nothing and pass having run zero tests,
     /// which is exactly what the first cut of this cell (a hand-list of seven) could not see.
@@ -1039,8 +1044,7 @@ struct MeshP9HonestyAcceptanceTests {
         "AuditRatchetBoundaryTests", "CIGateSelectorBoundaryTests", "EphemeralMeshTLSIdentityTests",
         "LocalOnlyPersistentHistoryPruneTests", "MeshChannelIntroductionTests",
         "MeshChannelIntroductionTranscriptTests", "MeshContinuationTaskHostTests",
-        "MeshContinuationTaskHostWallTests", "MeshDialPreferenceTests",
-        "MeshEvictionReleasesTransportLinkTests", "MeshHeartbeatLivenessTests",
+        "MeshContinuationTaskHostWallTests", "MeshDialPreferenceTests", "MeshHeartbeatLivenessTests",
         "MeshHeartbeatScheduleTests", "MeshInboundRankingTests", "MeshIntroductionNonceCacheTests",
         "MeshIntroductionRosterTests", "MeshKeyAdvertisementDeliveryTests",
         "MeshLinkAdvertisementTests", "MeshLinkTableTests",
@@ -1071,11 +1075,9 @@ struct MeshP9HonestyAcceptanceTests {
             + "deallocation that happened into one that has not happened yet.",
         "ProximityManagerDeallocationTests":
             "MemoryLifecycleTests.swift, same poll shape: deallocation is observed by waiting.",
-        "MeshEvictionReleasesTransportLinkTests":
-            "MemoryLifecycleTests.swift, same poll shape.",
         "PresenceReleaseTests":
             "MemoryLifecycleTests.swift: P9 item 2 pass 2 edited this row when the presence radio "
-            + "swapped, and it is the closest of the seven to a P9 claim — still a timed weak-ref "
+            + "swapped, and it is the closest of the six to a P9 claim — still a timed weak-ref "
             + "poll, so it is named here rather than priced onto the mesh line.",
         "RecipeShareTeardownTests":
             "MemoryLifecycleTests.swift: item 3 pass 2's row, same timed weak-ref poll.",

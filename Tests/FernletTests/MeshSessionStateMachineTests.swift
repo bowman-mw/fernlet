@@ -23,6 +23,10 @@
 //
 // Time is always an argument here — `now` and `monotonicElapsed` are passed in, exactly like
 // `MeshEpochKeyring` and `MeshRotationTriggerQueue` — so nothing waits and nothing flakes.
+//
+// Since the re-pin to ProximityKit 0.1.1 (2026-10-17) the launch restore's pure mapping, the five load
+// states to the seven launch outcomes (`MeshSessionRestoreMappingTests`), is ProximityKit's package
+// suite of the same name and cells, which its own CI runs; the manager's launch restore stays here.
 
 import Foundation
 import Testing
@@ -318,146 +322,6 @@ struct MeshSessionCeilingTests {
         let ceiling = MeshSessionCeiling(hardDeadline: deadline, startedAt: created)
         #expect(ceiling.verdict(now: created, monotonicElapsed: -10_000)
                 == .live(remainingSeconds: MeshSessionCeiling.ceilingSeconds))
-    }
-}
-
-// MARK: - MeshSessionRestoreMappingTests
-
-/// The five load states → seven launch outcomes, as a pure mapping.
-@Suite(.serialized)
-struct MeshSessionRestoreMappingTests {
-
-    private typealias Fixture = MeshSessionStoreFixtures
-
-    private let selfFingerprint = MeshMembershipFixtures.fingerprint(0)
-
-    /// A live context, well inside its ceiling.
-    private func liveContext(termination: MeshSessionLocalTermination? = nil) -> MeshSessionContext {
-        MeshSessionContext(
-            meshID: MeshMembershipFixtures.meshID,
-            protocolVersion: 3,
-            createdAt: MeshMembershipFixtures.base,
-            hardDeadline: MeshMembershipFixtures.base.addingTimeInterval(6 * 3_600),
-            localTermination: termination
-        )
-    }
-
-    /// A token-carrying `loaded`, built through the store so the token is a real one.
-    private func loaded(_ context: MeshSessionContext) throws -> MeshSessionLoad {
-        let scope = Fixture.scope()
-        defer { Fixture.tearDown(scope) }
-        let store = MeshSessionStore(scope: scope)
-        try Fixture.save(context, into: store)
-        return DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
-    }
-
-    /// Outcome 1: a live context inside the ceiling resumes.
-    @Test func aLiveContextIsResumable() throws {
-        let context = liveContext()
-        let outcome = MeshSessionRestore.outcome(
-            for: try loaded(context),
-            selfFingerprint: selfFingerprint,
-            now: MeshMembershipFixtures.base.addingTimeInterval(3_600)
-        )
-        #expect(outcome.disposition == .resumable)
-        #expect(outcome.context?.meshID == context.meshID)
-        #expect(!outcome.isRetryable)
-    }
-
-    /// Outcome 2: a context that already records an ending comes back ended, by every one of the
-    /// four authorities that can record one.
-    @Test func aRecordedEndingComesBackEnded() {
-        var developed = liveContext()
-        developed.developedLocally = true
-        #expect(developed.recordedEndingReason(selfFingerprint: selfFingerprint) == .developed)
-
-        var terminatedLedger = liveContext()
-        terminatedLedger.ledger.terminations = MeshMembershipRecordSet([MeshMembershipFixtures.termination(1)])
-        #expect(terminatedLedger.recordedEndingReason(selfFingerprint: selfFingerprint)
-                == .verifiedTerminationRecord)
-
-        var departed = liveContext()
-        departed.ledger.departures = MeshMembershipRecordSet([MeshMembershipFixtures.departure(0)])
-        #expect(departed.recordedEndingReason(selfFingerprint: selfFingerprint) == .ownDeparture)
-
-        let marked = liveContext(termination: MeshSessionLocalTermination(
-            reason: .epochCounterExhausted, at: MeshMembershipFixtures.base
-        ))
-        #expect(marked.recordedEndingReason(selfFingerprint: selfFingerprint) == .epochCounterExhausted)
-    }
-
-    /// A recorded ending beats the ceiling: the reason on the file is what the launch reports.
-    @Test func aRecordedEndingBeatsThePassedCeiling() throws {
-        let context = liveContext(termination: MeshSessionLocalTermination(
-            reason: .ownDeparture, at: MeshMembershipFixtures.base
-        ))
-        let outcome = MeshSessionRestore.outcome(
-            for: try loaded(context),
-            selfFingerprint: selfFingerprint,
-            now: MeshMembershipFixtures.base.addingTimeInterval(86_400)
-        )
-        #expect(outcome == .terminated(context, .ownDeparture))
-        #expect(outcome.disposition == .departed, "a departure ends this device, not the mesh")
-    }
-
-    /// Outcome 3: a live context whose ceiling passed while the process was gone.
-    @Test func aPassedCeilingIsExpired() throws {
-        let context = liveContext()
-        let outcome = MeshSessionRestore.outcome(
-            for: try loaded(context),
-            selfFingerprint: selfFingerprint,
-            now: context.hardDeadline.addingTimeInterval(MeshSessionCeiling.skewToleranceSeconds + 1)
-        )
-        #expect(outcome == .expired(context))
-        #expect(outcome.disposition == .expired)
-    }
-
-    /// Outcomes 4–7: absent, deferred, refused and corrupt, each distinct and only one of them a
-    /// green field.
-    @Test func theFourNonLoadedStatesStayDistinct() {
-        let scope = Fixture.scope()
-        defer { Fixture.tearDown(scope) }
-        let store = MeshSessionStore(scope: scope)
-        let absent = DeviceBindingID.$testOverride.withValue(.identifier(Fixture.installA)) { store.load() }
-        #expect(MeshSessionRestore.outcome(for: absent, selfFingerprint: selfFingerprint, now: .now)
-                == .noSession)
-
-        let deferral = MeshSessionDeferral(reason: .fileUnreadable, detail: "x")
-        let deferred = MeshSessionRestore.outcome(
-            for: .deferred(deferral), selfFingerprint: selfFingerprint, now: .now
-        )
-        #expect(deferred == .retryAfterUnlock(deferral))
-        #expect(deferred.isRetryable)
-        #expect(deferred.logToken == "deferred:fileUnreadable")
-
-        let refusal = MeshSessionSealRefusal(operation: .open, cause: .installBindingUnavailable)
-        let refused = MeshSessionRestore.outcome(
-            for: .refused(refusal), selfFingerprint: selfFingerprint, now: .now
-        )
-        #expect(refused == .retryAfterRefusal(refusal))
-        #expect(refused.isRetryable)
-        #expect(refused.logToken == "refused:installBindingUnavailable",
-                "a refusal is logged apart from a deferral")
-
-        let corruption = MeshSessionCorruption(detail: .emptyFile)
-        let corrupt = MeshSessionRestore.outcome(
-            for: .corrupt(corruption), selfFingerprint: selfFingerprint, now: .now
-        )
-        #expect(corrupt == .quarantineCorruptFile(corruption))
-        #expect(!corrupt.isRetryable, "a corrupt file is quarantined, not retried")
-    }
-
-    /// None of the three token-less states starts a session.
-    @Test func noTokenlessStateStartsASession() {
-        let outcomes: [MeshSessionRestoreOutcome] = [
-            .retryAfterUnlock(MeshSessionDeferral(reason: .sealKeyTransientlyUnreadable, detail: "x")),
-            .retryAfterRefusal(MeshSessionSealRefusal(operation: .open, cause: .sealKeyMalformed)),
-            .quarantineCorruptFile(MeshSessionCorruption(detail: .authenticationFailed))
-        ]
-        for outcome in outcomes {
-            #expect(outcome.disposition == .none)
-            #expect(outcome.context == nil)
-        }
     }
 }
 

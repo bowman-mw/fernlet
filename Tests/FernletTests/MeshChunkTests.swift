@@ -61,7 +61,8 @@ enum MeshChunkFixtures {
     /// **A SHAPE vector, deliberately not size-consistent with any manifest**: index 1 of 3 with a
     /// four-byte payload could not come from a real item. That is fine and intended — the
     /// transcript carries neither `size` nor `payload`, so consistency is a *verifier* property and
-    /// is exercised in `MeshChunkerTests` against real manifests. Do not "fix" it.
+    /// is exercised in ProximityKit's package suite `MeshChunkerTests` against real manifests (Fernlet's
+    /// copy left at the re-pin to 0.1.1). Do not "fix" it.
     static func chunk() -> MeshChunk {
         MeshChunk(
             meshID: meshID,
@@ -205,40 +206,6 @@ enum MeshChunkShapeFault: String, CaseIterable, Sendable {
         case .countOverCap:
             return base.replacing(chunkCount: UInt32(MeshChunkFormat.maxChunkCount + 1))
         case .indexAtCount: return base.replacing(chunkIndex: base.chunkCount)
-        }
-    }
-}
-
-/// One SIGNED field per case; every case must land on `.signatureInvalid` and nothing else, which
-/// is the point of signing all of them. `meshID` and `payload` are deliberately absent — each has
-/// an earlier, differently named refusal of its own (`foreignMesh`, `chunkHashMismatch`).
-enum MeshChunkTamper: String, CaseIterable, Sendable {
-    case itemID, originFingerprint, contentHash, chunkIndex, chunkCount, chunkHash, expiresAt
-    case signatureByte
-
-    /// A minted chunk with this one field changed, through the memberwise init. The origin
-    /// substitute is another ADMITTED member, so every case reaches the signature check.
-    func applied(to chunk: MeshChunk, otherAdmittedOrigin: String) -> MeshChunk {
-        switch self {
-        case .itemID: return chunk.replacing(itemID: MeshMembershipEventFixtures.proposalID)
-        case .originFingerprint: return chunk.replacing(originFingerprint: otherAdmittedOrigin)
-        case .contentHash:
-            var hash = chunk.contentHash
-            hash[hash.startIndex] ^= 0x01
-            return chunk.replacing(contentHash: hash)
-        case .chunkIndex:
-            let moved = chunk.chunkIndex == 0 ? chunk.chunkIndex + 1 : chunk.chunkIndex - 1
-            return chunk.replacing(chunkIndex: moved)
-        case .chunkCount: return chunk.replacing(chunkCount: chunk.chunkCount + 1)
-        case .chunkHash:
-            var hash = chunk.chunkHash
-            hash[hash.startIndex] ^= 0x01
-            return chunk.replacing(chunkHash: hash)
-        case .expiresAt: return chunk.replacing(expiresAt: chunk.expiresAt.addingTimeInterval(1))
-        case .signatureByte:
-            var signature = chunk.signature
-            signature[signature.startIndex] ^= 0x01
-            return chunk.replacing(signature: signature)
         }
     }
 }

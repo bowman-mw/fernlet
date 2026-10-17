@@ -1,5 +1,5 @@
 {
-  "originHash" : "b438be8ce48d900d5458d48c74549c3b5472c4e9b847086acb4a8ef3f752e915",
+  "originHash" : "3a7f02131e6ee65c4bc2c868cdb1540f6754afd7791f5d030c04cfa2f07f66c1",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/bowman-mw/proximitykit",
       "state" : {
-        "revision" : "6648094f6acf5cb6f37ef0102f182540d83146cd",
-        "version" : "0.1.0"
+        "revision" : "e09affe44af0d763478a1f84207bdad7a3d650c1",
+        "version" : "0.1.1"
       }
     }
   ],

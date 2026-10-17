@@ -11,7 +11,9 @@
 //  - The three proximity managers must deallocate when released, with or without `stop()`, and so
 //    must the pair session the recipe-share manager drives, which holds its radio and its tasks.
 //  - MeshNetworkManager must free the transport link (the MC link then, the QUIC tunnel now) of every slot it evicts (a zombie link ate one of
-//    MC's 8 peer slots and made re-forming a slot with that peer impossible for the search).
+//    MC's 8 peer slots and made re-forming a slot with that peer impossible for the search). Since the
+//    re-pin to ProximityKit 0.1.1 (2026-10-17) ProximityKit's package suite of the same name holds it
+//    (`MeshEvictionReleasesTransportLinkTests`, one cell), not this file.
 //  - PresenceManager must release a discovered peer whose match a re-evaluation dropped, and must
 //    run the coordinator's own teardown (ranging + Live Activity anchor) when the MC channel drops.
 //  - ProximityRecipeShareManager must run that teardown on every record-drop path.
@@ -285,33 +287,6 @@ struct ProximityManagerDeallocationTests {
         await waitUntil { weakStore == nil && weakManager == nil }
         #expect(weakManager == nil, "a store-owned mesh manager must release with its beacon loop armed")
         #expect(weakStore == nil, "…and so must its store — a host pin on a STORED task is a cycle (HP2)")
-    }
-}
-
-// MARK: - MeshNetworkManager: evicted slots free their transport link (the MC link when this was written)
-
-@MainActor
-@Suite(.serialized)
-struct MeshEvictionReleasesTransportLinkTests {
-    let store = makeTestStore()
-
-    /// `removeSlot` (timeouts, stale sweep, remote goodbye, session close, transport loss) must
-    /// request the per-peer kick — before the fix nothing in the eviction chain touched the shared
-    /// radio, so the link lingered until the whole search stopped.
-    ///
-    /// Asserted on the INJECTED radio rather than through a hook inside the MC session, which is
-    /// what the P2 item-8 seam bought: the claim is now "the eviction chain reached the transport",
-    /// read off the transport, and it holds whichever conformer is behind it.
-    @Test func evictingASlotRequestsTheTransportKick() {
-        let transport = FakeMeshTransportSession()
-        let manager = MeshNetworkManager(store: store, transport: transport)
-        let peer = makePeer()
-        manager.addSlotForTesting(coordinator: makeThrowawayCoordinator(), peer: peer, fingerprint: nil)
-
-        manager.evictSlotForTesting(peerID: peer.id)
-
-        #expect(transport.disconnectedPeers.map(\.id) == [peer.id],
-                "the evicted peer's link must be released, not left as a zombie")
     }
 }
 

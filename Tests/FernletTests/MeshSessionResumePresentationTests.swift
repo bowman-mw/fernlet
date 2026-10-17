@@ -4,8 +4,8 @@
 // Network migration P7 item 5: the resume surface's decision as a table over every
 // `MeshSessionRestoreOutcome` case — the pure half the launcher asked for, so the surface is a
 // screenshot's worth of `switch` and not a claim only a launch can reach. Contexts are the
-// state-machine suite's fixture shape (`MeshSessionRestoreMappingTests.liveContext`), stated
-// instants only.
+// restore-mapping suite's fixture shape (`MeshSessionRestoreMappingTests.liveContext`, ProximityKit's
+// package suite since the re-pin to 0.1.1), stated instants only.
 
 import Foundation
 import Testing

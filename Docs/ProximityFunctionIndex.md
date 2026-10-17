@@ -120,7 +120,9 @@ with them: its repository documents them, through its DocC landing page
 them. This index keeps what this repository holds over it: Fernlet's namespace and its supply
 (FernletConnections), the app's and FernletSocial's features, the review screens and the test target's
 bindings. A ProximityKit name below (`MeshNetworkManager`, `IdentityService`, `ProximityPairSession`, …) is
-its public API at that tag.
+its public API at that tag. **2026-10-17:** Fernlet pins `0.1.1`, a fix release that removed or changed no
+public API and added two (`ProximityPairSession.inspector`, `init(host:profile:inspector:)`), so "that tag"
+is `0.1.1`.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend
@@ -461,9 +463,9 @@ file chooses for the doubles that state none; a test that pins a value names `.f
 | Function | What It Does |
 | --- | --- |
 | `canonicalBytes(for:)` (17 types), `canonicalInventoryDigestBytes(for:)` | The serializer's overloads with `.fernlet`'s labels. |
-| `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)`, the six routed verifiers' and `MeshChannelIntroductionExchange`'s initializers without `purposes:` | The verifiers and helpers with `.fernlet`'s labels (the first four with `Family.fernlet`, record kinds included). |
+| `MeshMembershipRecordVerifier.init(meshID:founderSigningPublicKey:ledger:)`, `MeshInventoryDigest.init(meshID:ledger:)`, `MeshAdmissionToken.verify(...now:)`, five of the six routed verifiers' initializers (all but the chunk door's) and `MeshChannelIntroductionExchange`'s, without `purposes:` | The verifiers and helpers with `.fernlet`'s labels (the first two with `Family.fernlet`, record kinds included). The re-pin to 0.1.1 (2026-10-17) retired `MeshLedgerAdoption.bootstrapVerifier(meshID:ownAdmission:)` / `adopt(offered:ownAdmission:meshID:)` and the chunk door's initializer with the suites that called them, which ProximityKit's package tests hold. |
 | `ProximityVerifyQR.urlScheme` / `parse(_:)` / `isValid(_:at:)`, `ProximityVerifySignature.message(scannerKeyAgreementPublicKey:challengeNonce:qrNonce:)` | The verify QR in `.fernlet`. |
-| `MeshRoutedContentDigest.contentHash(of:)` / `chunkHash(of:)` / `chunkID(itemID:chunkIndex:)`, `MeshChunk.chunkID` / `MeshCustodyReceipt.receiptID` / `MeshRecipientReceipt.receiptID` as properties, `MeshRoutedContentHasher.init()`, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, the six item-seal and key-wrap doors, `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` / `successor(coordinatorFingerprint:meshID:)`, `MeshRotationPolicy.plan(...)` | The hashes, seals and epoch under `.fernlet`'s labels. |
+| `MeshRoutedContentDigest.contentHash(of:)` / `chunkHash(of:)` / `chunkID(itemID:chunkIndex:)`, `MeshChunk.chunkID` / `MeshCustodyReceipt.receiptID` / `MeshRecipientReceipt.receiptID` as properties, `MeshChunkAssembly.admit(_:)` / `completion(against:)`, the six item-seal and key-wrap doors, `MeshEpochRef.minted(counter:coordinatorFingerprint:meshID:)` / `successor(coordinatorFingerprint:meshID:)`, `MeshRotationPolicy.plan(...)` | The hashes, seals and epoch under `.fernlet`'s labels. `MeshRoutedContentHasher.init()` left at the re-pin to 0.1.1 (2026-10-17) with the one suite that called it, which ProximityKit's package tests hold. |
 | `NetworkMeshSession.init()` / `NetworkPresenceSession.init()` / `NetworkPairSession.init()` | The argument-less radios, built from `.fernlet` (the recipe radio under `ProximityPairProfile.recipeShare(in: .fernlet)`; no `init(namespace:)` comes back, since it would read a row off the caller's namespace). |
 | `ProximityPairAdvertisement.mode` / `sessionID(from:)` | The recipe mode and the mode-less session-id read the advertisement spelled for itself before the profile carried the mode: `.recipeShare(in: .fernlet)`'s `advertisementMode`, and `sessionID(from:mode:)` under it. |
 | `MeshSessionSealKey.forOpen(service:)` / `forSeal(service:)`, `MeshRoutedSealKey.forOpen(service:)` / `forSeal(service:)` / `keychainAccount`, `IdentityService.classifyDeviceIdentityRows(signing:keyAgreement:)` | The seal-key and identity-row helpers with `.fernlet`'s accounts. |

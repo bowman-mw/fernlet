@@ -2,7 +2,8 @@
 
 **Status:** detailed plan, owner decisions recorded through O17 and, for A1, where they apply. Of
 workstream A (§4), A0, A1.0, A1.1 (its prep, the split and batch A), A1.2 and A1.3 are built, A1.4
-is verified, and `proximitykit` is tagged `0.1.0`; the steps after them are not.
+is verified, `proximitykit` is tagged `0.1.0` and `0.1.1`, and Fernlet pins `0.1.1` (A2, built in
+part); the steps after them are not.
 **Supersedes in part:** [FernletCoach-Specification-2026-07-19.md](FernletCoach-Specification-2026-07-19.md)
 (see §2) and §5 of [Data-Provenance-Coach-Trust-2026-07-12.md](Data-Provenance-Coach-Trust-2026-07-12.md)
 (App Attest).
@@ -718,6 +719,24 @@ into the root `Fernlet.xcworkspace`). Never commit the override, and CI always b
 - **Cross-version fixtures:** older peers' bytes must keep decoding, or be parked politely, never
   crash. The repo already follows "updates must never brick old clients".
 - Fernlet and Coach move to a new tag together. The `fernletcoach` CI check in §3.1 enforces it.
+
+*Built in part (2026-10-17).* The package's repository holds A2's groundwork (a `CHANGELOG.md` with the
+0.y version rule, the README's "Versioning" section, and `CrossVersionFixtureTests` over
+`Fixtures/0.1.0/`), its copies of batches B and C (39 suites: 17 that reach the keychain, 157 tests,
+`IdentityServiceTests` among them; 22 that also open a store, 184 tests), and tag `0.1.1` (on
+`e09affe4`), a fix release: every radio's listener takes every inbound connection (a finite
+new-connection limit is a lifetime budget the framework spends), presence and the pair radio drop a
+pending inbound connection that stays silent past 5 s, and the pair radio counts a pending connection
+as connecting only once its hello has been read. **Fernlet re-pinned to `0.1.1`** the same day: the
+four spellings moved together (`FernletKit/Package.swift`'s `exact:`, the app project's
+`exactVersion`, and both `Package.resolved` files from a real resolve through the workspace and
+through `-project`), and a `CIGateSelectorBoundaryTests` cell holds them to one tag at the commit it
+was cut on (`releasedRevisions`; owner default 9 of the remainder proposal), so a spelling out of
+step, a moved tag or a mistyped version fails. The 23 pure-logic suites the package now holds under
+the same names and cells, on no CI line here, left `FernletTests` (161 tests, owner default 6); the
+other 16 copies stay (the 11 on mesh-batteries, the four store suites and `IdentityServiceTests`,
+182 tests). The DEBUG feasibility probe dropped its own finite listener limit the same way. 0.1.1
+changes radio behaviour, so it is device-checked on a second device before a build carrying it ships.
 
 ---
 

@@ -655,6 +655,12 @@ final class NetworkMeshFeasibilityProbe {
     }
 
     private func startListener() throws {
+        // No finite new-connection limit, the fix ProximityKit 0.1.1 made to its radios: the framework
+        // spends a finite limit, one for every connection the listener ever creates, and never refunds
+        // it, so `maxConnections` here left the probe deaf after its fourth inbound connection (refused
+        // and failed ones included) until the next start. The probe's own admission bounds it instead:
+        // `acceptIncoming(_:)` holds one inbound tunnel, and `reserveConnection(_:)` caps live
+        // connections at `maxConnections`.
         let listener = try NetworkListener(
             for: .bonjour(
                 name: serviceName,
@@ -662,7 +668,7 @@ final class NetworkMeshFeasibilityProbe {
                 txtRecord: MeshProbeNetworkProfile.txtRecord
             ),
             using: try Self.listenerParameters(includePeerToPeer: includesPeerToPeer)
-        ).newConnectionLimit(Self.maxConnections)
+        ).newConnectionLimit(NWListener.InfiniteConnectionLimit)
         self.listener = listener
         listener.onStateUpdate { [weak self] _, state in
             Task { @MainActor in self?.listenerStateChanged(state) }

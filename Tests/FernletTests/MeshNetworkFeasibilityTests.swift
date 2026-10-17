@@ -152,6 +152,23 @@ struct MeshNetworkFeasibilityTests {
         #expect(localNetworkCopy.contains("background"))
     }
 
+    /// The probe's listener sets no finite new-connection limit: the fix ProximityKit 0.1.1 made to
+    /// its radios, carried to the DEBUG probe at the re-pin (2026-10-17). Network.framework spends a
+    /// finite limit, one for every connection the listener ever creates, and never refunds it, so the
+    /// probe's old `maxConnections` went deaf after its fourth inbound connection. A source pin, over
+    /// the probe's code with its comments lexed out: observing the listener needs a device, and the
+    /// probe never starts in a test.
+    @Test func probeListenerSetsNoFiniteNewConnectionLimit() throws {
+        let path = "App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift"
+        let code = SwiftSourceLexer.lex(try RepoRoot.source(path)).code
+        let limits = code.components(separatedBy: ".newConnectionLimit(").dropFirst()
+            .map { String($0.prefix { $0 != ")" }) }
+        #expect(limits == ["NWListener.InfiniteConnectionLimit"], """
+            \(path) sets its listener's new-connection limit to \(limits); it must set exactly one, the \
+            framework's infinite marker, and bound inbound connections by its own admission
+            """)
+    }
+
     private func makeIntroduction(
         channelBindingHash: Data = Data(repeating: 5, count: MeshProbeConstants.channelBindingByteCount)
     ) -> MeshProbeChannelIntroduction {

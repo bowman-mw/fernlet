@@ -5,7 +5,7 @@ Fernlet's social features over ProximityKit's mechanisms: the mesh features the 
 ## Overview
 
 ProximityKit is a drop-in package any app can use (its own repository's since plan step A1.3,
-which Fernlet pins at exactly 0.1.0), with nothing Fernlet-specific in its
+which Fernlet pins at exactly 0.1.1), with nothing Fernlet-specific in its
 API (`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` §3.2). Fernlet's rules on top of it, its
 namespace, trust vault and session policies, live in `FernletConnections`; Fernlet's features live
 here, every byte they put on the wire, in the keychain or on disk the one Fernlet shipped (pinned

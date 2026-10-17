@@ -97,12 +97,14 @@ fixture** (so the matcher cannot rot into always-returning-nothing).
 `CIGateSelectorBoundaryTests` holds the workspace's and the project's `Package.resolved` to one
 revision of each and to nothing else: since plan step A1.3's review fixes either file pinning a third
 identity fails, which is where a package a later ProximityKit tag depended on would first appear,
-since neither manifest would name it:
+since neither manifest would name it. Since the re-pin to `0.1.1` it also holds ProximityKit's four
+spellings (the manifest's `exact:`, the project's `exactVersion` and both resolved versions) to one
+tag at the commit that tag was cut on:
 
 | Package | URL | Requirement | Why it may be here |
 |---|---|---|---|
 | CryptoSwift | `https://github.com/krzyzanowskim/CryptoSwift` | up to next minor from 1.10.0 | `FernletLock`'s memory-hard Scrypt KDF: pure local computation, no network code. |
-| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.1.0` (plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). It names no internet host: its own no-tracking scan (`Scripts/no-tracking-scan.py` there, run by its CI's Walls step) refuses a `scheme://` literal on any code line of its sources, and a web view or in-app browser, the pasteboard and app-wide defaults there too, while `hardcodedNetworkDestinationsAreExactlyTheAllowlist` and this repository's web-view, pasteboard and persisted-surface walls read Fernlet's code only since plan step A1.3. |
+| ProximityKit | `https://github.com/bowman-mw/proximitykit` | exactly `0.1.1` (since 2026-10-17; `0.1.0` from plan step A1.3) | Fernlet's own peer-to-peer subsystem (the radios, identity, sealing, the mesh engine), moved with its history to a repository of its own. It depends on nothing, and that repository's CI holds its code to this wall's rules: no tracking SDK or symbol in its sources or tests, no HTTP client at all, and the local-link API in its three radio files alone (§4c). It names no internet host: its own no-tracking scan (`Scripts/no-tracking-scan.py` there, run by its CI's Walls step) refuses a `scheme://` literal on any code line of its sources, and a web view or in-app browser, the pasteboard and app-wide defaults there too, while `hardcodedNetworkDestinationsAreExactlyTheAllowlist` and this repository's web-view, pasteboard and persisted-surface walls read Fernlet's code only since plan step A1.3. |
 
 ### Two design decisions worth knowing
 
@@ -260,7 +262,7 @@ they cannot appear in the §3 allowlist and are enumerated here instead.
 | **Network.framework / QUIC** — the DEBUG-only feasibility spike for the same migration | `App/Fernlet/Proximity/Feasibility/NetworkMeshFeasibilityProbe.swift`, entirely inside `#if DEBUG` | `_fernlet-mesh2._udp` |
 
 The ranging session and the three QUIC radios are ProximityKit's, which Fernlet consumes from its own
-repository at exactly `0.1.0` since plan step A1.3 (§2); that repository's local-link scan permits the
+repository since plan step A1.3, at exactly `0.1.1` (§2); that repository's local-link scan permits the
 local-link API in those three files and nowhere else, and this repository's `permittedLocalLinkFiles`
 holds the DEBUG probe alone. The service types they advertise are Fernlet's: its namespace
 (`ProximityNamespace.fernlet`, in FernletConnections) supplies them, and this wall pins them in the
