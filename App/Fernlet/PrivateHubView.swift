@@ -94,18 +94,24 @@ struct PrivateHubView: View {
             scope: .privateHub
         )
 
-        Group {
-            if isActive {
-                sectionPage(visibleSections: visibleSections)
-            } else {
-                Color.clear
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
+        // The picker is STACKED above the page, not a top `safeAreaInset`: the inset never reached
+        // the scroll view inside Journal's and Cycle's own `NavigationStack`, so their headers laid
+        // out as if the picker were not there and slid under it (the "Journal" title half-hidden,
+        // iOS 26.5). Stacked, the page simply starts below the picker; the picker is opaque, so
+        // content that used to scroll beneath it looked exactly like content clipped at its edge.
+        VStack(spacing: 0) {
             HubSectionPicker(
                 sections: Array(visibleSections),
                 selection: $section
             ) { $0.rawValue }
+            Group {
+                if isActive {
+                    sectionPage(visibleSections: visibleSections)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.parchment)
         // Capture FRICTION (never a security control) over the whole hub — the three pages and

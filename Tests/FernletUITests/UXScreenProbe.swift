@@ -266,6 +266,28 @@ struct UXScreenProbe {
         return self
     }
 
+    /// A header sits below chrome pinned above it (a hub's section picker) rather than sliding
+    /// under it. The status-bar check alone passed while the Private hub's picker covered the top
+    /// half of the Journal title, because the title was still below the status bar.
+    @discardableResult
+    func assertBelowElement(
+        _ identifier: String,
+        _ upper: XCUIElement,
+        describe: String,
+        file: StaticString = #file,
+        line: UInt = #line
+    ) -> Self {
+        let el = element(identifier)
+        XCTAssertTrue(upper.exists, "[\(name)] \(describe) is not on screen to measure against", file: file, line: line)
+        guard upper.exists, el.exists else { return self }
+        XCTAssertGreaterThanOrEqual(
+            el.frame.minY, upper.frame.maxY - tolerance,
+            "[\(name)] '\(identifier)' rides under \(describe) (top \(el.frame.minY) < its bottom \(upper.frame.maxY))",
+            file: file, line: line
+        )
+        return self
+    }
+
     /// The element does not overlap the floating bottom tab bar (content hidden behind it).
     /// Uses the Home tab button as the tab-bar reference; skipped when no tab bar is shown
     /// (e.g. inside a sheet).

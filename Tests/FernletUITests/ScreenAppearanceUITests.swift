@@ -70,6 +70,7 @@ final class ScreenAppearanceUITests: XCTestCase {
         try UXScreenProbe(app, "Private · Journal", in: self)
             .assertOnScreen("screen.journal")
             .assertBelowStatusBar("screen.journal")
+            .assertBelowElement("screen.journal", app.buttons["Journal"].firstMatch, describe: "the hub's section picker")
             .capture()
     }
 
@@ -87,6 +88,7 @@ final class ScreenAppearanceUITests: XCTestCase {
         cycle.tap()
         try UXScreenProbe(app, "Private · Cycle (both halves)", in: self)
             .assertOnScreen("screen.cycle")
+            .assertBelowElement("screen.cycle", cycle, describe: "the hub's section picker")
             .capture()
     }
 
