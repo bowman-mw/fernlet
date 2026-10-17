@@ -32,6 +32,25 @@ Resources) handles a clone without it:
 A placeholder left behind by a Debug build is a zero-byte file. Replace it with the real database
 before a Release build.
 
+## Getting the database (fresh clones and Xcode Cloud)
+The published database is a GitHub Release asset on this repository: release
+[`branded-food-catalog-v1`](https://github.com/bowman-mw/fernlet/releases/tag/branded-food-catalog-v1),
+`FoodCatalogBranded.sqlite.gz` (58 MB gzipped, sha256 of the decompressed database
+`7dc78cb95401f7a17cc1b078fbe2a54fd1493019f8fc7864218635ce49a5b5a6`). The data is USDA FoodData Central's
+public-domain (CC0) branded download. `Scripts/fetch-branded-catalog.sh` downloads it, checks the pinned
+hash and moves it here. It leaves a matching database alone, replaces a zero-byte placeholder, and
+refuses to overwrite a different non-empty one without `--force`.
+
+Xcode Cloud clones fresh for every build, so its post-clone hook runs that script before any build:
+`App/ci_scripts/ci_post_clone.sh` beside the project and `ci_scripts/ci_post_clone.sh` beside the
+workspace. Xcode Cloud reads the `ci_scripts` folder next to whichever container its workflow builds.
+That is what lets a Release archive there pass the **Ensure branded catalog ODR source** phase with the
+real pack, with no `FERNLET_ALLOW_MISSING_BRANDED_CATALOG` override.
+
+A regenerated database is published as a NEW release (`branded-food-catalog-v2`, …), and the script's
+tag, URL and hash move in the same commit. An asset is never replaced in place, so every commit keeps
+building the catalog it was tested with.
+
 ## Regeneration
 Not committed-from-source. Regenerate from the USDA FDC branded download with the scripts under
 `Scripts/branded-catalog/` (see that dir). The bundled base DB's 50k curated floor is regenerated via
