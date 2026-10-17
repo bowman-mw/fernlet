@@ -20,6 +20,15 @@ public nonisolated enum DiagnosticLanguage {
     /// Lowercase substrings that indicate clinical or diagnostic language.
     /// Text containing any of these is treated as diagnostic and excluded from
     /// AI prompts / silently rejected at memory-storage time.
+    ///
+    /// Covers every term of spec §8's `DIAGNOSTIC_PATTERNS` ("depressed, anxious, ADHD, bipolar,
+    /// traumatized, burned out, codependent, avoidant, OCD, PTSD, insomnia, panic disorder, eating
+    /// disorder, manic, dissociation, narcissism") as a stem — "traumatized" through "trauma", both
+    /// disorders through "disorder" — except "manic", which is in ``wholeWordPatterns`` because as a
+    /// substring it is inside ordinary words ("manicure", "Germanic"). Each of the spec's other stems
+    /// appears in no ordinary word outside its own family (unlike the cycle-privacy entries "period"
+    /// and "cycle", which over-match on purpose); "burned out" and "burnt out" are listed in their
+    /// normalized, separator-free form.
     nonisolated public static let patterns: [String] = [
         "disorder", "syndrome", "diagnos", "depression", "anxiety",
         "bipolar", "adhd", "autism", "ocd", "ptsd", "trauma",
@@ -27,8 +36,16 @@ public nonisolated enum DiagnosticLanguage {
         "therapy", "psychiatric", "clinical",
         "period", "cycle", "pregnan", "miscarriage",
         "intimacy", "libido",
-        "suicid", "self-harm"
+        "suicid", "self-harm",
+        "depress", "anxious", "burnedout", "burntout", "codependen", "avoidant",
+        "insomnia", "dissociat", "narcissis"
     ]
+
+    /// Lowercase words matched only as a whole word — a run of letters and digits bounded by
+    /// anything else — because as substrings they sit inside ordinary words ("manic" in "manicure",
+    /// "Germanic", and across a dropped space in "woman icon"). The trade is deliberate: a whole
+    /// word is not caught when spelled with separators inside it, which ``patterns`` would catch.
+    nonisolated public static let wholeWordPatterns: Set<String> = ["manic"]
 
     /// `patterns` pre-normalized once (they are compile-time constants), so `contains`
     /// only has to normalize the varying input text per call — not every pattern.
@@ -44,15 +61,24 @@ public nonisolated enum DiagnosticLanguage {
     /// declared fields can reach a prompt), and the `S3BoundaryTests` grep-wall. Do not treat this
     /// classifier as a hard boundary.
     ///
-    /// Matching normalizes BOTH the input and each pattern down to lowercase alphanumerics before the
-    /// substring test, so trivial separator-injection evasions ("d e p r e s s i o n", "self.harm",
+    /// Matching normalizes BOTH the input and each ``patterns`` entry down to lowercase alphanumerics
+    /// before the substring test, so trivial separator-injection evasions ("d e p r e s s i o n", "self.harm",
     /// "self_harm", "selfharm", "p.t.s.d", "bi-polar") are still caught. Normalization can only widen
     /// coverage; it never lets a previously-caught term slip through. (It can occasionally manufacture a
     /// false positive when stripping spaces fuses short tokens — e.g. "taco cdr" → contains "ocd" — which
-    /// for a silent-reject gate is acceptable.)
+    /// for a silent-reject gate is acceptable.) ``wholeWordPatterns`` are then matched against the
+    /// text's words instead, because a substring match would reject ordinary words.
     public static func contains(_ text: String) -> Bool {
         let normalizedText = normalize(text)
-        return normalizedPatterns.contains { normalizedText.contains($0) }
+        if normalizedPatterns.contains(where: { normalizedText.contains($0) }) { return true }
+        return containsWholeWord(text)
+    }
+
+    /// Whether any ``wholeWordPatterns`` entry is one of `text`'s words (lowercased, split on every
+    /// character that is not a letter or digit).
+    private static func containsWholeWord(_ text: String) -> Bool {
+        let words = text.lowercased().split { !($0.isLetter || $0.isNumber) }
+        return words.contains { wholeWordPatterns.contains(String($0)) }
     }
 
     /// Lowercase + drop every non-alphanumeric character (whitespace, punctuation, separators).

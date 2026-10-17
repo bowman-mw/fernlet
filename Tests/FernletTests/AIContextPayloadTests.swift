@@ -198,7 +198,9 @@ import FernletDomainModel
             "anxiety levels", "bipolar pattern", "adhd traits", "autism spectrum",
             "ocd behavior", "ptsd response", "trauma history", "schizophrenia signs",
             "psychosis episode", "on medication", "prescription use",
-            "in therapy", "psychiatric eval", "clinical assessment"
+            "in therapy", "psychiatric eval", "clinical assessment",
+            "felt depressed", "anxious all day", "burned out", "codependent pattern",
+            "avoidant style", "insomnia again", "a manic week", "dissociation at work", "narcissism talk"
         ]
         for text in sensitive {
             let record = TierTwoMemoryRecord(category: "test", text: text, evidence: "")

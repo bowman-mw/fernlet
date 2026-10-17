@@ -21,7 +21,10 @@ import FernletDomainModel
 /// active record and appended only when the behavioral `state` actually changed, deactivating
 /// the predecessor — so records form a small per-category history instead of churning every
 /// save. Every candidate must pass the `DiagnosticLanguage` post-classifier (spec §8) before
-/// storage; any diagnostic-sounding text is silently rejected. ``updateInferences(existing:from:goals:)``
+/// storage; any diagnostic-sounding text is silently rejected — and because a rejected candidate
+/// leaves its predecessor active, every branch's text is written to pass it (pinned by
+/// `MemoryStorageScreeningTests`). The texts reach the companion's prompt as "user pattern:" lines,
+/// so they describe what the days show and never judge the user. ``updateInferences(existing:from:goals:)``
 /// always ends with ``prune(_:)`` (5 per category / 20 total). Results persist as
 /// `TierTwoMemoryRecord`s in the device-local ``TierTwoMemoryStore`` sidecar — never in the
 /// synced ``LocalFernletDatabase`` blob (owner decision 2026-09-23) — and reach the AI layer only
@@ -162,7 +165,7 @@ enum TierTwoMemoryEngine {
         let evidence = "\(workoutDays)/\(n) days with workouts"
         if workoutRate < 0.2 {
             return GapVerdict(state: "misaligned", confidence: "high", evidence: evidence,
-                              text: "Has stated strength goals but rarely exercises in the data window; likely lacks follow-through or is in a low-motivation period.")
+                              text: "Has stated strength goals; workouts have been rare in the data window, a quieter stretch for training.")
         }
         if workoutRate < 0.45 {
             return GapVerdict(state: "partial", confidence: "medium", evidence: evidence,
@@ -179,7 +182,7 @@ enum TierTwoMemoryEngine {
         let evidence = "\(mealDays)/\(n) meal days, \(workoutDays)/\(n) workout days"
         if mealRate < 0.3 {
             return GapVerdict(state: "misaligned", confidence: "high", evidence: evidence,
-                              text: "States weight management goals but rarely logs meals; tends to avoid tracking when not on plan.")
+                              text: "States weight management goals; meals have been logged on only a few days in the data window.")
         }
         if workoutRate < 0.2 {
             return GapVerdict(state: "dietary_only", confidence: "medium", evidence: evidence,
@@ -254,10 +257,10 @@ enum TierTwoMemoryEngine {
             text = "Logs consistently across most days; self-monitoring appears to be a genuine habit rather than reactive behavior."
         } else if rate >= 0.45 {
             state = "intermittent"; confidence = "medium"
-            text = "Logs intermittently — tends to engage when motivated or on good days; gaps likely reflect disengagement or avoidance."
+            text = "Logs on some days and not others; checks in when it fits the day, with quieter days in between."
         } else if rate >= 0.2 {
             state = "sporadic"; confidence = "medium"
-            text = "Rarely logs data; engagement pattern suggests the app is used sporadically, likely only when already on track."
+            text = "Logs now and then; the app is part of some days rather than most."
         } else {
             state = "minimal"; confidence = "high"
             text = "Minimal logging across the window; stated goals are not backed by sustained day-to-day engagement."
@@ -302,10 +305,10 @@ enum TierTwoMemoryEngine {
 
         if rate >= 0.6 {
             state = "high_avoidance"; confidence = "high"
-            text = "Journal entries frequently contain excuse and avoidance language rather than reflection; may use journaling to rationalize rather than confront behavior patterns."
+            text = "Journal entries often mention putting things off — feeling too tired, running out of time, or meaning to try again later."
         } else {
             state = "moderate_avoidance"; confidence = "medium"
-            text = "Journal entries occasionally show avoidance patterns — citing tiredness, forgetting, or planning to act later; gap between stated intentions and follow-through is visible in writing."
+            text = "Journal entries sometimes mention tiredness, forgetting, or planning to get to things later."
         }
 
         return TierTwoMemoryRecord(
@@ -346,7 +349,7 @@ enum TierTwoMemoryEngine {
             text = "Mood is noticeably better on workout days; exercise appears to positively affect emotional state — may respond well to reminders framed around mood benefit."
         } else if delta <= -0.15 {
             state = "mood_drain"; confidence = "medium"
-            text = "Mood tends to be lower on workout days; may push through exercise when already depleted, or training sessions coincide with higher-stress periods."
+            text = "Mood tends to be lower on workout days; workouts may be landing on days that were already tiring or busy."
         } else {
             state = "neutral"; confidence = "medium"
             text = "No clear mood difference between workout and rest days; exercise motivation is likely goal-driven rather than mood-driven."
