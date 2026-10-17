@@ -25,7 +25,12 @@ import Foundation
 /// ``CookingActivityAttributes`` mirrors this shape for cooking mode. The rest timer ticks natively
 /// via `Text(timerInterval:)`, so the content state only changes on discrete set/exercise
 /// transitions — never per-second, never via push.
-struct WorkoutActivityAttributes: ActivityAttributes {
+///
+/// `nonisolated`, with its nested types, so the app target's default main-actor isolation does not
+/// make its `ActivityAttributes` conformance an isolated one: ActivityKit enumerates, updates and
+/// ends activities from `@concurrent` code, and ``LiveActivityRunReflectable`` holds its
+/// `Attributes` to `SendableMetatype`, which an isolated conformance cannot meet.
+nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
     /// The workout's title (e.g. "Push day"). Fixed for the life of the activity.
     var workoutTitle: String
 
@@ -35,14 +40,14 @@ struct WorkoutActivityAttributes: ActivityAttributes {
     /// Produced only by `GuidedWorkoutRunState.contentState` (the app-group run state's Live Activity
     /// mapping), so both drivers — the in-app guided sheet and the Lock Screen intents — publish
     /// byte-identical snapshots.
-    struct ContentState: Codable, Hashable {
+    nonisolated struct ContentState: Codable, Hashable {
         /// The two-case rendering phase: `working` = doing a set (show set / reps), `resting` =
         /// between sets (show the countdown).
         ///
         /// Deliberately narrower than the run state's three-case ``GuidedWorkoutRunState/Phase`` —
         /// the Live Activity surface only ever renders while a workout is in progress, so `.done`
         /// never reaches it (the activity is ended the instant a run finishes).
-        enum Phase: String, Codable, Hashable {
+        nonisolated enum Phase: String, Codable, Hashable {
             case working
             case resting
         }

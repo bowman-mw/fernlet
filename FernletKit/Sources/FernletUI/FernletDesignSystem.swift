@@ -24,7 +24,7 @@ import SwiftUI
 /// The design export's wordmark role (Playfair Display Italic) is deliberately absent: its face
 /// was dropped on 2026-10-01 because the bundled copy broke the font's license. Read the FernletUI
 /// landing page before adding it back.
-public enum FernletTextRole: CaseIterable {
+nonisolated public enum FernletTextRole: CaseIterable {
     case display         // Fraunces SemiBold 36 — avatar state / hero
     case displayMedium   // Fraunces SemiBold 28 — section display
     case header          // DM Serif Display 24 — section headers
@@ -37,7 +37,9 @@ public enum FernletTextRole: CaseIterable {
     case stat            // DM Sans Medium 14 tabular — numbers / stats
 }
 
-public extension Font {
+// `nonisolated`, as the palette is (FernletUIComponents.swift says why): a view applies
+// `.font(.fernlet(.label))` inside `@Sendable` view-builder closures too.
+nonisolated public extension Font {
     /// Resolve a design-system type role to a bundled font at its canonical size, scaling with
     /// Dynamic Type relative to the nearest system text style.
     static func fernlet(_ role: FernletTextRole) -> Font {
@@ -81,7 +83,7 @@ public extension Font {
 /// The fonts are under the SIL Open Font License 1.1, not Apache-2.0. Each family's license text
 /// lives in `App/Fernlet/Fonts/LICENSES/` and must reach the app bundle beside the font, which the
 /// same test checks — adding a font means adding its family's license in the same commit.
-public enum FernletFontName {
+nonisolated public enum FernletFontName {
     public static let frauncesSemiBold      = "Fraunces-72ptSemiBoldNonWonky"
     public static let dmSerifDisplay        = "DMSerifDisplay-Regular"
     public static let instrumentSerif       = "InstrumentSerif-Regular"
@@ -98,7 +100,7 @@ public enum FernletFontName {
 
 // MARK: - Color tokens
 
-public extension Color {
+nonisolated public extension Color {
     // New tokens added by the redesign. (parchment / cream / bark / slate / moss / fern / goldenrod /
     // terracotta already live in FernletUIComponents; these extend the palette.) Each is built through
     // the app's single `UIColor(hex:)` parser so there is one hex source of truth.
