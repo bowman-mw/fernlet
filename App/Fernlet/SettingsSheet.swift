@@ -1285,8 +1285,9 @@ struct SettingsSheet: View {
         NutritionTargetsEditor(store: store)
     }
 
-    /// The AI switches: manual off, web nutrition lookup, weather-aware prompts, and the voice line
-    /// reflecting today's EFFECTIVE status.
+    /// The AI switches: manual off, web nutrition lookup, weather-aware prompts, and the "Today" row and
+    /// voice line from `FernletStore.aiStatusPresentation` — today's effective status, or why this iPhone
+    /// cannot run the on-device model.
     @ViewBuilder
     private var aiSection: some View {
         SectionLabel("AI")
@@ -1300,7 +1301,7 @@ struct SettingsSheet: View {
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.slate)
                 Spacer()
-                Text(store.effectiveAIStatus.label)
+                Text(store.aiStatusPresentation.label)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
             }
@@ -1331,7 +1332,7 @@ struct SettingsSheet: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
-            Text(FernletVoice.message(for: aiStatusVoiceLine))
+            Text(FernletVoice.message(for: store.aiStatusPresentation.voiceLine))
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -1351,17 +1352,6 @@ struct SettingsSheet: View {
                 }
             }
         )
-    }
-
-    /// Reflects the EFFECTIVE status (intent overlaid with today's local budget): off shows the
-    /// switched-off copy, a spent budget (`.sleepy`/`.resting`) the resting copy, otherwise the
-    /// gentle retry note.
-    private var aiStatusVoiceLine: FernletVoice {
-        switch store.effectiveAIStatus {
-        case .off: return .aiUnavailable
-        case .sleepy, .resting: return .aiResting
-        case .ready: return .retryAvailable
-        }
     }
 
     /// The body-tension opt-in, its two plain-language disclosures, and the Health-needed note.

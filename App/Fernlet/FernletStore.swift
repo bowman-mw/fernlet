@@ -107,6 +107,12 @@ final class FernletStore {
     var effectiveAIStatus: AIStatus {
         AIStatusOverlay.effectiveStatus(intent: settings.aiStatus, quota: aiCallQuotaStore.currentQuota())
     }
+    /// What Settings says about the helper today: `effectiveAIStatus`, unless this iPhone cannot run the
+    /// on-device model, when it says why (`AIStatusPresentation`). Read this for the AI status label and
+    /// voice line, never `effectiveAIStatus` alone — its counter never moves on an incapable device.
+    var aiStatusPresentation: AIStatusPresentation {
+        AIStatusPresentation(effective: effectiveAIStatus, availability: aiCapabilityProvider.onDeviceAvailability)
+    }
     var recentMeals: [Meal] {
         get { diary.recentMeals }
         set { diary.recentMeals = newValue }
@@ -342,8 +348,9 @@ final class FernletStore {
     /// Reports which AI rungs this device can physically reach (the cloud rungs report `false` on this
     /// SDK). Built by `FernletAIComposition` — the concrete provider type is named ONLY in that helper
     /// file, never here, so this store (which references many sealed `Private*` stores) is not flagged
-    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device.
-    @ObservationIgnored private(set) lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
+    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device: the setter
+    /// is internal for that, and nothing in the app assigns it.
+    @ObservationIgnored lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
     /// The routing gate every AI call site funnels through — the capability-capped `FernletModelRouter`
     /// plus the device-local quota store plus the *current* stored AI intent. Rebuilt on each read so a
     /// mid-session AI toggle is always reflected, and so the effective status is derived from the live
@@ -2642,8 +2649,10 @@ final class FernletStore {
         await mealResolutionService.resolveMeals(from: description, type: type, date: date)
     }
 
-    /// Commits a resolved meal set to the diary: registers any created recipes, appends each meal,
-    /// and queues a background AI retry for fabricated fallback meals.
+    /// Commits a resolved meal set to the diary: mints the recipes the person confirmed in the pre-log
+    /// review (`createdRecipes`, which only the review fills), appends each meal, and queues a background
+    /// AI retry for fabricated fallback meals. A resolution's OFFERED recipes (`suggestedRecipe`,
+    /// `offeredRecipes`) are never minted here, so an auto-commit or a background retry adds no recipe.
     @discardableResult func commitResolution(_ resolution: MealResolution, date: String? = nil) -> [Meal] {
         // Day-rollover safety: if the app has stayed resident across local midnight, advance the store's
         // notion of "today" BEFORE resolving the default date, so a meal committed just after midnight
@@ -5545,8 +5554,13 @@ final class FernletStore {
     /// the count is the growth cap; the servings/quantity bounds keep a hostile payload from turning
     /// every later macro computation into a nonsense (or non-finite) number.
     enum RecipeImportLimits {
-        /// Most ingredients one imported recipe may carry (extras are refused / dropped).
-        static let maxIngredients = 60
+        /// Most ingredients one imported recipe may carry (extras are refused / dropped): the wire
+        /// cap itself, which the editor (`RecipeLimits`), the decoders, the exchange validator and the
+        /// web importer all hold, so a recipe Fernlet lets anyone build or send is one it imports whole.
+        /// It was a second constant, 60, until 2026-10-16: a recipe of 61 to 100 ingredients was
+        /// refused by paste, a nearby `.local` share, a Messages card and a Shortcuts file, and a
+        /// nearby `.saved` share kept only its first 60 lines.
+        static let maxIngredients = SharedRecipeLimits.maxIngredients
         /// Most servings one imported recipe may claim.
         static let maxServings = 100
         /// Largest per-ingredient quantity accepted from a share.

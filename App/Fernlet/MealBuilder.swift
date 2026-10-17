@@ -3,13 +3,13 @@ import FernletDomainModel
 import AIProviders
 
 /// Pure meal-construction helpers shared by every resolution tier: turning selection plans, recipes,
-/// and resolved ingredient pairs into fully snapshotted `Meal`s, and minting reusable recipes from
-/// multi-ingredient logs.
+/// and resolved ingredient pairs into fully snapshotted `Meal`s, and building the reusable recipe a
+/// multi-ingredient log OFFERS for review (never mints).
 ///
 /// All inputs are passed in (recipes, catalog items, candidates) — nothing here reads or mutates the
 /// store; `@MainActor` because callers hand it main-actor store snapshots mid-resolve. Key
 /// invariants: a recipe meal divides by the recipe yield so one log is one plated serving, and a
-/// minted recipe's stored quantities are the per-serving portion × yield so re-logging it reproduces
+/// built recipe's stored quantities are the per-serving portion × yield so re-logging it reproduces
 /// exactly one plate (decision §11.5). Macros and micronutrients always come from catalog-bound
 /// `FoodItem`s, never from model output. Used by ``MealResolutionService``,
 /// ``MealDecompositionResolver``, and ``DishTemplateLexicon``.
@@ -17,45 +17,49 @@ import AIProviders
 struct MealBuilder {
     /// The outcome of building meals from a selection plan.
     ///
-    /// Carries the meals plus any recipes auto-minted for multi-ingredient items, so the caller can
-    /// persist both together.
+    /// Carries the meals plus the recipes built for multi-ingredient items. Those are OFFERS for the
+    /// pre-log review (`MealResolution.offeredRecipes`), never minted by resolution or an auto-commit,
+    /// which is why no meal here claims to come from one.
     struct PlanResult {
         let meals: [Meal]
-        let createdRecipes: [RecipeDefinition]
+        let offeredRecipes: [RecipeDefinition]
     }
 
     /// Builds meals from a candidate-constrained selection plan: each plan item logs via the best
-    /// matching saved recipe when one exists, otherwise from its resolved (and relevance-filtered)
-    /// ingredients — minting a new recipe when several ingredients back one item.
-    /// - Returns: The meals plus any created recipes, or `nil` when no item resolves.
+    /// matching SAVED recipe when one exists, otherwise from its resolved (and relevance-filtered)
+    /// ingredients as the matched foods they are — and when several ingredients back one item, the
+    /// recipe they make is offered alongside, for the review to save or not.
+    ///
+    /// An offered recipe never backs a later item of the same plan: it is not in the book, so a meal
+    /// logged "from" it would claim a recipe the person never saved (until 2026-10-16 it did, and every
+    /// such meal read "From your recipe"; bug confirmation 2026-10-15, food-ai §4).
+    /// - Returns: The meals plus any offered recipes, or `nil` when no item resolves.
     static func meals(
         from plan: FoodSelectionPlan,
         candidates: [FoodSelectionCandidate],
         recipes: [RecipeDefinition],
         foodItems: [FoodItem]
     ) -> PlanResult? {
-        var availableRecipes = recipes
-        var createdRecipes: [RecipeDefinition] = []
+        var offeredRecipes: [RecipeDefinition] = []
         var meals: [Meal] = []
         for item in plan.items {
             guard let result = resolvedMeal(
-                for: item, availableRecipes: availableRecipes, candidates: candidates, foodItems: foodItems,
+                for: item, savedRecipes: recipes, candidates: candidates, foodItems: foodItems,
                 mealType: plan.mealType
             ) else { return nil }
             meals.append(result.meal)
-            if let recipe = result.createdRecipe {
-                createdRecipes.append(recipe)
-                availableRecipes.insert(recipe, at: 0)
-            }
+            if let recipe = result.offeredRecipe { offeredRecipes.append(recipe) }
         }
-        return meals.isEmpty ? nil : PlanResult(meals: meals, createdRecipes: createdRecipes)
+        return meals.isEmpty ? nil : PlanResult(meals: meals, offeredRecipes: offeredRecipes)
     }
 
+    /// One plan item's meal: one serving of the best-matching saved recipe, else its resolved foods —
+    /// plus, when several foods back it, the recipe they make, offered and not saved.
     private static func resolvedMeal(
-        for item: FoodSelectionMealItem, availableRecipes: [RecipeDefinition], candidates: [FoodSelectionCandidate],
+        for item: FoodSelectionMealItem, savedRecipes: [RecipeDefinition], candidates: [FoodSelectionCandidate],
         foodItems: [FoodItem], mealType: MealType
-    ) -> (meal: Meal, createdRecipe: RecipeDefinition?)? {
-        if let recipe = bestRecipeMatch(for: item.name, in: availableRecipes),
+    ) -> (meal: Meal, offeredRecipe: RecipeDefinition?)? {
+        if let recipe = bestRecipeMatch(for: item.name, in: savedRecipes),
            let meal = mealFromRecipe(recipe, mealType: mealType, foodItems: foodItems) {
             return (meal, nil)
         }
@@ -71,15 +75,14 @@ struct MealBuilder {
             guard let food = candidates.first(where: { $0.id == ingredient.candidateId })?.foodItem else { return nil }
             return (ingredient, food)
         }
-        guard resolved.isEmpty == false else { return nil }
-        guard resolved.count > 1 else {
-            return mealFromIngredients(itemName: item.name, resolvedIngredients: resolved, mealType: mealType)
-                .map { ($0, nil) }
-        }
+        guard resolved.isEmpty == false,
+              let meal = mealFromIngredients(itemName: item.name, resolvedIngredients: resolved, mealType: mealType)
+        else { return nil }
+        guard resolved.count > 1 else { return (meal, nil) }
         let recipe = createRecipe(
             for: item.name, resolvedIngredients: resolved, servings: defaultRecipeServings(description: item.name)
         )
-        return mealFromRecipe(recipe, mealType: mealType, foodItems: foodItems).map { ($0, recipe) }
+        return (meal, recipe)
     }
 
     /// One logged serving of `recipe`: component snapshots scaled to 1/servings, with macro and
@@ -175,11 +178,12 @@ struct MealBuilder {
     /// as-eaten portion the resolver produced). The recipe yields `servings` of that plate, so its
     /// stored ingredient quantities are the per-serving portion scaled up by the yield: logging it back
     /// through `mealFromRecipe` (which divides by `servings`) reproduces exactly one plate. Keeping
-    /// per-serving == the resolved portion is what lets the auto-mint's yield change from a hardcoded 1
+    /// per-serving == the resolved portion is what lets the recipe's yield change from a hardcoded 1
     /// to the F1(c) default chain WITHOUT altering any logged meal's macros (decision §11.5).
     ///
-    /// Internal (was `private`) so the dish-decomposition resolver can build a review-offered recipe
-    /// from the same deduped ingredient pairs it already computes (F1(a) wire, §2.2a).
+    /// Every caller OFFERS the result for review: the plan tiers through `PlanResult.offeredRecipes`,
+    /// and the dish-decomposition resolver, which builds its review-offered recipe from the same deduped
+    /// ingredient pairs it already computes (F1(a) wire, §2.2a). None of them saves it.
     static func createRecipe(
         for itemName: String,
         resolvedIngredients: [(FoodSelectionIngredient, FoodItem)],
@@ -206,7 +210,7 @@ struct MealBuilder {
         )
     }
 
-    /// The default yield for a recipe minted from a meal log (decision §11.5): the model's explicit
+    /// The default yield for a recipe built from a meal log (decision §11.5): the model's explicit
     /// hint when present, else the matching dish template's natural unit count, else 4. A plate is one
     /// serving of a recipe that usually makes several, so 4 is a saner reusable-recipe default than the
     /// old hardcoded 1. Always ≥ 1.

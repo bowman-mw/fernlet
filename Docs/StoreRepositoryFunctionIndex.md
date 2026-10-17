@@ -94,7 +94,7 @@ split is by concern, not alphabetical.
 | `Micronutrients.populatedFieldCount` / `completeness` / `hasAnyValue` | Measure micronutrient data coverage. |
 | `Micronutrients.scaled(by:)` | Scales all populated micronutrient values by a recipe/portion multiplier. |
 | `Micronutrients.add(_:)` | Adds another micronutrient set into the receiver while preserving nil semantics. |
-| `MicronutrientGapAnalyzer.gaps(from:windowDays:)` | Computes covered/gap/unknown nutrient statuses over a 7- or 14-day window. |
+| `MicronutrientGapAnalyzer.gaps(from:windowDays:minimumDataDayFraction:)` | Computes covered/gap/unknown nutrient statuses over a 7- or 14-day window, measured against the days that carry micronutrient data; returns none until the window holds `minimumDataDayFraction` (owner-tunable, 1.0 = a full window) of its days with data. |
 | `FoodItem.calories` | Returns macro calories for catalog or custom food items. |
 | `FoodSelectionPlan.ingredients` | Flattens planned meal items into one ingredient list. |
 | `MealItemSplitter.items(from:)` | Splits a free-form meal description into candidate item phrases. |

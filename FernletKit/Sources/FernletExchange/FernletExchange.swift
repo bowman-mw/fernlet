@@ -127,7 +127,7 @@ public nonisolated enum ExchangeRecipePayloadValidator {
         }
         guard payload.servings >= 1, payload.servings <= 24,
               payload.name.count <= 200, payload.notes.count <= 4_000,
-              payload.ingredients.count <= 100, (payload.steps?.count ?? 0) <= 60 else {
+              payload.ingredients.count <= SharedRecipeLimits.maxIngredients, (payload.steps?.count ?? 0) <= 60 else {
             throw ExchangePacketError.invalidPayload
         }
         guard ingredientsAreValid(payload.ingredients), stepsAreValid(payload.steps ?? []),

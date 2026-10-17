@@ -3049,6 +3049,9 @@
     "Gastrotrich Lifetimes" : {
       "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal"
     },
+    "Getting ready" : {
+
+    },
     "Giant bakery cookie" : {
 
     },
@@ -4155,6 +4158,12 @@
 
     },
     "Not Now" : {
+
+    },
+    "Not available on this iPhone" : {
+
+    },
+    "Not available right now" : {
 
     },
     "Not enough coins yet" : {
@@ -5296,6 +5305,9 @@
     "Restarts the timer on the current cooking step." : {
 
     },
+    "Resting" : {
+
+    },
     "Resting today." : {
 
     },
@@ -5853,6 +5865,9 @@
 
     },
     "Sleep, heart and temperature signals, for recovery context." : {
+
+    },
+    "Sleepy" : {
 
     },
     "Slices eaten, eight to a pizza." : {
@@ -6614,6 +6629,9 @@
 
     },
     "Turn on" : {
+
+    },
+    "Turn on Apple Intelligence" : {
 
     },
     "Turn on Nearby Friends to send hearts" : {

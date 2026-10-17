@@ -34,17 +34,46 @@ public struct SystemLanguageModelCapabilityProvider: AIDeviceCapabilityProviding
         )
     }
 
+    /// The live reason the on-device model can or cannot run, for Settings' "Today" row.
+    public var onDeviceAvailability: OnDeviceModelAvailability {
+        Self.onDeviceModelAvailability
+    }
+
     /// `true` when the default `SystemLanguageModel` reports `.available` — the canonical
     /// availability probe (``FoodSelectionAvailability`` delegates here); `false` on incapable
     /// hardware or SDKs without `FoundationModels`.
     static var isOnDeviceModelAvailable: Bool {
+        onDeviceModelAvailability == .available
+    }
+
+    /// The default `SystemLanguageModel`'s availability, its unavailable reason mapped one to one; an
+    /// SDK without `FoundationModels` is a device that cannot run the model.
+    static var onDeviceModelAvailability: OnDeviceModelAvailability {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            if case .available = SystemLanguageModel.default.availability {
-                return true
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return .available
+            case .unavailable(let reason):
+                return availability(for: reason)
             }
         }
         #endif
-        return false
+        return .deviceNotEligible
     }
+
+    #if canImport(FoundationModels)
+    /// One unavailable reason in the app's vocabulary; a reason newer than this build is `.unavailable`.
+    @available(iOS 26.0, *)
+    private static func availability(
+        for reason: SystemLanguageModel.Availability.UnavailableReason
+    ) -> OnDeviceModelAvailability {
+        switch reason {
+        case .deviceNotEligible: .deviceNotEligible
+        case .appleIntelligenceNotEnabled: .appleIntelligenceNotEnabled
+        case .modelNotReady: .modelNotReady
+        @unknown default: .unavailable
+        }
+    }
+    #endif
 }
