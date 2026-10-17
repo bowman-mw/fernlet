@@ -61,10 +61,15 @@ custom-item stores are thin wrappers over one internal load/upsert engine (`Appe
 parameterized by entity name and labels); the engine deliberately has no delete method, so each
 repository's deletion policy stays visible on the repository type itself.
 Because CloudKit mirrors by record identity rather than by logical id, two devices can produce
-duplicate rows for one logical key; only ``DayRecordRepository`` collapses duplicates itself (most
-recent `updatedAt` wins, with a deliberately tie-conservative self-heal that makes a mutual
-cross-device wipe impossible) — the ledgers and items are union-merged by their aggregation
-services instead. ``MilestoneLedgerRepository``'s one delete is `deleteAll()`, the
+duplicate rows for one logical key; only ``DayRecordRepository`` collapses duplicates itself — the
+rows for a day MERGE by entry id (meals, workouts, planned workouts and journal entries union, the
+newer row's copy of an id winning; water takes the larger count; hygiene and tasks union), and the
+self-heal writes that merge into the newest row in the same save that deletes an older one, with a
+deliberately tie-conservative rule that makes a mutual cross-device wipe impossible. That merge is
+the read-side stop-gap of bug confirmation 2026-10-15 §3: it keeps what each device logged on a day
+both first-wrote, but ONE row that both devices rewrite whole is still last-writer-wins until the
+write side merges too — the ledgers and items are union-merged by their aggregation services
+instead. ``MilestoneLedgerRepository``'s one delete is `deleteAll()`, the
 delete-everything wipe path (added 2026-08-20, when the wipe stopped keeping the milestone trail —
 reversing the earlier survive-a-reset rule); its protocol still exposes no delete, so only the
 app's deletion funnel, which narrows to the concrete type, can reach it.
