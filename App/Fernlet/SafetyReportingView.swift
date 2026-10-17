@@ -6,7 +6,8 @@
 //  actual report + block affordances live where the content is — on shared shop items, on people in
 //  the friend list / in-session roster, and (2026-10-15) on each session message and photo, which run
 //  the same people-report flow (`PeerReportFlow.swift`) — this screen explains them and states the
-//  no-tolerance policy.
+//  no-tolerance policy. It opens on the crisis-line card First Aid carries (`CrisisSupportCard`),
+//  because Settings search sends "crisis", "help", "988", "suicide", "hotline" and "first aid" here.
 //
 
 import SwiftUI
@@ -19,6 +20,11 @@ import FernletUI
 /// the no-tolerance policy and the chat's send filter, explains the on-device consequences of a
 /// report, and gives a developer contact route (``contactURL``, which the report flow offers too).
 /// Reached from Settings so the path is always available, even outside any session.
+///
+/// It opens on ``CrisisSupportCard`` — the same region-keyed crisis line First Aid shows — because
+/// it is where Settings search sends a person who types "crisis", "help", "988", "suicide",
+/// "hotline" or "first aid" (bug confirmation 2026-10-15, safety §2b): a search for help must not
+/// land on a page whose only contact is a developer's email.
 struct SafetyReportingView: View {
     /// The same address the in-app privacy policy publishes. A `mailto:` link, never a web
     /// destination — Fernlet's outbound-destination allowlist is deliberately tiny.
@@ -32,6 +38,8 @@ struct SafetyReportingView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                CrisisSupportCard(identifierPrefix: "safety.support")
+
                 section(
                     "A kind, safe space",
                     "Everything friends share with you happens in person: custom companion clothing, the photos you take together, messages during a session, recipes, and the activities you start. Objectionable content and abusive behavior aren't welcome here.")

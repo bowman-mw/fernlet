@@ -359,6 +359,7 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``FirstAidView``
 - ``CrisisResources``
 - ``CrisisResource``
+- ``CrisisSupportCard``
 
 ### Onboarding, Settings & Shared UI
 

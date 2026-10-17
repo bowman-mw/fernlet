@@ -531,10 +531,12 @@ nonisolated enum SettingsSearchIndex {
             route: .privacyPolicy
         ),
 
-        // Safety & reporting
+        // Safety & reporting — it opens on the crisis-line card (`CrisisSupportCard`), so the words a
+        // person in distress might type land on a page that carries the line.
         SettingsSearchEntry(
             title: "Safety & reporting",
-            keywords: ["safety", "reporting", "report", "block", "abuse", "crisis", "help", "blocked"],
+            keywords: ["safety", "reporting", "report", "block", "abuse", "crisis", "help", "blocked",
+                       "988", "suicide", "hotline", "first aid"],
             breadcrumb: "Safety & reporting",
             route: .safetyReporting
         ),
