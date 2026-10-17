@@ -205,7 +205,7 @@ struct DuressDecoyVisibilityTests {
         let store = makeFullyVisibleStore("duress-endtoend")
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         service.lock(reason: .manual)
 
         _ = try await service.unlock(passcode: "654321", for: .privateHub)
@@ -270,7 +270,7 @@ struct DuressSilentWipeTests {
         // Biometrics ON: the `.biometricBypass` row holds the RAW content key, which is the copy a
         // wipe most easily forgets and the one a coercer can use with no PIN at all.
         try await service.setBiometricEnabled(true, passcode: "123456")
-        try await service.configureDuress(pin: "654321", mode: .silentWipe)
+        try await service.configureDuress(pin: "654321", mode: .silentWipe, current: "123456")
 
         let counter = DuressTestCounter()
         service.installDuressPurgeHook { counter.increment() }

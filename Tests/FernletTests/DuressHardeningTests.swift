@@ -88,7 +88,7 @@ private func armedService(
 ) async throws -> FernletLockService {
     let service = harness.makeService()
     try await service.configure(credential: .pin6(realPIN), grantingScope: .privateHub)
-    try await service.configureDuress(pin: duressPIN, mode: mode)
+    try await service.configureDuress(pin: duressPIN, mode: mode, current: realPIN)
     service.lock(reason: .manual)
     return service
 }
@@ -232,7 +232,7 @@ struct DuressSessionMutatorRefusalTests {
 
         let refusal = FernletLockService.duressSessionRefusalMessage
         await expectInvalidCredential(refusal) {
-            try await service.configureDuress(pin: "999999", mode: .decoy)
+            try await service.configureDuress(pin: "999999", mode: .decoy, current: "123456")
         }
         await expectInvalidCredential(refusal) {
             try service.removeDuress()
@@ -258,7 +258,7 @@ struct DuressSessionMutatorRefusalTests {
         // The real passcode is the only thing that ends it, after which the API works again.
         _ = try await service.unlock(passcode: "123456", for: .privateHub)
         #expect(!service.isDuressSessionActive)
-        try await service.configureDuress(pin: "999999", mode: .silentWipe)
+        try await service.configureDuress(pin: "999999", mode: .silentWipe, current: "123456")
         #expect(service.configuredDuressMode == .silentWipe)
     }
 
@@ -305,7 +305,7 @@ struct DuressCredentialKindStrandingTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
         try await service.configure(credential: .pin4("1234"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "4321", mode: .decoy)
+        try await service.configureDuress(pin: "4321", mode: .decoy, current: "1234")
 
         await expectInvalidCredential(FernletLockService.duressPINWouldBeUnenterableMessage) {
             try await service.changeCredential(current: "1234", new: .pin6("123456"))
@@ -326,13 +326,13 @@ struct DuressCredentialKindStrandingTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
         try await service.configure(credential: .pin4("1234"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "4321", mode: .decoy)
+        try await service.configureDuress(pin: "4321", mode: .decoy, current: "1234")
 
         try service.removeDuress()
         try await service.changeCredential(current: "1234", new: .pin6("123456"))
 
         #expect(service.credentialKind == .pin6)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         service.lock(reason: .manual)
         _ = try await service.unlock(passcode: "654321", for: .privateHub)
         #expect(service.isDuressSessionActive)
@@ -345,7 +345,7 @@ struct DuressCredentialKindStrandingTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
 
         try await service.changeCredential(current: "123456", new: .pin6("111111"))
         #expect(service.hasDuressConfigured)
@@ -414,7 +414,7 @@ struct DuressWipeMediaKeyTests {
             keyAgreementPublicKey: Data(repeating: 2, count: 32),
             ownKeyAgreementPublicKey: Data(repeating: 3, count: 32)
         ) { _ in Data(repeating: 4, count: 48) }
-        try await service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         plantMediaKey(harness)
         service.lock(reason: .manual)
 

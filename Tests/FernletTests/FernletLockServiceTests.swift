@@ -999,6 +999,155 @@ struct KeychainUpdateOnlyContractTests {
     }
 }
 
+/// DPA-76: every door a typed real passcode can reach is the ONE counted door, so a wrong passcode
+/// costs an attempt on the ladder wherever it is typed.
+///
+/// Before the fix, `changeCredential`, `setBiometricEnabled(true)` and `enrollRecoveryCustodian`
+/// compared on their own and threw `invalidPasscode` with nothing counted, and `configureDuress`
+/// answered "is this the passcode?" with its "must be different" refusal. The Face ID re-enable
+/// sheet on an unlocked App-lock page could therefore try every 4-digit PIN with no lockout. Each
+/// case runs from a settings-page unlock — where those sheets live — and fails the door four times.
+@MainActor
+@Suite(.serialized)
+struct CountedPasscodeDoorTests {
+    /// The entry points that take a typed real passcode.
+    enum Door: String, CaseIterable, CustomTestStringConvertible {
+        case unlock, removePasscode, changePasscode, enableBiometrics, enrollCustodian, configureDuress
+
+        var testDescription: String { rawValue }
+
+        /// Calls this door with `passcode` the way its settings sheet does.
+        @MainActor
+        func attempt(_ service: FernletLockService, passcode: String) async throws {
+            switch self {
+            case .unlock:
+                _ = try await service.unlock(passcode: passcode, for: .appLockSettings)
+            case .removePasscode:
+                try await service.removeCredential(current: passcode)
+            case .changePasscode:
+                try await service.changeCredential(current: passcode, new: .pin6("111111"))
+            case .enableBiometrics:
+                try await service.setBiometricEnabled(true, passcode: passcode)
+            case .enrollCustodian:
+                try await service.enrollRecoveryCustodian(
+                    passcode: passcode,
+                    signingPublicKey: Data(repeating: 1, count: 32),
+                    keyAgreementPublicKey: Data(repeating: 2, count: 32),
+                    ownKeyAgreementPublicKey: Data(repeating: 3, count: 32)
+                ) { $0 }
+            case .configureDuress:
+                try await service.configureDuress(pin: "654321", mode: .decoy, current: passcode)
+            }
+        }
+    }
+
+    /// A wrong passcode is counted and re-locks the page; the fourth starts the 60 s cooldown,
+    /// which then refuses the RIGHT passcode at this door and at the lock screen alike.
+    @Test(arguments: Door.allCases)
+    func aWrongPasscodeCountsAndTheFourthLocksOut(_ door: Door) async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
+
+        for expectedCount in 1...3 {
+            await #expect(throws: FernletLockError.invalidPasscode) {
+                try await door.attempt(service, passcode: "000000")
+            }
+            #expect(service.currentAttemptCount == expectedCount, "the wrong passcode was not counted")
+            #expect(service.state == .locked(cooldownDeadline: nil), "a counted mistype re-locks the page")
+        }
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await door.attempt(service, passcode: "000000")
+        }
+        let deadline = try #require(cooldownDeadline(from: service.state), "the fourth mistype starts no cooldown")
+        #expect(deadline.timeIntervalSince(harness.clock.now) == 60)
+
+        await expectCooldown { try await door.attempt(service, passcode: "123456") }
+        await expectCooldown { _ = try await service.unlock(passcode: "123456", for: .privateHub) }
+        #expect(service.credentialKind == .pin6, "nothing was re-keyed")
+        #expect(!service.biometricEnabled, "nothing was enabled")
+        #expect(!service.hasRecoveryCustodian, "nothing was enrolled")
+        #expect(!service.hasDuressConfigured, "nothing was configured")
+    }
+
+    /// Once the ladder is exhausted only `reset()` goes on — at this door too.
+    @Test(arguments: Door.allCases)
+    func aRequiredResetRefusesTheRightPasscode(_ door: Door) async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
+        #expect(KeychainItem.store(Data([1]), for: .requiresReset, service: harness.serviceID) == errSecSuccess)
+
+        await #expect(throws: FernletLockError.resetRequired) {
+            try await door.attempt(service, passcode: "123456")
+        }
+    }
+
+    /// The scrub: a mistype on a screen that holds the Private hub's key leaves no key resident
+    /// under the `.locked` state it moves to.
+    @Test func aMistypeWhileTheHubIsOpenScrubsTheResidentKey() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
+        #expect(service.hasResidentContentKey)
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await service.setBiometricEnabled(true, passcode: "000000")
+        }
+        #expect(service.state == .locked(cooldownDeadline: nil))
+        #expect(!service.hasResidentContentKey)
+    }
+
+    /// The duress-setup oracle, closed: a candidate equal to the passcode is refused as "must be
+    /// different" ONLY to someone who typed the passcode; to anyone else it is a counted mistype.
+    @Test func theDuressEqualityRefusalIsNoPasscodeOracle() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await service.configureDuress(pin: "123456", mode: .decoy, current: "000000")
+        }
+        #expect(service.currentAttemptCount == 1)
+        await #expect(throws: FernletLockError.invalidCredential(FernletLockService.duressPINMatchesPasscodeMessage)) {
+            try await service.configureDuress(pin: "123456", mode: .decoy, current: "123456")
+        }
+        #expect(!service.hasDuressConfigured)
+    }
+
+    /// A duress code typed as the passcode at duress setup runs its response and reads as a
+    /// mistype, uncounted — the `removeCredential` shape — and sets nothing.
+    @Test func aDuressCodeTypedAsThePasscodeAtDuressSetupIsTheDuressPath() async throws {
+        let harness = LockTestHarness()
+        defer { harness.cleanup() }
+        let service = harness.makeService()
+        try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
+
+        await #expect(throws: FernletLockError.invalidPasscode) {
+            try await service.configureDuress(pin: "222222", mode: .silentWipe, current: "654321")
+        }
+        #expect(service.isDuressSessionActive)
+        #expect(service.currentAttemptCount == 0, "a duress entry never reaches the counter")
+        _ = try await service.unlock(passcode: "123456", for: .appLockSettings)
+        #expect(service.configuredDuressMode == .decoy, "the armed response was not replaced")
+    }
+
+    private func expectCooldown(_ body: () async throws -> Void) async {
+        do {
+            try await body()
+            Issue.record("the right passcode was accepted during a cooldown")
+        } catch FernletLockError.cooldownActive {
+        } catch {
+            Issue.record("expected cooldownActive, got \(error)")
+        }
+    }
+}
+
 @MainActor
 final class LockTestHarness {
     let serviceID = "com.fernlet.lock.test.\(UUID().uuidString)"

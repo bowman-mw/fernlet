@@ -7344,6 +7344,9 @@
     "Your progress photos are private" : {
 
     },
+    "Your real passcode first, so only you can set or change a duress code." : {
+
+    },
     "Your real passcode — the one that opens your data. Fernlet uses it to unlock the key it is about to seal to your recovery device, and the key never leaves this phone unsealed." : {
 
     },

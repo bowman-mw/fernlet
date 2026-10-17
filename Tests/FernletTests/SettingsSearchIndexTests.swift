@@ -57,6 +57,30 @@ struct SettingsSearchIndexTests {
         }
     }
 
+    /// Bug confirmation 2026-10-15, safety §2b: "crisis" used to open Safety & reporting, a page whose
+    /// only contact was the developer's email, and "988", "suicide", "hotline" and "first aid" found
+    /// nothing. Every one of these words now lands on that page, and the page opens on the same
+    /// crisis-line card First Aid shows.
+    @Test func crisisQueriesLandOnAPageThatCarriesTheCrisisLine() throws {
+        for query in ["crisis", "help", "988", "suicide", "hotline", "first aid"] {
+            let results = SettingsSearchIndex.results(for: query)
+            #expect(!results.isEmpty, "query '\(query)' returned no results")
+            #expect(results.allSatisfy { $0.route == .safetyReporting },
+                    "query '\(query)' reached a page without the crisis line: \(results.map(\.route))")
+        }
+        let sheet = try RepoRoot.source("App/Fernlet/SettingsSheet.swift")
+        #expect(sheet.contains("case .safetyReporting:\n            SafetyReportingView()"),
+                "the .safetyReporting route no longer opens SafetyReportingView")
+        let page = try RepoRoot.source("App/Fernlet/SafetyReportingView.swift")
+        let firstItem = try #require(page.range(of: "VStack(alignment: .leading, spacing: 16) {"))
+        #expect(page[firstItem.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+                    .hasPrefix("CrisisSupportCard(identifierPrefix: \"safety.support\")"),
+                "Safety & reporting no longer opens on the crisis-line card")
+        let firstAid = try RepoRoot.source("App/Fernlet/FirstAidView.swift")
+        #expect(firstAid.contains("CrisisSupportCard(identifierPrefix: \"firstAid.support\")"),
+                "First Aid and Safety & reporting no longer share one card")
+    }
+
     @Test func prefixMatchingFindsPartialTokens() {
         // "notif" should still reach the notifications/check-in leaves via prefix match.
         let results = SettingsSearchIndex.results(for: "notif")

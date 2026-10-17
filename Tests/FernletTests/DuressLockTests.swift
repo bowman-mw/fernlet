@@ -65,7 +65,7 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
 
         #expect(service.hasDuressConfigured)
         let duressSalt = try #require(duressRow(.duressSalt, harness))
@@ -88,7 +88,7 @@ struct DuressLockTests {
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         do {
-            try await service.configureDuress(pin: "123456", mode: .decoy)
+            try await service.configureDuress(pin: "123456", mode: .decoy, current: "123456")
             Issue.record("A duress PIN equal to the real passcode was accepted — the real content key is now unreachable")
         } catch FernletLockError.invalidCredential(let message) {
             #expect(message == FernletLockService.duressPINMatchesPasscodeMessage)
@@ -111,11 +111,11 @@ struct DuressLockTests {
 
         try await service.configure(credential: .pin4("1234"), grantingScope: .privateHub)
         await #expect(throws: FernletLockError.self) {
-            try await service.configureDuress(pin: "654321", mode: .decoy)
+            try await service.configureDuress(pin: "654321", mode: .decoy, current: "1234")
         }
         #expect(!service.hasDuressConfigured)
 
-        try await service.configureDuress(pin: "4321", mode: .decoy)
+        try await service.configureDuress(pin: "4321", mode: .decoy, current: "1234")
         #expect(service.hasDuressConfigured)
     }
 
@@ -127,7 +127,7 @@ struct DuressLockTests {
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         #expect(!service.hasRecoveryCustodian)
         do {
-            try await service.configureDuress(pin: "654321", mode: .recoveryLock)
+            try await service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
             Issue.record("recoveryLock was accepted with no custodian — the keys would be destroyed with no way back")
         } catch FernletLockError.invalidCredential(let message) {
             #expect(message == FernletLockService.duressRecoveryCustodianRequiredMessage)
@@ -147,7 +147,7 @@ struct DuressLockTests {
                                   service: harness.serviceID) == errSecSuccess)
         #expect(service.hasRecoveryCustodian)
 
-        try await service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         #expect(service.hasDuressConfigured)
         #expect(duressRow(.duressMode, harness) == Data([DuressMode.recoveryLock.rawValue]))
     }
@@ -160,10 +160,10 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         let firstSalt = try #require(duressRow(.duressSalt, harness))
 
-        try await service.configureDuress(pin: "222222", mode: .silentWipe)
+        try await service.configureDuress(pin: "222222", mode: .silentWipe, current: "123456")
 
         let secondSalt = try #require(duressRow(.duressSalt, harness))
         #expect(secondSalt != firstSalt, "a replacement must mint a fresh duress salt")
@@ -186,7 +186,7 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         try service.removeDuress()
 
         #expect(!service.hasDuressConfigured)
@@ -214,7 +214,7 @@ struct DuressLockTests {
         let setup = harness.makeService()
         try await setup.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let realKey = try #require(setup.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
-        try await setup.configureDuress(pin: "654321", mode: .decoy)
+        try await setup.configureDuress(pin: "654321", mode: .decoy, current: "123456")
 
         // A fresh instance = a relaunch, so the process passcode flags start false and the
         // "a duress unlock sets neither" assertion is meaningful.
@@ -260,7 +260,7 @@ struct DuressLockTests {
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let realKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         let duressSaltBefore = try #require(duressRow(.duressSalt, harness))
         let duressVerifierBefore = try #require(duressRow(.duressVerifier, harness))
 
@@ -298,7 +298,7 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         service.lock(reason: .manual)
 
         // --- Active cooldown ---
@@ -348,7 +348,7 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         service.lock(reason: .manual)
 
         try await failUnlock(service, times: 2)
@@ -395,7 +395,7 @@ struct DuressLockTests {
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let realKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         let saltBefore = try #require(duressRow(.salt, harness))
         let verifierBefore = try #require(duressRow(.verifier, harness))
         let kindBefore = try #require(duressRow(.kind, harness))
@@ -433,7 +433,7 @@ struct DuressLockTests {
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         let realKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
 
         do {
             try await service.changeCredential(current: "123456", new: .pin6("654321"))
@@ -457,7 +457,7 @@ struct DuressLockTests {
         let service = harness.makeService()
 
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
 
         try await service.setBiometricEnabled(true, passcode: "654321")
 
@@ -488,7 +488,7 @@ struct DuressLockTests {
         try await service.configure(credential: .pin6("123456"), grantingScope: .privateHub)
         biometricKey = try #require(service.contentKey(for: .privateHub)).withUnsafeBytes { Data($0) }
         try await service.setBiometricEnabled(true, passcode: "123456")
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         #expect(service.passcodeUnlockedThisProcess, "precondition: PIN-before-biometrics is already satisfied")
         #expect(service.isBiometricUnlockAvailable)
 
@@ -534,7 +534,7 @@ struct DuressLockTests {
                                   service: harness.serviceID) == errSecSuccess)
         #expect(KeychainItem.store(Data(repeating: 0x33, count: 96), for: .recoveryBlob,
                                   service: harness.serviceID) == errSecSuccess)
-        try await service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         // The blob vanishes after the response was armed.
         KeychainItem.delete(for: .recoveryBlob, service: harness.serviceID)
         service.lock(reason: .manual)
@@ -666,7 +666,7 @@ extension DuressLockTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
         try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
-        try await service.configureDuress(pin: "654321", mode: .decoy)
+        try await service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         let rows: [LockKeychainKey] = [.salt, .verifier, .kind, .scryptN, .wrappedContentKey,
                                        .seWrappedContentKey, .duressSalt, .duressVerifier, .duressMode]
         let before = rows.map { duressRow($0, harness) }
@@ -690,7 +690,7 @@ extension DuressLockTests {
         defer { harness.cleanup() }
         let service = harness.makeService()
         try await service.configure(credential: .pin6("123456"), grantingScope: .appLockSettings)
-        try await service.configureDuress(pin: "654321", mode: .silentWipe)
+        try await service.configureDuress(pin: "654321", mode: .silentWipe, current: "123456")
         let realVerifier = try #require(duressRow(.verifier, harness))
 
         await #expect(throws: FernletLockError.invalidPasscode) {

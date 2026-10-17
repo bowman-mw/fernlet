@@ -234,8 +234,7 @@ struct TierTwoDeviceLocalTests {
     /// inactive history. A from-scratch recompute would mint a fresh record for both.
     @Test func aRelaunchKeepsFirstSeenDatesAndSupersededVerdictsStayAsHistory() throws {
         let url = temporaryDatabaseURL("history")
-        // Weight management, not strength: the strength arm's "misaligned" text says "low-motivation
-        // period", which the diagnostic post-classifier rejects on "period" — it is never stored.
+        // Weight management: its meal-only days give the `dietary_only` precondition below.
         let goal = FitnessGoal(type: .weightManagement, goal: "Eat steadily", timeframe: "8 weeks", metric: "meals")
         let first = LocalFernletRepository(fileURL: url)
         for key in ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"] {

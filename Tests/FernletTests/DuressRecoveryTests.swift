@@ -190,13 +190,13 @@ struct DuressRecoveryEnrollmentTests {
 
         #expect(!fixture.service.hasRecoveryCustodian)
         await #expect(throws: FernletLockError.self) {
-            try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+            try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         }
         #expect(!fixture.service.hasDuressConfigured)
 
         try await fixture.enrollCustodian()
         #expect(fixture.service.hasRecoveryCustodian)
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         #expect(fixture.service.hasDuressConfigured)
     }
 
@@ -206,7 +206,7 @@ struct DuressRecoveryEnrollmentTests {
     @Test func enrollmentUnderTheDuressPINSealsNothingAndPresentsTheDecoy() async throws {
         let fixture = try await RecoveryFixture()
         defer { fixture.cleanup() }
-        try await fixture.service.configureDuress(pin: "654321", mode: .decoy)
+        try await fixture.service.configureDuress(pin: "654321", mode: .decoy, current: "123456")
         fixture.service.lock(reason: .manual)
 
         try await fixture.enrollCustodian(passcode: "654321")
@@ -253,7 +253,7 @@ struct DuressRecoveryEnrollmentTests {
         let fixture = try await RecoveryFixture()
         defer { fixture.cleanup() }
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
 
         do {
             try fixture.service.removeRecoveryCustodian()
@@ -294,7 +294,7 @@ struct DuressRecoveryLockTriggerTests {
     private func triggeredFixture() async throws -> RecoveryFixture {
         let fixture = try await RecoveryFixture()
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         fixture.service.lock(reason: .manual)
         #expect(KeychainItem.store(Data([0xA5, 0x5A]), for: .wrappedContentKeyRewrapStaging,
                                    service: fixture.harness.serviceID) == errSecSuccess)
@@ -355,7 +355,7 @@ struct DuressRecoveryLockTriggerTests {
         let deviceKeyService = fixture.harness.sealedContentKeyServiceID
         _ = KeychainItem.store(Data(repeating: 0x5A, count: 32), for: .salt, service: deviceKeyService)
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         fixture.service.lock(reason: .manual)
 
         _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
@@ -412,7 +412,7 @@ struct DuressRecoveryLockTriggerTests {
         let fixture = try await RecoveryFixture()
         defer { fixture.cleanup() }
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         // The blob vanishes after the response was armed (a swept or corrupted keychain).
         KeychainItem.delete(for: .recoveryBlob, service: fixture.harness.serviceID)
         fixture.service.lock(reason: .manual)
@@ -458,14 +458,14 @@ struct DuressRecoveryLockTriggerTests {
         #expect(relaunched.hasSupersededRecoveryBlob)
 
         do {
-            try await relaunched.configureDuress(pin: "654321", mode: .recoveryLock)
+            try await relaunched.configureDuress(pin: "654321", mode: .recoveryLock, current: "999999")
             Issue.record("a superseded recovery blob was armed again")
         } catch FernletLockError.invalidCredential(let message) {
             #expect(message == FernletLockService.recoveryCustodianSupersededMessage)
         }
         #expect(!relaunched.hasDuressConfigured)
         // The non-destructive responses are unaffected — the refusal is about this one pairing.
-        try await relaunched.configureDuress(pin: "654321", mode: .decoy)
+        try await relaunched.configureDuress(pin: "654321", mode: .decoy, current: "999999")
         #expect(relaunched.configuredDuressMode == .decoy)
         // …and the setup screen withholds the option for the same reason, with a reason to show.
         let availability = DuressSetupAvailability(lockService: relaunched)
@@ -496,7 +496,7 @@ struct DuressRecoveryLockTriggerTests {
         }
 
         #expect(!relaunched.hasSupersededRecoveryBlob)
-        try await relaunched.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await relaunched.configureDuress(pin: "654321", mode: .recoveryLock, current: "999999")
         #expect(relaunched.configuredDuressMode == .recoveryLock)
     }
 
@@ -557,7 +557,7 @@ struct DuressRecoveryReestablishTests {
     private func recoveryLockedFixture() async throws -> RecoveryFixture {
         let fixture = try await RecoveryFixture()
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         fixture.service.lock(reason: .manual)
         _ = try await fixture.service.unlock(passcode: "654321", for: .privateHub)
         return fixture
@@ -828,7 +828,7 @@ struct DuressRecoveryCeremonyTests {
             senderSigningPublicKey: pair.fixture.custodianIdentity.localSigningPublicKey,
             passcode: "123456"
         )
-        try await pair.fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await pair.fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         pair.fixture.service.lock(reason: .manual)
         _ = try await pair.fixture.service.unlock(passcode: "654321", for: .privateHub)
         return pair
@@ -1260,7 +1260,7 @@ struct DuressRecoveryIdentityRotationTests {
         let fixture = try await RecoveryFixture()
         defer { fixture.cleanup() }
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         #expect(fixture.service.hasRecoveryCustodian)
         #expect(fixture.service.enrolledRecoveryOwnerKeyAgreementPublicKey
                 == fixture.primaryIdentity.localKeyAgreementPublicKey)
@@ -1299,7 +1299,7 @@ struct DuressRecoveryIdentityRotationTests {
         let fixture = try await RecoveryFixture()
         defer { fixture.cleanup() }
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
 
         let coordinator = DuressRecoveryCoordinator(
             identity: fixture.primaryIdentity,
@@ -1342,7 +1342,7 @@ struct DuressRecoveryDeviceCustodyTests {
     private func armedFixture() async throws -> RecoveryFixture {
         let fixture = try await RecoveryFixture()
         try await fixture.enrollCustodian()
-        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock)
+        try await fixture.service.configureDuress(pin: "654321", mode: .recoveryLock, current: "123456")
         return fixture
     }
 
