@@ -29,7 +29,7 @@ import Foundation
 /// `nonisolated`, with its nested types, so the app target's default main-actor isolation does not
 /// make its `ActivityAttributes` conformance an isolated one: ActivityKit enumerates, updates and
 /// ends activities from `@concurrent` code, and ``LiveActivityRunReflectable`` holds its
-/// `Attributes` to `SendableMetatype`, which an isolated conformance cannot meet.
+/// `Attributes` to `Sendable`, which an isolated conformance cannot meet.
 nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
     /// The workout's title (e.g. "Push day"). Fixed for the life of the activity.
     var workoutTitle: String
