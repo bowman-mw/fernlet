@@ -10,6 +10,7 @@
 import Foundation
 import Observation
 import FernletDomainModel
+import FernletFoundation
 import ProximityKit
 
 /// Device-local, append-only store of moderation report rows: this device's own reports and
@@ -20,8 +21,16 @@ import ProximityKit
 /// (`ModerationLedgerEntry.rowID`) so a repeat report de-dupes and a retract supersedes its
 /// report via a higher `reporterSeq`; upsert keeps the higher-seq row, making re-delivery
 /// idempotent. Persistence is a JSON sidecar in Application Support
-/// (`.completeFileProtection`), deliberately NEVER in the synced snapshot — who reported whom is
-/// sensitive social data.
+/// (`.completeFileProtection`, excluded from iCloud device backups), deliberately NEVER in the synced
+/// snapshot or a backup — who reported whom is sensitive social data.
+///
+/// The file is data of record (the evidence ban reconciliation reads, and what keeps a reported item
+/// hidden), so it never fails open to an empty ledger that the next report would write over (bug
+/// confirmation 2026-10-15 §4): an undecodable file is moved aside to `ModerationLedger.json.corrupt`
+/// before anything is written, rows decode one by one so a single unreadable row costs only itself, and
+/// while the file exists but cannot be READ (a locked-device read of the protected file) every save
+/// first retries the read — merging the rows recorded since into the file's — and is refused while
+/// the read still fails.
 ///
 /// Bounded MAX-MIN FAIRLY, not by age alone (R3): at most `maxRowsPerReporter` rows per reporter
 /// fingerprint and `maxRows` overall, and when the total would overflow the per-reporter allowance is
@@ -39,6 +48,9 @@ public final class ModerationLedger {
 
     @ObservationIgnored private let file: JSONSidecarFile<PersistedState>
     @ObservationIgnored private let now: () -> Date
+    /// True while the sidecar exists but its last read failed: the rows in memory are not the file's,
+    /// so writing them would overwrite the real ledger. Cleared by the first read that succeeds.
+    @ObservationIgnored private var fileUnread = false
 
     /// Hard ceiling on the whole ledger.
     static let maxRows = 512
@@ -59,9 +71,10 @@ public final class ModerationLedger {
     ///     proximity sidecar root; a test passes a file of its own.
     ///   - now: The clock its rows are stamped with.
     public init(fileURL: URL, now: @escaping () -> Date = Date.init) {
-        self.file = JSONSidecarFile(fileURL: fileURL)
+        // Out of iCloud device backups: who reported whom (bug confirmation 2026-10-15 §5).
+        self.file = JSONSidecarFile(fileURL: fileURL, excludedFromBackup: true)
         self.now = now
-        load()
+        rows = Self.bounded(readFile() ?? [])
     }
 
     // MARK: - Local report / retract
@@ -131,10 +144,13 @@ public final class ModerationLedger {
         return true
     }
 
-    /// Wipes every row and the on-disk sidecar (wired from `FernletStore.resetAll`).
+    /// Wipes every row, the on-disk sidecar and its `.corrupt` quarantine (wired from
+    /// `FernletStore.resetAll`).
     public func clearAll() {
         rows = []
         file.removeFile()
+        // What a wipe leaves is "no ledger", so the next report writes a fresh file.
+        fileUnread = false
     }
 
     // MARK: - Internals
@@ -193,22 +209,35 @@ public final class ModerationLedger {
         rows.sorted { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) }
     }
 
-    /// Versioned on-disk shape; tolerant of missing keys so older files keep decoding.
+    /// Versioned on-disk shape; tolerant of missing keys so older files keep decoding, and of a row
+    /// that will not decode, which is dropped alone (`droppedRows` counts it) rather than taking every
+    /// report in the file with it (bug confirmation 2026-10-15 §4).
     ///
     /// `nonisolated` so its hand-written `Decodable` conformance stays usable from the
     /// nonisolated ``JSONSidecarFile`` generic (pure data: an `Int` plus nonisolated entries).
     private nonisolated struct PersistedState: Codable {
         var version = 1
         var rows: [ModerationLedgerEntry] = []
+        /// Rows the last decode dropped. Never encoded.
+        var droppedRows = 0
+        /// The persisted keys — `droppedRows` is a decode fact, not part of the file.
+        enum CodingKeys: String, CodingKey {
+            case version, rows
+        }
         init() {}
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
-            rows = try c.decodeIfPresent([ModerationLedgerEntry].self, forKey: .rows) ?? []
+            let decoded = try c.decodeIfPresent([LenientSidecarRow<ModerationLedgerEntry>].self, forKey: .rows) ?? []
+            rows = decoded.compactMap(\.value)
+            droppedRows = decoded.count - rows.count
         }
     }
 
-    /// Reads the sidecar, oldest-first.
+    /// Reads the sidecar's rows, or nil while the file exists but cannot be read (`fileUnread` then
+    /// stays set and every save is refused until a read succeeds). Absent reads as no rows; an
+    /// undecodable file is quarantined first and then reads as no rows — or, if the move failed and
+    /// the file is still in the way, as unread. Callers bound what it returns.
     ///
     /// R3: the file is external input to this process — it can be larger than ``maxRows`` because a
     /// build with a higher cap wrote it, or because it was tampered with — so `bounded` is applied on
@@ -217,12 +246,41 @@ public final class ModerationLedger {
     /// reporter's rows would evict every other reporter (including this device's own) at startup.
     /// Without any bound the ledger would stay permanently over its cap: `upsert` only re-bounds when
     /// it writes, and every read that scans `rows` would work over an unbounded array until then.
-    private func load() {
-        guard let state = file.load() else { return }
-        rows = Self.bounded(state.rows)
+    private func readFile() -> [ModerationLedgerEntry]? {
+        switch file.read() {
+        case .absent:
+            fileUnread = false
+            return []
+        case .loaded(let state):
+            fileUnread = false
+            if state.droppedRows > 0 {
+                FernletAuditLog.log("moderationLedger.rowsDropped", context: ["count": String(state.droppedRows)])
+            }
+            return state.rows
+        case .undecodable:
+            fileUnread = !file.quarantine()
+            return fileUnread ? nil : []
+        case .unreadable:
+            fileUnread = true
+            return nil
+        }
     }
 
+    /// Writes the ledger — unless the file has not been read, when the read is retried first and the
+    /// rows recorded since are merged INTO the file's (the same keep-the-higher-seq merge a relay batch
+    /// takes), so neither side's reports are lost. While the read still fails nothing is written (a
+    /// refused save is audited; the rows stay in memory and the next save retries).
     private func save() {
+        if fileUnread {
+            guard let onDisk = readFile() else {
+                FernletAuditLog.log("moderationLedger.saveRefusedUnread", context: ["rows": String(rows.count)])
+                return
+            }
+            let recordedSince = rows
+            rows = Self.bounded(onDisk)
+            for entry in recordedSince.prefix(Self.maxRows) { merge(entry) }
+            rows = Self.bounded(rows)
+        }
         var state = PersistedState()
         state.rows = rows
         file.save(state)

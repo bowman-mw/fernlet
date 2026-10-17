@@ -1981,6 +1981,9 @@
     "Couldn't share that photo with the mesh. It's saved on your own wall." : {
 
     },
+    "Couldn't turn on your encrypted photo backup, so it's still off and your photos aren't in iCloud. Tap Retry to try again." : {
+
+    },
     "Couldn't update your workout just now — please try again in a moment." : {
 
     },
@@ -2982,6 +2985,12 @@
         }
       }
     },
+    "Found an encrypted %@ backup in iCloud. To restore it to this iPhone, turn on its switch above with Sync to iCloud on." : {
+
+    },
+    "Found an encrypted photo backup in iCloud. To restore your photos to this iPhone, turn on the photo backup above." : {
+
+    },
     "Found on Open Food Facts. Check the name and macros below before you remember it — they come from a shared, community-built database." : {
 
     },
@@ -3048,6 +3057,9 @@
     },
     "Gastrotrich Lifetimes" : {
       "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal"
+    },
+    "Getting ready" : {
+
     },
     "Giant bakery cookie" : {
 
@@ -4155,6 +4167,12 @@
 
     },
     "Not Now" : {
+
+    },
+    "Not available on this iPhone" : {
+
+    },
+    "Not available right now" : {
 
     },
     "Not enough coins yet" : {
@@ -5296,6 +5314,9 @@
     "Restarts the timer on the current cooking step." : {
 
     },
+    "Resting" : {
+
+    },
     "Resting today." : {
 
     },
@@ -5855,6 +5876,9 @@
     "Sleep, heart and temperature signals, for recovery context." : {
 
     },
+    "Sleepy" : {
+
+    },
     "Slices eaten, eight to a pizza." : {
       "comment" : "Silly stat: how pizza is counted"
     },
@@ -6393,6 +6417,9 @@
     "This entry is sealed." : {
 
     },
+    "This iCloud account also holds an encrypted backup of your journal, cycle, intimate logs or photos. To restore it to this iPhone, turn on its backup in Settings › Privacy & Data after setup." : {
+
+    },
     "This iPhone can't open the cycle backup in iCloud. A new backup replaces it for good, for every iPhone that uses it. If its key hasn't arrived through iCloud Keychain yet, wait for it: it usually arrives, even if you no longer have the iPhone that saved it. Only start over if you've reset iCloud Keychain or the backup is damaged." : {
 
     },
@@ -6614,6 +6641,9 @@
 
     },
     "Turn on" : {
+
+    },
+    "Turn on Apple Intelligence" : {
 
     },
     "Turn on Nearby Friends to send hearts" : {

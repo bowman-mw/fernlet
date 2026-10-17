@@ -660,12 +660,17 @@ final class SealedPhotoBackupService {
     ///   is that it runs against a corpus that is no longer empty, so it must not re-download (or
     ///   re-write) the photos that already landed. Entries outside the set are neither restored nor
     ///   counted as failed; they are simply not this pass's business. Nil restores everything.
+    /// - Parameter skipping: Manifest entries this corpus already holds under the same id and must
+    ///   keep: they are neither fetched, written, nor counted as failed — the restore INTO a corpus
+    ///   holding photos this device took before its backup was turned on (bug confirmation 2026-10-15
+    ///   §2), where a fetched copy must never overwrite the local one.
     /// - Returns: nil when the corpus has no manifest at all (nothing was ever committed).
     /// - Throws: `SealedBackupError.staleGeneration` on rollback, `.keyAgreementIdentityMismatch`
     ///   when the manifest is not ours, `.malformedRecord` when it is ours but corrupt.
     func restore(
         corpus: SealedPhotoCorpus,
         limitedTo: Set<UUID>? = nil,
+        skipping: Set<UUID> = [],
         write: (UUID, Data) -> Bool
     ) async throws -> SealedPhotoRestoreSummary? {
         guard let opened = try await openManifest(corpus: corpus) else { return nil }
@@ -688,6 +693,7 @@ final class SealedPhotoBackupService {
         )
         for entry in opened.manifest.entries {
             if let limitedTo, !limitedTo.contains(entry.id) { continue }
+            if skipping.contains(entry.id) { continue }
             guard let record = try? await cloudDataService.sealedPhoto(corpus: corpus, slot: .photo(entry.id)),
                   let plaintext = try? SealedPhotoCrypto.open(record, identityService: identityService) else {
                 summary.failed.append(entry.id)

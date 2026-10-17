@@ -10,8 +10,9 @@ import FoundationModels
 #endif
 
 /// F1(a) — the dish-decomposition → recipe wire (AI-Feature-Expansion §2.2a/§2.5, decision §11.5).
-/// Covers: the default-yield chain, `createRecipe`'s per-serving-preserving yield scaling, the auto-mint
-/// yield change (with the logged meal's macros held invariant), the resolution transforms carrying the
+/// Covers: the default-yield chain, `createRecipe`'s per-serving-preserving yield scaling, the plan
+/// tiers' offered recipe's yield (with the logged meal's macros held invariant; since 2026-10-16 that
+/// recipe is offered for review, never minted, `MealLogRecipeOfferTests`), the resolution transforms carrying the
 /// suggested recipe out of the cascade, the review-gated mint (a suggested recipe is NEVER minted by
 /// `commitResolution` — only a user-confirmed one, routed through `createdRecipes`), and — behind the
 /// FoundationModels gate — the resolver actually building the recipe from its deduped ingredient pairs.
@@ -116,10 +117,10 @@ struct MealDecompositionRecipeWireTests {
             foodItems: [oats, yogurt]
         ))
 
-        let createdRecipe = try #require(result.createdRecipes.first)
+        let offeredRecipe = try #require(result.offeredRecipes.first)
         // Yield now comes from the default chain (4), not the old hardcoded 1 — with ingredients scaled up.
-        #expect(createdRecipe.servings == 4)
-        #expect(createdRecipe.ingredients.map(\.quantity) == [4, 4])
+        #expect(offeredRecipe.servings == 4)
+        #expect(offeredRecipe.ingredients.map(\.quantity) == [4, 4])
         // The logged meal is still exactly one plate — the servings change must not alter it.
         let meal = try #require(result.meals.first)
         #expect(meal.macros == Macros(protein: 23, carbs: 33, fat: 3))

@@ -212,7 +212,10 @@ engine through its public seams.
   device's own reports and retracts beside peers' one-hop-verified rows, bounded max-min fairly per
   reporter so a flooding peer can never evict this device's own reports. The app files a verified
   relay batch here (`FernletStore.ingestModerationRows`) and hands its rows to the relay as this
-  device's own reports.
+  device's own reports. Its file is data of record, so it never fails open to an empty ledger the
+  next report would write over (bug confirmation 2026-10-15 §4): an undecodable file is moved aside to
+  `ModerationLedger.json.corrupt`, rows decode one by one, and while the file cannot be read every save
+  is refused until a read succeeds and merges what was recorded meanwhile.
 - ``ModerationBanStore`` (`Moderation/ModerationBanStore.swift`): the 30-day store ban, self and
   peer, in the keychain under the dedicated `com.fernlet.moderation` service. It survives app delete
   and reinstall and every device clock change (a credited-time countdown over
@@ -347,9 +350,13 @@ the dead-drop's, the ban store's and presence's own (`heartdrop.*`, `storeBan.*`
 `activity.*`, `moderation.relay*` and `meshFeatures.registrationRefused`), which
 `FernletFeatureGoldenTests` pins wherever a cell can drive one, and the ledgers' sidecar's under
 `sidecar.*` — that sidecar,
-`JSONSidecarFile` (`Support/JSONSidecarFile.swift`), the naive JSON idiom the activity, moderation,
+`JSONSidecarFile` (`Support/JSONSidecarFile.swift`), the JSON idiom the activity, moderation,
 closeness and friend-state ledgers and the photo wall's preferences persist through, is this module's
-own and internal. The dead-drop's and the ban store's rows go through FernletFoundation's
+own and internal: its naive `load()` serves the reconstructible stores, its classified `read()` and
+`quarantine()` the moderation ledger, and each owner states whether its file stays out of iCloud
+device backups — the four ledgers do (bug confirmation 2026-10-15 §5; a dated co-presence log,
+friends' wellbeing states, who reported whom and the activities joined), the photo wall's preferences
+do not yet, pending the owner's call. The dead-drop's and the ban store's rows go through FernletFoundation's
 `KeychainItem` (each with its `ThisDeviceOnly` class, never synchronizable), the query dictionaries
 ProximityKit's copy of that mechanism issues too, so a row written by either reads back through the
 other. The sealed sidecars' failures audit through ProximityKit's `ProximityAudit` (the `heartdrop.*`

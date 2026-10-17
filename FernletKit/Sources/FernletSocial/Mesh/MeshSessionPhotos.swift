@@ -310,7 +310,11 @@ public final class MeshSessionPhotos {
             keyProvider: heldPhotoKeys ?? KeychainPrivateMediaKeyProvider(role: .pendingSessionPhotos)
         )
         let preferencesURL = cacheURL.deletingLastPathComponent().appendingPathComponent("MeshPhotoWallPreferences.json")
-        let preferencesStore = JSONSidecarFile<FriendPhotoWallPreferences>(fileURL: preferencesURL)
+        // Left IN iCloud device backups, as before: whether the wall's carousel / cover / favourite
+        // choices should ride a backup is the owner's call (bug confirmation 2026-10-15 §5; spec, the
+        // photo wall), unlike the four ledgers, which are excluded.
+        let preferencesStore = JSONSidecarFile<FriendPhotoWallPreferences>(
+            fileURL: preferencesURL, excludedFromBackup: false)
         self.photoWallPreferencesStore = preferencesStore
         self.photoWallPreferences = preferencesStore.load() ?? FriendPhotoWallPreferences()
         loadPhotoCorpora(now: Date())

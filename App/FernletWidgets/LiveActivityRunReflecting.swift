@@ -25,8 +25,10 @@ import Foundation
 /// activity directly). `contentState` and `staleDate(postedAt:)` are satisfied by the members the
 /// run states already declare in their "Live Activity mapping" sections.
 protocol LiveActivityRunReflectable {
-    /// The `ActivityAttributes` type whose live activities this run state drives.
-    associatedtype Attributes: ActivityAttributes
+    /// The `ActivityAttributes` type whose live activities this run state drives. `SendableMetatype`
+    /// keeps its conformance nonisolated: `Activity<Attributes>.activities` and its `update`/`end`
+    /// run in `@concurrent` code, where newer Xcode refuses a conformance that may be isolated.
+    associatedtype Attributes: ActivityAttributes & SendableMetatype
 
     /// Snapshot of this run state as the activity's dynamic content.
     var contentState: Attributes.ContentState { get }
@@ -63,7 +65,7 @@ enum LiveActivityReflector {
 
     /// End every live activity of the given attributes type immediately — and ONLY that type, so
     /// the workout and cooking activities never touch each other.
-    static func end<A: ActivityAttributes>(_ type: A.Type) async {
+    static func end<A: ActivityAttributes & SendableMetatype>(_ type: A.Type) async {
         for activity in Activity<A>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }

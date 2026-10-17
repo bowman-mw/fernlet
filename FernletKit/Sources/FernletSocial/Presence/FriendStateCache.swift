@@ -40,8 +40,9 @@ public nonisolated struct CachedFriendState: Codable, Equatable, Identifiable {
 ///
 /// Fed by the app when a verified `.friendState` payload arrives from a committed, vault-trusted
 /// friend; read by the Friends UI. Persistence is a JSON sidecar in Application Support with
-/// `.completeFileProtection` — deliberately NEVER in the synced snapshot, since a friend's
-/// struggling state is theirs and must not follow the user into iCloud. Entries expire from the
+/// `.completeFileProtection`, excluded from iCloud device backups — deliberately NEVER in the synced
+/// snapshot or a backup, since a friend's struggling state is theirs and must not follow the user
+/// into iCloud. Entries expire from the
 /// UI after 30 days (`staleAfter`), the map is bounded at `maxStates` (newest kept), and decode
 /// is per-row tolerant so one unknown future value can never wipe the cache. `remove` is wired
 /// from block/revoke so a removed friend leaves nothing behind; `clearAll` from reset-everything.
@@ -66,7 +67,9 @@ public final class FriendStateCache {
     ///     proximity sidecar root; a test passes a file of its own.
     ///   - now: The clock a recorded state is stamped with and its staleness judged by.
     public init(fileURL: URL, now: @escaping () -> Date = Date.init) {
-        self.file = JSONSidecarFile(fileURL: fileURL)
+        // Out of iCloud device backups: a friend's struggling state is theirs (bug confirmation
+        // 2026-10-15 §5).
+        self.file = JSONSidecarFile(fileURL: fileURL, excludedFromBackup: true)
         self.now = now
         load()
     }
@@ -114,19 +117,6 @@ public final class FriendStateCache {
         save()
     }
 
-    /// Wraps a `Decodable` so a single element that fails to decode becomes `nil` instead of throwing and
-    /// taking the whole array down with it (freeze/park convention — one unknown row must not wipe the
-    /// cache; e.g. a future `FriendFuzzyState` case written by a newer build then read after a downgrade).
-    /// Wraps one element of a decoded array so a single undecodable element becomes `nil`
-    /// instead of failing the whole array.
-    ///
-    /// `nonisolated` (like ``PersistedState``) so its hand-written `Decodable` conformance is
-    /// usable from the nonisolated decode path.
-    private nonisolated struct Lenient<T: Decodable>: Decodable {
-        let value: T?
-        init(from decoder: Decoder) throws { value = try? T(from: decoder) }
-    }
-
     /// Versioned on-disk shape; decodes rows leniently so one bad element never drops the file.
     ///
     /// `nonisolated` so its hand-written `Decodable` conformance stays usable from the
@@ -138,8 +128,10 @@ public final class FriendStateCache {
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
-            // Per-row tolerant: skip any undecodable row, keep the rest.
-            states = (try c.decodeIfPresent([Lenient<CachedFriendState>].self, forKey: .states) ?? [])
+            // Per-row tolerant (freeze/park — one unknown row must not wipe the cache; e.g. a future
+            // `FriendFuzzyState` case written by a newer build then read after a downgrade): skip any
+            // undecodable row, keep the rest.
+            states = (try c.decodeIfPresent([LenientSidecarRow<CachedFriendState>].self, forKey: .states) ?? [])
                 .compactMap { $0.value }
         }
     }

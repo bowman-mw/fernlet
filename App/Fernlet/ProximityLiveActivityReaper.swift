@@ -31,10 +31,14 @@ import Foundation
 /// renders); this declaration is how the app reaps an activity one of its earlier builds requested
 /// under ProximityKit's identical type, which lived there until plan step A0.6.
 /// `FernletFeatureGoldenTests` pins its unqualified name and its stored shape.
-struct ProximityConnectionActivityAttributes: ActivityAttributes {
+///
+/// `nonisolated`, with its content state, so the target's default main-actor isolation does not
+/// make its `ActivityAttributes` conformance an isolated one: ActivityKit enumerates and ends
+/// activities from `@concurrent` code, where newer Xcode refuses an isolated conformance.
+nonisolated struct ProximityConnectionActivityAttributes: ActivityAttributes {
     /// The mutable half of the Live Activity: running byte counters and a status word. Only the
     /// reaper writes one now, and only ever `"Ended"`.
-    struct ContentState: Codable, Hashable {
+    nonisolated struct ContentState: Codable, Hashable {
         var bytesSent: Int
         var bytesReceived: Int
         var status: String

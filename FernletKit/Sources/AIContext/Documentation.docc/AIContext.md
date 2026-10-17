@@ -105,9 +105,15 @@ separate display property in the UI layer and leave the token alone.
 
 ### Device capability
 
+The provider also names, for display, why the on-device model cannot run when it cannot
+(``OnDeviceModelAvailability``): the app's Settings "Today" row shows that reason ahead of the effective
+status, whose counter never moves on a device that cannot run the model (2026-10-16). Routing reads
+only ``AIDeviceCapability``.
+
 - ``AIDeviceCapability``
 - ``AIDeviceCapabilityProviding``
 - ``StaticAIDeviceCapabilityProvider``
+- ``OnDeviceModelAvailability``
 
 ### Daily call budget
 

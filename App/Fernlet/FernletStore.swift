@@ -107,6 +107,12 @@ final class FernletStore {
     var effectiveAIStatus: AIStatus {
         AIStatusOverlay.effectiveStatus(intent: settings.aiStatus, quota: aiCallQuotaStore.currentQuota())
     }
+    /// What Settings says about the helper today: `effectiveAIStatus`, unless this iPhone cannot run the
+    /// on-device model, when it says why (`AIStatusPresentation`). Read this for the AI status label and
+    /// voice line, never `effectiveAIStatus` alone — its counter never moves on an incapable device.
+    var aiStatusPresentation: AIStatusPresentation {
+        AIStatusPresentation(effective: effectiveAIStatus, availability: aiCapabilityProvider.onDeviceAvailability)
+    }
     var recentMeals: [Meal] {
         get { diary.recentMeals }
         set { diary.recentMeals = newValue }
@@ -342,8 +348,9 @@ final class FernletStore {
     /// Reports which AI rungs this device can physically reach (the cloud rungs report `false` on this
     /// SDK). Built by `FernletAIComposition` — the concrete provider type is named ONLY in that helper
     /// file, never here, so this store (which references many sealed `Private*` stores) is not flagged
-    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device.
-    @ObservationIgnored private(set) lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
+    /// AI-facing by the S3 grep-wall. Injectable so a test can simulate an incapable device: the setter
+    /// is internal for that, and nothing in the app assigns it.
+    @ObservationIgnored lazy var aiCapabilityProvider: AIDeviceCapabilityProviding = FernletAIComposition.defaultCapabilityProvider()
     /// The routing gate every AI call site funnels through — the capability-capped `FernletModelRouter`
     /// plus the device-local quota store plus the *current* stored AI intent. Rebuilt on each read so a
     /// mid-session AI toggle is always reflected, and so the effective status is derived from the live
@@ -472,10 +479,13 @@ final class FernletStore {
     /// The opt-in own-photo escrow backup (security-hardening Phase 5, step 5b) — the sanctioned
     /// cross-device route for meal / recipe / progress photos once their key is device-bound.
     /// Owns its own store instances over `photoDocumentsDirectory`; see `OwnPhotoBackupCoordinator`.
-    @ObservationIgnored private lazy var ownPhotoBackupCoordinator = OwnPhotoBackupCoordinator(
-        host: self,
-        documentsDirectory: photoDocumentsDirectory
-    )
+    @ObservationIgnored private lazy var ownPhotoBackupCoordinator = ownPhotoBackupCoordinatorFactory?(self)
+        ?? OwnPhotoBackupCoordinator(host: self, documentsDirectory: photoDocumentsDirectory)
+    /// Builds ``ownPhotoBackupCoordinator`` over this store. Nil in production, where the coordinator
+    /// gets the real identity, CloudKit and `UserDefaults.standard`; a test sets it BEFORE the first
+    /// photo-backup call, to drive the store's own enable, Retry and wipe legs over a mock record
+    /// database (bug confirmation 2026-10-15 §1).
+    @ObservationIgnored var ownPhotoBackupCoordinatorFactory: ((FernletStore) -> OwnPhotoBackupCoordinator)?
     @ObservationIgnored private lazy var snapshotSaveCoordinator = SnapshotSaveCoordinator(
         repository: diary.repository,
         buildSnapshot: { [unowned self] in self.currentSnapshot() },
@@ -2642,8 +2652,10 @@ final class FernletStore {
         await mealResolutionService.resolveMeals(from: description, type: type, date: date)
     }
 
-    /// Commits a resolved meal set to the diary: registers any created recipes, appends each meal,
-    /// and queues a background AI retry for fabricated fallback meals.
+    /// Commits a resolved meal set to the diary: mints the recipes the person confirmed in the pre-log
+    /// review (`createdRecipes`, which only the review fills), appends each meal, and queues a background
+    /// AI retry for fabricated fallback meals. A resolution's OFFERED recipes (`suggestedRecipe`,
+    /// `offeredRecipes`) are never minted here, so an auto-commit or a background retry adds no recipe.
     @discardableResult func commitResolution(_ resolution: MealResolution, date: String? = nil) -> [Meal] {
         // Day-rollover safety: if the app has stayed resident across local midnight, advance the store's
         // notion of "today" BEFORE resolving the default date, so a meal committed just after midnight
@@ -4065,9 +4077,47 @@ final class FernletStore {
     /// renders nothing at all — for the life of the install.
     private(set) var ownPhotoBackupUploadFailed = false
 
+    /// Whether the last attempt to turn the own-photo backup ON failed — session state, like the
+    /// statuses around it (bug confirmation 2026-10-15 §1).
+    ///
+    /// A failed enable leaves the switch OFF, so the launch pass and the photo pass Retry used to run
+    /// both stop at the preference guard. Sharing `ownPhotoBackupUploadFailed` (the ENABLED route's
+    /// failure) made the banner promise "We'll keep trying, or tap Retry" over a route that was off,
+    /// and the Retry did nothing. With its own flag the banner names the failed enable, and Retry
+    /// re-runs the enable the user already consented to (``retrySealedBackups()``).
+    private(set) var ownPhotoBackupEnableFailed = false
+
     /// Records an own-photo backup pass's outcome (``OwnPhotoBackupContext``).
     func recordOwnPhotoBackupOutcome(_ outcome: SealedBackupRestoreOutcome) {
         ownPhotoBackupStatus = outcome
+    }
+
+    /// Records whether an attempt to turn the own-photo backup on succeeded. A failed one also drops
+    /// the statuses its pass recorded — an upload failure, an unread count, a restore outcome: they
+    /// describe a route that is off, and each invited a Retry its own pass could not run, so the
+    /// enable-failed line speaks for the route instead.
+    private func recordOwnPhotoBackupEnableAttempt(succeeded: Bool) {
+        ownPhotoBackupEnableFailed = !succeeded
+        guard !succeeded else { return }
+        ownPhotoBackupStatus = nil
+        recordOwnPhotoBackupUploadFailed(false)
+        recordOwnPhotoBackupVerifiedUnreadable(0)
+    }
+
+    /// Privacy & Data's Retry (bug confirmation 2026-10-15 §1). After a failed photo-backup enable the
+    /// switch is still off, so the photo pass ``restoreSealedBackupsIfNeeded(userInitiated:)`` runs
+    /// would stop at its preference guard and the tap would do nothing: Retry runs the payload backups'
+    /// retry, then re-runs the enable the user consented to.
+    ///
+    /// - Returns: the re-run enable's result when one ran — the caller persists the switch on `true`,
+    ///   exactly as the toggle does — else nil.
+    func retrySealedBackups() async -> Bool? {
+        guard ownPhotoBackupEnableFailed else {
+            await restoreSealedBackupsIfNeeded(userInitiated: true)
+            return nil
+        }
+        await sealedBackupCoordinator.restoreSealedBackupsIfNeeded(userInitiated: true)
+        return await setOwnPhotoBackupEnabled(true)
     }
 
     /// Records whether the own-photo backup's upload leg failed (``OwnPhotoBackupContext``).
@@ -4157,6 +4207,7 @@ final class FernletStore {
         if enabled { mirrorOwnPhotoBackupDebugState(passInFlight: true) }
         #endif
         let succeeded = await ownPhotoBackupCoordinator.setEnabled(enabled)
+        if enabled { recordOwnPhotoBackupEnableAttempt(succeeded: succeeded) }
         if succeeded && enabled {
             let outcome = OwnPhotoKeyBinder(
                 escrowRouteCommitted: OwnPhotoEscrowCommitLedger().isCommitted
@@ -4170,6 +4221,7 @@ final class FernletStore {
             // exists is a treadmill, not a status.
             recordOwnPhotoBackupUploadFailed(false)
             recordOwnPhotoBackupVerifiedUnreadable(0)
+            ownPhotoBackupEnableFailed = false
         }
         // Enabling may have healed and latched (the enable pass runs through the migration
         // wrapper); disabling tears the route down, which resets the latch.
@@ -5545,8 +5597,13 @@ final class FernletStore {
     /// the count is the growth cap; the servings/quantity bounds keep a hostile payload from turning
     /// every later macro computation into a nonsense (or non-finite) number.
     enum RecipeImportLimits {
-        /// Most ingredients one imported recipe may carry (extras are refused / dropped).
-        static let maxIngredients = 60
+        /// Most ingredients one imported recipe may carry (extras are refused / dropped): the wire
+        /// cap itself, which the editor (`RecipeLimits`), the decoders, the exchange validator and the
+        /// web importer all hold, so a recipe Fernlet lets anyone build or send is one it imports whole.
+        /// It was a second constant, 60, until 2026-10-16: a recipe of 61 to 100 ingredients was
+        /// refused by paste, a nearby `.local` share, a Messages card and a Shortcuts file, and a
+        /// nearby `.saved` share kept only its first 60 lines.
+        static let maxIngredients = SharedRecipeLimits.maxIngredients
         /// Most servings one imported recipe may claim.
         static let maxServings = 100
         /// Largest per-ingredient quantity accepted from a share.
@@ -5868,6 +5925,14 @@ final class FernletStore {
     /// reach the server by propagating over a session. Returns whether it cleared. Wired in `ContentView`
     /// (the store does not own a CloudKit service). Invoked only when `cloudCopyKept` is set.
     @ObservationIgnored var cloudCopyDeleteHook: (() async -> Bool)?
+    /// Asks iCloud which sealed backups it holds, by their commit records' existence
+    /// (`CloudKitDataService.sealedBackupPresence()`), so wipe leg 2 deletes what is THERE and not only
+    /// what this install's switches name (bug confirmation 2026-10-15 §2): the switches are device-only,
+    /// so a new iPhone's start off and the old phone's backups survived its "delete everything". Wired in
+    /// `ContentView`. Nil (an unwired test store) finds nothing, and so does a probe that throws — the
+    /// switches still drive their legs, and with no iCloud account there is no private database to hold
+    /// a backup.
+    @ObservationIgnored var sealedBackupPresenceHook: (@MainActor () async throws -> SealedBackupPresence)?
     /// Deletes the LEGACY direct-CloudKit records — the record types written by builds that talked to
     /// CloudKit themselves rather than through `NSPersistentCloudKitContainer`.
     ///
@@ -5974,6 +6039,29 @@ final class FernletStore {
     /// `sealedBackupDeferralPersistHook`: the preferences store is app-scoped. Unwired (tests), the
     /// marker simply stays set and the next pass re-runs an idempotent delete.
     @ObservationIgnored var retiredSealedBackupClearedHook: ((SealedBackupPayloadType) -> Void)?
+
+    /// The Sealed backups wipe leg 2 deletes: each payload this install's switches say may have a copy
+    /// up there, and each payload iCloud was found to hold whatever the switches say (bug confirmation
+    /// 2026-10-15 §2). A pure function of its two inputs.
+    static func sealedBackupPayloadsToDelete(
+        preferences: StoragePreferences,
+        found: SealedBackupPresence
+    ) -> [SealedBackupPayloadType] {
+        SealedBackupPayloadType.allCases.filter { hasSealedBackup($0, preferences) || found.payloads.contains($0) }
+    }
+
+    /// Wipe leg 2's probe through ``sealedBackupPresenceHook``: what iCloud holds, or nothing found when
+    /// the hook is unwired or the probe throws (audited, never fatal — the switches still drive their
+    /// legs).
+    private func sealedBackupsFoundInICloud() async -> SealedBackupPresence {
+        guard let probe = sealedBackupPresenceHook else { return SealedBackupPresence() }
+        do {
+            return try await probe()
+        } catch {
+            FernletAuditLog.log("deleteAll.sealedBackupProbeFailed", context: ["errorType": "\(type(of: error))"])
+            return SealedBackupPresence()
+        }
+    }
 
     /// Whether a sealed backup of this payload may be uploaded — i.e. whether "delete everything" has
     /// anything to remove. Lives here rather than on `StoragePreferences` because that type is Layer 0
@@ -6189,17 +6277,20 @@ final class FernletStore {
         preferences: StoragePreferences,
         into outcome: inout DeleteAllOutcome
     ) async -> (sealedFailed: Bool, cloudCopyFailed: Bool) {
+        // What iCloud holds, whatever this install's switches say (bug confirmation 2026-10-15 §2).
+        let found = await sealedBackupsFoundInICloud()
         // Sealed iCloud backups, BEFORE the preference reset that would gate them off. Turning the
         // pref off only stops the restore while it stays off; the CKRecords survive and re-appear the
         // moment the user re-enables the backup — a wipe the user's own journal outlives. Disabling
         // deletes the chunk set for real, and needs no escrow key, so it works while locked.
         //
-        // Only backups the user actually ENABLED are touched. `setSealedBackupEnabled(false,…)` returns
-        // false when there is no provisioned identity — the common case for someone who never used
-        // proximity — so attempting it unconditionally would report a failure to delete a backup that
-        // was never uploaded, on the one dialog whose whole value is that its promises are true.
+        // Only backups the user actually ENABLED, or that iCloud was FOUND to hold, are touched.
+        // `setSealedBackupEnabled(false,…)` returns false when there is no provisioned identity — the
+        // common case for someone who never used proximity — so attempting it unconditionally would
+        // report a failure to delete a backup that was never uploaded, on the one dialog whose whole
+        // value is that its promises are true.
         var sealedBackupDeleteFailed = false
-        for payloadType in SealedBackupPayloadType.allCases where Self.hasSealedBackup(payloadType, preferences) {
+        for payloadType in Self.sealedBackupPayloadsToDelete(preferences: preferences, found: found) {
             if await !setSealedBackupEnabled(false, payloadType: payloadType) {
                 sealedBackupDeleteFailed = true
                 if !outcome.incompleteStores.contains("your encrypted iCloud backup") {
@@ -6213,8 +6304,11 @@ final class FernletStore {
         // BEFORE the preference reset that would gate it off, and before the local photo stores are
         // emptied further down — the records are addressed by corpus name, but the ENABLE flag is
         // what tells this funnel there is anything in iCloud to delete. Deletion is by record name,
-        // so it needs no escrow key and works while the app is locked.
-        if preferences.sealedBackupOwnPhotosEnabled {
+        // so it needs no escrow key and works while the app is locked. The upload ledger is asked too
+        // (bug confirmation 2026-10-15 §1): a FAILED enable can commit one corpus before another's
+        // upload fails, leaving records in iCloud while the switch reads off.
+        if preferences.sealedBackupOwnPhotosEnabled || ownPhotoBackupCoordinator.hasUploadedAnyCorpus
+            || !found.photoCorpora.isEmpty {
             if await !deleteOwnPhotoEscrowBackups() {
                 sealedBackupDeleteFailed = true
                 if !outcome.incompleteStores.contains("your encrypted iCloud backup") {

@@ -5188,10 +5188,12 @@ extension FernletFeatureGoldenTests {
     }
 
     /// Saves `state` through a JSON sidecar over `fileURL`: today FernletSocial's `JSONSidecarFile` (its
-    /// internal `init(fileURL:)` and `save(_:)`), ProximityKit's package type until plan step A0.5.11
-    /// moved it whole; re-pointed only in its import, through `@testable import FernletSocial`.
+    /// internal `init(fileURL:excludedFromBackup:)` and `save(_:)`), ProximityKit's package type until
+    /// plan step A0.5.11 moved it whole; re-pointed only in its import, through `@testable import
+    /// FernletSocial`. Not excluded from backup: the cells pin the failing stages' audit lines, which
+    /// the exclusion (bug confirmation 2026-10-15 §5) neither writes nor reaches on a failed save.
     static func saveSidecar<State: Codable>(_ state: State, to fileURL: URL) {
-        JSONSidecarFile<State>(fileURL: fileURL).save(state)
+        JSONSidecarFile<State>(fileURL: fileURL, excludedFromBackup: false).save(state)
     }
 
     /// Delivers a `type` frame to `manager` from a committed slot whose peer the transport never

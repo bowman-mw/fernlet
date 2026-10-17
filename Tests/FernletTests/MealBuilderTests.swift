@@ -46,7 +46,7 @@ struct MealBuilderTests {
             foodItems: [turkey, bread]
         ))
 
-        #expect(result.createdRecipes.isEmpty)
+        #expect(result.offeredRecipes.isEmpty)
         #expect(result.meals.count == 1)
         let meal = try #require(result.meals.first)
         #expect(meal.name == "Turkey Sandwich")
@@ -54,7 +54,10 @@ struct MealBuilderTests {
         #expect(meal.source == MealLogSource.manual)
     }
 
-    @Test func multipleResolvedIngredientsCreateRecipeAndRecipeMeal() throws {
+    /// Several foods backing one item log as the matched foods they are and OFFER the recipe they make;
+    /// nothing claims a recipe the person never saved (bug confirmation 2026-10-15, food-ai §4 — this
+    /// cell pinned `.recipe` and a created recipe until 2026-10-16).
+    @Test func multipleResolvedIngredientsOfferARecipeAndLogTheMatchedFoods() throws {
         let oats = foodItem(name: "Oats", source: .manual, macros: Macros(protein: 5, carbs: 27, fat: 3))
         let yogurt = foodItem(name: "Greek yogurt", source: .manual, macros: Macros(protein: 18, carbs: 6, fat: 0))
         let candidates = [
@@ -82,14 +85,16 @@ struct MealBuilderTests {
             foodItems: [oats, yogurt]
         ))
 
-        #expect(result.createdRecipes.count == 1)
-        let createdRecipe = try #require(result.createdRecipes.first)
-        #expect(createdRecipe.name == "Oats Yogurt")
-        #expect(createdRecipe.source == "meal-log")
-        #expect(createdRecipe.ingredients.count == 2)
+        #expect(result.offeredRecipes.count == 1)
+        let offeredRecipe = try #require(result.offeredRecipes.first)
+        #expect(offeredRecipe.name == "Oats Yogurt")
+        #expect(offeredRecipe.source == "meal-log")
+        #expect(offeredRecipe.ingredients.count == 2)
         #expect(result.meals.count == 1)
         let meal = try #require(result.meals.first)
-        #expect(meal.mealSource == .recipe)
+        #expect(meal.mealSource == .manual)
+        #expect(meal.confidence == MealConfidence.foodMatch.token)
+        #expect(meal.name == "Oats Yogurt")
         #expect(meal.macros == Macros(protein: 23, carbs: 33, fat: 3))
     }
 
@@ -114,7 +119,7 @@ struct MealBuilderTests {
             foodItems: [banana]
         ))
 
-        #expect(result.createdRecipes.isEmpty)
+        #expect(result.offeredRecipes.isEmpty)
         #expect(result.meals.count == 1)
         let meal = try #require(result.meals.first)
         #expect(meal.mealSource == .manual)
@@ -420,10 +425,10 @@ struct MealBuilderTests {
             foodItems: [bread, cheese]
         ))
 
-        #expect(result.createdRecipes.count == 1)
-        let createdRecipe = try #require(result.createdRecipes.first)
-        #expect(createdRecipe.ingredients.count == 2)
-        #expect(Set(createdRecipe.ingredients.map(\.foodItemId)) == Set([bread.id, cheese.id]))
+        #expect(result.offeredRecipes.count == 1)
+        let offeredRecipe = try #require(result.offeredRecipes.first)
+        #expect(offeredRecipe.ingredients.count == 2)
+        #expect(Set(offeredRecipe.ingredients.map(\.foodItemId)) == Set([bread.id, cheese.id]))
     }
 
     @Test func grilledCheeseAcceptsBreadOrSourdoughIngredientsAsRelevant() throws {
@@ -447,7 +452,7 @@ struct MealBuilderTests {
             foodItems: [sourdough]
         ))
 
-        #expect(result.createdRecipes.isEmpty)
+        #expect(result.offeredRecipes.isEmpty)
         #expect(result.meals.count == 1)
         let meal = try #require(result.meals.first)
         #expect(meal.mealSource == .manual)

@@ -19,8 +19,10 @@ enum RecipeLimits {
     /// Largest pasted share text accepted, in UTF-8 bytes — the paste path's frame bound (the mesh
     /// path is bounded by `SealedPayloadFraming` instead).
     static let maxShareTextUTF8Bytes = 64 * 1024
-    /// Largest ingredient count in one recipe (each imported ingredient persists one `FoodItem`).
-    static let maxIngredients = 100
+    /// Largest ingredient count in one recipe (each imported ingredient persists one `FoodItem`). The
+    /// wire's cap, `SharedRecipeLimits.maxIngredients`, which every import path holds as well
+    /// (`FernletStore.RecipeImportLimits`), so the editor can never build a recipe an import refuses.
+    static let maxIngredients = SharedRecipeLimits.maxIngredients
     /// Largest cooking-step count in one recipe.
     static let maxSteps = 60
     /// Largest recipe name, in characters.

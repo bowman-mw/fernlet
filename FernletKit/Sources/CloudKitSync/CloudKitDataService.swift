@@ -4,13 +4,56 @@ import FernletFoundation
 import Foundation
 import FernletDomainModel
 
+/// Which sealed backups an iCloud account holds, found by their commit records' EXISTENCE alone — a
+/// Sealed backup's head (`sealed-backup.<payload>`) and an own-photo corpus's manifest
+/// (`sealed-photo.<corpus>.manifest`), fetched by name with no field or asset downloaded and nothing
+/// opened (bug confirmation 2026-10-15 §2).
+///
+/// The question a new iPhone could not ask: whether to turn a backup on is a device-only keychain
+/// preference, so a fresh install starts with every switch off and nothing ever asked the cloud
+/// whether a backup was there — "Restore from iCloud" brought the day rows back and said nothing of the
+/// journal text, cycle notes, intimate logs and photos still sealed in iCloud. Onboarding's storage step
+/// and Privacy & Data now say so, and "delete everything" deletes what this finds whatever this
+/// install's switches say.
+public struct SealedBackupPresence: Equatable {
+    /// The payloads whose Sealed backup head exists — the retired `.sensitiveNotes` included, which a
+    /// wipe still deletes but nothing restores (see ``restorablePayloads``).
+    public var payloads: Set<SealedBackupPayloadType>
+    /// The own-photo corpora with a committed manifest.
+    public var photoCorpora: Set<SealedPhotoCorpus>
+
+    public init(payloads: Set<SealedBackupPayloadType> = [], photoCorpora: Set<SealedPhotoCorpus> = []) {
+        self.payloads = payloads
+        self.photoCorpora = photoCorpora
+    }
+
+    /// The found payloads a switch can restore: every one but the retired `.sensitiveNotes`, which is
+    /// never sealed or restored again — only deleted.
+    public var restorablePayloads: Set<SealedBackupPayloadType> {
+        payloads.subtracting([.sensitiveNotes])
+    }
+
+    /// Whether anything was found that a switch on this device would restore.
+    public var offersRestore: Bool {
+        !restorablePayloads.isEmpty || !photoCorpora.isEmpty
+    }
+
+    /// Whether nothing at all was found.
+    public var isEmpty: Bool {
+        payloads.isEmpty && photoCorpora.isEmpty
+    }
+}
+
 /// Per-store counts of Fernlet data already present in the user's iCloud private database.
 ///
 /// Produced by ``CloudKitDataService``'s `detectExistingData()` on the rare detection paths
 /// (onboarding, the disable-sync flow) and consumed via `hasData` by ``MultiDeviceSyncWarning``
 /// to decide whether "another device already wrote cloud data" should be surfaced. Aggregate-blob
 /// counts come from the blob's bounded `dayContentSummary`; the per-row stores (custom items,
-/// coin ledger, day rows) are counted directly because the blob cannot see them.
+/// coin ledger, day rows) are counted directly because the blob cannot see them. The sealed backups
+/// the account holds ride beside the counts (``sealedBackups``) and are deliberately NOT part of
+/// ``hasData``: they are not day data that a sync would merge, and they restore through their own
+/// switches.
 public struct ExistingDataSummary: Equatable {
     public var mealLogCount: Int
     public var journalEntryCount: Int
@@ -26,6 +69,9 @@ public struct ExistingDataSummary: Equatable {
     public var customItemCount: Int
     public var coinLedgerCount: Int
     public var dayRecordCount: Int
+    /// The sealed backups the account holds (bug confirmation 2026-10-15 §2) — what onboarding and
+    /// Privacy & Data offer to restore.
+    public var sealedBackups: SealedBackupPresence
 
     public init(
         mealLogCount: Int,
@@ -36,7 +82,8 @@ public struct ExistingDataSummary: Equatable {
         sleepRecordCount: Int,
         customItemCount: Int = 0,
         coinLedgerCount: Int = 0,
-        dayRecordCount: Int = 0
+        dayRecordCount: Int = 0,
+        sealedBackups: SealedBackupPresence = SealedBackupPresence()
     ) {
         self.mealLogCount = mealLogCount
         self.journalEntryCount = journalEntryCount
@@ -47,6 +94,7 @@ public struct ExistingDataSummary: Equatable {
         self.customItemCount = customItemCount
         self.coinLedgerCount = coinLedgerCount
         self.dayRecordCount = dayRecordCount
+        self.sealedBackups = sealedBackups
     }
 
     /// True when any counted store holds at least one record — the signal the multi-device warning keys on.
@@ -54,6 +102,11 @@ public struct ExistingDataSummary: Equatable {
         mealLogCount > 0 || journalEntryCount > 0 || workoutCount > 0 ||
         hygieneLogCount > 0 || hydrationLogCount > 0 || sleepRecordCount > 0 ||
         customItemCount > 0 || coinLedgerCount > 0 || dayRecordCount > 0
+    }
+
+    /// True when the account holds any sealed backup or photo backup (``sealedBackups``).
+    public var hasSealedBackup: Bool {
+        !sealedBackups.isEmpty
     }
 
     /// Accumulates another summary's counts into this one (used to fold multiple aggregate records together).
@@ -67,6 +120,8 @@ public struct ExistingDataSummary: Equatable {
         customItemCount += other.customItemCount
         coinLedgerCount += other.coinLedgerCount
         dayRecordCount += other.dayRecordCount
+        sealedBackups.payloads.formUnion(other.sealedBackups.payloads)
+        sealedBackups.photoCorpora.formUnion(other.sealedBackups.photoCorpora)
     }
 
     /// A summary with every count at zero — the accumulator seed for detection.
@@ -326,9 +381,11 @@ public final class CloudKitDataService {
     ///
     /// Reads the aggregate blob's precomputed `dayContentSummary` (falling back to the blob's
     /// legacy `days`/derived tables for un-migrated blobs), then directly counts the per-row
-    /// stores the blob can't see. Runs only on the rare onboarding/settings detection paths.
+    /// stores the blob can't see, then asks which sealed backups exist
+    /// (``sealedBackupPresence()``). Runs only on the rare onboarding/settings detection paths.
     ///
-    /// - Returns: the summary when any data exists, or `nil` when the account is clean.
+    /// - Returns: the summary when any data or any sealed backup exists, or `nil` when the account is
+    ///   clean.
     /// - Throws: ``CloudKitDataServiceError/notSignedIn`` without an available account, or
     ///   ``CloudKitDataServiceError/cloudKitOperationFailed(_:)`` wrapping any CloudKit error.
     public func detectExistingData() async throws -> ExistingDataSummary? {
@@ -372,9 +429,12 @@ public final class CloudKitDataService {
             for type in ["CD_DayRecord", "DayRecord"] {
                 summary.dayRecordCount += try await countRecords(type: type, in: zoneIDs)
             }
+            summary.sealedBackups = try await sealedBackupPresence()
 
             FernletAuditLog.log("cloudkit.detect.completed", context: [
                 "hasData": summary.hasData ? "true" : "false",
+                "sealedBackups": "\(summary.sealedBackups.payloads.count)",
+                "photoBackups": "\(summary.sealedBackups.photoCorpora.count)",
                 "mealLogs": "\(summary.mealLogCount)",
                 "journalEntries": "\(summary.journalEntryCount)",
                 "workouts": "\(summary.workoutCount)",
@@ -385,7 +445,7 @@ public final class CloudKitDataService {
                 "coinLedger": "\(summary.coinLedgerCount)",
                 "dayRecords": "\(summary.dayRecordCount)"
             ])
-            return summary.hasData ? summary : nil
+            return summary.hasData || summary.hasSealedBackup ? summary : nil
         } catch let error as CloudKitDataServiceError {
             FernletAuditLog.log("cloudkit.detect.failed", context: ["error": error.auditValue])
             throw error
@@ -394,6 +454,47 @@ public final class CloudKitDataService {
             FernletAuditLog.log("cloudkit.detect.failed", context: ["error": mapped.auditValue])
             throw mapped
         }
+    }
+
+    /// Which sealed backups this account holds — every payload's Sealed backup head and every own-photo
+    /// corpus's manifest, each fetched by its deterministic name through
+    /// ``CloudKitRecordDatabase/existingRecordIDs(_:)``: no field or asset is downloaded, nothing is
+    /// opened, and no query index is involved (bug confirmation 2026-10-15 §2).
+    ///
+    /// - Throws: ``CloudKitDataServiceError/notSignedIn`` without an available account, or the
+    ///   underlying CloudKit error for anything but a missing record.
+    public func sealedBackupPresence() async throws -> SealedBackupPresence {
+        try await ensureSignedIn()
+        var presence = SealedBackupPresence()
+        // R2: bounded by the four payload cases and the three corpora.
+        for payload in SealedBackupPayloadType.allCases {
+            if try await recordExists(sealedBackupRecordID(payloadType: payload)) { presence.payloads.insert(payload) }
+        }
+        for corpus in SealedPhotoCorpus.allCases {
+            if try await recordExists(sealedPhotoRecordID(corpus: corpus, slot: .manifest)) {
+                presence.photoCorpora.insert(corpus)
+            }
+        }
+        return presence
+    }
+
+    /// Whether one record exists, by name. A missing record answers false whichever way CloudKit says
+    /// so — a bare `unknownItem`, or a fetch's `partialFailure` whose every item is `unknownItem`.
+    private func recordExists(_ recordID: CKRecord.ID) async throws -> Bool {
+        do {
+            return try await !database.existingRecordIDs([recordID]).isEmpty
+        } catch let error as CKError where Self.isMissingRecord(error) {
+            return false
+        }
+    }
+
+    /// Whether `error` says only that the fetched records do not exist.
+    nonisolated static func isMissingRecord(_ error: CKError) -> Bool {
+        guard error.code != .unknownItem else { return true }
+        guard error.code == .partialFailure, let partial = error.partialErrorsByItemID, !partial.isEmpty else {
+            return false
+        }
+        return partial.values.allSatisfy { ($0 as? CKError)?.code == .unknownItem }
     }
 
     /// Deletes every Fernlet record from the private database, across all zones and record types.

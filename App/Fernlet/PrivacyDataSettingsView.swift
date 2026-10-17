@@ -849,6 +849,7 @@ struct PrivacyDataSettingsView: View {
                 .font(.fernlet(.bodySmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
+            foundBackupLines
 
             // Beneath the switches themselves, not at the far bottom of the page.
             operationErrorLine(.iCloud)
@@ -856,6 +857,32 @@ struct PrivacyDataSettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// The sealed backups iCloud was found to hold (`ExistingDataSummary.sealedBackups`) whose switch on
+    /// this iPhone is off — one line each, saying how to restore it (bug confirmation 2026-10-15 §2).
+    /// Every switch is a device-only preference, so on a new iPhone they all start off and nothing else
+    /// says the old phone's journal, cycle notes, intimate logs or photos are waiting in iCloud.
+    @ViewBuilder
+    private var foundBackupLines: some View {
+        let found = existingDataSummary?.sealedBackups ?? SealedBackupPresence()
+        let preferences = storagePreferencesStore.preferences
+        ForEach(SealedBackupBookkeeping.v2Payloads.filter {
+            found.restorablePayloads.contains($0) && !preferences.isSealedBackupEnabled(for: $0)
+        }, id: \.self) { payload in
+            Text("Found an encrypted \(payload.displayNoun) backup in iCloud. To restore it to this iPhone, turn on its switch above with Sync to iCloud on.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.found.\(payload.rawValue)")
+        }
+        if !found.photoCorpora.isEmpty, !preferences.sealedBackupOwnPhotosEnabled {
+            Text("Found an encrypted photo backup in iCloud. To restore your photos to this iPhone, turn on the photo backup above.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.bark)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.found.ownPhotos")
+        }
     }
 
     /// The delete-the-iCloud-copy control, sized to what is actually up there.
@@ -1158,16 +1185,17 @@ struct PrivacyDataSettingsView: View {
             || store.journalBackupRowState != .none || store.intimacyBackupRowState != .none
             || !sealedBackupAttentionItems.isEmpty || !sealedBackupDisableFailures.isEmpty
             || ownPhotoAttention != nil || ownPhotoBackupDisableFailed
-            || store.ownPhotoBackupUploadFailed
+            || store.ownPhotoBackupEnableFailed || store.ownPhotoBackupUploadFailed
             || store.ownPhotoBackupVerifiedUnreadable > 0
             || showsHashMigrationPending
     }
 
-    /// The own-photo backup's status lines: a failed upload, an unclean verification, a failed
-    /// disable-delete, a restore outcome that needs attention, and the Phase 2.1 format-check
+    /// The own-photo backup's status lines: a failed enable or upload, an unclean verification, a
+    /// failed disable-delete, a restore outcome that needs attention, and the Phase 2.1 format-check
     /// nudge (pending, or blocked by another device's entries).
     @ViewBuilder
     private var ownPhotoStatusLines: some View {
+        ownPhotoEnableFailedLine
         if let store, store.ownPhotoBackupUploadFailed {
             // An UPLOAD failure, which the restore vocabulary cannot express: a device that has
             // photos never takes the restore path at all, so without this line a pass in which
@@ -1243,6 +1271,20 @@ struct PrivacyDataSettingsView: View {
                     .fernletWrappingText()
                     .accessibilityIdentifier("privacy.sealedBackup.formatCheckPending")
             }
+        }
+    }
+
+    /// A FAILED enable (bug confirmation 2026-10-15 §1). The switch stayed off, so nothing retries by
+    /// itself — no "we'll keep trying" — and the Retry beside it re-runs the enable the user consented
+    /// to (`FernletStore.retrySealedBackups`), not the ordinary pass that stops at the off switch.
+    @ViewBuilder
+    private var ownPhotoEnableFailedLine: some View {
+        if let store, store.ownPhotoBackupEnableFailed {
+            Text("Couldn't turn on your encrypted photo backup, so it's still off and your photos aren't in iCloud. Tap Retry to try again.")
+                .font(.fernlet(.bodySmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+                .accessibilityIdentifier("privacy.sealedBackup.ownPhotosEnableFailed")
         }
     }
 
@@ -1658,6 +1700,8 @@ struct PrivacyDataSettingsView: View {
             // restore, for the ids a partial restore left owed (the repair pass), and
             // for a failed upload.
             || (ownPhotoAttention?.isRetryable ?? false)
+            // A failed enable: Retry re-runs the enable (`FernletStore.retrySealedBackups`).
+            || store.ownPhotoBackupEnableFailed
             || store.ownPhotoBackupUploadFailed
             // A committed-but-not-clean verification pass: Retry runs a FULL pass, which re-reads
             // every photo — the one remedy for "couldn't read N of your photos to verify".
@@ -1730,10 +1774,14 @@ struct PrivacyDataSettingsView: View {
         isRetryingRestore = true
         // `userInitiated` asks the Sealed backup v2 engine for an ambient pass of every payload (the
         // owner hold, E1 and every gate honoured; a no-op while Private is closed) and makes the photo
-        // pass a full one.
+        // pass a full one — or, after a failed photo-backup enable, re-runs that enable, whose result
+        // persists the switch exactly as the toggle's would.
         Task {
-            await store.restoreSealedBackupsIfNeeded(userInitiated: true)
-            await MainActor.run { isRetryingRestore = false }
+            let enableRetried = await store.retrySealedBackups()
+            await MainActor.run {
+                if let enableRetried { finishOwnPhotoBackupApply(enabled: true, ok: enableRetried) }
+                isRetryingRestore = false
+            }
         }
     }
 
@@ -2116,29 +2164,33 @@ struct PrivacyDataSettingsView: View {
         }
         Task {
             let ok = await store.setOwnPhotoBackupEnabled(enabled)
-            await MainActor.run {
-                if ok {
-                    storagePreferencesStore.update { $0.sealedBackupOwnPhotosEnabled = enabled }
-                    ownPhotoBackupDisableFailed = false
-                } else if !enabled {
-                    // Same rule as the payload toggles: a failed delete keeps the preference ON so
-                    // the surviving records stay targetable by a retry (and by "delete everything"),
-                    // and the banner says so instead of the failure hiding behind an off switch.
-                    ownPhotoBackupDisableFailed = true
-                    FernletAuditLog.log("privacy.sealedBackup.disableFailed", context: ["payload": "ownPhotos"])
-                } else {
-                    // A FAILED enable. The preference stays off, so the switch the user just
-                    // consented to (size + binding disclosures) snaps back — say why instead of
-                    // letting it look like a switch that refuses to move.
-                    setOperationError(
-                        String(localized: "privacy.error.enablePhotoBackup",
-                               defaultValue: "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
-                               comment: "Shown and spoken when enabling the encrypted photo backup fails."),
-                        scope: .iCloud
-                    )
-                    FernletAuditLog.log("privacy.sealedBackup.enableFailed", context: ["payload": "ownPhotos"])
-                }
-            }
+            await MainActor.run { finishOwnPhotoBackupApply(enabled: enabled, ok: ok) }
+        }
+    }
+
+    /// Persists the photo-backup switch after the store's enable/disable answered `ok` — the toggle's
+    /// path and Retry's re-run of a failed enable (bug confirmation 2026-10-15 §1) end here alike.
+    private func finishOwnPhotoBackupApply(enabled: Bool, ok: Bool) {
+        if ok {
+            storagePreferencesStore.update { $0.sealedBackupOwnPhotosEnabled = enabled }
+            ownPhotoBackupDisableFailed = false
+        } else if !enabled {
+            // Same rule as the payload toggles: a failed delete keeps the preference ON so
+            // the surviving records stay targetable by a retry (and by "delete everything"),
+            // and the banner says so instead of the failure hiding behind an off switch.
+            ownPhotoBackupDisableFailed = true
+            FernletAuditLog.log("privacy.sealedBackup.disableFailed", context: ["payload": "ownPhotos"])
+        } else {
+            // A FAILED enable. The preference stays off, so the switch the user just
+            // consented to (size + binding disclosures) snaps back — say why instead of
+            // letting it look like a switch that refuses to move.
+            setOperationError(
+                String(localized: "privacy.error.enablePhotoBackup",
+                       defaultValue: "Couldn't turn on the encrypted photo backup. Check that iCloud is available and try again.",
+                       comment: "Shown and spoken when enabling the encrypted photo backup fails."),
+                scope: .iCloud
+            )
+            FernletAuditLog.log("privacy.sealedBackup.enableFailed", context: ["payload": "ownPhotos"])
         }
     }
 

@@ -9,7 +9,7 @@ import Testing
 import FernletDomainModel
 import PrivateStoreCore
 import PrivateHealthStore
-import CloudKitSync
+@testable import CloudKitSync
 @testable import Fernlet
 
 @MainActor
@@ -48,6 +48,53 @@ struct CloudKitDataServiceTests {
         let summary = try await service.detectExistingData()
 
         #expect(summary == nil)
+    }
+
+    /// Bug confirmation 2026-10-15 §2: an account holding only sealed backups — the journal's Sealed
+    /// backup and a committed meal-photo manifest, no day data at all — read as a clean account,
+    /// because detection counted every synced type and never `SealedBackupRecord` or
+    /// `SealedPhotoRecord`. A new iPhone then never offered the restore. The probe asks by name, so a
+    /// photo body without its corpus's manifest (an uncommitted upload) is not a backup.
+    @Test func detectionReportsTheSealedBackupsOfASealedOnlyAccount() async throws {
+        let database = MockCloudKitRecordDatabase()
+        let zoneID = CKRecordZone.ID(zoneName: "test-zone", ownerName: CKCurrentUserDefaultName)
+        database.recordsByType["SealedBackupRecord"] = [
+            record(type: "SealedBackupRecord", name: "sealed-backup.journalNarratives", zoneID: zoneID)
+        ]
+        database.recordsByType["SealedPhotoRecord"] = [
+            record(type: "SealedPhotoRecord", name: "sealed-photo.meal.manifest", zoneID: zoneID),
+            record(type: "SealedPhotoRecord", name: "sealed-photo.meal.\(UUID().uuidString)", zoneID: zoneID),
+            record(type: "SealedPhotoRecord", name: "sealed-photo.progress.\(UUID().uuidString)", zoneID: zoneID)
+        ]
+        let service = makeService(database: database, zoneID: zoneID)
+
+        let summary = try #require(try await service.detectExistingData(), "a sealed-only account read as clean")
+        #expect(!summary.hasData, "a sealed backup is not day data a sync would merge")
+        #expect(summary.sealedBackups.payloads == [.journalNarratives])
+        #expect(summary.sealedBackups.photoCorpora == [.meal])
+        #expect(summary.sealedBackups.offersRestore)
+    }
+
+    /// The retired sensitive-notes copy is found (a wipe deletes it) but offers no restore: nothing
+    /// seals or restores it again.
+    @Test func aRetiredPayloadAloneOffersNoRestore() {
+        let retiredOnly = SealedBackupPresence(payloads: [.sensitiveNotes])
+        #expect(!retiredOnly.isEmpty)
+        #expect(!retiredOnly.offersRestore)
+        #expect(SealedBackupPresence(photoCorpora: [.recipe]).offersRestore)
+    }
+
+    /// The probe fetches each name alone, and CloudKit says "no such record" two ways: a bare
+    /// `unknownItem`, or a fetch's `partialFailure` whose items are all `unknownItem`. Anything else is
+    /// a real failure the probe must not read as "absent".
+    @Test func onlyAMissingRecordReadsAsAbsent() {
+        let id = CKRecord.ID(recordName: "sealed-backup.periodData")
+        let missing = CKError(.partialFailure, userInfo: [CKPartialErrorsByItemIDKey: [id: CKError(.unknownItem)]])
+        let offline = CKError(.partialFailure, userInfo: [CKPartialErrorsByItemIDKey: [id: CKError(.networkFailure)]])
+        #expect(CloudKitDataService.isMissingRecord(CKError(.unknownItem)))
+        #expect(CloudKitDataService.isMissingRecord(missing))
+        #expect(!CloudKitDataService.isMissingRecord(offline))
+        #expect(!CloudKitDataService.isMissingRecord(CKError(.networkUnavailable)))
     }
 
     /// Stage B: once the per-row split clears the blob's `days`, detection reads the precomputed
