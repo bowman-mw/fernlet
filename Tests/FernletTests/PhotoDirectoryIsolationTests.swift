@@ -56,7 +56,7 @@ struct PhotoDirectoryIsolationTests {
     private static let appGroupRootedTriggers = [
         // Guided run — GuidedWorkoutRunState.json
         "guidedRunState", "startGuidedRun", "clearGuidedRun", "abandonGuidedRun",
-        "reconcileGuidedRunFromAppGroup", "guidedMarkSetDone", "guidedSkipRest",
+        "reconcileGuidedRunFromAppGroup", "guidedMarkSetDone", "guidedSkipRest", "guidedWorkoutRunAdvancedByIntent",
         "guidedSessionForResume", "activeGuidedRunBlockingStart", "GuidedWorkoutRunState",
         // Cooking run — CookingRunState.json
         "cookingRunState", "startCookingRun", "endCookingRun", "cookingAdvanceStep",

@@ -5066,6 +5066,11 @@ final class FernletStore {
     /// this brings the in-memory walker into step the moment the file is written, so an in-app "Next"
     /// can't land on stale state and clobber the intent's advance while the app is foregrounded.
     @ObservationIgnored private var cookingIntentObserver: NSObjectProtocol?
+    /// Observer token for `.guidedWorkoutRunAdvancedByIntent` — the guided twin of
+    /// ``cookingIntentObserver``, registered once in `activateWidgetBridge`. A guided-workout App
+    /// Intent ("Done set" / "Skip rest") mutates only the app-group file; this reconciles the in-app run
+    /// the moment it lands, so an in-app tap cannot write a stale run over the intent's set.
+    @ObservationIgnored private var guidedIntentObserver: NSObjectProtocol?
 
     /// Begin cooking a recipe step-by-step. Builds the run from the recipe's ordered steps, anchors it
     /// to the day the cook began (a long session can cross local midnight), mirrors it to the app group,
@@ -6907,13 +6912,21 @@ final class FernletStore {
     /// widget queued while the app was closed, and publishes the initial snapshot.
     func activateWidgetBridge() {
         ensureWidgetSnapshotMirror()
-        // Reconcile the cooking walker the instant an in-process App Intent (Live Activity "Next" / Siri)
-        // writes the advanced run, instead of only on the next scenePhase `.active`. Registered once.
+        // Reconcile the cooking walker and the guided run the instant an in-process App Intent (Live
+        // Activity "Next" / "Done set" / "Skip rest", or Siri) writes the advanced run, instead of only on
+        // the next scenePhase `.active`. Each is registered once.
         if cookingIntentObserver == nil {
             cookingIntentObserver = NotificationCenter.default.addObserver(
                 forName: .cookingRunAdvancedByIntent, object: nil, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated { self?.reconcileCookingRunFromAppGroup() }
+            }
+        }
+        if guidedIntentObserver == nil {
+            guidedIntentObserver = NotificationCenter.default.addObserver(
+                forName: .guidedWorkoutRunAdvancedByIntent, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reconcileGuidedRunFromAppGroup() }
             }
         }
         processPendingWidgetActions()

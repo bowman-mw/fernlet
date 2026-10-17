@@ -28,6 +28,18 @@
 
 import ActivityKit
 import AppIntents
+import Foundation
+
+extension Notification.Name {
+    /// Posted in the APP's process the instant a guided-workout App Intent (Live Activity "Done set" /
+    /// "Skip rest", or the same Siri phrases) writes the advanced run to the app group — the guided twin
+    /// of `.cookingRunAdvancedByIntent`. `perform()` runs in-process but mutates only the file and the
+    /// activity, so without this the in-app guided sheet catches up only on the next scenePhase
+    /// reconcile, and an in-app tap landing first writes its stale in-memory run over the file,
+    /// discarding the intent's set. `FernletStore` observes this and reconciles immediately. Harmless
+    /// in the widget process (no observer there).
+    static let guidedWorkoutRunAdvancedByIntent = Notification.Name("MBO.Fernlet.guidedWorkoutRunAdvancedByIntent")
+}
 
 /// "Done set" — completes the current set (starting the rest countdown, advancing the exercise, or
 /// finishing the workout, exactly like the in-app button).
@@ -69,7 +81,8 @@ struct GuidedWorkoutSkipRestIntent: LiveActivityIntent {
 
 /// Shared transition applier for the two guided-workout intents.
 ///
-/// Reads → mutates → writes the app-group run state via ``GuidedWorkoutRunStateStore``, then
+/// Reads → mutates → writes the app-group run state via ``GuidedWorkoutRunStateStore``, posts
+/// `.guidedWorkoutRunAdvancedByIntent` so the in-app guided sheet reconciles immediately, then
 /// reflects the result onto the activity through ``GuidedWorkoutActivityBridge``. Guarded on the
 /// expected phase so a double-tap or a tap that races the app's own transition changes nothing.
 ///
@@ -101,8 +114,12 @@ enum GuidedWorkoutIntentRunner {
 
     /// Complete the current set (rest / next exercise / finish, per the pure transition) and reflect
     /// the result onto the activity. Guarded on `.working`; any other phase reports `.wrongPhase`.
-    static func markSetDone() async -> Outcome {
-        let store = GuidedWorkoutRunStateStore()
+    ///
+    /// - Parameter directory: nil → the real app-group container. A test passes the directory its
+    ///   `FernletStore` reads, so the intent and the store share one isolated file (the cooking
+    ///   runner's seam).
+    static func markSetDone(directory: URL? = nil) async -> Outcome {
+        let store = GuidedWorkoutRunStateStore(directory: directory)
         guard var state = store.read() else { return .noRunInProgress }
         guard state.phase == .working else { return .wrongPhase }
         state.markSetDone(now: Date())
@@ -111,8 +128,10 @@ enum GuidedWorkoutIntentRunner {
 
     /// End the rest early and resume the next set, then reflect the result onto the activity.
     /// Guarded on `.resting`; any other phase reports `.wrongPhase`.
-    static func skipRest() async -> Outcome {
-        let store = GuidedWorkoutRunStateStore()
+    ///
+    /// - Parameter directory: Same test seam as ``markSetDone(directory:)``.
+    static func skipRest(directory: URL? = nil) async -> Outcome {
+        let store = GuidedWorkoutRunStateStore(directory: directory)
         guard var state = store.read() else { return .noRunInProgress }
         guard state.phase == .resting else { return .wrongPhase }
         state.skipRest()
@@ -164,6 +183,10 @@ enum GuidedWorkoutIntentRunner {
         // the store has already logged the failure, and the next tap retries from the real state.
         // The caller now hears about it too, instead of being told the tap worked.
         guard store.write(state) else { return .notSaved }
+        // Tell the app (same process) to reconcile its in-memory run NOW that the file is durable,
+        // before the activity await below gives an in-app tap a turn to write stale state over it —
+        // see `.guidedWorkoutRunAdvancedByIntent`.
+        NotificationCenter.default.post(name: .guidedWorkoutRunAdvancedByIntent, object: nil)
         await GuidedWorkoutActivityBridge.sync(to: state)
         return .applied(state.phase)
     }

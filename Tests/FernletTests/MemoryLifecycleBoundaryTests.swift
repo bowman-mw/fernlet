@@ -155,7 +155,7 @@ struct MemoryLifecycleBoundaryTests {
             invariant: "`PeriodTrackerStore` is ContentView's root `@State`, alive for the process; `legacyImportTask` is the held legacy cycle import (period-data design 2026-09-30, §8.4), which captures [weak self], is awaited to completion by `runLegacyImportIfNeeded` — a method of the store, so the store is held for the whole run and cannot be released under it — clears itself when it finishes, and is cancelled by `cancelBackgroundWriters()` in the first leg of \"Delete everything\"."),
         Exemption(
             rule: "ML2", path: "App/Fernlet/FernletStore.swift",
-            invariant: "The cooking-intent observer is installed once on the process-lifetime store and must outlive every scene; there is no earlier moment at which removing it would be correct."),
+            invariant: "The cooking-intent and guided-workout-intent observers are each installed once on the process-lifetime store and must outlive every scene; there is no earlier moment at which removing either would be correct."),
     ]
 
     // MARK: - Scan
