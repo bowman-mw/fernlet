@@ -46,7 +46,7 @@ Prototype implementation status as of 2026-05-28:
 - **A duress PIN with three configurable responses ships (2026-08-11, security-hardening P7 `d43bbce`).** Decoy, silent wipe, or recovery-lock; entry is indistinguishable from a normal unlock attempt (Section 2). The feature's existence is public; whether a given user configured one is not.
 - **Deletion semantics are tiered and audited (2026-08-10, security-hardening P1a `aaa4aac` + P1b `500cf5d`).** "Reset app lock" is fully honest crypto-erasure; "Delete everything" is bounded-honest and must never be called crypto-erasure; `Docs/PrivacyWipeCoverage.md` is the enforced ledger (Section 19, "Deleting Everything").
 - **Capture friction covers six Private-tab surfaces (2026-08-11, security-hardening P8 `2e6cadb`).** Friction against casual self-sharing, never a security control — described only in honest-limits voice (Section 15; Verifiability §5).
-- Mesh networking Phase 1 through group-encryption hardening are implemented: `MeshMultipeerSession`, `MeshNetworkManager`, admission tokens, open/closed mode, block model, `MeshAdmissionPromptSheet`, and `FriendListView` all exist. The legacy `MeshLobbyView` has been removed; the active flow is the single-Join `ConnectView` / `DisposableCameraView` surface.
+- Mesh networking Phase 1 through group-encryption hardening are implemented: `MeshMultipeerSession` (replaced by the QUIC radio `NetworkMeshSession` and deleted on 2026-09-22; the mesh now lives in the external ProximityKit package), `MeshNetworkManager`, admission tokens, open/closed mode, block model, `MeshAdmissionPromptSheet`, and `FriendListView` all exist. The legacy `MeshLobbyView` has been removed; the active flow is the single-Join `ConnectView` / `DisposableCameraView` surface.
 - **Life-tab redesign (workstreams B + C) is implemented:** The Connect surface uses a single **Join** button; peers are committed via a 15 cm / 0.8 s UWB proximity gate (manual confirm fallback on non-UWB). One committed peer = pairwise; two or more = mesh (auto-promoted in place). In session, `ConnectView` shows `DisposableCameraView`: small live viewfinder, 27-shot film counter, shutter gated behind a thumbwheel wind gesture, photos hidden until "Develop" triggers the existing review-and-save flow (`FriendPhotoReviewSheet`).
 - Foundation Models is wired for meal-candidate selection (`FoundationFoodSelection`), overnight day summaries, and thought bubbles. No third-party or OHTTP AI path exists yet; all AI is on-device.
 
@@ -592,7 +592,8 @@ Prototype direction:
 - Trainer/nutritionist sharing uses the same local-first transport and should not require cloud.
 
 Core architecture:
-- **MultipeerConnectivity** (Wi-Fi, peer-to-peer Wi-Fi, and Bluetooth) handles discovery and packet transport via `MCSession`. All `MCSession` instances must use `encryptionPreference: .required`. Sensitive 1:1 payloads (friend photos, trainer attachments) must use `payloadEncryption: .sealedTo(recipientKeyAgreementPublicKey:)` via the existing `IdentityService.seal/open` ChaCha20-Poly1305 path.
+- **QUIC with TLS 1.3 over Network.framework** handles discovery and transport, inside the external ProximityKit package (github.com/bowman-mw/proximitykit, pinned exactly). Discovery is Bonjour (`_fernlet-mesh2._udp`, `_fernlet-near2._udp`, `_fernlet-recipe2._udp`) on the local network and Apple peer-to-peer Wi-Fi; cellular is prohibited. Each listener presents an app-minted, never-persisted, self-signed ECDSA P-256 certificate, valid 24 hours and minted fresh per session or presence epoch. TLS accepts any certificate, so peer authentication belongs to the app layer. The mesh binds an Ed25519-signed channel introduction to the TLS 1.3 exporter secret, and the pair and presence radios carry Ed25519-signed identity envelopes. Sensitive payloads are also sealed end to end inside the channel: `IdentityService.seal` (ephemeral X25519 → HKDF-SHA256 → ChaCha20-Poly1305), and AES-GCM with a per-recipient key wrap for mesh-routed friend photos.
+  > **Reconciled 2026-10-17:** until the QUIC cutover of 2026-09-21 this bullet specified MultipeerConnectivity (`MCSession` with `encryptionPreference: .required`, and `payloadEncryption: .sealedTo(…)` for 1:1 payloads). MultipeerConnectivity was deleted from the app on 2026-09-22 (see [Plan-ProximityKit-Network-Migration-2026-08-27.md](Plan-ProximityKit-Network-Migration-2026-08-27.md) §28.8–§28.9).
 - NearbyInteraction handles UWB ranging.
 
 Apple documentation notes:
@@ -1036,6 +1037,9 @@ Entitlements required beyond HealthKit/CloudKit/App Groups:
 > The proximity transport is MultipeerConnectivity over the **Local Network** permission (Bonjour) plus
 > NearbyInteraction/UWB — there is no direct `CoreBluetooth`/`CBCentralManager` use, so no Bluetooth
 > usage string is required or appropriate. Declare only permissions the app actually exercises.
+> *Reconciled 2026-10-17:* the transport is now Network.framework QUIC (the `_udp` Bonjour services
+> above) over the same Local Network permission, plus NearbyInteraction/UWB. There is still no
+> `CoreBluetooth` use in the app or in ProximityKit, so the conclusion stands.
 
 ## 19. iCloud Sync and Encrypted Backup
 

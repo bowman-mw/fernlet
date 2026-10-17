@@ -6150,6 +6150,13 @@ honesty suite; no production anchor below moves.*
   `Appendix A`, the rule-7 cell (`:155`), then six anchored patches (`Info.plist` `:316`,
   `MeshNetworkManager.swift` `:406`, `MeshTransportSelection.swift` `:632`,
   `TransportNeutralityBoundaryTests.swift` `:812`, docs `:936`, tests `:1115`).
+  **Superseded 2026-09-21/22, and the tree has moved again since (§28.8, §28.10):** the flip made `shippingDefault`
+  `.quic` in `5d88247` (2026-09-21); the deletion (`ec05b0c`, the round closed at `d88062c`, 2026-09-22) took
+  MultipeerConnectivity out and `MeshTransportFactory` with it — `MeshNetworkManager.init` names `NetworkMeshSession()`
+  directly — so **MC is retired**: `git grep -n 'import MultipeerConnectivity' origin/main -- App FernletKit` is empty
+  at `20d404b8` (nine comment lines still name the framework, in the past tense). Since A1.3 (`5882ea7a`, 2026-10-15)
+  the path above is not in this tree at all: ProximityKit is the external package `github.com/bowman-mw/proximitykit`,
+  pinned `exact: "0.1.1"` (`FernletKit/Package.swift:65`) since fernlet PR #27 (merged `487f99dc`, 2026-10-17).
 - **The residuals P10 leaves:** the one unscoped `== 1` read (`routedShare.recipientIsSelf`) and the
   other 16 in the ratchet (`MeshP9AcceptanceTests.swift:1437`); the eight rows of `ungatedByDesign`
   (`:1152`); `AppIntentsTests` un-`.serialized` (`Tests/FernletTests/AppIntentsTests.swift:20`); CI's
@@ -6379,7 +6386,7 @@ without touching the phone (§15.5's overnight window kept running on it). The r
   The draft routed a new flag through `onPeerVerified`, which is declared and fired and read by nothing; only the blind
   verify's grep caught it. Grep the READER of every seam a design leans on before writing the size.
 - **The deletion round, 2026-09-22 — item 0, the gate: the QUIC first-meeting capability is OBSERVED** (`3eb1768`; the
-  record is `Docs/Mesh-Migration-Loop-Ledger-Deletion-2026-09-22.md` and the runbook's "Lane C — the deletion round's
+  record is `e6a3b48:Docs/Mesh-Migration-Loop-Ledger-Deletion-2026-09-22.md` and the runbook's "Lane C — the deletion round's
   item 0"). Two Simulators with no `FERNLET_MESH_MATRIX_MEMBERS` and no seeded descriptor found a mesh through the
   provisional path over a real QUIC tunnel on the first unseeded launch: the roster consulted at the introduction empty
   on both (audit `legacyRosterFallback members=0`), `accepted` both ways with zero `refused` (the only path to an accept
@@ -6493,3 +6500,83 @@ it settles:
 - **State:** `origin/main` had caught up to `d88062c` by the time this round opened (the owner pushed); the round's
   commits sit on top, not pushed. The plan's phases remain spent; what is left is the owner's — a second phone for
   §15.1/§15.2, the §15.5 window, the soak's read-out, and the two build items above.
+
+### 28.10 After the device round — the owner's calls closed, the seat proof, the floors and C0–C2 (to 2026-10-17)
+
+*Written 2026-10-17 at `origin/main` = `20d404b8`, every hash re-read with `git show`. The mesh code named here now
+lives in the external package (last paragraph): a source anchor reads `proximitykit@0.1.1:<path>:<line>`, a Fernlet
+anchor is at `20d404b8`.*
+
+- **The owner-calls round CLOSED the same day** (`e6a3b48`, 2026-09-22; launcher
+  `Docs/Next-Round-Prompt-Owner-Calls-2026-09-22.md`, record `Docs/Mesh-Migration-Loop-Ledger-Owner-Calls-2026-09-22.md`),
+  stop condition 1 as far as the day allowed, three blind verifies. Item 1, P9-3-A (`4d1fa0b`, 23 040 → 11 520 rows).
+  Item 2, Option 1b (`e83ec82`, record `f8687d5`): the first build still named this device through `sendEnvelopeCore`
+  (BLOCKER, `1cbf5e3`), and the receiving side minted "A friend" into the descriptor until the join request went to
+  committed slots only (`316ae29`). Item 3a, the cold-start "You left" card told once (`b277888`; its BLOCKER, no real
+  launch wrote the mark because `startJoin()` nils the restored context first, in `a60b940`); 3b inert until a
+  resume-ACCEPT door exists; 4a priced (held catalog); 4b `MeshLinkTable.links` bounded (`04b1d99`); 4c the wipe wall's
+  value half (`4d9820b`). **Item 0, the soak's read-out, closed `blocked (owner)` and still is.** The ledger's residuals
+  stand: joining before a name is known; the recipe radio's TXT name now reaching lock users; a presence heart
+  auto-committed before the friend check (a tag-replaying forger holding both KA keys gets a named heartbeat); the
+  descriptor gossiping names before admission; `startJoin()` clearing `offersForegroundResume` (C1 below).
+- **`31fafd67` — the owner's report of 2026-09-22** (its own branch, fast-forwarded onto `main` mid-round). A returning
+  member never re-committed: a re-dial parks at the proximity gate, whose controls the session's camera covers, so the
+  phone — suspended when iOS expired its continued-processing task — sat uncommitted, its frames dropped.
+  `reseatReturningMembers()` commits a gated slot whose verified key is on the live mesh's signed derived roster **and**
+  is the key the QUIC introduction proved for that link (`verifiedSigningPublicKey(for:)`, TLS-exporter-bound) — never
+  its own, never a member it voted out — because the review found the coordinator's envelope replayable over QUIC (no
+  recipient, 5-minute expiry). A final pair's leave signs the termination and waits up to 1.5 s for the partner's close
+  (`awaitRemoteClose(of:within:)`; six lane runs, 50–56 ms): a bounded best effort, not a delivery guarantee. No LED
+  under the Dynamic Island. `MeshReturningMemberReseatTests` (23); the runbook's Lane C re-dial record is corrected.
+- **`0258ba37` (2026-09-23) — every seat answers to the tunnel's proof.** The coordinator re-gates to a second,
+  replayable introduction in any state and only a re-seat was judged against the transport, so a tap, the QR ceremony or
+  a dwell could seat a link as an identity the tunnel had proven FALSE. Now every seat commits the tunnel-proven key or
+  the link is evicted, a NIL proven key included (`mesh.slot.refusedUnprovenIdentityAtSeat`); the payload door credits
+  nothing against it (`attributableSlot(for:envelope:credited:type:)` drops a frame whose signer or credited identity
+  contradicts the seated or proven key, or that arrives slotless: `mesh.dispatch.droppedUnattributable`); and a claimed
+  `sid` cannot squat an absent member's link (`MeshLinkTable.noteProvenOwner`, read by `claimResolves` / `sweepSkips`).
+  `MeshSeatTransportProofTests` (13), `MeshSessionIDClaimTests` (7). **The sid-squat residual**, in the commit and in
+  `proximitykit@0.1.1:Sources/ProximityKit/Documentation.docc/ProximityKit.md:1645`: an advertisement no dial of this
+  device's has proven and no tunnel holds can still be named first, and when this device is the preferred dialer toward
+  it the claimant holds that key until its own tunnel ends — availability, never identity (seated only as itself;
+  signing the field cannot help, nothing binds an advertisement to a key). **Neither the seat refusal nor the door has
+  run on a radio:** no record in `Docs/` names either audit (grep, 2026-10-17), and an honest real-radio seat answering
+  a nil proven key would be refused. Owed: an unseeded Lane C pair, freeze re-dial and re-seat, both counts at 0.
+- **The floors at `20d404b8`.** mesh-batteries is **152 names, floor 1310** (`.github/workflows/s3-wall.yml:2387`;
+  `CIGateSelectorBoundaryTests.measuredSuiteNameCounts` `:409`). From §28.9's 1216 / 140: 1222 / 141 (`65c9432` +
+  `c97474d`); 1226 (`dcc1925`); 154 names (`2d22dd9d`, 2026-09-24: the seat, sid and re-seat suites, the resume-copy,
+  resume-presentation, wipe-effect and host-pin suites, every wire golden, and `everyWireGoldenSuiteIsGated`) at 1353
+  MEASURED (`bce2dbc7`); 1379 / 155 by A1.1.10 (2026-10-14); **LOWERED to 1309 / 152 at A1.3** (`5882ea7a`:
+  `MeshSessionIDClaimTests` left with the package, whose CI runs it; the seat-proof and re-seat suites stay); **RAISED
+  to 1310 at the 0.1.1 re-pin** (`e89bab6e`, the pin-agreement cell). `mesh-features` (A0.5's FernletSocial suites) is 50 names at 550 (`:1645`). On no line still:
+  `SealedIntroductionTests`, `HeartShareTests`, `ProximityCoordinatorTests` (wall-clock sleeps). The ledger's two-doors
+  flake is ordered by construction since `e57546b6`. The line was red on `main` from `bd248ad9` (2026-09-30, a seventh
+  run-policy Bool: 11 520 → 23 040 rows) until `d90b9008` re-pinned P7.
+- **C0–C2, the 2026-09-23 audit's mesh defects** (its labels; that tracker is local, not in the tree). **C0 — a
+  relaunched member cannot rejoin its live mesh on QUIC:** the restore leaves `currentMesh` nil by design, so the hello
+  names the all-zero `unboundMeshID` (`proximitykit@0.1.1:Sources/ProximityKit/Mesh/MeshNetworkManager.swift:14386`), and
+  the introduction tolerates a meshID mismatch only for a provisional stranger
+  (`…/Transport/MeshChannelIntroduction.swift:544`); a restored member is not one, so both sides refuse `.foreignMesh`
+  (`twoMembersOfDifferentMeshesAreStillForeignMesh` pins member-vs-member as intended). §10.3's process-restart resume
+  is unreachable; a surviving pair partner ends at its five-minute give-up. Read from the code, never run on a lane.
+  **C1 — P7 item 5's resume-OFFER card never renders:** the restore offers it (`MeshNetworkManager.swift:9098`), and
+  opening Friends runs `startJoin()` (`:1556`) → `resetSessionStateMachine(keepingTerminalState: false)` (`:1576`),
+  which clears it (`:1536`) first. **C0 and C1 are owner-deferred (2026-09-23) and unfixed at 0.1.1**; C0 goes first.
+  **C2 — the "Connected" celebration showed the raw fingerprint under Option 1b: FIXED** in `862a9886` (2026-09-30).
+
+**After the mesh rounds: ProximityKit left the tree.** Workstream A of
+`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` (§4) carved it into a host-neutral public package: A0
+(2026-10-01…11), A1.0–A1.1 (to 2026-10-14), A1.2 in the package's repository, and A1.3 (`5882ea7a`, 2026-10-15), where
+Fernlet consumed `proximitykit` `0.1.0` exactly from github.com/bowman-mw/proximitykit and the in-tree target left. Tags:
+`0.1.0` 2026-10-15; `0.1.1` 2026-10-17 (on `e09affe4`), a fix release — every listener takes every inbound connection (a
+finite new-connection limit is a lifetime budget the framework spends), presence and the pair radio drop a pending
+inbound connection silent past 5 s, and the pair radio counts one as connecting only once its hello is read. Fernlet
+re-pinned to `exact: "0.1.1"` in fernlet PR #27 (`e89bab6e`, `f2597f77`, `cfbea6aa`; merged `487f99dc`, 2026-10-17):
+four spellings held to one tag (`CIGateSelectorBoundaryTests.releasedRevisions`, `:1021`), the 23 suites the package
+holds dropped (161 tests), the DEBUG probe's finite listener limit removed. **The 6 h soak has still never run** —
+scheduled for 2026-09-22's evening (§28.3, §28.9), read out by no commit, the runbook's *Progress soak* row NOT RUN, the
+degraded ladder unchosen; 0.1.1 was tagged without it. **Owed on a second device before a build carrying 0.1.1 ships**
+(the Coach plan's A2 note, `:738`; the rows are the re-pin round's): the pair radio's hello refusals and its 5 s
+deadline; presence hearts past four in one epoch (0.1.0's presence limit); a long mesh session past eight inbound
+connections (`MeshLinkTable.maxConcurrentLinks`); the AWDL `interface=` value; the DEBUG probe past four. With C0/C1 and
+the sid residual they join §28.4's list; the plan's phases remain spent.

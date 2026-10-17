@@ -1,5 +1,14 @@
 # Mesh session photos: review first, nothing saved until chosen
 
+> **Status (2026-10-17): BUILT** on `main` (2026-09-30). U1 adds the sealed pending corpus, its three AEAD domains and a third media-key role, and the shared
+> wall file mechanics (`26136808`, `189ac5dc`, `c0ad1fc9`; fix round `7efe98f6`). U2 holds every session
+> photo, taken here or received, in the sealed pending corpus until it is chosen (`637c3131`, `66cbbb35`; fix rounds
+> `768cb8f5`, `2f604654`, `1908901a`). U3 makes the review the first thing shown through
+> `SessionPhotoReviewCoordinator`, with "Not now" (`32cfe77b`, `bd248ad9`; fix round `1cc01354`, `e199672f`), and the
+> MeshP7 run-policy pins follow it (`d90b9008`). Still open: the owner's sign-off on Q1–Q8 (built to their defaults)
+> and the closing walk on two phones (force-quit, Not now, Photos denied, delete-all), both in the tracker. The
+> `file:line` citations below are from `3c8c9313` and have moved.
+
 Design for the 2026-09-30 owner decision, revision 2 (after two adversarial reviews; §9 records
 what each finding changed). Read-only survey of `main` at `3c8c9313`; every `file:line` below is
 from that tree. Paths are repo-relative.
