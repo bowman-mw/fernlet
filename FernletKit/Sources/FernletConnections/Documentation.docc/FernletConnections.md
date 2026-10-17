@@ -6,7 +6,7 @@ Fernlet's connection rules on top of ProximityKit's mechanisms. Today it holds `
 
 `FernletConnections` is where Fernlet's side of the ProximityKit split lives. ProximityKit is
 a drop-in package any app can use (its own repository's since plan step A1.3, which Fernlet pins at
-exactly 0.1.0), with nothing Fernlet-specific in its API
+exactly 0.1.1), with nothing Fernlet-specific in its API
 (`Docs/Plan-FernletCoach-ProximityKit-2026-10-01.md` §3.2); owner decision O3 puts Fernlet's own
 connection types and rules in FernletKit instead, on top of ProximityKit's mechanisms. This module
 is that place.

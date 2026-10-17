@@ -34,10 +34,10 @@
 # planted `import UIKit` fails it.
 #
 # ProximityKit is a package of its own since plan step A1.3: Fernlet depends on
-# https://github.com/bowman-mw/proximitykit at exactly 0.1.0 (FernletKit/Package.swift and the app
-# project, both Package.resolved files pinning one revision), and that repository's own CI builds and
-# tests it, its walls included, on macOS and iOS. The strict build here compiles the tag with
-# warnings as errors.
+# https://github.com/bowman-mw/proximitykit at exactly 0.1.1 since the re-pin of 2026-10-17
+# (FernletKit/Package.swift and the app project, both Package.resolved files pinning one revision,
+# the tag's commit), and that repository's own CI builds and tests it, its walls included, on macOS
+# and iOS. The strict build here compiles the tag with warnings as errors.
 #
 # Every test step runs through Scripts/run-gated-suites.sh, which writes a result bundle and
 # refuses a green run that executed fewer tests than the step's floor, or in which a named suite ran
@@ -697,6 +697,17 @@ jobs:
         # No suite joined or left this line, and the line, MEASURED on a Mac on that tree (iPhone 17
         # simulator, iOS 26.5), ran 96 tests in 11 suites (CIGateSelectorBoundaryTests 8); its floor stays
         # the shared `1`.
+        #
+        # The re-pin to ProximityKit 0.1.1 (2026-10-17) changes two suites of this line and adds one cell.
+        # `CIGateSelectorBoundaryTests` gains `theFourPinSpellingsNameOneReleasedProximityKitVersion`: the
+        # manifest's `exact:`, the app project's `exactVersion` and both Package.resolved files' `version`
+        # name one tag, and both resolve it to the commit its `releasedRevisions` row holds, so a spelling
+        # out of step, a moved tag or a mistyped version fails (the resolution pin held only the two
+        # resolved files to each other); each spelling out of step and a moved tag's revision shown red
+        # once. `ProximityPlatformBoundaryTests` names the new pin in its header only. No suite joined or
+        # left this line, and the line, MEASURED on a Mac on the branch's last tree (iPhone 17 simulator,
+        # iOS 26.5), ran 97 tests in 11 suites (CIGateSelectorBoundaryTests 9); its floor stays the shared
+        # `1`.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh s3-grep 1 S3BoundaryTests CIGateSelectorBoundaryTests \
@@ -1383,7 +1394,7 @@ jobs:
         # or `await`, and ML4's samples reach a `Task` line's marker of no kind and every host spelling. No
         # cell added or removed: MEASURED on a Mac on that tree (iPhone 17 simulator, iOS 26.5), the line ran
         # 8.
-        # Since ProximityKit plan step A1.3 (2026-10-15) Fernlet consumes ProximityKit's tag 0.1.0, and
+        # Since ProximityKit plan step A1.3 (2026-10-15) Fernlet consumes a ProximityKit tag (0.1.1 now), and
         # ProximityKit's package halves of ML1-ML5 (ProximityMemoryLifecycleTests, PackageTestTreeWallTests)
         # are its own repository's, run by its CI; ProximityKit's folder left the shipping roots with
         # `ProximityKitSources`, so ML1-ML4 read the five roots whole. No cell added or removed: MEASURED on
@@ -2353,9 +2364,18 @@ jobs:
         # iOS 26.5): this exact 152-name list run at its floor after the strict build-for-testing (WALL
         # CHECK PASSED), read off its own result bundle: totalTestCount 1309 in 152 suites, 0 failed, 0
         # skipped, no `Restarting after unexpected exit` line, the suite census silent.
+        # The re-pin to ProximityKit 0.1.1 (2026-10-17) adds one cell and moves no suite:
+        # CIGateSelectorBoundaryTests 8 -> 9 (the pin-agreement cell; see the s3-grep step). The 11 suites
+        # on this line whose copies the package also holds stay, and run against 0.1.1 here.
+        # RAISED 1309 -> 1310, MEASURED on a Mac, 2026-10-17 (iPhone 17 simulator, iOS 26.5), on the
+        # branch's last tree: this exact 152-name list run at its old floor 1309 through Fernlet.xcworkspace
+        # after the strict build-for-testing (WALL CHECK PASSED), read off its own result bundle:
+        # totalTestCount 1310 in 152 suites, all FernletTests (CIGateSelectorBoundaryTests 9), 0 failed, 0
+        # skipped, no `Restarting after unexpected exit` line, the suite census silent. Re-run AT 1310:
+        # passed, and shown red once at 1311. 1309 + 1 = 1310 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1309 \
+          Scripts/run-gated-suites.sh mesh-batteries 1310 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \

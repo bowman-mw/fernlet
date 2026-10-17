@@ -14,10 +14,11 @@
 // ungated for three phases because nothing said they had to be), `Tests/suite-inventory.tsv` must be
 // the tree (every suite's file and lines), the strict build and every run go through
 // `Fernlet.xcworkspace`, which resolves the same revision of every package the app project pins
-// (CryptoSwift since ProximityKit plan step A0.8.1, and ProximityKit itself, at exactly 0.1.0 from
-// its own repository, since A1.3), and this suite gates itself. ProximityKit's own tests, with the
-// rules that keep them clean and the inventory that counts them, are its repository's since plan
-// step A1.3.
+// (CryptoSwift since ProximityKit plan step A0.8.1, and ProximityKit itself, from its own repository
+// since A1.3, at exactly 0.1.1 since the re-pin of 2026-10-17), the pin's four spellings name one
+// released tag at the commit it was cut on, and this suite gates itself. ProximityKit's own tests,
+// with the rules that keep them clean and the inventory that counts them, are its repository's since
+// plan step A1.3.
 
 import Foundation
 import Testing
@@ -822,9 +823,10 @@ import Testing
 
     /// The packages both of ``resolvedFiles`` must pin, each once and to a released version, and the
     /// only ones either may pin: CryptoSwift, the Scrypt KDF behind FernletLock (ProximityKit plan step
-    /// A0.8.1), and ProximityKit, the peer-to-peer subsystem, from its own repository at exactly 0.1.0
-    /// (A1.3). The floor that keeps ``expectOneRevisionPerSharedPin()`` from passing on two files that
-    /// pin nothing in common, and, since A1.3's review fixes, the ceiling that refuses a third pin: a
+    /// A0.8.1), and ProximityKit, the peer-to-peer subsystem, from its own repository (A1.3), at exactly
+    /// 0.1.1 since the re-pin of 2026-10-17 (``theFourPinSpellingsNameOneReleasedProximityKitVersion()``).
+    /// The floor that keeps ``expectOneRevisionPerSharedPin()`` from passing on two files that pin
+    /// nothing in common, and, since A1.3's review fixes, the ceiling that refuses a third pin: a
     /// package a later ProximityKit tag depended on would reach Fernlet as one more pin in both files
     /// and nowhere else, since neither manifest would name it (`NoTrackingBoundaryTests` reads the
     /// manifests, `Docs/No-Tracking-Wall.md` §2).
@@ -996,6 +998,153 @@ import Testing
             pins[identity] = [location, revision, version ?? ""]
         }
         return (pins, problems)
+    }
+
+    // MARK: - The pin's four spellings (the re-pin to ProximityKit 0.1.1)
+
+    /// ProximityKit's repository, as the manifest's `.package(url:)` and the app project's remote
+    /// reference both spell it.
+    static let proximityKitURL = "https://github.com/bowman-mw/proximitykit"
+
+    /// The manifest that names ProximityKit's version for every build through ``workspacePath``.
+    private static let manifestPath = "FernletKit/Package.swift"
+
+    /// The app project, whose remote reference names ProximityKit's version for `-project` (a release
+    /// archive).
+    private static let projectPath = "App/Fernlet.xcodeproj/project.pbxproj"
+
+    /// Every ProximityKit tag Fernlet has pinned, each with the commit its tag names
+    /// (`git rev-parse <tag>^{commit}` in the package's repository), as the tag was cut. A tag moved
+    /// after the fact, or a version mistyped into all four spellings, resolves to a revision this table
+    /// does not hold for that version. Tags never move: a re-pin adds its tag's row in the same commit as
+    /// the four spellings, and no row is ever edited.
+    static let releasedRevisions = [
+        "0.1.0": "6648094f6acf5cb6f37ef0102f182540d83146cd",
+        "0.1.1": "e09affe44af0d763478a1f84207bdad7a3d650c1"
+    ]
+
+    /// One spelling of the ProximityKit pin: the file that writes it, the version it names (nil when
+    /// none can be read as an exact one), and, for a resolved file, the revision it resolves.
+    struct PinSpelling: Equatable {
+        /// The repo-relative file that writes the spelling.
+        let site: String
+        /// The exact version it names, or nil.
+        let version: String?
+        /// The revision a resolved file resolves; nil for a manifest.
+        let revision: String?
+    }
+
+    /// The four load-bearing spellings of the ProximityKit pin name one version, and both resolved files
+    /// resolve it to the commit ``releasedRevisions`` holds for that tag (the ProximityKit remainder
+    /// proposal's §2 "move together" check, owner default 9; added at the re-pin to 0.1.1, 2026-10-17).
+    /// The spellings: ``manifestPath``'s `exact:`, ``projectPath``'s `exactVersion`, and the `version`
+    /// of both of ``resolvedFiles``. ``expectOneRevisionPerSharedPin()`` holds the two resolved files to
+    /// each other, never to the manifests or to the tag, so a re-pin that moved one manifest and
+    /// re-resolved through one container, or a resolved file edited by hand to agree with the other,
+    /// passed it. Each spelling is a manifest or JSON fact with no compiler half (SwiftPM resolves
+    /// whatever the files say), read here so it reds with no simulator.
+    @Test func theFourPinSpellingsNameOneReleasedProximityKitVersion() throws {
+        var spellings = [
+            PinSpelling(site: Self.manifestPath, version: Self.manifestExactVersion(
+                try RepoRoot.source(Self.manifestPath), url: Self.proximityKitURL), revision: nil),
+            PinSpelling(site: Self.projectPath, version: Self.projectExactVersion(
+                try RepoRoot.source(Self.projectPath), url: Self.proximityKitURL), revision: nil)
+        ]
+        // R2: bounded by the two files.
+        for path in Self.resolvedFiles {
+            // A pin reads as (location, revision, version), its version empty when it names none.
+            let pin = Self.pins(inResolved: try Data(contentsOf: RepoRoot.url(path)), path: path).pins["proximitykit"]
+            let version = pin.flatMap { $0.count == 3 && !$0[2].isEmpty ? $0[2] : nil }
+            spellings.append(PinSpelling(site: path, version: version, revision: pin.flatMap { $0.count == 3 ? $0[1] : nil }))
+        }
+        let problems = Self.pinAgreementProblems(spellings)
+        #expect(problems.isEmpty, """
+            The ProximityKit pin is spelled four ways, and they must name one released tag at the commit \
+            `releasedRevisions` holds for it. A re-pin moves \(Self.manifestPath)'s `exact:` and \
+            \(Self.projectPath)'s `exactVersion` by hand, re-resolves both of \(Self.resolvedFiles) through \
+            the workspace and through `-project` (never by hand), and adds the tag's row, in one commit:
+            \(problems.joined(separator: "\n"))
+            """)
+    }
+
+    /// The ways the pin's spellings fall short: a spelling that names no exact version, spellings that
+    /// name more than one version, and a resolved spelling whose version ``releasedRevisions`` does not
+    /// hold or whose revision is not the one it holds for that version.
+    static func pinAgreementProblems(_ spellings: [PinSpelling]) -> [String] {
+        var problems: [String] = []
+        // R2: bounded by the spellings.
+        for spelling in spellings where spelling.version == nil {
+            problems.append("\(spelling.site) names no exact version of proximitykit: Fernlet pins it `exact:`, all four ways")
+        }
+        let versions = Set(spellings.compactMap(\.version))
+        if versions.count > 1 {
+            let named = spellings.map { "\($0.site) \($0.version ?? "(none)")" }.joined(separator: ", ")
+            problems.append("the pin's spellings name \(versions.count) versions, not one: \(named)")
+        }
+        // R2: bounded by the spellings.
+        for spelling in spellings {
+            guard let version = spelling.version, let revision = spelling.revision else { continue }
+            guard let expected = releasedRevisions[version] else {
+                problems.append("""
+                    \(spelling.site) resolves proximitykit \(version), which `releasedRevisions` does not hold: \
+                    a re-pin adds its tag's row, `git rev-parse \(version)^{commit}`, in the same commit
+                    """)
+                continue
+            }
+            if revision != expected {
+                problems.append("""
+                    \(spelling.site) resolves proximitykit \(version) to \(revision), not the tag's commit \
+                    \(expected): the tag moved, the version is mistyped, or the file was edited by hand
+                    """)
+            }
+        }
+        return problems
+    }
+
+    /// The version a manifest's one `.package(url: "<url>", exact: "<version>")` line names: nil when no
+    /// code line names `url`, or more than one does, or its line pins anything but `exact:` (a range
+    /// resolves whatever tag is newest inside it). A comment line is not code, and another URL that
+    /// starts with `url` is not `url`.
+    static func manifestExactVersion(_ manifest: String, url: String) -> String? {
+        let lines = manifest.components(separatedBy: "\n").filter {
+            !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") && $0.contains(".package(url: \"\(url)\"")
+        }
+        guard lines.count == 1, let line = lines.first else { return nil }
+        return quotedValue(after: "exact: ", in: line)
+    }
+
+    /// The non-empty text between the `"` that follows `key` on `line` and the next `"`, or nil.
+    private static func quotedValue(after key: String, in line: String) -> String? {
+        guard let start = line.range(of: key + "\"") else { return nil }
+        let rest = line[start.upperBound...]
+        guard let end = rest.firstIndex(of: "\"") else { return nil }
+        let value = String(rest[..<end])
+        return value.isEmpty ? nil : value
+    }
+
+    /// The version an Xcode project's one remote package reference to `url` pins with
+    /// `kind = exactVersion;`: nil when no reference names `url`, or more than one does, or its
+    /// requirement is any other kind. The requirement is read from the reference's own lines, after its
+    /// `repositoryURL` and up to the first `};`, which closes the requirement.
+    static func projectExactVersion(_ project: String, url: String) -> String? {
+        let lines = project.components(separatedBy: "\n")
+        let starts = lines.indices.filter { lines[$0].trimmingCharacters(in: .whitespaces) == "repositoryURL = \"\(url)\";" }
+        guard starts.count == 1, let start = starts.first else { return nil }
+        var fields: [String: String] = [:]
+        var closed = false
+        // R2: bounded by the six lines a requirement spans at most.
+        for line in lines.dropFirst(start + 1).prefix(6) {
+            let text = line.trimmingCharacters(in: .whitespaces)
+            if text == "};" {
+                closed = true
+                break
+            }
+            let parts = text.components(separatedBy: " = ")
+            guard parts.count == 2, parts[1].hasSuffix(";") else { continue }
+            fields[parts[0]] = String(parts[1].dropLast()).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        }
+        guard closed, fields["kind"] == "exactVersion", let version = fields["version"], !version.isEmpty else { return nil }
+        return version
     }
 
     /// The one device every test line runs on is named once, is the same device the scripts default
@@ -1255,7 +1404,8 @@ import Testing
     /// The parser reads the workflow's real shape: a continuation-joined invocation with a label, a
     /// floor and several selectors, a qualified token among them, read whole, and ignores everything
     /// else; and the selector, declaration, inventory and resolution readers each read their fixtures
-    /// (ProximityKit plan step A0.8.0).
+    /// (ProximityKit plan step A0.8.0), as do the pin-spelling readers and the pin-agreement check (the
+    /// re-pin to 0.1.1).
     @Test func theParserReadsContinuationJoinedInvocations() throws {
         let sample = """
             run: |
@@ -1288,6 +1438,8 @@ import Testing
         Self.expectSelectorReaderFixtured()
         Self.expectInventoryReaderFixtured()
         Self.expectResolutionReaderFixtured()
+        Self.expectPinSpellingReadersFixtured()
+        Self.expectPinAgreementFixtured()
         let steps2 = """
               - name: Other step
                 run: echo other
@@ -1382,5 +1534,71 @@ import Testing
         let moved = sharedPinProblems(shared, shared.merging(["proximitykit": ["K", "U", "0.1.0"]]) { _, second in second })
         #expect(moved.contains { $0.contains("`proximitykit` is pinned to") }, "two revisions of one pin were not named: \(moved)")
         #expect(shellCode("# a comment\nARGS=(-workspace X)\n    # indented -project\necho done") == "ARGS=(-workspace X)\necho done")
+    }
+
+    /// The pin's two manifest readers, both ways: the manifest's one code line naming the URL is read
+    /// for its `exact:` version past a commented-out line, another package and a longer URL; a range, no
+    /// line and two lines each read as nil. The project's one reference is read for its `exactVersion`
+    /// past another reference's range; a range, no reference and two references each read as nil.
+    private static func expectPinSpellingReadersFixtured() {
+        let url = proximityKitURL
+        let cryptoSwift = #"    .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),"#
+        let exact = #"    .package(url: "\#(url)", exact: "0.1.1"),"#
+        let manifest = [#"    // .package(url: "\#(url)", exact: "9.9.9"),"#, cryptoSwift,
+                        #"    .package(url: "\#(url)-fork", exact: "8.8.8"),"#, exact].joined(separator: "\n")
+        #expect(manifestExactVersion(manifest, url: url) == "0.1.1", "the manifest's exact pin was not read")
+        let refusedManifests = [
+            #"    .package(url: "\#(url)", from: "0.1.1"),"#,
+            #"    .package(url: "\#(url)", .upToNextMinor(from: "0.1.1")),"#,
+            cryptoSwift,
+            [exact, exact].joined(separator: "\n")
+        ]
+        // R2: bounded by the fixed list.
+        for refused in refusedManifests {
+            #expect(manifestExactVersion(refused, url: url) == nil, "`\(refused)` was read as an exact pin")
+        }
+        let range = ["\t\t\trepositoryURL = \"https://github.com/krzyzanowskim/CryptoSwift\";", "\t\t\trequirement = {",
+                     "\t\t\t\tkind = upToNextMinorVersion;", "\t\t\t\tminimumVersion = 1.10.0;", "\t\t\t};", "\t\t};"]
+        let reference = ["\t\t\trepositoryURL = \"\(url)\";", "\t\t\trequirement = {", "\t\t\t\tkind = exactVersion;",
+                         "\t\t\t\tversion = 0.1.1;", "\t\t\t};", "\t\t};"]
+        #expect(projectExactVersion((range + reference).joined(separator: "\n"), url: url) == "0.1.1",
+                "the project's exactVersion reference was not read")
+        let ranged = reference.map { $0.replacingOccurrences(of: "kind = exactVersion;", with: "kind = upToNextMinorVersion;") }
+        let refusedProjects = [ranged, range, reference + reference]
+        // R2: bounded by the fixed list.
+        for refused in refusedProjects {
+            #expect(projectExactVersion(refused.joined(separator: "\n"), url: url) == nil,
+                    "a reference that is not one exact pin was read as one")
+        }
+    }
+
+    /// The pin's agreement, both ways: four spellings of one tag at its table commit pass; each spelling
+    /// moved out of step alone, a resolved revision that is not the tag's, a version the table does not
+    /// hold and a spelling with no exact version are each named.
+    private static func expectPinAgreementFixtured() {
+        let commit = releasedRevisions["0.1.1"] ?? ""
+        let sites = ["M", "P", "R1", "R2"]
+        func spellings(_ versions: [String?], _ revisions: [String?] = [nil, nil, commit, commit]) -> [PinSpelling] {
+            zip(sites, zip(versions, revisions)).map { PinSpelling(site: $0.0, version: $0.1.0, revision: $0.1.1) }
+        }
+        let agreed: [String?] = ["0.1.1", "0.1.1", "0.1.1", "0.1.1"]
+        #expect(pinAgreementProblems(spellings(agreed)).isEmpty, "four spellings of one tag at its commit were refused")
+        // R2: bounded by the four sites.
+        for index in sites.indices {
+            var moved = agreed
+            moved[index] = "0.1.0"
+            let problems = pinAgreementProblems(spellings(moved))
+            #expect(problems.contains { $0.contains("name 2 versions") && $0.contains("\(sites[index]) 0.1.0") },
+                    "\(sites[index]) out of step was not named: \(problems)")
+        }
+        let wrong = pinAgreementProblems(spellings(agreed, [nil, nil, commit, "0000000"]))
+        #expect(wrong.count == 1 && wrong.contains { $0.contains("R2 resolves proximitykit 0.1.1 to 0000000") },
+                "a revision that is not the tag's commit was not named: \(wrong)")
+        let unknown = pinAgreementProblems(spellings(["9.9.9", "9.9.9", "9.9.9", "9.9.9"]))
+        #expect(unknown.count == 2 && unknown.allSatisfy { $0.contains("does not hold") },
+                "a version the table does not hold was not named for both resolved files: \(unknown)")
+        let unpinned = pinAgreementProblems(spellings([nil, "0.1.1", "0.1.1", "0.1.1"]))
+        #expect(unpinned.contains { $0.contains("M names no exact version") },
+                "a spelling with no exact version was not named: \(unpinned)")
     }
 }

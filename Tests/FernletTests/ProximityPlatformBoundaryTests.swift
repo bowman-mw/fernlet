@@ -9,7 +9,7 @@
 // with no default, and the module keeps only the two mechanism seams a platform needs, each compiled
 // only where its framework is usable. Both halves of that wall are ProximityKit's own repository's
 // since plan step A1.3 (Fernlet depends on https://github.com/bowman-mw/proximitykit at exactly
-// 0.1.0): its CI builds and tests it for native macOS, the compiler half, and its package test
+// 0.1.1): its CI builds and tests it for native macOS, the compiler half, and its package test
 // `ProximityPlatformNeutralityTests` holds the rules over its code (its imports and platform branches,
 // its device-name reads, its platform directories and host-fact defaults, its own channel-ready doors
 // and `NIRangingSession`'s one home), the source half. This suite holds what is this repository's, two

@@ -47,8 +47,8 @@
 # errors. A new warning anywhere in this build therefore fails this check.
 #
 # WHY THE WORKSPACE (ProximityKit plan steps A0.8 and A1.3): Fernlet.xcworkspace holds FernletKit as a
-# root beside the app project. It is where ProximityKit, a dependency pinned at exactly 0.1.0 from its
-# own repository since plan step A1.3, can be developed beside Fernlet (plan step A1.5): a sibling
+# root beside the app project. It is where ProximityKit, a dependency from its own repository since plan
+# step A1.3, pinned at exactly 0.1.1, can be developed beside Fernlet (plan step A1.5): a sibling
 # checkout of the package dragged into the workspace overrides the tag on one machine, never
 # committed, while CI always builds the tag. Its packages resolve from FernletKit/Package.resolved,
 # which CIGateSelectorBoundaryTests holds to the app project's resolved file, pin for pin.

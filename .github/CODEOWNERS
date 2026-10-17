@@ -77,8 +77,9 @@
 /App/Fernlet/PrivacyPolicyView.swift          @bowman-mw
 
 # The dependency DAG is the S3 wall's compiler half; the two resolved files pin the revision of each
-# package from outside this repository (CryptoSwift, and since plan step A1.3 ProximityKit, exactly 0.1.0)
-# that the strict build and a release archive compile, which CIGateSelectorBoundaryTests holds equal
+# package from outside this repository (CryptoSwift, and since plan step A1.3 ProximityKit, exactly 0.1.1
+# since the re-pin of 2026-10-17) that the strict build and a release archive compile, which
+# CIGateSelectorBoundaryTests holds equal, and holds to the manifests' one version at its tag's commit
 /FernletKit/Package.swift                     @bowman-mw
 /FernletKit/Package.resolved                  @bowman-mw
 /App/Fernlet.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved @bowman-mw
@@ -94,7 +95,7 @@
 /FernletKit/Sources/FernletLock/              @bowman-mw
 # ProximityKit's own at-rest, keychain and label-registry code (its column-crypto and install-binding
 # copies, its keychain funnel, its namespace registry, its presence engine and the identity's provisioning
-# participant) is its own repository's since plan step A1.3, which Fernlet pins at exactly 0.1.0 (the
+# participant) is its own repository's since plan step A1.3, which Fernlet pins at exactly 0.1.1 (the
 # resolved files above) and whose CODEOWNERS protects those rows.
 
 # Fernlet's wire identity (ProximityNamespace.fernlet): changing a literal breaks Fernlet's wire,

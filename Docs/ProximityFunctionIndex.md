@@ -120,7 +120,9 @@ with them: its repository documents them, through its DocC landing page
 them. This index keeps what this repository holds over it: Fernlet's namespace and its supply
 (FernletConnections), the app's and FernletSocial's features, the review screens and the test target's
 bindings. A ProximityKit name below (`MeshNetworkManager`, `IdentityService`, `ProximityPairSession`, …) is
-its public API at that tag.
+its public API at that tag. **2026-10-17:** Fernlet pins `0.1.1`, a fix release that removed or changed no
+public API and added two (`ProximityPairSession.inspector`, `init(host:profile:inspector:)`), so "that tag"
+is `0.1.1`.
 
 > **Dangling reference, do not go looking:** twenty source files and test suites in this subsystem
 > cite `Docs/Proximity-Mesh-Redesign-2026-07-10.md` for the phase numbering ("Phase 2 friend

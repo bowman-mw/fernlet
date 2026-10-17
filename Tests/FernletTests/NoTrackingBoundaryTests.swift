@@ -165,10 +165,10 @@ struct NoTrackingBoundaryTests {
     ///
     /// CryptoSwift supplies the memory-hard Scrypt KDF behind `FernletLock`'s passphrase derivation —
     /// pure local computation, no network code. ProximityKit is Fernlet's own peer-to-peer subsystem,
-    /// moved with its history to a repository of its own and pinned at exactly 0.1.0 since plan step
-    /// A1.3: it depends on nothing, and its repository's CI holds its code to the same rules (no
-    /// tracking SDK or symbol, no HTTP client, and Network.framework's local-link API in its three radio
-    /// files alone). That it names no internet host is its own no-tracking scan's to hold
+    /// moved with its history to a repository of its own at plan step A1.3 and pinned at exactly 0.1.1
+    /// since the re-pin of 2026-10-17: it depends on nothing, and its repository's CI holds its code to
+    /// the same rules (no tracking SDK or symbol, no HTTP client, and Network.framework's local-link API
+    /// in its three radio files alone). That it names no internet host is its own no-tracking scan's to hold
     /// (`Scripts/no-tracking-scan.py` there, which refuses a `scheme://` literal on any code line of its
     /// sources): ``hardcodedNetworkDestinationsAreExactlyTheAllowlist()`` reads Fernlet's code only. Any
     /// other package URL fails here, whether or not its name is on ``bannedSDKModules``: the banned
@@ -1226,7 +1226,7 @@ struct NoTrackingBoundaryTests {
 
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"        .package(url: "https://github.com/krzyzanowskim/CryptoSwift", .upToNextMinor(from: "1.10.0")),"#)
             == ["https://github.com/krzyzanowskim/CryptoSwift"])
-        #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"        .package(url: "https://github.com/bowman-mw/proximitykit", exact: "0.1.0"),"#)
+        #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"        .package(url: "https://github.com/bowman-mw/proximitykit", exact: "0.1.1"),"#)
             == ["https://github.com/bowman-mw/proximitykit"])
         #expect(NoTrackingBoundaryTests.declaredPackageURLs(in: #"\#t\#t\#trepositoryURL = "https://github.com/firebase/firebase-ios-sdk";"#)
             == ["https://github.com/firebase/firebase-ios-sdk"])
