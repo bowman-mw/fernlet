@@ -166,10 +166,13 @@ nonisolated struct SealedPhotoBackupMigrationPassResult: FormatMigrationPassResu
 /// writes only through the existing reconcile.
 ///
 /// Built per invocation by `OwnPhotoBackupCoordinator.synchronizeFullyVerified` — cheap, like
-/// the per-call stores. `@MainActor` because the pass is; conforms to the nonisolated
-/// `AsyncFormatMigrator` via an isolated async witness (the thunk hops to the main actor).
+/// the per-call stores. `@MainActor` because the pass is. Its conformance to the nonisolated
+/// `AsyncFormatMigrator` is declared `nonisolated`: the shared `run(maxPasses:)` loop calls it from
+/// `@concurrent` code, where newer Xcode refuses the main-actor-isolated conformance the class would
+/// otherwise get. `latch` and `maxMigrationPasses` are `nonisolated` witnesses; `performPass()`'s
+/// witness stays on the main actor, and the call hops to it.
 @MainActor
-final class SealedPhotoBackupFormatMigrator: AsyncFormatMigrator {
+final class SealedPhotoBackupFormatMigrator: nonisolated AsyncFormatMigrator {
     /// The completion latch the shared `AsyncFormatMigrator.run(maxPasses:)` loop sets after a
     /// clean pass (a protocol requirement, which is why it is not `private`). `nonisolated`
     /// because the protocol's `latch` requirement is synchronous.

@@ -11,7 +11,12 @@
 
 import SwiftUI
 
-public extension Color {
+// The palette is `nonisolated`: every token is an immutable `Sendable` value, so it must not inherit
+// this module's `defaultIsolation(MainActor.self)`. A view reads it from a default argument
+// (`tint: Color = Color.moss`) and from a `@Sendable` view-builder closure (`PhotosPicker`'s label),
+// both nonisolated contexts newer Xcode checks; a main-actor token is an error there. The two
+// extensions below are `nonisolated` for the same reason (the tokens are built through them).
+nonisolated public extension Color {
     // The `@Sendable` on each dynamic provider is load-bearing, not decoration: without it the closure
     // inherits this module's `defaultIsolation(MainActor.self)`, and UIKit resolving the color on
     // SwiftUI's off-main render thread trips the Swift 6 executor check and traps. See FernletTheme.swift.
@@ -170,7 +175,7 @@ public extension Color {
     //    legible; the same text at 60% is neither.
 }
 
-public extension Color {
+nonisolated public extension Color {
     /// Resolves to `light` in light mode, `dark` in dark mode.
     ///
     /// Both sides are bridged to `UIColor` up front rather than inside the provider: the provider runs on
@@ -217,7 +222,7 @@ public extension Color {
     }
 }
 
-public extension Color {
+nonisolated public extension Color {
     /// The alpha a `bark` hairline needs to clear the **3:1 WCAG non-text floor** as a component
     /// boundary — the floor that applies to the edge of a card, chip, pill or bar.
     ///

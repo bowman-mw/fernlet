@@ -24,7 +24,12 @@ import Foundation
 /// ``WorkoutActivityAttributes`` exactly. The per-step timer ticks natively via
 /// `Text(timerInterval:)`, so the content state only changes on discrete step transitions — never
 /// per-second, never via push.
-struct CookingActivityAttributes: ActivityAttributes {
+///
+/// `nonisolated`, with its nested types, so the app target's default main-actor isolation does not
+/// make its `ActivityAttributes` conformance an isolated one: ActivityKit enumerates, updates and
+/// ends activities from `@concurrent` code, and ``LiveActivityRunReflectable`` holds its
+/// `Attributes` to `SendableMetatype`, which an isolated conformance cannot meet.
+nonisolated struct CookingActivityAttributes: ActivityAttributes {
     /// The recipe's name (e.g. "Weeknight ragù"). Fixed for the life of the activity.
     var recipeName: String
 
@@ -34,7 +39,7 @@ struct CookingActivityAttributes: ActivityAttributes {
     /// Produced only by `CookingRunState.contentState` (the app-group run state's Live Activity
     /// mapping), so both drivers — the in-app walker and the Lock Screen intents — publish
     /// byte-identical snapshots.
-    struct ContentState: Codable, Hashable {
+    nonisolated struct ContentState: Codable, Hashable {
         /// The current step's instruction text.
         var stepText: String
         /// 1-based step cursor and total, for "Step 3 of 8".
