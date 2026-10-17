@@ -971,7 +971,7 @@ extension Micronutrients {
 /// Whether a tracked nutrient is covered or in gap over the analysis window.
 ///
 /// Intermediate coverage (25–50%) yields no row at all — see
-/// ``MicronutrientGapAnalyzer/gaps(from:windowDays:)``.
+/// ``MicronutrientGapAnalyzer/gaps(from:windowDays:minimumDataDayFraction:)``.
 public nonisolated enum NutrientGapStatus: String, Codable, Equatable {
     case covered
     case gap
@@ -979,7 +979,7 @@ public nonisolated enum NutrientGapStatus: String, Codable, Equatable {
 
 /// One nutrient's coverage verdict over a rolling window, for the preventive-care nudge UI.
 ///
-/// `coverageRatio` compares intake to the recommended window total; `dataCoverageRatio` records how
+/// `coverageRatio` compares intake to the recommended total for the window's days with data; `dataCoverageRatio` records how
 /// many meals actually carried data — the analyzer suppresses verdicts on thin data.
 public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
 
@@ -995,7 +995,11 @@ public nonisolated struct NutrientGap: Identifiable, Codable, Equatable {
     public var nutrientKey: String
     public var nutrientName: String
     public var unit: String
+    /// The window this verdict covers (7 or 14 days). The analyzer stamps it only when the window held
+    /// the minimum days with data (``MicronutrientGapAnalyzer/minimumDataDayFraction``), so a reader's
+    /// `windowDays >= 7` or `>= 14` check means that much history stood behind the verdict.
     public var windowDays: Int
+    /// Intake over the days with data, as a share of the daily value for that many days.
     public var coverageRatio: Double
     public var dataCoverageRatio: Double
     public var status: NutrientGapStatus
@@ -1028,11 +1032,34 @@ public nonisolated struct NutrientReference: Sendable {
 
 /// Deterministic micronutrient gap analysis over recent days' meals.
 ///
-/// Only speaks when the data supports it: it requires at least half the window's meals to carry
-/// usable micronutrient data (and per-nutrient data coverage ≥ 50%) before rating a nutrient
-/// covered (≥ 50% of the FDA-DV window total) or a gap (< 25%). Pure ``Meal`` arithmetic kept in
-/// the domain layer so scoring can depend on it, never the reverse.
+/// Only speaks when the data supports it: the window must hold ``minimumDataDayFraction`` of its days
+/// with usable micronutrient data (``carriesMicronutrientData(_:)``), at least half of those days'
+/// meals must carry usable data, and each nutrient needs data coverage ≥ 50% — then it rates a nutrient
+/// covered (≥ 50% of the FDA-DV total for the days with data) or a gap (< 25%). Intake is measured
+/// against the days that carry data, never the nominal window, so an unlogged day is unknown rather
+/// than zero (spec §5: "on days with micronutrient data"). Until 2026-10-16 it divided by the nominal
+/// window with no minimum history, so a first day of logging read as a 1/7 or 1/14 share of the window
+/// and every nutrient was a gap — a score penalty, a Home nudge naming foods and an AI prompt line from
+/// day 1 (bug confirmation 2026-10-15, safety-firstrun §4). Pure ``Meal`` arithmetic kept in the
+/// domain layer so scoring can depend on it, never the reverse.
 public nonisolated enum MicronutrientGapAnalyzer {
+    /// **OWNER-TUNABLE.** The share of a window's days that must carry micronutrient data before the
+    /// analyzer says anything about that window — how much history a "lately" claim needs.
+    ///
+    /// `1.0`, the bug confirmation's value (2026-10-15), means the window must be full: seven days of
+    /// data for the 7-day signal, fourteen for the 14-day one. A first day, a first week, or a window
+    /// with an unlogged day in it therefore yields no verdict — no gap, no score penalty, no nudge, no
+    /// prompt line. Lowering it lets a window with some unlogged days speak; intake is always divided by
+    /// the days that carry data, so a lower value never counts an unlogged day as zero. The owner sets
+    /// it; ``minimumDaysWithData(forWindow:fraction:)`` turns it into a day count.
+    public static let minimumDataDayFraction = 1.0
+
+    /// Meals read per day, the per-day bound every read here shares (R3).
+    private static let mealsReadPerDay = 20
+
+    /// Populated micronutrient fields at which a meal counts as carrying usable data.
+    private static let usableDataFieldCount = 5
+
     // Recommended daily amounts come from the single shared `FDADailyValues` table
     // (21 CFR 101.9), which the `NutritionLabelScanner` reads too. Calcium and
     // potassium here previously carried the stale NASEM figures (1,000 / 3,400); they
@@ -1058,51 +1085,88 @@ public nonisolated enum MicronutrientGapAnalyzer {
     /// forwards here for existing app-layer callers.
     public static func micronutrientDataCoverageRatio(for meals: [Meal]) -> Double {
         guard meals.isEmpty == false else { return 0 }
-        let mealsWithData = meals.filter { $0.micronutrientSnapshot.populatedFieldCount >= 5 }.count
+        let mealsWithData = meals.filter(carriesUsableData).count
         return Double(mealsWithData) / Double(meals.count)
     }
 
-    public static func gaps(from days: [(String, FernletDay)], windowDays: Int) -> [NutrientGap] {
+    /// Whether one meal's snapshot carries usable micronutrient data (five or more populated fields).
+    private static func carriesUsableData(_ meal: Meal) -> Bool {
+        meal.micronutrientSnapshot.populatedFieldCount >= usableDataFieldCount
+    }
+
+    /// Whether a day carries micronutrient data: one of its meals does. A day with no meals, or only
+    /// meals without data, says nothing about intake and is left out of the analysis, never read as zero.
+    public static func carriesMicronutrientData(_ day: FernletDay) -> Bool {
+        day.meals.prefix(mealsReadPerDay).contains(where: carriesUsableData)
+    }
+
+    /// The days with data a `windowDays` window needs before it may speak: `fraction` of the window
+    /// (clamped to 0...1), rounded up, at least one day and at most the whole window.
+    public static func minimumDaysWithData(
+        forWindow windowDays: Int,
+        fraction: Double = MicronutrientGapAnalyzer.minimumDataDayFraction
+    ) -> Int {
+        guard windowDays > 0 else { return 1 }
+        let share = fraction.isFinite ? min(max(fraction, 0), 1) : 1
+        return min(windowDays, max(1, Int((Double(windowDays) * share).rounded(.up))))
+    }
+
+    /// The covered and gap verdicts for one window of days, or none while the window holds fewer days
+    /// with data than ``minimumDaysWithData(forWindow:fraction:)`` asks.
+    ///
+    /// - Parameters:
+    ///   - days: Day history in chronological order; the trailing `windowDays` entries are the window.
+    ///   - windowDays: The window, in stored days (7 or 14 in production).
+    ///   - fraction: The share of the window that must carry data. Production callers take the default,
+    ///     ``minimumDataDayFraction``; the parameter lets a test hold the owner's dial at another value.
+    /// - Returns: One row per tracked nutrient rated covered or gap, stamped with `windowDays`.
+    public static func gaps(
+        from days: [(String, FernletDay)],
+        windowDays: Int,
+        minimumDataDayFraction fraction: Double = MicronutrientGapAnalyzer.minimumDataDayFraction
+    ) -> [NutrientGap] {
         // R5: a public entry point taking a plain Int. `suffix(_:)` TRAPS on a negative length and a
         // zero window divides by zero into NaN ratios, and `assert` is compiled out in Release — so
         // the guard, not the assert, is what makes the parameter safe.
         assert(windowDays > 0, "window must be positive")
         guard windowDays > 0 else { return [] }
-        let window = Array(days.suffix(windowDays))
-        let meals = window.flatMap { $0.1.meals.prefix(20) }
+        let daysWithData = days.suffix(windowDays).filter { carriesMicronutrientData($0.1) }
+        guard daysWithData.count >= minimumDaysWithData(forWindow: windowDays, fraction: fraction) else { return [] }
+        let meals = daysWithData.flatMap { $0.1.meals.prefix(mealsReadPerDay) }
         guard meals.isEmpty == false else { return [] }
         guard micronutrientDataCoverageRatio(for: meals) >= 0.5 else { return [] }
-
+        let intakeDays = Double(daysWithData.count)
         return trackedNutrients.compactMap { nutrient in
-            let values = meals.compactMap { nutrient.value($0.micronutrientSnapshot) }
-            let dataCoverageRatio = Double(values.count) / Double(meals.count)
-            guard dataCoverageRatio >= 0.5 else { return nil }
+            verdict(for: nutrient, meals: meals, intakeDays: intakeDays, windowDays: windowDays)
+        }
+    }
 
-            let coverageRatio = values.reduce(0, +) / (nutrient.recommendedDailyAmount * Double(windowDays))
-            if coverageRatio < 0.25 {
-                return NutrientGap(
-                    nutrientKey: nutrient.key,
-                    nutrientName: nutrient.name,
-                    unit: nutrient.unit,
-                    windowDays: windowDays,
-                    coverageRatio: coverageRatio,
-                    dataCoverageRatio: dataCoverageRatio,
-                    status: .gap
-                )
-            }
-            if coverageRatio >= 0.5 {
-                return NutrientGap(
-                    nutrientKey: nutrient.key,
-                    nutrientName: nutrient.name,
-                    unit: nutrient.unit,
-                    windowDays: windowDays,
-                    coverageRatio: coverageRatio,
-                    dataCoverageRatio: dataCoverageRatio,
-                    status: .covered
-                )
-            }
+    /// One nutrient's verdict over the window's meals: covered at ≥ 50% of the DV for `intakeDays`
+    /// days, a gap under 25%, and no row in between or when under half the meals carry its value.
+    private static func verdict(
+        for nutrient: NutrientReference, meals: [Meal], intakeDays: Double, windowDays: Int
+    ) -> NutrientGap? {
+        let values = meals.compactMap { nutrient.value($0.micronutrientSnapshot) }
+        let dataCoverageRatio = Double(values.count) / Double(meals.count)
+        guard dataCoverageRatio >= 0.5 else { return nil }
+        let coverageRatio = values.reduce(0, +) / (nutrient.recommendedDailyAmount * intakeDays)
+        let status: NutrientGapStatus
+        if coverageRatio < 0.25 {
+            status = .gap
+        } else if coverageRatio >= 0.5 {
+            status = .covered
+        } else {
             return nil
         }
+        return NutrientGap(
+            nutrientKey: nutrient.key,
+            nutrientName: nutrient.name,
+            unit: nutrient.unit,
+            windowDays: windowDays,
+            coverageRatio: coverageRatio,
+            dataCoverageRatio: dataCoverageRatio,
+            status: status
+        )
     }
 }
 

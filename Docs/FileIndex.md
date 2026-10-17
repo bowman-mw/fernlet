@@ -978,6 +978,7 @@ Unit tests live in one target here, built strict by `Scripts/spm-wall-check.sh` 
 | `Fernlet/Tests/FernletTests/SavedRecipePayloadMigrationTests.swift` | The `SavedRecipeRecord` typed-column → payload-blob migration that unblocked F3/F4/F5. |
 | `Fernlet/Tests/FernletTests/MealDecompositionRecipeWireTests.swift` | Meal-decomposition recipe payloads over the wire. |
 | `Fernlet/Tests/FernletTests/FDADailyValuesTests.swift` | Daily Value table values and their single-source coupling to the gap analyzer. |
+| `Fernlet/Tests/FernletTests/MicronutrientGapHistoryTests.swift` | How much history a micronutrient verdict needs (bug confirmation 2026-10-15, safety-firstrun §4): the owner's dial `MicronutrientGapAnalyzer.minimumDataDayFraction` stands at 1.0 (a full window); one and six days at full daily values report no gap in either window, and a first day's derived signals carry none ("insufficient data"); fourteen low days still report every nutrient a gap; a full window at the daily values reads 1.0; an unlogged day is never zero intake (at a looser dial intake is divided by the days with data); a day whose meals carry no data is not a day with data. |
 | `Fernlet/Tests/FernletTests/NutrientSuggestionTests.swift` | The gap-filling nutrient nudge: curated-source binding and suppression rules. |
 | `Fernlet/Tests/FernletTests/BarcodeServingStepTests.swift` | Serving-step prefill memory keyed by normalized GTIN, and its wipe. |
 | `Fernlet/Tests/FernletTests/CloudKitSchemaDeployTests.swift` | Purity of the schema-deploy launch-flag parse. |

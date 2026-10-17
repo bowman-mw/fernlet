@@ -157,6 +157,13 @@ under-18 exception (owner, 2026-09-24). `GoalType.nutritionSummary(weightManagem
 states the value in effect on the goal card. Evidence and options:
 `Docs/Calorie-Deficit-Research-2026-09-23.md`.
 
+``MicronutrientGapAnalyzer`` rates a nutrient over a 7- or 14-day window only when that window holds
+``MicronutrientGapAnalyzer/minimumDataDayFraction`` of its days with micronutrient data, and measures
+intake against those days, never the nominal window (2026-10-16): an unlogged day is unknown, not
+zero, and a first day of logging is no gap. The fraction is the owner's dial; at its value of `1.0`
+the window must be full, so the gaps that feed the food score, the Home nudge and the AI prompt need
+a full week (or fortnight) of data behind them.
+
 - ``UserNutritionProfile``
 - ``UserNutritionPreferences``
 - ``BiologicalSex``
