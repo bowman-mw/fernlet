@@ -8461,6 +8461,102 @@
     "meal" : {
 
     },
+    "mealReview.message.checkItems" : {
+      "comment" : "Shown at the top of the pre-log meal review when every typed item was matched but the result still needs a look.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Double-check the items below before logging."
+          }
+        }
+      }
+    },
+    "mealReview.message.lowConfidence" : {
+      "comment" : "Shown at the top of the pre-log meal review when the match for what the person typed or photographed is low-confidence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it."
+          }
+        }
+      }
+    },
+    "mealReview.message.partialMatch" : {
+      "comment" : "Shown at the top of the pre-log meal review when some of the typed words matched nothing; those words are listed below it.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet matched part of what you typed. Check what's here before logging."
+          }
+        }
+      }
+    },
+    "mealSheet.capture.labelUnreadable" : {
+      "comment" : "Shown in the meal sheet's capture banner, above a Try again button, when the person chose Read the label but no nutrition label could be read from the photo.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+          }
+        }
+      }
+    },
+    "mealSheet.capture.noBarcode" : {
+      "comment" : "Shown in the meal sheet's capture banner, above a Try again button, when the person chose Look up the barcode but no barcode was found in the photo.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+          }
+        }
+      }
+    },
+    "mealSheet.notice.photoNotRecognized" : {
+      "comment" : "Shown on the meal sheet when Identify from photo found nothing food-like in the picture. It invites typing the meal instead.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
+          }
+        }
+      }
+    },
+    "mealSheet.notice.photoNotSaved" : {
+      "comment" : "Shown on the meal sheet when the meal was logged but its photo could not be saved. The sheet stays open so this is read; saving again does not log the meal twice.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your meal is logged, but its photo couldn't be saved to your private store."
+          }
+        }
+      }
+    },
+    "mealSheet.notice.productSaved" : {
+      "comment" : "Shown on the meal sheet after a packaged food was imported from a web product page and its name was put in the meal description. The placeholder is the product's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ was saved. Review the meal description, then save your meal."
+          }
+        }
+      }
+    },
     "memory.emotionOnly.bright" : {
       "comment" : "Core memory row: a journal entry tagged Bright. Only the feeling is kept, never the words.",
       "extractionState" : "extracted_with_value",
@@ -8946,6 +9042,102 @@
         }
       }
     },
+    "productImport.notice.webLookupOff" : {
+      "comment" : "Shown on the product search screen when web lookup is off but AI features are on. 'Web nutrition lookup' is the name of a switch in Settings › AI & data sources; translate it as that switch is translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web."
+          }
+        }
+      }
+    },
+    "productImport.notice.webLookupOffWithAI" : {
+      "comment" : "Shown on the product search screen when web lookup is off and AI features are off too. 'Web nutrition lookup' is the name of a switch in Settings › AI & data sources; translate it as that switch is translated.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web."
+          }
+        }
+      }
+    },
+    "recipeBook.notice.added" : {
+      "comment" : "Shown in the recipe book for a few seconds after a recipe was created, whether it was typed in, pasted as recipe data or imported from a web page. The placeholder is the new recipe's name, kept in curly quotes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” added to your recipes."
+          }
+        }
+      }
+    },
+    "recipeDetail.photo.notSaved" : {
+      "comment" : "Shown under a recipe's photo when a new photo for the recipe could not be saved. Nothing changed, so trying again is safe.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couldn't save this photo to your private store. Please try again."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.recipeDeleted" : {
+      "comment" : "Shown on a recipe when it was deleted while its re-import from the source web page was still running, so nothing was refreshed.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This recipe was deleted, so there's nothing to refresh."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.refreshed" : {
+      "comment" : "Shown on a recipe after its ingredients and nutrition were replaced with what its source web page says now. The placeholder is the website's host name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Refreshed from %@. Your photo and notes are kept."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.refreshing" : {
+      "comment" : "Shown on a recipe while it is being re-imported from its source web page. The placeholder is the website's host name, for example www.example.com.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Refreshing from %@..."
+          }
+        }
+      }
+    },
+    "recipeDetail.reimport.sourcePage" : {
+      "comment" : "Stands in for a website's name when an imported recipe's source link has no host, inside sentences such as 'Re-import from %@?' and 'Refreshing from %@...'. Lowercase because it sits mid-sentence.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "the source page"
+          }
+        }
+      }
+    },
     "recipeImport.error.aiBudgetExhaustedNotQueued" : {
       "comment" : "Shown when a pasted recipe link needs on-device AI, today's AI budget is spent, AND the link could not be saved for a retry tomorrow — so, unlike the usual resting message, it asks the person to paste it again.",
       "extractionState" : "extracted_with_value",
@@ -8978,6 +9170,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Could not re-import this recipe."
+          }
+        }
+      }
+    },
+    "recipeImport.notice.added" : {
+      "comment" : "Shown on the recipe import screen for a moment after a pasted link imported, just before the screen closes. The placeholder is the imported recipe's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ added to your recipes."
+          }
+        }
+      }
+    },
+    "recipeImport.notice.alreadyImported" : {
+      "comment" : "Shown on the recipe import screen when the pasted link was imported before, so nothing is fetched and the saved recipe is offered instead. The placeholder is that saved recipe's name, kept in curly quotes.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%@” was already imported from this page."
+          }
+        }
+      }
+    },
+    "recipeImport.notice.fetching" : {
+      "comment" : "Shown on the recipe import screen while the pasted recipe link is being fetched from the web.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fetching recipe..."
           }
         }
       }
