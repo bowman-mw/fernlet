@@ -354,7 +354,9 @@ public extension View {
 /// Titles **wrap** (two lines by default) rather than shrink-and-truncate: at accessibility sizes a
 /// one-line header used to read "Protect private spa…", and a header that swallows the page's name
 /// is worse than a header that takes a second line. Pass `titleLineLimit: 3` where the title is
-/// user-supplied and long (a recipe name, say); the subtitle takes up to three lines.
+/// user-supplied and long (a recipe name, say); the subtitle takes up to three lines. Both limits
+/// lift at accessibility sizes, where two lines of a 60pt title still truncated "Pick an eating
+/// pattern" and three lines of subtitle cut the onboarding copy mid-sentence.
 public struct ScreenHeader: View {
     var title: Text
     var subtitle: Text
@@ -363,8 +365,10 @@ public struct ScreenHeader: View {
     /// screen's header (e.g. "screen.home"). An identifier is a test *token*, never display text,
     /// so it stays a plain `String` and stays English forever. Empty when unset — a no-op for users.
     var identifier: String?
-    /// How many lines the title may wrap to before truncating. Two by default.
+    /// How many lines the title may wrap to before truncating, below accessibility sizes. Two by
+    /// default.
     var titleLineLimit: Int
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// The localizing initializer, for the common case where both halves are authored copy.
     ///
@@ -417,7 +421,7 @@ public struct ScreenHeader: View {
             title
                 .font(.fernlet(.display))
                 .foregroundStyle(Color.bark)
-                .lineLimit(titleLineLimit)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : titleLineLimit)
                 .fixedSize(horizontal: false, vertical: true)
             if !subtitleFirst { subtitleView }
         }
@@ -436,7 +440,7 @@ public struct ScreenHeader: View {
             .font(.fernlet(.bodySmall))
             .italic()
             .foregroundStyle(Color.slate)
-            .lineLimit(3)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

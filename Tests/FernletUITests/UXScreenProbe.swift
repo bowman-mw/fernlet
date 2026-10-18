@@ -1367,25 +1367,8 @@ extension UXScreenProbe {
         // from this map entirely — the retired line was their only entry, so they are back to an
         // empty baseline and fail on their first new finding, which is where a clean screen
         // belongs. Same for `Sheet · Log intimacy` below.
-        "Onboarding · Dietary pattern": [
-            "Text clipped — “Pick an eating pattern” (48)",
-        ],
-        "Onboarding · Lock setup": [
-            "Text clipped — “Protect private spaces” (48)",
-            "Text clipped — “The lock guards period, intimacy, and other sensitive areas before they open.” (48)",
-        ],
-        "Onboarding · Permissions": [
-            "Text clipped — “Fernlet asks at first use where practical, so you can start without granting everything now.” (48)",
-        ],
         "Onboarding · Personal details": [
             "Text clipped — <no label> id=onboarding.displayName (49)",
-            "Text clipped — “These are optional except age. Fernlet never asks for weight goals.” (48)",
-        ],
-        "Onboarding · Storage choice": [
-            "Text clipped — “Choose where logs live” (48)",
-        ],
-        "Onboarding · Welcome": [
-            "Text clipped — “A small daily care companion built around privacy, local control, and enoughness.” (48)",
         ],
         "Private · Cycle (both halves)": [
             "Dynamic Type font sizes are partially unsupported — “<date-word> #” (48)",
