@@ -1,0 +1,323 @@
+# Scheduled report: the whole FernletTests suite, a strict Release build and the DocC build.
+#
+# REPORT-ONLY, deliberately, until each job has a record. Nothing here runs on push or pull_request,
+# nothing here is a required status check, and no other workflow or test reads this file, so a red
+# run blocks no merge. A red run is still a red run: GitHub marks it failed and mails whoever last
+# changed the schedule, so a failure is reported, never swallowed. No job carries
+# `continue-on-error:` for that reason. Promote a job once it has been green on a run of nights: move
+# its steps into s3-wall.yml (whose walls then pin them) or give it a `pull_request:` trigger and make
+# it a required check, in a commit that says what its record was.
+#
+# What each job covers that S3 Wall does not:
+#   * full-suite: S3 Wall runs named suites on gated lines, 259 of FernletTests' ~640 suites
+#     (Tests/suite-inventory.tsv, 2026-10-17), each against a measured floor. This job runs all of
+#     FernletTests once a night over the same strict build, so a suite on no line that goes red (a
+#     regression or a flake) is seen within a day instead of whenever somebody next runs it by hand.
+#     It has no floor: it names no suite, and it is not a gate. It refuses a restarted run with
+#     run-gated-suites.sh's own restart guard, since a restart re-runs suites and makes every count
+#     unreadable. MEASURED locally on 2026-10-17 (a private iPhone 17 simulator): 6832 tests (6670 in
+#     614 Swift Testing suites), 0 failed, 3 skipped (HealthKitWorkoutTests' simulator skips), 788 s.
+#   * release-build: every other build in CI is Debug. Release compiles the `#else` halves of every
+#     `#if DEBUG` (the test hooks TestHookBoundaryTests holds to DEBUG, the UITestSupport no-ops),
+#     optimizes whole-module, and runs the Release-only "Ensure branded catalog ODR source" phase.
+#     Xcode Cloud archives main with the project's warnings-as-errors, but Xcode hides the local
+#     packages' warnings there (`-suppress-warnings`). This job builds Release with the same three
+#     overrides Scripts/spm-wall-check.sh passes for Power-of-10 rule 10 (Docs/Power-of-10-Swift.md
+#     §R10), `SUPPRESS_WARNINGS=NO` among them, unsigned, for a generic iOS device. MEASURED locally
+#     on 2026-10-17 (the branded catalog skipped with FERNLET_ALLOW_MISSING_BRANDED_CATALOG=YES):
+#     BUILD SUCCEEDED in about 4 minutes, its only warnings ld's class_ro_t pointer-signing notes
+#     (Docs/Enhanced-Security.md) and two App Intents metadata notes.
+#   * docc: the DocC landing pages and `///` comments are the orientation layer a reader of any module
+#     starts from, and nothing builds them. Scripts/doc-coverage-scan.py counts that every type
+#     has a comment, but not that a symbol link resolves. This job builds the archives, counts the
+#     documentation warnings in Fernlet's own sources, and keeps the archives as an artifact. It runs
+#     weekly and on demand: the docs change least often, and the count is a backlog more than a
+#     signal. MEASURED locally on 2026-10-17: a cold docbuild took 271 s and 8.7 GB of derived data
+#     and built 34 archives (the 27 FernletKit modules, the app and its three extensions, ProximityKit
+#     and CryptoSwift's two). It printed 581 warnings of Fernlet's own: 447 symbol links that resolve
+#     to nothing (mostly ``Symbol`` links to a private or another module's name), 122 undocumented
+#     parameters, 12 other. That backlog is why this job reports and does not gate.
+#
+# The runner floor is the one S3 Wall states and checks: macOS with the iOS 26.5 SDK or newer
+# (`runs-on: macos-26`; macos-15 tops out at the 26.3 SDK). Each job's "Select the newest Xcode 26+"
+# copies S3 Wall's step, its checks rather than its prose (release-build reads the device SDK, the
+# others the simulator's). Extract it to a script both workflows call when a job here is promoted,
+# rather than let the copies drift.
+
+name: Scheduled report
+
+on:
+  schedule:
+    # Off the hour, when hosted runners are least contended. Nightly: full-suite and release-build.
+    - cron: "23 6 * * *"
+    # Sundays an hour later: docc alone (the nightly run has covered the other two that day).
+    - cron: "23 7 * * 0"
+  workflow_dispatch:
+    inputs:
+      docc:
+        description: "Also build the DocC archives"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-report
+  cancel-in-progress: false
+
+jobs:
+  full-suite:
+    name: Full FernletTests (report-only)
+    # Every trigger but the weekly cron, which is docc's (a job's `if:` cannot read a workflow `env:`,
+    # so the cron is spelled again in each condition).
+    if: github.event.schedule != '23 7 * * 0'
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode 26+
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          best_version=""; best_dir=""
+          for app in /Applications/Xcode*.app; do
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+              "$app/Contents/Info.plist" 2>/dev/null)" || continue
+            [ -n "$version" ] || continue
+            major="${version%%.*}"
+            case "$major" in ''|*[!0-9]*) continue ;; esac
+            [ "$major" -ge 26 ] || continue
+            if [ -z "$best_version" ] || \
+               [ "$(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -1)" = "$version" ]; then
+              best_version="$version"; best_dir="$app/Contents/Developer"
+            fi
+          done
+          if [ -z "$best_dir" ]; then
+            echo "::error::No Xcode 26 or newer on this runner. FernletKit needs Swift tools 6.2+ and the iOS 26 SDK."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          echo "Selected Xcode $best_version ($best_dir)"
+          echo "DEVELOPER_DIR=$best_dir" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$best_dir" xcodebuild -version
+          required_sdk="26.5"
+          sdk="$(DEVELOPER_DIR="$best_dir" xcodebuild -version -sdk iphonesimulator SDKVersion | head -1)"
+          echo "iOS Simulator SDK: $sdk (require >= $required_sdk)"
+          if [ "$(printf '%s\n%s\n' "$required_sdk" "$sdk" | sort -V | head -1)" != "$required_sdk" ]; then
+            echo "::error::iOS SDK $sdk is older than the required $required_sdk (AgeRangeService.AgeRangeDeclaration.confirmed). Use a runner image with a newer Xcode, or a self-hosted runner."
+            exit 1
+          fi
+
+      # The one device every test line runs on, with no fallback (S3 Wall's "Resolve a simulator
+      # destination" says why).
+      - name: Resolve the iPhone 17 simulator
+        run: |
+          set -euo pipefail
+          name="iPhone 17"
+          if ! xcrun simctl list devices available | grep -qE "^ *${name} \("; then
+            echo "::error::The '${name}' simulator is not available on this runner. Do not substitute another device."
+            xcrun simctl list devices available || true
+            exit 1
+          fi
+          echo "FERNLET_DESTINATION=platform=iOS Simulator,name=$name" >> "$GITHUB_ENV"
+
+      # The strict build-for-testing every S3 Wall line reads (warnings are errors, the S3 flag on).
+      - name: Strict build-for-testing (Scripts/spm-wall-check.sh)
+        run: |
+          set -euo pipefail
+          Scripts/spm-wall-check.sh
+
+      - name: Run all of FernletTests
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/fernlet-full-suite.xcresult"
+          log="$RUNNER_TEMP/fernlet-full-suite.log"
+          status=0
+          xcodebuild test-without-building -workspace Fernlet.xcworkspace -scheme Fernlet \
+            -destination "$FERNLET_DESTINATION" -only-testing:FernletTests \
+            -resultBundlePath "$bundle" 2>&1 | tee "$log" || status=$?
+          # The floor script's restart guard, at its log seam: one grep, one marker, one wording.
+          Scripts/run-gated-suites.sh --check-log "$log" || status=1
+          if [ ! -d "$bundle" ]; then
+            echo "::error::xcodebuild wrote no result bundle (status $status)"
+            exit 1
+          fi
+          xcrun xcresulttool get test-results summary --path "$bundle" --compact > "$RUNNER_TEMP/summary.json"
+          xcrun xcresulttool get test-results tests --path "$bundle" --compact > "$RUNNER_TEMP/tests.json"
+          python3 - "$RUNNER_TEMP/summary.json" "$RUNNER_TEMP/tests.json" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          summary = json.load(open(sys.argv[1], encoding="utf-8"))
+          tree = json.load(open(sys.argv[2], encoding="utf-8"))
+          print("### Full FernletTests")
+          print(f"- result: {summary.get('result', 'unknown')}")
+          print(f"- tests: {summary.get('totalTestCount', 0)}, failed {summary.get('failedTests', 0)}, "
+                f"skipped {summary.get('skippedTests', 0)}")
+          # Bounded: every node of the finite tree is pushed once; at most 50 names are printed.
+          failed, stack = [], list(tree.get("testNodes", []))
+          while stack:
+              node = stack.pop()
+              if node.get("nodeType") == "Test Case" and node.get("result") == "Failed":
+                  failed.append(node.get("nodeIdentifier") or node.get("name", "?"))
+              stack.extend(node.get("children", []) or [])
+          for name in sorted(failed)[:50]:
+              print(f"  - failed: `{name}`")
+          if len(failed) > 50:
+              print(f"  - … and {len(failed) - 50} more")
+          PY
+          exit "$status"
+
+      - name: Keep the result bundle of a red run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-suite-xcresult
+          path: ${{ runner.temp }}/fernlet-full-suite.xcresult
+          retention-days: 7
+
+  release-build:
+    name: Strict Release build (report-only)
+    if: github.event.schedule != '23 7 * * 0'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode 26+
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          best_version=""; best_dir=""
+          for app in /Applications/Xcode*.app; do
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+              "$app/Contents/Info.plist" 2>/dev/null)" || continue
+            [ -n "$version" ] || continue
+            major="${version%%.*}"
+            case "$major" in ''|*[!0-9]*) continue ;; esac
+            [ "$major" -ge 26 ] || continue
+            if [ -z "$best_version" ] || \
+               [ "$(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -1)" = "$version" ]; then
+              best_version="$version"; best_dir="$app/Contents/Developer"
+            fi
+          done
+          if [ -z "$best_dir" ]; then
+            echo "::error::No Xcode 26 or newer on this runner. FernletKit needs Swift tools 6.2+ and the iOS 26 SDK."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          echo "Selected Xcode $best_version ($best_dir)"
+          echo "DEVELOPER_DIR=$best_dir" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$best_dir" xcodebuild -version
+          required_sdk="26.5"
+          sdk="$(DEVELOPER_DIR="$best_dir" xcodebuild -version -sdk iphoneos SDKVersion | head -1)"
+          echo "iOS SDK: $sdk (require >= $required_sdk)"
+          if [ "$(printf '%s\n%s\n' "$required_sdk" "$sdk" | sort -V | head -1)" != "$required_sdk" ]; then
+            echo "::error::iOS SDK $sdk is older than the required $required_sdk (AgeRangeService.AgeRangeDeclaration.confirmed). Use a runner image with a newer Xcode, or a self-hosted runner."
+            exit 1
+          fi
+
+      # A Release build refuses to ship the branded-food-catalog pack without its database (the
+      # "Ensure branded catalog ODR source" phase), and a fresh clone has none: fetch the pinned
+      # release asset, checksum-verified, exactly as Xcode Cloud's post-clone hook does.
+      - name: Fetch the branded catalog (Scripts/fetch-branded-catalog.sh)
+        run: |
+          set -euo pipefail
+          Scripts/fetch-branded-catalog.sh
+
+      - name: Release build, warnings as errors, unsigned
+        run: |
+          set -euo pipefail
+          xcodebuild build -workspace Fernlet.xcworkspace -scheme Fernlet -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/release" \
+            CODE_SIGNING_ALLOWED=NO \
+            SUPPRESS_WARNINGS=NO SWIFT_TREAT_WARNINGS_AS_ERRORS=YES GCC_TREAT_WARNINGS_AS_ERRORS=YES
+
+  docc:
+    name: DocC build (report-only)
+    if: github.event.schedule == '23 7 * * 0' || (github.event_name == 'workflow_dispatch' && inputs.docc)
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode 26+
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          best_version=""; best_dir=""
+          for app in /Applications/Xcode*.app; do
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+              "$app/Contents/Info.plist" 2>/dev/null)" || continue
+            [ -n "$version" ] || continue
+            major="${version%%.*}"
+            case "$major" in ''|*[!0-9]*) continue ;; esac
+            [ "$major" -ge 26 ] || continue
+            if [ -z "$best_version" ] || \
+               [ "$(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -1)" = "$version" ]; then
+              best_version="$version"; best_dir="$app/Contents/Developer"
+            fi
+          done
+          if [ -z "$best_dir" ]; then
+            echo "::error::No Xcode 26 or newer on this runner. FernletKit needs Swift tools 6.2+ and the iOS 26 SDK."
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          echo "Selected Xcode $best_version ($best_dir)"
+          echo "DEVELOPER_DIR=$best_dir" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$best_dir" xcodebuild -version
+          required_sdk="26.5"
+          sdk="$(DEVELOPER_DIR="$best_dir" xcodebuild -version -sdk iphonesimulator SDKVersion | head -1)"
+          echo "iOS Simulator SDK: $sdk (require >= $required_sdk)"
+          if [ "$(printf '%s\n%s\n' "$required_sdk" "$sdk" | sort -V | head -1)" != "$required_sdk" ]; then
+            echo "::error::iOS SDK $sdk is older than the required $required_sdk (AgeRangeService.AgeRangeDeclaration.confirmed). Use a runner image with a newer Xcode, or a self-hosted runner."
+            exit 1
+          fi
+
+      - name: Build the DocC archives
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/docc.log"
+          status=0
+          xcodebuild docbuild -workspace Fernlet.xcworkspace -scheme Fernlet \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/docc" \
+            2>&1 | tee "$log" || status=$?
+          mkdir -p "$RUNNER_TEMP/doccarchives"
+          find "$RUNNER_TEMP/docc/Build/Products" -name '*.doccarchive' -type d -prune \
+            -exec cp -R {} "$RUNNER_TEMP/doccarchives/" \;
+          archives="$(find "$RUNNER_TEMP/doccarchives" -maxdepth 1 -name '*.doccarchive' | wc -l | tr -d ' ')"
+          {
+            echo "### DocC"
+            echo "- xcodebuild status: $status"
+            echo "- archives built: $archives"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Fernlet's own documentation warnings, each once: xcodebuild prints every one twice (once
+          # with ` (in target …)`), and the dependencies' docs under SourcePackages/ are theirs.
+          python3 - "$log" "$GITHUB_WORKSPACE" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import collections, re, sys
+          pattern = re.compile(r"^(/.*?):(\d+):(\d+): warning: (.*?)(?: \(in target '[^']*' from project '[^']*'\))?$")
+          root = sys.argv[2].rstrip("/") + "/"
+          seen = set()
+          # Bounded: one pass over the finite log.
+          for raw in open(sys.argv[1], encoding="utf-8", errors="replace"):
+              match = pattern.match(raw.rstrip("\n"))
+              if match and match.group(1).startswith(root) and "/SourcePackages/" not in match.group(1):
+                  seen.add(match.groups())
+          modules = collections.Counter()
+          for path, _, _, _ in seen:
+              parts = path[len(root):].split("/")
+              modules[parts[2] if parts[0] == "FernletKit" and len(parts) > 2 else parts[min(1, len(parts) - 1)]] += 1
+          print(f"- documentation warnings in Fernlet's sources: {len(seen)}")
+          for name, count in modules.most_common(10):
+              print(f"  - {name}: {count}")
+          PY
+          exit "$status"
+
+      - name: Keep the archives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doccarchives
+          path: ${{ runner.temp }}/doccarchives
+          retention-days: 14
+          if-no-files-found: warn
