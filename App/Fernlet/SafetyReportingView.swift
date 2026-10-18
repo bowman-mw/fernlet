@@ -80,6 +80,9 @@ struct SafetyReportingView: View {
             Text("Contact")
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
+                // This page is where help lives; its section titles are how the Headings rotor
+                // finds the developer's address without reading every paragraph above it.
+                .accessibilityAddTraits(.isHeader)
             Text("For anything a report or block can't resolve, reach the developer, Michael Bowman Olay.")
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
@@ -109,6 +112,7 @@ struct SafetyReportingView: View {
             Text(title)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
+                .accessibilityAddTraits(.isHeader)
             Text(body)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)

@@ -85,6 +85,9 @@ struct ContentView: View {
     /// presenter, preserving its post-import calendar refresh.
     @State private var trainerExportLaunchAction: TrainerExportLaunchAction?
     @State private var mealLogNotification: MealLogNotification?
+    /// True while VoiceOver's cursor is on the meal-logged toast, which then waits rather than
+    /// vanishing from under it (see ``showMealLogNotification(_:)``).
+    @State private var isMealToastUnderCursor = false
     /// The just-logged meal the toast's "Adjust" action opens the correction sheet for — a local
     /// `.sheet(item:)` slot beside the `activeSheet` router (the toast fires only after the logging
     /// sheet has dismissed, so the two slots never race).
@@ -1127,6 +1130,16 @@ struct ContentView: View {
                 activeSheet = .settings
             }
         )
+        // The long press as a VoiceOver action on the Home tab (Actions rotor), so "Settings from
+        // any tab" is not a sighted-only shortcut. Same effect as the gesture.
+        .accessibilityActions {
+            if tab == .home {
+                Button("Open Settings") {
+                    selectedTab = .home
+                    activeSheet = .settings
+                }
+            }
+        }
     }
 
     /// Routes a sheet case to its family builder. Split per family (not per case) because the flat
@@ -1878,6 +1891,11 @@ struct ContentView: View {
         // over whichever tab the log started from; jumping to Home meant a meal logged from Food
         // landed the user on another tab and cost them a tab switch to check the match.
         mealLogNotification = notification
+        // The toast appears with no focus change, so without this a VoiceOver user is never told
+        // the meal landed or that an Undo exists. Spoken after the logging sheet has settled.
+        Task { @MainActor in
+            await TaskConfirmation.mealLogged(count: meals.count).announceAfterSheetCloses()
+        }
 
         // Read at post time, not at view construction: VoiceOver can be turned on mid-session.
         let window = FernletDismissalWindow.system.window(
@@ -1890,6 +1908,13 @@ struct ContentView: View {
                 // Switch Control that budget buys nothing — the toast is gone before the cursor
                 // has reached it — so the stretched action window applies instead.
                 try await Task.sleep(for: window)
+                // Never pull the toast out from under VoiceOver's cursor: a user who reached it at
+                // second 19 would hear "Undo, button" and then nothing. While it is focused the
+                // window waits, a second at a time, up to ``mealToastCursorHoldLimit``.
+                for _ in 0..<Self.mealToastCursorHoldLimit
+                where isMealToastUnderCursor && mealLogNotification?.id == notification.id {
+                    try await Task.sleep(for: .seconds(1))
+                }
             } catch {
                 // Cancelled: leave the toast to whatever superseded this one (the id check below is
                 // the same supersede rule).
@@ -1901,6 +1926,11 @@ struct ContentView: View {
         }
     }
 
+    /// The most seconds the meal-logged toast waits past its window while VoiceOver's cursor is on
+    /// it. Five minutes: far longer than reading two buttons takes, short enough that a phone set
+    /// down with the cursor parked on Undo still clears the toast eventually.
+    static let mealToastCursorHoldLimit = 300
+
     /// The bottom toast slot (artboard 4b). Overlays ``mainInterface`` outside its tab-bar inset and
     /// keyboard ignore, lifted by ``mealLogToastLift``: 8pt above the bar while the keyboard is down
     /// (where the bar's inset used to push it), 8pt above the keyboard while it is up (the bar is
@@ -1911,6 +1941,7 @@ struct ContentView: View {
         if let notification = mealLogNotification {
             MealLogNotificationView(
                 notification: notification,
+                isUnderCursor: $isMealToastUnderCursor,
                 onUndo: { undoLoggedMeals(notification) },
                 onAdjust: { adjustLoggedMeal(notification) }
             )
@@ -1929,6 +1960,7 @@ struct ContentView: View {
         if mealLogNotification?.id == notification.id {
             mealLogNotification = nil
         }
+        TaskConfirmation.mealUndone(count: notification.meals.count).announce()
     }
 
     /// The toast's "Adjust": opens the meal-correction sheet for the single just-logged meal.
@@ -2111,12 +2143,23 @@ struct MealLogNotification: Identifiable, Equatable {
 /// reaches the tab bar beneath it.
 struct MealLogNotificationView: View {
     var notification: MealLogNotification
+    /// Set while VoiceOver's cursor is on any part of the toast, so the presenter's timer waits
+    /// instead of removing the element being read.
+    @Binding var isUnderCursor: Bool
     /// Removes the just-logged meal(s); the presenter owns the store call.
     var onUndo: () -> Void
     /// Opens the correction sheet for ``MealLogNotification/singleMeal``; only invoked when the
     /// Adjust pill renders (single-meal logs).
     var onAdjust: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Which of the toast's three elements VoiceOver's cursor is on, if any. Read, never written:
+    /// the toast does not take focus — the announcement says where it is — it only notices it.
+    @AccessibilityFocusState private var cursor: ToastPart?
+
+    /// The toast's accessibility elements, for ``cursor``.
+    private enum ToastPart: Hashable {
+        case message, undo, adjust
+    }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -2141,6 +2184,9 @@ struct MealLogNotificationView: View {
         .overlay(shape.stroke(Color.bark.opacity(0.10), lineWidth: 1))
         .shadow(color: Color.bark.opacity(0.12), radius: 14, x: 0, y: 7)
         .accessibilityElement(children: .contain)
+        .onChange(of: cursor) { _, part in isUnderCursor = part != nil }
+        // The toast can leave while focused (Undo, a newer log); the hold must not outlive it.
+        .onDisappear { isUnderCursor = false }
     }
 
     /// Title ("<name> logged" / "<n> meals logged") over the slot + macros detail line.
@@ -2157,6 +2203,7 @@ struct MealLogNotificationView: View {
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityFocused($cursor, equals: .message)
     }
 
     private var titleText: Text {
@@ -2187,10 +2234,12 @@ struct MealLogNotificationView: View {
             Button("Undo", action: onUndo)
                 .buttonStyle(MealToastPillStyle(prominent: false, expands: expands))
                 .accessibilityIdentifier("mealToast.undo")
+                .accessibilityFocused($cursor, equals: .undo)
             if notification.singleMeal != nil {
                 Button("Adjust", action: onAdjust)
                     .buttonStyle(MealToastPillStyle(prominent: true, expands: expands))
                     .accessibilityIdentifier("mealToast.adjust")
+                    .accessibilityFocused($cursor, equals: .adjust)
             }
         }
     }

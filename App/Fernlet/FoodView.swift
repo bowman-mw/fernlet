@@ -2166,7 +2166,11 @@ private struct CatalogSuggestionRow: View {
             Button(action: onSelect) { rowContent }
                 .buttonStyle(.plain)
         } else {
-            rowContent.accessibilityAddTraits(.isSelected)
+            // One element, then selected. The trait used to land on an uncombined HStack, which
+            // splits into four elements — name, source, macros, check glyph — each read "selected".
+            rowContent
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isSelected)
         }
     }
 
@@ -2187,10 +2191,15 @@ private struct CatalogSuggestionRow: View {
                 Text("\(RecipeQuantityDisplay.display(foodItem.servingSize)) \(foodItem.servingUnit) · P\(grams.protein)g C\(grams.carbs)g F\(grams.fat)g")
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
+                    // "P0g C25g F0g" is a glance format; spoken letter by letter it is noise.
+                    .accessibilityLabel(Text("\(RecipeQuantityDisplay.display(foodItem.servingSize)) \(foodItem.servingUnit), protein \(grams.protein) grams, carbs \(grams.carbs) grams, fat \(grams.fat) grams"))
             }
             Spacer()
+            // Decorative: the row is the button (add) or carries the selected trait (chosen), so
+            // the glyph's own spoken name only added "Add" / "checkmark" to the end of the row.
             Image(systemName: trailingSystemImage)
                 .foregroundStyle(Color.moss)
+                .accessibilityHidden(true)
         }
         .padding(10)
         .background(Color.parchment.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
@@ -3025,6 +3034,11 @@ struct MealSheet: View {
                                 guard canSaveTypedMeal else { return }
                                 saveTapped()
                             }
+                            // The caption above can't name this field (`namesControl` would also
+                            // swallow the results list beside it), so VoiceOver read the example
+                            // placeholder as the field's name — easy to mistake for text already
+                            // typed. The field says what it is for instead.
+                            .accessibilityLabel("What did you eat?")
                             .accessibilityIdentifier("mealComposer.search")
                             mealCatalogSearchState
                         }
@@ -5111,12 +5125,18 @@ private struct MealComponentEditorRows: View {
                             .frame(maxWidth: 64)
                             .font(.fernlet(.stat))
                             .foregroundStyle(Color.bark)
+                            // "Qty, text field" in a list of them said nothing about WHICH item.
+                            .accessibilityLabel(Text("Amount of \(component.name)"))
                         Text(component.unit)
                             .font(.fernlet(.stat))
                             .foregroundStyle(Color.moss)
                     }
                     Stepper("", value: $component.quantity, in: 0...2000, step: component.unit == RecipeUnit.gram.rawValue ? 5 : 0.25)
                         .labelsHidden()
+                        // `.labelsHidden()` also hid the spoken name, so each item's stepper read as
+                        // a bare "Increment" / "Decrement" — one per item, none saying which.
+                        .accessibilityLabel(Text("Amount of \(component.name)"))
+                        .accessibilityValue(Text(component.quantity, format: .number.precision(.fractionLength(0...1))))
                     let macros = component.snapshot.macros
                     Text("P \(macros.protein)g  C \(macros.carbs)g  F \(macros.fat)g")
                         .font(.fernlet(.stat))
@@ -5269,6 +5289,9 @@ private struct MealReviewSheet: View {
                         Text("Check this meal")
                             .font(.fernlet(.displayMedium))
                             .foregroundStyle(Color.bark)
+                            // This sheet replaces the meal sheet mid-task; its title is where a
+                            // VoiceOver user's Headings rotor should land first.
+                            .accessibilityAddTraits(.isHeader)
                         Spacer()
                         Button("Discard", action: onDiscard)
                             .buttonStyle(.plain)
@@ -5288,6 +5311,7 @@ private struct MealReviewSheet: View {
                             SheetField("Meal name") {
                                 TextField("Meal", text: $meal.name)
                                     .sheetTextInput()
+                                    .accessibilityLabel("Meal name")
                             }
 
                             SheetField("Meal type") {
@@ -6458,6 +6482,9 @@ private struct MacroInputRow: View {
                     .font(.fernlet(.stat))
                     .frame(width: 64)
                     .focused($isFocused)
+                    // `TextField("")` has no name of its own; the row's caption is a separate
+                    // element, so VoiceOver announced a bare "text field" with nothing to say whose.
+                    .accessibilityLabel(Text(label))
                     .onAppear {
                         isFocused = true
                     }
@@ -6477,9 +6504,19 @@ private struct MacroInputRow: View {
                 .buttonStyle(.plain)
                 // "0g" alone was an 18pt-square target beside the stepper.
                 .fernletTapTarget()
+                // Spoke only "12g, button" — the macro it belongs to was the caption beside it, a
+                // different element. Name first, amount as the value, so it reads as a field.
+                .accessibilityLabel(Text(label))
+                .accessibilityValue(Text(verbatim: "\(MacroGramEntry.display(grams))\(unit)"))
+                .accessibilityHint("Double-tap to type an amount.")
             }
             Stepper("", value: $grams, in: range, step: 1)
                 .labelsHidden()
+                // `.labelsHidden()` hides the drawn label AND the spoken one: the stepper's two
+                // halves read "Increment" / "Decrement" with no macro named. Same name and value
+                // as the amount beside it.
+                .accessibilityLabel(Text(label))
+                .accessibilityValue(Text(verbatim: "\(MacroGramEntry.display(grams))\(unit)"))
                 .onChange(of: grams) { _, _ in
                     if isEditing {
                         isFocused = false

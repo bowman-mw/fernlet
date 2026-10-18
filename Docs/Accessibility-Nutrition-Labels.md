@@ -263,17 +263,125 @@ These four are intended, not abandoned. Each names what would have to be true.
 "most elements are labelled" — **all common tasks, end to end, with the screen off-attention.**
 
 **Blocker.** Fernlet's four common tasks are: log a meal, log water, log a mood, complete a workout.
-Batches A1–A5 cleared a great deal — the app lock is now modal and speaks its failures (T0-1/T0-3),
-the widget target went from *zero* accessibility modifiers to labelled (T1-7), the announcer exists
-and is adopted at 14 sites (T1-2), 124 headings light up the rotor (T1-1) — but the criterion is a
-**manual, task-by-task pass**, and that pass has not been run. Nothing mechanical can substitute for
-it: the §4.5 wall explicitly does not catch a label that is present but wrong, a broken focus order,
-or a missing custom action, and those are exactly what break a task rather than an element.
+Apple's fundamentals count too: onboarding, changing a setting, and finding help. Batches A1–A5
+cleared a great deal — the app lock is now modal and speaks its failures (T0-1/T0-3), the widget
+target went from *zero* accessibility modifiers to labelled (T1-7), the announcer exists and is
+adopted at 14 sites (T1-2), 124 headings light up the rotor (T1-1). But the criterion is a **manual,
+task-by-task pass on a device**, and that pass has not been run. Nothing mechanical can substitute
+for it: the §4.5 wall explicitly does not catch a label that is present but wrong, a broken focus
+order, or a missing custom action, and those are exactly what break a task rather than an element.
 
-**What would clear it.** One end-to-end VoiceOver-only session doing all four tasks on a device (not
-the simulator), with a stopwatch on the destructive-undo windows. If that session succeeds, this row
-can be added at any subsequent submission at no cost. Declaring it before that session is the single
-most tempting over-claim available here, and it is refused.
+**The simulator half of that pass ran on 2026-10-18, and it found a lot.** Four read-only maps of the
+task flows were followed by a UI suite that walks each task the way VoiceOver reaches it:
+`Tests/FernletUITests/VoiceOverTaskUITests` on the `VoiceOverWalk` harness. Every control is found by
+its spoken label or identifier and never by a coordinate. Every control must be a kind VoiceOver can
+operate and must speak words. Every screen is audited with `performAccessibilityAudit`, restricted to
+element description, traits and hit region, at zero tolerance and with no baseline. Each screen's
+reading order is attached to the run.
+
+**The suite's final result:** all eight walks pass on a private iPhone 17 simulator (iOS 26.5). They
+cover water, a mood, a meal and its Undo, a logged workout, a guided workout to "Nicely done",
+onboarding, a setting, and help. It took seven runs to get there, and each run stopped at the next
+real defect. Two harness lessons are worth keeping:
+- XCUITest lists a SwiftUI button's icon and text as separate elements that VoiceOver never visits,
+  so the walk reads a button as one element, as VoiceOver does.
+- XCUITest also lists a child of a `.contain` container that `.accessibilityHidden(true)` hides from
+  VoiceOver. That is §5's finding again, so the walk excuses such a glyph only by symbol plus
+  container, naming the source line that hides it.
+
+The guided walk sets the Strength goal first. The seeded Wellness program suggests a cardio
+descriptor on some days, and that has no runner. A run left live by an earlier launch is walked
+through its Resume card.
+
+The common thread was not missing labels. **The four tasks completed in silence.** A sighted user
+sees the sheet close, the tile's count roll, the chip fill. A VoiceOver user heard the cursor land
+somewhere and had to go looking for proof. What changed, all of it labels, traits, actions and
+announcements:
+
+- **Every common task now says it landed.** `App/Fernlet/TaskConfirmations.swift` holds the copy.
+  It is caller-resolved, per `FernletAnnouncer`'s localization rule, and it announces the event,
+  never the payload ("Mood logged.", never which mood; "Journal entry saved.", never the entry).
+  - A meal is announced with where its Undo is.
+  - A mood chip is announced only when the store actually wrote, because re-tapping today's mood is
+    a no-op.
+  - A workout is announced from the sheet, from "Already did this", and from a planned row's check.
+  - A journal entry is announced on save.
+  - Water is deliberately not announced. Its counters now carry an `.accessibilityValue`, the
+    mechanism `FernletAnnouncer` reserves for counters. The water sheet's count is one adjustable
+    element, so swiping up and down adds or removes a bottle, and the one-tap add on Home carries the
+    count it changes. Before, that count was drawn on a different element and every double-tap was
+    followed by silence.
+- **The meal Undo toast was a destructive-undo window VoiceOver could not see.** It appeared with
+  no announcement, and its 20 s assistive window (`FernletDismissalWindow`) ran down even with the
+  cursor parked on Undo. It now announces itself. It also waits a second at a time, up to five
+  minutes, while VoiceOver's cursor is on any part of it (`@AccessibilityFocusState`, read and never
+  written). Undo itself says "Meal removed."
+- **The guided workout lost the cursor on every set.** Its bottom bar was an `if`/`else` of two
+  buttons, and SwiftUI gives each branch its own identity, so every "Done set" and every "Skip rest"
+  destroyed the control under the cursor.
+  - It is now one button whose words and action follow the phase.
+  - Each transition is announced: "Set done. Resting.", "Set 2 of 3.", "Next exercise: …",
+    "Workout finished and logged.". The mapping is a pure function, `GuidedRunAnnouncement`, pinned
+    by `TaskConfirmationTests`.
+  - The rest timer gained `.updatesFrequently`. Without it VoiceOver kept the time it read on
+    arrival, which the Live Activity's own timer already handled.
+  - A rest reaching zero is announced, because nothing on screen moves at 0:00.
+- **VoiceOver's escape gesture was dead on every logging sheet with input.**
+  `interactiveDismissDisabled(isDirty)` swallowed the two-finger scrub: no dismissal, no discard
+  prompt, no sound. `FernletDraftGuardModifier` now maps escape to its own Cancel, discard prompt
+  included, which covers every draft-guarded sheet at once. The water sheet and the guided runner got
+  the same treatment.
+- **Onboarding's steps swap in place, so VoiceOver was never told the screen changed.** The cursor
+  could land on the next step's Continue and skip a screen unheard. Each step's header now takes
+  focus when it appears.
+- **Controls that named nothing:**
+  - the Suggest-workout sheet's "Anything else?" field, which had no spoken name at all;
+  - the meal field, which read its example placeholder ("scrambled eggs and toast"), easy to mistake
+    for typed text;
+  - the manual-macro rows' amount button, field and stepper;
+  - the meal review sheet's quantity field and stepper, one per item, none saying which;
+  - three onboarding fields and the age stepper;
+  - the eating-pattern rows, whose only selection cue was a glyph's name. They now carry
+    `.isSelected`.
+- **Glyph names and wrong system labels spoken.** The audit's last frozen "Label not
+  human-readable" finding was `figure.strengthtraining.traditional` on the Move tab's workout cards.
+  It was found and fixed independently by this round and by the Larger Text round (#38): both hid
+  the cards' icons, and the two fixes merged as one. This round also hid the journal sheet's
+  `sparkles` and banner glyphs, the catalog rows' trailing glyph, the Log-it-again card's arrow, the
+  runner's done-screen leaf, and the progress-photo placeholder.
+
+  The walk also caught one that no audit flags: the Suggest sheet's space-row pin,
+  `mappin.and.ellipse`, read as **"Remove Map Pin"**. That is the system's own description of the
+  symbol, a present-but-wrong label beside a row that removes nothing, and exactly the class §5 says
+  no tool can judge. It was found by reading the run's attached transcript.
+- **Navigation:**
+  - "Quick log", "How today felt", "Today's workout", "Workout in progress", the runner's "Rest" and
+    "Nicely done", the meal review title, and Safety & reporting's section titles are now headings.
+  - The Home tab's long-press-to-Settings shortcut has a VoiceOver action, "Open Settings".
+
+**What the simulator could not prove, and why the row stays undeclared.** XCUITest cannot hear an
+announcement, cannot see where the cursor lands after a sheet closes or a step changes, cannot fire
+the two-finger scrub, and cannot list custom actions (§5). Every one of the fixes above is therefore
+an argument, not yet a fact. `TaskConfirmation.sheetSettle`, the 0.7 s wait before a closing sheet's
+confirmation is spoken, is a reasoned figure, not a measured one.
+
+**Owner call: there is no in-app Help.** Apple's fundamentals include finding help. Today help is
+Settings › Safety & reporting, with regional crisis lines and the developer's email, plus the Privacy
+Policy. Settings search finds it from "help". A web support page with common questions exists, and
+nothing in the app links to it. Whether that is enough, or the app needs a Help row first, is a
+product decision. It is recorded here rather than built unasked. A link out would also be a new
+outbound destination for the no-tracking wall's allowlist.
+
+**What would clear it.** One end-to-end VoiceOver-only session on a device, not the simulator.
+- Run it with Screen Curtain on and a stopwatch on the Undo toast.
+- Do all four tasks and the three fundamentals.
+- Follow the owner's step-by-step checklist from this round, which is kept with the local handoff
+  material, not in the repo. It lists, step by step, what each fix above should sound like.
+- If that session succeeds, this row can be added at any subsequent submission at no cost, with the
+  checklist's result table as the evidence.
+
+Declaring it before that session is the single most tempting over-claim available here, and it is
+refused.
 
 ### Voice Control — undeclared
 

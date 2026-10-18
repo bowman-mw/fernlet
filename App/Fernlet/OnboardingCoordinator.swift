@@ -519,6 +519,12 @@ struct OnboardingScreenContainer<Content: View>: View {
     /// was strictly forward, so a mis-tapped "Skip for now" or storage card could not be undone.
     var backAction: (() -> Void)? = nil
     @ViewBuilder var content: Content
+    /// VoiceOver's cursor, moved to the header when a step appears. The coordinator swaps steps in
+    /// place — no push, no sheet — so nothing told VoiceOver the screen had changed: the cursor
+    /// stayed wherever the old step's Continue had been and could land on the next step's Continue,
+    /// skipping a whole screen unheard. Every step builds a fresh container, so `onAppear` fires
+    /// once per step and the new title is the first thing spoken.
+    @AccessibilityFocusState private var isHeaderFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -543,6 +549,7 @@ struct OnboardingScreenContainer<Content: View>: View {
                         Spacer(minLength: 0)
                     }
                     ScreenHeader(title: title, subtitle: subtitle)
+                        .accessibilityFocused($isHeaderFocused)
                     content
                 }
                 .padding(20)
@@ -550,6 +557,7 @@ struct OnboardingScreenContainer<Content: View>: View {
                 .frame(maxWidth: 620, alignment: .leading)
             }
         }
+        .onAppear { isHeaderFocused = true }
     }
 }
 
@@ -590,14 +598,18 @@ private struct OnboardingGoalScreen: View {
                         }
                     }
 
+                    // Each field is named by its caption: the caption is a separate element, so
+                    // VoiceOver otherwise named the field by its example placeholder.
                     SheetField("Interests") {
                         TextField("strength, running, mobility", text: $interests)
                             .sheetTextInput()
+                            .accessibilityLabel("Interests")
                     }
 
                     SheetField("Constraints") {
                         TextField("shoulder issues, hotel gyms only", text: $constraints)
                             .sheetTextInput()
+                            .accessibilityLabel("Constraints")
                     }
                 }
             }
@@ -653,6 +665,8 @@ private struct OnboardingStarterScreen: View {
                     TextField("Fernlet", text: $starterName)
                         .textInputAutocapitalization(.words)
                         .sheetTextInput()
+                        // Read "Fernlet, text field" — the default name, with nothing saying it is one.
+                        .accessibilityLabel("Name")
                         .accessibilityIdentifier("onboarding.starter.name")
                 }
 
@@ -735,6 +749,10 @@ private struct OnboardingPersonalDetailsScreen: View {
                     Spacer(minLength: 0)
                     Stepper("Age", value: steppedAge, in: 13...100)
                         .labelsHidden()
+                        // `.labelsHidden()` drops the spoken name too; say whose stepper it is and
+                        // the age it is at, as the field beside it does.
+                        .accessibilityLabel("Age")
+                        .accessibilityValue(Text(verbatim: "\(steppedAge.wrappedValue)"))
                 }
                 Stepper(BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds),
                         value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
@@ -776,6 +794,7 @@ private struct OnboardingPersonalDetailsScreen: View {
                     TextField("How friends will see you", text: $displayName)
                         .textInputAutocapitalization(.words)
                         .sheetTextInput()
+                        .accessibilityLabel("Your name")
                         .accessibilityIdentifier("onboarding.displayName")
                 }
                 bodyProfileField
@@ -868,6 +887,8 @@ private struct OnboardingChoiceRow: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(isSelected ? Color.moss : Color.slate)
                     .frame(width: 28, height: 28)
+                    // The check is the drawn selection; the trait below is the spoken one.
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.fernlet(.headerMedium))
@@ -887,5 +908,8 @@ private struct OnboardingChoiceRow: View {
             )
         }
         .buttonStyle(.plain)
+        // Selection was carried only by a check glyph's spoken name ("checkmark.circle.fill" vs
+        // "circle") — the storage and intimacy cards on neighbouring steps already say "selected".
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

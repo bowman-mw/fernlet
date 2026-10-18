@@ -590,6 +590,7 @@ struct ResumeWorkoutCard: View {
                         Text("Workout in progress")
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
+                            .accessibilityAddTraits(.isHeader)
                         Text(isResting ? "\(title) — you're resting between sets." : "\(title) — pick up where you left off.")
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
@@ -682,6 +683,8 @@ struct StartTodaysWorkoutCard: View {
                         Text("Today's workout")
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
+                            // The guided workout's way in, findable from the Headings rotor.
+                            .accessibilityAddTraits(.isHeader)
                         subtitle
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
@@ -1182,6 +1185,9 @@ struct WorkoutSheet: View {
         workout.loggedAt = completedAtDate
         store.addWorkout(workout, date: targetDateKey)
         dismiss()
+        // The sheet closes in silence otherwise: nothing on the screen it returns to changes under
+        // VoiceOver's cursor. Spoken once the dismissal has settled.
+        Task { @MainActor in await TaskConfirmation.workoutLogged.announceAfterSheetCloses() }
     }
 
     /// Any user-visible field filled in, a row already added, or a draft exercise typed. Deliberately
@@ -1394,6 +1400,9 @@ struct LogAgainCard: View {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(Color.moss)
+                    // Decorative, beside its own title; unhidden it read as its symbol name
+                    // (VoiceOver dry run, 2026-10-18).
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Log it again")
                         .font(.fernlet(.label))
@@ -1544,6 +1553,9 @@ struct WorkoutSuggestionSheet: View {
                     Image(systemName: "mappin.and.ellipse")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.moss)
+                        // Decorative. Unhidden, VoiceOver read the symbol's system description —
+                        // "Remove Map Pin" — beside a row that removes nothing (dry run, 2026-10-18).
+                        .accessibilityHidden(true)
                     // Localizing interpolation, never a verbatim String build: "items" is display
                     // copy; the location name interpolates as data.
                     Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
@@ -1744,6 +1756,7 @@ struct WorkoutSuggestionSheet: View {
             store.markGuidedSessionCompleted(session.id)
         }
         dismiss()
+        Task { @MainActor in await TaskConfirmation.workoutLogged.announceAfterSheetCloses() }
     }
 
     /// The configurator bottom bar: **Suggest a workout**, with a loading state while the plan is
@@ -2003,6 +2016,9 @@ struct WorkoutSuggestionSheet: View {
         SheetField("Anything else?") {
             TextField("e.g. sore left knee, short on time", text: $context)
                 .sheetTextInput()
+                // Measured with no spoken name at all ("text field"); the caption above is a
+                // separate element.
+                .accessibilityLabel("Anything else?")
         }
     }
 
@@ -4053,7 +4069,12 @@ struct PlannedWorkoutRow: View {
     /// The complete button, or the faded dot a future day shows in its place.
     @ViewBuilder private var leadingMarker: some View {
         if showsCompleteAction {
-            Button(action: onComplete) {
+            Button {
+                onComplete()
+                // The row under VoiceOver's cursor leaves the list as it completes, so the cursor
+                // moves somewhere else with nothing said about why.
+                TaskConfirmation.workoutLogged.announce()
+            } label: {
                 ZStack {
                     Circle()
                         .fill(plannedWorkout.workoutType.color.opacity(0.14))

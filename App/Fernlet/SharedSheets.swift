@@ -70,6 +70,12 @@ struct WaterSheet: View {
                 .padding(20)
                 .padding(.bottom, 10)
             }
+            // VoiceOver's escape is Cancel here too; the swipe block below otherwise swallows it once
+            // the count has moved, leaving the scrub silently dead. On the scrolling content, not the
+            // whole sheet: SwiftUI copies an action on a plain container onto every child, and on the
+            // header that made its small subtitle read as actionable to the audit (measured
+            // 2026-10-18). The header's Cancel is one swipe away.
+            .accessibilityAction(.escape) { dismiss() }
         }
         .background(Color.parchment)
         // Keyed to the seeded baseline, not the live count: an external +1 must not re-block the
@@ -108,10 +114,31 @@ struct WaterSheet: View {
         .accessibilityElement(children: .ignore)
         .accessibilityCustomContent("Total today", Text("\(totalOz) oz"))
         .accessibilityCustomContent("Target", target == 1 ? Text("1 bottle") : Text("\(target) bottles"))
-        // Explicit `Text` so both branches localize — a bare ternary of string literals can land
-        // on the non-localizing StringProtocol overload.
-        .accessibilityLabel(draft == 1 ? Text("1 bottle") : Text("\(draft) bottles"))
+        // The count is this sheet's whole task, so it is ONE adjustable element: VoiceOver's swipe
+        // up / down adds or removes a bottle and speaks the new value itself. Before, the number
+        // was a label on a static element and the two buttons below changed it in silence.
+        .accessibilityLabel("Water today")
+        .accessibilityValue(countText)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: draftCount = min(draft + 1, Self.maximumBottles)
+            case .decrement: draftCount = max(draft - 1, 0)
+            @unknown default: break
+            }
+        }
+        .accessibilityIdentifier("water.count")
     }
+
+    /// "1 bottle" / "N bottles" for the draft — the hero's spoken value, and the value the two
+    /// stepper buttons carry so a double-tap on either is followed by the count it produced.
+    /// Explicit `Text` so both branches localize — a bare ternary of string literals can land on
+    /// the non-localizing StringProtocol overload.
+    private var countText: Text {
+        draft == 1 ? Text("1 bottle") : Text("\(draft) bottles")
+    }
+
+    /// The day's bottle cap, the same one `DiaryStore.addBottle` clamps to.
+    static let maximumBottles = 30
 
     /// Bottles as a row of glyphs with a goldenrod tick after the target position — the target is
     /// a marker, never a second number masquerading as intake (2c).
@@ -160,10 +187,12 @@ struct WaterSheet: View {
                 systemImage: "minus", accessibilityLabel: "Remove a bottle",
                 fill: Color.cream, ink: Color.bark, stroke: 0.12, disabled: draft <= 0
             ) { draftCount = max(draft - 1, 0) }
+            .accessibilityValue(countText)
             stepButton(
                 systemImage: "plus", accessibilityLabel: "Add a bottle",
-                fill: Color.mossFill, ink: Color.onMoss, stroke: 0, disabled: draft >= 30
-            ) { draftCount = min(draft + 1, 30) }
+                fill: Color.mossFill, ink: Color.onMoss, stroke: 0, disabled: draft >= Self.maximumBottles
+            ) { draftCount = min(draft + 1, Self.maximumBottles) }
+            .accessibilityValue(countText)
         }
         .frame(maxWidth: .infinity)
     }

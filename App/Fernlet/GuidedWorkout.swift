@@ -90,8 +90,16 @@ struct GuidedWorkoutSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
+            // The two-finger scrub is the close button: without this, mid-run it hit the swipe block
+            // below and did nothing, where the button asks "Keep going / End without logging". On the
+            // content and the bar — where the cursor sits during a run — not on the whole sheet:
+            // SwiftUI copies an action on a plain container onto every child, and on the header
+            // that made the small progress line read as actionable to the audit (measured
+            // 2026-10-18). The header's own control IS the close button.
+            .accessibilityAction(.escape) { closeTapped() }
             if isLive {
                 bottomBar
+                    .accessibilityAction(.escape) { closeTapped() }
             }
         }
         .background(Color.parchment)
@@ -196,14 +204,7 @@ struct GuidedWorkoutSheet: View {
     }
 
     private var closeButton: some View {
-        Button {
-            if isLive {
-                showEndConfirm = true
-            } else {
-                if run?.isDone == true { store.clearGuidedRun() }
-                dismiss()
-            }
-        } label: {
+        Button(action: closeTapped) {
             Image(systemName: "xmark")
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.slate)
@@ -213,6 +214,17 @@ struct GuidedWorkoutSheet: View {
         .buttonStyle(.plain)
         .accessibilityLabel("End session")
         .accessibilityIdentifier("workout.guided.end")
+    }
+
+    /// The close button's action, shared with VoiceOver's escape: mid-run it asks before ending,
+    /// otherwise it closes.
+    private func closeTapped() {
+        if isLive {
+            showEndConfirm = true
+        } else {
+            if run?.isDone == true { store.clearGuidedRun() }
+            dismiss()
+        }
     }
 
     // MARK: Phases
@@ -409,6 +421,7 @@ struct GuidedWorkoutSheet: View {
             Text("Rest")
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.moss)
+                .accessibilityAddTraits(.isHeader)
 
             if let restStartedAt = run.restStartedAt, let restEndsAt = run.restEndsAt, restStartedAt <= restEndsAt {
                 // A fixed window: Text(timerInterval:) clamps to 0:00 once it expires, and the range
@@ -419,7 +432,11 @@ struct GuidedWorkoutSheet: View {
                 Text(timerInterval: restStartedAt...restEndsAt, countsDown: true)
                     .font(.fernletTimer(size: 68))
                     .foregroundStyle(Color.bark)
+                    // Without it VoiceOver keeps the time it read when the cursor arrived, as the
+                    // Live Activity's own timer already notes (`WorkoutLiveActivity.swift`).
+                    .accessibilityAddTraits(.updatesFrequently)
                     .accessibilityIdentifier("workout.guided.restTimer")
+                    .task(id: restEndsAt) { await announceRestOver(at: restEndsAt) }
             }
 
             if let exercise = run.currentExercise {
@@ -453,9 +470,11 @@ struct GuidedWorkoutSheet: View {
             Image(systemName: "leaf.fill")
                 .font(.system(size: 40))
                 .foregroundStyle(Color.moss)
+                .accessibilityHidden(true)
             Text("Nicely done")
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
+                .accessibilityAddTraits(.isHeader)
             completionMessage
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
@@ -490,14 +509,16 @@ struct GuidedWorkoutSheet: View {
     @ViewBuilder private var bottomBar: some View {
         if let run {
             VStack(spacing: 6) {
-                if run.isResting {
-                    barPrimary("Skip rest", identifier: "workout.guided.skipRest") {
-                        store.guidedSkipRest()
-                    }
-                } else {
-                    barPrimary(doneSetLabel(run), identifier: "workout.guided.doneSet") {
-                        store.guidedMarkSetDone()
-                    }
+                // ONE button whose words and action follow the phase — not an if/else of two.
+                // SwiftUI gives each branch of an if/else its own identity, so every "Done set" and
+                // every "Skip rest" destroyed the control under VoiceOver's cursor and the cursor
+                // fell somewhere else on the screen, set after set (VoiceOver dry run, 2026-10-18).
+                let resting = run.isResting
+                barPrimary(
+                    resting ? "Skip rest" : doneSetLabel(run),
+                    identifier: resting ? "workout.guided.skipRest" : "workout.guided.doneSet"
+                ) {
+                    announcingTransition(resting ? store.guidedSkipRest : store.guidedMarkSetDone)
                 }
                 skipToNextButton(run)
             }
@@ -528,7 +549,7 @@ struct GuidedWorkoutSheet: View {
     /// not removed — on the last exercise, so the bar's height never jumps.
     private func skipToNextButton(_ run: GuidedWorkoutRunState) -> some View {
         Button {
-            store.guidedSkipToNextExercise()
+            announcingTransition(store.guidedSkipToNextExercise)
         } label: {
             Text(dynamicTypeSize.isAccessibilitySize ? "Skip" : "Skip to next exercise")
                 .font(.fernlet(.label))
@@ -544,6 +565,35 @@ struct GuidedWorkoutSheet: View {
         // the spoken name stays the whole one at every text size.
         .accessibilityLabel("Skip to next exercise")
         .accessibilityIdentifier("workout.guided.skipExercise")
+    }
+
+    /// Runs one of the bottom bar's transitions and says what it changed.
+    ///
+    /// Everything a bar button changes — the set strip, the rest timer, the exercise card — is
+    /// elsewhere on the screen, so without this a double-tap moved the whole workout in silence.
+    /// See ``GuidedRunAnnouncement``.
+    private func announcingTransition(_ transition: @MainActor () -> Void) {
+        let before = run
+        transition()
+        guard let before, let spoken = GuidedRunAnnouncement.spoken(from: before, to: store.guidedRunState) else {
+            return
+        }
+        FernletAnnouncer.system.announce(spoken.kind, spoken.sentence)
+    }
+
+    /// Says the rest's nudge is over when its timer reaches zero. The rest itself waits for the user
+    /// — nothing on screen moves at 0:00 — so this is the only way a VoiceOver user not focused on
+    /// the timer learns it ran out. Keyed by the rest's end, so a new rest re-arms it and a skipped
+    /// one cancels it with the view.
+    private func announceRestOver(at end: Date) async {
+        let remaining = end.timeIntervalSinceNow
+        guard remaining > 0 else { return }
+        do {
+            try await Task.sleep(for: .seconds(remaining))
+        } catch {
+            return
+        }
+        FernletAnnouncer.system.announce(.status, GuidedRunAnnouncement.restOver)
     }
 
     // MARK: Pieces
