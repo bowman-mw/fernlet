@@ -1687,6 +1687,18 @@ jobs:
         # after unexpected exit` line, the suite census silent. Re-run AT 576: passed, and shown red once
         # at 577. 550 + 26 (HeartShareTests) = 576 is the ARITHMETIC CHECK, never the source. The
         # slowest handshake cell of HeartShareTests over the ten runs noted on mesh-batteries: 2.5 s.
+        # HELD at 576, MEASURED on a Mac, 2026-10-17 (a private iPhone 17 simulator, iOS 26.5):
+        # MeshClothingShopTests' `retainedSlotTrustPolicyDropsEnvelopeFromBlockedKey` waited for
+        # `.awaitingTapConfirmation` as HeartShareTests had, so the wait ran to its poll floor in every
+        # run: 4.00, 4.01 and 4.12 s in three runs of this line. It waits for
+        # `.awaitingIdentityIntroduction` now: 0.10-0.13 s in three more (the same wait, in
+        # PresenceReleaseTests and RecipeShareCodecTests on no line, is fixed in the same commit). No
+        # cell joined or left, so the floor and the NAME count (51) stay. This exact 51-name list run at
+        # its floor through Fernlet.xcworkspace after the strict build-for-testing (WALL CHECK PASSED),
+        # each read off its own result bundle: 576 tests (541 Swift Testing cells in 48 suites, "passed
+        # after 18.769, 19.257 and 19.457 seconds", and the 35 XCTest cases), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent; shown red once at 577. The
+        # line's span did not move (18.3-18.4 s before): its slowest cells set it, not this one.
         run: |
           set -euo pipefail
           Scripts/run-gated-suites.sh mesh-features 576 \

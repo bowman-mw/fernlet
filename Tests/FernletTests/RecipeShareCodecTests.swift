@@ -303,7 +303,12 @@ struct RecipeShareCodecTests {
         // enforcement the friend-mode production session relies on.
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        await waitUntil { if case .awaitingTapConfirmation = coordinator.state { return true }; return false }
+        // Poll for the state the hop SETTLES on: a connected trainer passes the tap gate and sends its
+        // introduction within the one hop (ProximityCoordinatorTests'
+        // `nonUWBTrainerAutoAdvancesPastTheTapGate`), so `.awaitingTapConfirmation` is never observable.
+        // A wait for it ran to its poll floor every time: 2.5 s alone, 15.9 s beside the mesh-features
+        // line (MEASURED 2026-10-17). The `tapToConfirm()` below stays the no-op it was.
+        await waitUntil { if case .awaitingIdentityIntroduction = coordinator.state { return true }; return false }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
         await waitUntil { if case .failed = coordinator.state { return true }; return false }
