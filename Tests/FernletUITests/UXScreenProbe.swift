@@ -724,8 +724,9 @@ struct UXScreenProbe {
     }
 
     /// How many excused entries one screen's presence check will look up. Bounds the query cost on
-    /// the two screens that carry a large Dynamic Type baseline (`Private · Cycle (both halves)` is
-    /// 23 entries, `Home tab` 17); anything past it stays excused, which is the safe direction.
+    /// screens that carry a large Dynamic Type baseline (`Private · Cycle (both halves)` carried 23
+    /// entries and `Home tab` 17 until the 2026-10-18 burn-down); anything past it stays excused,
+    /// which is the safe direction.
     static let maximumPresenceChecks = 24
 
     /// How many elements sharing one label the presence check will examine before concluding the
@@ -1185,6 +1186,16 @@ extension UXScreenProbe {
     /// dated note saying which run produced it and what moved. Every other entry is still the
     /// 2026-08-23/08-27 record.
     ///
+    /// THE 2026-10-18 LARGER TEXT BURN-DOWN took this map from 167 identities on 37 screens to 62
+    /// on 24 (three of them the new `AX5 · ` screens), in the same commits as the fixes. Walled lines
+    /// left only after a run on the pinned simulator reported them gone. Four sets of
+    /// UNDER-REPORTING lines, which no run can force out, were deleted on measurement instead:
+    /// `Private · Cycle (both halves)`'s 23 and `Home tab`'s 9 non-tile Dynamic Type lines never
+    /// reproduced in four full audits on four builds and four Dynamic-Type-only passes; `Home tab`'s
+    /// six tile nouns and `Private · Journal`'s five weekday letters reproduced on 3 of 3 passes
+    /// before their grids stopped being lazy (`EqualColumnGrid`) and on none after. If one of them
+    /// comes back it fails as an appearance, which is the honest direction.
+    ///
     /// Every entry here was copied from the "not in baseline" listing of a run on the pinned
     /// simulator and confirmed on a second, independent run. The high-signal findings the original
     /// harvest note says to fix first were FIXED in the same commit rather than frozen: six
@@ -1267,16 +1278,7 @@ extension UXScreenProbe {
         // count-bearing identity. Re-verified deterministic across two independent runs.
         "Home tab": [
             "Dynamic Type font sizes are partially unsupported — “# bottles” (48)",
-            "Dynamic Type font sizes are partially unsupported — “# entries” (48)",
             "Dynamic Type font sizes are partially unsupported — “# logged” (48)",
-            "Dynamic Type font sizes are partially unsupported — “# of #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “#h” (48)",
-            "Dynamic Type font sizes are partially unsupported — “<date-word>, <date-word> #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Fernlet” (48)",
-            "Dynamic Type font sizes are partially unsupported — “I'm unwell today” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Quick log” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Scoring goes gentle until tomorrow” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Today” (48)",
         ],
         // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
         // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
@@ -1289,31 +1291,6 @@ extension UXScreenProbe {
         // belongs. Same for `Sheet · Log intimacy` below.
         "Onboarding · Personal details": [
             "Text clipped — <no label> id=onboarding.displayName (49)",
-        ],
-        "Private · Cycle (both halves)": [
-            "Dynamic Type font sizes are partially unsupported — “<date-word> #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Cycle” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Cycle” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Food” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Friends” (9)",
-            "Dynamic Type font sizes are partially unsupported — “F” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Heavy” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Home” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Intimacy” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Journal” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Light” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Log at least # cycles to see predictions.” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Medium” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Move” (9)",
-            "Dynamic Type font sizes are partially unsupported — “M” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app.” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Period-aware care” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Private” (9)",
-            "Dynamic Type font sizes are partially unsupported — “S” (48)",
-            "Dynamic Type font sizes are partially unsupported — “T” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Worry box” (9)",
-            "Dynamic Type font sizes are partially unsupported — “W” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Your cycle, at a glance.” (48)",
         ],
         "Settings · Core memory": [
             "Text clipped — <no label> (49)",
