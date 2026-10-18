@@ -1204,6 +1204,29 @@ extension UXScreenProbe {
     /// `Element has no description` on the full-size progress photo. What is frozen below is the
     /// Larger Text backlog these screens share with the other twenty-two.
     static let auditBaselineEntries: [String: Set<String>] = [
+        // THE AX5 PROBES (`LargerTextAX5UITests`, recorded 2026-10-18). These screens are launched AT
+        // the largest accessibility size, not audited from `large`, on a freshly created iPhone 17
+        // (iPhone18,3), portrait, en_US, light, the runner itself at `large`. Copied from the "not
+        // in baseline" listing of the run that added them and confirmed on a second run of a clean
+        // build. Every line below was checked against that run's AX5 screenshot, and in each one
+        // the text is drawn whole: no ellipsis, no word cut. They are recorded as what the audit
+        // says, not as defects anyone has seen, and the owner's AX5 device pass is what decides.
+        // The two Settings lines are system-drawn (the navigation bar's Done, `.searchable`'s
+        // field). The other AX5 screens audit clean, so they have no key.
+        "AX5 · Settings · Hub": [
+            "Dynamic Type font sizes are partially unsupported — “Done” id=settings.done (9)",
+            "Text clipped — “Search settings” (45)",
+        ],
+        "AX5 · Sheet · Meal": [
+            "Text clipped — “Log meal” (48)",
+            "Text clipped — “WHAT DID YOU EAT?” (48)",
+        ],
+        "AX5 · Sheet · Workout suggestion": [
+            "Text clipped — “Full gym · # items” (48)",
+            "Text clipped — “SPACE & EQUIPMENT” (48)",
+            "Text clipped — “Suggest” (48)",
+            "Text clipped — “Suggest” id=workout.suggest (9)",
+        ],
         // "POTENTIALLY INACCESSIBLE TEXT" ADDED (2026-09-26), element-less, 2 raw issues. Copied
         // from the "not in baseline" listing of runs on two independent, freshly created iPhone 17
         // simulators (iPhone18,3, portrait, `large`, en_US, light), clean build, nothing else
