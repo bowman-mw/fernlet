@@ -1894,7 +1894,7 @@ struct DayEditSheet: View {
     /// The single free-text meal line added to the edited day.
     private var mealField: some View {
         SheetField("Add a meal") {
-            TextField("What did you eat?", text: $mealDescription)
+            TextField("What did you eat?", text: $mealDescription, prompt: .fieldPrompt("What did you eat?"))
                 .submitLabel(.done)
                 .sheetTextInput()
         }
@@ -1907,7 +1907,7 @@ struct DayEditSheet: View {
     private var workoutField: some View {
         SheetField("Add a workout") {
             VStack(spacing: 8) {
-                TextField("Workout name (optional)", text: $workoutName)
+                TextField("Workout name (optional)", text: $workoutName, prompt: .fieldPrompt("Workout name (optional)"))
                     .submitLabel(.done)
                     .sheetTextInput()
                 HStack(spacing: 8) {
@@ -1976,10 +1976,10 @@ struct DayEditSheet: View {
                     }
                 }
                 HStack(spacing: 12) {
-                    TextField("Hours (e.g. 7.5)", text: $sleepHoursText)
+                    TextField("Hours (e.g. 7.5)", text: $sleepHoursText, prompt: .fieldPrompt("Hours (e.g. 7.5)"))
                         .keyboardType(.decimalPad)
                         .sheetTextInput(font: .fernlet(.label))
-                    TextField("Note (optional)", text: limitedSleepNote)
+                    TextField("Note (optional)", text: limitedSleepNote, prompt: .fieldPrompt("Note (optional)"))
                         .submitLabel(.done)
                         .sheetTextInput()
                 }

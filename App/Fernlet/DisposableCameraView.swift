@@ -2140,7 +2140,7 @@ struct DisposableCameraView: View {
                             TextField("Session name", text: Binding(
                                 get: { newMeshName },
                                 set: { newMeshName = String($0.prefix(Self.maxMeshNameLength)) }
-                            ))
+                            ), prompt: .fieldPrompt("Session name"))
                             .sheetTextInput()
                             .accessibilityIdentifier("sessionInfo.renameField")
                         }

@@ -119,7 +119,7 @@ struct GuidedWorkoutEditorSheet: View {
                         Text("REPS")
                             .font(.fernlet(.labelSmall)).tracking(0.6)
                             .foregroundStyle(Color.slate)
-                        TextField("8-12", text: repsBinding(index))
+                        TextField("8-12", text: repsBinding(index), prompt: .fieldPrompt("8-12"))
                             .sheetTextInput()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

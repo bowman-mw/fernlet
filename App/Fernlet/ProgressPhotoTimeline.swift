@@ -757,7 +757,8 @@ struct ProgressPhotoDetailView: View {
     private var noteField: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel("Note")
-            TextField("A word about this one — optional", text: limitedCaption, axis: .vertical)
+            TextField("A word about this one — optional", text: limitedCaption,
+                      prompt: .fieldPrompt("A word about this one — optional"), axis: .vertical)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .lineLimit(1...4)

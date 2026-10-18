@@ -136,7 +136,8 @@ struct BarcodeServingStepView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     // Typeable so fractional amounts (half a bar, a serving and a half) log honestly.
-                    TextField("Servings", value: $servings, format: .number.precision(.fractionLength(0...2)))
+                    TextField("Servings", value: $servings, format: .number.precision(.fractionLength(0...2)),
+                              prompt: .fieldPrompt("Servings"))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.leading)
                         .textContentType(.none)

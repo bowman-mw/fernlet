@@ -57,6 +57,15 @@ Checks (IDs match §4.5 and AccessibilityBoundaryTests):
                        from an Image, so every hit is reported, and the non-text sites (a disabled
                        control, a backdrop under a full-strength glyph, a placeholder fill) are
                        allowlisted one by one with the ratio that makes them safe.
+    A10-FIELD-PROMPT   A `TextField(` / `SecureField(` that passes no `prompt: .fieldPrompt(…)`. A
+                       field with no prompt draws its title in the SYSTEM placeholder colour, which
+                       measured 1.71:1 on the cream field in default light, 2.43:1 in dark and 4.33:1
+                       under Increase Contrast: under the 4.5:1 text floor on every route, and on the
+                       common tasks (the Meal sheet, the recipe searches, Plan goals). The fix is
+                       FernletUI's `Text.fieldPrompt(_:)`, full-strength `slate` in italic, passed the
+                       field's own title so no string is added. A field that never shows a prompt (an
+                       inline editor pre-filled with the value it edits) is allowlisted with that
+                       invariant.
 
 Deliberately NOT here: "an accessibility label may not be a bare `String`". A grep cannot tell
 `.accessibilityLabel(coverText)` (a String — a real defect) from `.accessibilityLabel(titleKey)`
@@ -95,6 +104,12 @@ function call or a runtime branch:
     (`let ink = Color.slate` then `ink.opacity(0.5)`), or any OTHER ink at alpha (`bark`, the
     accents). The runtime contrast audit in `UXScreenProbe` is the backstop for those, and only
     on the screens its gallery visits.
+  * A10 TRUSTS THE HELPER AND THE CALL'S SHAPE. It asks that a field's call passes
+    `prompt: .fieldPrompt(`, not what that prompt says, and it reads the call across a FIXED
+    A10_WINDOW of code lines, so a call longer than that window reports a false positive (shorten
+    the call; do not widen the bound). A field built by UIKit (`UITextField`, a `UISearchBar`), a
+    `.searchable` bar and a `TextEditor` are other controls with other placeholders, and none is
+    read; `SheetTextEditor` draws its own slate placeholder.
   * Nothing here sees FOCUS ORDER, a missing custom action, an unhonored Reduce Motion, contrast as
     rendered, or how a screen actually sounds. Those are manual, forever, and the runtime half is
     `performAccessibilityAudit` in `UXScreenProbe`.
@@ -128,6 +143,7 @@ A5_DERIVATION_PASSES = 3 # hops followed from a grid minimum back to a `@ScaledM
 A6_WINDOW = 12           # code lines after `Image(uiImage:)` searched for the Smart Invert opt-out
 A7_LOOKBACK = 60         # code lines searched backwards for the `Button` a `.ignore` chains onto
 A8_WINDOW = 2            # code lines joined so `Color.slate` wrapped before `.opacity(…)` is one expression
+A10_WINDOW = 6           # code lines joined so a field whose `Binding(get:set:)` wraps is one call
 ADD_TRAITS_SCAN_LIMIT = 32  # `accessibilityAddTraits(` calls inspected inside one canary's braces
 WRAPPER_UNWRAPS = 3      # `Text(verbatim: …)`-style wrappers peeled off a spoken argument
 
@@ -195,6 +211,8 @@ IMAGE_BITMAP_RE = re.compile(r"\bImage\(\s*uiImage:")
 BUTTON_HEAD_RE = re.compile(r"\bButton\s*[({<]")
 MUTED_SLATE_RE = re.compile(r"\bslate\s*\.\s*(?:opacity\s*\(|secondary\b|tertiary\b|quaternary\b|quinary\b)")
 MUTED_SECONDARY_INK_RE = re.compile(r"\bsecondaryText\s*\.\s*withAlphaComponent\s*\(")
+FIELD_HEAD_RE = re.compile(r"\b(?:TextField|SecureField)\s*\(")
+FIELD_PROMPT_RE = re.compile(r"\bprompt:\s*(?:Text)?\s*\.\s*fieldPrompt\s*\(")
 ADD_TRAITS_CALL = "accessibilityAddTraits("
 INVERT_NEEDLE = "accessibilityIgnoresInvertColors"
 WRAPPERS = ("Text(verbatim:", "Text(", "LocalizedStringKey(", "String(", "Optional(")
@@ -206,6 +224,10 @@ A6_DETAIL = ("Image(uiImage:) is a photograph or a rendered bitmap, and Smart In
 A8_DETAIL = ("slate under alpha 1 is below the 4.5:1 text floor by construction (full slate is "
              "4.78:1 on parchment; 0.7 -> 2.74:1). Use full-strength slate and de-emphasize by role, "
              "size or weight; a non-text site goes in the allowlist with its measured ratio.")
+A10_DETAIL = ("a field with no prompt draws its title in the system placeholder colour, 1.71:1 on "
+              "cream (4.33:1 even under Increase Contrast). Pass `prompt: .fieldPrompt(<the same "
+              "title>)`, full-strength slate in italic; a field that never shows a prompt goes in the "
+              "allowlist with that invariant.")
 
 
 def strip_code(line, st):
@@ -670,6 +692,25 @@ def scan_muted_slate(rel, coded):
     return hits
 
 
+def scan_field_prompt(rel, coded):
+    """A10: a `TextField(` / `SecureField(` call that passes no `prompt: .fieldPrompt(…)`.
+
+    The call's own balanced argument list is read across a FIXED A10_WINDOW-line join, so a title
+    or a `Binding(get:set:)` that wraps is still one call and the prompt after it is seen. Only the
+    first field on a line is read: the allowlist names lines, and two fields on one line are one
+    edit. `SheetGrowingTextField(` and `UITextField(` are other names, which the word boundary in
+    FIELD_HEAD_RE keeps out."""
+    hits = []
+    for i, (lineno, code, raw) in enumerate(coded):
+        m = FIELD_HEAD_RE.search(code)
+        if m is None:
+            continue
+        text, _starts = joined(coded, i, A10_WINDOW)
+        if FIELD_PROMPT_RE.search(call_span(text, m.start())) is None:
+            hits.append(hit("A10-FIELD-PROMPT", rel, lineno, raw, A10_DETAIL))
+    return hits
+
+
 # ---------------------------------------------------------------------------------------------
 # A3
 # ---------------------------------------------------------------------------------------------
@@ -792,6 +833,7 @@ def scan_file(path, rel):
     hits.extend(scan_invert_colors(rel, coded))
     hits.extend(scan_ignore_on_button(rel, coded))
     hits.extend(scan_muted_slate(rel, coded))
+    hits.extend(scan_field_prompt(rel, coded))
     return hits
 
 

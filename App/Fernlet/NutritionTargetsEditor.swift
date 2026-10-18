@@ -247,7 +247,7 @@ private struct MacroTargetRow: View {
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
             Spacer()
-            TextField("\(placeholder)", text: text)
+            TextField("\(placeholder)", text: text, prompt: .fieldPrompt("\(placeholder)"))
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .font(.fernlet(.stat))

@@ -373,7 +373,8 @@ struct DeleteEverythingSheet: View {
     /// protects (5e·AX3).
     private var typedGate: some View {
         SheetField("Type \(DeleteConfirmationWord.localizedWord) to confirm") {
-            TextField(DeleteConfirmationWord.localizedWord, text: $typedConfirmation)
+            TextField(DeleteConfirmationWord.localizedWord, text: $typedConfirmation,
+                      prompt: .fieldPrompt(verbatim: DeleteConfirmationWord.localizedWord))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.characters)
                 .sheetTextInput()

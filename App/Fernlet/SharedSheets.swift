@@ -281,14 +281,14 @@ struct SleepSheet: View {
                     // alone is wider than half the sheet and both captions were cut mid-word.
                     AdaptiveStack(spacing: 12, horizontalAlignment: .leading, verticalAlignment: .top) {
                         SheetField("Hours (optional)", namesControl: true) {
-                            TextField("7.5", text: $hours)
+                            TextField("7.5", text: $hours, prompt: .fieldPrompt("7.5"))
                                 // A decimal pad, not the full alphabetic keyboard: "7.5" is the
                                 // expected value and there are no letters in it.
                                 .keyboardType(.decimalPad)
                                 .sheetTextInput(font: .fernlet(.label))
                         }
                         SheetField("Note (optional)") {
-                            TextField("woke up twice...", text: $note)
+                            TextField("woke up twice...", text: $note, prompt: .fieldPrompt("woke up twice..."))
                                 .submitLabel(.done)
                                 .onSubmit { save() }
                                 .sheetTextInput()
@@ -389,12 +389,14 @@ struct GoalsSheet: View {
                         }
 
                         SheetField("Interests") {
-                            TextField("strength, running, mobility", text: $interests)
+                            TextField("strength, running, mobility", text: $interests,
+                                      prompt: .fieldPrompt("strength, running, mobility"))
                                 .sheetTextInput()
                         }
 
                         SheetField("Constraints") {
-                            TextField("shoulder issues, hotel gyms only", text: $constraints)
+                            TextField("shoulder issues, hotel gyms only", text: $constraints,
+                                      prompt: .fieldPrompt("shoulder issues, hotel gyms only"))
                                 .sheetTextInput()
                         }
 

@@ -265,12 +265,14 @@ struct WorkoutSetupSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             if store.settings.selectedGoal == .sportsPrep {
                 SheetField("Sport") {
-                    TextField("e.g. basketball, soccer, climbing", text: $profile.sport)
+                    TextField("e.g. basketball, soccer, climbing", text: $profile.sport,
+                              prompt: .fieldPrompt("e.g. basketball, soccer, climbing"))
                         .sheetTextInput()
                 }
             }
             SheetField("Interests") {
-                TextField("e.g. kettlebells, mobility, running", text: $interestsText)
+                TextField("e.g. kettlebells, mobility, running", text: $interestsText,
+                          prompt: .fieldPrompt("e.g. kettlebells, mobility, running"))
                     .sheetTextInput()
             }
         }
@@ -285,7 +287,8 @@ struct WorkoutSetupSheet: View {
                             .buttonStyle(ChipButtonStyle(selected: avoidedAreas.contains(area.name)))
                     }
                 }
-                TextField("Anything else to keep in mind (not medical advice)", text: $profile.injuryNotes)
+                TextField("Anything else to keep in mind (not medical advice)", text: $profile.injuryNotes,
+                          prompt: .fieldPrompt("Anything else to keep in mind (not medical advice)"))
                     .sheetTextInput()
             }
         }

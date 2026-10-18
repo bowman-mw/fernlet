@@ -122,7 +122,8 @@ struct FriendListView: View {
             // The placeholder is the name that is ACTUALLY broadcast when the field is empty (the
             // device name), not an invented "Your name" — otherwise friends see "iPhone" and nothing
             // here ever said so.
-            TextField(store.resolvedProximityDisplayName, text: $displayName)
+            TextField(store.resolvedProximityDisplayName, text: $displayName,
+                      prompt: .fieldPrompt(verbatim: store.resolvedProximityDisplayName))
                 .font(.fernlet(.body))
                 .multilineTextAlignment(.trailing)
                 .foregroundStyle(Color.bark)
@@ -151,7 +152,7 @@ struct FriendListView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color.slate)
-            TextField("Search by name", text: $searchText)
+            TextField("Search by name", text: $searchText, prompt: .fieldPrompt("Search by name"))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
         }

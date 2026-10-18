@@ -606,7 +606,7 @@ struct CreationStudioView: View {
                     TextField("Name your item", text: Binding(
                         get: { name },
                         set: { name = String($0.prefix(ItemNameModeration.maxNameLength)) }
-                    ))
+                    ), prompt: .fieldPrompt("Name your item"))
                     .sheetTextInput()
                     .accessibilityIdentifier("studio.confirm.name")
                 }

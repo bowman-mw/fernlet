@@ -172,7 +172,7 @@ struct SessionChatPanel: View {
                 .accessibilityIdentifier("session.chat.sendNotice")
         }
         HStack(spacing: 10) {
-            TextField("Message", text: $draft, axis: .vertical)
+            TextField("Message", text: $draft, prompt: .fieldPrompt("Message"), axis: .vertical)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .lineLimit(1...4)

@@ -203,7 +203,7 @@ struct RecipePartEditorCard: View {
                 glyphButton("chevron.down", enabled: index < count - 1, label: "Make part \(index + 1) later") { actions.move(1) }
                 glyphButton("trash", enabled: true, label: "Remove part \(index + 1)", action: actions.remove)
             }
-            TextField("Name this part, like Dressing", text: nameBinding)
+            TextField("Name this part, like Dressing", text: nameBinding, prompt: .fieldPrompt("Name this part, like Dressing"))
                 .submitLabel(.done)
                 .sheetTextInput()
                 .accessibilityLabel(Text("Name of part \(index + 1)"))

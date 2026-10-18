@@ -800,7 +800,7 @@ private struct DuressPINEntrySheet: View {
         let kind = lockService.credentialKind ?? .pin6
         if kind == .alphanumeric {
             VStack(alignment: .leading, spacing: 16) {
-                SecureField(fieldPlaceholder, text: activeEntry)
+                SecureField(fieldPlaceholder, text: activeEntry, prompt: .fieldPrompt(fieldPlaceholder))
                     .textContentType(step == .verify ? .password : .newPassword)
                     .sheetTextInput()
                     .accessibilityIdentifier("duress.entry.field")

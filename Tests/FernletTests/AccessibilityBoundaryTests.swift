@@ -24,7 +24,7 @@
 //
 // WHAT THIS WALL CANNOT SEE — the honest ceiling, restated here because it is what stops the wall
 // being mistaken for coverage, and kept in step with the scanner's module docstring. It catches
-// eight named structural regressions. It does NOT catch a rawValue that reaches a label through a
+// nine named structural regressions. It does NOT catch a rawValue that reaches a label through a
 // function call or across a file, a string computed at runtime, a label that is present but WRONG,
 // focus order, a missing custom action, an unhonored Reduce Motion, or anything about how a screen
 // actually sounds. Those stay manual, forever.
@@ -37,7 +37,7 @@
 import Foundation
 import Testing
 
-/// Grep-wall enforcing the eight mechanically decidable accessibility invariants of §4.5.
+/// Grep-wall enforcing the nine mechanically decidable accessibility invariants of §4.5.
 ///
 /// Each rule is a pure matcher over source text, exercised both against the real tree (with a
 /// file-count floor, so a green run cannot mean "the scan read nothing") and against planted
@@ -143,6 +143,8 @@ extension AccessibilityBoundaryTests {
     static let a7Lookback = 60
     /// Code lines joined so `Color.slate` wrapped before its `.opacity(…)` is read as one expression.
     static let a8Window = 2
+    /// Code lines joined so a field whose title or `Binding(get:set:)` wraps is read as one call.
+    static let a10Window = 6
     /// `accessibilityAddTraits(` calls inspected inside one heading canary's braces.
     static let addTraitsScanLimit = 32
     /// `Text(verbatim: …)`-style wrappers peeled off a spoken argument before comparing it.
@@ -450,6 +452,8 @@ extension AccessibilityBoundaryTests {
     static let mutedSlate = Pattern(
         #"\bslate\s*\.\s*(?:opacity\s*\(|secondary\b|tertiary\b|quaternary\b|quinary\b)"#)
     static let mutedSecondaryInk = Pattern(#"\bsecondaryText\s*\.\s*withAlphaComponent\s*\("#)
+    static let fieldHead = Pattern(#"\b(?:TextField|SecureField)\s*\("#)
+    static let fieldPrompt = Pattern(#"\bprompt:\s*(?:Text)?\s*\.\s*fieldPrompt\s*\("#)
 
     /// UIKit's assignment form, built from ``spokenProperties`` exactly as the scanner builds it
     /// from `SPOKEN_PROPERTIES` — so adding a property name on one side and not the other is a
@@ -462,7 +466,7 @@ extension AccessibilityBoundaryTests {
     static let portedPatterns: [Pattern] = [
         combineArguments, ignoreElement, labelStep, labelAnywhere, gridColumn, scaledMetric,
         binding, boundArgument, imageBitmap, buttonHead, numericLiteral, identifier, structHead,
-        mutedSlate, mutedSecondaryInk
+        mutedSlate, mutedSecondaryInk, fieldHead, fieldPrompt
     ]
 
     /// The two literal fragments of ``assignment``; its middle piece is COMPUTED on both sides, so
@@ -826,6 +830,37 @@ extension AccessibilityBoundaryTests {
     }
 }
 
+// MARK: - A10
+
+extension AccessibilityBoundaryTests {
+
+    /// **A10** — a `TextField(` / `SecureField(` call that passes no `prompt: .fieldPrompt(…)`.
+    ///
+    /// A field with no prompt draws its title in the SYSTEM placeholder colour, which measured
+    /// 1.71:1 on the cream field in default light, 2.43:1 in dark and 4.33:1 under Increase Contrast,
+    /// under the 4.5:1 text floor on every route and on the common tasks (the Meal sheet, the
+    /// recipe searches, Plan goals). FernletUI's `Text.fieldPrompt(_:)` inks it full-strength
+    /// `slate` in italic, and the call site passes the field's own title, so no string is added.
+    ///
+    /// The call's own balanced argument list is read across a FIXED ``a10Window``-line join, so a
+    /// wrapped title or `Binding(get:set:)` is still one call and the prompt after it is seen. Only
+    /// the first field on a line is read, because the allowlist names lines. A field that never
+    /// shows a prompt — an inline editor pre-filled with the value it edits — is allowlisted with
+    /// that invariant.
+    static func fieldPromptFindings(_ path: String, _ lines: [SourceLine]) -> [Finding] {
+        guard !path.isEmpty else { return [] }
+        var findings: [Finding] = []
+        for (index, line) in lines.enumerated() {
+            guard let head = fieldHead.search(line.code) else { continue }
+            let win = window(lines, from: index, count: a10Window)
+            let arguments = callSpan(win.chars, from: matchStart(head, in: line.code))
+            guard fieldPrompt.search(arguments) == nil else { continue }
+            findings.append(Finding(rule: "A10-FIELD-PROMPT", path: path, line: line.number, text: line.raw))
+        }
+        return findings
+    }
+}
+
 // MARK: - A3
 
 extension AccessibilityBoundaryTests {
@@ -894,7 +929,7 @@ extension AccessibilityBoundaryTests {
         return paths.sorted()
     }
 
-    /// Runs all eight rules over the shipping tree.
+    /// Runs all nine rules over the shipping tree.
     static func scanTree() throws -> (findings: [Finding], filesScanned: Int) {
         var findings: [Finding] = []
         let paths = shippingFiles()
@@ -908,6 +943,7 @@ extension AccessibilityBoundaryTests {
             findings += invertColorFindings(path, lines)
             findings += ignoreOnButtonFindings(path, lines)
             findings += mutedSlateFindings(path, lines)
+            findings += fieldPromptFindings(path, lines)
         }
         // A3 asserts something EXISTS, so it runs off its own named paths rather than off the walk:
         // deleting the file must fail the canary, not quietly remove it from the scan.
@@ -1027,6 +1063,7 @@ extension AccessibilityBoundaryTests {
             ("A5_WINDOW", Self.a5Window), ("A5_DERIVATION_LINES", Self.a5DerivationLines),
             ("A5_DERIVATION_PASSES", Self.a5DerivationPasses), ("A6_WINDOW", Self.a6Window),
             ("A7_LOOKBACK", Self.a7Lookback), ("A8_WINDOW", Self.a8Window),
+            ("A10_WINDOW", Self.a10Window),
             ("ADD_TRAITS_SCAN_LIMIT", Self.addTraitsScanLimit),
             ("WRAPPER_UNWRAPS", Self.wrapperUnwraps)
         ]
@@ -1501,6 +1538,53 @@ extension AccessibilityBoundaryTests {
         """
         #expect(Self.mutedSlateFindings("F.swift", Self.sourceLines(clean)).isEmpty,
                 "full-strength slate is the fix, and a bark hairline or a comment is not this rule")
+    }
+
+    /// A10 refuses every field whose prompt would draw in the system placeholder colour, and
+    /// nothing else.
+    ///
+    /// The planted shapes are the ones a reviewer would try first: no prompt at all, a prompt left
+    /// in the system colour (`prompt: Text(…)`), a `nil` prompt, a `SecureField`, a `value:format:`
+    /// field, and a `Binding(get:set:)` that wraps before its prompt was forgotten. The negatives:
+    /// both spellings of the helper, the prompt after a wrapped binding, the helper's name in a
+    /// comment, and controls with other names (`SheetGrowingTextField`, `UITextField`).
+    @Test func fieldPromptRuleRefusesEveryFieldWithoutAnInkedPrompt() {
+        let planted = [
+            #"TextField("Meal", text: $name)"#,
+            #"TextField("Meal", text: $name, prompt: Text("Meal"))"#,
+            #"TextField("Meal", text: $name, prompt: nil)"#,
+            #"SecureField(copy.passwordFieldPlaceholder, text: $passcode)"#,
+            #"TextField("Qty", value: $quantity, format: .number)"#,
+            #"TextField("Message", text: $draft, axis: .vertical)"#,
+        ]
+        for line in planted {
+            #expect(Self.fieldPromptFindings("F.swift", Self.sourceLines(line)).count == 1,
+                    "this field draws its prompt in the system placeholder colour: \(line)")
+        }
+        let wrappedWithout = """
+        TextField("Name your item", text: Binding(
+            get: { name },
+            set: { name = $0 }
+        ))
+        .sheetTextInput()
+        """
+        #expect(Self.fieldPromptFindings("F.swift", Self.sourceLines(wrappedWithout)).map(\.line) == [1],
+                "a wrapped call is one site, reported on the line the field opens")
+
+        let clean = """
+        TextField("Meal", text: $name, prompt: .fieldPrompt("Meal"))
+        TextField("Message", text: $draft, prompt: Text.fieldPrompt("Message"), axis: .vertical)
+        SecureField(copy.passwordFieldPlaceholder, text: $passcode, prompt: .fieldPrompt(verbatim: copy.passwordFieldPlaceholder))
+        TextField("Name your item", text: Binding(
+            get: { name },
+            set: { name = $0 }
+        ), prompt: .fieldPrompt("Name your item"))
+        // TextField("Meal", text: $name) in a comment is prose
+        SheetGrowingTextField(text: $description, placeholder: "scrambled eggs and toast")
+        let field = UITextField(frame: .zero)
+        """
+        #expect(Self.fieldPromptFindings("F.swift", Self.sourceLines(clean)).isEmpty,
+                "the inked helper is the fix, and a comment or another control's name is not this rule")
     }
 
     /// The tokenizer, which every rule above depends on: a forbidden shape written inside a

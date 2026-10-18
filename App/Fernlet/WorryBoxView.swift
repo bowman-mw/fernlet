@@ -574,7 +574,8 @@ struct WorryBoxView: View {
     private var composer: some View {
         FernletCard {
             VStack(alignment: .leading, spacing: 10) {
-                TextField("Something circling around?", text: $composeText, axis: .vertical)
+                TextField("Something circling around?", text: $composeText,
+                          prompt: .fieldPrompt("Something circling around?"), axis: .vertical)
                     .focused($isComposeFocused)
                     .lineLimit(1...4)
                     .font(.fernlet(.body))

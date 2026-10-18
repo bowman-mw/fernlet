@@ -248,7 +248,7 @@ struct WorkoutLocationSetupView: View {
 
                     sectionHeader("Somewhere else")
                     HStack(spacing: 8) {
-                        TextField("Location name", text: $customName)
+                        TextField("Location name", text: $customName, prompt: .fieldPrompt("Location name"))
                             .sheetTextInput()
                         Button("Add") { addCustomLocation() }
                             .buttonStyle(ChipButtonStyle(selected: true))
@@ -378,7 +378,7 @@ struct WorkoutLocationSetupView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "mappin.and.ellipse")
                         .font(.caption2)
-                    TextField("Location", text: editingNameBinding)
+                    TextField("Location", text: editingNameBinding, prompt: .fieldPrompt("Location"))
                         .font(.fernlet(.labelSmall))
                         .textInputAutocapitalization(.words)
                         .submitLabel(.done)

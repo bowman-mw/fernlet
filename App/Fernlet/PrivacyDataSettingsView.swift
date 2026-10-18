@@ -1969,7 +1969,8 @@ struct PrivacyDataSettingsView: View {
                 // inserts the same localized word `DeleteConfirmationWord.matches` compares
                 // against, so the two can never disagree across languages.
                 SheetField("Type \(DeleteConfirmationWord.localizedWord) to confirm") {
-                    TextField(DeleteConfirmationWord.localizedWord, text: $deleteConfirmationText)
+                    TextField(DeleteConfirmationWord.localizedWord, text: $deleteConfirmationText,
+                              prompt: .fieldPrompt(verbatim: DeleteConfirmationWord.localizedWord))
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.characters)
                         .sheetTextInput()

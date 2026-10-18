@@ -720,7 +720,7 @@ struct BarcodeNotFoundView: View {
                     .fernletWrappingText()
 
                 SheetField("What should we call it?") {
-                    TextField("Hazelnut oat bar", text: $name)
+                    TextField("Hazelnut oat bar", text: $name, prompt: .fieldPrompt("Hazelnut oat bar"))
                         .sheetTextInput()
                 }
 

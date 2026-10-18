@@ -1397,7 +1397,7 @@ jobs:
             PersistedSurfaceWipeBoundaryTests
 
       - name: Accessibility wall (AccessibilityBoundaryTests)
-        # The Swift port of Scripts/accessibility-scan.py, reading the same allowlist: eight
+        # The Swift port of Scripts/accessibility-scan.py, reading the same allowlist: nine
         # structural VoiceOver / Dynamic Type / Smart Invert / contrast invariants that fail
         # SILENTLY when dropped — the screen looks identical and only an assistive technology can
         # tell. Its own doc called it "the half CI enforces" before any line ran it. The Python
@@ -1405,7 +1405,7 @@ jobs:
         # doc-coverage-scan.py do; this step is the Swift half and the port-drift pins.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh accessibility 21 AccessibilityBoundaryTests
+          Scripts/run-gated-suites.sh accessibility 22 AccessibilityBoundaryTests
 
       - name: Memory-lifecycle wall (MemoryLifecycleBoundaryTests)
         # ML1–ML5: stored Task handles cancelled in deinit, block observers removed, observation
