@@ -94,6 +94,17 @@ for the simulator, so the suite is what catches a device-only break before an ar
 - **Inconsistent `arm64e`.** Everything linked into one process must carry the slice; that is why the
   setting is project-level and the packages follow the workspace setting. A binary framework added
   later would need an `arm64e` slice of its own.
+- **Apple silicon Macs need macOS 26.5 (validation warning, 2026-10-17).** App Store Connect offers an
+  iPhone app on Apple silicon Macs by default, and Fernlet is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`)
+  with an implied macOS minimum of 26.0. A bundle carrying the `arm64e` slice launches on a Mac only from
+  macOS 26.5, so validation warns "Macs with Apple silicon support issue".
+  - **Resolution (owner, 2026-10-17):** Mac availability is turned OFF in App Store Connect (Pricing and
+    Availability → iPhone and iPad Apps on Apple Silicon Macs). On a Mac, Fernlet's core features are
+    absent anyway: no Apple Health data, no UWB ranging, no in-person mesh. No build setting changed.
+  - **If Mac availability is ever turned back on:** set the minimum macOS version to 26.5 on that App
+    Store Connect page, or add `INFOPLIST_KEY_LSMinimumSystemVersion = 26.5` to the Fernlet target, which
+    iOS ignores, with a cell in `EnhancedSecurityConfigurationTests` to hold it. Otherwise a Mac on
+    26.0–26.4 would offer the app and then fail to launch it.
 - **The app's `arm64e` slice has no class_ro_t pointer signing (found 2026-10-17).** Every iOS archive
   prints 29 linker warnings: "'<Module>.o' was built with class_ro_t pointer signing enabled, but
   previous .o file was not", once per FernletKit module, plus the reverse for `CryptoSwift.o`.
