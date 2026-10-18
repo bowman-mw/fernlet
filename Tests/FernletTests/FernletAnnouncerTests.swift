@@ -27,16 +27,19 @@
 //
 // None of the three failures is catchable by the compiler. All three are catchable by a source scan.
 //
-// KNOWN NON-ADOPTED SITES, deliberately left for the reconciliation batch. `FoodView.swift` is
-// owned by the parallel food track, so batch A3 did not touch it: its bare `ProgressView()`
-// (~:3317, the search / label-read progress card) is still an unlabelled empty leaf, and its
-// `createdNotice` toast (~:5992, a 4 s `.task(id:)`) still auto-dismisses on the sighted-tap budget
-// rather than through `FernletDismissalWindow`. Both are the same one-line fixes applied elsewhere
-// in this batch; they are recorded here so the gap is visible in the tree and not only in a ledger.
+// FORMERLY NON-ADOPTED SITES, both now closed. `FoodView.swift` belonged to the parallel food track,
+// so batch A3 left two gaps there and recorded them here, so they stayed visible in the tree:
+//   * The search / label-read progress card's bare `ProgressView()` is now hidden, beside the
+//     status line that names the operation.
+//   * The recipe book's `createdNotice` line, once a fixed 4 s `.task(id:)`, now holds for
+//     `FernletDismissalWindow`'s notice window and is spoken as `TaskConfirmation.recipeAdded`
+//     (2026-10-18). The same off-path follow-up to the VoiceOver round also adopted the passcode
+//     setup's success toast (`FernletLockSetupView`; its tests are at the bottom of this file).
 
 import Foundation
 import Testing
 import FernletUI
+@testable import FernletLockUI
 
 /// Records what an announcer was asked to speak, in order, kind and words together.
 @MainActor
@@ -521,5 +524,55 @@ private final class SpeechRecorder {
     @Test func stretchedWindowsAreOrderedAndLongerThanTheSightedBudget() async throws {
         #expect(FernletDismissalWindow.assistiveNoticeWindow > .seconds(6))
         #expect(FernletDismissalWindow.assistiveActionWindow > FernletDismissalWindow.assistiveNoticeWindow)
+    }
+}
+
+/// Pins the passcode setup's success toast for an assistive-technology user: what VoiceOver hears
+/// as it appears, and how long the sheet waits before it closes itself.
+///
+/// Both live in `FernletLockUI`, a package module, so the spoken sentence has to be the toast's own
+/// `bundle: .module` copy passed as `resolved:`. A literal or a resource created there would be
+/// spoken in English, or as its raw key. Before this, the toast was silent and gone in 1.5 s, so a
+/// VoiceOver user setting a passcode from onboarding or Settings › App lock had the sheet close
+/// under them with no word that the lock existed.
+@MainActor
+@Suite struct LockSetupSuccessToastTests {
+
+    /// The plain toast is spoken exactly as it reads, once, as a success.
+    @Test func configuredToastIsSpokenAsItReads() {
+        let recorder = SpeechRecorder()
+        FernletLockSetupView.announceSuccess(biometricFailed: false, biometry: "Face ID",
+                                             using: recorder.announcer)
+
+        let toast = FernletLockSetupView.successToastMessage(biometricFailed: false, biometry: "Face ID")
+        #expect(recorder.spoken == [FernletAnnouncement(kind: .success, message: toast)])
+        #expect(!toast.contains("Face ID"), "the plain toast claims nothing about biometrics")
+    }
+
+    /// The Face ID variant says its caveat out loud. It is still a success, because the lock IS on.
+    /// It is never the unqualified sentence, which would tell the user they got an unlock they did
+    /// not get.
+    @Test func biometricFailureIsSpokenWithItsCaveat() {
+        let recorder = SpeechRecorder()
+        FernletLockSetupView.announceSuccess(biometricFailed: true, biometry: "Face ID",
+                                             using: recorder.announcer)
+
+        let caveat = FernletLockSetupView.successToastMessage(biometricFailed: true, biometry: "Face ID")
+        #expect(recorder.spoken.map(\.kind) == [.success])
+        #expect(recorder.words == [caveat])
+        #expect(caveat.contains("Face ID"))
+        #expect(caveat != FernletLockSetupView.successToastMessage(biometricFailed: false, biometry: "Face ID"))
+    }
+
+    /// Sighted users keep the 1.5 s beat. Under VoiceOver or Switch Control the sheet holds for the
+    /// notice window: the toast carries no action, and the settled step behind it has no live
+    /// controls to pull away.
+    @Test func dwellStretchesToTheNoticeWindowUnderAssistiveTechnology() {
+        let sighted = FernletDismissalWindow(isAssistiveNavigationRunning: { false })
+        let assistive = FernletDismissalWindow(isAssistiveNavigationRunning: { true })
+
+        #expect(FernletLockSetupView.successToastDwell(using: sighted) == .seconds(1.5))
+        #expect(FernletLockSetupView.successToastDwell(using: assistive)
+                == FernletDismissalWindow.assistiveNoticeWindow)
     }
 }

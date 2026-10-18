@@ -2,7 +2,8 @@
 // FernletTests
 //
 // Pins what VoiceOver is told when a common task lands (``TaskConfirmation``) and as a guided
-// workout moves (``GuidedRunAnnouncement``) — the VoiceOver dry run's fixes, 2026-10-18.
+// workout moves (``GuidedRunAnnouncement``) — the VoiceOver dry run's fixes, 2026-10-18, and the
+// recipe book's "added" line from that round's off-path follow-up.
 //
 // Same reason as `FernletAnnouncerTests`: the accessibility system never reports what it spoke, so
 // "is this outcome still announced, and with the right kind?" is only answerable through the
@@ -74,11 +75,22 @@ private final class SpokenLog {
         #expect(String(localized: TaskConfirmation.mealUndone(count: 2).sentence).contains("2"))
     }
 
+    /// A recipe landing back on the book is spoken once, as a success, after the pop settles. The
+    /// sentence is the event: the case carries no name, so a recipe's name can never reach it.
+    /// The book's "added" line shows the name, for the one person holding the phone.
+    @Test func recipeAddedSpeaksTheEventOnceAfterThePop() async {
+        let log = SpokenLog()
+        await TaskConfirmation.recipeAdded.announceAfterSheetCloses(using: log.announcer)
+
+        #expect(log.spoken == [FernletAnnouncement(
+            kind: .success, message: String(localized: TaskConfirmation.recipeAdded.sentence))])
+    }
+
     /// Every confirmation is a non-empty sentence — an empty one is silently dropped by the announcer.
     @Test func everyConfirmationSaysSomething() {
         let all: [TaskConfirmation] = [
             .mealLogged(count: 1), .mealLogged(count: 2), .mealUndone(count: 1), .mealUndone(count: 2),
-            .moodLogged, .workoutLogged, .journalSaved
+            .moodLogged, .workoutLogged, .journalSaved, .recipeAdded
         ]
         for confirmation in all {
             #expect(!String(localized: confirmation.sentence).isEmpty, "\(confirmation)")
