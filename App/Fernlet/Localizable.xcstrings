@@ -4726,6 +4726,15 @@
     "Please try again." : {
 
     },
+    "Point at the code on the other phone's screen." : {
+
+    },
+    "Point at the code on your friend's screen." : {
+
+    },
+    "Point at the code on your other phone's screen." : {
+
+    },
     "Point the camera at the product's barcode." : {
 
     },
@@ -5512,6 +5521,9 @@
 
     },
     "Scan the nutrition label" : {
+
+    },
+    "Scan the other phone" : {
 
     },
     "Scan their code" : {

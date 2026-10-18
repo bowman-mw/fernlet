@@ -2462,6 +2462,14 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
                      declaration: "var placeholder: LocalizedStringKey",
                      role: "SheetGrowingTextField's placeholder, which names the field"),
+        // Tracker §2.6 (2026-10-18): the QR scan sheet's heading and aiming line, the same T2-1 class
+        // found after the round — `String` parameters drawn with `Text(title)`.
+        ForkedMember(path: "App/Fernlet/VerifyQRViews.swift",
+                     declaration: "var title: LocalizedStringKey = \"Scan their code\"",
+                     role: "VerifyQRScanSheet's heading (friend verification and the duress recovery ceremony)"),
+        ForkedMember(path: "App/Fernlet/VerifyQRViews.swift",
+                     declaration: "var prompt: LocalizedStringKey = \"Point at the code on your friend's screen.\"",
+                     role: "VerifyQRScanSheet's line under the viewfinder"),
     ]
 
     /// The members this round forked are still forked.
@@ -2532,6 +2540,15 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "FernletKit/Sources/AppServices/Localizable.xcstrings",
                      key: "notification.dailyCheckIn.title",
                      source: "NotificationService's daily check-in title, T2-19"),
+        // Tracker §2.6 (2026-10-18). "Scan their code" was already harvested from another call site.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Point at the code on your friend's screen.",
+                     source: "VerifyQRScanSheet.prompt's default, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Scan the other phone",
+                     source: "the duress recovery ceremony's VerifyQRScanSheet title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Point at the code on your other phone's screen.",
+                     source: "the duress recovery ceremony's VerifyQRScanSheet prompt, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Point at the code on the other phone's screen.",
+                     source: "the duress recovery ceremony's VerifyQRScanSheet prompt, forked String → LocalizedStringKey"),
     ]
 
     /// The forks actually reached a catalog.

@@ -115,16 +115,20 @@ struct VerifyQRScanSheet: View {
     /// Sheet heading. Defaulted to the friend-verification wording so the original call sites are
     /// unchanged; the duress recovery ceremony (P7) passes its own, because "their code" names a
     /// friend and that ceremony is between two phones the same person owns.
-    var title: String = "Scan their code"
-    /// The line under the viewfinder, defaulted for the same reason.
-    var prompt: String = "Point at the code on your friend's screen."
+    ///
+    /// A `LocalizedStringKey`, never `String` (tracker §2.6, 2026-10-18): a `String` here bound
+    /// `Text`'s verbatim overload, so the heading rendered English in every language and its
+    /// callers' wording never reached the catalog. `LocalizationBoundaryTests.forkedMembers` pins it.
+    var title: LocalizedStringKey = "Scan their code"
+    /// The line under the viewfinder, defaulted for the same reason, and localized for the same
+    /// reason as ``title``.
+    var prompt: LocalizedStringKey = "Point at the code on your friend's screen."
     /// What VoiceOver says when it lands on the live viewfinder (T2-20).
     ///
-    /// Deliberately a *separate* `LocalizedStringKey` rather than a reuse of ``prompt``: `prompt`
-    /// is `String`-typed, so it is frozen English (the T2-1 class) and would carry that freeze into
-    /// speech. Aiming instructions are also not the same sentence for eyes and for ears — a sighted
-    /// user has already seen the viewfinder and only needs to know *what* to aim at, while a
-    /// VoiceOver user needs to be told there is a camera running here at all.
+    /// Deliberately a *separate* key rather than a reuse of ``prompt``: aiming instructions are not
+    /// the same sentence for eyes and for ears — a sighted user has already seen the viewfinder and
+    /// only needs to know *what* to aim at, while a VoiceOver user needs to be told there is a
+    /// camera running here at all.
     var scannerLabel: LocalizedStringKey = "Camera viewfinder. Point the camera at the code on your friend's screen."
     @Environment(\.dismiss) private var dismiss
     @State private var handedOff = false
