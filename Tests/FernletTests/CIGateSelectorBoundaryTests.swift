@@ -400,13 +400,22 @@ import Testing
     /// coordinator's hop lands on, and a cell that asserts an absence waits for the record its handler
     /// makes for that input. None is a `MeshP<n>…AcceptanceTests` or a `…GoldenTests`, so this entry
     /// and the two steps' MEASURED floors are what notice one leaving. Counted off the lines.
+    ///
+    /// RE-MEASURED in the same round (2026-10-17, tracker §2.4, after the Coach plan's §13): `s3-grep`
+    /// 11 → 12, for `TestHookBoundaryTests`, and `crypto-goldens` 7 → 8, for
+    /// `CryptographicEscapeHatchCensusTests`. Each is a source scan with no compiler half that rode no
+    /// line: the first holds every launch-hook read in a shipping root inside `#if DEBUG` and
+    /// UITestSupport's Release half complete, and the second pins the `// cryptographic-domain:` escape
+    /// hatches the purpose wall beside it lets through. A hook read outside DEBUG and a new hatch both
+    /// compile clean. `s3-grep`'s floor stays the shared `1`. Both are pinned by name in ``wallLines``
+    /// too. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 11,
+        "s3-grep": 12,
         "no-tracking": 2,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
-        "crypto-goldens": 7,
+        "crypto-goldens": 8,
         "privacy-wipe": 4,
         "accessibility": 1,
         "memory-lifecycle": 1,
@@ -435,7 +444,7 @@ import Testing
     /// own CI.
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
-                    "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
+                    "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests", "TestHookBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests", "OpenFoodFactsLookupTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
@@ -444,7 +453,7 @@ import Testing
         "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
                            "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests",
                            "ProximityVocabularyGoldenTests", "ProximityNamespaceGateTests",
-                           "FernletFeatureGoldenTests"],
+                           "FernletFeatureGoldenTests", "CryptographicEscapeHatchCensusTests"],
         "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
                          "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
         "accessibility": ["AccessibilityBoundaryTests"],

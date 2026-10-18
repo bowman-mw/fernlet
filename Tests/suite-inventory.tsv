@@ -70,7 +70,7 @@ CreationStudioLayoutTests	Tests/FernletTests/CreationStudioLayoutTests.swift	-
 CrisisResourceTests	Tests/FernletTests/LocaleCorrectnessTests.swift	-
 CryptoFormatCensusTests	Tests/FernletTests/CryptoFormatCensusTests.swift	-
 CryptographicDomainSeparationTests	Tests/FernletTests/CryptographicDomainSeparationTests.swift	crypto-goldens
-CryptographicEscapeHatchCensusTests	Tests/FernletTests/CryptographicEscapeHatchCensusTests.swift	-
+CryptographicEscapeHatchCensusTests	Tests/FernletTests/CryptographicEscapeHatchCensusTests.swift	crypto-goldens
 CryptographicPurposeBoundaryTests	Tests/FernletTests/CryptographicPurposeBoundaryTests.swift	crypto-goldens
 CuratedSearchAliasTests	Tests/FernletTests/CuratedSearchAliasTests.swift	-
 CustomIngredientUpsertTests	Tests/FernletTests/CustomIngredientUpsertTests.swift	-
@@ -594,7 +594,7 @@ SwiftSourceLexerTests	Tests/FernletTests/SwiftSourceLexerTests.swift	s3-grep
 TabBarClearanceTests	Tests/FernletTests/TabBarCompactionTests.swift	-
 TabBarCompactionTests	Tests/FernletTests/TabBarCompactionTests.swift	-
 TabReselectTests	Tests/FernletTests/TabReselectTests.swift	-
-TestHookBoundaryTests	Tests/FernletTests/TestHookBoundaryTests.swift	-
+TestHookBoundaryTests	Tests/FernletTests/TestHookBoundaryTests.swift	s3-grep
 TierTwoDeviceLocalTests	Tests/FernletTests/TierTwoDeviceLocalTests.swift	-
 TrainerExportTests	Tests/FernletTests/TrainerExportTests.swift	-
 TrainerProximityServiceTests	Tests/FernletTests/TrainerProximityServiceTests.swift	-
