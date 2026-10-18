@@ -1193,12 +1193,6 @@ extension UXScreenProbe {
     /// `Element has no description` on the full-size progress photo. What is frozen below is the
     /// Larger Text backlog these screens share with the other twenty-two.
     static let auditBaselineEntries: [String: Set<String>] = [
-        "Food · Recipe detail": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
         // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): `ScreenHeader`'s subtitle still
         // renders (FoodView.swift:87) — it is the clipping that stopped, not the element that went
         // away. The tab-bar clearance and scroll-position work that landed after the baseline
@@ -1207,16 +1201,6 @@ extension UXScreenProbe {
         // `xcodebuild test` runs on the pinned simulator before removing.
         "Food tab": [
             "Hit area is too small — “Adjust targets” id=food.adjustTargets (9)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Friends tab": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         // "POTENTIALLY INACCESSIBLE TEXT" ADDED (2026-09-26), element-less, 2 raw issues. Copied
         // from the "not in baseline" listing of runs on two independent, freshly created iPhone 17
@@ -1282,12 +1266,7 @@ extension UXScreenProbe {
         "Home · Recent bites": [
             "Potentially inaccessible text",
             "Text clipped — “Chicken rice bowl” (48)",
-            "Text clipped — “Food” (9)",
-            "Text clipped — “Friends” (9)",
             "Text clipped — “Greek yogurt with berries” (48)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
         // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
@@ -1316,16 +1295,6 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “Today” (48)",
             "Dynamic Type font sizes are partially unsupported — “Water” (48)",
             "Hit area is too small — “Care score # percent” (1)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Move · Progress photo detail": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         // VIEWPORT AND SEED PINNED, DATE CHIP GONE (2026-09-24). This entry went red on main with
         // one or two lines "no longer reproducing" — on 3eeb7bb AND 53633f50, on one simulator that
@@ -1375,11 +1344,6 @@ extension UXScreenProbe {
         // them (the commit that made this change counts them).
         "Move · Progress photos": [
             "Text clipped — “Feeling stronger” (48)",
-            "Text clipped — “Food” (9)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): same component and same reason as
         // `Food tab` above (MoveView.swift:133 still renders it).
@@ -1392,11 +1356,7 @@ extension UXScreenProbe {
         // is a genuine clipped-text finding and joins the Larger Text backlog the rest of this map
         // freezes rather than a defect this round introduced.
         "Move tab": [
-            "Text clipped — “Friends” (9)",
             "Text clipped — “Full gym · # items” (48)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
         // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
@@ -1451,22 +1411,6 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “Worry box” (9)",
             "Dynamic Type font sizes are partially unsupported — “W” (48)",
             "Dynamic Type font sizes are partially unsupported — “Your cycle, at a glance.” (48)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Private · Cycle (intimacy only)": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Private · Cycle (period only)": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         "Private · Journal": [
             "Dynamic Type font sizes are partially unsupported — “F” (48)",
@@ -1474,10 +1418,6 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “S” (48)",
             "Dynamic Type font sizes are partially unsupported — “T” (48)",
             "Dynamic Type font sizes are partially unsupported — “W” (48)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         "Settings · Core memory": [
             "Text clipped — <no label> (49)",
