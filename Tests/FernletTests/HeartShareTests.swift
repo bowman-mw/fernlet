@@ -424,9 +424,15 @@ struct HeartShareTests {
         )
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        // Poll rather than sleep-a-fixed-amount: the transport→coordinator hop is async and 10 ms is
-        // not reliable under parallel test execution.
-        await waitUntil { if case .awaitingTapConfirmation = coordinator.state { return true }; return false }
+        // Poll rather than sleep a fixed amount: the transport→coordinator hop is async, and 10 ms is
+        // not reliable under parallel test execution. Poll for the state the hop SETTLES on: a
+        // connected trainer passes the tap gate and sends its introduction within the one hop
+        // (ProximityCoordinatorTests' `nonUWBTrainerAutoAdvancesPastTheTapGate`), so
+        // `.awaitingTapConfirmation` is never observable. A wait for it ran to its poll floor on every
+        // call: 2 s on an idle machine, 17–22 s per cell beside the mesh-features line and 30 s beside
+        // mesh-batteries (MEASURED 2026-10-17: a starved main actor stretches each 5 ms poll). The
+        // `tapToConfirm()` below stays the no-op it was.
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
         await waitUntil {
@@ -448,6 +454,12 @@ struct HeartShareTests {
     }
 
     private enum TestFailure: Error { case notConnected(String) }
+
+    /// The state a connected trainer settles on (see ``connectedCoordinator(local:remote:vault:peerName:)``).
+    private func isAwaitingIdentityIntroduction(_ coordinator: ProximityCoordinator) -> Bool {
+        if case .awaitingIdentityIntroduction = coordinator.state { return true }
+        return false
+    }
 
     /// Gives up only once the deadline has passed AND `minimumPolls` observations have really been
     /// made. A `ContinuousClock` deadline alone measures wall clock, which keeps advancing while
@@ -601,7 +613,8 @@ struct HeartShareTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        await waitUntil { if case .awaitingTapConfirmation = coordinator.state { return true }; return false }
+        // The settled state, as in `connectedCoordinator`: the tap gate is never observable.
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(intro), from: peer)
         await waitUntil { if case .failed = coordinator.state { return true }; return false }

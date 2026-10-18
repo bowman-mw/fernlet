@@ -391,13 +391,31 @@ import Testing
     /// without the web-nutrition-lookup consent, the exact request, the cap, the deadline, no retries
     /// and the audit line at dispatch. Each compiles clean when it breaks, and it ran on no line. The
     /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RE-MEASURED at the de-flake of tracker §2.4 (2026-10-17): `mesh-batteries` 152 → 154, for
+    /// `SealedIntroductionTests` and `ProximityCoordinatorTests`, and `mesh-features` 50 → 51, for
+    /// `HeartShareTests`. These are the three suites the CI-breadth round (2026-09-24) and plan step
+    /// A0.5.0 named as de-flake follow-ups and left on no line, because each waited on the wall clock in
+    /// a way no floor can price. Each cell now waits for the state or the inspector record that a
+    /// coordinator's hop lands on, and a cell that asserts an absence waits for the record its handler
+    /// makes for that input. None is a `MeshP<n>…AcceptanceTests` or a `…GoldenTests`, so this entry
+    /// and the two steps' MEASURED floors are what notice one leaving. Counted off the lines.
+    ///
+    /// RE-MEASURED in the same round (2026-10-17, tracker §2.4, after the Coach plan's §13): `s3-grep`
+    /// 11 → 12, for `TestHookBoundaryTests`, and `crypto-goldens` 7 → 8, for
+    /// `CryptographicEscapeHatchCensusTests`. Each is a source scan with no compiler half that rode no
+    /// line: the first holds every launch-hook read in a shipping root inside `#if DEBUG` and
+    /// UITestSupport's Release half complete, and the second pins the `// cryptographic-domain:` escape
+    /// hatches the purpose wall beside it lets through. A hook read outside DEBUG and a new hatch both
+    /// compile clean. `s3-grep`'s floor stays the shared `1`. Both are pinned by name in ``wallLines``
+    /// too. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
-        "s3-grep": 11,
+        "s3-grep": 12,
         "no-tracking": 2,
         "power-of-10": 1,
         "localization": 1,
         "key-custody": 4,
-        "crypto-goldens": 7,
+        "crypto-goldens": 8,
         "privacy-wipe": 4,
         "accessibility": 1,
         "memory-lifecycle": 1,
@@ -406,8 +424,8 @@ import Testing
         "messages-envelope": 5,
         "recipe-wire": 1,
         "food-search": 13,
-        "mesh-batteries": 152,
-        "mesh-features": 50
+        "mesh-batteries": 154,
+        "mesh-features": 51
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
@@ -426,7 +444,7 @@ import Testing
     /// own CI.
     private static let wallLines: [String: [String]] = [
         "s3-grep": ["S3BoundaryTests", "CompanionEmotionPrivacyTests", "ProximityAuditBridgeTests",
-                    "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests"],
+                    "SwiftSourceLexerTests", "ProximityPlatformBoundaryTests", "TestHookBoundaryTests"],
         "no-tracking": ["NoTrackingBoundaryTests", "OpenFoodFactsLookupTests"],
         "power-of-10": ["PowerOfTenBoundaryTests"],
         "localization": ["LocalizationBoundaryTests"],
@@ -435,7 +453,7 @@ import Testing
         "crypto-goldens": ["CryptographicPurposeBoundaryTests", "CryptographicDomainSeparationTests",
                            "MeshMembershipEventGoldenTests", "ProximityNamespaceGoldenTests",
                            "ProximityVocabularyGoldenTests", "ProximityNamespaceGateTests",
-                           "FernletFeatureGoldenTests"],
+                           "FernletFeatureGoldenTests", "CryptographicEscapeHatchCensusTests"],
         "privacy-wipe": ["PrivacyWipeCoverageTests", "PrivacyWipeMediaKeySurvivalTests",
                          "PrivacyWipeAttemptMemoryRemovalTests", "PersistedSurfaceWipeBoundaryTests"],
         "accessibility": ["AccessibilityBoundaryTests"],
