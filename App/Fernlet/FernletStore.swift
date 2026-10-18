@@ -137,6 +137,9 @@ final class FernletStore {
         get { diary.foodItems }
         set { diary.foodItems = newValue }
     }
+    /// The licence attribution a meal row, the day detail and the export show for `meal` (tracker
+    /// §2.6): see `DiaryStore.dataAttribution(for:)`.
+    func dataAttribution(for meal: Meal) -> String? { diary.dataAttribution(for: meal) }
     var webImportedFoodItems: [FoodItem] { diary.webImportedFoodItems }
     var allowsWebNutritionLookup: Bool { diary.allowsWebNutritionLookup }
     var shouldOfferWebNutritionLookupConsent: Bool { settings.shouldOfferWebNutritionLookupConsent }
@@ -979,6 +982,9 @@ final class FernletStore {
         // This device's HealthKit readings, before anything reads a day: the snapshot's today came
         // from a row, which never carries them.
         self.diary.attachHealthKitResidueStore(deviceHealthResidueStore)
+        // ...and Tier-2's inputs on the same device: the repository's post-save refresh reads the
+        // window with that residue put back, never the stripped rows alone (tracker §2.6).
+        attachTierTwoHealthKitResidue()
         // This device's day summaries, likewise: the persisted score history never carries them.
         self.diary.attachDaySummaryStore(deviceDaySummaryStore)
         // Mint the anonymous designer id now (not lazily from a view body) so the first Wardrobe/Studio

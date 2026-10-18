@@ -8,6 +8,7 @@
 import Foundation
 import FernletFoundation
 import FernletDomainModel
+import FernletPersistence
 
 /// The device-local, never-mirrored, never-backed-up home of the Tier-2 behavioral memories that
 /// `TierTwoMemoryEngine` infers — one small JSON file beside the local database.
@@ -82,8 +83,10 @@ public struct TierTwoMemoryStore: Sendable {
     }
 
     /// Runs `TierTwoMemoryEngine` over `days` (oldest-first) against the persisted records and writes
-    /// the result back when — and only when — it changed. Called by both repositories after every
-    /// SUCCESSFUL save, with the same day window the derived tables were rebuilt from.
+    /// the result back when — and only when — it changed. Called after every SUCCESSFUL repository
+    /// save, with the same day window the derived tables were rebuilt from: by the repository itself,
+    /// or, when the app has installed `CoreDataFernletRepository.tierTwoRefresher`, by the app with
+    /// that window passed through ``deviceWindow(restoringHealthKitTo:from:limit:)`` first.
     ///
     /// Best-effort by design (see the type's failure policy): a skipped or failed write is audited and
     /// retried by the next save, and nothing here can fail the save that called it.
@@ -97,6 +100,52 @@ public struct TierTwoMemoryStore: Sendable {
         if !write(updated) {
             FernletAuditLog.log("tierTwo.refresh.writeFailed", context: ["count": String(updated.count)])
         }
+    }
+
+    /// The window ``refresh(from:goals:)`` reads on THIS device: `rows`, a repository's window of days
+    /// that have passed through the HealthKit storage strip, with this device's HealthKit residue put
+    /// back, so the engine sees each day as it read before the strip existed (tracker §2.6, 2026-10-18:
+    /// since the strip landed on 2026-09-23, Tier-2 had been counting days without their Apple Health
+    /// workouts and sleep).
+    ///
+    /// Each row gets its own day's residue overlaid (`overlayingHealthKitResidue(_:)`). A day whose
+    /// only content was HealthKit's has no row at all (the strip empties it, and an empty day writes
+    /// none), so a residue with no row comes back as a day of its own, but only when the restored day
+    /// has logged content: a day without any had no row before the strip either. The newest `limit`
+    /// days are kept, oldest-first, like the repositories' own windows; the engine reads the trailing
+    /// 14 of them.
+    ///
+    /// DEVICE-LOCAL ONLY: the result carries values read from HealthKit. It may feed this store's
+    /// refresh and nothing that syncs (never the blob's derived tables). Pinned by
+    /// `TierTwoHealthKitResidueTests`.
+    ///
+    /// - Parameters:
+    ///   - rows: The repository's window, oldest-first, its days stripped of every HealthKit value.
+    ///   - residues: This device's HealthKit residue, keyed by `yyyy-MM-dd` day key.
+    ///   - limit: How many of the newest days to keep; the repositories' derived-window bound.
+    /// - Returns: The restored window, oldest-first; `rows` unchanged when there is no residue.
+    public static func deviceWindow(
+        restoringHealthKitTo rows: [(String, FernletDay)],
+        from residues: [String: DeviceHealthResidue],
+        limit: Int = FernletLimits.derivedLogWindowDays
+    ) -> [(String, FernletDay)] {
+        guard !residues.isEmpty else { return rows }
+        guard limit > 0 else {
+            assertionFailure("Tier-2 window limit must be positive")
+            return rows
+        }
+        var byKey: [String: FernletDay] = [:]
+        for (dateKey, day) in rows {
+            byKey[dateKey] = day.overlayingHealthKitResidue(residues[dateKey])
+        }
+        for (dateKey, residue) in residues where byKey[dateKey] == nil {
+            let restored = FernletDay(date: dateKey).overlayingHealthKitResidue(residue)
+            if restored.hasLoggedContent { byKey[dateKey] = restored }
+        }
+        return byKey.sorted { $0.key > $1.key }
+            .prefix(limit)
+            .reversed()
+            .map { ($0.key, $0.value) }
     }
 
     /// Deletes the sidecar. Removing the file (rather than writing an empty list) leaves nothing on

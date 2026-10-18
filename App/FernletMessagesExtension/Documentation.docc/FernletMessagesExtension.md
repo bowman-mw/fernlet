@@ -30,6 +30,12 @@ its homemade dressing takes 955 of the 5,000 characters — travels whole (recip
 both the composer's preview and the received card put a "Parts: …" line, with the sender's part names,
 above the note.
 
+A planned workout's own notes travel inside its card too, and the recipient's Fernlet imports them.
+So when a workout carries notes (`WorkoutPlanExchangePacket.includesNotes`), its composer row and the
+composer's preview read "2026-10-18 · 1 workout · Notes included" (2026-10-18, the owner's pick after
+the 2026-09-23 review found the notes went unannounced). The card face itself, which the recipient
+and a lock-screen preview see, keeps the date and the count alone and never shows the note text.
+
 The card artwork is drawn locally — an SF Symbol and a wordmark on a 1200×630 canvas — so Messages
 never fetches, and a recipient never sees, a private food photo.
 

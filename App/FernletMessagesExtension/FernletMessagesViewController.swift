@@ -422,7 +422,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func workoutButton(for entry: FernletMessagesWorkoutCatalogEntry) -> UIButton {
         let isSelected = entry.packet.originContentID == selectedWorkoutID
-        let button = catalogButton(title: entry.card.title, subtitle: workoutSummary(for: entry),
+        let button = catalogButton(title: entry.card.title, subtitle: workoutComposerSummary(for: entry),
                                    symbol: "figure.strengthtraining.traditional", isSelected: isSelected)
         button.addAction(UIAction { [weak self] _ in self?.selectWorkout(entry.packet.originContentID) }, for: .touchUpInside)
         return button
@@ -542,7 +542,7 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
 
     private func workoutPreviewText(for entry: FernletMessagesWorkoutCatalogEntry?) -> String {
         guard let entry else { return "" }
-        return workoutSummary(for: entry)
+        return workoutComposerSummary(for: entry)
     }
 
     private func setPreviewText(_ text: String) {
@@ -558,8 +558,19 @@ final class FernletMessagesViewController: MSMessagesAppViewController, UISearch
                                           steps: packet.recipe.steps?.count ?? 0)
     }
 
+    /// The date and the session count: the card face's subcaption, and the composer's line for a
+    /// workout that carries no notes. Never the notes themselves.
     private func workoutSummary(for entry: FernletMessagesWorkoutCatalogEntry) -> String {
         "\(entry.dayKey) · \(FernletMessagesCopy.workoutCount(entry.packet.plan.sessionCount))"
+    }
+
+    /// The composer's row and preview line: ``workoutSummary(for:)``, plus "Notes included" when the
+    /// workout's own notes travel inside the card (tracker §2.6, 2026-10-18), so the sender knows
+    /// before sending. The note text is never shown, here or on the card.
+    private func workoutComposerSummary(for entry: FernletMessagesWorkoutCatalogEntry) -> String {
+        let summary = workoutSummary(for: entry)
+        guard entry.packet.includesNotes else { return summary }
+        return FernletMessagesCopy.workoutSubtitleWithNotes(summary: summary)
     }
 
     private func insertSelectedRecipe() {

@@ -1242,6 +1242,30 @@ public nonisolated enum FoodItemSource: String, Codable, Sendable {
     }
 }
 
+public extension Meal {
+    /// The data-licence attribution lines this meal must carry wherever it is shown or exported
+    /// (tracker §2.6, 2026-10-18): the ``FoodItemSource/attributionLine`` of each food its components
+    /// were logged from, each distinct line once, in component order.
+    ///
+    /// Empty when no component names an attributed food. Today only an Open Food Facts import carries
+    /// an obligation (ODbL); the bundled USDA catalog is public domain (CC0, attribution requested
+    /// rather than required), and the user's own foods and AI estimates carry none. A component
+    /// whose food can no longer be resolved (deleted since) contributes nothing: the meal keeps its
+    /// numbers but not their source.
+    ///
+    /// - Parameter sourceOfFood: The source of the food with the given id, or nil when it is unknown.
+    func attributionLines(sourceOfFood: (UUID) -> FoodItemSource?) -> [String] {
+        var lines: [String] = []
+        for component in componentSnapshots {
+            guard let foodID = component.foodItemId,
+                  let line = sourceOfFood(foodID)?.attributionLine,
+                  !lines.contains(line) else { continue }
+            lines.append(line)
+        }
+        return lines
+    }
+}
+
 /// The free-string provenance tokens stamped into `Meal.source` (manual, label-scan, web-import, …).
 ///
 /// Deliberately string constants rather than an enum so a token minted by a newer build round-trips

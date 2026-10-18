@@ -118,7 +118,8 @@ struct FernletDataExport: Codable {
         }
     }
 
-    /// One logged meal: name, meal type, calories, macros, optional note, and the log time.
+    /// One logged meal: name, meal type, calories, macros, optional note, the log time, and the
+    /// licence attribution of the food data it was logged from.
     ///
     /// Projected from the day's meals; meal photos are excluded from the export by design.
     struct MealExport: Codable {
@@ -130,6 +131,11 @@ struct FernletDataExport: Codable {
         var fatGrams: Int
         var note: String?
         var loggedAt: Date
+        /// "Data from Open Food Facts (ODbL)" for a meal logged from an Open Food Facts import — the
+        /// database licence asks that anyone shown its data be told where it came from, and an export
+        /// is shown to whoever the person shares it with (tracker §2.6, 2026-10-18). Omitted when no
+        /// food the meal was logged from carries an attribution.
+        var attribution: String?
     }
 
     /// One logged workout: name, type, exercise lines, duration, perceived effort, and notes.
@@ -285,10 +291,16 @@ extension FernletStore {
         let recipeNameByID = Dictionary(
             (recipes + savedRecipes).map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
 
+        // Each meal's licence attribution resolves through the foods it was logged from (tracker §2.6).
+        let foodSourceByID = Dictionary(foodItems.map { ($0.id, $0.source) }, uniquingKeysWith: { first, _ in first })
+
         return loadDays().values
             .filter { $0.hasLoggedContent }
             .sorted { $0.date > $1.date }   // newest first
-            .map { day in Self.projectDay(day, score: scoresByDay[day.date], target: settings.hydrationTarget, recipeNameByID: recipeNameByID) }
+            .map { day in
+                Self.projectDay(day, score: scoresByDay[day.date], target: settings.hydrationTarget,
+                                recipeNameByID: recipeNameByID, foodSourceByID: foodSourceByID)
+            }
     }
 
     private func exportMemories() -> [FernletDataExport.MemoryExport] {
@@ -482,12 +494,17 @@ extension FernletStore {
 
     // MARK: - Projection helpers (static, pure)
 
-    private static func projectDay(_ day: FernletDay, score: DailyHealthScore?, target: Int, recipeNameByID: [UUID: String] = [:]) -> FernletDataExport.DayExport {
+    private static func projectDay(
+        _ day: FernletDay, score: DailyHealthScore?, target: Int, recipeNameByID: [UUID: String] = [:],
+        foodSourceByID: [UUID: FoodItemSource] = [:]
+    ) -> FernletDataExport.DayExport {
         let meals = day.meals.map { m in
-            FernletDataExport.MealExport(
+            let attribution = m.attributionLines { foodSourceByID[$0] }
+            return FernletDataExport.MealExport(
                 name: m.name, type: m.mealType.rawValue, calories: m.calories,
                 proteinGrams: m.macros.protein, carbsGrams: m.macros.carbs, fatGrams: m.macros.fat,
-                note: m.note.isEmpty ? nil : m.note, loggedAt: m.loggedAt)
+                note: m.note.isEmpty ? nil : m.note, loggedAt: m.loggedAt,
+                attribution: attribution.isEmpty ? nil : attribution.joined(separator: " · "))
         }
         let workouts = day.workouts.map { w in
             FernletDataExport.WorkoutExport(

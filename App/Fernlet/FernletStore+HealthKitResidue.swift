@@ -3,6 +3,7 @@ import CloudKitSync
 import DiaryStore
 import FernletFoundation
 import FernletPersistence
+import LocalPersistence
 
 /// The app-side half of "HealthKit information is not stored in iCloud" (owner decision
 /// 2026-09-23, App Review 5.1.3(ii)): recording today's HealthKit residue on this device, and the
@@ -23,6 +24,26 @@ extension FernletStore {
         guard deviceHealthResidueStore.record(day.healthKitResidue, for: todayKey) else {
             PersistenceFailureAudit.record("healthResidue.captureToday.failed")
             return
+        }
+    }
+
+    /// Installs the device-local Tier-2 refresh on the Core Data repository (tracker §2.6,
+    /// 2026-10-18): after each save, the window the repository hands over (stripped of every
+    /// HealthKit value) gets this device's residue put back before `TierTwoMemoryEngine` reads it, so
+    /// Tier-2 counts Apple Health workouts and sleep as it did before the strip.
+    ///
+    /// The restored window goes only into the device-local, never-synced, backup-excluded Tier-2
+    /// sidecar; the repository itself never receives a HealthKit value (see
+    /// `CoreDataFernletRepository.tierTwoRefresher`). A local-JSON repository has no hook and keeps its
+    /// own refresh. Reads the residue at refresh time, so the HealthKit opt-out (which empties the
+    /// cache) takes effect at the next save.
+    func attachTierTwoHealthKitResidue() {
+        guard let coreData = diary.repository as? CoreDataFernletRepository else { return }
+        let sidecar = coreData.tierTwoMemoryStore
+        coreData.tierTwoRefresher = { [residueStore = deviceHealthResidueStore] window, goals in
+            let restored = TierTwoMemoryStore.deviceWindow(restoringHealthKitTo: window,
+                                                           from: residueStore.allResidues())
+            sidecar.refresh(from: restored, goals: goals)
         }
     }
 

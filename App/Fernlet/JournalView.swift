@@ -1432,6 +1432,14 @@ struct DayDetailView: View {
                             Text("P \(meal.macros.protein)g · C \(meal.macros.carbs)g · F \(meal.macros.fat)g")
                                 .font(.fernlet(.stat))
                                 .foregroundStyle(Color.slate)
+                            // The licence notice for an attributed food source (Open Food Facts,
+                            // ODbL), already localized by the domain model (tracker §2.6).
+                            if let attribution = store.dataAttribution(for: meal) {
+                                Text(verbatim: attribution)
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                                    .accessibilityIdentifier("journal.dayDetail.mealAttribution")
+                            }
                         }
                         Spacer()
                         Text(verbatim: meal.mealType.displayName)
