@@ -31,7 +31,10 @@ which is what removed the old 370-day cap and lets different-day edits from diff
 per record. One diary structure is deliberately in NEITHER: the Tier-2 behavioral memories (owner
 decision 2026-09-23, "Tier 2 sensitive notes shouldn't be backed up to iCloud at all") live in
 LocalPersistence's device-local, backup-excluded `TierTwoMemoryStore` sidecar, which the repository
-shares with its legacy repository, refreshes after each successful save and purges with the rest —
+shares with its legacy repository, refreshes after each successful save and purges with the rest
+(since 2026-10-18 the app may install `tierTwoRefresher`, which takes over that refresh and puts
+this device's HealthKit residue back into the window first; the repository hands the stripped window
+out and never receives a HealthKit value) —
 nothing in this module serializes them, so the mirror has nothing to export. The repository also
 owns the one-time legacy-JSON migration, the blob→row day backfill (which
 re-sanitizes every legacy day so neither sealed journal text nor any HealthKit-derived value — the

@@ -21,7 +21,9 @@ import FernletPersistence
 /// A third, deliberately UNSYNCED home sits beside them: the Tier-2 behavioral memories live in the
 /// device-local `TierTwoMemoryStore` sidecar this repository shares with its legacy repository —
 /// never in the mirrored blob (owner decision 2026-09-23). It is refreshed after every successful
-/// save over the same bounded window the derived tables use, and purged with everything else.
+/// save over the same bounded window the derived tables use (through the app's ``tierTwoRefresher``
+/// when installed, which puts this device's HealthKit residue back first), and purged with
+/// everything else.
 ///
 /// Key invariants:
 /// - **Sanitize-before-sync (S3)**: day writes accept only `SanitizedDay`/`SanitizedSnapshot`,
@@ -55,6 +57,18 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
     /// file per install. Never serialized into the mirrored blob. Public (read-only) for the same
     /// reason as `LocalFernletRepository.tierTwoMemoryStore`: tests assert on the bytes.
     public let tierTwoMemoryStore: TierTwoMemoryStore
+    /// The app's device-local Tier-2 refresh, run in place of this repository's own
+    /// ``tierTwoMemoryStore`` refresh after every successful save (tracker §2.6, 2026-10-18).
+    ///
+    /// It is handed exactly what this repository would have refreshed from: the bounded window the
+    /// derived tables were rebuilt from, whose days carry no HealthKit value (every row passed the
+    /// storage strip), and the blob's goals. The app puts this device's HealthKit residue back
+    /// (`TierTwoMemoryStore.deviceWindow(restoringHealthKitTo:from:limit:)`) and refreshes the sidecar,
+    /// so Tier-2 reads Apple Health workouts and sleep again. HealthKit values flow one way only, out
+    /// of the app into the device-local sidecar: nothing here receives them, so nothing here can write
+    /// them into the mirrored blob or a row. Nil (tests, and before the app wires it) keeps the
+    /// repository's own refresh over the stripped window.
+    public var tierTwoRefresher: (@MainActor (_ window: [(String, FernletDay)], _ goals: [FitnessGoal]) -> Void)?
 
     private var cachedDatabase: LocalFernletDatabase?
     private var cachedRecordUpdatedAt: Date?
@@ -233,8 +247,19 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         database.apply(snapshot, maxStoredDays: blobDayBound)
         let recent = refreshRowDerivedState(&database, todayKey: snapshot.todayKey, justWrote: (snapshot.todayKey, snapshot.day))
         guard saveDatabase(database, invalidatesDayCache: false) else { return false }
-        tierTwoMemoryStore.refresh(from: recent, goals: database.goals)
+        refreshTierTwo(from: recent, goals: database.goals)
         return true
+    }
+
+    /// The device-local Tier-2 refresh after a save that landed: the app's ``tierTwoRefresher`` when one
+    /// is installed (it restores this device's HealthKit residue first), else the sidecar's own refresh
+    /// over the stripped window. Derived and best-effort either way; it never changes a save's answer.
+    private func refreshTierTwo(from window: [(String, FernletDay)], goals: [FitnessGoal]) {
+        guard let tierTwoRefresher else {
+            tierTwoMemoryStore.refresh(from: window, goals: goals)
+            return
+        }
+        tierTwoRefresher(window, goals)
     }
 
     /// After day rows are written, refresh the blob's row-derived state from the bounded recent window:
@@ -304,7 +329,7 @@ public final class CoreDataFernletRepository: FernletRepository, @MainActor Remo
         // once migrated, keep the blob's days cleared).
         let recent = refreshRowDerivedState(&database, todayKey: todayKey, justWrote: (dateKey, day))
         guard saveDatabase(database, invalidatesDayCache: false) else { return false }
-        tierTwoMemoryStore.refresh(from: recent, goals: database.goals)
+        refreshTierTwo(from: recent, goals: database.goals)
         return true
     }
 
