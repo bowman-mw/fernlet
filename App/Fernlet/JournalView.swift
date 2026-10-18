@@ -391,6 +391,8 @@ struct JournalSheet: View {
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
                 .buttonStyle(.plain)
+                // The label alone was an 18pt-tall target.
+                .fernletTapTarget()
                 .accessibilityHint("Inserts the prompt so you can write under it")
             }
             .padding(12)

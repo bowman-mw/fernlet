@@ -2601,11 +2601,20 @@ struct HealthBar: View {
                 heartGlowCap
             }
         }
-        .accessibilityLabel(
-            heartGlow > 0
-                ? "Care score \(Int(value * 100)) percent, with a little warmth from a friend"
-                : "Care score \(Int(value * 100)) percent"
-        )
+        // The bar draws 8pt tall; the element that names it is 44pt, an invisible overlay centred
+        // on it, so finding the score by touch does not mean hitting an 8pt strip. An overlay does
+        // not take part in layout, so the card around the bar is unchanged.
+        .accessibilityHidden(true)
+        .overlay {
+            Color.clear
+                .frame(height: 44)
+                .accessibilityElement()
+                .accessibilityLabel(
+                    heartGlow > 0
+                        ? "Care score \(Int(value * 100)) percent, with a little warmth from a friend"
+                        : "Care score \(Int(value * 100)) percent"
+                )
+        }
     }
 
     /// The 24h "afterglow" at the end of the bar (good-vibes 10b): two goldenrod/sun heart-bonus

@@ -160,6 +160,8 @@ struct FoodView: View {
                     .buttonStyle(.plain)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
+                    // The label alone was an 18pt-tall target.
+                    .fernletTapTarget()
                     .accessibilityIdentifier("food.adjustTargets")
             }
         }
@@ -6473,6 +6475,8 @@ private struct MacroInputRow: View {
                         .underline()
                 }
                 .buttonStyle(.plain)
+                // "0g" alone was an 18pt-square target beside the stepper.
+                .fernletTapTarget()
             }
             Stepper("", value: $grams, in: range, step: 1)
                 .labelsHidden()

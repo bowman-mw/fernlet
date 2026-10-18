@@ -1193,15 +1193,6 @@ extension UXScreenProbe {
     /// `Element has no description` on the full-size progress photo. What is frozen below is the
     /// Larger Text backlog these screens share with the other twenty-two.
     static let auditBaselineEntries: [String: Set<String>] = [
-        // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): `ScreenHeader`'s subtitle still
-        // renders (FoodView.swift:87) — it is the clipping that stopped, not the element that went
-        // away. The tab-bar clearance and scroll-position work that landed after the baseline
-        // (e2ebd98, 1ff3294, 92678e8) is the layout change in that window. Same removal on `Move
-        // tab`, which uses the same component. Re-verified deterministic across two independent
-        // `xcodebuild test` runs on the pinned simulator before removing.
-        "Food tab": [
-            "Hit area is too small — “Adjust targets” id=food.adjustTargets (9)",
-        ],
         // "POTENTIALLY INACCESSIBLE TEXT" ADDED (2026-09-26), element-less, 2 raw issues. Copied
         // from the "not in baseline" listing of runs on two independent, freshly created iPhone 17
         // simulators (iPhone18,3, portrait, `large`, en_US, light), clean build, nothing else
@@ -1286,7 +1277,6 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “Quick log” (48)",
             "Dynamic Type font sizes are partially unsupported — “Scoring goes gentle until tomorrow” (48)",
             "Dynamic Type font sizes are partially unsupported — “Today” (48)",
-            "Hit area is too small — “Care score # percent” (1)",
         ],
         // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
         // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
@@ -1378,7 +1368,6 @@ extension UXScreenProbe {
         // deterministic across two independent runs on the pinned simulator. The clipping itself is
         // untouched — it stays part of the Larger Text backlog this round did not take on.
         "Sheet · Edit recipe": [
-            "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
         // “Craft” is this sheet's `SheetSaveBar` label, so its hit-region finding retired with the
@@ -1395,9 +1384,6 @@ extension UXScreenProbe {
             "Text clipped — “Skincare AM” (48)",
             "Text clipped — “Sunscreen” (48)",
         ],
-        "Sheet · Journal": [
-            "Hit area is too small — “Start from this” id=journal.inspiration (9)",
-        ],
         "Sheet · Meal": [
             "Potentially inaccessible text",
             "Text clipped",
@@ -1407,7 +1393,6 @@ extension UXScreenProbe {
         // Same identity-key migration as `Sheet · Edit recipe` above — the two sheets share the
         // ingredient search field that gained `recipeIngredient.search` in 525b0c8.
         "Sheet · Recipe": [
-            "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
         "Sheet · Recipe book": [
