@@ -286,48 +286,75 @@ Control's numbered-overlay mode must also be usable, which nobody has tried.
 
 ### Larger Text — undeclared
 
-**Blocker, and this is now a measured number rather than a suspicion.** Apple requires **verified
-no-truncation at AX5 across all common tasks**. The mechanical half is in place: the §4.5 wall's
-rule A5 forbids a fixed adaptive-grid minimum, rule A4 forbids a `Font.custom` without
-`relativeTo:`, the AX-size content drops now re-expose through `.accessibilityCustomContent`
-(T2-2), and the named fixed-pixel minimums are `@ScaledMetric` (T2-11).
+**Blocker: the burn-down is not at zero on the common tasks, and nobody has looked at AX5 on a
+device.** Apple requires **verified no-truncation at AX5 across all common tasks**. The mechanical
+half was already in place before the burn-down: the §4.5 wall's rule A5 forbids a fixed
+adaptive-grid minimum, rule A4 forbids a `Font.custom` without `relativeTo:`, the AX-size content
+drops re-expose through `.accessibilityCustomContent` (T2-2), and the named fixed-pixel minimums are
+`@ScaledMetric` (T2-11).
 
-**Then the runtime audit ran for the first time, over the 25 screens of the `ScreenAppearanceUITests`
-gallery, and found 119 raw issues:**
+**Where it started.** The first runtime audit, over the 25 screens of the `ScreenAppearanceUITests`
+gallery, found **119 raw issues**: 76 text clipped, 19 Dynamic Type partially unsupported, 15 hit
+areas under 44pt, 7 potentially inaccessible texts and 2 "Label not human" (a glyph name read
+aloud). Frozen as issue identities by the ratchet in
+`Tests/FernletUITests/UXScreenProbe.auditBaselines` — which by 2026-10-17 covered every probe suite,
+not only the gallery — that was **167 identities on 37 screens**.
 
-| Category | Count | What it means |
-|---|---|---|
-| Text clipped | 76 | text losing characters to its own frame |
-| Dynamic Type font sizes are partially unsupported | 19 | a font that does not track the user's text size |
-| Hit area is too small | 15 | a control under 44pt |
-| Potentially inaccessible text | 7 | text the audit could not resolve as readable |
-| Label not human | 2 | **an SF Symbol name or raw token being spoken** |
+**Where it is (2026-10-18, branch `claude/focused-curie-bf7c00`).** Measured on a private iPhone 17
+(iPhone18,3, portrait, `large`, en_US, light), every line removed after a run reported it gone:
 
-The 76 + 19 in the first two rows **are** the Larger Text criterion. Nobody had measured this before
-— the previous rounds fixed the sites they could see, which is why the count is a surprise and why
-it is recorded here rather than quietly absorbed. Two calibration notes so the number is not
-misread: 15 sub-44pt regions across 25 dense screens is a small residue, not a refutation of the
-2026-08-16 hit-target round (several are inside system-drawn controls); and the two "Label not
-human" findings are the highest-signal items in the whole set — that category means a glyph name is
-being read aloud — and should be fixed before any of the other 117.
+| Category | 2026-10-17 | Now (the 37 original screens) | What is left |
+|---|---|---|---|
+| Text clipped | 98 | **34** | 8 text-field placeholders, 5 element-less, 5 sheet titles, 5 field captions, 5 personal-care rows, 6 others (below) |
+| Dynamic Type partially / un-supported | 51 | **6** | Settings hub's 3 (system-drawn Done, a section header, one element-less), the studio confirmation's 3 |
+| Hit area too small | 7 | **2** | Sleep's 19pt hours field, Nutrition targets' Reset |
+| Potentially inaccessible text | 10 | 10 | not a Larger Text finding (OCR, boot-dependent; §5) |
+| Label not human | 1 | **0** | — |
+| **Total** | **167 on 37 screens** | **52 on 20** | |
 
-The findings are frozen as a per-screen **set of issue identities** by the ratchet in
-`Tests/FernletUITests/UXScreenProbe.auditBaselines`, so no *new* finding can appear while the
-burn-down is scheduled, a fixed one cannot be quietly left in the map, and a newly added screen
-starts from an empty baseline. They are attached to every test run as a per-screen listing — raw
-issues, identities, and both deltas — so the backlog is readable without re-running the audit. §5
-explains why the first version of this ratchet (a per-screen integer) had to be replaced.
+Plus **8 lines on 3 new `AX5 · ` screens**, below. What moved it, in the commits that carry the
+before/after counts: the custom tab bar's hidden labels left the layout (50 lines — the tab bar was
+on every screen); `ScreenHeader` and `SheetHeader` lift their line limits at accessibility sizes
+(onboarding, 7); side-by-side rows stack and one-line captions wrap (the Move strip and space row,
+Sleep's fields, recipe notes, meal polaroids, progress-photo captions); a pinned action bar that
+left the guided plan ~150pt at AX5 now scrolls with it; Home's quick-log tiles and the month
+calendar stopped being lazy grids and the tile counts scale with `.caption`; four targets reached
+44pt; and 32 under-reporting Dynamic Type lines that never reproduced in four full audits and four
+Dynamic-Type-only passes were deleted on that measurement. **Home now audits with no findings.**
 
-**A note on the screen counts in this document, because three different ones were in circulation.**
-The measured 119 came from the `ScreenAppearanceUITests` gallery, which visits **25** screens (22 of
-them report at least one finding, so the baseline map has 22 keys, not 25). The
-wider probe inventory — every suite that constructs a `UXScreenProbe`, so `SettingsAppearance`,
-`OnboardingAppearance`, `HomeCardsRedesign`, `ItemCreationFlow`, `ProgressPhoto`, `RecentBites`,
-`RecipeDetail`, `NutritionTargetsEditor` and `GoalPresetCards` as well — is **37** distinct screen
-names, counted from source by `AuditRatchetBoundaryTests`. Any figure between those two in an older
-draft was a snapshot of one suite quoted as if it were the whole inventory.
+**The AX5 check over the common tasks.** `LargerTextAX5UITests` launches the app **at** AX5 —
+not from `large` — for Home, the meal, water and journal (mood) sheets, the workout suggestion and
+plan, the manual workout log, Settings and the first three onboarding steps, attaches every AX5
+screenshot, and audits the stable ones. Home, Water, Journal and the onboarding steps audit clean.
+Meal (2), the Settings hub (2, both system-drawn) and the workout suggestion (4) carry `AX5 · `
+baselines, and in every one of those screenshots the text is drawn whole. The workout plan, the
+manual log and Home's mood row are screenshot-only: their findings would rotate with the weekday or
+with where a scroll stops. The guided runner is reached only on a day whose suggested session is
+guidable, so it is on the device-pass checklist. The probe inventory is now 50 screen names.
 
-**What would clear this row:** the burn-down, then a human looking at every common task at AX5.
+**What the audit turned out to be measuring — read this before trusting any count above.**
+
+- `Text clipped` means *may* be clipped **at a larger size than the screen is at**. From `large`, the
+  audit's own Dynamic Type pass re-lays an already open sheet out at AX sizes, which reports some
+  clipping no AX5 user sees (a medium sheet does not regrow its detent mid-audit) and misses some
+  they do: a text field's example truncating, a pinned bar crowding its content. That is why the
+  AX5 suite exists, and why the AX5 screenshots are the better evidence.
+- Many remaining lines are drawn whole in the AX5 screenshots: the sheet titles ("Log meal",
+  "Suggest workout"), several field captions, text running off the bottom of a scrolling screen.
+  They stay in the map as what the audit says, not as defects anyone has seen.
+- **Text-field placeholders** (8 lines) are one line by platform design and do truncate at AX5;
+  what the user types is not affected. Shorter AX-size examples per field is the remaining fix, and
+  the Settings search field is drawn by iOS.
+- Swapping two views at the accessibility boundary (`if isAccessibilitySize { A } else { B }`)
+  makes the audit lose the element and report an element-less finding, which the ratchet treats as
+  new. `AdaptiveStack` now switches with `AnyLayout` for that reason.
+- "Dynamic Type partially unsupported" on fonts that do scale came from two things, each measured:
+  a `LazyVGrid` tearing down rows pushed off screen, and `.caption2`'s ramp, which is a flat 11pt
+  from xSmall to Large.
+
+**What would clear this row:** the remaining common-task lines fixed or shown on a device to be
+drawn whole — the meal, water and workout sheets' lines, the onboarding name field — and then **the owner's AX5 device pass** over every common task, from the checklist in
+`Docs/Handoff/a11y-2026-10-18/largertext-device-pass.md`. Until both are done the row stays blank.
 
 **One platform note, because it is a trap:** Apple explicitly **forbids citing Hover Text** as
 evidence of Larger Text support. Hover Text magnifies one element under the pointer; it is not text
