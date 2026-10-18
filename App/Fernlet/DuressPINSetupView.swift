@@ -426,7 +426,7 @@ struct DuressPINSetupView: View {
                     HStack(alignment: .top, spacing: 14) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.title3.weight(.semibold))
-                            .foregroundStyle(isSelected ? Color.moss : Color.slate.opacity(0.4))
+                            .foregroundStyle(isSelected ? Color.moss : Color.slate)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(DuressModeCopy.title(mode))
                                 .font(.fernlet(.label))

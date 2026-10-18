@@ -150,7 +150,7 @@ public struct EmptyState: View {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(Color.slate.opacity(0.6))
+                    .foregroundStyle(Color.slate)
                     .accessibilityHidden(true)
             }
             text

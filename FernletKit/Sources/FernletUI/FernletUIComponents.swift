@@ -1302,9 +1302,13 @@ public struct SheetTextEditor: View {
     public var body: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
+                // Full-strength slate in italic, not 45% slate: the faded prompt measured 1.83:1 on
+                // the cream field. The italic and the slate-vs-bark ink keep it from reading as text
+                // the user typed.
                 placeholder
                     .font(.fernlet(.body))
-                    .foregroundStyle(Color.slate.opacity(0.45))
+                    .italic()
+                    .foregroundStyle(Color.slate)
                     .padding(14)
                     .allowsHitTesting(false)
                     // The drawn placeholder is not the control's name — it vanishes the moment

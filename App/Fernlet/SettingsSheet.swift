@@ -1231,8 +1231,8 @@ struct SettingsSheet: View {
                     .foregroundStyle(Color.bark)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.slate.opacity(0.5))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.slate)
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -2800,8 +2800,8 @@ struct AppLockSettingsView: View {
             Spacer()
             if !destructive && showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.slate.opacity(0.5))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.slate)
             }
         }
         .frame(minHeight: 44)
@@ -2957,7 +2957,7 @@ private struct FernletLockChangePasscodeView: View {
             HStack(spacing: 14) {
                 Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate.opacity(0.4))
+                    .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate)
                 Text(title)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)

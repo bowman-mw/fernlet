@@ -102,7 +102,7 @@ struct StepTimerControl: View {
                 .foregroundStyle(Color.bark)
                 Button { durationSeconds = nil } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.slate.opacity(0.6))
+                        .foregroundStyle(Color.slate)
                 }
                 .buttonStyle(.plain)
                 .fernletIconButton("Remove timer")

@@ -721,7 +721,7 @@ struct FriendsView: View {
                 if store.proximityDebugToolsEnabled {
                     Text(verbatim: message)
                         .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate.opacity(0.8))
+                        .foregroundStyle(Color.slate)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

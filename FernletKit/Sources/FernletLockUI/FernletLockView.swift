@@ -492,7 +492,7 @@ public struct FernletLockSetupView: View {
             HStack(spacing: 14) {
                 Image(systemName: kind == selectedKind ? "checkmark.circle.fill" : "circle")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate.opacity(0.4))
+                    .foregroundStyle(kind == selectedKind ? Color.moss : Color.slate)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {

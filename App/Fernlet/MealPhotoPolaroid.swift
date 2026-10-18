@@ -129,8 +129,8 @@ private struct MealPhotoPlaceholder: View {
     var body: some View {
         VStack(spacing: 5) {
             Image(systemName: systemImage)
-                .font(.title3)
-                .foregroundStyle(Color.slate.opacity(0.5))
+                .font(.title3.weight(.light))
+                .foregroundStyle(Color.slate)
             Text(text)
                 .font(.fernlet(.labelSmall))
                 // Full-strength slate: this 11pt line explains where the picture went, so it has to
@@ -159,8 +159,8 @@ private struct MealPhotoUnavailableCard: View {
             .overlay {
                 VStack(spacing: 10) {
                     Image(systemName: systemImage)
-                        .font(.largeTitle)
-                        .foregroundStyle(Color.slate.opacity(0.5))
+                        .font(.largeTitle.weight(.light))
+                        .foregroundStyle(Color.slate)
                     Text(title)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.slate)
@@ -257,8 +257,8 @@ struct MealPhotoDetailView: View {
                     .frame(height: 320)
                     .overlay {
                         Image(systemName: "fork.knife")
-                            .font(.largeTitle)
-                            .foregroundStyle(Color.slate.opacity(0.4))
+                            .font(.largeTitle.weight(.light))
+                            .foregroundStyle(Color.slate)
                     }
             }
         }

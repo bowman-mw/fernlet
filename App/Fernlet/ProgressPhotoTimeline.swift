@@ -496,8 +496,8 @@ struct ProgressPhotoCard: View {
                             .accessibilityIgnoresInvertColors()
                     } else {
                         Image(systemName: "figure.strengthtraining.traditional")
-                            .font(.title2)
-                            .foregroundStyle(Color.slate.opacity(0.4))
+                            .font(.title2.weight(.light))
+                            .foregroundStyle(Color.slate)
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -691,8 +691,8 @@ struct ProgressPhotoDetailView: View {
                     .frame(height: 360)
                     .overlay {
                         Image(systemName: "figure.strengthtraining.traditional")
-                            .font(.largeTitle)
-                            .foregroundStyle(Color.slate.opacity(0.4))
+                            .font(.largeTitle.weight(.light))
+                            .foregroundStyle(Color.slate)
                     }
             }
         }
