@@ -243,10 +243,17 @@ struct SillyStatsHomeCard: View {
                             .accessibilityHidden(true)
                     }
                     if let text {
-                        Text(verbatim: "\(text.emoji) \(text.headline)")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
+                        // The emoji in its own system-font `Text`, as the stats page draws it: set in
+                        // Instrument Serif's short line, the glyph overran its own frame at larger
+                        // sizes and the audit reported the headline as clipped.
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(verbatim: text.emoji)
+                                .accessibilityHidden(true)
+                            Text(verbatim: text.headline)
+                                .font(.fernlet(.body))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
+                        }
                         Text(verbatim: text.detail)
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)

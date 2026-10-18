@@ -95,7 +95,8 @@ struct MonthGridModel {
 // MARK: - Card
 
 /// The shared month-calendar card chrome: paging chevrons (future months disabled) over a
-/// 7-column `LazyVGrid` of weekday symbols and caller-rendered day cells, inside a `FernletCard`.
+/// 7-column ``EqualColumnGrid`` of weekday symbols and caller-rendered day cells, inside a
+/// `FernletCard`.
 ///
 /// Owns only layout and paging; each calendar (journal, cycle) supplies its own
 /// `cell` builder — called with `nil` for each leading blank pad and with a ``MonthGridDay`` per
@@ -106,7 +107,6 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
     var cell: (MonthGridDay?) -> Cell
     var footer: () -> Footer
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     private var cal: Calendar { .current }
 
     /// One rendered grid slot: a leading blank (`day == nil`) or a real day. Freshly identified
@@ -202,7 +202,9 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
     private func grid(_ model: MonthGridModel) -> some View {
         let slots = (0..<model.leadingBlanks).map { _ in Slot(day: nil) }
             + model.days.map { Slot(day: $0) }
-        return LazyVGrid(columns: columns, spacing: 4) {
+        // Not lazy: a month is at most 49 cells, and a lazy grid tore down the rows that larger
+        // text pushed off screen, which the audit read as fonts that ignore Dynamic Type.
+        return EqualColumnGrid(columns: 7, horizontalSpacing: 4, verticalSpacing: 4) {
             ForEach(Array(model.weekdaySymbols.enumerated()), id: \.offset) { _, day in
                 Text(day)
                     .font(.fernlet(.labelSmall))

@@ -957,6 +957,70 @@ public struct FlowLayout: Layout {
     }
 }
 
+/// A fixed number of equal-width columns, filled row by row, every cell built: what a
+/// `LazyVGrid` of `.flexible()` columns draws, without the laziness.
+///
+/// For small grids that must exist whole — six quick-log tiles, one month of days. A `LazyVGrid`
+/// builds only the rows on screen, and a small grid low on a page is where that shows: as the text
+/// size grows the page lengthens, the grid's lower rows leave the screen and are torn down, and
+/// the accessibility audit, which re-measures each text at the other sizes, finds them gone and
+/// reports their fonts as not tracking Dynamic Type. Cells are centred in their column and row, as
+/// a flexible `GridItem` centres them, and keep their identity when `columns` changes.
+public struct EqualColumnGrid: Layout {
+    var columns: Int
+    var horizontalSpacing: CGFloat
+    var verticalSpacing: CGFloat
+
+    public init(columns: Int, horizontalSpacing: CGFloat = 8, verticalSpacing: CGFloat = 8) {
+        self.columns = max(columns, 1)
+        self.horizontalSpacing = horizontalSpacing
+        self.verticalSpacing = verticalSpacing
+    }
+
+    /// The proposed width (or the widest cell's ideal width per column) by the summed row heights.
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? idealWidth(of: subviews)
+        let heights = rowHeights(of: subviews, columnWidth: columnWidth(in: width))
+        let gaps = verticalSpacing * CGFloat(max(heights.count - 1, 0))
+        return CGSize(width: width, height: heights.reduce(0, +) + gaps)
+    }
+
+    /// Places each cell centred in its column and row.
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let cellWidth = columnWidth(in: bounds.width)
+        var y = bounds.minY
+        for (row, height) in rowHeights(of: subviews, columnWidth: cellWidth).enumerated() {
+            for column in 0..<columns where row * columns + column < subviews.count {
+                let x = bounds.minX + CGFloat(column) * (cellWidth + horizontalSpacing)
+                subviews[row * columns + column].place(
+                    at: CGPoint(x: x + cellWidth / 2, y: y + height / 2),
+                    anchor: .center,
+                    proposal: ProposedViewSize(width: cellWidth, height: height)
+                )
+            }
+            y += height + verticalSpacing
+        }
+    }
+
+    private func columnWidth(in width: CGFloat) -> CGFloat {
+        max((width - horizontalSpacing * CGFloat(columns - 1)) / CGFloat(columns), 0)
+    }
+
+    private func idealWidth(of subviews: Subviews) -> CGFloat {
+        let widest = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+        return widest * CGFloat(columns) + horizontalSpacing * CGFloat(columns - 1)
+    }
+
+    /// Each row's height: its tallest cell at the column width.
+    private func rowHeights(of subviews: Subviews, columnWidth: CGFloat) -> [CGFloat] {
+        stride(from: 0, to: subviews.count, by: columns).map { start in
+            subviews[start..<min(start + columns, subviews.count)]
+                .map { $0.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height }
+                .max() ?? 0
+        }
+    }
+}
+
 /// A row of peer controls that becomes a column at accessibility text sizes.
 ///
 /// The fix for side-by-side button pairs, which do not reflow: at AX sizes "Meal planner" /
@@ -973,6 +1037,11 @@ public struct FlowLayout: Layout {
 ///
 /// For a *variable-length* set of items (chips, legends, tags) reach for ``FlowLayout`` instead:
 /// this switches wholesale on the text size, while FlowLayout wraps on measured width.
+///
+/// The switch is one `AnyLayout`, not an `if` between two stacks, so the children keep their
+/// identity when the text size crosses into the accessibility range: their state survives, and
+/// the accessibility audit, which re-lays a screen out at other sizes, can still say which element
+/// a finding belongs to. Two stacks in an `if` made every child a new view at the crossing.
 public struct AdaptiveStack<Content: View>: View {
     var spacing: CGFloat
     var horizontalAlignment: HorizontalAlignment
@@ -993,11 +1062,10 @@ public struct AdaptiveStack<Content: View>: View {
     }
 
     public var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: horizontalAlignment, spacing: spacing) { content }
-        } else {
-            HStack(alignment: verticalAlignment, spacing: spacing) { content }
-        }
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: horizontalAlignment, spacing: spacing))
+            : AnyLayout(HStackLayout(alignment: verticalAlignment, spacing: spacing))
+        layout { content }
     }
 }
 

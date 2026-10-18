@@ -1265,8 +1265,6 @@ extension UXScreenProbe {
         // cards return to this viewport, the six come back as unconditional appearances.
         "Home · Recent bites": [
             "Potentially inaccessible text",
-            "Text clipped — “Chicken rice bowl” (48)",
-            "Text clipped — “Greek yogurt with berries” (48)",
         ],
         // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
         // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
@@ -1283,80 +1281,12 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “# of #” (48)",
             "Dynamic Type font sizes are partially unsupported — “#h” (48)",
             "Dynamic Type font sizes are partially unsupported — “<date-word>, <date-word> #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Care” (48)",
             "Dynamic Type font sizes are partially unsupported — “Fernlet” (48)",
             "Dynamic Type font sizes are partially unsupported — “I'm unwell today” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Journal” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Meals” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Move” (48)",
             "Dynamic Type font sizes are partially unsupported — “Quick log” (48)",
             "Dynamic Type font sizes are partially unsupported — “Scoring goes gentle until tomorrow” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Sleep” (48)",
             "Dynamic Type font sizes are partially unsupported — “Today” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Water” (48)",
             "Hit area is too small — “Care score # percent” (1)",
-        ],
-        // VIEWPORT AND SEED PINNED, DATE CHIP GONE (2026-09-24). This entry went red on main with
-        // one or two lines "no longer reproducing" — on 3eeb7bb AND 53633f50, on one simulator that
-        // was fresh when that session began — with no app change behind it. Two inputs moved it,
-        // and both are now pinned:
-        //
-        // 1. WHERE THE SCROLL STOPPED. `ProgressPhotoUITests` stopped the moment the strip was
-        //    hittable, which is anywhere from the true bottom to ~175pt above it, and the audit is
-        //    sensitive to exactly that. Measured on one binary: started at the bottom, or 30 or 80pt
-        //    above it, the audit reported the first card's caption (and, under that day's seed, its
-        //    chip) clipped; started 150 or 230pt above, neither. The probe now scrolls to the true
-        //    bottom (the section is last in Move's column), and the audit pulls any start within
-        //    78pt of the bottom to one offset.
-        // 2. THE SEED'S DATES. Whether the audit reports a date chip clipped is a function of the
-        //    chip's width. With the strip in the same place, on either card: "Sep 24" and "Aug 24"
-        //    clip; "Sep 14", "Aug 19", "Sep 9" and "Sep 3" do not. A seed dated from today moved that
-        //    answer with the calendar, so `FernletStore+DemoSeed.swift` now dates the photos from a
-        //    fixed day with one-digit days, clear of the cut-off — and `Text clipped — "<date-word> #"`
-        //    stopped reproducing, so it is deleted here.
-        //
-        // That deletion is NOT a fix. A wide enough two-digit chip still reports clipped; it is just
-        // no longer what the seed renders. If chips start clipping again the line comes back as an
-        // appearance, which fails, so the wall now watches them more closely than the frozen line
-        // did. The 2026-09-20 work that made every chip key as ONE identity (the month abbreviations
-        // in `volatileDateWords`) stands, and is what would key them. Dates in this comment are in
-        // straight quotes on purpose: `baselinePinsAVolatileLiteral` reads every curly-quoted label
-        // in this file, comments included.
-        //
-        // "FEELING STRONGER" STAYS, BUT THE STRIP NO LONGER CUTS IT (2026-09-24, later that day).
-        // Until then the strip really did cut it. The strip took its height from the add tile,
-        // 203.67pt, around a 211pt captioned card (215pt by its accessibility frame, which starts 4pt
-        // above the picture), and its bottom edge cut the caption through its baseline.
-        // `ProgressPhotoSection.addTile` now reserves the tallest card's labels, so the
-        // strip is 223pt and the caption ends 6pt above its edge; it is 6pt at AX1, AX3 and AX5 too.
-        // The line still reproduces because the audit is measuring something else. The caption is
-        // `lineLimit(1)` in a 132pt card, so at the largest accessibility size it truncates
-        // ("Feelin..."). This was measured on one build with the same scroll stop: with that caption
-        // the finding reproduces; with the caption changed to "Strong" (about 117pt at AX5 by the
-        // font's metrics, so it fits), nothing is reported for the caption. That is the width rule
-        // the date chips follow (point 2). The line goes when the caption stops truncating at AX5:
-        // a card whose caption may wrap would do that, and so would a shorter seed caption, which
-        // would not be a fix.
-        //
-        // Re-recorded on a freshly created iPhone 17 (iPhone18,3), portrait, content size large,
-        // en_US, light: copied from the "not in baseline" listing of a run with this entry emptied,
-        // then confirmed on independent runs of a clean build with the simulator erased between
-        // them (the commit that made this change counts them).
-        "Move · Progress photos": [
-            "Text clipped — “Feeling stronger” (48)",
-        ],
-        // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): same component and same reason as
-        // `Food tab` above (MoveView.swift:133 still renders it).
-        //
-        // SEED-DETERMINISM CORRECTION (2026-08-27): `Text clipped — “Full gym · # items”` is the
-        // Move header's equipment segment (`MoveView.swift:2523`), and it is NEW here only because
-        // the active workout location is now pinned by the demo seed. It previously read whatever
-        // `WorkoutLocationUITests` had last left persisted — "Shed", which is short enough not to
-        // clip — so this screen's real behaviour under the SHIPPED default was never measured. It
-        // is a genuine clipped-text finding and joins the Larger Text backlog the rest of this map
-        // freezes rather than a defect this round introduced.
-        "Move tab": [
-            "Text clipped — “Full gym · # items” (48)",
         ],
         // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
         // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
@@ -1394,13 +1324,6 @@ extension UXScreenProbe {
             "Dynamic Type font sizes are partially unsupported — “Worry box” (9)",
             "Dynamic Type font sizes are partially unsupported — “W” (48)",
             "Dynamic Type font sizes are partially unsupported — “Your cycle, at a glance.” (48)",
-        ],
-        "Private · Journal": [
-            "Dynamic Type font sizes are partially unsupported — “F” (48)",
-            "Dynamic Type font sizes are partially unsupported — “M” (48)",
-            "Dynamic Type font sizes are partially unsupported — “S” (48)",
-            "Dynamic Type font sizes are partially unsupported — “T” (48)",
-            "Dynamic Type font sizes are partially unsupported — “W” (48)",
         ],
         "Settings · Core memory": [
             "Text clipped — <no label> (49)",
@@ -1489,8 +1412,6 @@ extension UXScreenProbe {
         ],
         "Sheet · Recipe book": [
             "Text clipped — <no label> (49)",
-            "Text clipped — “Seeded demo recipe. Mix, chill overnight, top with fruit.” (48)",
-            "Text clipped — “Seeded demo recipe. Roast at # for # minutes.” (48)",
         ],
         "Sheet · Saved recipe notes": [
             "Potentially inaccessible text",
@@ -1500,7 +1421,6 @@ extension UXScreenProbe {
         "Sheet · Sleep": [
             "Hit area is too small — <no label> (49)",
             "Potentially inaccessible text",
-            "Text clipped — <no label> (49)",
             "Text clipped — “HOURS (OPTIONAL)” (48)",
             "Text clipped — “NOTE (OPTIONAL)” (48)",
             "Text clipped — “restorative, woke easy” (48)",
