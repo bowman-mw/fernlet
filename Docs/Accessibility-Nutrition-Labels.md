@@ -32,19 +32,19 @@ conservative one at every point where the evidence was thin.
 
 ## 1. The declaration
 
-Three rows declared, two left blank as inapplicable, four left undeclared.
+Four rows declared, two left blank as inapplicable, three left undeclared.
 
 | Feature | First submission | Basis |
 |---|---|---|
 | **Dark Interface** | **DECLARE** | Full adaptive palette; measured ratios; the last cold-launch light flash removed. |
 | **Reduced Motion** | **DECLARE** | Zero ungated continuous motion in shipping code, verified by enumeration. |
 | **Differentiate Without Color** | **DECLARE** | Selection carries a trait, not a hue; all three hue-only encodings were fixed. |
+| **Sufficient Contrast** | **DECLARE** | On the Increase Contrast route: the gallery measures clean in light, dark and Increase Contrast. |
 | **Captions** | *blank — inapplicable* | The product contains no timed media of any kind. |
 | **Audio Descriptions** | *blank — inapplicable* | Same. |
 | **VoiceOver** | undeclared | See §3. |
 | **Voice Control** | undeclared | See §3. |
 | **Larger Text** | undeclared | See §3. |
-| **Sufficient Contrast** | undeclared | See §3. |
 
 "Blank" and "undeclared" are the same thing in the form — Apple offers no "not supported" state,
 and inventing one in prose would be worse than silence. §2 and §3 are where the difference lives:
@@ -251,11 +251,214 @@ The same enumeration was not repeated for `FeelingTag.color`: all six feeling ti
 tokens with no collisions, and every non-calendar site (mood chips, `JournalRow`, summaries) draws
 the dot immediately beside `tag.label`, so the calendar grid was the single load-bearing site.
 
+### Sufficient Contrast — DECLARE at first submission, on the Increase Contrast route
+
+**Apple's criterion, quoted because the route matters.** "You may indicate your app supports
+Sufficient Contrast if the user interface for your common tasks, including text, buttons, and other
+controls, meets general contrast guidelines by default — usually 4.5 to 1 for most text elements."
+If it does not do that by default, an app on Apple's UI frameworks must "verify that the Increase
+Contrast setting applies sufficient contrast." Apple also asks for 3:1 on "interactive controls and
+non-text representations of a state, such as a selection" (an unchecked checkbox, for example), and
+for checking light and dark
+([Sufficient Contrast evaluation criteria](https://developer.apple.com/help/app-store-connect/manage-app-accessibility/sufficient-contrast-evaluation-criteria)).
+**Fernlet qualifies on the Increase Contrast route, not by default, and is declared on it.** Plain
+`moss` text is 3.74:1 on parchment and 4.02:1 on cream in default light, across about 179 foreground
+sites, and nothing below changes that. Under Increase Contrast `moss` resolves to `#46683A`, and every
+moss label on the gallery measures 5.14–6.33:1 there. That is the verification Apple's criterion asks
+of an app on its UI frameworks.
+
+**What Batch A5 already landed (unchanged).** `Color(light:dark:)` widened to
+`Color(light:dark:lightHC:darkHC:)` resolving inside the same dynamic provider, so Increase
+Contrast moves `slate` to the approved `#45535E` (**6.90:1 on parchment / 7.41:1 on cream**),
+`mossFill` to `#38562C` (**white on it 8.28:1**) and `moss` to `#46683A` (**5.54:1 / 5.95:1**). A
+custom background's ink is fitted rather than picked off one threshold (T2-7).
+
+**The evidence: the gallery in all three appearances, retaken 2026-10-18 with the Mac awake.** The
+25-screen `ScreenAppearanceUITests` gallery (iPhone 17 simulator, iOS 26.5, demo seed, `large` text),
+one run per appearance on main 014f8620 (#37 and #38) with this round on top, with `.contrast` on and
+the measured sweep walled. Every screen finished; the slowest took 37 s.
+
+| Appearance | Gallery | Swept text under 4.5:1 | Field prompts |
+|---|---|---|---|
+| Default light | **25 / 25 green** | none unexcused; 10 moss labels at 3.75–4.02:1, exempt on the Increase Contrast route | **5.13:1** (was 1.71:1) |
+| Dark | **25 / 25 green** | none | **5.93:1** (was 2.43:1) |
+| Increase Contrast | **25 / 25 green** | none | **7.41:1** (was 4.33:1) |
+
+The triage beside it, in default light: 52 nominations whose ink clears, 39 occluded, 7 disabled,
+and 29 exemptions (the moss labels and the Home tab's label). In dark: 49 ink clears, 39 occluded,
+7 disabled, and 3 exemptions. Under Increase Contrast: 42 ink clears, 39 occluded, 7 disabled, and 5
+exemptions. Exemptions are matched before the triage measures anything, so the dark and Increase
+Contrast ones were measured by hand afterwards, and none is needed: Food's "Adjust targets",
+"Adjust" and "P 42g" at 5.29–6.65:1 in dark; the same three and the Home tab's label at 5.39–7.07:1
+under Increase Contrast.
+
+#### Cleared 1: the muted-`slate` sites
+
+**The count, by the stated method.** The accessibility scanner's tokenizer over the five shipping
+roots (comments and string literals excluded) found **65 code lines in 35 files** drawing
+`slate.opacity(…)` on 2026-10-18. The earlier "62 in 32" was the same method on an older tree.
+Light `slate` at full strength is 4.78:1 on parchment, so any alpha under 1 is under the 4.5:1 text
+floor by construction: 0.7 → 2.74:1, 0.5 → 1.98:1, and even 0.8 under Increase Contrast → 4.28:1.
+
+**44 lines were converted** to full-strength `slate`. The owner approved the treatment on
+before/after screenshots in light, dark and Increase Contrast. Text is quieted by italic or a
+smaller role instead of a fainter ink (the `SheetTextEditor` placeholder, the journal's "Not
+logged", the Move week strip's "Rest" from 1.83:1 to 5.08:1 rendered). Glyphs that carry a state
+are drawn at full strength, one stroke-weight lighter: radio rings, the water bottles (now filled
+versus outlined), the journal's drop and moon (also filled versus outlined), and 10 disclosure
+chevrons. The unselected ring is the case Apple names, an unchecked control, and it goes from
+1.48–1.87:1 to 4.78:1. One text chip on parchment (`MoveView`'s rework affordance) measured 4.22:1 on
+its slate tint, so it moved to a cream fill (5.13:1).
+
+**21 lines stay**, each in `Scripts/accessibility-allowlist.json` with its measured ratio and the
+invariant that makes it safe:
+- 11 disabled controls. Each ternary's dim branch is taken exactly when the control's own
+  `.disabled(…)` is true. WCAG 1.4.3 and 1.4.11 exempt inactive components.
+- 4 slate@0.10 circles behind a full-strength ✕. The glyph measures 4.22:1 against the circle in
+  the worst case, above the 3:1 non-text floor.
+- 2 text chips that sit on cream cards: 4.52:1 light, 6.38:1 under Increase Contrast.
+- 3 lines of placeholder-swatch palette, which have no ink on them.
+- 1 policy divider, which is decoration.
+
+**And it is walled.** Rule **A8-MUTED-SLATE** in `Scripts/accessibility-scan.py` and its Swift
+twin `AccessibilityBoundaryTests` refuse any new `slate.opacity(` (and the `slate.secondary`-style
+and `secondaryText.withAlphaComponent(` spellings) unless it is allowlisted. Six planted spellings
+are fixtures on both halves. The rule's ceiling is in the scanner's docstring: a view-level
+`.opacity`, a bare `.secondary` resolving against a slate ancestor, a binding, and every other ink
+at alpha are not A8's to catch.
+
+#### Cleared 2: `.contrast` is back on, and its findings are measured, not believed
+
+`UXScreenProbe` now runs `.contrast` in its own first pass, then everything else. Inside one `.all`
+audit, 28 of 134 contrast issues came back with no element, and therefore nothing to measure. Run
+alone, none did. That comparison is not controlled, because the app changed between the two runs;
+it is the observation that made the split worth keeping, not a proof of its cause.
+
+**Why the auditor cannot be taken at its word.** On the 25-screen `ScreenAppearanceUITests` gallery
+(iPhone 17, demo seed) its verdicts do not follow the WCAG ratio in either direction:
+- Full-strength `bark` headings rendered at 19.6:1 are reported "Contrast failed".
+- Under Increase Contrast, text rendered at 7.36:1 is still "failed".
+- `moss` text at 3.73:1 is only "nearly passed".
+- The Move week strip's 45%-slate "Rest" captions, at 1.83:1 the faintest text on that screen, were
+  never reported at all. They were reported once they reached 5.08:1.
+
+So the auditor nominates and `Tests/FernletUITests/UXScreenProbe+Contrast.swift` decides. It
+measures each nominated element in the screenshot taken for that screen: the 90th-percentile inked
+pixel against the crop's dominant colour, held to 4.5:1 for text and 3:1 for an image. A finding is
+excused only for one of these, and each excused finding is listed in the run's attachment with its
+number:
+- the control is **disabled**;
+- the element is **occluded**, running under the floating tab bar or past the window edge;
+- its **ink clears** the floor.
+
+**The burn-down, default light, measured 2026-10-17/18:**
+
+| | Before (one `.all` pass, muted sites unconverted) | After |
+|---|---|---|
+| Raw contrast issues | 134 on 22 of 25 screens (104 "failed", 30 "nearly passed") | 127 |
+| Excused by measurement | — | 99: 61 ink clears, 31 occluded, 7 disabled |
+| Real, below the floor | — | 28: 26 on the Increase Contrast route, 1 illustration, 1 triage bug |
+
+**What is left in default light is the Increase Contrast route itself, plus one illustration.** The
+28th real finding was a triage bug: Home's quick-log "Move" tile was read as the Move tab button. It
+is fixed. The other 27:
+- `moss`-family text: each sheet's Done, Adjust, Adjust targets, the protein and "0g" amounts,
+  Change, "Start from this", "Call 988", and the recipe book's three tabs. Rendered 3.48–4.02:1.
+- The unselected Home tab over the bar's glass on the two Cycle screens: 4.43–4.50:1.
+- One letter of companion artwork, the sleeping "z" at 2.47:1. WCAG exempts text inside a picture.
+
+Measured at the same frames in the other appearances, **every one of the 27 clears its floor:
+5.14–6.33:1 under Increase Contrast and ≥4.54:1 in dark** (the "z" too: 5.55:1 / 5.26:1). They are in
+`UXScreenProbe.auditExemptions`, one control per entry, under that measured reason. So a new moss
+label on a gallery screen still fails the wall until someone measures it. The sweep below found two
+more moss labels the auditor never nominated, "Servings" and "Protein-Forward" (4.02:1). Both are the
+same class and both pass under Increase Contrast.
+
+**The wall's own result, after the burn-down:** the full light gallery, 25 of 25 screens, **0
+failures**, with `.contrast` on (2026-10-18, iPhone 17 simulator, iOS 26.5).
+
+The first dark and Increase Contrast runs were taken while the Mac slept, and 6 and 4 of their 25
+screens timed out inside the audit. Both were retaken awake on 2026-10-18, with every screen
+finishing (the slowest in 37 s); the table at the top of this section is that retake.
+
+#### Cleared 3: the system text-field placeholder
+
+The sweep found what the auditor never reports: every SwiftUI `TextField`/`SecureField` in the app,
+**88 code lines in 32 files**, passed no `prompt:`, so its prompt drew in the system placeholder
+colour: 1.71:1 in default light, 2.43:1 in dark and 4.33:1 under Increase Contrast, on the Meal sheet
+("scrambled eggs and toast"), the recipe and recipe-book searches and Plan goals. Logging a meal is a
+common task, so this was exactly what Apple's criterion is about.
+
+1. **Every field passes an inked prompt.** FernletUI's `Text.fieldPrompt(_:)` draws full-strength
+   `slate` in italic, the treatment `SheetTextEditor`'s placeholder already had: the italic and the
+   slate-against-bark ink keep a prompt from reading as typed text. Each call site passes its own
+   title (`TextField("Meal", text: $name, prompt: .fieldPrompt("Meal"))`), so the title stays the
+   accessibility label and no string is added; the 11 fields titled by a `String` pass it through
+   `fieldPrompt(verbatim:)`. 87 of the 88 lines carry one. The 88th, `MacroInputRow`'s inline gram
+   editor, never shows a prompt: it opens prefilled with the value it edits. It is allowlisted with
+   that invariant. The owner approved the look on before/after screenshots of the Meal, Goals and
+   recipe-book sheets in light, dark and Increase Contrast.
+2. **Rule A10-FIELD-PROMPT walls it.** `Scripts/accessibility-scan.py` and `AccessibilityBoundaryTests`
+   refuse a `TextField(`/`SecureField(` whose call passes no `prompt: .fieldPrompt(`, read across a
+   six-line window so a wrapped `Binding(get:set:)` is one call. Seven planted shapes fail on both
+   halves (no prompt, `prompt: Text(…)` left in the system colour, `prompt: nil`, a `SecureField`, a
+   `value:format:` field, an `axis:` field, and a wrapped binding), and the helper in either spelling,
+   a comment and `SheetGrowingTextField` pass. The accessibility CI line's floor goes 21 → 22.
+3. **The sweep is walled.** A swept text under 4.5:1 now fails the screen unless it sits in an inactive
+   control, under the tab bar, a pinned header or footer or the keyboard, or an `auditExemptions` entry
+   names that one text. The bar excuse is new: `PinnedBar` takes the buttons that no scroll container
+   holds near the window's bottom, the buttons and texts near its top, and the system keyboard, and
+   skips content scrolled under them and the fade beside them. That is where the sweep's non-ink
+   readings came from: "ANYTHING ELSE?" (1.80:1) under the suggest bar and the workout search field
+   (2.14:1) under `SheetSaveBar` on the gallery; "Calories" (2.27:1) in Nutrition targets' header fade
+   and its footnote (1.43:1) under the number pad its UI test leaves up. "Servings" and
+   "Protein-Forward", moss labels the auditor never nominated, joined the Increase Contrast entries.
+4. **The three appearances were retaken awake** — the table above.
+5. **The other probe screens were burned down too.** Turning `.contrast` back on, and then walling the
+   sweep, reached every suite that calls `capture()`, not only the gallery. The other probe screens
+   (onboarding, Settings, Nutrition targets, the item studio, Home's recent bites, the recipe detail,
+   the Move log's photos) held findings no run had judged. Four were real ink defects, fixed:
+   - onboarding's menu pickers drew their value in **system blue, 3.29:1**, because nothing tinted
+     them; they now take `mossInk` (5.95:1 on the cream card);
+   - the item studio's "Clear canvas" was plain `terracotta`, **4.16:1**, a token with no Increase
+     Contrast twin; it is now `terracottaInk`;
+   - Home's First aid subtitle (**4.28:1**) and a selected onboarding choice's subtitle (**4.44:1**)
+     were full `slate` on a moss wash, under the floor by the wash alone; both are `bark`, as the
+     "unwell" subtitle already was.
+
+   The rest is the same class as the gallery's moss text and goes the same route: onboarding's step
+   counter, Settings' Done, Nutrition targets' "Show calories in Fernlet" and Reset, Home's three First
+   aid chips, "Add a photo of this recipe", the Move log's Add tile and Edit link, and Privacy &
+   Data's "Multiple devices" heading (full `slate` on a terracotta wash, 4.34:1).
+
+   Measured on those suites, plus the new `LargerTextAX5UITests`, in all three appearances with the
+   Mac awake: **62 of 63 tests pass in each, none fails**, and the 63rd skips by its own design (the
+   AX5 guided workout needs a suggested session the seed does not always have). The fixes measure
+   5.23:1 or more in every appearance (pickers 5.95 / 5.74 / 8.03:1 in light, dark and Increase
+   Contrast; "Clear canvas" 5.69 / 5.23 / 5.69:1; the two subtitles 9.99:1 or more). The exempted
+   texts measure 3.75–4.34:1 in default light, 5.58:1 or more in dark and 5.54:1 or more under
+   Increase Contrast.
+
+#### What this declaration does not rest on
+
+Stated so the wall is not mistaken for coverage:
+- **Component boundaries.** The wall measures text, and the glyphs the auditor nominates against 3:1.
+  It does not measure the edge of a card, a field or a chip. About 187 `bark` hairlines at 0.08–0.10
+  alpha sit at 1.15–1.73:1, and only five shared components thicken theirs under Increase Contrast
+  (`fernletHighContrastEdgeAlpha`). The controls on the common tasks are identified by their text,
+  every label and prompt measured at 4.5:1 or more on the route this row is declared on, which WCAG
+  1.4.11 accepts in place of a boundary. A control identified by its boundary alone would need one.
+- **Screens off the gallery.** The three-appearance evidence is the 25 gallery screens plus the other
+  probe screens, the AX5 ones included, on one device and one seed. Beyond them, the A8 and A10 grep rules hold the two inks
+  that failed most, and nothing measures the rest.
+- **Text over a photograph or a gradient**, where the probe's dominant-colour background is wrong.
+  There is none on the gallery.
+
 ---
 
 ## 3. Undeclared, with the blocker named
 
-These four are intended, not abandoned. Each names what would have to be true.
+These three are intended, not abandoned. Each names what would have to be true.
 
 ### VoiceOver — undeclared
 
@@ -472,154 +675,6 @@ scaling, and offering it as the answer is treated as an over-claim.
 branch and every `minimumScaleFactor` in the tree is calibrated against **English** string lengths.
 German runs 30–40% longer. The day a translation ships, this row's evidence has to be re-taken.
 
-### Sufficient Contrast — undeclared
-
-**Status, 2026-10-18: the two blockers this row named are cleared, and clearing them found a third.**
-The row stays undeclared until the third is gone. All three are recorded here with the numbers they
-rest on.
-
-**Apple's criterion, quoted because the route matters.** "You may indicate your app supports
-Sufficient Contrast if the user interface for your common tasks, including text, buttons, and other
-controls, meets general contrast guidelines by default — usually 4.5 to 1 for most text elements."
-If it does not do that by default, an app on Apple's UI frameworks must "verify that the Increase
-Contrast setting applies sufficient contrast." Apple also asks for 3:1 on "interactive controls and
-non-text representations of a state, such as a selection" (an unchecked checkbox, for example), and
-for checking light and dark
-([Sufficient Contrast evaluation criteria](https://developer.apple.com/help/app-store-connect/manage-app-accessibility/sufficient-contrast-evaluation-criteria)).
-**Fernlet can only qualify on the Increase Contrast route.** Plain `moss` text is 3.74:1 on
-parchment and 4.02:1 on cream in default light, across about 179 foreground sites, and no change
-here alters that.
-
-**What Batch A5 already landed (unchanged).** `Color(light:dark:)` widened to
-`Color(light:dark:lightHC:darkHC:)` resolving inside the same dynamic provider, so Increase
-Contrast moves `slate` to the approved `#45535E` (**6.90:1 on parchment / 7.41:1 on cream**),
-`mossFill` to `#38562C` (**white on it 8.28:1**) and `moss` to `#46683A` (**5.54:1 / 5.95:1**). A
-custom background's ink is fitted rather than picked off one threshold (T2-7).
-
-#### Blocker 1, cleared: the muted-`slate` sites
-
-**The count, by the stated method.** The accessibility scanner's tokenizer over the five shipping
-roots (comments and string literals excluded) found **65 code lines in 35 files** drawing
-`slate.opacity(…)` on 2026-10-18. The earlier "62 in 32" was the same method on an older tree.
-Light `slate` at full strength is 4.78:1 on parchment, so any alpha under 1 is under the 4.5:1 text
-floor by construction: 0.7 → 2.74:1, 0.5 → 1.98:1, and even 0.8 under Increase Contrast → 4.28:1.
-
-**44 lines were converted** to full-strength `slate`. The owner approved the treatment on
-before/after screenshots in light, dark and Increase Contrast. Text is quieted by italic or a
-smaller role instead of a fainter ink (the `SheetTextEditor` placeholder, the journal's "Not
-logged", the Move week strip's "Rest" from 1.83:1 to 5.08:1 rendered). Glyphs that carry a state
-are drawn at full strength, one stroke-weight lighter: radio rings, the water bottles (now filled
-versus outlined), the journal's drop and moon (also filled versus outlined), and 10 disclosure
-chevrons. The unselected ring is the case Apple names, an unchecked control, and it goes from
-1.48–1.87:1 to 4.78:1. One text chip on parchment (`MoveView`'s rework affordance) measured 4.22:1 on
-its slate tint, so it moved to a cream fill (5.13:1).
-
-**21 lines stay**, each in `Scripts/accessibility-allowlist.json` with its measured ratio and the
-invariant that makes it safe:
-- 11 disabled controls. Each ternary's dim branch is taken exactly when the control's own
-  `.disabled(…)` is true. WCAG 1.4.3 and 1.4.11 exempt inactive components.
-- 4 slate@0.10 circles behind a full-strength ✕. The glyph measures 4.22:1 against the circle in
-  the worst case, above the 3:1 non-text floor.
-- 2 text chips that sit on cream cards: 4.52:1 light, 6.38:1 under Increase Contrast.
-- 3 lines of placeholder-swatch palette, which have no ink on them.
-- 1 policy divider, which is decoration.
-
-**And it is walled.** Rule **A8-MUTED-SLATE** in `Scripts/accessibility-scan.py` and its Swift
-twin `AccessibilityBoundaryTests` refuse any new `slate.opacity(` (and the `slate.secondary`-style
-and `secondaryText.withAlphaComponent(` spellings) unless it is allowlisted. Six planted spellings
-are fixtures on both halves. The rule's ceiling is in the scanner's docstring: a view-level
-`.opacity`, a bare `.secondary` resolving against a slate ancestor, a binding, and every other ink
-at alpha are not A8's to catch.
-
-#### Blocker 2, cleared: `.contrast` is back on, and its findings are measured, not believed
-
-`UXScreenProbe` now runs `.contrast` in its own first pass, then everything else. Inside one `.all`
-audit, 28 of 134 contrast issues came back with no element, and therefore nothing to measure. Run
-alone, none did. That comparison is not controlled, because the app changed between the two runs;
-it is the observation that made the split worth keeping, not a proof of its cause.
-
-**Why the auditor cannot be taken at its word.** On the 25-screen `ScreenAppearanceUITests` gallery
-(iPhone 17, demo seed) its verdicts do not follow the WCAG ratio in either direction:
-- Full-strength `bark` headings rendered at 19.6:1 are reported "Contrast failed".
-- Under Increase Contrast, text rendered at 7.36:1 is still "failed".
-- `moss` text at 3.73:1 is only "nearly passed".
-- The Move week strip's 45%-slate "Rest" captions, at 1.83:1 the faintest text on that screen, were
-  never reported at all. They were reported once they reached 5.08:1.
-
-So the auditor nominates and `Tests/FernletUITests/UXScreenProbe+Contrast.swift` decides. It
-measures each nominated element in the screenshot taken for that screen: the 90th-percentile inked
-pixel against the crop's dominant colour, held to 4.5:1 for text and 3:1 for an image. A finding is
-excused only for one of these, and each excused finding is listed in the run's attachment with its
-number:
-- the control is **disabled**;
-- the element is **occluded**, running under the floating tab bar or past the window edge;
-- its **ink clears** the floor.
-
-**The burn-down, default light, measured 2026-10-17/18:**
-
-| | Before (one `.all` pass, muted sites unconverted) | After |
-|---|---|---|
-| Raw contrast issues | 134 on 22 of 25 screens (104 "failed", 30 "nearly passed") | 127 |
-| Excused by measurement | — | 99: 61 ink clears, 31 occluded, 7 disabled |
-| Real, below the floor | — | 28: 26 on the Increase Contrast route, 1 illustration, 1 triage bug |
-
-**What is left in default light is the Increase Contrast route itself, plus one illustration.** The
-28th real finding was a triage bug: Home's quick-log "Move" tile was read as the Move tab button. It
-is fixed. The other 27:
-- `moss`-family text: each sheet's Done, Adjust, Adjust targets, the protein and "0g" amounts,
-  Change, "Start from this", "Call 988", and the recipe book's three tabs. Rendered 3.48–4.02:1.
-- The unselected Home tab over the bar's glass on the two Cycle screens: 4.43–4.50:1.
-- One letter of companion artwork, the sleeping "z" at 2.47:1. WCAG exempts text inside a picture.
-
-Measured at the same frames in the other appearances, **every one of the 27 clears its floor:
-5.14–6.33:1 under Increase Contrast and ≥4.54:1 in dark** (the "z" too: 5.55:1 / 5.26:1). They are in
-`UXScreenProbe.auditExemptions`, one control per entry, under that measured reason. So a new moss
-label on a gallery screen still fails the wall until someone measures it. The sweep below found two
-more moss labels the auditor never nominated, "Servings" and "Protein-Forward" (4.02:1). Both are the
-same class and both pass under Increase Contrast.
-
-**The wall's own result, after the burn-down:** the full light gallery, 25 of 25 screens, **0
-failures**, with `.contrast` on (2026-10-18, iPhone 17 simulator, iOS 26.5).
-
-The gallery under Increase Contrast and in dark mode left no real finding at all, apart from that
-same "Move" tile.
-**Caveat:** those two runs were taken while the Mac was asleep on battery. 4 of 25 screens under
-Increase Contrast and 6 of 25 in dark timed out inside the audit, so the claim covers 21 and 19
-screens. Re-run both on an awake machine before the row is declared.
-
-#### Blocker 3, new: the system text-field placeholder, which the auditor never reports
-
-The report-only sweep in `UXScreenProbe+Contrast.swift` measures **every** visible static text and
-every empty field's prompt, not only what the auditor nominates. It covered 317 text elements on the
-light gallery. It found the failures the auditor's nominations missed, and the small ones are fixed:
-
-| Fixed on this branch | Was | Now |
-|---|---|---|
-| Move week-strip day numerals (68% bark; today moss on its moss fill) | 4.32:1; today 2.54:1 (3.45:1 even under Increase Contrast) | full `bark`: ≥6.13:1 on every tile tint in every mode, computed from the tokens; days ahead of today quieted by `labelSmall` |
-| Period primer "Turn on" (white on plain `moss`) | 4.30:1 | on `mossFill`, 5.37:1 |
-| Home "I'm unwell today" subtitle, slate on the rose wash | 4.22:1 light, 4.36:1 dark | `bark` italic, ≥9.11:1 |
-| Five more chevrons in `bark`/`moss` at 35–70%, Worry Box's goldenrod empty-state icon | 1.80–2.48:1, under even the 3:1 non-text floor | full-strength `slate` (4.78:1), `moss` (3.75–4.02:1) and `goldenrodInk` (4.95:1) |
-
-**What blocks the row now.** Every SwiftUI `TextField`/`SecureField` in the app shows its prompt in
-the system placeholder colour: **88 code lines in 32 files**, none passing a `prompt:`. Measured on
-the gallery, that prompt is **1.71:1 in default light, 2.43:1 in dark and 4.33:1 under Increase
-Contrast**. That is under the floor on every route, on the Meal sheet ("scrambled eggs and toast"),
-the recipe and recipe-book searches, and Plan goals. Logging a meal is a common task, so this is
-exactly what Apple's criterion is about.
-
-**What would clear it:**
-1. Every field passes an explicit prompt inked in full-strength `slate`
-   (`TextField(…, prompt: Text(…).foregroundStyle(Color.slate))`): 4.78:1 on parchment, 5.13:1 on
-   cream, ≥6.9:1 under Increase Contrast, ≥5.9:1 in dark.
-2. A grep rule refuses a field without one.
-3. The sweep is promoted from report-only to walled. Two things it measures today are not ink, and
-   it would need to exclude them first: content under a sheet's pinned footer, and its fade. The
-   footer excuse is the gap: "ANYTHING ELSE?" and the workout search field read 1.80–2.57:1 through
-   the footer's fade, and the triage knows only the tab bar.
-4. The dark and Increase Contrast gallery runs are retaken awake.
-
-Then this row can be declared on the Increase Contrast route.
-
 ---
 
 ## 4. Inapplicable, verified
@@ -653,7 +708,7 @@ Because no field telemetry will ever check these claims, it matters exactly wher
 
 **The machine checks (the §4.5 wall):**
 
-- `Scripts/accessibility-scan.py` + `Tests/FernletTests/AccessibilityBoundaryTests` — **eight**
+- `Scripts/accessibility-scan.py` + `Tests/FernletTests/AccessibilityBoundaryTests` — **nine**
   structural rules with a zero-violation baseline and one shared allowlist
   (`Scripts/accessibility-allowlist.json`), each entry stating the invariant that makes it safe:
   A1 a `.combine` anywhere in a modifier chain that also carries a label, A2 a spoken `rawValue`,
@@ -661,7 +716,9 @@ Because no field telemetry will ever check these claims, it matters exactly wher
   A5 a fixed `GridItem` width, A6 an `Image(uiImage:)` with no `.accessibilityIgnoresInvertColors`
   (Smart Invert turning a user's photograph into a colour negative — T2-10), A7
   `.accessibilityElement(children: .ignore)` on a `Button` (the traitless-second-element defect
-  below), A8 `slate` drawn at an alpha below 1 (§3, Sufficient Contrast).
+  below), A8 `slate` drawn at an alpha below 1, A10 a `TextField`/`SecureField` that passes no
+  `prompt: .fieldPrompt(…)` and so draws its prompt in the system placeholder colour (both §2,
+  Sufficient Contrast).
 
   **The first five were adversarially tested and were porous.** A reviewer planted fifteen evasions
   of A1, A2 and A5 — a same-line pair, `children:.combine` with no space, one interleaved modifier
@@ -801,21 +858,25 @@ Because no field telemetry will ever check these claims, it matters exactly wher
 **How `.contrast` runs, now that it is back.** It was subtracted until 2026-10-18 on a correct
 diagnosis: XCUITest's contrast auditor samples rendered pixels and, on this palette, its verdicts do
 not follow the WCAG ratio. Measured on the gallery, it fails `bark` headings at 19.6:1, calls
-3.73:1 `moss` text only "nearly passed", and misses 1.83:1 captions entirely (§3). It came back as a
+3.73:1 `moss` text only "nearly passed", and misses 1.83:1 captions entirely (§2). It came back as a
 **nominator**. `UXScreenProbe+Contrast.swift` decides each nominated element by measuring it in the
-screenshot. A finding is excused only when the element is disabled, covered by the tab bar or the
-window edge, or its ink clears the floor, and every excused finding is listed in the run's
-attachment with its number. What survives is real, and fails the screen unless
-`UXScreenProbe.auditExemptions` names that control with a measured reason. Beside it, a
-**report-only sweep** measures every visible text element and empty-field prompt, because the
-auditor's recall is as poor as its precision; that sweep is how the placeholder blocker in §3 was
-found.
+screenshot. A finding is excused only when the element is disabled, covered by the tab bar, a
+pinned header, footer or keyboard, or the window edge, or its ink clears the floor, and every
+excused finding is listed in the run's attachment with its number. What survives is real, and fails
+the screen unless `UXScreenProbe.auditExemptions` names that control with a measured reason. Beside it, a **walled
+sweep** measures every visible text element and empty-field prompt, because the auditor's recall is
+as poor as its precision; that sweep is how the field-prompt blocker in §2 was found. A swept text
+under 4.5:1 fails the screen unless it sits in an inactive control, under the tab bar or a pinned
+header, footer or keyboard, or an `auditExemptions` entry names that one text.
 
 Its ceiling, stated as plainly as the rest:
 - It judges a nominated element only where the screenshot shows it.
 - A dominant-colour background is wrong for text over a photograph or a gradient.
-- Content under a sheet's pinned footer is still measured through the footer's fade.
-- The sweep fails nothing.
+- A pinned header or footer is found by geometry: elements that no scroll container holds, near
+  the top or the bottom of the window. Each band errs wide by a few points, and a screen with a
+  fixed control near either edge gets one too, so the few points of text beside such a control go
+  unmeasured. The attachment names every band.
+- The sweep sees only the screens the probes visit.
 - The map describes **default light**. Dark mode and Increase Contrast are re-taken by re-running
   the gallery with the simulator set that way (`xcrun simctl ui <udid> appearance dark`,
   `… increase_contrast enabled`), which no test can do for itself.
