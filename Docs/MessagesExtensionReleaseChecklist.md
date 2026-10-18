@@ -96,6 +96,8 @@ with Fernlet's Messages extension enabled; do not substitute the simulator for t
 ## Accessibility and presentation
 
 - [ ] Verify compact and expanded composer presentation for recipes and workouts.
+- [ ] Pick a planned workout that has notes: its composer row and preview end "· Notes included",
+  and the inserted card's face shows only the date and the workout count, never the note (2026-10-18).
 - [ ] Verify Dynamic Type, VoiceOver labels, and reduced-motion behavior in the composer and both
   Fernlet review screens.
 - [ ] Confirm static/local card artwork renders without a network request.

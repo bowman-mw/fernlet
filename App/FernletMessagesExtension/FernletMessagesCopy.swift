@@ -178,6 +178,13 @@ enum FernletMessagesCopy {
                comment: "Number of sessions in a shared workout plan, e.g. '3 workouts'. Needs a plural variation per language; English also needs the one-workout form.")
     }
 
+    /// The workout's composer row and preview when its notes travel with it (tracker §2.6, 2026-10-18).
+    /// Never the card face: that keeps the date and the count alone.
+    static func workoutSubtitleWithNotes(summary: String) -> String {
+        String(localized: "messages.workout.subtitleWithNotes", defaultValue: "\(summary) · Notes included",
+               comment: "Composer subtitle and preview line for a planned workout whose own written notes travel with it, so the sender knows before sending. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.")
+    }
+
     static func recipeSubtitleWithNote(summary: String) -> String {
         String(localized: "messages.recipe.subtitleWithNote", defaultValue: "\(summary) · Note included",
                comment: "Recipe card subtitle when the sender's own note travels with the recipe. %@ is the servings/ingredients/steps summary.")

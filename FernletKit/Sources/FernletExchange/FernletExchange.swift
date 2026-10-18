@@ -293,6 +293,18 @@ public nonisolated struct WorkoutPlanExchangePacket: Codable, Equatable, Sendabl
     public var plan: CoachPlan
     public var contentHash: String
 
+    /// Whether the plan carries free-text session notes: the sender's own words, which ride inside the
+    /// packet and are imported by the recipient (`ExchangeWorkoutPlanBuilder` copies a planned
+    /// workout's notes into its session, and into `conditioning` when it lists no exercises).
+    ///
+    /// The Messages composer says "Notes included" on the workout's row and preview when this is true,
+    /// so the sender knows before sending (tracker §2.6, 2026-10-18; the owner's pick "2a"); the card
+    /// face shows the date and the session count only, never the notes. Derived from ``plan``, so it is
+    /// neither encoded nor hashed: the wire is unchanged.
+    public var includesNotes: Bool {
+        plan.days.contains { day in day.sessions.contains { !($0.notes ?? "").isEmpty } }
+    }
+
     public init(plan: CoachPlan) throws {
         format = Self.format
         formatVersion = Self.formatVersion

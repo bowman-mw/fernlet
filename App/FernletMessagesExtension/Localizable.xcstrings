@@ -788,6 +788,18 @@
           }
         }
       }
+    },
+    "messages.workout.subtitleWithNotes" : {
+      "comment" : "Composer subtitle and preview line for a planned workout whose own written notes travel with it, so the sender knows before sending. %@ is the date and workout count, e.g. '2026-10-18 · 1 workout'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ · Notes included"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

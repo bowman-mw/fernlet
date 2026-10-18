@@ -39,6 +39,11 @@ The hash is **integrity, not authentication**: it detects a truncated or edited 
 nothing about who produced it (signing and trust live in `ProximityKit`). It also gives the app's
 replay ledger a stable identity, which is why a forwarded message still maps to the same import.
 
+A workout plan's session notes are the sender's own words and travel inside the packet.
+``WorkoutPlanExchangePacket/includesNotes`` says whether any do; it is derived from the plan, so it
+is neither encoded nor hashed. The iMessage app's composer reads it to say "Notes included" before
+the person sends (2026-10-18), while the card face shows only the date and the session count.
+
 A workout plan is version 1. A recipe is version 1 when it is one part — byte-for-byte what every
 earlier build wrote — and **version 2 when it is made in parts** (2026-09-24): a salad and its
 homemade dressing carry the payload's `components` partition, which an older reader could not keep
