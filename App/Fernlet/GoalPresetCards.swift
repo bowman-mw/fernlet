@@ -54,7 +54,7 @@ private struct GoalPresetCard: View {
                     Spacer()
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(isSelected ? Color.moss : Color.slate.opacity(0.3))
+                        .foregroundStyle(isSelected ? Color.moss : Color.slate)
                 }
                 Text(goal.tagline)
                     .font(.fernlet(.bodySmall))

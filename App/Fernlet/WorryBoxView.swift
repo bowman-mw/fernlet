@@ -126,7 +126,7 @@ struct WorryEntryView: View {
                 if text.isEmpty {
                     Text("It's alright. Just start typing…")
                         .font(.custom(FernletFontName.instrumentSerifItalic, size: 17, relativeTo: .body))
-                        .foregroundStyle(Color.slate.opacity(0.7))
+                        .foregroundStyle(Color.slate)
                         .padding(.horizontal, 5)
                         .padding(.top, 8)
                         .allowsHitTesting(false)
@@ -637,8 +637,9 @@ struct WorryBoxView: View {
     private var emptyState: some View {
         HStack(spacing: 20) {
             Image(systemName: "archivebox")
-                .font(.system(size: 34, weight: .regular))
-                .foregroundStyle(Color.goldenrod.opacity(0.75))
+                .font(.system(size: 34, weight: .light))
+                // `goldenrodInk`: plain goldenrod is 2.22:1 on parchment even at full strength.
+                .foregroundStyle(Color.goldenrodInk)
                 .frame(width: 56)
             VStack(alignment: .leading, spacing: 5) {
                 Text("The box is empty right now.")

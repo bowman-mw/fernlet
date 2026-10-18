@@ -5467,7 +5467,7 @@ private struct MealPhotoThumb: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.cream)
                     .frame(width: 54, height: 54)
-                    .overlay(Image(systemName: "iphone.and.arrow.forward").font(.caption).foregroundStyle(Color.slate.opacity(0.7)))
+                    .overlay(Image(systemName: "iphone.and.arrow.forward").font(.caption).foregroundStyle(Color.slate))
                     .accessibilityLabel("Photo on your other device")
             } else if presence == .unavailable {
                 // The sealed file is here but wouldn't open (corrupt / undecryptable) — a distinct,
@@ -5475,7 +5475,7 @@ private struct MealPhotoThumb: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.cream)
                     .frame(width: 54, height: 54)
-                    .overlay(Image(systemName: "photo.badge.exclamationmark").font(.caption).foregroundStyle(Color.slate.opacity(0.7)))
+                    .overlay(Image(systemName: "photo.badge.exclamationmark").font(.caption).foregroundStyle(Color.slate))
                     .accessibilityLabel("Photo couldn't be opened")
             } else {
                 RoundedRectangle(cornerRadius: 8)
@@ -6594,8 +6594,8 @@ private struct RecipeCreationOptionRow: View {
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.slate.opacity(0.6))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.slate)
                 .padding(.top, 8)
         }
         .padding(14)

@@ -866,7 +866,7 @@ private struct OnboardingChoiceRow: View {
             HStack(spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.moss : Color.slate.opacity(0.45))
+                    .foregroundStyle(isSelected ? Color.moss : Color.slate)
                     .frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)

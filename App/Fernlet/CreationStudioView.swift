@@ -395,7 +395,7 @@ struct CreationStudioView: View {
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.5)
                     .padding(8)
-                    .foregroundStyle(Color.slate.opacity(0.6))
+                    .foregroundStyle(Color.slate)
                     .allowsHitTesting(false)
                     // Decorative; hidden from a11y so it doesn't also carry the canvas's `studio.canvas` id.
                     .accessibilityHidden(true)

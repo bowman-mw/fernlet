@@ -1611,7 +1611,10 @@ struct WorkoutSuggestionSheet: View {
                     .foregroundStyle(Color.slate)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(Color.slate.opacity(0.10), in: Capsule())
+                    // Cream, not a slate tint: this sheet is parchment, and slate text on a 10%
+                    // slate tint over parchment measures 4.22:1, under the 4.5:1 floor.
+                    .background(Color.cream, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.bark.opacity(0.10), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 // Reworking mid-adjustment would let a stale AI result land on a freshly reworked plan;
@@ -2722,7 +2725,7 @@ private struct MoveContextSegment: View {
             HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.moss)
+                    .foregroundStyle(value == nil ? Color.slate : Color.moss)
                 VStack(alignment: .leading, spacing: 2) {
                     // `.textCase` on a `LocalizedStringKey` caption: the transform runs after the
                     // catalog lookup, on the translation. (F5: as a `String` parameter it ran on
@@ -2731,7 +2734,7 @@ private struct MoveContextSegment: View {
                         .textCase(.uppercase)
                         .font(.fernlet(.labelSmall))
                         .tracking(0.6)
-                        .foregroundStyle(value == nil ? Color.slate.opacity(0.5) : Color.slate)
+                        .foregroundStyle(Color.slate)
                     if let value {
                         Text(value)
                             // Two lines, not one: at default size an accepted goal already truncated
@@ -3617,20 +3620,20 @@ struct WorkoutCalendarCell: View {
     }
 
     /// What sits inside the tile: the day numeral over the category marks.
+    ///
+    /// Full-strength `bark` on every day, because it is the only ink that clears 4.5:1 on every
+    /// fill a tile can take: the worst is goldenrod at 34% in dark mode, 6.13:1. The numeral used to
+    /// carry the day's state in its alpha — 68% bark behind today (4.32:1 on the taupe tile), 28%
+    /// ahead of it, and moss on today (2.54:1 on today's moss fill) — and all three failed. Today
+    /// is still marked by its moss ring and fill; a day ahead of today is quieted by the smaller,
+    /// lighter `labelSmall` face instead of by a fainter ink.
     private var tileContents: some View {
         VStack(spacing: 4) {
             Text("\(cell.day)")
-                .font(.fernlet(.stat))
-                .foregroundStyle(dayNumeralInk)
+                .font(.fernlet(cell.isFuture ? .labelSmall : .stat))
+                .foregroundStyle(Color.bark)
             categoryMarks
         }
-    }
-
-    /// Faded ahead of today, moss on today, ordinary bark behind it.
-    private var dayNumeralInk: Color {
-        cell.isFuture ? Color.bark.opacity(0.28)
-            : cell.isToday ? Color.moss
-            : Color.bark.opacity(0.68)
     }
 
     /// Up to three marks: logged categories first, then planned ones into whatever room is left.
@@ -3658,7 +3661,7 @@ struct WorkoutCalendarCell: View {
             .font(.fernlet(.labelSmall))
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            .foregroundStyle(cell.categories.isEmpty && cell.plannedCategories.isEmpty ? Color.slate.opacity(0.45) : Color.slate)
+            .foregroundStyle(Color.slate)
     }
 }
 

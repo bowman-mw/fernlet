@@ -633,7 +633,7 @@ private struct DuressCeremonyPrimaryFlow: View {
             HStack(spacing: 14) {
                 Image(systemName: kind == newKind ? "checkmark.circle.fill" : "circle")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(kind == newKind ? Color.moss : Color.slate.opacity(0.4))
+                    .foregroundStyle(kind == newKind ? Color.moss : Color.slate)
                 Text(title)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)

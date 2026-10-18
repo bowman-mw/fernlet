@@ -48,6 +48,15 @@ Checks (IDs match §4.5 and AccessibilityBoundaryTests):
                        a SECOND, traitless element beside the real control, so the button stops
                        announcing as a button and its activation stops being discoverable (T2-29).
                        A label alone is the correct fix; `.ignore` is not.
+    A8-MUTED-SLATE     `slate` drawn at an alpha below 1: `slate.opacity(`, the hierarchical
+                       `slate.secondary` / `.tertiary` / `.quaternary` / `.quinary` styles, and the
+                       UIKit `secondaryText.withAlphaComponent(` form. Light `slate` at FULL strength
+                       is 4.78:1 on parchment, so any alpha under 1 puts TEXT below the 4.5:1 floor
+                       by construction (0.7 -> 2.74:1, 0.5 -> 1.98:1) and no token can fix it. Text
+                       is de-emphasized by role, size and weight instead. A grep cannot tell a Text
+                       from an Image, so every hit is reported, and the non-text sites (a disabled
+                       control, a backdrop under a full-strength glyph, a placeholder fill) are
+                       allowlisted one by one with the ratio that makes them safe.
 
 Deliberately NOT here: "an accessibility label may not be a bare `String`". A grep cannot tell
 `.accessibilityLabel(coverText)` (a String — a real defect) from `.accessibilityLabel(titleKey)`
@@ -80,6 +89,12 @@ function call or a runtime branch:
     the shape that gets a wall switched off.
   * A6 CANNOT TELL TWO ADJACENT IMAGES APART. One `.accessibilityIgnoresInvertColors` inside the
     window satisfies every `Image(uiImage:)` that opened within it.
+  * A8 SEES ONE INK SPELLED ONE WAY. It catches `slate` thinned in its own expression, and not:
+    a view-level `.opacity(0.5)` on a slate-inked view, a bare `.foregroundStyle(.secondary)` that
+    resolves against a slate ancestor, `Color.slate.mix(with:by:)`, a binding
+    (`let ink = Color.slate` then `ink.opacity(0.5)`), or any OTHER ink at alpha (`bark`, the
+    accents). The runtime contrast audit in `UXScreenProbe` is the backstop for those, and only
+    on the screens its gallery visits.
   * Nothing here sees FOCUS ORDER, a missing custom action, an unhonored Reduce Motion, contrast as
     rendered, or how a screen actually sounds. Those are manual, forever, and the runtime half is
     `performAccessibilityAudit` in `UXScreenProbe`.
@@ -112,6 +127,7 @@ A5_DERIVATION_LINES = 3  # code lines of a declaration read when deciding if it 
 A5_DERIVATION_PASSES = 3 # hops followed from a grid minimum back to a `@ScaledMetric`
 A6_WINDOW = 12           # code lines after `Image(uiImage:)` searched for the Smart Invert opt-out
 A7_LOOKBACK = 60         # code lines searched backwards for the `Button` a `.ignore` chains onto
+A8_WINDOW = 2            # code lines joined so `Color.slate` wrapped before `.opacity(…)` is one expression
 ADD_TRAITS_SCAN_LIMIT = 32  # `accessibilityAddTraits(` calls inspected inside one canary's braces
 WRAPPER_UNWRAPS = 3      # `Text(verbatim: …)`-style wrappers peeled off a spoken argument
 
@@ -177,6 +193,8 @@ BOUND_ARG_RE = re.compile(r"\(\s*([A-Za-z_]\w*)\s*\)")
 ASSIGN_RE = re.compile(r"\.(" + "|".join(SPOKEN_PROPERTIES) + r")\s*=(?!=)\s*(.+)$")
 IMAGE_BITMAP_RE = re.compile(r"\bImage\(\s*uiImage:")
 BUTTON_HEAD_RE = re.compile(r"\bButton\s*[({<]")
+MUTED_SLATE_RE = re.compile(r"\bslate\s*\.\s*(?:opacity\s*\(|secondary\b|tertiary\b|quaternary\b|quinary\b)")
+MUTED_SECONDARY_INK_RE = re.compile(r"\bsecondaryText\s*\.\s*withAlphaComponent\s*\(")
 ADD_TRAITS_CALL = "accessibilityAddTraits("
 INVERT_NEEDLE = "accessibilityIgnoresInvertColors"
 WRAPPERS = ("Text(verbatim:", "Text(", "LocalizedStringKey(", "String(", "Optional(")
@@ -185,6 +203,9 @@ A1_DETAIL = ("a label in the same modifier chain as .combine REPLACES the fragme
              "allowlist it only if the label says strictly more than they do")
 A6_DETAIL = ("Image(uiImage:) is a photograph or a rendered bitmap, and Smart Invert turns it into "
              "a colour negative. Add .accessibilityIgnoresInvertColors() (T2-10).")
+A8_DETAIL = ("slate under alpha 1 is below the 4.5:1 text floor by construction (full slate is "
+             "4.78:1 on parchment; 0.7 -> 2.74:1). Use full-strength slate and de-emphasize by role, "
+             "size or weight; a non-text site goes in the allowlist with its measured ratio.")
 
 
 def strip_code(line, st):
@@ -626,6 +647,29 @@ def scan_ignore_on_button(rel, coded):
     return hits
 
 
+def scan_muted_slate(rel, coded):
+    """A8: `slate` drawn at an alpha below 1 — muted ink that no text may wear.
+
+    The arithmetic is the whole rule. Light `slate` at full strength measures 4.78:1 on parchment
+    and 5.13:1 on cream, barely over the 4.5:1 floor for small text, so ANY alpha under 1 lands
+    below it (0.8 -> 3.27:1, 0.5 -> 1.98:1); Increase Contrast's #45535E still only reaches 4.28:1
+    at 0.8. Hierarchy is carried by role, size and weight instead.
+
+    The expression is read across a FIXED A8_WINDOW-line join so `Color.slate` wrapped before its
+    `.opacity(…)` is still one expression, and a hit is reported only when it began on the
+    window's first line, so overlapping windows never report one site twice. One report per line:
+    the allowlist names lines, and the fix is the same edit however many hits a line holds."""
+    hits = []
+    for i, (lineno, code, raw) in enumerate(coded):
+        if "slate" not in code and "secondaryText" not in code:
+            continue
+        text, starts = joined(coded, i, A8_WINDOW)
+        found = [m for regex in (MUTED_SLATE_RE, MUTED_SECONDARY_INK_RE) for m in regex.finditer(text)]
+        if any(line_of(starts, m.start()) == 0 for m in found):
+            hits.append(hit("A8-MUTED-SLATE", rel, lineno, raw, A8_DETAIL))
+    return hits
+
+
 # ---------------------------------------------------------------------------------------------
 # A3
 # ---------------------------------------------------------------------------------------------
@@ -747,6 +791,7 @@ def scan_file(path, rel):
     hits.extend(scan_grid_scales(rel, coded, whole))
     hits.extend(scan_invert_colors(rel, coded))
     hits.extend(scan_ignore_on_button(rel, coded))
+    hits.extend(scan_muted_slate(rel, coded))
     return hits
 
 

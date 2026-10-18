@@ -231,7 +231,7 @@ struct CoachPlanReviewView: View {
                                  struck: false, tint: Color.slate)
                 Image(systemName: "arrow.down")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.slate.opacity(0.5))
+                    .foregroundStyle(Color.slate)
                 beforeAfterBlock(title: after?.name ?? resolved.before.name,
                                  lines: after?.exerciseLines ?? [], struck: false, tint: Color.bark)
             } else {

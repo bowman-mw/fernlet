@@ -24,12 +24,12 @@
 //
 // WHAT THIS WALL CANNOT SEE — the honest ceiling, restated here because it is what stops the wall
 // being mistaken for coverage, and kept in step with the scanner's module docstring. It catches
-// seven named structural regressions. It does NOT catch a rawValue that reaches a label through a
+// eight named structural regressions. It does NOT catch a rawValue that reaches a label through a
 // function call or across a file, a string computed at runtime, a label that is present but WRONG,
 // focus order, a missing custom action, an unhonored Reduce Motion, or anything about how a screen
 // actually sounds. Those stay manual, forever.
 //
-// ONE HOME PER RULE. The tempting eighth rule — "an accessibility label may not be a bare `String`"
+// ONE HOME PER RULE. The tempting ninth rule — "an accessibility label may not be a bare `String`"
 // — is deliberately absent: a grep cannot distinguish `.accessibilityLabel(coverText)` (a `String`,
 // a real defect) from `.accessibilityLabel(titleKey)` (a `LocalizedStringKey`, correct). It lives
 // in `LocalizationBoundaryTests` as a TYPE check on the named members. Do not add it here too.
@@ -37,7 +37,7 @@
 import Foundation
 import Testing
 
-/// Grep-wall enforcing the seven mechanically decidable accessibility invariants of §4.5.
+/// Grep-wall enforcing the eight mechanically decidable accessibility invariants of §4.5.
 ///
 /// Each rule is a pure matcher over source text, exercised both against the real tree (with a
 /// file-count floor, so a green run cannot mean "the scan read nothing") and against planted
@@ -141,6 +141,8 @@ extension AccessibilityBoundaryTests {
     static let a6Window = 12
     /// Code lines searched backwards for the `Button` a `children: .ignore` chains onto.
     static let a7Lookback = 60
+    /// Code lines joined so `Color.slate` wrapped before its `.opacity(…)` is read as one expression.
+    static let a8Window = 2
     /// `accessibilityAddTraits(` calls inspected inside one heading canary's braces.
     static let addTraitsScanLimit = 32
     /// `Text(verbatim: …)`-style wrappers peeled off a spoken argument before comparing it.
@@ -445,6 +447,9 @@ extension AccessibilityBoundaryTests {
         #"(?:struct|class|enum)\s+([A-Za-z_]\w*)"#
     ])
     static let customFont = Pattern(#"\.custom\("#)
+    static let mutedSlate = Pattern(
+        #"\bslate\s*\.\s*(?:opacity\s*\(|secondary\b|tertiary\b|quaternary\b|quinary\b)"#)
+    static let mutedSecondaryInk = Pattern(#"\bsecondaryText\s*\.\s*withAlphaComponent\s*\("#)
 
     /// UIKit's assignment form, built from ``spokenProperties`` exactly as the scanner builds it
     /// from `SPOKEN_PROPERTIES` — so adding a property name on one side and not the other is a
@@ -456,7 +461,8 @@ extension AccessibilityBoundaryTests {
     /// Every pattern whose Python source must appear VERBATIM in the scanner.
     static let portedPatterns: [Pattern] = [
         combineArguments, ignoreElement, labelStep, labelAnywhere, gridColumn, scaledMetric,
-        binding, boundArgument, imageBitmap, buttonHead, numericLiteral, identifier, structHead
+        binding, boundArgument, imageBitmap, buttonHead, numericLiteral, identifier, structHead,
+        mutedSlate, mutedSecondaryInk
     ]
 
     /// The two literal fragments of ``assignment``; its middle piece is COMPUTED on both sides, so
@@ -777,6 +783,49 @@ extension AccessibilityBoundaryTests {
     }
 }
 
+// MARK: - A8
+
+extension AccessibilityBoundaryTests {
+
+    /// The character offset of every whole match of `pattern` in `text` — Python's `finditer` where
+    /// only the position is needed, for a pattern with no capture group.
+    static func matchOffsets(_ pattern: Pattern, in text: String) -> [Int] {
+        guard !text.isEmpty else { return [] }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return pattern.regex.matches(in: text, options: [], range: range).compactMap { result in
+            guard let whole = Range(result.range, in: text) else { return nil }
+            return text.distance(from: text.startIndex, to: whole.lowerBound)
+        }
+    }
+
+    /// **A8** — `slate` drawn at an alpha below 1: muted ink that no text may wear.
+    ///
+    /// The arithmetic is the whole rule. Light `slate` at full strength measures 4.78:1 on
+    /// parchment and 5.13:1 on cream, barely over the 4.5:1 floor for small text, so ANY alpha
+    /// under 1 lands below it (0.8 → 3.27:1, 0.5 → 1.98:1), and Increase Contrast's `#45535E` still
+    /// only reaches 4.28:1 at 0.8. Hierarchy is carried by role, size and weight instead. A grep
+    /// cannot tell a `Text` from an `Image`, so every hit is reported and each non-text site — a
+    /// disabled control, a backdrop under a full-strength glyph, a placeholder fill — is allowlisted
+    /// with the ratio that makes it safe.
+    ///
+    /// The expression is read across a FIXED ``a8Window``-line join so `Color.slate` wrapped before
+    /// its `.opacity(…)` is still one expression, and a hit counts only when it began on the
+    /// window's first line, so overlapping windows never report one site twice. One finding per
+    /// line: the allowlist names lines, and the fix is the same edit however many hits a line holds.
+    static func mutedSlateFindings(_ path: String, _ lines: [SourceLine]) -> [Finding] {
+        guard !path.isEmpty else { return [] }
+        var findings: [Finding] = []
+        for (index, line) in lines.enumerated() {
+            guard line.code.contains("slate") || line.code.contains("secondaryText") else { continue }
+            let win = window(lines, from: index, count: a8Window)
+            let offsets = matchOffsets(mutedSlate, in: win.text) + matchOffsets(mutedSecondaryInk, in: win.text)
+            guard offsets.contains(where: { win.line(at: $0) == 0 }) else { continue }
+            findings.append(Finding(rule: "A8-MUTED-SLATE", path: path, line: line.number, text: line.raw))
+        }
+        return findings
+    }
+}
+
 // MARK: - A3
 
 extension AccessibilityBoundaryTests {
@@ -845,7 +894,7 @@ extension AccessibilityBoundaryTests {
         return paths.sorted()
     }
 
-    /// Runs all seven rules over the shipping tree.
+    /// Runs all eight rules over the shipping tree.
     static func scanTree() throws -> (findings: [Finding], filesScanned: Int) {
         var findings: [Finding] = []
         let paths = shippingFiles()
@@ -858,6 +907,7 @@ extension AccessibilityBoundaryTests {
             findings += gridScaleFindings(path, lines, source: source)
             findings += invertColorFindings(path, lines)
             findings += ignoreOnButtonFindings(path, lines)
+            findings += mutedSlateFindings(path, lines)
         }
         // A3 asserts something EXISTS, so it runs off its own named paths rather than off the walk:
         // deleting the file must fail the canary, not quietly remove it from the scan.
@@ -976,7 +1026,8 @@ extension AccessibilityBoundaryTests {
             ("A2_WINDOW", Self.a2Window), ("A2_BODY_LINES", Self.a2BodyLines),
             ("A5_WINDOW", Self.a5Window), ("A5_DERIVATION_LINES", Self.a5DerivationLines),
             ("A5_DERIVATION_PASSES", Self.a5DerivationPasses), ("A6_WINDOW", Self.a6Window),
-            ("A7_LOOKBACK", Self.a7Lookback), ("ADD_TRAITS_SCAN_LIMIT", Self.addTraitsScanLimit),
+            ("A7_LOOKBACK", Self.a7Lookback), ("A8_WINDOW", Self.a8Window),
+            ("ADD_TRAITS_SCAN_LIMIT", Self.addTraitsScanLimit),
             ("WRAPPER_UNWRAPS", Self.wrapperUnwraps)
         ]
         for (name, value) in bounds {
@@ -1410,6 +1461,46 @@ extension AccessibilityBoundaryTests {
         let sameLine = #"Button("Go") { act() }.accessibilityElement(children: .ignore)"#
         #expect(Self.ignoreOnButtonFindings("F.swift", Self.sourceLines(sameLine)).count == 1,
                 "the whole chain on one line is the same defect")
+    }
+
+    /// A8 fires on every spelling of a thinned `slate` and on nothing else.
+    ///
+    /// Six spellings, because each is one a reviewer would try first: the shipping form, the
+    /// leading-dot shorthand, spaces around the dot, `Color.slate` wrapped before its `.opacity(…)`,
+    /// the hierarchical `.secondary` style (which is slate at a lower alpha by another name), and
+    /// UIKit's `withAlphaComponent` on the palette's secondary ink. The negatives matter as much:
+    /// full-strength slate is the FIX, and the alpha hairlines in `bark` are a different rule's job.
+    @Test func mutedSlateRuleCatchesEverySpellingOfThinnedSlate() {
+        let planted = [
+            "Text(\"a\").foregroundStyle(Color.slate.opacity(0.5))",
+            "Text(\"a\").foregroundStyle(.slate.opacity(0.5))",
+            "Text(\"a\").foregroundStyle(Color.slate . opacity (0.5))",
+            "Text(\"a\").foregroundStyle(Color.slate.secondary)",
+            "let ink = palette.secondaryText.withAlphaComponent(0.6)",
+        ]
+        for line in planted {
+            #expect(Self.mutedSlateFindings("F.swift", Self.sourceLines(line)).count == 1,
+                    "slate under alpha 1 is under the 4.5:1 text floor: \(line)")
+        }
+        let wrapped = """
+        Text("a")
+            .foregroundStyle(Color.slate
+                .opacity(0.5))
+        """
+        let wrappedFindings = Self.mutedSlateFindings("F.swift", Self.sourceLines(wrapped))
+        #expect(wrappedFindings.map(\.line) == [2],
+                "a wrapped expression is one site, reported once, on the line where slate is named")
+
+        let clean = """
+        Text("a").foregroundStyle(Color.slate)
+        // Color.slate.opacity(0.5) in a comment is prose
+        let help = "Color.slate.opacity(0.5) inside a sentence is copy"
+        RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.08), lineWidth: 1)
+        let ink = palette.secondaryText
+        let other = Color.slateGrey.opacity(0.4)
+        """
+        #expect(Self.mutedSlateFindings("F.swift", Self.sourceLines(clean)).isEmpty,
+                "full-strength slate is the fix, and a bark hairline or a comment is not this rule")
     }
 
     /// The tokenizer, which every rule above depends on: a forbidden shape written inside a

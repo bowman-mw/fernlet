@@ -521,7 +521,9 @@ struct CycleTrackerView: View {
                                 .foregroundStyle(Color.onMoss)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
-                                .background(Color.moss, in: Capsule())
+                                // `mossFill`, the filled-button half of the `onMoss` pair: white on
+                                // plain `moss` measured 4.30:1, on `mossFill` 5.37:1.
+                                .background(Color.mossFill, in: Capsule())
                         }
                         .buttonStyle(.plain)
                         Button {

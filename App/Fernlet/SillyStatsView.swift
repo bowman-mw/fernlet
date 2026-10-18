@@ -238,8 +238,8 @@ struct SillyStatsHomeCard: View {
                             .foregroundStyle(Color.bark)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.slate.opacity(0.65))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.slate)
                             .accessibilityHidden(true)
                     }
                     if let text {

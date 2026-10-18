@@ -113,8 +113,8 @@ struct OnboardingLockSetupView: View {
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Color.slate.opacity(0.6))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.slate)
             }
             .padding(16)
             .background(Color.cream, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

@@ -915,7 +915,7 @@ struct JournalCalendarCell: View {
                             )
                         if cell.hasData && cell.tag == nil {
                             Circle()
-                                .fill(Color.slate.opacity(0.45))
+                                .fill(Color.slate)
                                 .frame(width: 3, height: 3)
                         } else {
                             Color.clear.frame(width: 3, height: 3)
@@ -1485,13 +1485,15 @@ struct DayDetailView: View {
                 HStack {
                     SectionLabel("Water")
                     Spacer()
-                    Image(systemName: "drop.fill")
+                    // Filled when logged, outlined when not: the shape carries the state at full
+                    // strength instead of a 30% ink at 1.48:1.
+                    Image(systemName: day.bottleCount > 0 ? "drop.fill" : "drop")
                         .font(.caption)
-                        .foregroundStyle(day.bottleCount > 0 ? Color.slate : Color.slate.opacity(0.3))
+                        .foregroundStyle(Color.slate)
                 }
                 Text(day.bottleCount == 0 ? "None logged" : "\(day.bottleCount) \(day.bottleCount == 1 ? "bottle" : "bottles")")
                     .font(.fernlet(.stat))
-                    .foregroundStyle(day.bottleCount == 0 ? Color.slate.opacity(0.45) : Color.bark)
+                    .foregroundStyle(day.bottleCount == 0 ? Color.slate : Color.bark)
                 if day.bottleCount > 0 {
                     Text("\(day.bottleCount * store.settings.bottleOz) oz total")
                         .font(.fernlet(.stat))
@@ -1507,9 +1509,9 @@ struct DayDetailView: View {
                 HStack {
                     SectionLabel("Rest")
                     Spacer()
-                    Image(systemName: "moon.fill")
+                    Image(systemName: day.sleep != nil ? "moon.fill" : "moon")
                         .font(.caption)
-                        .foregroundStyle(day.sleep != nil ? Color.slate : Color.slate.opacity(0.3))
+                        .foregroundStyle(Color.slate)
                 }
                 if let sleep = day.sleep {
                     Text(sleep.quality.label)
@@ -1524,7 +1526,8 @@ struct DayDetailView: View {
                 } else {
                     Text("Not logged")
                         .font(.fernlet(.body))
-                        .foregroundStyle(Color.slate.opacity(0.45))
+                        .italic()
+                        .foregroundStyle(Color.slate)
                 }
             }
         }
@@ -1572,7 +1575,7 @@ struct DayDetailView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .foregroundStyle(store.isPersonalCareTaskCompleted(task, in: day) ? Color.moss : Color.slate.opacity(0.5))
+                            .foregroundStyle(store.isPersonalCareTaskCompleted(task, in: day) ? Color.moss : Color.slate)
                             .background(
                                 store.isPersonalCareTaskCompleted(task, in: day) ? Color.moss.opacity(0.12) : Color.bark.opacity(0.04),
                                 in: RoundedRectangle(cornerRadius: 10)

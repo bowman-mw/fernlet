@@ -182,8 +182,8 @@ struct WardrobeView: View {
             Spacer(minLength: 8)
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.bark.opacity(0.35))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.slate)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -241,8 +241,8 @@ struct WardrobeView: View {
                 }
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.bark.opacity(0.35))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.slate)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)

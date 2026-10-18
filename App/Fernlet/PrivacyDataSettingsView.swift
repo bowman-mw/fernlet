@@ -576,8 +576,8 @@ struct PrivacyDataSettingsView: View {
                     .font(.fernlet(.stat))
                     .foregroundStyle(Color.slate)
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.slate.opacity(0.5))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(Color.slate)
             }
             .frame(minHeight: 44)
             .padding(14)

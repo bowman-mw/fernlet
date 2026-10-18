@@ -107,7 +107,7 @@ struct OnboardingIntimacyChoiceScreen: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.moss : Color.slate.opacity(0.45))
+                    .foregroundStyle(isSelected ? Color.moss : Color.slate)
                     .frame(width: 28, height: 28)
                     // The selected trait below says the same thing, in words.
                     .accessibilityHidden(true)

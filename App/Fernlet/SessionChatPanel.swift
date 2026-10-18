@@ -108,8 +108,8 @@ struct SessionChatPanel: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 34, weight: .regular))
-                .foregroundStyle(Color.slate.opacity(0.5))
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(Color.slate)
             Text("Say hello")
                 .font(.fernlet(.header))
                 .foregroundStyle(Color.bark)

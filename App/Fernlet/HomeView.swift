@@ -253,8 +253,8 @@ struct HomeView: View {
                             .overlay(Capsule().strokeBorder(Color.goldenrod.opacity(0.4), lineWidth: 1))
                         }
                         Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color.slate.opacity(0.65))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.slate)
                     }
                     if !kept.isEmpty {
                         HStack(spacing: 10) {
@@ -707,8 +707,8 @@ struct HomeView: View {
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.moss.opacity(0.7))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.moss)
                 }
                 .contentShape(Rectangle())
             }
@@ -1177,10 +1177,12 @@ struct HomeView: View {
                     Text("I'm unwell today")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
+                    // Bark, not slate: on the row's dusty-rose wash slate measured 4.22:1 (4.36:1
+                    // dark) once the day is flagged. The italic serif keeps it the quieter line.
                     Text("Scoring goes gentle until tomorrow")
                         .font(.fernlet(.bodySmall))
                         .italic()
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(Color.bark)
                         .fernletWrappingText()
                 }
                 Spacer(minLength: 8)
@@ -1717,8 +1719,8 @@ private struct CompanionCustomizationSheet: View {
                     .foregroundStyle(Color.slate)
             }
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.bark.opacity(0.4))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.slate)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
@@ -1907,8 +1909,8 @@ private struct CompanionCustomizationSheet: View {
                 .lineLimit(1)
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.bark.opacity(0.4))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.slate)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1926,8 +1928,8 @@ private struct CompanionCustomizationSheet: View {
     /// A slot swatch built from an SF Symbol, tinted to read as a quiet placeholder.
     private func slotIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 15))
-            .foregroundStyle(Color.slate.opacity(0.7))
+            .font(.system(size: 15, weight: .light))
+            .foregroundStyle(Color.slate)
     }
 
     /// A full-screen picker for one slot: a live companion preview, the built-in item grid + recolor
@@ -2665,8 +2667,8 @@ struct HomeActionWidget: View {
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate.opacity(0.65))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.slate)
                 }
             }
         }

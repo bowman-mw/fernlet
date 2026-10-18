@@ -118,9 +118,11 @@ struct WaterSheet: View {
     private var bottleRow: some View {
         HStack(spacing: 8) {
             ForEach(0..<glyphCount, id: \.self) { index in
-                Image(systemName: "waterbottle")
+                // Filled for each bottle in the draft, outlined for the rest: the count is carried by
+                // shape at full strength, not by a 25% ink at 1.38:1.
+                Image(systemName: index < draft ? "waterbottle.fill" : "waterbottle")
                     .font(.title2)
-                    .foregroundStyle(index < draft ? Color.slate : Color.slate.opacity(0.25))
+                    .foregroundStyle(Color.slate)
                 if index == target - 1 && target < glyphCount {
                     Capsule()
                         .fill(Color.goldenrod)

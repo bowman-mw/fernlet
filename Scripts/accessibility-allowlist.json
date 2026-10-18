@@ -58,5 +58,113 @@
   "path": "FernletKit/Sources/FernletUI/FernletUIComponents.swift",
   "line_contains": "KeyboardDoneGlyph.image()",
   "reason": "NOT a photograph or a rendered bitmap, which are what A6 protects. `KeyboardDoneGlyph.image()` is an `.alwaysTemplate` copy of the SF Symbol `checkmark.circle.fill`: a template image has no colours of its own and is drawn entirely in the button's tint (moss), so it is interface ink, the same thing as the `Image(systemName:)` glyphs this rule never matches (the Swift port's fixture says why: 'Smart Invert is supposed to invert UI chrome'). It passes through `Image(uiImage:)` for one reason, commented at the site: the keyboard bar draws the button as a native image item and names it after its image alone, so the UIImage has to carry the localized 'Done' label — an `Image(systemName:)` there was read as 'selected'. `.accessibilityIgnoresInvertColors()` would be the defect here rather than the fix: its whole effect is to hold a view at its un-inverted colours, which here means a moss checkmark on a bar that has inverted under it, a glyph that no longer follows the interface it belongs to. Measured 2026-10-01 (iPhone 17 simulator, iOS 26.5, Smart Invert on, screens captured by XCUITest): a progress photo that carries the opt-out is captured as its colour negative — the counter-inversion that lets the display's inversion restore it — while this glyph, its bar and the keyboard are captured untouched, pixel for pixel the same as with Smart Invert off, so they invert together. The invariant is the template rendering mode inside `KeyboardDoneGlyph.image()`, and its doc comment says so: if that image ever carries colours of its own, delete this entry and decide the site against A6 again. `line_contains` names the glyph, so the entry cannot drift onto `PolaroidTile`'s photograph earlier in the same file, which carries its opt-out."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/CoachPlanPasteSheet.swift",
+  "line_contains": "text.isEmpty ? Color.slate.opacity(0.4)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(text.isEmpty)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (a solid `moss` fill under `parchment` ink). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/CoachPlanReviewView.swift",
+  "line_contains": "review.isImportable ? Color.moss : Color.slate.opacity(0.4)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!review.isImportable)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (a solid `moss` fill under `parchment` ink). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/CreationStudioView.swift",
+  "line_contains": "undoStack.isEmpty ? Color.slate.opacity(0.4)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(undoStack.isEmpty)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`fern`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/GroundingView.swift",
+  "line_contains": "stepIndex == 0 ? Color.slate.opacity(0.35)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(stepIndex == 0)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (full-strength `slate`, 4.78:1 on parchment). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/GuidedWorkoutEditorSheet.swift",
+  "line_contains": "canMoveUp ? Color.moss : Color.slate.opacity(0.3)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!canMoveUp)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/GuidedWorkoutEditorSheet.swift",
+  "line_contains": "canMoveDown ? Color.moss : Color.slate.opacity(0.3)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!canMoveDown)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/MonthCalendarCard.swift",
+  "line_contains": "isCurrentMonth ? Color.slate.opacity(0.25)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(isCurrentMonth)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (full-strength `slate`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/MoveView.swift",
+  "line_contains": "selectedExercise == nil ? Color.slate.opacity(0.45)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(selectedExercise == nil)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/RecipePartsEditor.swift",
+  "line_contains": "enabled ? tint : Color.slate.opacity(0.3)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!enabled)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (the caller's `tint`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/RecipePartsEditor.swift",
+  "line_contains": "enabled ? Color.moss : Color.slate.opacity(0.3)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!enabled)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`moss`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/SessionChatPanel.swift",
+  "line_contains": "canSend ? Color.terracotta : Color.slate.opacity(0.4)",
+  "reason": "DISABLED-STATE ink on an inactive control, which WCAG 1.4.3 and 1.4.11 both exempt: the dim branch of this ternary is taken exactly when the control's own `.disabled(!canSend)` is true, so VoiceOver announces it as dimmed and it cannot be activated. The ENABLED branch is the readable one (`terracotta`). If the `.disabled` predicate and this ternary ever stop being the same condition, this entry is wrong — delete it and decide the site again."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/AmbientCards.swift",
+  "line_contains": ".background(Color.slate.opacity(0.10), in: Circle())",
+  "reason": "A BACKDROP, not ink: a slate@0.10 circle behind a full-strength `Color.slate` ✕ glyph that is the control's only visible content and is named by its `.fernletIconButton` label (\"Not today\", \"Dismiss nutrient nudge\"); both dismiss buttons in this file share the line. The glyph measures 4.22:1 against the composited circle in the worst case (default light, card on parchment), 4.52:1 on cream, ≥4.96:1 in dark and ≥5.96:1 under Increase Contrast — all above the 3:1 non-text floor. The circle itself measures ~1.14:1 against its card and carries no information."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/HomeView.swift",
+  "line_contains": ".background(Color.slate.opacity(0.10), in: Circle())",
+  "reason": "A BACKDROP, not ink: a slate@0.10 circle behind a full-strength `Color.slate` ✕ glyph that is the control's only visible content and is named by its `.fernletIconButton(\"Dismiss today's intent\")`. The glyph measures 4.22:1 against the composited circle in the worst case (default light, card on parchment), 4.52:1 on cream, ≥4.96:1 in dark and ≥5.96:1 under Increase Contrast — all above the 3:1 non-text floor. The circle itself measures ~1.14:1 against its card and carries no information."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/JournalView.swift",
+  "line_contains": ".background(Color.slate.opacity(0.10), in: Circle())",
+  "reason": "A BACKDROP, not ink: a slate@0.10 circle behind a full-strength `Color.slate` ✕ glyph that is the control's only visible content and is named by its `.accessibilityLabel(\"Dismiss the prompt\")`. The glyph measures 4.22:1 against the composited circle in the worst case (default light, card on parchment), 4.52:1 on cream, ≥4.96:1 in dark and ≥5.96:1 under Increase Contrast — all above the 3:1 non-text floor. The circle itself measures ~1.14:1 against its card and carries no information."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/CycleTrackerView.swift",
+  "line_contains": ".background(Color.slate.opacity(0.10), in: Capsule())",
+  "reason": "A BACKDROP under full-strength TEXT, kept because the text clears the 4.5:1 floor on the surface this chip actually sits on: the \"Not now\" capsule inside the period-aware-care primer's `FernletCard`. Full `Color.slate` on slate@0.10 composited over cream measures 4.52:1 in default light, 4.96:1 in dark and 6.38:1 under Increase Contrast. Over PARCHMENT the same chip would be 4.22:1 and fail, which is why `MoveView`'s rework chip, which sits on parchment, was moved to a cream fill instead. If this chip ever leaves its card, delete this entry and re-measure."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": ".background(Color.slate.opacity(0.10), in: Capsule())",
+  "reason": "A BACKDROP under full-strength TEXT, kept because the text clears the 4.5:1 floor on the surface this chip actually sits on: the provenance tag inside `MealRow`, which is drawn in the meal-type section card. Full `Color.slate` on slate@0.10 composited over cream measures 4.52:1 in default light, 4.96:1 in dark and 6.38:1 under Increase Contrast. Over PARCHMENT the same chip would be 4.22:1 and fail, which is why `MoveView`'s rework chip, which sits on parchment, was moved to a cream fill instead. If this chip ever leaves its card, delete this entry and re-measure."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/HomeView.swift",
+  "line_contains": ".slate.opacity(0.32)",
+  "reason": "A PLACEHOLDER FILL, not ink: one of the four tinted swatches (fern, goldenrod, slate, dusty rose, each at 32–45%) that stand in for a photo that has not been taken or cannot be shown. No text or glyph is drawn on it — the caption sits below on the polaroid's cream frame in full-strength slate. The fill measures ~1.52:1 against its surface and conveys nothing a sighted user needs, so neither contrast floor applies (WCAG 1.4.11 exempts pure decoration). Covers the three palette lines in this file (the photowall fallback, the photowall palette and the recent-bites placeholders), which are the same four-swatch set."
+ },
+ {
+  "rule": "A8-MUTED-SLATE",
+  "path": "App/Fernlet/PrivacyPolicyView.swift",
+  "line_contains": "Divider().background(Color.slate.opacity(0.4))",
+  "reason": "A DIVIDER between sections of the privacy policy, measuring ~1.70:1 against the page. It is decoration, not information: every section it separates opens with its own heading (and VoiceOver never reaches a Divider), so WCAG 1.4.11 does not ask it to contrast. Raising it to 3:1 would make the policy's rules darker than its body text's quietest ink without telling anyone anything."
  }
 ]

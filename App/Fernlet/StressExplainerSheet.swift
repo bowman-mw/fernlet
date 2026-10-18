@@ -116,8 +116,8 @@ struct StressExplainerSheet: View {
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.slate.opacity(0.6))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.slate)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
