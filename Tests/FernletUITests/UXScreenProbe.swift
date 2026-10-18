@@ -1186,15 +1186,17 @@ extension UXScreenProbe {
     /// dated note saying which run produced it and what moved. Every other entry is still the
     /// 2026-08-23/08-27 record.
     ///
-    /// THE 2026-10-18 LARGER TEXT BURN-DOWN took this map from 167 identities on 37 screens to 62
-    /// on 24 (three of them the new `AX5 · ` screens), in the same commits as the fixes. Walled lines
+    /// THE 2026-10-18 LARGER TEXT BURN-DOWN took this map from 167 identities on 37 screens to 60
+    /// on 23 (three of them the new `AX5 · ` screens), in the same commits as the fixes. Walled lines
     /// left only after a run on the pinned simulator reported them gone. Four sets of
     /// UNDER-REPORTING lines, which no run can force out, were deleted on measurement instead:
     /// `Private · Cycle (both halves)`'s 23 and `Home tab`'s 9 non-tile Dynamic Type lines never
     /// reproduced in four full audits on four builds and four Dynamic-Type-only passes; `Home tab`'s
     /// six tile nouns and `Private · Journal`'s five weekday letters reproduced on 3 of 3 passes
-    /// before their grids stopped being lazy (`EqualColumnGrid`) and on none after. If one of them
-    /// comes back it fails as an appearance, which is the honest direction.
+    /// before their grids stopped being lazy (`EqualColumnGrid`) and on none after; its two tile
+    /// counts reproduced on every run until they scaled with `.caption` instead of `.caption2`, and
+    /// on none after, which took `Home tab` out of the map. If one of them comes back it fails as an
+    /// appearance, which is the honest direction.
     ///
     /// Every entry here was copied from the "not in baseline" listing of a run on the pinned
     /// simulator and confirmed on a second, independent run. The high-signal findings the original
@@ -1290,18 +1292,6 @@ extension UXScreenProbe {
         // cards return to this viewport, the six come back as unconditional appearances.
         "Home · Recent bites": [
             "Potentially inaccessible text",
-        ],
-        // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
-        // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
-        // it is worth knowing which: `HomeView.swift:1361` renders "1 entry" (singular) below two
-        // entries, and `normalisedLabel` maps that to “# entry” — a DIFFERENT identity from
-        // “# entries”. So a seed that logs one entry rather than two would retire this line without
-        // anything being fixed. Either way the finding does not reproduce and the line has to go;
-        // flagged here because the singular/plural fork is a live time bomb for any future
-        // count-bearing identity. Re-verified deterministic across two independent runs.
-        "Home tab": [
-            "Dynamic Type font sizes are partially unsupported — “# bottles” (48)",
-            "Dynamic Type font sizes are partially unsupported — “# logged” (48)",
         ],
         // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
         // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
