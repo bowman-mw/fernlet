@@ -584,6 +584,8 @@ struct ResumeWorkoutCard: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(Color.moss)
                         .frame(width: 30)
+                        // Decorative, as on `StartTodaysWorkoutCard`: the header names the card.
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Workout in progress")
                             .font(.fernlet(.headerMedium))
@@ -673,6 +675,9 @@ struct StartTodaysWorkoutCard: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(accentColor)
                         .frame(width: 30)
+                        // Decorative: the header beside it names the card. Left visible, the
+                        // audit heard the symbol's name read aloud ("Label not human-readable").
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Today's workout")
                             .font(.fernlet(.headerMedium))

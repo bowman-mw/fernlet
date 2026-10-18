@@ -1392,7 +1392,6 @@ extension UXScreenProbe {
         // is a genuine clipped-text finding and joins the Larger Text backlog the rest of this map
         // freezes rather than a defect this round introduced.
         "Move tab": [
-            "Label not human-readable — “figure.strengthtraining.traditional” id=figure.strengthtraining.traditional (43)",
             "Text clipped — “Friends” (9)",
             "Text clipped — “Full gym · # items” (48)",
             "Text clipped — “Home” (9)",
