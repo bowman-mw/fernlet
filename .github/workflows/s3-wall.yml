@@ -1561,7 +1561,8 @@ jobs:
         # only when somebody ran it by name, so a move could break one and still land green. GATED
         # 2026-10-04, at A0.5.0, before anything moves, so every commit of the split runs them. The 47
         # less five: HeartShareTests (a de-flake follow-up, named as one in the mesh step's comment
-        # below); the three MemoryLifecycleTests.swift suites
+        # below; de-flaked and gated here since 2026-10-17, see the last note); the three
+        # MemoryLifecycleTests.swift suites
         # MeshP9HonestyAcceptanceTests.ungatedByDesign names (ProximityManagerDeallocationTests,
         # PresenceReleaseTests, PhotoWallPreferencePruneTests: timed weak-reference polls, which that
         # wall reds if any line gates them); and ProximityRunSeamsTests, which names no moving code.
@@ -1640,9 +1641,25 @@ jobs:
         # 550: passed, and shown red once at 551. 536 + 8 (SessionMessageFilterTests) + 6
         # (SessionContentReportTests) = 550 is the ARITHMETIC CHECK, never the source;
         # RoutedShareRefusalCopyTests and SessionMessageTests gained expectations, not cells.
+        # Tracker §2.4 (2026-10-17): HeartShareTests, the de-flake follow-up the A0.5.0 note above left
+        # off, JOINS the line, so the NAME count is 51 in CIGateSelectorBoundaryTests in this same commit.
+        # Its sleeps had gone, but its handshake helper waited for `.awaitingTapConfirmation`, a state a
+        # connected trainer passes inside the one hop that also sends its introduction, so the wait
+        # never saw it and ran to its 400-poll floor in every handshake cell: 17-22 s per cell beside
+        # this line and 30 s beside mesh-batteries, MEASURED. It waits for
+        # `.awaitingIdentityIntroduction` now, the state that hop settles on, as
+        # ProximityCoordinatorTests' handshake helper does.
+        # RAISED 550 -> 576, MEASURED on a Mac, 2026-10-17 (a private iPhone 17 simulator, iOS 26.5):
+        # this exact 51-name list run at floor 1 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 576
+        # (541 Swift Testing cells in 48 suites, "passed after 20.944 seconds", and the 35 XCTest cases
+        # of ActivityTests, ModerationTests and FriendStateTests), 0 failed, 0 skipped, no `Restarting
+        # after unexpected exit` line, the suite census silent. Re-run AT 576: passed, and shown red once
+        # at 577. 550 + 26 (HeartShareTests) = 576 is the ARITHMETIC CHECK, never the source. The
+        # slowest handshake cell of HeartShareTests over the ten runs noted on mesh-batteries: 2.5 s.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-features 550 \
+          Scripts/run-gated-suites.sh mesh-features 576 \
             ActivityTests \
             AgeGateWiringTests \
             ClothingShareCodecTests \
@@ -1692,7 +1709,8 @@ jobs:
             SessionPhotoReviewDoor3Tests \
             SessionPhotoReviewOverlayTests \
             SessionMessageFilterTests \
-            SessionContentReportTests
+            SessionContentReportTests \
+            HeartShareTests
 
       - name: Mesh acceptance batteries (P3 – P9) + the routed suites + the CI selector wall
         # The three phases' acceptance batteries (Docs/Plan-ProximityKit-Network-Migration-2026-08-27.md
@@ -2180,10 +2198,12 @@ jobs:
         # leaves the main actor (spawn, sign, and the fake channel's send), so the spawned task runs
         # before the cell resumes. NOT gated, deliberately — named here as de-flake follow-ups, since
         # each still waits on wall-clock sleeps a floor cannot price: SealedIntroductionTests,
-        # HeartShareTests, ProximityCoordinatorTests. Gating the five goldens does not gate their
-        # FILES: twelve sibling suites (75 cells) stay off the line — the Shape / Signing / Verifier
-        # suites of MeshChunkTests.swift, MeshCustodyReceiptTests.swift, MeshRecipientReceiptTests.swift,
-        # MeshRoutedDrainAnswerTests.swift and MeshRoutedInventoryTests.swift.
+        # HeartShareTests, ProximityCoordinatorTests (de-flaked and gated since 2026-10-17: the first
+        # and the last here, see the last note; HeartShareTests on mesh-features). Gating the five
+        # goldens does not gate their FILES: twelve sibling suites (75 cells) stay off the line — the
+        # Shape / Signing / Verifier suites of MeshChunkTests.swift, MeshCustodyReceiptTests.swift,
+        # MeshRecipientReceiptTests.swift, MeshRoutedDrainAnswerTests.swift and
+        # MeshRoutedInventoryTests.swift.
         # The NAME count moves 141 -> 154 in CIGateSelectorBoundaryTests' `measuredSuiteNameCounts` in
         # this same commit. The FLOOR stayed 1226 in that commit — still a true lower bound, since
         # names only joined — until it was measured:
@@ -2382,9 +2402,35 @@ jobs:
         # RecipeShareOverQUICTests' two inbound-gate cells are reworded in the same branch, unchanged in
         # behaviour: 0.1.1's seam books a connection whose hello has been read, the one stage its
         # connecting window counts. HELD at 1310.
+        # Tracker §2.4 (2026-10-17): two of the three de-flake follow-ups the CI-breadth note above
+        # left off JOIN this line, so the NAME count moves 152 -> 154 in CIGateSelectorBoundaryTests'
+        # `measuredSuiteNameCounts` in this same commit. SealedIntroductionTests (8: the sealed
+        # introduction's leak, forger and sender-binding cells and a real two-sided handshake) and
+        # ProximityCoordinatorTests (43: the coordinator's handshake, gates, ranging, heartbeats and
+        # Option 1b's name rule) are tier 1 over MockMultipeerTransport, with no radio. Their fixed
+        # sleeps (10-60 ms after an event, and twenty 15 ms pump rounds per handshake stage) were a guess
+        # at when a coordinator's fire-and-forget main-actor hop had run. Each cell now waits for the
+        # state or the inspector record the hop lands on (`waitUntil`, deadline + poll floor), and the
+        # pump runs until its stage holds. A cell that asserts an absence first waits for, and expects,
+        # the record its handler makes for that input: a heartbeat dropped at the sealed gate or at the
+        # evidence check, a connected report, a ranging sample. Before, a loaded run could check before
+        # the hop ran and pass vacuously. The two cells whose verdict reads the coordinator's 3 s
+        # evidence window hold its clock still. HeartShareTests, the third, joins mesh-features.
+        # RAISED 1310 -> 1361, MEASURED on a Mac, 2026-10-17 (a private iPhone 17 simulator, iOS
+        # 26.5): this exact 154-name list run at floor 1 through Fernlet.xcworkspace after the strict
+        # build-for-testing (WALL CHECK PASSED), read off its own result bundle: totalTestCount 1361, all
+        # FernletTests ("Test run with 1361 tests in 154 suites passed after 182.851 seconds";
+        # SealedIntroductionTests 8, ProximityCoordinatorTests 43), 0 failed, 0 skipped, no
+        # `Restarting after unexpected exit` line, the suite census silent. Re-run AT 1361: passed, and
+        # shown red once at 1362. The two then ran ten times beside the mesh-features
+        # line (627 tests a run), green every time. Their cells were shown to need the change: with the
+        # mock radio holding every send 50 ms (an experiment, not committed), as slow as a hop under
+        # load, the three suites passed 77 of 77 in three runs out of three, where the cells before this
+        # commit failed 17, two of them by trapping on an empty `sentData` and taking the test process
+        # down. 1310 + 8 + 43 = 1361 is the ARITHMETIC CHECK, never the source.
         run: |
           set -euo pipefail
-          Scripts/run-gated-suites.sh mesh-batteries 1310 \
+          Scripts/run-gated-suites.sh mesh-batteries 1361 \
             CIGateSelectorBoundaryTests \
             MeshRoutedRefusalBudgetTests \
             MeshPairwiseFoundingTests \
@@ -2536,4 +2582,6 @@ jobs:
             MeshRecipientReceiptGoldenTests \
             MeshRoutedDrainAnswerGoldenTests \
             MeshRoutedInventoryGoldenTests \
-            PeerHandleWireGoldenTests
+            PeerHandleWireGoldenTests \
+            SealedIntroductionTests \
+            ProximityCoordinatorTests

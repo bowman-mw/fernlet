@@ -182,7 +182,7 @@ HealthKitWriteGateTests	Tests/FernletTests/HealthKitWriteGateTests.swift	-
 HeartDropAppWiringTests	Tests/FernletTests/HeartDropAppWiringTests.swift	mesh-features
 HeartDropSidecarFormatCensusTests	Tests/FernletTests/HeartDropSidecarFormatCensusTests.swift	-
 HeartDropTests	Tests/FernletTests/HeartDropTests.swift	mesh-features
-HeartShareTests	Tests/FernletTests/HeartShareTests.swift	-
+HeartShareTests	Tests/FernletTests/HeartShareTests.swift	mesh-features
 HouseholdPortionConversionTests	Tests/FernletTests/HouseholdPortionConversionTests.swift	-
 IdentityProvisioningReadTests	Tests/FernletTests/IdentityProvisioningReadTests.swift	key-custody
 IdentityServiceEscrowTests	Tests/FernletTests/IdentityServiceEscrowTests.swift	-
@@ -501,7 +501,7 @@ ProgressPhotoLockNudgeTests	Tests/FernletTests/ProgressPhotoLockNudgeTests.swift
 ProgressPhotoStoreTests	Tests/FernletTests/ProgressPhotoStoreTests.swift	-
 ProtectedSidecarTests	Tests/FernletTests/ProtectedSidecarTests.swift	-
 ProximityAuditBridgeTests	Tests/FernletTests/ProximityAuditBridgeTests.swift	s3-grep
-ProximityCoordinatorTests	Tests/FernletTests/ProximityCoordinatorTests.swift	-
+ProximityCoordinatorTests	Tests/FernletTests/ProximityCoordinatorTests.swift	mesh-batteries
 ProximityIdentityEnvelopeTests	Tests/FernletTests/ProximityIdentityEnvelopeTests.swift	-
 ProximityManagerDeallocationTests	Tests/FernletTests/MemoryLifecycleTests.swift	-
 ProximityNamespaceGateTests	Tests/FernletTests/ProximityNamespaceGateTests.swift	crypto-goldens
@@ -562,7 +562,7 @@ SealedBackupRollbackTests	Tests/FernletTests/SealedBackupRollbackTests.swift	-
 SealedBackupTests	Tests/FernletTests/SealedBackupTests.swift	-
 SealedBackupV2EngineTests	Tests/FernletTests/SealedBackupV2EngineTests.swift	-
 SealedColumnFormatCensusTests	Tests/FernletTests/SealedColumnFormatCensusTests.swift	-
-SealedIntroductionTests	Tests/FernletTests/SealedIntroductionTests.swift	-
+SealedIntroductionTests	Tests/FernletTests/SealedIntroductionTests.swift	mesh-batteries
 SealedPayloadFramingTests	Tests/FernletTests/SealedPayloadFramingTests.swift	mesh-features
 SealedPhotoBackupTests	Tests/FernletTests/SealedPhotoBackupTests.swift	-
 SealedStoreConfigTests	Tests/FernletTests/SealedStoreConfigTests.swift	-

@@ -120,6 +120,50 @@ struct ProximityCoordinatorTests {
         }
     }
 
+    // MARK: - Settled states
+    //
+    // Every cell here drives the coordinator through its transport's and its ranging provider's
+    // Combine sinks, and each sink hands the event to a fire-and-forget `Task` on the main actor. The
+    // fixed 10–30 ms sleeps this suite used to take after each event were a guess at when that hop had
+    // run, and full-suite load beat the guess. A cell waits through `waitUntil` for the state, or the
+    // inspector record, that the hop lands on instead: it moves on the moment the hop has run, however
+    // late, and gives up only at the poll floor, so the expectation after it fails loudly. A cell that
+    // asserts that something did NOT happen waits for the record its handler makes for the input
+    // (``ProximityInspectorTrace``), so what it checks is never a hop that has not run yet.
+
+    /// The trainer handshake's first settled state: a connected trainer auto-advances past the tap
+    /// gate and sends its introduction in the same hop (`nonUWBTrainerAutoAdvancesPastTheTapGate`).
+    private func isAwaitingIdentityIntroduction(_ coordinator: ProximityCoordinator) -> Bool {
+        if case .awaitingIdentityIntroduction = coordinator.state { return true }
+        return false
+    }
+
+    /// Where a trainer lands once the peer's introduction verified and the acknowledgement went out.
+    private func isAwaitingUserConfirmation(_ coordinator: ProximityCoordinator) -> Bool {
+        if case .awaitingUserConfirmation = coordinator.state { return true }
+        return false
+    }
+
+    /// Where a friend-mode coordinator lands once the peer's introduction verified: the proximity gate
+    /// with a UWB token, the manual gate without one.
+    private func isAtFriendGate(_ coordinator: ProximityCoordinator) -> Bool {
+        switch coordinator.state {
+        case .awaitingProximityCommit, .awaitingManualCommit: return true
+        default: return false
+        }
+    }
+
+    private func hasFailed(_ coordinator: ProximityCoordinator) -> Bool {
+        if case .failed = coordinator.state { return true }
+        return false
+    }
+
+    /// Where a trainer advertiser holds an inbound invitation for the user's answer.
+    private func isHoldingAnInvite(_ coordinator: ProximityCoordinator) -> Bool {
+        if case .pendingInvite = coordinator.state { return true }
+        return false
+    }
+
     @Test func beginAsBrowserStartsBrowsing() async throws {
         let (identity, serviceID) = try makeIdentity()
         defer { cleanup(serviceID) }
@@ -156,7 +200,12 @@ struct ProximityCoordinatorTests {
 
         let peer = makePeer(name: "Coach")
         transport.simulateDiscovery(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // A browser invites what it discovers, and the invite's own hop seats the tap gate: either
+        // state says the discovery was handled.
+        await waitUntil {
+            coordinator.state == .peerInRange(peer: peer, distance: .unknown)
+                || coordinator.state == .awaitingTapConfirmation(peer: peer)
+        }
 
         switch coordinator.state {
         case .peerInRange(let discovered, .unknown):
@@ -172,17 +221,22 @@ struct ProximityCoordinatorTests {
         let (identity, serviceID) = try makeIdentity()
         defer { cleanup(serviceID) }
         let transport = MockMultipeerTransport()
-        let coordinator = makeCoordinator(identity: identity, transport: transport)
+        let trace = ProximityInspectorTrace()
+        let coordinator = makeCoordinator(identity: identity, transport: transport, inspector: trace)
         await coordinator.beginFriendJoin()
         let peer = makePeer(name: "Friend")
 
         transport.simulateInvite(from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // A friend accepts its invite and sends the introduction last, in the same hop.
+        await waitUntil { !transport.sentData.isEmpty }
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
         #expect(transport.sentData.count == 1)
 
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // The connected report must change nothing, so no state can say it was handled: wait for the
+        // transport state its handler records, after which it returns without suspending.
+        await waitUntil { trace.transportStates.contains("connected") }
+        #expect(trace.transportStates.contains("connected"), "the connected report was handled — the checks below are not vacuous")
 
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
         #expect(transport.sentData.count == 1)
@@ -199,7 +253,7 @@ struct ProximityCoordinatorTests {
 
         let peer = makePeer(name: "Client")
         transport.simulateInvite(from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isHoldingAnInvite(coordinator) }
         await coordinator.acceptPendingInvite()
 
         #expect(coordinator.state == .awaitingTapConfirmation(peer: peer))
@@ -214,7 +268,7 @@ struct ProximityCoordinatorTests {
         await coordinator.begin(role: .advertiser, mode: .trainer)
 
         transport.simulateInvite(from: makePeer(name: "Client"))
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isHoldingAnInvite(coordinator) }
         await coordinator.rejectPendingInvite()
 
         #expect(coordinator.state == .idle)
@@ -231,7 +285,7 @@ struct ProximityCoordinatorTests {
         let peer = makePeer(name: "Peer")
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnecting(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { coordinator.state == .awaitingTapConfirmation(peer: peer) }
         #expect(coordinator.state == .awaitingTapConfirmation(peer: peer))
 
         await coordinator.tapToConfirm()
@@ -255,7 +309,8 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // The introduction is the hop's last act.
+        await waitUntil { !transport.sentData.isEmpty }
 
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
         #expect(transport.sentData.count == 1, "the identity introduction went out without a tap")
@@ -275,12 +330,12 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnecting(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { coordinator.state == .awaitingTapConfirmation(peer: peer) }
         #expect(coordinator.state == .awaitingTapConfirmation(peer: peer),
                 "precondition: the gate is seated before the connected event")
 
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { !transport.sentData.isEmpty }
 
         #expect(coordinator.state == .awaitingIdentityIntroduction(peer: peer))
         #expect(transport.sentData.count == 1, "the already-waiting gate advanced on connect")
@@ -312,10 +367,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
 
         #expect(ranging.startCalled == true)
         #expect(ranging.lastPeerTokenData == Data([9, 8, 7]))
@@ -339,10 +394,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
 
         #expect(ranging.startCalled == false)
         #expect(inspector.liveLog?.ranging.mode == .rssi)
@@ -374,9 +429,9 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAtFriendGate(coordinator) }
 
         guard case .awaitingProximityCommit(let peerIdentity) = coordinator.state else {
             Issue.record("Expected proximity gate, got \(coordinator.state)")
@@ -384,7 +439,7 @@ struct ProximityCoordinatorTests {
         }
 
         ranging.simulateInvalidated(reason: "Nearby Interaction unavailable")
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { coordinator.state == .awaitingManualCommit(peer: peerIdentity) }
 
         #expect(coordinator.state == .awaitingManualCommit(peer: peerIdentity))
     }
@@ -402,10 +457,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
 
         guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
             Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
@@ -437,10 +492,12 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // Wait for the introduction's verdict, whichever it is, so the check below reads what the
+        // coordinator decided and never a hop that has not run yet.
+        await waitUntil { hasFailed(coordinator) || isAwaitingUserConfirmation(coordinator) }
 
         if case .awaitingUserConfirmation = coordinator.state {
             Issue.record("A legacy 8-char advertised fingerprint must no longer bind to a canonical identity introduction")
@@ -458,11 +515,12 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         ranging.simulateDistance(0.42)
         ranging.simulateDistance(0.36)
         ranging.simulateDistance(0.31)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        // The inspector keeps every third sample, so its one sample is the third hop's.
+        await waitUntil { inspector.liveLog?.ranging.samples.count == 1 }
 
         #expect(inspector.liveLog?.ranging.samples.count == 1)
         #expect(inspector.liveLog?.ranging.samples.first?.meters == 0.31)
@@ -495,10 +553,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(introData, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
         await coordinator.confirmPeerIdentity()
 
         await coordinator.heartbeatTick()
@@ -545,10 +603,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
 
         // Option 1b: before the commit the Inspector names the peer by its fingerprint — the same
         // line the Lane C pair run reads as `peer=<fingerprint>` before the dwell or the tap.
@@ -613,10 +671,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { hasFailed(coordinator) }
 
         guard case .failed(let reason) = coordinator.state else {
             Issue.record("Expected failed state, got \(coordinator.state)")
@@ -637,10 +695,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
         await coordinator.confirmPeerIdentity()
 
         guard case .connected(let peerIdentity) = coordinator.state else {
@@ -658,7 +716,7 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateDisconnection()
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { coordinator.state == .ended(reason: .transportLost) }
 
         #expect(coordinator.state == .ended(reason: .transportLost))
     }
@@ -711,10 +769,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(introduction, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
         await coordinator.confirmPeerIdentity()
         try await coordinator.send(payload)
 
@@ -837,12 +895,12 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
         transport.simulateInboundData(data, from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { hasFailed(coordinator) }
 
         guard case .failed(let reason) = coordinator.state else {
             Issue.record("Expected failed state, got \(coordinator.state)")
@@ -956,10 +1014,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
 
         guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
             Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
@@ -987,10 +1045,10 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .trainer)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         await coordinator.tapToConfirm()
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingUserConfirmation(coordinator) }
 
         guard case .awaitingUserConfirmation(let peerIdentity) = coordinator.state else {
             Issue.record("Expected awaiting user confirmation, got \(coordinator.state)")
@@ -1019,7 +1077,7 @@ struct ProximityCoordinatorTests {
         )
         await coordinator.beginFriendJoin()
         transport.simulateInvite(from: makePeer(name: "Friend"))
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { !transport.sentData.isEmpty }
 
         #expect(transport.sentData.count == 1)
         let sentEnvelope = try JSONDecoder().decode(ProximityIdentityEnvelope.self, from: transport.sentData[0].0)
@@ -1037,7 +1095,7 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .advertiser, mode: .trainer)
         transport.simulateInvite(from: makePeer(name: "Client"))
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { inspector.events.contains("state: pendingInvite") }
 
         #expect(inspector.events.contains("state: starting"))
         #expect(inspector.events.contains("state: discovering"))
@@ -1079,9 +1137,9 @@ struct ProximityCoordinatorTests {
         let peer = makePeer(name: "Remote", fingerprint: remote.localFingerprint)
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 20_000_000)
+        await waitUntil { isAtFriendGate(coordinator) }
 
         guard case .awaitingManualCommit(let identity) = coordinator.state else {
             Issue.record("Expected the proximity gate, got \(coordinator.state)")
@@ -1163,9 +1221,9 @@ struct ProximityCoordinatorTests {
 
         await coordinator.begin(role: .browser, mode: .friend)
         transport.simulateConnected(peer: peer)
-        try await Task.sleep(nanoseconds: 10_000_000)
+        await waitUntil { isAwaitingIdentityIntroduction(coordinator) }
         transport.simulateInboundData(try JSONEncoder().encode(envelope), from: peer)
-        try await Task.sleep(nanoseconds: 20_000_000)
+        await waitUntil { isAtFriendGate(coordinator) }
         return peer
     }
 
@@ -1182,7 +1240,8 @@ struct ProximityCoordinatorTests {
         let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
         let transport = MockMultipeerTransport()
         let ranging = MockRangingProvider(isHardwareSupported: false)
-        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+        let trace = ProximityInspectorTrace()
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging, inspector: trace)
 
         let peer = try await friendGate(coordinator: coordinator, transport: transport,
                                         remote: remote, uwbCapable: false)
@@ -1193,7 +1252,10 @@ struct ProximityCoordinatorTests {
         let sentAfterAck = transport.sentData.count
 
         transport.simulateInboundData(try signedHeartbeat(from: remote), from: peer)
-        try await Task.sleep(nanoseconds: 30_000_000)
+        // Nothing moves on this path, so wait for the line the heartbeat handler records; past it, an
+        // `ack` with no matching ping returns without suspending.
+        await waitUntil { trace.events.contains("heartbeat received") }
+        #expect(trace.events.contains("heartbeat received"), "the heartbeat was handled — the checks below are not vacuous")
 
         #expect(!isConnected(coordinator),
                 "A peer heartbeat must never commit the manual gate — that gate is the user's tap alone")
@@ -1212,7 +1274,13 @@ struct ProximityCoordinatorTests {
         let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
         let transport = MockMultipeerTransport()
         let ranging = MockRangingProvider()
-        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+        let trace = ProximityInspectorTrace()
+        // The coordinator's clock, held still. A heartbeat ratifies the commit only within 3 s of the
+        // local close sample on this clock, and on the wall clock a loaded run can put more than that
+        // between the sample's hop and the heartbeat's.
+        let frozen = Date(timeIntervalSince1970: 1_800_000_000)
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging,
+                                          inspector: trace) { frozen }
 
         let peer = try await friendGate(coordinator: coordinator, transport: transport,
                                         remote: remote, uwbCapable: true)
@@ -1223,13 +1291,17 @@ struct ProximityCoordinatorTests {
 
         // Without evidence: dropped.
         transport.simulateInboundData(try signedHeartbeat(from: remote), from: peer)
-        try await Task.sleep(nanoseconds: 30_000_000)
+        let dropped = "dropped peer-heartbeat commit: no local proximity evidence"
+        await waitUntil { trace.events.contains(dropped) }
+        #expect(trace.events.contains(dropped), "the heartbeat reached the evidence check — the next check is not vacuous")
         #expect(!isConnected(coordinator), "No local close sample yet — the heartbeat must be dropped")
 
         // One close sample is enough evidence, and is NOT enough for the dwell detector on its own
         // (3 samples / 0.8 s), so the commit below is genuinely the heartbeat's doing.
         ranging.simulateDistance(0.10)
-        try await Task.sleep(nanoseconds: 20_000_000)
+        // The sample is recorded first, and the rest of its handler does not suspend.
+        await waitUntil { trace.rangingSamples == 1 }
+        #expect(trace.rangingSamples == 1, "the sample was handled")
         #expect(!isConnected(coordinator), "precondition: one sample must not trip the dwell detector")
 
         transport.simulateInboundData(try signedHeartbeat(from: remote), from: peer)
@@ -1244,17 +1316,25 @@ struct ProximityCoordinatorTests {
         let (remote, remoteID) = try makeIdentity(); defer { cleanup(remoteID) }
         let transport = MockMultipeerTransport()
         let ranging = MockRangingProvider()
-        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging)
+        let trace = ProximityInspectorTrace()
+        // Held still, so the evidence below is inside its 3 s window however loaded the run is
+        // (`peerHeartbeatCommitsOnlyAfterLocalCloseSample`): only the decode can stop the commit.
+        let frozen = Date(timeIntervalSince1970: 1_800_000_000)
+        let coordinator = makeCoordinator(identity: local, transport: transport, ranging: ranging,
+                                          inspector: trace) { frozen }
 
         let peer = try await friendGate(coordinator: coordinator, transport: transport,
                                         remote: remote, uwbCapable: true)
         ranging.simulateDistance(0.10)          // evidence IS present — only the decode fails
-        try await Task.sleep(nanoseconds: 20_000_000)
+        await waitUntil { trace.rangingSamples == 1 }
+        #expect(trace.rangingSamples == 1, "the evidence sample was handled")
 
         transport.simulateInboundData(
             try signedHeartbeat(from: remote, payloadOverride: Data("not a heartbeat".utf8)),
             from: peer)
-        try await Task.sleep(nanoseconds: 30_000_000)
+        // Recorded before the decode, which fails and returns without suspending.
+        await waitUntil { trace.events.contains("heartbeat received") }
+        #expect(trace.events.contains("heartbeat received"), "the heartbeat was handled — the check below is not vacuous")
 
         #expect(!isConnected(coordinator),
                 "An undecodable heartbeat body must never commit, even with local proximity evidence")
@@ -1388,8 +1468,11 @@ struct ProximityCoordinatorTests {
         }
         #expect(committed.isDisplayNameWithheld, "the commit itself discloses nothing — the name is still owed")
 
+        let framesBeforePing = transport.sentData.count
         transport.simulateInboundData(try signedHeartbeat(from: remote, kind: "ping"), from: peer)
-        await waitUntil { disclosures.count == 1 }
+        // The answer, too: the disclosure lands before the handler sends its answer, and the answer is
+        // read below, so a wait on the disclosure alone checks a send that may still be in flight.
+        await waitUntil { disclosures.count == 1 && transport.sentData.count > framesBeforePing }
         guard case .connected(let named) = coordinator.state else {
             Issue.record("Expected .connected, got \(coordinator.state)")
             return
@@ -1414,6 +1497,33 @@ struct ProximityCoordinatorTests {
         #expect(disclosures.count == 1, "and the subscriber is not told twice")
     }
 
+}
+
+/// The inspector records a cell reads as proof that an input was handled: the coordinator's events,
+/// the transport states it reports, and how many ranging samples it recorded, each in arrival order.
+///
+/// A cell that asserts that something did NOT happen needs that proof, or it passes vacuously while
+/// the coordinator's fire-and-forget hop has not run yet. The coordinator calls its inspector only on
+/// the main actor, and each record a cell waits for is followed in its handler by code that does not
+/// suspend, so once the record is here the handler has finished. Held by the cell: the coordinator
+/// holds its inspector `weak`.
+@MainActor
+private final class ProximityInspectorTrace: ProximityInspectorRecording {
+    private(set) var events: [String] = []
+    private(set) var transportStates: [String] = []
+    private(set) var rangingSamples = 0
+
+    func recordCoordinatorEvent(_ message: String) {
+        events.append(message)
+    }
+
+    func updateTransport(_ event: ProximityInspectorTransportEvent) {
+        if case .stateChanged(let state, _, _) = event { transportStates.append(state) }
+    }
+
+    func recordRangingSample(_ sample: ProximityInspectorDistanceSample) {
+        rangingSamples += 1
+    }
 }
 
 @MainActor

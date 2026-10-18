@@ -112,6 +112,32 @@ struct SealedIntroductionTests {
         }
     }
 
+    /// ``waitUntil(timeout:minimumPolls:_:)`` for a two-coordinator handshake: forwards every frame
+    /// each side has sent to the other, then looks, round after round, until `condition` holds.
+    ///
+    /// It replaces fixed loops of twenty rounds 15 ms apart, which gave a loaded run 300 ms of wall
+    /// clock to finish a handshake whose every step is a fire-and-forget hop on a starved main actor.
+    /// It gives up only once the deadline has passed AND `minimumPolls` rounds have run, so a starved
+    /// run gets the rounds it needs, and it still terminates: `polls` only climbs, and every round
+    /// sleeps.
+    private func pumpUntil(
+        timeout: Duration = .seconds(3),
+        minimumPolls: Int = 400,
+        exchanging exchange: @MainActor () -> Void,
+        _ condition: @MainActor () -> Bool
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        var polls = 0
+        exchange()
+        while !condition() {
+            polls += 1
+            if polls >= minimumPolls, clock.now >= deadline { return }
+            try? await Task.sleep(for: .milliseconds(5))
+            exchange()
+        }
+    }
+
     private func dataContains(_ haystack: Data, _ needle: Data) -> Bool {
         guard !needle.isEmpty else { return false }
         return haystack.range(of: needle) != nil
@@ -307,10 +333,12 @@ struct SealedIntroductionTests {
         let (friend, friendID) = try makeIdentity(); defer { cleanup(friendID) }
         let (forger, forgerID) = try makeIdentity(); defer { cleanup(forgerID) }
 
+        let recorder = ProximityInspectorEventRecorder()
         let transport = MockMultipeerTransport()
         let coordinator = makeSealedCoordinator(
             identity: local, transport: transport,
-            expectedFriendKA: friend.localKeyAgreementPublicKey, displayName: "Aisha Bloom")
+            expectedFriendKA: friend.localKeyAgreementPublicKey, displayName: "Aisha Bloom",
+            inspector: recorder)
         let peer = presencePeer(name: "forger-heartbeat")
 
         await coordinator.begin(role: .browser, mode: .friend)
@@ -330,7 +358,13 @@ struct SealedIntroductionTests {
             payloadSummary: PayloadSummary(title: "Heartbeat"),
             payload: pingPayload)
         transport.simulateInboundData(try JSONEncoder().encode(ping), from: peer)
-        try? await Task.sleep(for: .milliseconds(60))
+        // The check below asserts an absence, so it needs proof the ping was handled: the line the
+        // sealed gate records as it drops the ping, which returns without suspending. A fixed 60 ms
+        // sleep let a loaded run assert before the hop had run, and pass vacuously.
+        let droppedAtTheGate = "dropped a heartbeat before sealed identity verification"
+        await waitUntil { recorder.events.contains(droppedAtTheGate) }
+        #expect(recorder.events.contains(droppedAtTheGate),
+                "the ping reached the sealed gate and was dropped there — the check below is not vacuous")
 
         // No acknowledgement (or any other envelope) was emitted after the sealed intro.
         #expect(transport.sentData.count == sentAfterIntro,
@@ -474,11 +508,7 @@ struct SealedIntroductionTests {
 
         // Pump the sealed intro⇄intro / ack⇄ack exchange until both sides have verified identity
         // and are waiting to commit.
-        for _ in 0..<20 {
-            exchangeOnce()
-            try? await Task.sleep(for: .milliseconds(15))
-            if isPastIdentity(coordA.state), isPastIdentity(coordB.state) { break }
-        }
+        await pumpUntil(exchanging: exchangeOnce) { isPastIdentity(coordA.state) && isPastIdentity(coordB.state) }
 
         // Both decrypted the sealed intro and verified the OTHER's real identity.
         #expect(committedFingerprint(coordA.state) == b.localFingerprint || pendingIdentityVerified(coordA.state, expect: b.localFingerprint))
@@ -488,10 +518,9 @@ struct SealedIntroductionTests {
         // .connected on both sides.
         await coordA.commitManualProximity()
         await coordB.commitManualProximity()
-        for _ in 0..<20 {
-            exchangeOnce()
-            try? await Task.sleep(for: .milliseconds(15))
-            if case .connected = coordA.state, case .connected = coordB.state { break }
+        await pumpUntil(exchanging: exchangeOnce) {
+            if case .connected = coordA.state, case .connected = coordB.state { return true }
+            return false
         }
         guard case .connected(let aPeer) = coordA.state, case .connected(let bPeer) = coordB.state else {
             Issue.record("Both sides should reach .connected — A=\(coordA.state) B=\(coordB.state)")
@@ -507,10 +536,8 @@ struct SealedIntroductionTests {
             summary: PayloadSummary(title: "Good vibes"),
             payload: try JSONEncoder().encode(heart),
             sealed: true)
-        for _ in 0..<20 {
-            exchangeOnce()
-            try? await Task.sleep(for: .milliseconds(15))
-            if handlerB.received.contains(where: { $0.envelope.payloadType == .friendHeart }) { break }
+        await pumpUntil(exchanging: exchangeOnce) {
+            handlerB.received.contains(where: { $0.envelope.payloadType == .friendHeart })
         }
         let delivered = try #require(handlerB.received.first(where: { $0.envelope.payloadType == .friendHeart }))
         let decoded = try JSONDecoder().decode(HeartPayload.self, from: delivered.plaintext)

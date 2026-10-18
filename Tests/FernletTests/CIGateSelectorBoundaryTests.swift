@@ -391,6 +391,15 @@ import Testing
     /// without the web-nutrition-lookup consent, the exact request, the cap, the deadline, no retries
     /// and the audit line at dispatch. Each compiles clean when it breaks, and it ran on no line. The
     /// step's floor stays the shared `1`. Pinned by name in ``wallLines`` too. Counted off the line.
+    ///
+    /// RE-MEASURED at the de-flake of tracker §2.4 (2026-10-17): `mesh-batteries` 152 → 154, for
+    /// `SealedIntroductionTests` and `ProximityCoordinatorTests`, and `mesh-features` 50 → 51, for
+    /// `HeartShareTests`. These are the three suites the CI-breadth round (2026-09-24) and plan step
+    /// A0.5.0 named as de-flake follow-ups and left on no line, because each waited on the wall clock in
+    /// a way no floor can price. Each cell now waits for the state or the inspector record that a
+    /// coordinator's hop lands on, and a cell that asserts an absence waits for the record its handler
+    /// makes for that input. None is a `MeshP<n>…AcceptanceTests` or a `…GoldenTests`, so this entry
+    /// and the two steps' MEASURED floors are what notice one leaving. Counted off the lines.
     private static let measuredSuiteNameCounts: [String: Int] = [
         "s3-grep": 11,
         "no-tracking": 2,
@@ -406,8 +415,8 @@ import Testing
         "messages-envelope": 5,
         "recipe-wire": 1,
         "food-search": 13,
-        "mesh-batteries": 152,
-        "mesh-features": 50
+        "mesh-batteries": 154,
+        "mesh-features": 51
     ]
 
     /// The walls each line exists to run, by label — the names a count cannot tell apart.
