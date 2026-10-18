@@ -760,8 +760,9 @@ struct UXScreenProbe {
     }
 
     /// How many excused entries one screen's presence check will look up. Bounds the query cost on
-    /// the two screens that carry a large Dynamic Type baseline (`Private · Cycle (both halves)` is
-    /// 23 entries, `Home tab` 17); anything past it stays excused, which is the safe direction.
+    /// screens that carry a large Dynamic Type baseline (`Private · Cycle (both halves)` carried 23
+    /// entries and `Home tab` 17 until the 2026-10-18 burn-down); anything past it stays excused,
+    /// which is the safe direction.
     static let maximumPresenceChecks = 24
 
     /// How many elements sharing one label the presence check will examine before concluding the
@@ -1321,6 +1322,18 @@ extension UXScreenProbe {
     /// dated note saying which run produced it and what moved. Every other entry is still the
     /// 2026-08-23/08-27 record.
     ///
+    /// THE 2026-10-18 LARGER TEXT BURN-DOWN took this map from 167 identities on 37 screens to 60
+    /// on 23 (three of them the new `AX5 · ` screens), in the same commits as the fixes. Walled lines
+    /// left only after a run on the pinned simulator reported them gone. Four sets of
+    /// UNDER-REPORTING lines, which no run can force out, were deleted on measurement instead:
+    /// `Private · Cycle (both halves)`'s 23 and `Home tab`'s 9 non-tile Dynamic Type lines never
+    /// reproduced in four full audits on four builds and four Dynamic-Type-only passes; `Home tab`'s
+    /// six tile nouns and `Private · Journal`'s five weekday letters reproduced on 3 of 3 passes
+    /// before their grids stopped being lazy (`EqualColumnGrid`) and on none after; its two tile
+    /// counts reproduced on every run until they scaled with `.caption` instead of `.caption2`, and
+    /// on none after, which took `Home tab` out of the map. If one of them comes back it fails as an
+    /// appearance, which is the honest direction.
+    ///
     /// Every entry here was copied from the "not in baseline" listing of a run on the pinned
     /// simulator and confirmed on a second, independent run. The high-signal findings the original
     /// harvest note says to fix first were FIXED in the same commit rather than frozen: six
@@ -1329,30 +1342,28 @@ extension UXScreenProbe {
     /// `Element has no description` on the full-size progress photo. What is frozen below is the
     /// Larger Text backlog these screens share with the other twenty-two.
     static let auditBaselineEntries: [String: Set<String>] = [
-        "Food · Recipe detail": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
+        // THE AX5 PROBES (`LargerTextAX5UITests`, recorded 2026-10-18). These screens are launched AT
+        // the largest accessibility size, not audited from `large`, on a freshly created iPhone 17
+        // (iPhone18,3), portrait, en_US, light, the runner itself at `large`. Copied from the "not
+        // in baseline" listing of the run that added them and confirmed on a second run of a clean
+        // build. Every line below was checked against that run's AX5 screenshot, and in each one
+        // the text is drawn whole: no ellipsis, no word cut. They are recorded as what the audit
+        // says, not as defects anyone has seen, and the owner's AX5 device pass is what decides.
+        // The two Settings lines are system-drawn (the navigation bar's Done, `.searchable`'s
+        // field). The other AX5 screens audit clean, so they have no key.
+        "AX5 · Settings · Hub": [
+            "Dynamic Type font sizes are partially unsupported — “Done” id=settings.done (9)",
+            "Text clipped — “Search settings” (45)",
         ],
-        // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): `ScreenHeader`'s subtitle still
-        // renders (FoodView.swift:87) — it is the clipping that stopped, not the element that went
-        // away. The tab-bar clearance and scroll-position work that landed after the baseline
-        // (e2ebd98, 1ff3294, 92678e8) is the layout change in that window. Same removal on `Move
-        // tab`, which uses the same component. Re-verified deterministic across two independent
-        // `xcodebuild test` runs on the pinned simulator before removing.
-        "Food tab": [
-            "Hit area is too small — “Adjust targets” id=food.adjustTargets (9)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
+        "AX5 · Sheet · Meal": [
+            "Text clipped — “Log meal” (48)",
+            "Text clipped — “WHAT DID YOU EAT?” (48)",
         ],
-        "Friends tab": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
+        "AX5 · Sheet · Workout suggestion": [
+            "Text clipped — “Full gym · # items” (48)",
+            "Text clipped — “SPACE & EQUIPMENT” (48)",
+            "Text clipped — “Suggest” (48)",
+            "Text clipped — “Suggest” id=workout.suggest (9)",
         ],
         // "POTENTIALLY INACCESSIBLE TEXT" ADDED (2026-09-26), element-less, 2 raw issues. Copied
         // from the "not in baseline" listing of runs on two independent, freshly created iPhone 17
@@ -1417,123 +1428,6 @@ extension UXScreenProbe {
         // cards return to this viewport, the six come back as unconditional appearances.
         "Home · Recent bites": [
             "Potentially inaccessible text",
-            "Text clipped — “Chicken rice bowl” (48)",
-            "Text clipped — “Food” (9)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Greek yogurt with berries” (48)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        // QUICK-LOG SUBTITLES NO LONGER CLIP (2026-08-27): `Text clipped — “# entries”` and
-        // `“# of #”` both stopped reproducing. Note the first one has a second possible reading and
-        // it is worth knowing which: `HomeView.swift:1361` renders "1 entry" (singular) below two
-        // entries, and `normalisedLabel` maps that to “# entry” — a DIFFERENT identity from
-        // “# entries”. So a seed that logs one entry rather than two would retire this line without
-        // anything being fixed. Either way the finding does not reproduce and the line has to go;
-        // flagged here because the singular/plural fork is a live time bomb for any future
-        // count-bearing identity. Re-verified deterministic across two independent runs.
-        "Home tab": [
-            "Dynamic Type font sizes are partially unsupported — “# bottles” (48)",
-            "Dynamic Type font sizes are partially unsupported — “# entries” (48)",
-            "Dynamic Type font sizes are partially unsupported — “# logged” (48)",
-            "Dynamic Type font sizes are partially unsupported — “# of #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “#h” (48)",
-            "Dynamic Type font sizes are partially unsupported — “<date-word>, <date-word> #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Care” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Fernlet” (48)",
-            "Dynamic Type font sizes are partially unsupported — “I'm unwell today” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Journal” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Meals” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Move” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Quick log” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Scoring goes gentle until tomorrow” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Sleep” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Today” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Water” (48)",
-            "Hit area is too small — “Care score # percent” (1)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Move · Progress photo detail": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        // VIEWPORT AND SEED PINNED, DATE CHIP GONE (2026-09-24). This entry went red on main with
-        // one or two lines "no longer reproducing" — on 3eeb7bb AND 53633f50, on one simulator that
-        // was fresh when that session began — with no app change behind it. Two inputs moved it,
-        // and both are now pinned:
-        //
-        // 1. WHERE THE SCROLL STOPPED. `ProgressPhotoUITests` stopped the moment the strip was
-        //    hittable, which is anywhere from the true bottom to ~175pt above it, and the audit is
-        //    sensitive to exactly that. Measured on one binary: started at the bottom, or 30 or 80pt
-        //    above it, the audit reported the first card's caption (and, under that day's seed, its
-        //    chip) clipped; started 150 or 230pt above, neither. The probe now scrolls to the true
-        //    bottom (the section is last in Move's column), and the audit pulls any start within
-        //    78pt of the bottom to one offset.
-        // 2. THE SEED'S DATES. Whether the audit reports a date chip clipped is a function of the
-        //    chip's width. With the strip in the same place, on either card: "Sep 24" and "Aug 24"
-        //    clip; "Sep 14", "Aug 19", "Sep 9" and "Sep 3" do not. A seed dated from today moved that
-        //    answer with the calendar, so `FernletStore+DemoSeed.swift` now dates the photos from a
-        //    fixed day with one-digit days, clear of the cut-off — and `Text clipped — "<date-word> #"`
-        //    stopped reproducing, so it is deleted here.
-        //
-        // That deletion is NOT a fix. A wide enough two-digit chip still reports clipped; it is just
-        // no longer what the seed renders. If chips start clipping again the line comes back as an
-        // appearance, which fails, so the wall now watches them more closely than the frozen line
-        // did. The 2026-09-20 work that made every chip key as ONE identity (the month abbreviations
-        // in `volatileDateWords`) stands, and is what would key them. Dates in this comment are in
-        // straight quotes on purpose: `baselinePinsAVolatileLiteral` reads every curly-quoted label
-        // in this file, comments included.
-        //
-        // "FEELING STRONGER" STAYS, BUT THE STRIP NO LONGER CUTS IT (2026-09-24, later that day).
-        // Until then the strip really did cut it. The strip took its height from the add tile,
-        // 203.67pt, around a 211pt captioned card (215pt by its accessibility frame, which starts 4pt
-        // above the picture), and its bottom edge cut the caption through its baseline.
-        // `ProgressPhotoSection.addTile` now reserves the tallest card's labels, so the
-        // strip is 223pt and the caption ends 6pt above its edge; it is 6pt at AX1, AX3 and AX5 too.
-        // The line still reproduces because the audit is measuring something else. The caption is
-        // `lineLimit(1)` in a 132pt card, so at the largest accessibility size it truncates
-        // ("Feelin..."). This was measured on one build with the same scroll stop: with that caption
-        // the finding reproduces; with the caption changed to "Strong" (about 117pt at AX5 by the
-        // font's metrics, so it fits), nothing is reported for the caption. That is the width rule
-        // the date chips follow (point 2). The line goes when the caption stops truncating at AX5:
-        // a card whose caption may wrap would do that, and so would a shorter seed caption, which
-        // would not be a fix.
-        //
-        // Re-recorded on a freshly created iPhone 17 (iPhone18,3), portrait, content size large,
-        // en_US, light: copied from the "not in baseline" listing of a run with this entry emptied,
-        // then confirmed on independent runs of a clean build with the simulator erased between
-        // them (the commit that made this change counts them).
-        "Move · Progress photos": [
-            "Text clipped — “Feeling stronger” (48)",
-            "Text clipped — “Food” (9)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        // SCREEN-HEADER SUBTITLE NO LONGER CLIPS (2026-08-27): same component and same reason as
-        // `Food tab` above (MoveView.swift:133 still renders it).
-        //
-        // SEED-DETERMINISM CORRECTION (2026-08-27): `Text clipped — “Full gym · # items”` is the
-        // Move header's equipment segment (`MoveView.swift:2523`), and it is NEW here only because
-        // the active workout location is now pinned by the demo seed. It previously read whatever
-        // `WorkoutLocationUITests` had last left persisted — "Shed", which is short enough not to
-        // clip — so this screen's real behaviour under the SHIPPED default was never measured. It
-        // is a genuine clipped-text finding and joins the Larger Text backlog the rest of this map
-        // freezes rather than a defect this round introduced.
-        "Move tab": [
-            "Label not human-readable — “figure.strengthtraining.traditional” id=figure.strengthtraining.traditional (43)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Full gym · # items” (48)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         // The onboarding screens. Their `Hit area is too small — “Continue”` / `“Start Fernlet”`
         // entries are GONE as of 2026-08-27, and so are `Sheet · Sleep`'s and `Sheet · Log
@@ -1544,77 +1438,8 @@ extension UXScreenProbe {
         // from this map entirely — the retired line was their only entry, so they are back to an
         // empty baseline and fail on their first new finding, which is where a clean screen
         // belongs. Same for `Sheet · Log intimacy` below.
-        "Onboarding · Dietary pattern": [
-            "Text clipped — “Pick an eating pattern” (48)",
-        ],
-        "Onboarding · Lock setup": [
-            "Text clipped — “Protect private spaces” (48)",
-            "Text clipped — “The lock guards period, intimacy, and other sensitive areas before they open.” (48)",
-        ],
-        "Onboarding · Permissions": [
-            "Text clipped — “Fernlet asks at first use where practical, so you can start without granting everything now.” (48)",
-        ],
         "Onboarding · Personal details": [
             "Text clipped — <no label> id=onboarding.displayName (49)",
-            "Text clipped — “These are optional except age. Fernlet never asks for weight goals.” (48)",
-        ],
-        "Onboarding · Storage choice": [
-            "Text clipped — “Choose where logs live” (48)",
-        ],
-        "Onboarding · Welcome": [
-            "Text clipped — “A small daily care companion built around privacy, local control, and enoughness.” (48)",
-        ],
-        "Private · Cycle (both halves)": [
-            "Dynamic Type font sizes are partially unsupported — “<date-word> #” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Cycle” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Cycle” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Food” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Friends” (9)",
-            "Dynamic Type font sizes are partially unsupported — “F” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Heavy” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Home” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Intimacy” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Journal” (9)",
-            "Dynamic Type font sizes are partially unsupported — “Light” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Log at least # cycles to see predictions.” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Medium” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Move” (9)",
-            "Dynamic Type font sizes are partially unsupported — “M” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Once you've logged a few cycles, Fernlet can gently soften your daily score on the phases that tend to be harder for you, and show a cycle chip and outlook on Home. It's optional, stays on this device, and never leaves the app.” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Period-aware care” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Private” (9)",
-            "Dynamic Type font sizes are partially unsupported — “S” (48)",
-            "Dynamic Type font sizes are partially unsupported — “T” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Worry box” (9)",
-            "Dynamic Type font sizes are partially unsupported — “W” (48)",
-            "Dynamic Type font sizes are partially unsupported — “Your cycle, at a glance.” (48)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Private · Cycle (intimacy only)": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Private · Cycle (period only)": [
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
-        ],
-        "Private · Journal": [
-            "Dynamic Type font sizes are partially unsupported — “F” (48)",
-            "Dynamic Type font sizes are partially unsupported — “M” (48)",
-            "Dynamic Type font sizes are partially unsupported — “S” (48)",
-            "Dynamic Type font sizes are partially unsupported — “T” (48)",
-            "Dynamic Type font sizes are partially unsupported — “W” (48)",
-            "Text clipped — “Friends” (9)",
-            "Text clipped — “Home” (9)",
-            "Text clipped — “Move” (9)",
-            "Text clipped — “Private” (9)",
         ],
         "Settings · Core memory": [
             "Text clipped — <no label> (49)",
@@ -1669,7 +1494,6 @@ extension UXScreenProbe {
         // deterministic across two independent runs on the pinned simulator. The clipping itself is
         // untouched — it stays part of the Larger Text backlog this round did not take on.
         "Sheet · Edit recipe": [
-            "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
         // “Craft” is this sheet's `SheetSaveBar` label, so its hit-region finding retired with the
@@ -1686,9 +1510,6 @@ extension UXScreenProbe {
             "Text clipped — “Skincare AM” (48)",
             "Text clipped — “Sunscreen” (48)",
         ],
-        "Sheet · Journal": [
-            "Hit area is too small — “Start from this” id=journal.inspiration (9)",
-        ],
         "Sheet · Meal": [
             "Potentially inaccessible text",
             "Text clipped",
@@ -1698,13 +1519,10 @@ extension UXScreenProbe {
         // Same identity-key migration as `Sheet · Edit recipe` above — the two sheets share the
         // ingredient search field that gained `recipeIngredient.search` in 525b0c8.
         "Sheet · Recipe": [
-            "Hit area is too small — “#g” (9)",
             "Text clipped — <no label> id=recipeIngredient.search (49)",
         ],
         "Sheet · Recipe book": [
             "Text clipped — <no label> (49)",
-            "Text clipped — “Seeded demo recipe. Mix, chill overnight, top with fruit.” (48)",
-            "Text clipped — “Seeded demo recipe. Roast at # for # minutes.” (48)",
         ],
         "Sheet · Saved recipe notes": [
             "Potentially inaccessible text",
@@ -1714,7 +1532,6 @@ extension UXScreenProbe {
         "Sheet · Sleep": [
             "Hit area is too small — <no label> (49)",
             "Potentially inaccessible text",
-            "Text clipped — <no label> (49)",
             "Text clipped — “HOURS (OPTIONAL)” (48)",
             "Text clipped — “NOTE (OPTIONAL)” (48)",
             "Text clipped — “restorative, woke easy” (48)",

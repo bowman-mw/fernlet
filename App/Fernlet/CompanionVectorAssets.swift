@@ -653,12 +653,24 @@ struct CompanionDriftingZ: View {
         let t = (elapsed.truncatingRemainder(dividingBy: 3.4)) / 3.4
         let rise = -size * 0.22 * CGFloat(t)
         let fade = sin(t * .pi)
-        Text("z")
-            .font(.system(size: size * 0.16, weight: .semibold, design: .serif))
-            .foregroundStyle(Color.moss.opacity(0.6))
-            .rotationEffect(.degrees(-5 + 12 * t))
-            .opacity(fade)
-            .offset(y: rise)
+        // Drawn into a `Canvas`, not laid out as a `Text`: the glyph is art, sized to the companion
+        // rather than to the user's text size, and as a `Text` it was the one element in the
+        // drawing — the accessibility audit reported it as text that ignores Dynamic Type, even
+        // when hidden. A canvas leaves nothing behind to report, and "a bare render is silent"
+        // (see ``CompanionView``) holds again.
+        Canvas { context, canvasSize in
+            let glyph = context.resolve(
+                Text("z")
+                    .font(.system(size: size * 0.16, weight: .semibold, design: .serif))
+                    .foregroundStyle(Color.moss.opacity(0.6))
+            )
+            context.draw(glyph, at: CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2))
+        }
+        .frame(width: size * 0.22, height: size * 0.22)
+        .rotationEffect(.degrees(-5 + 12 * t))
+        .opacity(fade)
+        .offset(y: rise)
+        .accessibilityHidden(true)
     }
 }
 

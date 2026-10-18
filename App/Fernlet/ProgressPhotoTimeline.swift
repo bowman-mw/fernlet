@@ -309,9 +309,11 @@ struct ProgressPhotoSection: View {
     ///
     /// So the tile reserves ``ProgressPhotoCardLabels`` itself, the same view every card renders, not
     /// a hand-kept copy of its fonts (a copy is what drifted). It reserves one for each distinct date
-    /// in the strip, each over a caption line when any photo has a caption. In a `ZStack` the
-    /// tallest wins, so a date that wraps onto two lines at the largest text sizes reserves both.
-    /// Bounded: the chip has no year, so there are at most 366 distinct dates.
+    /// in the strip, each over a caption line when any photo has a caption, and one for each
+    /// distinct caption under the longest date, since captions wrap at accessibility sizes. In a
+    /// `ZStack` the tallest wins, so a date that wraps onto two lines at the largest text sizes
+    /// reserves both. Bounded: the chip has no year, so there are at most 366 distinct dates, and
+    /// there are no more captions than captioned photos.
     private var addTile: some View {
         VStack(alignment: .leading, spacing: ProgressPhotoCard.labelSpacing) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -330,6 +332,11 @@ struct ProgressPhotoSection: View {
                 ForEach(reservedDateLabels, id: \.self) { date in
                     ProgressPhotoCardLabels(date: date, caption: reservesCaptionLine ? " " : nil)
                 }
+                // At accessibility sizes a caption wraps, so one caption line is not the tallest
+                // card any more: each distinct caption is reserved too, under the longest date.
+                ForEach(reservedCaptions, id: \.self) { caption in
+                    ProgressPhotoCardLabels(date: longestDateLabel, caption: caption)
+                }
             }
             .hidden()
             .accessibilityHidden(true)
@@ -344,6 +351,16 @@ struct ProgressPhotoSection: View {
     /// Whether any photo has a caption, and so whether the tallest card has a caption line.
     private var reservesCaptionLine: Bool {
         records.contains { $0.caption != nil }
+    }
+
+    /// Every distinct caption in the strip. Bounded by the photos the user has captioned.
+    private var reservedCaptions: [String] {
+        Set(records.compactMap(\.caption)).sorted()
+    }
+
+    /// The date chip with the most characters: the one most likely to wrap at the largest sizes.
+    private var longestDateLabel: String {
+        reservedDateLabels.max { $0.count < $1.count } ?? ""
     }
 }
 
@@ -531,8 +548,16 @@ struct ProgressPhotoCard: View {
 struct ProgressPhotoCardLabels: View {
     /// The date chip's text, as ``ProgressPhotoCard/dateLabel(for:)`` formats it.
     let date: String
-    /// The user's note, or nil for none. It gets one line; a longer note truncates.
+    /// The user's note, or nil for none. One line below accessibility sizes, where a longer note
+    /// truncates; at them it wraps.
     let caption: String?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// The label column: the card's width, widened at accessibility sizes, where one word of a
+    /// caption ("Feeling") or a two-digit date chip was already wider than the 132pt card.
+    private var columnWidth: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 220 : ProgressPhotoCard.cardWidth
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -543,10 +568,11 @@ struct ProgressPhotoCardLabels: View {
                 Text(caption)
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(width: ProgressPhotoCard.cardWidth, alignment: .leading)
+        .frame(width: columnWidth, alignment: .leading)
     }
 }
 

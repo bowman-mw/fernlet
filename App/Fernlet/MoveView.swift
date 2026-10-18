@@ -584,6 +584,8 @@ struct ResumeWorkoutCard: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(Color.moss)
                         .frame(width: 30)
+                        // Decorative, as on `StartTodaysWorkoutCard`: the header names the card.
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Workout in progress")
                             .font(.fernlet(.headerMedium))
@@ -673,6 +675,9 @@ struct StartTodaysWorkoutCard: View {
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(accentColor)
                         .frame(width: 30)
+                        // Decorative: the header beside it names the card. Left visible, the
+                        // audit heard the symbol's name read aloud ("Label not human-readable").
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Today's workout")
                             .font(.fernlet(.headerMedium))
@@ -1532,25 +1537,31 @@ struct WorkoutSuggestionSheet: View {
     /// full setup sheet.
     private var spaceRow: some View {
         SheetField("Space & equipment") {
-            HStack(spacing: 10) {
-                Image(systemName: "mappin.and.ellipse")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.moss)
-                // Localizing interpolation, never a verbatim String build: "items" is display
-                // copy; the location name interpolates as data.
-                Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
-                    .font(.fernlet(.label))
-                    .foregroundStyle(Color.bark)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+            // At accessibility sizes "Change" moves under the location, which then has the whole
+            // width to wrap in: side by side at AX5 they read "Full gy…" and "Chang/e".
+            AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+                HStack(spacing: 10) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.moss)
+                    // Localizing interpolation, never a verbatim String build: "items" is display
+                    // copy; the location name interpolates as data.
+                    Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
+                        .font(.fernlet(.label))
+                        .foregroundStyle(Color.bark)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: 8)
                 Button("Change") { showingSpaces = true }
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
                     .buttonStyle(.plain)
+                    .fixedSize()
                     .fernletTapTarget()
                     .accessibilityIdentifier("workout.space.change")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(Color.cream.opacity(0.86), in: RoundedRectangle(cornerRadius: 10))
@@ -1710,8 +1721,12 @@ struct WorkoutSuggestionSheet: View {
             Text("Already did this — log it")
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(Color.moss.opacity(0.12), in: Capsule())
+                .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("workout.logAlreadyDone")
@@ -2134,10 +2149,18 @@ struct WorkoutSuggestionSheet: View {
                 }
                 .padding(20)
                 .padding(.bottom, 10)
+                // At accessibility sizes the committed plan's four actions scroll with the plan: pinned,
+                // at AX5 they took all but ~150pt of the sheet, truncated "Already did this…" and left
+                // the plan itself unreadable behind them.
+                if let dayPlan, dynamicTypeSize.isAccessibilitySize {
+                    committedPlanActionBar(dayPlan)
+                }
             }
 
             if let dayPlan {
-                committedPlanActionBar(dayPlan)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    committedPlanActionBar(dayPlan)
+                }
             } else {
                 suggestActionBar
             }
@@ -2662,7 +2685,9 @@ struct MoveContextStrip: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        // Side by side, each half was ~130pt wide, and at accessibility sizes two lines of it
+        // truncated even the shortened "Full gym · 22". Stacked, each value has the full width.
+        AdaptiveStack(spacing: 0, horizontalAlignment: .leading) {
             MoveContextSegment(
                 icon: "target",
                 label: "Goal",
@@ -2681,10 +2706,7 @@ struct MoveContextStrip: View {
             // shortest-first because the first one is what the numbered overlay shows.
             .accessibilityInputLabels([Text("Goal"), Text("Goals"), Text("Movement goal")])
 
-            Rectangle()
-                .fill(Color.bark.opacity(0.10))
-                .frame(width: 1)
-                .padding(.vertical, 10)
+            divider
 
             MoveContextSegment(
                 icon: "mappin.and.ellipse",
@@ -2707,6 +2729,23 @@ struct MoveContextStrip: View {
     }
 }
 
+extension MoveContextStrip {
+    /// The hairline between the two segments: vertical beside them, horizontal once they stack.
+    @ViewBuilder fileprivate var divider: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            Rectangle()
+                .fill(Color.bark.opacity(0.10))
+                .frame(height: 1)
+                .padding(.horizontal, 14)
+        } else {
+            Rectangle()
+                .fill(Color.bark.opacity(0.10))
+                .frame(width: 1)
+                .padding(.vertical, 10)
+        }
+    }
+}
+
 /// One tappable half of the context strip: a small uppercase label over a value line, with a
 /// leading icon.
 ///
@@ -2719,6 +2758,11 @@ private struct MoveContextSegment: View {
     var value: String?
     var emptyPrompt: String
     var action: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// Two lines below accessibility sizes; unlimited at them, where the strip stacks and each
+    /// value has the whole width to wrap in.
+    private var valueLineLimit: Int? { dynamicTypeSize.isAccessibilitySize ? nil : 2 }
 
     var body: some View {
         Button(action: action) {
@@ -2741,14 +2785,14 @@ private struct MoveContextSegment: View {
                             // to "Complete 3 gene…" with no way to read the rest.
                             .font(.fernlet(.label))
                             .foregroundStyle(Color.bark)
-                            .lineLimit(2)
+                            .lineLimit(valueLineLimit)
                             .truncationMode(.tail)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         Text(emptyPrompt)
                             .font(.fernlet(.bubble))
                             .foregroundStyle(Color.slate)
-                            .lineLimit(2)
+                            .lineLimit(valueLineLimit)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

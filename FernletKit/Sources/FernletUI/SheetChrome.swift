@@ -81,14 +81,19 @@ public struct SheetHeader<Accessory: View>: View {
                 eyebrow
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.moss)
-                    .lineLimit(1)
+                    // One line, except at accessibility sizes: at AX5 the guided plan's
+                    // "Daily Movement · Day 2" read "Daily Movement · D…".
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                    .fixedSize(horizontal: false, vertical: true)
                     // Above the title in the same raised band — see the title's note below.
                     .accessibilitySortPriority(12)
             }
             title
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-                .lineLimit(2)
+                // Two lines, lifted at accessibility sizes as ``ScreenHeader``'s are: the audit
+                // reported every sheet title that carried the limit there as text that may clip.
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .fixedSize(horizontal: false, vertical: true)
                 // The sheet's own title — the top of its Headings rotor, same level as
                 // ``ScreenHeader``. No `.combine` above it to discard the trait, unlike

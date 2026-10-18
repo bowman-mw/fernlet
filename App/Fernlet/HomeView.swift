@@ -1280,7 +1280,9 @@ struct HomeView: View {
                 Text("Quick log")
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
-                LazyVGrid(columns: quickLogColumns, spacing: 8) {
+                // Not lazy: a lazy grid tore down the tiles that larger text pushed off screen,
+                // and the audit read their vanished labels as fonts that ignore Dynamic Type.
+                EqualColumnGrid(columns: quickLogColumnCount, horizontalSpacing: 8, verticalSpacing: 8) {
                     ForEach(FernletShortcut.visibleQuickLog(store.settings.quickLogItems, visibility: store.sensitiveSurfaceVisibility)) { item in
                         quickLogTile(item)
                     }
@@ -1291,9 +1293,8 @@ struct HomeView: View {
 
     /// 3a·AX3: three tiles cannot share the width once the noun is accessibility-sized — the grid
     /// goes 2-up, so four of the six tiles stay visible above the fold.
-    private var quickLogColumns: [GridItem] {
-        let count = dynamicTypeSize.isAccessibilitySize ? 2 : 3
-        return Array(repeating: GridItem(.flexible(), spacing: 8), count: count)
+    private var quickLogColumnCount: Int {
+        dynamicTypeSize.isAccessibilitySize ? 2 : 3
     }
 
     /// The one-tap mood check-in as its own self-named card (HOME-28): "How today felt", with the
@@ -2602,11 +2603,20 @@ struct HealthBar: View {
                 heartGlowCap
             }
         }
-        .accessibilityLabel(
-            heartGlow > 0
-                ? "Care score \(Int(value * 100)) percent, with a little warmth from a friend"
-                : "Care score \(Int(value * 100)) percent"
-        )
+        // The bar draws 8pt tall; the element that names it is 44pt, an invisible overlay centred
+        // on it, so finding the score by touch does not mean hitting an 8pt strip. An overlay does
+        // not take part in layout, so the card around the bar is unchanged.
+        .accessibilityHidden(true)
+        .overlay {
+            Color.clear
+                .frame(height: 44)
+                .accessibilityElement()
+                .accessibilityLabel(
+                    heartGlow > 0
+                        ? "Care score \(Int(value * 100)) percent, with a little warmth from a friend"
+                        : "Care score \(Int(value * 100)) percent"
+                )
+        }
     }
 
     /// The 24h "afterglow" at the end of the bar (good-vibes 10b): two goldenrod/sun heart-bonus
@@ -2716,22 +2726,26 @@ struct QuickLogButton: View {
             VStack(spacing: 3) {
                 Image(systemName: systemImage)
                     .font(.title3)
+                // Wraps rather than shrinking: the grid goes 2-up at accessibility sizes, so a wrap
+                // is rare, and a word shrunk to fit is text that stopped tracking the user's size.
                 noun
                     .font(.custom(FernletFontName.dmSansMedium, size: 12, relativeTo: .caption))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let state {
+                    // Scaled with `.caption`, not `.caption2`: caption 2 is the same 11pt from
+                    // xSmall through Large, so the count did not change at the steps either side of
+                    // the default size, and the audit reported it as not tracking Dynamic Type.
                     state
-                        .font(.custom(FernletFontName.dmSans, size: 11, relativeTo: .caption2))
+                        .font(.custom(FernletFontName.dmSans, size: 11, relativeTo: .caption))
                         .foregroundStyle(Color.slate)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
                         // The water tile's "+1 bottle" badge changes this in place ("2 bottles" →
                         // "3 bottles"); rolling the digits is the only feedback that the one-tap
                         // add landed.
                         .contentTransition(.numericText())
                 }
             }
+            .multilineTextAlignment(.center)
             // 56, down from 66 (FLOW-18): the compacted cold open.
             .frame(maxWidth: .infinity, minHeight: 56)
             .foregroundStyle(active ? Color.moss : Color.slate)

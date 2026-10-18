@@ -243,10 +243,16 @@ struct SillyStatsHomeCard: View {
                             .accessibilityHidden(true)
                     }
                     if let text {
-                        Text(verbatim: "\(text.emoji) \(text.headline)")
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .fernletWrappingText()
+                        // The emoji apart from the headline, and drawn rather than set as text: in the
+                        // headline it overran Instrument Serif's short line, and even alone in a
+                        // system-font `Text` the audit reports an emoji's glyph as clipped text.
+                        HStack(alignment: .center, spacing: 8) {
+                            SillyStatEmoji(emoji: text.emoji)
+                            Text(verbatim: text.headline)
+                                .font(.fernlet(.body))
+                                .foregroundStyle(Color.bark)
+                                .fernletWrappingText()
+                        }
                         Text(verbatim: text.detail)
                             .font(.fernlet(.bodySmall))
                             .foregroundStyle(Color.slate)
@@ -269,5 +275,25 @@ struct SillyStatsHomeCard: View {
     static func featured(in revealed: [SillyStatKind], todayKey: String) -> SillyStatKind? {
         guard !revealed.isEmpty else { return nil }
         return revealed[GentleOfferEngine.rotationSeed(dateKey: todayKey) % revealed.count]
+    }
+}
+
+/// A silly stat's emoji, drawn into a `Canvas` at a size that tracks Dynamic Type.
+///
+/// Decorative beside the headline it illustrates, so it is hidden from VoiceOver as the stats page
+/// hides it. Drawn rather than laid out because the accessibility audit reports a bare emoji `Text`
+/// as clipped (its glyph overhangs the line box) at every size; the canvas is the same picture,
+/// scaled by `@ScaledMetric` so it still grows with the user's text size.
+private struct SillyStatEmoji: View {
+    let emoji: String
+    @ScaledMetric(relativeTo: .body) private var side: CGFloat = 22
+
+    var body: some View {
+        Canvas { context, size in
+            let glyph = context.resolve(Text(verbatim: emoji).font(.system(size: side * 0.8)))
+            context.draw(glyph, at: CGPoint(x: size.width / 2, y: size.height / 2))
+        }
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
     }
 }

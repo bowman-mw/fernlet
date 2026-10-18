@@ -160,6 +160,8 @@ struct FoodView: View {
                     .buttonStyle(.plain)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.moss)
+                    // The label alone was an 18pt-tall target.
+                    .fernletTapTarget()
                     .accessibilityIdentifier("food.adjustTargets")
             }
         }
@@ -5514,6 +5516,7 @@ private struct RecipeRow: View {
     var recipe: RecipeDefinition
     var totals: MacroTotals
     var showCalories: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -5535,7 +5538,9 @@ private struct RecipeRow: View {
                 Text(recipe.notes)
                     .font(.fernlet(.bubble))
                     .foregroundStyle(Color.slate)
-                    .lineLimit(2)
+                    // A two-line preview, except at accessibility sizes, where two lines held only
+                    // the first few words.
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             }
             HStack(spacing: 14) {
                 Text("P \(perServing.protein)g").foregroundStyle(Color.moss)
@@ -6470,6 +6475,8 @@ private struct MacroInputRow: View {
                         .underline()
                 }
                 .buttonStyle(.plain)
+                // "0g" alone was an 18pt-square target beside the stepper.
+                .fernletTapTarget()
             }
             Stepper("", value: $grams, in: range, step: 1)
                 .labelsHidden()

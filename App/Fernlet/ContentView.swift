@@ -1064,21 +1064,25 @@ struct ContentView: View {
         return Button {
             selectTab(tab)
         } label: {
-            VStack(spacing: hidesLabel ? 0 : 3) {
+            VStack(spacing: 3) {
                 Image(systemName: tab.systemImage)
                     // Scales with Dynamic Type instead of a fixed 18/20pt, so the bar's one
                     // remaining element grows with the user's text size.
                     .font(isCompact ? .body : .title3)
                     .frame(minHeight: isCompact ? 22 : 24)
-                Text(verbatim: tab.title)
-                    .font(.fernlet(.labelSmall))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .opacity(hidesLabel ? 0 : 1)
-                    .frame(height: hidesLabel ? 0 : nil)
-                    // Always hidden: the Button carries the title as its accessibility
-                    // label, so VoiceOver reads it in every state (drawn or not) exactly once.
-                    .accessibilityHidden(true)
+                // Laid out only while it is drawn. Hidden by zero opacity in a zero-height frame,
+                // the label stayed in the layout, and the accessibility audit measured it as
+                // clipped text on every screen with a tab bar.
+                if !hidesLabel {
+                    Text(verbatim: tab.title)
+                        .font(.fernlet(.labelSmall))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .transition(.opacity)
+                        // Always hidden: the Button carries the title as its accessibility
+                        // label, so VoiceOver reads it in every state (drawn or not) exactly once.
+                        .accessibilityHidden(true)
+                }
             }
             // F1 fix: under Reduce Transparency `tabBarBackground` resolves to solid `Color.parchment`
             // (below), which is exactly the selected pill's own fill — the indicator went invisible

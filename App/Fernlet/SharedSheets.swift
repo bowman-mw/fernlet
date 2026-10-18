@@ -248,7 +248,9 @@ struct SleepSheet: View {
                 VStack(alignment: .leading, spacing: 22) {
                     qualityPicker
 
-                    HStack(alignment: .top, spacing: 12) {
+                    // Side by side below accessibility sizes; stacked at them, where "(OPTIONAL)"
+                    // alone is wider than half the sheet and both captions were cut mid-word.
+                    AdaptiveStack(spacing: 12, horizontalAlignment: .leading, verticalAlignment: .top) {
                         SheetField("Hours (optional)", namesControl: true) {
                             TextField("7.5", text: $hours)
                                 // A decimal pad, not the full alphabetic keyboard: "7.5" is the
@@ -420,6 +422,7 @@ struct GoalsSheet: View {
 /// authored in ``SettingsSheet``'s personal-care section; this sheet only checks things off.
 struct HygieneSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var store: FernletStore
 
     var body: some View {
@@ -455,7 +458,14 @@ struct HygieneSheet: View {
         let isDone = store.isPersonalCareTaskCompleted(task)
         return Button { store.togglePersonalCareTask(task) } label: {
             HStack {
-                Label(task.displayLabel, systemImage: task.systemImage)
+                // At accessibility sizes the glyph gives way (the unwell row's convention): beside
+                // it, a one-word task like "Deodorant" was wider than the space left and was cut.
+                // Only the glyph is conditional, so the title stays the same view at every size.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Image(systemName: task.systemImage)
+                        .foregroundStyle(Color.bark)
+                }
+                Text(task.displayLabel)
                     .foregroundStyle(Color.bark)
                 Spacer()
                 if isDone {

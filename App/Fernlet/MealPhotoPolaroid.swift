@@ -16,6 +16,7 @@ struct MealPhotoPolaroid: View {
     var width: CGFloat = 128
 
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var image: UIImage?
     /// nil until the sealed read runs; false once it comes back empty (no openable bytes on this device).
     @State private var bytesAvailable: Bool?
@@ -41,11 +42,17 @@ struct MealPhotoPolaroid: View {
         }
     }
 
+    /// The print's width: the caller's, widened at accessibility sizes, where one word of the meal's
+    /// name ("Chicken") was already wider than a 128pt print.
+    private var printWidth: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? max(width, 220) : width
+    }
+
     var body: some View {
         VStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(photoFill)
-                .frame(width: width, height: width * 0.86)
+                .frame(width: printWidth, height: printWidth * 0.86)
                 .overlay { photoOverlay }
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(name)
@@ -53,8 +60,12 @@ struct MealPhotoPolaroid: View {
                 // Full-strength slate, not 58%: the faded caption measured 1.9:1 on the cream frame
                 // (matching the shared `PolaroidTile`, which was corrected the same way).
                 .foregroundStyle(Color.slate)
-                .lineLimit(1)
-                .frame(maxWidth: width)
+                // Two lines on the strip ("Greek yogurt with berries" was already cut on one at the
+                // default size); the whole name at accessibility sizes.
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: printWidth)
         }
         .padding(.horizontal, 7)
         .padding(.top, 7)
@@ -107,7 +118,7 @@ struct MealPhotoPolaroid: View {
             return
         }
         bytesAvailable = true
-        let pixelSize = CGSize(width: width * displayScale, height: width * 0.86 * displayScale)
+        let pixelSize = CGSize(width: printWidth * displayScale, height: printWidth * 0.86 * displayScale)
         image = await UIImage(data: data)?.byPreparingThumbnail(ofSize: pixelSize)
     }
 
