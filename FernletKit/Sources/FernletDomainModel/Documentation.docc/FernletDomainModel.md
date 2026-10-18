@@ -273,7 +273,9 @@ lookup) and kept after reviewing it. It is a user food row — synced with the r
 never merged into the bundled catalog — whose values are Open Food Facts contributors', so it is
 not `.manual`. Two invariants ride on it: every surface that names such a row's source shows
 ``FoodItemSource/attributionLine`` (the ODbL notice), which ``FoodItem/dataSourceLabel`` does for
-the search rows; and search ranks it manual > openFoodFacts > usda > aiResolved, each source on a
+the search rows and, since 2026-10-18 (tracker §2.6), ``Meal/attributionLines(sourceOfFood:)`` does
+for a meal logged from such a food (the meal rows, the day detail and the data export); and search
+ranks it manual > openFoodFacts > usda > aiResolved, each source on a
 distinct priority because the comparators stop at the first differing source. A build that predates
 the token reads the row as `.manual` and parks the token (`EnumDecodeCompat`), so a round trip
 through an older device loses nothing.

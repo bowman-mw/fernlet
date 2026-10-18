@@ -137,6 +137,9 @@ final class FernletStore {
         get { diary.foodItems }
         set { diary.foodItems = newValue }
     }
+    /// The licence attribution a meal row, the day detail and the export show for `meal` (tracker
+    /// §2.6): see `DiaryStore.dataAttribution(for:)`.
+    func dataAttribution(for meal: Meal) -> String? { diary.dataAttribution(for: meal) }
     var webImportedFoodItems: [FoodItem] { diary.webImportedFoodItems }
     var allowsWebNutritionLookup: Bool { diary.allowsWebNutritionLookup }
     var shouldOfferWebNutritionLookupConsent: Bool { settings.shouldOfferWebNutritionLookupConsent }

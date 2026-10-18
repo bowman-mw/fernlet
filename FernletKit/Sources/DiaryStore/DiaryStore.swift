@@ -99,6 +99,14 @@ public final class DiaryStore {
     public var foodItems: [FoodItem] {
         didSet { foodCatalog.setUserItems(foodItems) }
     }
+    /// The licence attribution `meal` must carry wherever it is shown or exported (tracker §2.6,
+    /// 2026-10-18), resolved against ``foodItems``: "Data from Open Food Facts (ODbL)" when a component
+    /// was logged from an Open Food Facts import, or nil when no component's food carries an
+    /// obligation. Several attributed sources join into one line. See `Meal.attributionLines`.
+    public func dataAttribution(for meal: Meal) -> String? {
+        let lines = meal.attributionLines { foodID in foodItems.first(where: { $0.id == foodID })?.source }
+        return lines.isEmpty ? nil : lines.joined(separator: " · ")
+    }
     /// The subset of ``foodItems`` that arrived through the web-nutrition import path
     /// (tagged `web-import`).
     public var webImportedFoodItems: [FoodItem] {

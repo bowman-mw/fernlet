@@ -334,7 +334,8 @@ struct FoodView: View {
                                 onCorrect: { correctingMeal = meal },
                                 loadPhotoData: meal.photoID.map { id in { store.mealPhotoData(for: id) } },
                                 hasPhotoSealedFile: meal.photoID.map { id in { store.mealPhotoHasSealedFile(for: id) } },
-                                showsMealTypeBadge: false
+                                showsMealTypeBadge: false,
+                                dataAttribution: store.dataAttribution(for: meal)
                             )
                             if rowIndex < group.meals.count - 1 {
                                 FernletRowDivider()
@@ -4239,6 +4240,9 @@ private struct MealRow: View {
     /// The row's own meal-type capsule. Suppressed when the row already sits under a meal-type section
     /// header (the "Today" card) so the type isn't labelled twice; defaults to shown for any other use.
     var showsMealTypeBadge: Bool = true
+    /// The licence notice for the foods this meal was logged from ("Data from Open Food Facts (ODbL)"),
+    /// already localized by the domain model; nil when none carries one (tracker §2.6).
+    var dataAttribution: String? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -4293,6 +4297,12 @@ private struct MealRow: View {
             Text(displayNote)
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
+            if let dataAttribution {
+                Text(verbatim: dataAttribution)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .accessibilityIdentifier("food.mealRow.attribution")
+            }
         }
     }
 
