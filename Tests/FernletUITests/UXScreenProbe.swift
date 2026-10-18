@@ -180,7 +180,7 @@ struct UXScreenProbe {
         self.test = test
     }
 
-    private var window: XCUIElement { app.windows.firstMatch }
+    var window: XCUIElement { app.windows.firstMatch }
 
     func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)[identifier]
@@ -329,26 +329,36 @@ struct UXScreenProbe {
 
     // MARK: Accessibility audit — the runtime half of the §4.5 wall
 
-    /// The audit types run on every screen.
+    /// The audit types run on every screen: all of them, `.contrast` included since 2026-10-18.
     ///
-    /// `.contrast` is **deliberately subtracted**, and this is the honest reason rather than a
-    /// convenience: XCUITest's contrast auditor samples rendered pixels and cannot see which pairs
-    /// are text and which are decorative, so on a parchment palette built from deliberately soft
-    /// hairlines (a card edge at 0.08 bark, a chip outline at 0.12) it reports the design's whole
-    /// vocabulary of quiet boundaries as failures. Those boundaries ARE measured — every ratio in
-    /// `FernletUIComponents.swift`'s token doc comments was computed from the raw channel bytes,
-    /// and Increase Contrast raises each of them past the 3:1 non-text floor (T2-6 / §4.2). A
-    /// pixel auditor that cannot tell a 12pt caption from a 1pt divider would bury the four real
-    /// findings under fifty false ones, and a noisy wall is a disabled wall.
+    /// `.contrast` was subtracted until then, on a correct diagnosis: XCUITest's contrast auditor
+    /// samples rendered pixels and its verdicts do not follow the WCAG ratio on this palette. It
+    /// came back once two things were true. The 65 muted-`slate` sites it could never have passed
+    /// were converted (and rule A8 in `Scripts/accessibility-scan.py` keeps new ones out), and its
+    /// findings stopped being taken at its word: the auditor NOMINATES and
+    /// `UXScreenProbe+Contrast.swift` decides, by measuring each nominated element in the
+    /// screenshot against the 4.5:1 / 3:1 floors. The measurement that made that necessary, on the
+    /// gallery in default light: full-strength `bark` headings rendered at 19.4:1 reported
+    /// "Contrast failed", moss text at 3.73:1 reported only "nearly passed", and the Move tab's
+    /// 45%-slate "Rest" captions at 1.83:1 not reported at all.
     ///
     /// `.sufficientElementDescription`, `.hitRegion`, `.dynamicType`, `.elementDetection`,
-    /// `.textClipped` and `.trait` all run. Those are the four things this audit is genuinely good
+    /// `.textClipped` and `.trait` run as before. Those are the things this audit is genuinely good
     /// at — an unlabeled element, a sub-44pt target, text clipped at AX5, a control with no trait.
+    static var auditTypes: XCUIAccessibilityAuditType { .all }
+
+    /// The passes ``auditTypes`` is run in: `.contrast` alone FIRST, then the rest.
     ///
-    /// Re-examine this subtraction when the contrast work lands its second half; the review's
-    /// instruction was to burn the contrast allowlist down deliberately rather than to leave the
-    /// type off forever.
-    static var auditTypes: XCUIAccessibilityAuditType { .all.subtracting(.contrast) }
+    /// **Why two passes, measured rather than guessed.** Run inside one `.all` audit on the gallery
+    /// in default light, 28 of the 134 contrast issues were element-less: no element, so no frame
+    /// and nothing the triage can measure, which would have left them failing the wall unjudged.
+    /// Run first and alone on the same gallery, the contrast pass returned no element-less issue at
+    /// all. The app changed between those two runs, so that is an observation rather than a
+    /// controlled result. The likely cause is the one ``underReportingCategoryPrefixes`` records
+    /// for Dynamic Type: that pass re-renders the screen at other text sizes and does not always
+    /// put it back. The auditor's misjudgements did NOT go away with the separate pass — 61 issues
+    /// on the same gallery still measured clear of their floor — which is why the triage exists.
+    static var auditPasses: [XCUIAccessibilityAuditType] { [.contrast, auditTypes.subtracting(.contrast)] }
 
     /// Runs `performAccessibilityAudit` against the current screen.
     ///
@@ -370,7 +380,7 @@ struct UXScreenProbe {
     /// manual, forever.
     @discardableResult
     func audit(file: StaticString = #file, line: UInt = #line) throws -> Self {
-        var (raw, found) = try runAudit()
+        var (raw, found, excused, sweep) = try runAudit()
         // The environment check comes first: on a wrong device or a rotated simulator the ratchet
         // does not run at all, so neither the retry below nor `report` has anything to say.
         attachListingIfOffBaseline(raw: raw)
@@ -392,27 +402,50 @@ struct UXScreenProbe {
         // "Frozen findings" means walled ones (``walledEntries(of:)``): a baseline made only of
         // under-reporting lines legitimately audits to nothing, so it earns no retry either.
         if found.isEmpty && !Self.walledEntries(of: Self.auditBaselines[name] ?? []).isEmpty {
-            (raw, found) = try runAudit()
+            (raw, found, excused, sweep) = try runAudit()
         }
-        report(found, raw: raw, file: file, line: line)
+        report(found, raw: raw, excused: excused, sweep: sweep, file: file, line: line)
         return self
     }
 
-    /// One `performAccessibilityAudit` pass: the raw descriptions and the identity set.
-    private func runAudit() throws -> (raw: [String], found: Set<String>) {
+    /// One `performAccessibilityAudit` run: the raw descriptions, the identity set, and the contrast
+    /// issues the measured triage excused (see `UXScreenProbe+Contrast.swift`), each with its number.
+    private func runAudit() throws -> (raw: [String], found: Set<String>, excused: [String], sweep: [String]) {
         var raw: [String] = []
         var found: Set<String> = []
-        try app.performAccessibilityAudit(for: Self.auditTypes) { issue in
-            guard Self.exemption(for: issue) == nil else { return true }
-            raw.append(Self.describe(issue))
-            found.insert(Self.identity(issue))
-            // Always `true`. The handler's own "report it" path (`false`) raises an issue with no
-            // screen name on it, and a 26-screen gallery run then tells you something is wrong
-            // without saying where. Reporting below keeps the probe's `[screen]` prefix, which is
-            // the whole reason this harness exists.
-            return true
+        var excused: [String] = []
+        // Taken before the contrast pass, on the same screen the gallery attaches.
+        let canvas = ContrastCanvas(app.screenshot(), pointWidth: window.frame.width, tabBar: floatingTabBarBand())
+        let swept = contrastSweep(in: canvas)
+        let sweep = ["\(swept.measured) text element(s) measured; \(swept.below.count) under 4.5:1"] + swept.below
+        for pass in Self.auditPasses {
+            try app.performAccessibilityAudit(for: pass) { issue in
+                if let exemption = Self.exemption(for: issue) {
+                    // Listed, never silent: an exemption is a decision someone should be able to
+                    // read beside the finding it covers.
+                    excused.append("\(Self.describe(issue)) — exempt: \(exemption.reason.prefix(80))…")
+                    return true
+                }
+                if issue.auditType == .contrast {
+                    let verdict = contrastVerdict(issue, in: canvas)
+                    if verdict.excuse != nil {
+                        excused.append("\(Self.describe(issue)) — \(verdict.summary)")
+                        return true
+                    }
+                    raw.append("\(Self.describe(issue)) — \(verdict.summary)")
+                    found.insert(Self.identity(issue))
+                    return true
+                }
+                raw.append(Self.describe(issue))
+                found.insert(Self.identity(issue))
+                // Always `true`. The handler's own "report it" path (`false`) raises an issue with
+                // no screen name on it, and a 26-screen gallery run then tells you something is
+                // wrong without saying where. Reporting below keeps the probe's `[screen]` prefix,
+                // which is the whole reason this harness exists.
+                return true
+            }
         }
-        return (raw, found)
+        return (raw, found, excused, sweep)
     }
 
     /// The window geometry every identity in ``auditBaselines`` was recorded against: **iPhone 17
@@ -498,10 +531,12 @@ struct UXScreenProbe {
     /// previously left to the runner's memory. Four inputs, each measured to move findings, each
     /// named in the failure — see ``baselineEnvironmentMismatches()``.
     ///
-    /// **What it still does not check.** Appearance (light/dark). `.contrast` is subtracted from
-    /// ``auditTypes``, and the 2026-09-20 re-record confirmed the whole delta reproduces
-    /// byte-for-byte in dark and in light on two independent runs, so appearance is measured not to
-    /// matter to these findings rather than merely hoped not to.
+    /// **What it still does not check.** Appearance (light/dark) and Increase Contrast. For the
+    /// layout categories the 2026-09-20 re-record confirmed the whole delta reproduces byte-for-byte
+    /// in dark and in light on two independent runs. Contrast DOES depend on both, and the map
+    /// describes default light: on 2026-10-18 the gallery in dark mode and under Increase Contrast
+    /// left no contrast finding the triage could not excuse, so another appearance cannot fail it
+    /// spuriously today — it can only leave ``auditExemptions`` entries unused.
     private func isOnBaselineEnvironment(file: StaticString, line: UInt) -> Bool {
         let mismatches = baselineEnvironmentMismatches()
         guard !mismatches.isEmpty else { return true }
@@ -612,14 +647,15 @@ struct UXScreenProbe {
     /// rule above holds for EVERY frozen line: an entry is excused only while the element it names
     /// is still on the audited screen. An under-reporting auditor is the only thing the exception
     /// was ever meant to cover, and a screen the element has left is not that.
-    private func report(_ found: Set<String>, raw: [String], file: StaticString, line: UInt) {
+    private func report(_ found: Set<String>, raw: [String], excused: [String], sweep: [String],
+                        file: StaticString, line: UInt) {
         let baseline = Self.auditBaselines[name] ?? []
         let excusable = Self.unreportedCategories(found: found, baseline: baseline)
         let unreported = excusable.subtracting(absentFromScreen(excusable))
         let appeared = found.subtracting(baseline).sorted()
         let disappeared = baseline.subtracting(found).subtracting(unreported).sorted()
         attachListing(found: found, raw: raw, appeared: appeared, disappeared: disappeared,
-                      unreported: unreported.sorted())
+                      unreported: unreported.sorted(), excused: excused, sweep: sweep)
 
         // A screen with a non-empty baseline that returns NOTHING AT ALL is the auditor failing, not
         // the screen being fixed — reported as such, because the generic "no longer reproduce"
@@ -765,7 +801,8 @@ struct UXScreenProbe {
     /// listing (frames and duplicates included — that detail is what a fixer needs), then the
     /// identity set the wall actually compares, then the three deltas.
     private func attachListing(found: Set<String>, raw: [String],
-                               appeared: [String], disappeared: [String], unreported: [String]) {
+                               appeared: [String], disappeared: [String], unreported: [String],
+                               excused: [String], sweep: [String]) {
         let body = """
             [\(name)] \(found.count) distinct finding(s) from \(raw.count) raw issue(s)
 
@@ -784,6 +821,12 @@ struct UXScreenProbe {
             -- baseline entries excused this run: category under-reports AND the element is still \
             on screen (not walled) --
             \(unreported.isEmpty ? "none" : unreported.joined(separator: "\n"))
+
+            -- contrast issues excused by measurement (disabled / occluded / inkClears) --
+            \(excused.isEmpty ? "none" : excused.sorted().joined(separator: "\n"))
+
+            -- measured sweep of every visible text element (report-only, not walled) --
+            \(sweep.joined(separator: "\n"))
             """
         let attachment = XCTAttachment(string: body)
         attachment.name = "\(name) – accessibility audit"
@@ -906,21 +949,117 @@ struct UXScreenProbe {
         let auditType: XCUIAccessibilityAuditType
         /// A substring of `XCUIAccessibilityAuditIssue.compactDescription`.
         let descriptionContains: String
+        /// When set, the element's label as ``identity(_:)`` keys it (``normalisedLabel(_:)``) must
+        /// equal this, so an entry names ONE control rather than a whole audit category.
+        var elementLabel: String? = nil
+        /// When set, the element's accessibility identifier must equal this.
+        var elementIdentifier: String? = nil
         /// Why this issue is not a defect.
         let reason: String
+
+        /// Whether this entry covers `issue`. Main-actor, as the element it reads is.
+        @MainActor func covers(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+            guard issue.auditType.contains(auditType),
+                  issue.compactDescription.contains(descriptionContains) else { return false }
+            if let elementLabel, issue.element.map({ UXScreenProbe.normalisedLabel($0.label) }) != elementLabel {
+                return false
+            }
+            if let elementIdentifier, issue.element?.identifier != elementIdentifier { return false }
+            return true
+        }
     }
 
     /// Audit issues deliberately suppressed, individually, with a reason.
     ///
-    /// Empty on purpose. The measured backlog — 119 raw issues, which collapse to **135 identities
-    /// across 22 screens** once duplicates and volatile values are keyed out — was **not** waved
-    /// through here. It is frozen per screen in ``auditBaselines`` instead, so every one of those
-    /// findings stays visible and attached to the run. This list is for the different case: a
-    /// specific issue that is provably
-    /// not a defect (a platform artifact, an element the audit misreads). Nothing has qualified yet,
-    /// and the bar for adding an entry is the same as the other two walls' allowlists — state the
-    /// invariant, not the inconvenience.
-    static let auditExemptions: [AuditExemption] = []
+    /// The measured backlog of the other categories — 119 raw issues, which collapse to **135
+    /// identities across 22 screens** once duplicates and volatile values are keyed out — was **not**
+    /// waved through here. It is frozen per screen in ``auditBaselines`` instead, so every one of
+    /// those findings stays visible and attached to the run. This list is for the different case: a
+    /// specific issue that is provably not a defect, or not a defect under the route the declaration
+    /// rests on. The bar is the same as the other two walls' allowlists — state the invariant, not the
+    /// inconvenience — and every exempted issue is still LISTED in the run's attachment beside its
+    /// reason, so an entry never makes a finding invisible.
+    ///
+    /// **What is here, and why it is all contrast.** `.contrast` came back on 2026-10-18 with the
+    /// measured triage in `UXScreenProbe+Contrast.swift`, which excuses the auditor's false positives
+    /// by measuring them. What survives the triage on the gallery, in the default light appearance, is
+    /// below: moss-family text that is under 4.5:1 by default and over it under Increase Contrast, and
+    /// one piece of illustration. Entries are keyed to one control each (an identifier, or a
+    /// normalised label), never to a whole category, so a NEW moss label on a gallery screen still
+    /// fails the wall until someone measures it and decides.
+    ///
+    /// **The honest cost.** These entries are environment-shaped: in dark mode or under Increase
+    /// Contrast they match nothing, because nothing there fails. An unused entry therefore cannot be
+    /// failed the way the grep-wall's allowlist fails one, and an entry whose control is deleted
+    /// stays here silently. Re-measure the list whenever a gallery screen changes its accents.
+    static let auditExemptions: [AuditExemption] = mossTextExemptions + [
+        AuditExemption(
+            auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Home",
+            reason: """
+                THE UNSELECTED HOME TAB, ON THE INCREASE CONTRAST ROUTE. Its label is full-strength \
+                `slate` over the floating bar's translucent material, so its ratio follows the page \
+                under the glass: 4.43–4.50:1 rendered on the two Cycle screens in default light, where \
+                that page is darkest, and 5.39:1 on the others; 4.54:1 in dark; 6.33:1 under Increase \
+                Contrast, where `slate` resolves to #45535E; and under Reduce Transparency the bar is \
+                solid parchment, 4.78:1. Same route as the moss entries — see \
+                ``mossIncreaseContrastRoute``. Delete it if the bar's material ever stops tinting \
+                with the page.
+                """
+        ),
+        AuditExemption(
+            auditType: .contrast, descriptionContains: "Contrast", elementLabel: "z",
+            reason: """
+                INCIDENTAL TEXT IN AN ILLUSTRATION. The "z" is part of the companion's sleeping \
+                artwork on Home (it is drawn only while the companion sleeps, which is why it appears in \
+                evening runs only), set over the companion's moss body: 2.47:1 rendered in default \
+                light, 5.26:1 dark, 5.55:1 under Increase Contrast. WCAG 1.4.3 exempts text that is part \
+                of a picture with significant other visual content; it conveys nothing a reader needs. \
+                Its Dynamic Type finding is a separate, pre-existing issue for the Larger Text row.
+                """
+        ),
+    ]
+
+    /// The shared reason for every ``mossTextExemptions`` entry.
+    static let mossIncreaseContrastRoute = """
+        MOSS-FAMILY TEXT, PASSING ON THE INCREASE CONTRAST ROUTE. Plain `moss` text measures 3.74:1 \
+        on parchment and 4.02:1 on cream in the default light appearance (rendered on the gallery: \
+        3.48–3.99:1), under the 4.5:1 text floor; in dark mode the same elements measure 5.37:1 or \
+        more, and under Increase Contrast, where `moss` resolves to #46683A, 5.14:1 or more (measured \
+        2026-10-18 from the gallery's screenshots at each element's frame). Apple's Sufficient \
+        Contrast criterion accepts exactly this for an app on Apple's UI frameworks — "verify that \
+        the Increase Contrast setting applies sufficient contrast" — and the declaration in \
+        Docs/Accessibility-Nutrition-Labels.md rests on it. Delete the entry if this control's \
+        default ink ever passes on its own.
+        """
+
+    /// The gallery's moss-family text, one control per entry — see ``mossIncreaseContrastRoute``.
+    ///
+    /// Labels are written as ``identity(_:)`` keys them (``normalisedLabel(_:)``: "Call 988" is
+    /// "Call #", "0g" is "#g").
+    static let mossTextExemptions: [AuditExemption] = [
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "sheet.done",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "food.adjustTargets",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "workout.space.change",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "journal.inspiration",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Adjust",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "P #g",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "#g",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Call #",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Create",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "List",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Planner",
+                       reason: mossIncreaseContrastRoute),
+    ]
 
     /// The per-screen baseline: the **exact set of issue identities** each probe screen is known to
     /// report, frozen. A ratchet in the same spirit as `Scripts/power-of-10-scan.py`'s
@@ -1125,10 +1264,7 @@ struct UXScreenProbe {
 
     /// The exemption covering `issue`, if any.
     static func exemption(for issue: XCUIAccessibilityAuditIssue) -> AuditExemption? {
-        auditExemptions.first {
-            issue.auditType.contains($0.auditType)
-                && issue.compactDescription.contains($0.descriptionContains)
-        }
+        auditExemptions.first { $0.covers(issue) }
     }
 
     // MARK: Screenshot gallery
