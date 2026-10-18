@@ -699,10 +699,11 @@ struct HomeView: View {
                         Text("First aid")
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
+                        // `bark`, not `slate`: on the card's moss wash slate measured 4.28:1.
                         Text("A quiet minute, whenever")
                             .font(.fernlet(.bodySmall))
                             .italic()
-                            .foregroundStyle(Color.slate)
+                            .foregroundStyle(Color.bark)
                             .fernletWrappingText()
                     }
                     Spacer()

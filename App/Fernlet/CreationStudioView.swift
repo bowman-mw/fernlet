@@ -564,9 +564,11 @@ struct CreationStudioView: View {
             if !isCanvasBlank { pushUndoSnapshot() }
             pixels = Self.blankPixels(for: slot)
         } label: {
+            // `terracottaInk`, the destructive TEXT token: plain `terracotta` measured 4.16:1 here and
+            // has no Increase Contrast twin, so it failed on every route.
             Label("Clear canvas", systemImage: "trash")
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.terracotta)
+                .foregroundStyle(Color.terracottaInk)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()

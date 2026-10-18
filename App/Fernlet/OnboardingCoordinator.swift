@@ -895,9 +895,10 @@ private struct OnboardingChoiceRow: View {
                     Text(title)
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
+                    // On the selected row's moss wash `slate` measured 4.44:1, so it goes to `bark`.
                     Text(subtitle)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(isSelected ? Color.bark : Color.slate)
                         .fernletWrappingText()
                 }
                 Spacer(minLength: 8)

@@ -410,14 +410,29 @@ struct UXScreenProbe {
 
     /// One `performAccessibilityAudit` run: the raw descriptions, the identity set, and the contrast
     /// issues the measured triage excused (see `UXScreenProbe+Contrast.swift`), each with its number.
-    private func runAudit() throws -> (raw: [String], found: Set<String>, excused: [String], sweep: [String]) {
+    private func runAudit() throws -> (raw: [String], found: Set<String>, excused: [String], sweep: ContrastSweep) {
         var raw: [String] = []
         var found: Set<String> = []
         var excused: [String] = []
-        // Taken before the contrast pass, on the same screen the gallery attaches.
-        let canvas = ContrastCanvas(app.screenshot(), pointWidth: window.frame.width, tabBar: floatingTabBarBand())
-        let swept = contrastSweep(in: canvas)
-        let sweep = ["\(swept.measured) text element(s) measured; \(swept.below.count) under 4.5:1"] + swept.below
+        // Taken before the contrast pass, on the same screen the gallery attaches. The snapshot
+        // THROWS rather than being skipped: the sweep is walled, and a sweep that read no tree has
+        // measured nothing, which must not pass for a screen with no faint text.
+        let root = try app.snapshot()
+        let tabBar = floatingTabBarBand()
+        let header = pinnedHeader(in: root)
+        let footer = pinnedFooter(in: root, tabBar: tabBar)
+        let keyboard = keyboardBar(in: root)
+        let canvas = ContrastCanvas(app.screenshot(), pointWidth: window.frame.width, tabBar: tabBar,
+                                    bars: [header, footer, keyboard].compactMap { $0 })
+        var sweep = ContrastSweep()
+        if let canvas {
+            sweep = contrastSweep(root, in: canvas)
+        } else {
+            sweep.failing = ["the screenshot has no bitmap, so nothing on this screen was measured"]
+        }
+        sweep.occluded.insert(contentsOf: ["pinned header: \(header?.summary ?? "none")",
+                                           "pinned footer: \(footer?.summary ?? "none")",
+                                           "keyboard: \(keyboard?.summary ?? "none")"], at: 0)
         for pass in Self.auditPasses {
             try app.performAccessibilityAudit(for: pass) { issue in
                 if let exemption = Self.exemption(for: issue) {
@@ -533,10 +548,12 @@ struct UXScreenProbe {
     ///
     /// **What it still does not check.** Appearance (light/dark) and Increase Contrast. For the
     /// layout categories the 2026-09-20 re-record confirmed the whole delta reproduces byte-for-byte
-    /// in dark and in light on two independent runs. Contrast DOES depend on both, and the map
-    /// describes default light: on 2026-10-18 the gallery in dark mode and under Increase Contrast
-    /// left no contrast finding the triage could not excuse, so another appearance cannot fail it
-    /// spuriously today — it can only leave ``auditExemptions`` entries unused.
+    /// in dark and in light on two independent runs. Contrast DOES depend on both, and so does the
+    /// walled sweep (`contrastSweep(_:in:)`), which runs in every appearance. Retaken with the Mac
+    /// awake on 2026-10-18, the gallery in dark mode and under Increase Contrast was 25 of 25 green
+    /// each: no swept text under 4.5:1 and no contrast finding the triage could not excuse. So
+    /// another appearance does not fail it spuriously today; it can only leave ``auditExemptions``
+    /// entries unused.
     private func isOnBaselineEnvironment(file: StaticString, line: UInt) -> Bool {
         let mismatches = baselineEnvironmentMismatches()
         guard !mismatches.isEmpty else { return true }
@@ -647,7 +664,7 @@ struct UXScreenProbe {
     /// rule above holds for EVERY frozen line: an entry is excused only while the element it names
     /// is still on the audited screen. An under-reporting auditor is the only thing the exception
     /// was ever meant to cover, and a screen the element has left is not that.
-    private func report(_ found: Set<String>, raw: [String], excused: [String], sweep: [String],
+    private func report(_ found: Set<String>, raw: [String], excused: [String], sweep: ContrastSweep,
                         file: StaticString, line: UInt) {
         let baseline = Self.auditBaselines[name] ?? []
         let excusable = Self.unreportedCategories(found: found, baseline: baseline)
@@ -655,7 +672,19 @@ struct UXScreenProbe {
         let appeared = found.subtracting(baseline).sorted()
         let disappeared = baseline.subtracting(found).subtracting(unreported).sorted()
         attachListing(found: found, raw: raw, appeared: appeared, disappeared: disappeared,
-                      unreported: unreported.sorted(), excused: excused, sweep: sweep)
+                      unreported: unreported.sorted(), excused: excused, sweep: sweep.listing)
+
+        // The measured sweep is walled on its own, before the identity ratchet: a text under the
+        // floor is a defect whatever the auditor said about the screen, including nothing at all.
+        if !sweep.failing.isEmpty {
+            XCTFail("""
+                [\(name)] \(sweep.failing.count) visible text element(s) measure under the 4.5:1 text \
+                floor in this screenshot, and nothing excuses them (see `contrastSweep(_:in:)`). Ink \
+                them at full strength, or, if the text passes on the Increase Contrast route, measure it \
+                there and add an `AuditExemption` naming that one text:
+                \(sweep.failing.joined(separator: "\n"))
+                """, file: file, line: line)
+        }
 
         // A screen with a non-empty baseline that returns NOTHING AT ALL is the auditor failing, not
         // the screen being fixed — reported as such, because the generic "no longer reproduce"
@@ -826,7 +855,7 @@ struct UXScreenProbe {
             -- contrast issues excused by measurement (disabled / occluded / inkClears) --
             \(excused.isEmpty ? "none" : excused.sorted().joined(separator: "\n"))
 
-            -- measured sweep of every visible text element (report-only, not walled) --
+            -- measured sweep of every visible text element (walled: an unexcused one FAILS) --
             \(sweep.joined(separator: "\n"))
             """
         let attachment = XCTAttachment(string: body)
@@ -1008,6 +1037,17 @@ struct UXScreenProbe {
                 """
         ),
         AuditExemption(
+            auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "privacy.multiDevice.warning",
+            reason: """
+                FULL-STRENGTH SLATE ON A TERRACOTTA WASH, ON THE INCREASE CONTRAST ROUTE. Privacy & Data's \
+                "Multiple devices" warning is the shared `SectionLabel` (full `slate`) over the box's \
+                `terracotta` 8% wash: 4.34:1 rendered in default light, 6.19:1 in dark, and \
+                6.27:1 under Increase Contrast, where `slate` resolves to #45535E. The heading \
+                component is shared by ~83 call sites and carries the T1-1 heading canary, so its ink is \
+                not forked for one box. Same route as ``mossIncreaseContrastRoute``.
+                """
+        ),
+        AuditExemption(
             auditType: .contrast, descriptionContains: "Contrast", elementLabel: "z",
             reason: """
                 INCIDENTAL TEXT IN AN ILLUSTRATION. The "z" is part of the companion's sleeping \
@@ -1023,17 +1063,20 @@ struct UXScreenProbe {
     /// The shared reason for every ``mossTextExemptions`` entry.
     static let mossIncreaseContrastRoute = """
         MOSS-FAMILY TEXT, PASSING ON THE INCREASE CONTRAST ROUTE. Plain `moss` text measures 3.74:1 \
-        on parchment and 4.02:1 on cream in the default light appearance (rendered on the gallery: \
-        3.48–3.99:1), under the 4.5:1 text floor; in dark mode the same elements measure 5.37:1 or \
-        more, and under Increase Contrast, where `moss` resolves to #46683A, 5.14:1 or more (measured \
-        2026-10-18 from the gallery's screenshots at each element's frame). Apple's Sufficient \
+        on parchment and 4.02:1 on cream in the default light appearance (rendered on the probe \
+        screens: 3.48–4.02:1), under the 4.5:1 text floor; in dark mode the same elements measure \
+        5.37:1 or more, and under Increase Contrast, where `moss` resolves to #46683A, 5.14:1 or more \
+        (measured 2026-10-18 from the gallery's and the other probe suites' screenshots at each \
+        element's frame, with the Mac awake). Apple's Sufficient \
         Contrast criterion accepts exactly this for an app on Apple's UI frameworks — "verify that \
         the Increase Contrast setting applies sufficient contrast" — and the declaration in \
         Docs/Accessibility-Nutrition-Labels.md rests on it. Delete the entry if this control's \
         default ink ever passes on its own.
         """
 
-    /// The gallery's moss-family text, one control per entry — see ``mossIncreaseContrastRoute``.
+    /// The probe screens' moss-family text, one control per entry — see ``mossIncreaseContrastRoute``.
+    /// The measured sweep (`contrastSweep(_:in:)`) consults these too, matching a swept text by the
+    /// same normalised label or identifier, so one entry excuses one text in both halves.
     ///
     /// Labels are written as ``identity(_:)`` keys them (``normalisedLabel(_:)``: "Call 988" is
     /// "Call #", "0g" is "#g").
@@ -1059,6 +1102,35 @@ struct UXScreenProbe {
         AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "List",
                        reason: mossIncreaseContrastRoute),
         AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Planner",
+                       reason: mossIncreaseContrastRoute),
+        // Never nominated by the auditor; the measured sweep found both (4.02:1 in default light, on
+        // the Recipe and Edit recipe sheets and on Trends), and the sweep consults this list too.
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Servings",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Protein-Forward",
+                       reason: mossIncreaseContrastRoute),
+        // Off the gallery, on the other probe screens: onboarding's step counter, Settings' Done,
+        // Nutrition targets' "Show calories" link and Reset, Home's First aid chips, the recipe
+        // detail's photo prompt, and the Move log's Add tile and Edit link (2026-10-18).
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "onboarding.step",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "settings.done",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast",
+                       elementIdentifier: "nutritionTargets.showCalories", reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "nutritionTargets.reset",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "workout.log.edit",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Breathe",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Ground",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Worry box",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Add a photo of this recipe",
+                       reason: mossIncreaseContrastRoute),
+        AuditExemption(auditType: .contrast, descriptionContains: "Contrast", elementLabel: "Add",
                        reason: mossIncreaseContrastRoute),
     ]
 

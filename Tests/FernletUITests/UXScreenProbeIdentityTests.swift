@@ -181,4 +181,45 @@ final class UXScreenProbeIdentityTests: XCTestCase {
                        "Roast at # for # minutes")
         XCTAssertEqual(UXScreenProbe.normalisedLabel("1999"), "#")
     }
+
+    /// The contrast sweep's footer excuse covers content running under a pinned footer and never the
+    /// footer's own controls, whose ink is measured like any other text's.
+    ///
+    /// The frames are the Workout sheet's, measured 2026-10-18: the search field under
+    /// `SheetSaveBar` (2.14:1 through the strip) and the Save label itself.
+    @MainActor
+    func testPinnedBarCoversContentUnderItButNotItsOwnElements() {
+        let save = CGRect(x: 318, y: 780, width: 40, height: 20)
+        let footer = PinnedBar(band: CGRect(x: 0, y: 736, width: 402, height: 138), controls: [save])
+        XCTAssertTrue(footer.covers(CGRect(x: 68, y: 743, width: 293, height: 22)),
+                      "a field scrolled under the strip is hidden, not faint")
+        XCTAssertFalse(footer.covers(save), "the footer's own label is measured, not excused")
+        XCTAssertFalse(footer.covers(CGRect(x: 318, y: 783, width: 30, height: 14)),
+                       "text drawn inside the footer's control is that control's ink")
+        XCTAssertFalse(footer.covers(CGRect(x: 34, y: 690, width: 200, height: 20)),
+                       "text wholly above the band is measured")
+    }
+
+    /// The sweep honours an exemption only when it names that one text, by normalised label or by
+    /// identifier, and only a `.contrast` one; an entry that names neither would excuse a category.
+    @MainActor
+    func testSweptTextIsExemptOnlyByAnEntryNamingIt() {
+        let byLabel = UXScreenProbe.AuditExemption(
+            auditType: .contrast, descriptionContains: "Contrast", elementLabel: "P #g", reason: "moss")
+        XCTAssertTrue(byLabel.coversSweptText(label: "P 28g", identifier: ""))
+        XCTAssertFalse(byLabel.coversSweptText(label: "Protein", identifier: ""))
+
+        let byIdentifier = UXScreenProbe.AuditExemption(
+            auditType: .contrast, descriptionContains: "Contrast", elementIdentifier: "sheet.done", reason: "moss")
+        XCTAssertTrue(byIdentifier.coversSweptText(label: "Done", identifier: "sheet.done"))
+        XCTAssertFalse(byIdentifier.coversSweptText(label: "Done", identifier: "other"))
+
+        let category = UXScreenProbe.AuditExemption(auditType: .contrast, descriptionContains: "Contrast", reason: "all")
+        XCTAssertFalse(category.coversSweptText(label: "Anything", identifier: ""),
+                       "an entry naming no text must not excuse every swept text")
+        let otherType = UXScreenProbe.AuditExemption(
+            auditType: .dynamicType, descriptionContains: "Dynamic", elementLabel: "Servings", reason: "type")
+        XCTAssertFalse(otherType.coversSweptText(label: "Servings", identifier: ""),
+                       "only a contrast entry speaks to a contrast measurement")
+    }
 }

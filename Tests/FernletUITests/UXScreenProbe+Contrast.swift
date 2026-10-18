@@ -17,16 +17,19 @@ import XCTest
 //   * `disabled`  — the element reports `isEnabled == false`. WCAG 1.4.3 and 1.4.11 both exempt an
 //                   inactive control, and the house Save pill dims exactly that way.
 //   * `occluded`  — the element is not wholly on the visible canvas: it runs under the floating tab
-//                   bar or past the window's edge, so the auditor sampled the glass or nothing. The
-//                   same element is measured wherever it is NOT covered.
+//                   bar, under a bar pinned over a screen's scrolling content (`SheetSaveBar` or a
+//                   bar like it at the bottom, a sheet's header at the top) and the scroll-edge fade
+//                   beside it, or past the window's edge, so the auditor sampled the glass, the bar
+//                   or nothing. The same element is measured wherever it is
+//                   NOT covered.
 //   * `inkClears` — the element's rendered ink measures at or above its floor. The measurement is the
 //                   90th percentile of the inked pixels against the crop's dominant colour: ink at
 //                   full strength, not the anti-aliased fringe of a thin serif stroke.
 // Anything else is a real finding: it is reported like every other audit issue and fails the
 // screen unless it is in `auditBaselines` or `auditExemptions`, which name it and say why.
 //
-// THE HONEST CEILING. This judges only what the auditor nominates; an element it never reports is
-// never measured. The dominant-colour background is wrong for text on a gradient or a photograph
+// THE HONEST CEILING. The triage judges only what the auditor nominates; the sweep at the bottom of
+// this file is what measures the rest. The dominant-colour background is wrong for text on a gradient or a photograph
 // (none on the gallery). An element-less issue carries no frame and cannot be judged at all, so it
 // is reported unexcused. And the measurement is of THIS run's appearance only: the Increase Contrast
 // and dark-mode evidence in `Docs/Accessibility-Nutrition-Labels.md` comes from re-running the gallery
@@ -37,7 +40,8 @@ import XCTest
 enum ContrastExcuse: String, Sendable {
     /// An inactive control; WCAG 1.4.3 / 1.4.11 exempt it.
     case disabled
-    /// Not wholly on the visible canvas — under the tab bar or past the window's edge.
+    /// Not wholly on the visible canvas — under the tab bar, under a pinned header or footer, or
+    /// past the window's edge.
     case occluded
     /// Its rendered ink measures at or above its floor.
     case inkClears
@@ -59,6 +63,36 @@ struct ContrastVerdict: Sendable {
     }
 }
 
+/// A bar pinned over a screen's scrolling content, and the elements drawn on it: a footer
+/// (`SheetSaveBar`, or a bar built like it) found by ``UXScreenProbe/pinnedFooter(in:tabBar:)``, a
+/// sheet's header found by ``UXScreenProbe/pinnedHeader(in:)``, or the system keyboard found by
+/// ``UXScreenProbe/keyboardBar(in:)``.
+///
+/// Content scrolled under the bar is hidden by it, and the system's scroll-edge fade beside the bar
+/// washes out whatever sits next to it. Measured 2026-10-18, that is where four of the sweep's
+/// non-ink readings came from: the Workout sheet's search field (2.14:1) under `SheetSaveBar` and
+/// "ANYTHING ELSE?" (1.80:1) under the suggest bar, on the gallery; "Calories" (2.27:1) and "cal"
+/// (1.64:1) under Nutrition targets' header, and that card's footnote (1.43:1) and "HYDRATION"
+/// (1.35:1) under the keyboard its UI test leaves up. None is text a reader is shown; each is measured
+/// once it is scrolled into view.
+struct PinnedBar: Sendable {
+    /// The bar and its fade, from the window's edge, in points.
+    let band: CGRect
+    /// The frames of the bar's own elements. Their ink is measured like any other element's.
+    let controls: [CGRect]
+
+    /// Whether `frame` is content running under the bar, rather than one of its own elements.
+    func covers(_ frame: CGRect) -> Bool {
+        frame.intersects(band) && !controls.contains { $0.contains(frame) }
+    }
+
+    /// `y 724–874 under 1 element(s) …` — the line the attachment prints.
+    var summary: String {
+        "y \(Int(band.minY.rounded()))–\(Int(band.maxY.rounded())) under \(controls.count) element(s) "
+            + "\(controls.map(\.debugDescription))"
+    }
+}
+
 /// A screenshot unpacked once into RGBA bytes, so every issue on the screen is measured against the
 /// same pixels the gallery attached.
 struct ContrastCanvas {
@@ -73,9 +107,11 @@ struct ContrastCanvas {
     /// The band the floating tab bar covers, in points, or `nil` when no tab bar is showing (a sheet
     /// covers it). See ``UXScreenProbe/floatingTabBarBand()``.
     let tabBar: CGRect?
+    /// The header, footer and keyboard pinned over the scrolling content: whichever the screen has.
+    let bars: [PinnedBar]
 
     /// Unpacks `screenshot` of a window `pointWidth` points wide, or `nil` when it has no bitmap.
-    init?(_ screenshot: XCUIScreenshot, pointWidth: CGFloat, tabBar: CGRect?) {
+    init?(_ screenshot: XCUIScreenshot, pointWidth: CGFloat, tabBar: CGRect?, bars: [PinnedBar]) {
         guard let image = screenshot.image.cgImage, pointWidth > 0 else { return nil }
         let scale = CGFloat(image.width) / pointWidth
         let width = image.width
@@ -96,6 +132,12 @@ struct ContrastCanvas {
         self.scale = scale
         self.bytes = bytes
         self.tabBar = tabBar
+        self.bars = bars
+    }
+
+    /// Whether a pinned header, footer or keyboard covers `frame`.
+    func barsCover(_ frame: CGRect) -> Bool {
+        bars.contains { $0.covers(frame) }
     }
 }
 
@@ -132,14 +174,16 @@ extension UXScreenProbe {
         return ContrastVerdict(excuse: clears ? .inkClears : nil, ratio: ratio, floor: floor)
     }
 
-    /// Whether `frame` is not wholly on the visible canvas: past the window's edge, or under the
-    /// floating tab bar without being one of its own five items.
+    /// Whether `frame` is not wholly on the visible canvas: past the window's edge, under a pinned
+    /// header or footer without being one of its own elements, or under the floating tab bar without
+    /// being one of its own five items.
     ///
     /// A tab item is a BUTTON carrying a tab title. The title alone is not enough: Home's quick-log
     /// grid has a "Move" tile whose static text runs under the bar on the first viewport, and on
     /// 2026-10-17 it was measured as if it were the Move tab.
     private func isOccluded(_ frame: CGRect, isTabItem: Bool, in canvas: ContrastCanvas?) -> Bool {
         guard window.frame.contains(frame) else { return true }
+        if canvas?.barsCover(frame) == true { return true }
         guard let band = canvas?.tabBar, frame.intersects(band) else { return false }
         return !(band.contains(frame) && isTabItem)
     }
@@ -172,6 +216,123 @@ extension UXScreenProbe {
         guard home.exists, home.isHittable else { return nil }
         let top = home.frame.maxY - max(home.frame.height, Self.tabButtonHeight) - Self.tabBarOutset
         return CGRect(x: window.frame.minX, y: top, width: window.frame.width, height: window.frame.maxY - top)
+    }
+
+    /// How far above the window's bottom edge a footer's control may sit: a sheet's pill (bottom
+    /// safe area, the strip's padding, the pill) or a pushed editor's, which rides above the tab bar.
+    static let footerReach: CGFloat = 170
+    /// `SheetSaveBar`'s pill: at least 52pt tall, its label padded 16pt top and bottom.
+    static let footerPillHeight: CGFloat = 52
+    /// A reported frame at least this tall is the whole pill rather than its label. Lower than
+    /// ``footerPillHeight`` because a sheet presented below its full height is drawn scaled: the
+    /// Meal sheet's 52pt Save pill reports 49.9pt (2026-10-18).
+    static let footerPillMinimumReported: CGFloat = 40
+    /// The label's vertical padding inside `SheetSaveBar`'s pill.
+    static let footerPillPadding: CGFloat = 16
+    /// The strip's padding above the pill, as `SheetSaveBar` and the bars built like it draw it.
+    static let footerStripPadding: CGFloat = 20
+    /// Points the system's scroll-edge fade reaches above the strip's hairline.
+    static let footerFadeOutset: CGFloat = 8
+    /// Containers whose content scrolls, and can therefore run under a footer pinned outside them.
+    static let scrollContainers: [XCUIElement.ElementType] = [.scrollView, .collectionView, .table]
+
+    /// The footer pinned over this screen's scrolling content, or `nil` when there is none.
+    ///
+    /// A footer's control is a BUTTON that no scroll container holds (it does not scroll with the
+    /// content), sitting within ``footerReach`` of the window's bottom edge. That is what
+    /// `.safeAreaInset(edge: .bottom)` makes of `SheetSaveBar` and the eight bars like it. Its frame
+    /// is either the whole pill (a bar that pads inside the button's label) or only the label
+    /// (`SheetSaveBar`, which pads outside it under `.buttonStyle(.plain)`), so the pill's top is
+    /// recovered from the label when the frame is shorter than ``footerPillMinimumReported``. The
+    /// band starts ``footerStripPadding`` above the pill and ``footerFadeOutset`` more for the fade.
+    ///
+    /// The tab bar's row is left out by geometry, not by title: a button inside `tabBar` (from
+    /// ``floatingTabBarBand()``) is never a footer's. Measured 2026-10-18 with a title check
+    /// instead, four buttons in the tab bar's row still passed it on every tab screen, and the band
+    /// they drew sat 20pt above the tab bar's own.
+    ///
+    /// Like the tab bar's band it errs wide by a few points, which only ever moves an element from
+    /// "measured" to "occluded", and the attachment names the band. A screen with a fixed, unscrolled
+    /// button near its bottom also yields a band; nothing scrolls under it, so all that costs is the
+    /// few points of text just above it.
+    func pinnedFooter(in root: XCUIElementSnapshot, tabBar: CGRect?) -> PinnedBar? {
+        let reach = window.frame.maxY - Self.footerReach
+        var stack: [(node: XCUIElementSnapshot, scrolled: Bool)] = [(root, false)]
+        var controls: [CGRect] = []
+        for _ in 0..<Self.maximumSweptNodes {
+            guard let entry = stack.popLast() else { break }
+            let node = entry.node
+            if !entry.scrolled, node.elementType == .button, node.frame.maxY >= reach,
+               node.frame.maxY <= window.frame.maxY, !(tabBar?.intersects(node.frame) ?? false) {
+                controls.append(node.frame)
+            }
+            let scrolled = entry.scrolled || Self.scrollContainers.contains(node.elementType)
+            stack.append(contentsOf: node.children.map { ($0, scrolled) })
+        }
+        let pillTops = controls.map { frame in
+            frame.height >= Self.footerPillMinimumReported
+                ? frame.minY
+                : min(frame.minY - Self.footerPillPadding, frame.midY - Self.footerPillHeight / 2)
+        }
+        guard let pillTop = pillTops.min() else { return nil }
+        let top = pillTop - Self.footerStripPadding - Self.footerFadeOutset
+        let band = CGRect(x: window.frame.minX, y: top, width: window.frame.width, height: window.frame.maxY - top)
+        return PinnedBar(band: band, controls: controls)
+    }
+
+    /// How far below the window's top edge a header's elements may reach: a sheet's back button and
+    /// title row, a pushed page's header, a hub's section picker.
+    static let headerReach: CGFloat = 150
+    /// Points the system's scroll-edge fade reaches below a header's lowest element.
+    static let headerFadeOutset: CGFloat = 12
+
+    /// The header pinned over this screen's scrolling content, or `nil` when there is none.
+    ///
+    /// A header's elements are the buttons and static texts that no scroll container holds, lying
+    /// wholly within ``headerReach`` of the window's top edge: a sheet's Cancel and Done, a pushed
+    /// page's back button and title. The band runs from the window's top to the lowest of them, plus
+    /// ``headerFadeOutset`` for the fade. Their own text is measured; content scrolled under them is
+    /// not. Measured 2026-10-18 on Nutrition targets, whose UI test leaves the card scrolled so
+    /// "Calories" sits in the header's fade (2.27:1, ink `#968C7E` where the label is drawn in full
+    /// bark). Like the footer's, the band errs wide by a few points and the attachment names it.
+    func pinnedHeader(in root: XCUIElementSnapshot) -> PinnedBar? {
+        let reach = window.frame.minY + Self.headerReach
+        var stack: [(node: XCUIElementSnapshot, scrolled: Bool)] = [(root, false)]
+        var elements: [CGRect] = []
+        for _ in 0..<Self.maximumSweptNodes {
+            guard let entry = stack.popLast() else { break }
+            let node = entry.node
+            if !entry.scrolled, [.button, .staticText].contains(node.elementType),
+               node.frame.minY >= window.frame.minY, node.frame.maxY <= reach, !node.frame.isEmpty {
+                elements.append(node.frame)
+            }
+            let scrolled = entry.scrolled || Self.scrollContainers.contains(node.elementType)
+            stack.append(contentsOf: node.children.map { ($0, scrolled) })
+        }
+        guard let bottom = elements.map(\.maxY).max() else { return nil }
+        let band = CGRect(x: window.frame.minX, y: window.frame.minY, width: window.frame.width,
+                          height: bottom + Self.headerFadeOutset - window.frame.minY)
+        return PinnedBar(band: band, controls: elements)
+    }
+
+    /// The system keyboard as a bar over the content, or `nil` when no keyboard is up.
+    ///
+    /// Its keys are system ink, not the app's, so it has no elements to measure: everything from
+    /// ``footerFadeOutset`` above its top edge to the window's bottom is covered. Measured
+    /// 2026-10-18, Nutrition targets' UI test captures its pinned-calories state with the number pad
+    /// still up, over the card's footnote and the HYDRATION heading.
+    func keyboardBar(in root: XCUIElementSnapshot) -> PinnedBar? {
+        var stack: [XCUIElementSnapshot] = [root]
+        for _ in 0..<Self.maximumSweptNodes {
+            guard let node = stack.popLast() else { break }
+            if node.elementType == .keyboard, !node.frame.isEmpty {
+                let top = node.frame.minY - Self.footerFadeOutset
+                return PinnedBar(band: CGRect(x: window.frame.minX, y: top, width: window.frame.width,
+                                              height: window.frame.maxY - top), controls: [])
+            }
+            stack.append(contentsOf: node.children)
+        }
+        return nil
     }
 
     /// The rendered WCAG ratio of the ink inside `frame` against the crop's dominant colour, or
@@ -224,58 +385,113 @@ extension UXScreenProbe {
 
 // MARK: - The measured sweep: every text element, not only the nominated ones
 
+/// One screen's sweep: every visible text measured, and what each one under the floor came to.
+struct ContrastSweep: Sendable {
+    /// Text elements whose ink was measured.
+    var measured = 0
+    /// Under the floor and excused by nothing: each one fails the screen.
+    var failing: [String] = []
+    /// Under the floor and covered by an ``UXScreenProbe/auditExemptions`` entry, with its reason.
+    var exempted: [String] = []
+    /// Skipped because a pinned header, footer or keyboard, or the tab bar, covers them.
+    var occluded: [String] = []
+
+    /// The attachment's listing.
+    var listing: [String] {
+        ["\(measured) text element(s) measured; \(failing.count) under 4.5:1 and unexcused (FAILS)"]
+            + failing
+            + ["-- under 4.5:1, exempt --"] + (exempted.isEmpty ? ["none"] : exempted)
+            + ["-- not measured: under a pinned header, footer or keyboard, or the tab bar --"] + (occluded.isEmpty ? ["none"] : occluded)
+    }
+}
+
+extension UXScreenProbe.AuditExemption {
+
+    /// Whether this entry covers a swept text: a `.contrast` entry that names that one text, by its
+    /// normalised label or its identifier. An entry naming neither covers a category, and the sweep
+    /// never excuses a category.
+    @MainActor func coversSweptText(label: String, identifier: String) -> Bool {
+        guard auditType.contains(.contrast) else { return false }
+        if let elementIdentifier, elementIdentifier != identifier { return false }
+        if let elementLabel, UXScreenProbe.normalisedLabel(label) != elementLabel { return false }
+        return elementLabel != nil || elementIdentifier != nil
+    }
+}
+
 extension UXScreenProbe {
 
     /// Accessibility-snapshot nodes the sweep will walk on one screen; far past any gallery screen.
     static let maximumSweptNodes = 4_000
 
-    /// Every static text on the visible canvas, measured against the 4.5:1 text floor — REPORT-ONLY.
+    /// Every static text and every empty field's prompt on the visible canvas, measured against the
+    /// 4.5:1 text floor — WALLED since 2026-10-18.
     ///
     /// **Why this exists beside the auditor.** Measured 2026-10-17, the contrast auditor's recall is
     /// as poor as its precision on this palette: on the Move tab it never nominated the week strip's
-    /// "Rest" captions, drawn in 45% slate at 1.83:1 — the faintest text on the screen. A wall that
-    /// only judges what the auditor nominates cannot see that. This sweep measures every static text
-    /// the snapshot holds, the same way ``contrastVerdict(_:in:)`` measures a nominated one, and lists
-    /// each one under the floor in the run's attachment.
+    /// "Rest" captions, drawn in 45% slate at 1.83:1, the faintest text on the screen, and it never
+    /// reports a text field's prompt at all. A wall that only judges what the auditor nominates
+    /// cannot see either. This sweep measures every text the snapshot holds, the same way
+    /// ``contrastVerdict(_:in:)`` measures a nominated one.
     ///
-    /// It does not fail the test. Text over a photograph, a gradient or another element defeats the
-    /// dominant-colour background, so a line here is a lead to look at, not a verdict; the gallery's
-    /// measured counts in `Docs/Accessibility-Nutrition-Labels.md` are read from these listings.
-    func contrastSweep(in canvas: ContrastCanvas?) -> (measured: Int, below: [String]) {
-        // A snapshot that cannot be taken measures nothing, and the attachment says "0 measured"
-        // rather than passing for a screen with no faint text.
-        guard let canvas, let root = try? app.snapshot() else { return (0, []) }
+    /// **What excuses a text under the floor**, each listed in the attachment: an inactive control
+    /// around it (WCAG 1.4.3), the tab bar or a pinned header or footer over it (``PinnedBar``), or an
+    /// ``auditExemptions`` entry naming that one text, which is how the moss-family labels on the
+    /// Increase Contrast route pass in default light. Anything else fails the screen.
+    ///
+    /// **The honest ceiling.** The background is the crop's dominant colour, which is wrong for text
+    /// over a photograph or a gradient (none on the gallery), so a new failure there is a lead to
+    /// re-measure by hand, and then a case for an exemption, not for widening the rule.
+    func contrastSweep(_ root: XCUIElementSnapshot, in canvas: ContrastCanvas) -> ContrastSweep {
+        var sweep = ContrastSweep()
+        for text in visibleTexts(in: root) {
+            let line = "“\(text.label)” \(text.frame)"
+            if canvas.barsCover(text.frame) || canvas.tabBar.map({ text.frame.intersects($0) }) == true {
+                sweep.occluded.append(line)
+                continue
+            }
+            guard let ratio = Self.renderedContrast(of: text.frame, in: canvas) else { continue }
+            sweep.measured += 1
+            guard ratio < Self.textContrastFloor else { continue }
+            let measured = String(format: "%.2f:1", ratio) + " — " + line
+            let swept = text.label.hasPrefix(Self.placeholderPrefix)
+                ? String(text.label.dropFirst(Self.placeholderPrefix.count)) : text.label
+            if let exemption = Self.auditExemptions.first(where: {
+                $0.coversSweptText(label: swept, identifier: text.identifier)
+            }) {
+                sweep.exempted.append("\(measured) — exempt: \(exemption.reason.prefix(80))…")
+            } else {
+                sweep.failing.append(measured)
+            }
+        }
+        sweep.failing.sort()
+        sweep.exempted.sort()
+        return sweep
+    }
+
+    /// What the sweep prints before an empty field's prompt.
+    static let placeholderPrefix = "placeholder: "
+
+    /// Every enabled static text and empty field's prompt wholly inside the window, as (label,
+    /// identifier, frame). Text inside an inactive control is left out: WCAG 1.4.3 exempts it, the
+    /// same excuse ``contrastVerdict(_:in:)`` gives a nominated one.
+    private func visibleTexts(in root: XCUIElementSnapshot) -> [(label: String, identifier: String, frame: CGRect)] {
         let visible = window.frame
-        // (node, whether an ancestor is a disabled control): text inside an inactive control is
-        // exempt under WCAG 1.4.3, the same excuse ``contrastVerdict(_:in:)`` gives a nominated one.
         var stack: [(node: XCUIElementSnapshot, disabled: Bool)] = [(root, false)]
-        var texts: [(label: String, frame: CGRect)] = []
+        var texts: [(label: String, identifier: String, frame: CGRect)] = []
         for _ in 0..<Self.maximumSweptNodes {
             guard let entry = stack.popLast() else { break }
             let disabled = entry.disabled || !entry.node.isEnabled
             let node = entry.node
             if node.elementType == .staticText, !node.label.isEmpty, !disabled, visible.contains(node.frame) {
-                texts.append((node.label, node.frame))
+                texts.append((node.label, node.identifier, node.frame))
             } else if let prompt = Self.shownPlaceholder(of: node), !disabled, visible.contains(node.frame) {
                 // An empty field's prompt is text a user has to read too (WCAG 1.4.3 covers it),
                 // and it is the one kind the snapshot never reports as a static text.
-                texts.append(("placeholder: " + prompt, node.frame))
+                texts.append((Self.placeholderPrefix + prompt, node.identifier, node.frame))
             }
             stack.append(contentsOf: node.children.map { ($0, disabled) })
         }
-        var below: [String] = []
-        var measured = 0
-        for text in texts {
-            // The bar's own labels are hidden from the tree (the buttons carry the titles), so any
-            // text in the band is app content under the glass.
-            if let band = canvas.tabBar, text.frame.intersects(band) { continue }
-            guard let ratio = Self.renderedContrast(of: text.frame, in: canvas) else { continue }
-            measured += 1
-            if ratio < Self.textContrastFloor {
-                below.append(String(format: "%.2f:1", ratio) + " — “\(text.label)” \(text.frame)")
-            }
-        }
-        return (measured, below.sorted())
+        return texts
     }
 
     /// The prompt an empty text field is showing, or `nil` when the node is not an empty field.
