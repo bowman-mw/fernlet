@@ -461,8 +461,9 @@ extension FernletStore {
                 if !conflicting.isEmpty {
                     reasons.append("it works \(conflicting.map(\.displayName).sorted().joined(separator: ", ")), which you avoid")
                 }
-                if !location.has(target.equipment) {
-                    reasons.append("\(location.name) has no \(target.equipment.displayName.lowercased())")
+                let missing = WorkoutSafetyFilter.missingEquipment(for: target, at: location)
+                if !missing.isEmpty {
+                    reasons.append("\(location.name) has no \(missing.joined(separator: " or ").lowercased())")
                 }
                 guard !reasons.isEmpty else { continue }
                 flags.append(CoachPlanSafetyFlag(
@@ -501,8 +502,9 @@ extension FernletStore {
                         let names = conflicting.map(\.displayName).sorted().joined(separator: ", ")
                         reasons.append("it works \(names), which you avoid")
                     }
-                    if !location.has(target.equipment) {
-                        reasons.append("\(location.name) has no \(target.equipment.displayName.lowercased())")
+                    let missing = WorkoutSafetyFilter.missingEquipment(for: target, at: location)
+                    if !missing.isEmpty {
+                        reasons.append("\(location.name) has no \(missing.joined(separator: " or ").lowercased())")
                     }
                     guard !reasons.isEmpty else { continue }
 

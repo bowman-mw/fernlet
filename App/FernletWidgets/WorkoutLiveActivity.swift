@@ -95,7 +95,7 @@ private struct WorkoutIslandTrailing: View {
 
     var body: some View {
         // No live "Set X of Y" once the snapshot is stale — it would read as if still going.
-        if !isStale && !isSimpleStep(state) {
+        if !isStale && !isSimpleStep(state) && state.totalSets > 1 {
             Text("Set \(state.setNumber) of \(state.totalSets)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -185,6 +185,9 @@ private struct WorkoutIslandCompactTrailing: View {
                               font: .caption2.monospacedDigit(),
                               color: .primary)
                 .frame(maxWidth: 44)
+        } else if holdWindow(state) != nil {
+            HoldCountdownText(state: state, font: .caption2.monospacedDigit(), color: .primary)
+                .frame(maxWidth: 44)
         } else if !isSimpleStep(state) {
             Text("\(state.setNumber)/\(state.totalSets)")
                 .font(.caption2)
@@ -217,6 +220,9 @@ private struct WorkoutIslandMinimal: View {
                               font: .caption2.monospacedDigit(),
                               color: FernletWidgetPalette.leaf,
                               maxWidth: 34)
+        } else if holdWindow(state) != nil {
+            HoldCountdownText(state: state, font: .caption2.monospacedDigit(),
+                              color: FernletWidgetPalette.leaf, maxWidth: 34)
         } else {
             Image(systemName: "leaf.fill")
                 .foregroundStyle(FernletWidgetPalette.leaf)
@@ -240,9 +246,32 @@ private func isSimpleStep(_ state: WorkoutActivityAttributes.ContentState) -> Bo
 /// harvested sentence — a language that puts the rep count first, or separates clauses differently,
 /// can say so, which a runtime join of pre-built fragments can never allow.
 private func setRepsLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
+    if holdWindow(state) != nil { return holdLine(state) }
     guard !isSimpleStep(state) else { return Text("Take it at your own pace") }
     guard !state.reps.isEmpty else { return Text("Set \(state.setNumber) of \(state.totalSets)") }
     return Text("Set \(state.setNumber) of \(state.totalSets) · \(state.reps) reps")
+}
+
+/// The ordered hold window of a timed step being worked (a stretch, a plank), or nil. Same rule as
+/// the rest window: only a present, ordered pair is ever handed to `Text(timerInterval:)`.
+private func holdWindow(_ state: WorkoutActivityAttributes.ContentState) -> ClosedRange<Date>? {
+    guard state.phase == .working, let start = state.holdStartsAt, let end = state.holdEndsAt, start <= end else {
+        return nil
+    }
+    return start...end
+}
+
+/// The working line for a timed step: the side and the hold ("Left side · hold 20 s"), or the set
+/// and the hold for a timed set ("Set 1 of 2 · hold 30 s"). Whole sentences, as ``setRepsLine(_:)``.
+private func holdLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
+    if state.totalSets > 1 {
+        return Text("Set \(state.setNumber) of \(state.totalSets) · hold \(state.reps)")
+    }
+    switch state.sideRaw {
+    case "left": return Text("Left side · hold \(state.reps)")
+    case "right": return Text("Right side · hold \(state.reps)")
+    default: return Text("Hold \(state.reps)")
+    }
 }
 
 /// The resting line: what the rest is leading into. Same fork, same reason, as ``setRepsLine(_:)``.
@@ -292,6 +321,41 @@ private struct RestCountdownText: View {
         } else {
             // Never a live `Date()` range — a static label is the fail-safe fallback.
             Text("Rest")
+                .font(font)
+                .foregroundStyle(color)
+        }
+    }
+}
+
+/// Crash-safe hold countdown for a timed step, under the same rule as ``RestCountdownText``: a
+/// `Text(timerInterval:)` only over a present, ordered window, else a static "Hold" label. Before the
+/// hold starts (the lead-in) the timer shows the full hold, then counts it down.
+private struct HoldCountdownText: View {
+    let state: WorkoutActivityAttributes.ContentState
+    var font: Font
+    var color: Color
+    var maxWidth: CGFloat? = nil
+
+    var body: some View {
+        if let maxWidth {
+            content
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .frame(maxWidth: maxWidth)
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let window = holdWindow(state) {
+            Text(timerInterval: window, countsDown: true)
+                .font(font)
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .accessibilityAddTraits(.updatesFrequently)
+        } else {
+            Text("Hold")
                 .font(font)
                 .foregroundStyle(color)
         }
@@ -397,6 +461,10 @@ private struct WorkoutLockScreenView: View {
                     RestCountdownText(state: state,
                                       font: .system(size: 40, weight: .semibold, design: .rounded),
                                       color: FernletWidgetPalette.ink)
+                } else if holdWindow(state) != nil {
+                    HoldCountdownText(state: state,
+                                      font: .system(size: 40, weight: .semibold, design: .rounded),
+                                      color: FernletWidgetPalette.ink)
                 } else {
                     ExerciseProgressDots(index: state.exerciseIndex, total: state.totalExercises)
                 }
@@ -426,8 +494,10 @@ private func guidedActionButton(_ state: WorkoutActivityAttributes.ContentState)
     } else {
         // Last set of the last exercise finishes (and logs) the workout.
         let finishing = state.setNumber >= state.totalSets && state.exerciseIndex >= state.totalExercises - 1
+        // A one-set timed step (a stretch) moves on with "Next"; "Done set" would name a set it is not.
+        let singleHold = holdWindow(state) != nil && state.totalSets <= 1
         Button(intent: GuidedWorkoutMarkSetDoneIntent()) {
-            Label(finishing ? "Finish workout" : "Done set", systemImage: "checkmark")
+            Label(finishing ? "Finish workout" : (singleHold ? "Next" : "Done set"), systemImage: "checkmark")
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity)
         }

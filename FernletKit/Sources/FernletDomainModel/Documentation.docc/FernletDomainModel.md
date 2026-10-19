@@ -471,10 +471,36 @@ in-memory form state only — never on a ``RecipeIngredient``, the synced blob o
 - ``Equipment``
 - ``ExerciseTarget``
 - ``ExerciseInputKind``
+- ``MovementPlane``
+- ``ExerciseModality``
+- ``ExerciseDifficulty``
+- ``ExerciseMeasure``
 - ``WorkoutExerciseCatalog``
 - ``WorkoutSuggestion``
 
 ### Workout programming
+
+``WorkoutProgram`` fills each ``WorkoutSlotSpec`` with the best *eligible* catalog exercise. Eligibility
+is a requirement, not a score: rep-measured strength work (``ExerciseModality``, ``ExerciseMeasure``)
+that shares the slot's movement pattern, its ``MovementPlane`` when both name one, and at least one
+primary muscle — otherwise the slot is dropped and the session note names it. Among eligible
+exercises the score adds target fit, a tool preference by slot role and ``ExperienceLevel`` (barbell
+first for trained lifters' main lifts, dumbbells and machines for beginners, bands and bodyweight as
+fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a tie.
+``WorkoutSafetyFilter`` gates equipment on the exercise's tool or any alternative plus every piece of
+required gear (a pull-up bar, a bench). The split advances by the last logged split day
+(`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.
+
+A lifting session runs in ``SessionBlock`` order — the owner's layout (2026-10-19): the warm-up
+stretch flow (``WorkoutSessionBlocks/warmUpFlow``, 20–30 s holds), activation (the template's core
+slot, prescribed light, plus a single-leg balance hold and, for a trained lifter's leg day, 2 × 4
+squat jumps), the lifting, any cardio after it, and a cool-down of 45 s holds chosen to cover the
+muscles the lifting worked. Every step is a catalog row through the same safety filter. A timed
+movement carries `PrescribedExercise.holdSeconds` (its `reps` is the same duration as text, "40 s");
+a one-sided step carries `side`. Only the lifting block progresses
+(`SessionSuggestion.catalogExerciseNames`), an AI adjustment replaces only the lifting block, and
+the plan text a log records summarizes the warm-up and cool-down in one line each
+(``WorkoutSessionBlocks/planText(for:)``).
 
 - ``WorkoutProfile``
 - ``ExperienceLevel``
@@ -498,6 +524,9 @@ in-memory form state only — never on a ``RecipeIngredient``, the synced blob o
 - ``WorkoutGoalStyle``
 - ``WorkoutProgram``
 - ``PrescribedExercise``
+- ``SessionBlock``
+- ``ExerciseSide``
+- ``WorkoutSessionBlocks``
 - ``WorkoutRestGuidance``
 
 ### Coach plans

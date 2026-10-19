@@ -59,8 +59,18 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         var fromCatalog: Bool
         /// Rest AFTER a set of this exercise, in seconds. Baked in when the run is built.
         var restSeconds: Int
+        /// Seconds each set is held, for a timed step (a stretch, a plank, a carry); nil when the set
+        /// is counted in reps. Optional so a run persisted by an older build still decodes.
+        var holdSeconds: Int?
+        /// The session block this step belongs to — a ``BlockToken`` value; nil reads as lifting.
+        var blockRaw: String?
+        /// "left" | "right" for a one-sided step — the domain `ExerciseSide` raw value; nil otherwise.
+        var sideRaw: String?
 
-        init(id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool, restSeconds: Int) {
+        init(
+            id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool,
+            restSeconds: Int, holdSeconds: Int? = nil, blockRaw: String? = nil, sideRaw: String? = nil
+        ) {
             self.id = id
             self.name = name
             self.sets = sets
@@ -68,8 +78,30 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             self.roleRaw = roleRaw
             self.fromCatalog = fromCatalog
             self.restSeconds = restSeconds
+            self.holdSeconds = holdSeconds
+            self.blockRaw = blockRaw
+            self.sideRaw = sideRaw
         }
+
+        /// The step's block, with an untagged step (any run built before blocks existed) as lifting.
+        var block: String { blockRaw ?? BlockToken.lifting }
     }
+
+    /// The session-block tokens, spelled here because this shared file cannot import the domain:
+    /// each equals the domain `SessionBlock` case's raw value (pinned by a test), and like it is
+    /// FROZEN — a run in progress stores them.
+    enum BlockToken {
+        static let warmUp = "warmUp"
+        static let activation = "activation"
+        static let lifting = "lifting"
+        static let cardio = "cardio"
+        static let coolDown = "coolDown"
+    }
+
+    /// Seconds between a timed step starting and its hold starting: time to get into position, so a
+    /// 20-second stretch is held for 20 seconds, not 15. `nonisolated` so the Move tab's nonisolated
+    /// time estimate can read it under the app target's default main-actor isolation.
+    nonisolated static let holdLeadInSeconds = 5
 
     // MARK: Identity + logging payload
     // Enough to log the finished workout from a cold-launched process, without the domain plan.
@@ -103,6 +135,10 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     var restEndsAt: Date?
     /// Seconds of the most recent rest — surfaced separately so tests can assert length without a clock.
     var restDuration: Int
+    /// When the current set began — stamped on start, on moving to the next exercise, and on leaving
+    /// a rest. A timed step's hold window counts from here (``holdWindow``); nil in a run persisted
+    /// before holds existed, which then simply shows no countdown.
+    var setStartedAt: Date?
     /// True only after the run was walked all the way to the end. An abandon leaves it false, so
     /// nothing is logged.
     var completedNaturally: Bool
@@ -131,6 +167,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         restStartedAt: Date? = nil,
         restEndsAt: Date? = nil,
         restDuration: Int = 0,
+        setStartedAt: Date? = nil,
         completedNaturally: Bool = false,
         updatedAt: Date = Date()
     ) {
@@ -148,6 +185,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         self.restStartedAt = restStartedAt
         self.restEndsAt = restEndsAt
         self.restDuration = restDuration
+        self.setStartedAt = setStartedAt
         self.completedNaturally = completedNaturally
         self.updatedAt = updatedAt
     }
@@ -180,6 +218,35 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         max(0, min(currentSet - 1, totalSetsForCurrent))
     }
 
+    /// The fixed hold window of the current set, for a timed step that is being worked: from the end
+    /// of its lead-in to the end of the hold. Fixed (not `Date()`-based), so a countdown over it never
+    /// inverts however long the user takes; nil for a rep-counted set, while resting, or without a
+    /// set start.
+    var holdWindow: ClosedRange<Date>? {
+        guard phase == .working, let hold = currentExercise?.holdSeconds, hold > 0, let setStartedAt else {
+            return nil
+        }
+        let start = setStartedAt.addingTimeInterval(TimeInterval(Self.holdLeadInSeconds))
+        return start...start.addingTimeInterval(TimeInterval(hold))
+    }
+
+    /// The current step's block, or lifting when there is none.
+    var currentBlock: String { currentExercise?.block ?? BlockToken.lifting }
+
+    /// The current step's 1-based position within its block, and the block's size ("Warm-up · 3 of 23").
+    var blockPosition: (index: Int, count: Int) {
+        let block = currentBlock
+        let indices = exercises.indices.filter { exercises[$0].block == block }
+        let position = (indices.firstIndex(of: exerciseIndex) ?? 0) + 1
+        return (position, max(1, indices.count))
+    }
+
+    /// Whether the warm-up or the cool-down can be skipped from here — the runner's quiet "Skip
+    /// warm-up" / "Skip cool-down" secondary.
+    var canSkipBlock: Bool {
+        (isWorking || isResting) && (currentBlock == BlockToken.warmUp || currentBlock == BlockToken.coolDown)
+    }
+
     /// Whether the run can jump past the rest of the current exercise to the next one — the
     /// runner's quiet "Skip to next exercise" secondary. False on the last exercise (there is
     /// nothing next; finishing early is the End affordance's job) and once the run is done.
@@ -208,13 +275,14 @@ struct GuidedWorkoutRunState: Codable, Hashable {
                 total += descriptorSeconds
                 continue
             }
+            let perSet = exercise.holdSeconds.map { $0 + Self.holdLeadInSeconds } ?? workSecondsPerSet
             let setsAhead = index == exerciseIndex
                 ? max(0, exercise.sets - currentSet + 1)
                 : exercise.sets
             let restsAhead = index == exerciseIndex && isResting
                 ? max(0, setsAhead)             // the in-flight rest, plus one between each pair ahead
                 : max(0, setsAhead - 1)
-            total += setsAhead * workSecondsPerSet + restsAhead * max(0, exercise.restSeconds)
+            total += setsAhead * perSet + restsAhead * max(0, exercise.restSeconds)
         }
         return total
     }
@@ -234,6 +302,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             currentSet = 1
             restStartedAt = nil
             restEndsAt = nil
+            setStartedAt = now
             phase = .working
         } else {
             finish()
@@ -241,15 +310,35 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     }
 
     /// End the rest early and resume the next set (counters were advanced when the rest began).
-    mutating func skipRest() {
+    mutating func skipRest(now: Date = Date()) {
         guard phase == .resting else { return }
         restStartedAt = nil
         restEndsAt = nil
         if currentExercise == nil {
             finish()
         } else {
+            setStartedAt = now
             phase = .working
         }
+    }
+
+    /// Skip the rest of the warm-up (to the first step after it) or of the cool-down. Skipping the
+    /// cool-down finishes the run NATURALLY — the work is done, so it is logged — and so does a
+    /// warm-up with nothing after it. Any other block is left alone (`canSkipBlock` is false there).
+    mutating func skipBlock(now: Date) {
+        guard canSkipBlock else { return }
+        let block = currentBlock
+        let next = exercises.indices.first { $0 > exerciseIndex && exercises[$0].block != block }
+        guard block == BlockToken.warmUp, let next else {
+            finish()
+            return
+        }
+        exerciseIndex = next
+        currentSet = 1
+        restStartedAt = nil
+        restEndsAt = nil
+        setStartedAt = now
+        phase = .working
     }
 
     /// Abandon the run: `.done` but `completedNaturally` stays false, so nothing is logged.
@@ -289,7 +378,11 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             restStartedAt: restStartedAt,
             restEndsAt: restEndsAt,
             exerciseIndex: exerciseIndex,
-            totalExercises: totalExercises
+            totalExercises: totalExercises,
+            holdStartsAt: holdWindow?.lowerBound,
+            holdEndsAt: holdWindow?.upperBound,
+            blockRaw: currentExercise?.blockRaw,
+            sideRaw: currentExercise?.sideRaw
         )
     }
 
@@ -306,6 +399,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     func staleDate(postedAt now: Date) -> Date {
         if phase == .resting, let end = restEndsAt {
             return end.addingTimeInterval(Staleness.restGrace)
+        }
+        if let hold = holdWindow {
+            return hold.upperBound.addingTimeInterval(Staleness.restGrace)
         }
         return now.addingTimeInterval(Staleness.workingCap)
     }

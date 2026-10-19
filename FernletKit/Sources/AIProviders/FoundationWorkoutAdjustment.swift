@@ -83,7 +83,10 @@ public enum WorkoutAdjustmentCandidateBuilder {
     ) -> [WorkoutAdjustmentCandidate] {
         // R5: `prefix(_:)` traps on a negative length, so validate `limit` at entry rather than at the
         // `prefix` below; "nothing to offer" is already this function's documented empty answer.
+        // The adjustment rewrites the lifting block, so the warm-up and cool-down's stretches and the
+        // balance drills are never offered as a swap for a lift.
         let feasible = WorkoutSafetyFilter.feasibleExercises(in: catalog, location: location, profile: profile)
+            .filter { $0.modality != .mobility && $0.modality != .balance }
         guard limit > 0, feasible.isEmpty == false else { return [] }
 
         let byName = Dictionary(catalog.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })

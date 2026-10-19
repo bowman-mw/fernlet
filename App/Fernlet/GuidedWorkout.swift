@@ -180,14 +180,14 @@ struct GuidedWorkoutSheet: View {
     /// "Exercise 1 of 5 · 38 min left" — abbreviated to "1 of 5 · 38 min left" at accessibility
     /// sizes so the numerals stay large rather than the label shrinking (1e·AX3).
     private func progressLine(_ run: GuidedWorkoutRunState) -> some View {
-        let position = run.exerciseIndex + 1
-        let total = run.totalExercises
+        let (position, total) = run.blockPosition
         let minutes = minutesLeft(run)
+        let full = Self.blockProgressText(block: run.currentBlock, position: position, total: total, minutes: minutes)
         return Group {
             if dynamicTypeSize.isAccessibilitySize {
                 Text("\(position) of \(total) · \(minutes) min left")
             } else {
-                Text("Exercise \(position) of \(total) · \(minutes) min left")
+                full
             }
         }
         .font(.fernlet(.labelSmall))
@@ -195,7 +195,25 @@ struct GuidedWorkoutSheet: View {
         // T2-2: the shortened form drops the noun that says what "1 of 5" counts, and this line sits
         // beside a rest countdown and a set counter that are also "n of m". The drawn text keeps the
         // accessibility-size treatment; the spoken one keeps the noun.
-        .accessibilityLabel("Exercise \(position) of \(total) · \(minutes) min left")
+        .accessibilityLabel(full)
+    }
+
+    /// "Warm-up 3 of 23 · 38 min left" — the position within the current block, so twenty-odd
+    /// stretches never read as "Exercise 3 of 40". Lifting keeps its own wording. One whole sentence
+    /// per block, so a translator can reorder each.
+    static func blockProgressText(block: String, position: Int, total: Int, minutes: Int) -> Text {
+        switch block {
+        case GuidedWorkoutRunState.BlockToken.warmUp:
+            Text("Warm-up \(position) of \(total) · \(minutes) min left")
+        case GuidedWorkoutRunState.BlockToken.activation:
+            Text("Activate \(position) of \(total) · \(minutes) min left")
+        case GuidedWorkoutRunState.BlockToken.cardio:
+            Text("Cardio · \(minutes) min left")
+        case GuidedWorkoutRunState.BlockToken.coolDown:
+            Text("Cool-down \(position) of \(total) · \(minutes) min left")
+        default:
+            Text("Exercise \(position) of \(total) · \(minutes) min left")
+        }
     }
 
     /// Whole minutes remaining, floored at 1 — a live run never claims "0 min left".
@@ -241,22 +259,7 @@ struct GuidedWorkoutSheet: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            VStack(spacing: 8) {
-                ForEach(Array(session.exercises.enumerated()), id: \.element.id) { _, exercise in
-                    HStack(alignment: .top, spacing: 10) {
-                        Circle()
-                            .fill(Color.moss.opacity(0.5))
-                            .frame(width: 7, height: 7)
-                            .padding(.top, 7)
-                        Text(exercise.line)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(12)
-                    .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
-                }
-            }
+            GuidedReadyList(exercises: session.exercises)
 
             primaryButton("Start", identifier: "workout.guided.start") {
                 // Another session's run may still be live — after a relaunch the Suggest sheet mints a
@@ -279,7 +282,7 @@ struct GuidedWorkoutSheet: View {
             if let exercise = run.currentExercise {
                 exerciseCard(run, exercise)
 
-                if exercise.fromCatalog && exercise.sets >= 1 {
+                if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) {
                     GuidedSetStrip(total: run.totalSetsForCurrent, completed: run.setsCompletedForCurrent)
                     restPreview(run, exercise)
                 }
@@ -297,22 +300,59 @@ struct GuidedWorkoutSheet: View {
                     .fernletWrappingText()
             }
         }
+        .task(id: run.holdWindow?.upperBound) { await advanceWhenHoldEnds(run) }
+    }
+
+    /// Moves a timed step on by itself when its hold runs out — a stretch flow you can do without
+    /// looking at the phone. Only while this exact set is still the one being worked (a tap, a Lock
+    /// Screen button or a skip that got there first cancels it). Keyed by the hold's end, so the
+    /// next step re-arms it.
+    private func advanceWhenHoldEnds(_ run: GuidedWorkoutRunState) async {
+        guard let end = run.holdWindow?.upperBound else { return }
+        let remaining = end.timeIntervalSinceNow
+        if remaining > 0 {
+            do {
+                try await Task.sleep(for: .seconds(remaining))
+            } catch {
+                return
+            }
+        }
+        guard let now = store.guidedRunState, now.isWorking,
+              now.exerciseIndex == run.exerciseIndex, now.currentSet == run.currentSet else { return }
+        announcingTransition(store.guidedMarkSetDone)
+    }
+
+    /// A one-set timed step — a stretch, a balance hold. Its countdown says everything, so it gets no
+    /// set strip, no rest preview and no Set / Hold pills.
+    static func isSingleHold(_ exercise: GuidedWorkoutRunState.Exercise) -> Bool {
+        exercise.holdSeconds != nil && exercise.sets <= 1
     }
 
     /// The cream card naming the current exercise with its Set / Reps / Last-time pills.
     private func exerciseCard(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             exerciseTitle(run, exercise)
+            if let side = GuidedSideLabel(raw: exercise.sideRaw) {
+                side.text
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+            }
+            if let window = run.holdWindow {
+                GuidedHoldTimer(window: window)
+            }
 
-            if exercise.fromCatalog && exercise.sets >= 1 {
+            if Self.isSingleHold(exercise) {
+                // The countdown above says it all: no "Set 1 of 1", no "Hold 20 s" beside a 0:20.
+                EmptyView()
+            } else if exercise.fromCatalog && exercise.sets >= 1 {
                 HStack(spacing: 10) {
                     metricPill(title: "Set", value: setCounterText(run))
                     if !exercise.reps.isEmpty {
-                        metricPill(title: "Reps", value: exercise.reps)
+                        metricPill(title: exercise.holdSeconds == nil ? "Reps" : "Hold", value: exercise.reps)
                     }
                     // 1e·AX3: the Last-time pill is the first thing to go at accessibility sizes.
                     // ``exerciseTitle(_:_:)`` puts it back on the rotor there (T2-2).
-                    if !dynamicTypeSize.isAccessibilitySize,
+                    if !dynamicTypeSize.isAccessibilitySize, exercise.holdSeconds == nil,
                        let lastWeight = lastWeightByName[WorkoutExerciseCatalog.normalizedName(exercise.name)] {
                         metricPill(title: "Last time", value: lastWeight)
                     }
@@ -522,7 +562,11 @@ struct GuidedWorkoutSheet: View {
                 ) {
                     announcingTransition(resting ? store.guidedSkipRest : store.guidedMarkSetDone)
                 }
-                skipToNextButton(run)
+                if run.canSkipBlock {
+                    skipBlockButton(run)
+                } else {
+                    skipToNextButton(run)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 10)
@@ -571,6 +615,22 @@ struct GuidedWorkoutSheet: View {
         .accessibilityIdentifier("workout.guided.skipExercise")
     }
 
+    /// The quiet "Skip warm-up" / "Skip cool-down" secondary, in the skip-to-next slot. Skipping the
+    /// cool-down finishes the session and logs it — the lifting is done.
+    private func skipBlockButton(_ run: GuidedWorkoutRunState) -> some View {
+        let warmUp = run.currentBlock == GuidedWorkoutRunState.BlockToken.warmUp
+        return Button {
+            announcingTransition(store.guidedSkipBlock)
+        } label: {
+            Text(warmUp ? "Skip warm-up" : "Skip cool-down")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+        }
+        .buttonStyle(.plain)
+        .fernletTapTarget()
+        .accessibilityIdentifier(warmUp ? "workout.guided.skipWarmUp" : "workout.guided.skipCoolDown")
+    }
+
     /// Runs one of the bottom bar's transitions and says what it changed.
     ///
     /// Everything a bar button changes — the set strip, the rest timer, the exercise card — is
@@ -607,13 +667,18 @@ struct GuidedWorkoutSheet: View {
         let isLastSet = run.currentSet >= max(1, exercise.sets)
         let isLastExercise = run.exerciseIndex >= run.totalExercises - 1
         if isLastSet && isLastExercise { return "Finish workout" }
+        // A one-set timed step (a stretch) moves on; "Done set" would name a set it is not.
+        if exercise.holdSeconds != nil && exercise.sets <= 1 { return "Next" }
         return "Done set"
     }
 
     private func encouragement(_ run: GuidedWorkoutRunState) -> Text {
-        switch run.currentSet {
-        case 1: Text("No rush getting started.")
-        default: Text("Steady — you've got this.")
+        switch run.currentBlock {
+        case GuidedWorkoutRunState.BlockToken.warmUp: Text("Ease into each stretch — no bouncing.")
+        case GuidedWorkoutRunState.BlockToken.activation: Text("Light and steady — just waking things up.")
+        case GuidedWorkoutRunState.BlockToken.coolDown: Text("Breathe out and let it go.")
+        default:
+            run.currentSet == 1 ? Text("No rush getting started.") : Text("Steady — you've got this.")
         }
     }
 
@@ -749,12 +814,19 @@ private struct GuidedUpNextList: View {
                     .foregroundStyle(Color.slate)
                 ForEach(exercises) { exercise in
                     HStack(spacing: 10) {
-                        Text(exercise.name)
-                            .font(.fernlet(.body))
-                            .foregroundStyle(Color.bark)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(exercise.name)
+                                .font(.fernlet(.body))
+                                .foregroundStyle(Color.bark)
+                            if let side = GuidedSideLabel(raw: exercise.sideRaw) {
+                                side.text
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                            }
+                        }
                         Spacer(minLength: 8)
                         if exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty {
-                            Text(verbatim: "\(exercise.sets) × \(exercise.reps)")
+                            Text(verbatim: exercise.sets > 1 ? "\(exercise.sets) × \(exercise.reps)" : exercise.reps)
                                 .font(.fernlet(.labelSmall))
                                 .foregroundStyle(Color.slate)
                         }
@@ -764,6 +836,99 @@ private struct GuidedUpNextList: View {
                 }
             }
         }
+    }
+}
+
+/// "Left side" / "Right side" for a one-sided step, from a raw side token (the run's, or a plan
+/// step's `ExerciseSide` raw value) — shared by the runner and the Move plan card.
+struct GuidedSideLabel {
+    let text: Text
+
+    init?(raw: String?) {
+        switch raw {
+        case "left": text = Text("Left side")
+        case "right": text = Text("Right side")
+        default: return nil
+        }
+    }
+}
+
+/// The hold countdown on a timed step's card: "Get into position" through the lead-in, then
+/// "Hold" over a countdown of the fixed window — never a live `Date()` range, so it clamps at 0:00
+/// rather than inverting (the same rule as the rest timer).
+private struct GuidedHoldTimer: View {
+    let window: ClosedRange<Date>
+    @State private var holding = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(holding ? "Hold" : "Get into position")
+                .font(.fernlet(.labelSmall))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(Color.moss)
+            Text(timerInterval: window, countsDown: true)
+                .font(.fernletTimer(size: 56))
+                .foregroundStyle(Color.bark)
+                .accessibilityAddTraits(.updatesFrequently)
+                .accessibilityIdentifier("workout.guided.holdTimer")
+        }
+        .task(id: window.lowerBound) { await waitForHoldStart() }
+    }
+
+    /// Flips the caption from "Get into position" to "Hold" when the lead-in ends.
+    private func waitForHoldStart() async {
+        let remaining = window.lowerBound.timeIntervalSinceNow
+        guard remaining > 0 else {
+            holding = true
+            return
+        }
+        holding = false
+        do {
+            try await Task.sleep(for: .seconds(remaining))
+        } catch {
+            return
+        }
+        holding = true
+    }
+}
+
+/// The Ready screen's list of what the session holds, block by block: the warm-up and the cool-down
+/// as one summary row each (their twenty-odd stretches are walked one at a time in the run), and
+/// every activation, lifting and cardio movement on its own row.
+private struct GuidedReadyList: View {
+    let exercises: [PrescribedExercise]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            let warmUp = exercises.filter { $0.block == .warmUp }
+            let coolDown = exercises.filter { $0.block == .coolDown }
+            if !warmUp.isEmpty {
+                row(Text("Warm-up · \(warmUp.count) stretches · \(WorkoutSessionBlocks.minutes(of: warmUp)) min"))
+            }
+            ForEach(exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
+                row(Text(verbatim: exercise.line))
+            }
+            if !coolDown.isEmpty {
+                row(Text("Cool-down · \(coolDown.count) stretches · \(WorkoutSessionBlocks.minutes(of: coolDown)) min"))
+            }
+        }
+    }
+
+    private func row(_ text: Text) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(Color.moss.opacity(0.5))
+                .frame(width: 7, height: 7)
+                .padding(.top, 7)
+                .accessibilityHidden(true)
+            text
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

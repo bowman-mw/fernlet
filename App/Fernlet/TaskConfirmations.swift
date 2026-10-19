@@ -129,6 +129,16 @@ enum GuidedRunAnnouncement {
         guard after.isWorking, let exercise = after.currentExercise else { return nil }
         let countsSets = exercise.fromCatalog && exercise.sets >= 1
         if after.exerciseIndex != before.exerciseIndex {
+            // A one-sided step (a stretch, a balance hold) says its side; a single timed step has no
+            // set to count ("Set 1 of 1" for every stretch would be noise).
+            switch exercise.sideRaw {
+            case "left": return (.status, "Next: \(exercise.name), left side.")
+            case "right": return (.status, "Next: \(exercise.name), right side.")
+            default: break
+            }
+            if exercise.holdSeconds != nil && exercise.sets <= 1 {
+                return (.status, "Next: \(exercise.name).")
+            }
             return countsSets
                 ? (.status, "Next exercise: \(exercise.name). Set 1 of \(after.totalSetsForCurrent).")
                 : (.status, "Next exercise: \(exercise.name).")

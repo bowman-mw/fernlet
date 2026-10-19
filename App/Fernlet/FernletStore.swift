@@ -4854,7 +4854,10 @@ final class FernletStore {
             PrescribedExercise(
                 id: $0.id, name: $0.name, sets: $0.sets, reps: $0.reps,
                 role: Self.role(fromRaw: $0.roleRaw), fromCatalog: $0.fromCatalog,
-                restSecondsOverride: $0.restSeconds
+                restSecondsOverride: $0.restSeconds,
+                block: SessionBlock(rawValue: $0.block) ?? .lifting,
+                holdSeconds: $0.holdSeconds,
+                side: $0.sideRaw.flatMap(ExerciseSide.init(rawValue:))
             )
         }
         return WorkoutProgram.SessionSuggestion(
@@ -4898,7 +4901,10 @@ final class FernletStore {
                 roleRaw: Self.roleRaw(pe.role),
                 fromCatalog: pe.fromCatalog,
                 restSeconds: pe.restSecondsOverride
-                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal)
+                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal),
+                holdSeconds: pe.holdSeconds,
+                blockRaw: pe.block.rawValue,
+                sideRaw: pe.side?.rawValue
             )
         }
         guard !exercises.isEmpty else { return false }
@@ -4914,6 +4920,7 @@ final class FernletStore {
             exercises: exercises
         )
         state.phase = .working
+        state.setStartedAt = Date()
         guidedRunState = state
         mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
@@ -4936,7 +4943,15 @@ final class FernletStore {
     /// End the current rest early from the in-app sheet (mirrors the Live Activity "Skip rest" button).
     func guidedSkipRest() {
         guard var state = guidedRunState, state.phase == .resting else { return }
-        state.skipRest()
+        state.skipRest(now: Date())
+        applyGuidedTransition(state)
+    }
+
+    /// Skip the rest of the warm-up or the cool-down from the in-app sheet — the runner's quiet
+    /// "Skip warm-up" / "Skip cool-down". Skipping the cool-down finishes and logs the session.
+    func guidedSkipBlock() {
+        guard var state = guidedRunState, state.canSkipBlock else { return }
+        state.skipBlock(now: Date())
         applyGuidedTransition(state)
     }
 
@@ -5049,7 +5064,11 @@ final class FernletStore {
             workout.loggedAt = completedAt
         }
         addWorkout(workout, date: dayKey)
-        recordCompletedExercises(state.exercises.filter { $0.fromCatalog }.map(\.name))
+        // Only the lifting block progresses: stretches, the light activation work and the cool-down
+        // are never counted (the same rule as `SessionSuggestion.catalogExerciseNames`).
+        recordCompletedExercises(state.exercises
+            .filter { $0.fromCatalog && $0.block == GuidedWorkoutRunState.BlockToken.lifting }
+            .map(\.name))
         markGuidedSessionCompleted(state.sessionID)
     }
 

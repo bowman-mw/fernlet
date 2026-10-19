@@ -1864,8 +1864,16 @@ struct WorkoutSuggestionSheet: View {
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(session.exercises) { exercise in
+                let warmUp = session.exercises.filter { $0.block == .warmUp }
+                let coolDown = session.exercises.filter { $0.block == .coolDown }
+                if !warmUp.isEmpty {
+                    blockSummaryRow(Text("Warm-up · \(warmUp.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: warmUp))
+                }
+                ForEach(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
                     sessionExerciseRow(exercise)
+                }
+                if !coolDown.isEmpty {
+                    blockSummaryRow(Text("Cool-down · \(coolDown.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: coolDown))
                 }
             }
             if !session.suggestion.notes.isEmpty {
@@ -1880,10 +1888,25 @@ struct WorkoutSuggestionSheet: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    /// "5 exercises · ~45 min" under the session name.
+    /// The warm-up or cool-down as one row ("Warm-up · 23 stretches" beside "~9 min"): the stretches
+    /// themselves are walked one at a time in the run, not listed here.
+    private func blockSummaryRow(_ label: Text, minutes: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            label
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.bark)
+            Spacer(minLength: 8)
+            Text("~\(minutes) min")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+        }
+    }
+
+    /// "5 exercises · ~45 min" under the session name. The count is the movements listed one per row
+    /// (activation, lifting, cardio); the time includes the warm-up and cool-down.
     private func sessionMetaLine(_ session: WorkoutProgram.SessionSuggestion) -> Text {
         let minutes = Self.estimatedMinutes(for: session, goal: store.settings.selectedGoal)
-        let count = session.exercises.count
+        let count = session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.count
         return count == 1
             ? Text("1 exercise · ~\(minutes) min")
             : Text("\(count) exercises · ~\(minutes) min")
@@ -1893,13 +1916,18 @@ struct WorkoutSuggestionSheet: View {
     /// prescription stop sharing a line (1d·AX3).
     @ViewBuilder private func sessionExerciseRow(_ exercise: PrescribedExercise) -> some View {
         let prescription: String? = exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty
-            ? "\(exercise.sets) × \(exercise.reps)"
+            ? (exercise.holdSeconds != nil && exercise.sets <= 1 ? exercise.reps : "\(exercise.sets) × \(exercise.reps)")
             : nil
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
+                if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
+                    side.text
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                }
                 if let prescription {
                     Text(verbatim: prescription)
                         .font(.fernlet(.labelSmall))
@@ -1911,6 +1939,11 @@ struct WorkoutSuggestionSheet: View {
                 Text(exercise.name)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
+                if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
+                    side.text
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                }
                 Spacer(minLength: 8)
                 if let prescription {
                     Text(verbatim: prescription)
@@ -1922,16 +1955,18 @@ struct WorkoutSuggestionSheet: View {
     }
 
     /// The same rough time heuristic the runner's header uses, over a not-yet-started session:
-    /// 45s per prescribed set plus that exercise's rest between its own sets (override, else the
-    /// research default for the goal), and 5 min per descriptor line. `static` so it is testable
-    /// without standing up the sheet (the `AwayHeartsCopy` precedent).
+    /// 45s per prescribed set (a timed set: its hold plus the get-into-position lead-in) plus that
+    /// exercise's rest between its own sets (override, else the research default for the goal), and
+    /// 5 min per descriptor line. `static` so it is testable without standing up the sheet (the
+    /// `AwayHeartsCopy` precedent).
     nonisolated static func estimatedMinutes(for session: WorkoutProgram.SessionSuggestion, goal: GoalType) -> Int {
         var seconds = 0
         for exercise in session.exercises {
             if exercise.fromCatalog && exercise.sets >= 1 {
                 let rest = exercise.restSecondsOverride
                     ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: exercise.name, role: exercise.role, goal: goal)
-                seconds += exercise.sets * 45 + max(0, exercise.sets - 1) * max(0, rest)
+                let perSet = exercise.holdSeconds.map { $0 + GuidedWorkoutRunState.holdLeadInSeconds } ?? 45
+                seconds += exercise.sets * perSet + max(0, exercise.sets - 1) * max(0, rest)
             } else {
                 seconds += 300
             }

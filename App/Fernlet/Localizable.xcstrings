@@ -1121,6 +1121,16 @@
     "Action" : {
 
     },
+    "Activate %lld of %lld · %lld min left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Activate %1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
+    },
     "Activities" : {
 
     },
@@ -1575,6 +1585,9 @@
     "Breathe out" : {
       "comment" : "Shown and spoken while the breathing pacer's circle contracts. An instruction to exhale."
     },
+    "Breathe out and let it go." : {
+
+    },
     "Breathing pacer" : {
       "comment" : "VoiceOver name for the animated breathing circle. Its spoken value is the current phase — 'Breathe in', 'Hold', 'Breathe out'."
     },
@@ -1642,6 +1655,9 @@
 
     },
     "Cardio" : {
+
+    },
+    "Cardio · %lld min left" : {
 
     },
     "Care" : {
@@ -1926,6 +1942,29 @@
     },
     "Cooking in progress" : {
 
+    },
+    "Cool-down %lld of %lld · %lld min left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cool-down %1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
+    },
+    "Cool-down · %lld stretches" : {
+
+    },
+    "Cool-down · %lld stretches · %lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cool-down · %1$lld stretches · %2$lld min"
+          }
+        }
+      }
     },
     "Copied text leaves Fernlet when you paste it elsewhere. Pasted plans are not from a verified coach, so Fernlet shows every day for review before adding anything." : {
 
@@ -2439,6 +2478,9 @@
 
     },
     "Each exercise as logged, most recent first." : {
+
+    },
+    "Ease into each stretch — no bouncing." : {
 
     },
     "Easy — you could keep this up for a long while." : {
@@ -3119,6 +3161,9 @@
     "Gastrotrich Lifetimes" : {
       "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal"
     },
+    "Get into position" : {
+
+    },
     "Getting ready" : {
 
     },
@@ -3615,6 +3660,9 @@
     "Leave" : {
 
     },
+    "Left side" : {
+
+    },
     "Left this device" : {
 
     },
@@ -3641,6 +3689,9 @@
     },
     "Lifetime steps, one per word. Hamlet is about 30,557 words." : {
       "comment" : "Silly stat: how Shakespeare steps are counted"
+    },
+    "Light and steady — just waking things up." : {
+
     },
     "Likely next period" : {
 
@@ -4148,6 +4199,15 @@
 
     },
     "Next, iPhone will ask whether you want to share your age range with Fernlet. It's used only to unlock messaging friends nearby (13+) and intimacy tracking (16+). Fernlet never sees your birthday, and the answer stays on this device." : {
+
+    },
+    "Next: %@, left side." : {
+
+    },
+    "Next: %@, right side." : {
+
+    },
+    "Next: %@." : {
 
     },
     "Nicely cooked. Want to log %@ as a meal?" : {
@@ -5536,6 +5596,9 @@
     "Ridden so far: %@." : {
       "comment" : "Silly stat: ride share only"
     },
+    "Right side" : {
+
+    },
     "Room for a little more" : {
 
     },
@@ -6056,6 +6119,9 @@
     "Skip" : {
 
     },
+    "Skip cool-down" : {
+
+    },
     "Skip exact duplicate" : {
 
     },
@@ -6069,6 +6135,9 @@
 
     },
     "Skip to next exercise" : {
+
+    },
+    "Skip warm-up" : {
 
     },
     "Sleep" : {
@@ -7029,6 +7098,29 @@
     },
     "Wardrobe" : {
 
+    },
+    "Warm-up %lld of %lld · %lld min left" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up %1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
+    },
+    "Warm-up · %lld stretches" : {
+
+    },
+    "Warm-up · %lld stretches · %lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up · %1$lld stretches · %2$lld min"
+          }
+        }
+      }
     },
     "Water" : {
 
@@ -9699,6 +9791,9 @@
       }
     },
     "z" : {
+
+    },
+    "~%lld min" : {
 
     },
     "· %lld servings" : {

@@ -764,8 +764,13 @@ enum ExerciseLineParser {
         guard !name.isEmpty else { return nil }
 
         let sets = Int(match.output.1)
-        let repsText = String(match.output.2).replacingOccurrences(of: " ", with: "")
-        let repsCount = Int(repsText)
+        // A timed set — "Plank - 2 x 30 s", the line the planner writes for a hold — counts seconds,
+        // not reps: keep it as "30 s" and give it no rep count, so no rep tally or Epley estimate
+        // reads a 30-second plank as 30 reps.
+        let isHold = line[match.range.upperBound...].prefixMatch(of: /\s*(?:seconds|secs|sec|s)\b/) != nil
+        let rawReps = String(match.output.2).replacingOccurrences(of: " ", with: "")
+        let repsText = isHold ? "\(rawReps) s" : rawReps
+        let repsCount = isHold ? nil : Int(repsText)
 
         // Look for the load only AFTER the sets × reps, so "3 x 8" can't have its own digits read
         // back as a weight, and with cue parentheticals removed first.

@@ -10,6 +10,10 @@ import FernletUI
 /// here changes the rest timer for that exercise. Each exercise card also carries the same one-line
 /// factual "last time" recall the shared row editor shows (``WorkoutExerciseBuilder``) — refreshed
 /// when the set of exercise names changes, absent when an exercise has no parsed history.
+///
+/// Edits the LIFTING block only. The warm-up, activation, cardio and cool-down blocks around it are
+/// generated, are not what anyone means by "edit my workout", and would blow the row cap (the warm-up
+/// alone is twenty-odd stretches); saving puts them back around the edited lifting rows unchanged.
 struct GuidedWorkoutEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -29,14 +33,19 @@ struct GuidedWorkoutEditorSheet: View {
     init(store: FernletStore, session: WorkoutProgram.SessionSuggestion) {
         self.store = store
         self.session = session
-        _rows = State(initialValue: session.exercises)
+        _rows = State(initialValue: Self.liftingRows(of: session))
+    }
+
+    /// The session's lifting-block rows — what this editor shows and edits.
+    static func liftingRows(of session: WorkoutProgram.SessionSuggestion) -> [PrescribedExercise] {
+        session.exercises.filter { $0.block == .lifting }
     }
 
     private var goal: GoalType { store.settings.selectedGoal }
 
     /// The row list diverges from the session this editor opened on (reorder, add, remove, or a
     /// sets/reps/rest tweak). `PrescribedExercise` is Equatable, so this is an honest compare.
-    private var isDirty: Bool { rows != session.exercises }
+    private var isDirty: Bool { rows != Self.liftingRows(of: session) }
 
     private func attemptCancel() {
         if isDirty { showDiscardConfirm = true } else { dismiss() }
@@ -291,10 +300,22 @@ struct GuidedWorkoutEditorSheet: View {
         rows[index].sets = max(1, min(8, newValue))
     }
 
+    /// The reps field. For a timed row (a plank, a carry) it edits the hold: the digits typed become
+    /// `holdSeconds`, and `reps` stays the matching "40 s" display text the runner and plan show.
     private func repsBinding(_ index: Int) -> Binding<String> {
         Binding(
             get: { rows.indices.contains(index) ? rows[index].reps : "" },
-            set: { if rows.indices.contains(index) { rows[index].reps = $0 } }
+            set: { newValue in
+                guard rows.indices.contains(index) else { return }
+                guard rows[index].holdSeconds != nil else {
+                    rows[index].reps = newValue
+                    return
+                }
+                let digits = newValue.filter(\.isNumber).prefix(3)
+                guard let seconds = Int(digits), seconds > 0 else { return }
+                rows[index].holdSeconds = seconds
+                rows[index].reps = PrescribedExercise.holdText(seconds: seconds)
+            }
         )
     }
 
@@ -326,12 +347,14 @@ struct GuidedWorkoutEditorSheet: View {
             role = .accessory
         }
         let style = WorkoutGoalStyle.style(for: goal, energy: .moderate, sport: "")
+        let hold: Int? = target.measure == .seconds ? style.holdSeconds : nil
         return PrescribedExercise(
             name: target.name,
             sets: style.adjustedSets(for: role, energy: .moderate),
-            reps: style.reps(for: role),
+            reps: hold.map { PrescribedExercise.holdText(seconds: $0) } ?? style.reps(for: role),
             role: role,
-            fromCatalog: true
+            fromCatalog: true,
+            holdSeconds: hold
         )
     }
 
@@ -339,9 +362,11 @@ struct GuidedWorkoutEditorSheet: View {
 
     private func save() {
         var updated = session
-        updated.exercises = rows
+        let before = session.exercises.filter { $0.block == .warmUp || $0.block == .activation }
+        let after = session.exercises.filter { $0.block == .cardio || $0.block == .coolDown }
+        updated.exercises = before + rows + after
         // Rebuild the display list so the sheet card and the logged workout reflect the edits.
-        let lines = rows.map(\.line).joined(separator: "\n")
+        let lines = WorkoutSessionBlocks.planText(for: updated.exercises)
         updated.suggestion.exercises = lines.isEmpty ? session.suggestion.exercises : lines
         // R7: the store refuses the save when the plan moved on or the session already started —
         // say so instead of dismissing as if the edits landed.
