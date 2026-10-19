@@ -269,6 +269,21 @@ localizing it would require a translated food-name database this app does not ha
 review-sheet names are ever prioritized for localization, `displayName` is the fork point — same
 token/display-split shape as §3.4's four, just not undertaken yet.
 
+**Addendum (2026-10-19, domain display names):** `WorkoutActivityType.displayName` was English
+literals doing two jobs, the picker's label and the name a workout is SAVED under when its name field
+is left blank (log sheet, plan sheet and plan exercise text) or when a Health sample from another app
+is imported. It is forked: `defaultName` keeps the exact English spellings for every one of those
+writes (pinned by `LocalizationBoundaryTests.frozenWorkoutActivityDefaultNames`), and `displayName`
+is localized for the picker, the chosen-activity row, the "Log it again" summary and the name
+placeholder. The saved half has to stay English: the workout row and week calendar file a logged
+workout under a category by keyword-matching English words in its name, and a Health import rebuilt
+on devices set to different languages would otherwise flip its own name through the day-record
+merge. **Deliberately not done yet:** a history row whose name is a stored `defaultName` still
+draws that English name verbatim. Rendering it through `displayName` at the history sites, when
+`name == activityType.defaultName`, is the follow-up, the same shape as the plan sheet's stored
+`"\(split.rawValue) workout"`. `WorkoutMode.label` and `DietaryPattern.label` had no persisted or
+prompt reader and were localized in place.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)

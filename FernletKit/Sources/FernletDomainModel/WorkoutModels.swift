@@ -515,43 +515,25 @@ public nonisolated enum WorkoutType: String, Codable, CaseIterable, Identifiable
 
 /// Whether a workout is strength training or a named activity/class.
 ///
-/// Switches the logging UI's vocabulary (`pickerTitle`, `searchPlaceholder`) and which fields
-/// (exercise lines vs ``WorkoutActivityType``) are expected; decodes tolerantly where persisted.
+/// Switches which fields the logging UI expects (exercise lines vs ``WorkoutActivityType``);
+/// decodes tolerantly where persisted.
 public nonisolated enum WorkoutMode: String, Codable, CaseIterable, Identifiable {
     case strengthTraining
     case activity
 
     public var id: String { rawValue }
 
-    /// The chip label in the log/plan sheets' "Kind" row.
+    /// The localized chip label in the log/plan sheets' "Kind" row. Display only: `rawValue` is the
+    /// persisted token.
     ///
     /// `.activity` says "Cardio & activity" rather than the old "Workouts": inside a sheet titled
     /// "Log workout", a chip called Workouts read as "everything" instead of "the non-strength one".
     public var label: String {
         switch self {
-        case .strengthTraining: "Strength Training"
-        case .activity: "Cardio & activity"
-        }
-    }
-
-    public var pickerTitle: String {
-        switch self {
-        case .strengthTraining: "Exercise"
-        case .activity: "Activity"
-        }
-    }
-
-    public var searchPlaceholder: String {
-        switch self {
-        case .strengthTraining: "Search exercise or muscle"
-        case .activity: "Search activity, e.g. Pilates"
-        }
-    }
-
-    public var addLabel: String {
-        switch self {
-        case .strengthTraining: "Add exercise"
-        case .activity: "Add activity"
+        case .strengthTraining: String(localized: "workoutMode.strengthTraining", defaultValue: "Strength Training",
+                                       bundle: .module, comment: "Workout kind chip: weights and exercise lines")
+        case .activity: String(localized: "workoutMode.activity", defaultValue: "Cardio & activity",
+                               bundle: .module, comment: "Workout kind chip: a named activity or class, e.g. running or yoga")
         }
     }
 }
@@ -772,7 +754,19 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
 
     public var id: String { rawValue }
 
-    public var displayName: String {
+    /// The FROZEN English name a workout of this type is SAVED under. Never localize it.
+    ///
+    /// It becomes `Workout.name` when the log sheet's name field is left blank,
+    /// `PlannedWorkout.name` and `PlannedWorkout.exercises` when the plan sheet's is, and
+    /// `Workout.name` on a Health import from another app (Fernlet's own samples carry their name in
+    /// `fernlet.activityName`). Every one of those is persisted on a synced row, and the workout row
+    /// and week calendar label a logged workout's category with
+    /// `WorkoutExerciseCatalog.inferredCategory(for:)`, which keyword-matches ENGLISH words in the
+    /// name and exercise text ("Mixed Cardio" files under Cardio by its name alone). A localized name
+    /// would rebuild the same Health sample under a different name on two devices set to different
+    /// languages, and file the same workout under a different category on each. Screens read
+    /// ``displayName``.
+    public var defaultName: String {
         switch self {
         case .running: "Running"
         case .walking: "Walking"
@@ -814,6 +808,58 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
         case .preparationAndRecovery: "Preparation and Recovery"
         case .cooldown: "Cooldown"
         case .other: "Other"
+        }
+    }
+
+    /// The localized activity name, for screens only: the activity picker, the chosen-activity row,
+    /// the "Log it again" summary and the name field's placeholder. Never persist or match it — a
+    /// workout saved with a blank name takes ``defaultName``.
+    ///
+    /// One case per line, unlike the two-line siblings: forty cases at two lines each exceed rule
+    /// 4's 60-line body, which is met by formatting here because the extractor only harvests a
+    /// literal written inside `String(localized:)` itself, so the calls cannot move into a helper.
+    public var displayName: String {
+        switch self {
+        case .running: String(localized: "activityType.running", defaultValue: "Running", bundle: .module, comment: "Workout activity type: running, outdoors or on a treadmill")
+        case .walking: String(localized: "activityType.walking", defaultValue: "Walking", bundle: .module, comment: "Workout activity type: walking")
+        case .hiking: String(localized: "activityType.hiking", defaultValue: "Hiking", bundle: .module, comment: "Workout activity type: hiking on trails")
+        case .cycling: String(localized: "activityType.cycling", defaultValue: "Cycling", bundle: .module, comment: "Workout activity type: cycling outdoors")
+        case .indoorCycling: String(localized: "activityType.indoorCycling", defaultValue: "Indoor Cycling", bundle: .module, comment: "Workout activity type: cycling on a stationary bike or spin class")
+        case .yoga: String(localized: "activityType.yoga", defaultValue: "Yoga", bundle: .module, comment: "Workout activity type: yoga")
+        case .pilates: String(localized: "activityType.pilates", defaultValue: "Pilates", bundle: .module, comment: "Workout activity type: Pilates")
+        case .barre: String(localized: "activityType.barre", defaultValue: "Barre", bundle: .module, comment: "Workout activity type: barre, a ballet-inspired fitness class")
+        case .dance: String(localized: "activityType.dance", defaultValue: "Dance", bundle: .module, comment: "Workout activity type: dance as a cardio workout")
+        case .socialDance: String(localized: "activityType.socialDance", defaultValue: "Social Dance", bundle: .module, comment: "Workout activity type: social or partner dancing, e.g. salsa or swing")
+        case .swimmingPool: String(localized: "activityType.swimmingPool", defaultValue: "Pool Swim", bundle: .module, comment: "Workout activity type: swimming in a pool")
+        case .swimmingOpenWater: String(localized: "activityType.swimmingOpenWater", defaultValue: "Open Water Swim", bundle: .module, comment: "Workout activity type: swimming in a lake or the sea")
+        case .rowing: String(localized: "activityType.rowing", defaultValue: "Rowing", bundle: .module, comment: "Workout activity type: rowing, on water or a rowing machine")
+        case .elliptical: String(localized: "activityType.elliptical", defaultValue: "Elliptical", bundle: .module, comment: "Workout activity type: the elliptical trainer machine")
+        case .stairClimbing: String(localized: "activityType.stairClimbing", defaultValue: "Stair Climbing", bundle: .module, comment: "Workout activity type: a stair-climbing machine")
+        case .stairs: String(localized: "activityType.stairs", defaultValue: "Stairs", bundle: .module, comment: "Workout activity type: climbing real flights of stairs")
+        case .hiit: String(localized: "activityType.hiit", defaultValue: "HIIT", bundle: .module, comment: "Workout activity type: high-intensity interval training")
+        case .kickboxing: String(localized: "activityType.kickboxing", defaultValue: "Kickboxing", bundle: .module, comment: "Workout activity type: kickboxing")
+        case .martialArts: String(localized: "activityType.martialArts", defaultValue: "Martial Arts", bundle: .module, comment: "Workout activity type: martial arts")
+        case .climbing: String(localized: "activityType.climbing", defaultValue: "Climbing", bundle: .module, comment: "Workout activity type: rock or wall climbing")
+        case .jumpRope: String(localized: "activityType.jumpRope", defaultValue: "Jump Rope", bundle: .module, comment: "Workout activity type: skipping with a jump rope")
+        case .tennis: String(localized: "activityType.tennis", defaultValue: "Tennis", bundle: .module, comment: "Workout activity type: tennis")
+        case .basketball: String(localized: "activityType.basketball", defaultValue: "Basketball", bundle: .module, comment: "Workout activity type: basketball")
+        case .soccer: String(localized: "activityType.soccer", defaultValue: "Soccer", bundle: .module, comment: "Workout activity type: soccer (association football)")
+        case .pickleball: String(localized: "activityType.pickleball", defaultValue: "Pickleball", bundle: .module, comment: "Workout activity type: pickleball, the paddle sport")
+        case .badminton: String(localized: "activityType.badminton", defaultValue: "Badminton", bundle: .module, comment: "Workout activity type: badminton")
+        case .tableTennis: String(localized: "activityType.tableTennis", defaultValue: "Table Tennis", bundle: .module, comment: "Workout activity type: table tennis")
+        case .racquetball: String(localized: "activityType.racquetball", defaultValue: "Racquetball", bundle: .module, comment: "Workout activity type: racquetball")
+        case .squash: String(localized: "activityType.squash", defaultValue: "Squash", bundle: .module, comment: "Workout activity type: squash, the racket sport")
+        case .coreTraining: String(localized: "activityType.coreTraining", defaultValue: "Core Training", bundle: .module, comment: "Workout activity type: core training, e.g. abs and planks")
+        case .flexibility: String(localized: "activityType.flexibility", defaultValue: "Flexibility", bundle: .module, comment: "Workout activity type: flexibility and stretching")
+        case .mindAndBody: String(localized: "activityType.mindAndBody", defaultValue: "Mind and Body", bundle: .module, comment: "Workout activity type: meditation, breathwork and similar practice")
+        case .taiChi: String(localized: "activityType.taiChi", defaultValue: "Tai Chi", bundle: .module, comment: "Workout activity type: tai chi")
+        case .functionalStrengthTraining: String(localized: "activityType.functionalStrengthTraining", defaultValue: "Functional Strength Training", bundle: .module, comment: "Workout activity type: functional strength training")
+        case .traditionalStrengthTraining: String(localized: "activityType.traditionalStrengthTraining", defaultValue: "Traditional Strength Training", bundle: .module, comment: "Workout activity type: traditional strength training with weights")
+        case .crossTraining: String(localized: "activityType.crossTraining", defaultValue: "Cross Training", bundle: .module, comment: "Workout activity type: cross training")
+        case .mixedCardio: String(localized: "activityType.mixedCardio", defaultValue: "Mixed Cardio", bundle: .module, comment: "Workout activity type: mixed cardio")
+        case .preparationAndRecovery: String(localized: "activityType.preparationAndRecovery", defaultValue: "Preparation and Recovery", bundle: .module, comment: "Workout activity type: warm-up, mobility and recovery work")
+        case .cooldown: String(localized: "activityType.cooldown", defaultValue: "Cooldown", bundle: .module, comment: "Workout activity type: a cool-down after a workout")
+        case .other: String(localized: "activityType.other", defaultValue: "Other", bundle: .module, comment: "Workout activity type: any activity not in the list")
         }
     }
 

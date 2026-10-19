@@ -16,7 +16,13 @@ public enum ActivityTypeCatalog {
     /// Every Fernlet activity type, in `WorkoutActivityType.allCases` order — the unfiltered catalog.
     static let allTypes: [WorkoutActivityType] = WorkoutActivityType.allCases
 
-    /// Case-insensitive substring search over display names and raw values.
+    /// Case-insensitive substring search over localized display names, the frozen English names
+    /// and raw values.
+    ///
+    /// The English `defaultName` is matched as well as the localized `displayName`, as
+    /// `WorkoutExerciseCatalog.search` matches muscle tokens beside muscle names: English search
+    /// keeps working exactly as before, and a user who types "Pool Swim" on a translated device
+    /// still finds it.
     ///
     /// - Parameter query: Free text from the activity picker; a blank/whitespace query returns the
     ///   whole catalog.
@@ -27,6 +33,7 @@ public enum ActivityTypeCatalog {
 
         return allTypes.filter { type in
             type.displayName.lowercased().contains(trimmed)
+                || type.defaultName.lowercased().contains(trimmed)
                 || type.rawValue.lowercased().contains(trimmed)
         }
     }

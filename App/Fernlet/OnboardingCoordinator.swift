@@ -880,8 +880,8 @@ private struct OnboardingDietaryPatternScreen: View {
 /// Used by ``OnboardingDietaryPatternScreen`` for its pattern choices; purely presentational, with
 /// selection state and the tap action owned by the caller.
 private struct OnboardingChoiceRow: View {
-    /// Stays `String`: the caller passes `DietaryPattern.label`, a domain display name, drawn
-    /// verbatim. That label is still English-only at its source; localizing it belongs there.
+    /// Stays `String`: the caller passes `DietaryPattern.label`, which the domain module already
+    /// resolves through its own catalog, so it is final text and is drawn verbatim.
     var title: String
     var subtitle: LocalizedStringKey
     var systemImage: String

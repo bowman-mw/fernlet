@@ -1,6 +1,486 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "activityType.badminton" : {
+      "comment" : "Workout activity type: badminton",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Badminton"
+          }
+        }
+      }
+    },
+    "activityType.barre" : {
+      "comment" : "Workout activity type: barre, a ballet-inspired fitness class",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Barre"
+          }
+        }
+      }
+    },
+    "activityType.basketball" : {
+      "comment" : "Workout activity type: basketball",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Basketball"
+          }
+        }
+      }
+    },
+    "activityType.climbing" : {
+      "comment" : "Workout activity type: rock or wall climbing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Climbing"
+          }
+        }
+      }
+    },
+    "activityType.cooldown" : {
+      "comment" : "Workout activity type: a cool-down after a workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cooldown"
+          }
+        }
+      }
+    },
+    "activityType.coreTraining" : {
+      "comment" : "Workout activity type: core training, e.g. abs and planks",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Core Training"
+          }
+        }
+      }
+    },
+    "activityType.crossTraining" : {
+      "comment" : "Workout activity type: cross training",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cross Training"
+          }
+        }
+      }
+    },
+    "activityType.cycling" : {
+      "comment" : "Workout activity type: cycling outdoors",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cycling"
+          }
+        }
+      }
+    },
+    "activityType.dance" : {
+      "comment" : "Workout activity type: dance as a cardio workout",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dance"
+          }
+        }
+      }
+    },
+    "activityType.elliptical" : {
+      "comment" : "Workout activity type: the elliptical trainer machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Elliptical"
+          }
+        }
+      }
+    },
+    "activityType.flexibility" : {
+      "comment" : "Workout activity type: flexibility and stretching",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Flexibility"
+          }
+        }
+      }
+    },
+    "activityType.functionalStrengthTraining" : {
+      "comment" : "Workout activity type: functional strength training",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Functional Strength Training"
+          }
+        }
+      }
+    },
+    "activityType.hiit" : {
+      "comment" : "Workout activity type: high-intensity interval training",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "HIIT"
+          }
+        }
+      }
+    },
+    "activityType.hiking" : {
+      "comment" : "Workout activity type: hiking on trails",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hiking"
+          }
+        }
+      }
+    },
+    "activityType.indoorCycling" : {
+      "comment" : "Workout activity type: cycling on a stationary bike or spin class",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Indoor Cycling"
+          }
+        }
+      }
+    },
+    "activityType.jumpRope" : {
+      "comment" : "Workout activity type: skipping with a jump rope",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Jump Rope"
+          }
+        }
+      }
+    },
+    "activityType.kickboxing" : {
+      "comment" : "Workout activity type: kickboxing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Kickboxing"
+          }
+        }
+      }
+    },
+    "activityType.martialArts" : {
+      "comment" : "Workout activity type: martial arts",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Martial Arts"
+          }
+        }
+      }
+    },
+    "activityType.mindAndBody" : {
+      "comment" : "Workout activity type: meditation, breathwork and similar practice",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mind and Body"
+          }
+        }
+      }
+    },
+    "activityType.mixedCardio" : {
+      "comment" : "Workout activity type: mixed cardio",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mixed Cardio"
+          }
+        }
+      }
+    },
+    "activityType.other" : {
+      "comment" : "Workout activity type: any activity not in the list",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Other"
+          }
+        }
+      }
+    },
+    "activityType.pickleball" : {
+      "comment" : "Workout activity type: pickleball, the paddle sport",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pickleball"
+          }
+        }
+      }
+    },
+    "activityType.pilates" : {
+      "comment" : "Workout activity type: Pilates",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pilates"
+          }
+        }
+      }
+    },
+    "activityType.preparationAndRecovery" : {
+      "comment" : "Workout activity type: warm-up, mobility and recovery work",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Preparation and Recovery"
+          }
+        }
+      }
+    },
+    "activityType.racquetball" : {
+      "comment" : "Workout activity type: racquetball",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Racquetball"
+          }
+        }
+      }
+    },
+    "activityType.rowing" : {
+      "comment" : "Workout activity type: rowing, on water or a rowing machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rowing"
+          }
+        }
+      }
+    },
+    "activityType.running" : {
+      "comment" : "Workout activity type: running, outdoors or on a treadmill",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Running"
+          }
+        }
+      }
+    },
+    "activityType.soccer" : {
+      "comment" : "Workout activity type: soccer (association football)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Soccer"
+          }
+        }
+      }
+    },
+    "activityType.socialDance" : {
+      "comment" : "Workout activity type: social or partner dancing, e.g. salsa or swing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Social Dance"
+          }
+        }
+      }
+    },
+    "activityType.squash" : {
+      "comment" : "Workout activity type: squash, the racket sport",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Squash"
+          }
+        }
+      }
+    },
+    "activityType.stairClimbing" : {
+      "comment" : "Workout activity type: a stair-climbing machine",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stair Climbing"
+          }
+        }
+      }
+    },
+    "activityType.stairs" : {
+      "comment" : "Workout activity type: climbing real flights of stairs",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stairs"
+          }
+        }
+      }
+    },
+    "activityType.swimmingOpenWater" : {
+      "comment" : "Workout activity type: swimming in a lake or the sea",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Open Water Swim"
+          }
+        }
+      }
+    },
+    "activityType.swimmingPool" : {
+      "comment" : "Workout activity type: swimming in a pool",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pool Swim"
+          }
+        }
+      }
+    },
+    "activityType.tableTennis" : {
+      "comment" : "Workout activity type: table tennis",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Table Tennis"
+          }
+        }
+      }
+    },
+    "activityType.taiChi" : {
+      "comment" : "Workout activity type: tai chi",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tai Chi"
+          }
+        }
+      }
+    },
+    "activityType.tennis" : {
+      "comment" : "Workout activity type: tennis",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tennis"
+          }
+        }
+      }
+    },
+    "activityType.traditionalStrengthTraining" : {
+      "comment" : "Workout activity type: traditional strength training with weights",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Traditional Strength Training"
+          }
+        }
+      }
+    },
+    "activityType.walking" : {
+      "comment" : "Workout activity type: walking",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Walking"
+          }
+        }
+      }
+    },
+    "activityType.yoga" : {
+      "comment" : "Workout activity type: yoga",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Yoga"
+          }
+        }
+      }
+    },
     "care.group.anytime" : {
       "comment" : "Personal-care checklist section for tasks with no fixed time of day",
       "extractionState" : "extracted_with_value",
@@ -477,6 +957,54 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tired"
+          }
+        }
+      }
+    },
+    "dietaryPattern.balanced" : {
+      "comment" : "Eating pattern: a flexible mix, no macro bias",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Balanced"
+          }
+        }
+      }
+    },
+    "dietaryPattern.higherProtein" : {
+      "comment" : "Eating pattern: more protein than the balanced default",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Higher protein"
+          }
+        }
+      }
+    },
+    "dietaryPattern.lowerCarb" : {
+      "comment" : "Eating pattern: fewer carbohydrates, without strict tracking",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower carb"
+          }
+        }
+      }
+    },
+    "dietaryPattern.plantForward" : {
+      "comment" : "Eating pattern: mostly plants, legumes and grains; not strictly vegetarian",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plant-forward"
           }
         }
       }
@@ -1977,6 +2505,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "moderate"
+          }
+        }
+      }
+    },
+    "workoutMode.activity" : {
+      "comment" : "Workout kind chip: a named activity or class, e.g. running or yoga",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cardio & activity"
+          }
+        }
+      }
+    },
+    "workoutMode.strengthTraining" : {
+      "comment" : "Workout kind chip: weights and exercise lines",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength Training"
           }
         }
       }

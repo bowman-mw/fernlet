@@ -1071,12 +1071,15 @@ struct WorkoutSheet: View {
         return others > 0 ? "\(first) + \(others)" : first
     }
 
-    /// The name field is optional: the placeholder shows the name that will actually be saved.
+    /// The name field is optional: the placeholder shows the name the workout will take.
     ///
     /// A resolved `String`, not a key, because two of its three answers are already final text: the
-    /// activity type's `displayName` and the name inferred from the exercises the user added. The
-    /// two authored fallbacks go through `String(localized:)`, so they reach the catalog instead of
-    /// riding the field's verbatim overload in English.
+    /// activity type's localized `displayName` and the name inferred from the exercises the user
+    /// added. The two authored fallbacks go through `String(localized:)`, so they reach the catalog
+    /// instead of riding the field's verbatim overload in English. An activity left unnamed is SAVED
+    /// under its frozen English `defaultName` (see ``workoutName``), so on a translated device the
+    /// placeholder reads in the user's language while the stored name stays the token, as the plan
+    /// sheet's split placeholder already does.
     private var namePlaceholder: String {
         if logMode == .activity {
             return selectedActivityType?.displayName
@@ -1216,7 +1219,10 @@ struct WorkoutSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         if logMode == .activity, let selectedActivityType {
-            return selectedActivityType.displayName
+            // `defaultName`, not `displayName`: this is PERSISTED as `Workout.name`, and the
+            // workout row and week calendar file the row under a category by keyword-matching
+            // English words in it. The placeholder is display-only and keeps the localized name.
+            return selectedActivityType.defaultName
         }
         // A strength log names itself from what's in it, so a daily log costs no keyboard trip:
         // Save enables as soon as one exercise is added.
@@ -3016,8 +3022,8 @@ struct WorkoutExerciseBuilder: View {
     @Binding var details: String
     @Binding var resetToken: Int
     /// Catalog keys. Both sheets show the builder only while the Kind is strength, so they take these
-    /// defaults rather than forwarding `WorkoutMode`'s `pickerTitle`/`searchPlaceholder`/`addLabel`:
-    /// plain English `String`s in the domain module, which bound the verbatim overloads.
+    /// defaults. `WorkoutMode` once carried English `String` copies of all three; nothing read them
+    /// after the field-title round, and they were deleted rather than localized.
     var pickerTitle: LocalizedStringKey = "Exercise"
     var searchPlaceholder: LocalizedStringKey = "Search exercise or muscle"
     var mode: WorkoutMode = .strengthTraining
@@ -4304,17 +4310,20 @@ struct WorkoutPlanSheet: View {
     private var plannedName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
+        // `defaultName` and `rawValue`, not `displayName` and `title`: this string is PERSISTED as
+        // `PlannedWorkout.name`, a completed plan carries it onto the logged row, and
+        // `WorkoutExerciseCatalog.inferredCategory`/`targetSummary` then match ENGLISH keywords
+        // against it. A localized default name would have a plan created on a German device infer
+        // its own type differently. The placeholder below is display-only and keeps the localized
+        // names.
         if logMode == .activity, let selectedActivityType {
-            return selectedActivityType.displayName
+            return selectedActivityType.defaultName
         }
-        // `rawValue`, not `title`: this string is PERSISTED as `PlannedWorkout.name`, and
-        // `WorkoutExerciseCatalog.inferType`/`targetSummary` then match ENGLISH keywords against
-        // it. A localized default name would have a plan created on a German device infer its own
-        // type differently. The placeholder below is display-only and keeps the localized title.
         return "\(split.rawValue) workout"
     }
 
-    /// The name field is optional — the placeholder shows the name the plan will actually take.
+    /// The name field is optional — the placeholder shows the name the plan will take, in the
+    /// user's language; ``plannedName`` stores its frozen English form.
     ///
     /// A resolved `String` for the same reason as ``WorkoutSheet``'s: the activity type's
     /// `displayName` is already final text. The authored lines go through `String(localized:)`,
@@ -4334,7 +4343,9 @@ struct WorkoutPlanSheet: View {
 
     private var exerciseText: String {
         if logMode == .activity {
-            return selectedActivityType?.displayName ?? ""
+            // Persisted as `PlannedWorkout.exercises` and keyword-matched with the name: the
+            // frozen `defaultName`, for the reason ``plannedName`` gives.
+            return selectedActivityType?.defaultName ?? ""
         }
         return plannedExerciseText.trimmingCharacters(in: .whitespacesAndNewlines)
     }

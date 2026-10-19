@@ -177,12 +177,19 @@ public nonisolated enum DietaryPattern: String, Codable, CaseIterable, Identifia
 
     public var id: String { rawValue }
 
+    /// The localized pattern name, for the onboarding rows and the profile picker. Display only:
+    /// `rawValue` is what `NutritionPreferences` persists, and the target calculator switches on
+    /// the case, never on this text.
     public var label: String {
         switch self {
-        case .balanced: "Balanced"
-        case .higherProtein: "Higher protein"
-        case .plantForward: "Plant-forward"
-        case .lowerCarb: "Lower carb"
+        case .balanced: String(localized: "dietaryPattern.balanced", defaultValue: "Balanced",
+                               bundle: .module, comment: "Eating pattern: a flexible mix, no macro bias")
+        case .higherProtein: String(localized: "dietaryPattern.higherProtein", defaultValue: "Higher protein",
+                                    bundle: .module, comment: "Eating pattern: more protein than the balanced default")
+        case .plantForward: String(localized: "dietaryPattern.plantForward", defaultValue: "Plant-forward",
+                                   bundle: .module, comment: "Eating pattern: mostly plants, legumes and grains; not strictly vegetarian")
+        case .lowerCarb: String(localized: "dietaryPattern.lowerCarb", defaultValue: "Lower carb",
+                                bundle: .module, comment: "Eating pattern: fewer carbohydrates, without strict tracking")
         }
     }
 }
