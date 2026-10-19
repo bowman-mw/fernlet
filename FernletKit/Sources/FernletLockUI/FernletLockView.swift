@@ -551,7 +551,8 @@ public struct FernletLockSetupView: View {
             }
 
             if selectedKind == .alphanumeric {
-                SecureField(FernletLockCopy.passwordFieldPlaceholder, text: $passcode)
+                SecureField(FernletLockCopy.passwordFieldPlaceholder, text: $passcode,
+                            prompt: .fieldPrompt(verbatim: FernletLockCopy.passwordFieldPlaceholder))
                     .textContentType(.newPassword)
                     .sheetTextInput()
             } else {
@@ -595,7 +596,8 @@ public struct FernletLockSetupView: View {
             }
 
             if selectedKind == .alphanumeric {
-                SecureField(FernletLockCopy.Setup.confirmPasswordFieldPlaceholder, text: $confirmation)
+                SecureField(FernletLockCopy.Setup.confirmPasswordFieldPlaceholder, text: $confirmation,
+                            prompt: .fieldPrompt(verbatim: FernletLockCopy.Setup.confirmPasswordFieldPlaceholder))
                     .textContentType(.newPassword)
                     .sheetTextInput()
             } else {
@@ -1452,7 +1454,8 @@ public struct FernletLockView: View {
 
     private var alphanumericInput: some View {
         VStack(spacing: 16) {
-            SecureField(FernletLockCopy.passwordFieldPlaceholder, text: $passcode)
+            SecureField(FernletLockCopy.passwordFieldPlaceholder, text: $passcode,
+                        prompt: .fieldPrompt(verbatim: FernletLockCopy.passwordFieldPlaceholder))
                 .textContentType(.password)
                 .sheetTextInput()
                 .submitLabel(.go)

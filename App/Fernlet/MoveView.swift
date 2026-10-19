@@ -908,7 +908,7 @@ struct WorkoutSheet: View {
     /// The optional workout-name field — below the fold per artboard 3b, beside the Log-again card.
     private var workoutNameField: some View {
         SheetField("Workout") {
-            TextField(namePlaceholder, text: $name)
+            TextField(namePlaceholder, text: $name, prompt: .fieldPrompt(verbatim: namePlaceholder))
                 .sheetTextInput()
         }
     }
@@ -1043,12 +1043,12 @@ struct WorkoutSheet: View {
     private var strengthMetricsRow: some View {
         HStack(alignment: .top, spacing: 12) {
             SheetField("RPE (1–10)", namesControl: true) {
-                TextField("7", text: $rpe)
+                TextField("7", text: $rpe, prompt: .fieldPrompt("7"))
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
             SheetField("Duration (min)", namesControl: true) {
-                TextField("45", text: $duration)
+                TextField("45", text: $duration, prompt: .fieldPrompt("45"))
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
@@ -1936,7 +1936,8 @@ struct WorkoutSuggestionSheet: View {
     private var aiAdjustField: some View {
         SheetField("Adjust") {
             VStack(alignment: .leading, spacing: 8) {
-                TextField("e.g. swap the squat, 30 minutes, no barbell", text: $adjustRequest)
+                TextField("e.g. swap the squat, 30 minutes, no barbell", text: $adjustRequest,
+                          prompt: .fieldPrompt("e.g. swap the squat, 30 minutes, no barbell"))
                     .sheetTextInput()
                     .disabled(isAdjusting)
                 Button {
@@ -2014,7 +2015,8 @@ struct WorkoutSuggestionSheet: View {
         feelingSection
         spaceRow
         SheetField("Anything else?") {
-            TextField("e.g. sore left knee, short on time", text: $context)
+            TextField("e.g. sore left knee, short on time", text: $context,
+                      prompt: .fieldPrompt("e.g. sore left knee, short on time"))
                 .sheetTextInput()
                 // Measured with no spoken name at all ("text field"); the caption above is a
                 // separate element.
@@ -2471,7 +2473,7 @@ struct EditWorkoutSheet: View {
     /// The name field, disabled with a note for a guided-logged row.
     private var nameField: some View {
         SheetField("Workout") {
-            TextField("e.g. Upper strength", text: $name)
+            TextField("e.g. Upper strength", text: $name, prompt: .fieldPrompt("e.g. Upper strength"))
                 .sheetTextInput()
                 .disabled(isGuided)
                 .opacity(isGuided ? 0.55 : 1)
@@ -2534,13 +2536,13 @@ struct EditWorkoutSheet: View {
 
                     HStack(alignment: .top, spacing: 12) {
                         SheetField("RPE (1–10)", namesControl: true) {
-                            TextField("7", text: $rpe)
+                            TextField("7", text: $rpe, prompt: .fieldPrompt("7"))
                                 .keyboardType(.numberPad)
                                 .sheetTextInput(font: .fernlet(.label))
                                 .accessibilityIdentifier("workout.edit.rpe")
                         }
                         SheetField("Duration (min)", namesControl: true) {
-                            TextField("45", text: $duration)
+                            TextField("45", text: $duration, prompt: .fieldPrompt("45"))
                                 .keyboardType(.numberPad)
                                 .sheetTextInput(font: .fernlet(.label))
                                 .accessibilityIdentifier("workout.edit.duration")
@@ -3036,24 +3038,24 @@ struct WorkoutExerciseBuilder: View {
     @ViewBuilder private var strengthFields: some View {
         HStack(alignment: .top, spacing: 12) {
             SheetField("Sets", namesControl: true) {
-                TextField("3", text: $sets)
+                TextField("3", text: $sets, prompt: .fieldPrompt("3"))
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
             SheetField("Reps", namesControl: true) {
-                TextField("8", text: $reps)
+                TextField("8", text: $reps, prompt: .fieldPrompt("8"))
                     .keyboardType(.numberPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
         }
 
         SheetField("Weight", namesControl: true) {
-            TextField("30 lb", text: $weight)
+            TextField("30 lb", text: $weight, prompt: .fieldPrompt("30 lb"))
                 .sheetTextInput()
         }
 
         SheetField("Details") {
-            TextField("tempo, form note", text: $details)
+            TextField("tempo, form note", text: $details, prompt: .fieldPrompt("tempo, form note"))
                 .sheetTextInput()
         }
     }
@@ -3062,19 +3064,19 @@ struct WorkoutExerciseBuilder: View {
     @ViewBuilder private var treadmillFields: some View {
         HStack(alignment: .top, spacing: 12) {
             SheetField("Speed", namesControl: true) {
-                TextField("5.5 mph", text: $speed)
+                TextField("5.5 mph", text: $speed, prompt: .fieldPrompt("5.5 mph"))
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
             SheetField("Incline", namesControl: true) {
-                TextField("2", text: $incline)
+                TextField("2", text: $incline, prompt: .fieldPrompt("2"))
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
         }
 
         SheetField("Details") {
-            TextField("intervals, distance, notes", text: $details)
+            TextField("intervals, distance, notes", text: $details, prompt: .fieldPrompt("intervals, distance, notes"))
                 .sheetTextInput()
         }
     }
@@ -3224,7 +3226,7 @@ struct ExerciseSearchPicker: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(Color.slate)
-                    TextField(placeholder, text: $query)
+                    TextField(placeholder, text: $query, prompt: .fieldPrompt(verbatim: placeholder))
                         .textInputAutocapitalization(.words)
                         .autocorrectionDisabled(false)
                         .focused($searchFocused)
@@ -3418,7 +3420,7 @@ struct EditablePlannedExerciseRow: View {
             Text(label)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
-            TextField(label, text: text)
+            TextField(label, text: text, prompt: .fieldPrompt(verbatim: label))
                 .keyboardType(keyboard)
                 // Tabular DM Sans for the numeric fields, per the shared field idiom.
                 .sheetTextInput(font: keyboard == .default ? nil : .fernlet(.label))
@@ -4514,7 +4516,7 @@ struct WorkoutPlanSheet: View {
             }
 
             SheetField("Workout") {
-                TextField(plannedNamePlaceholder, text: $name)
+                TextField(plannedNamePlaceholder, text: $name, prompt: .fieldPrompt(verbatim: plannedNamePlaceholder))
                     .sheetTextInput()
             }
 
@@ -4526,7 +4528,7 @@ struct WorkoutPlanSheet: View {
 
             if logMode == .strengthTraining {
                 SheetField("Duration (min)", namesControl: true) {
-                    TextField("45", text: $duration)
+                    TextField("45", text: $duration, prompt: .fieldPrompt("45"))
                         .keyboardType(.numberPad)
                         .sheetTextInput(font: .fernlet(.label))
                 }

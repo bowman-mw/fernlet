@@ -115,7 +115,7 @@ struct ActivityPickerSection: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(Color.slate)
-                    TextField("Search workout type", text: $query)
+                    TextField("Search workout type", text: $query, prompt: .fieldPrompt("Search workout type"))
                         .textInputAutocapitalization(.words)
                         .autocorrectionDisabled(false)
                         .accessibilityIdentifier("activity.search")
@@ -216,14 +216,15 @@ struct ActivityPickerSection: View {
         VStack(alignment: .leading, spacing: 14) {
             AdaptiveStack(spacing: 12, horizontalAlignment: .leading, verticalAlignment: .top) {
                 SheetField("Duration (min)", namesControl: true) {
-                    TextField("\(type.defaultDurationMinutes)", text: $duration)
+                    TextField("\(type.defaultDurationMinutes)", text: $duration,
+                              prompt: .fieldPrompt("\(type.defaultDurationMinutes)"))
                         .keyboardType(.numberPad)
                         .sheetTextInput(font: .fernlet(.label))
                         .accessibilityIdentifier("activity.duration")
                 }
                 if type.expectsDistance {
                     SheetField("Distance (mi)", namesControl: true) {
-                        TextField("3.0", text: $distance)
+                        TextField("3.0", text: $distance, prompt: .fieldPrompt("3.0"))
                             .keyboardType(.decimalPad)
                             .sheetTextInput(font: .fernlet(.label))
                             .accessibilityIdentifier("activity.distance")
@@ -235,7 +236,7 @@ struct ActivityPickerSection: View {
 
             if showsEnergyField {
                 SheetField("Energy (kcal)", namesControl: true) {
-                    TextField("250", text: $energyKcal)
+                    TextField("250", text: $energyKcal, prompt: .fieldPrompt("250"))
                         .keyboardType(.numberPad)
                         .sheetTextInput(font: .fernlet(.label))
                         .accessibilityIdentifier("activity.energy")

@@ -1520,7 +1520,7 @@ struct RecipeSheet: View {
                     // Pushed pages title themselves in the nav bar (see `.navigationTitle` below);
                     // the sheet presentation titles itself in the draft guard's pinned header.
                     SheetField("Recipe name") {
-                        TextField("black bean bowls", text: $name)
+                        TextField("black bean bowls", text: $name, prompt: .fieldPrompt("black bean bowls"))
                             .submitLabel(.done)
                             .sheetTextInput()
                     }
@@ -2300,7 +2300,7 @@ struct RecipeIngredientEditor: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(Color.slate)
-                TextField("Search ingredient", text: $ingredient.name)
+                TextField("Search ingredient", text: $ingredient.name, prompt: .fieldPrompt("Search ingredient"))
                     .font(.fernlet(.body))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
@@ -2396,7 +2396,7 @@ struct RecipeIngredientEditor: View {
 
     private var quantityUnitRow: some View {
         HStack(spacing: 12) {
-            TextField("Qty", value: $ingredient.quantity, format: .number)
+            TextField("Qty", value: $ingredient.quantity, format: .number, prompt: .fieldPrompt("Qty"))
                 .keyboardType(.decimalPad)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
@@ -3984,7 +3984,8 @@ private struct FoodProductPageImportView: View {
             SheetField("Product search or page URL") {
                 // A plain-language placeholder: the example URL rendered as a live blue link inside
                 // the empty field, which read as content rather than a hint.
-                TextField("Product name or paste a page link", text: $lookupText)
+                TextField("Product name or paste a page link", text: $lookupText,
+                          prompt: .fieldPrompt("Product name or paste a page link"))
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
                     .onSubmit { loadPreview() }
@@ -4572,7 +4573,7 @@ struct MealCorrectionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     SheetField("Meal name") {
-                        TextField("Meal", text: $name)
+                        TextField("Meal", text: $name, prompt: .fieldPrompt("Meal"))
                             .sheetTextInput()
                     }
 
@@ -4741,7 +4742,7 @@ private struct MealCorrectionItemsEditor: View {
     /// The quantity as a real FIELD — cream fill, taupe underline — so it stops reading as
     /// static text (FOOD-05).
     private func quantityField(_ component: Binding<MealComponentCorrectionInput>) -> some View {
-        TextField("Qty", value: component.quantity, format: .number.precision(.fractionLength(0...1)))
+        TextField("Qty", value: component.quantity, format: .number.precision(.fractionLength(0...1)), prompt: .fieldPrompt("Qty"))
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.trailing)
             .textContentType(.none)
@@ -4912,7 +4913,7 @@ private struct MealItemSearchField: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(Color.slate)
-                TextField(prompt, text: $searchText)
+                TextField(prompt, text: $searchText, prompt: .fieldPrompt(prompt))
                     .font(.fernlet(.body))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
@@ -5118,7 +5119,8 @@ private struct MealComponentEditorRows: View {
                             .foregroundStyle(Color.bark)
                         Spacer()
                         // Typeable quantity box so a wrong amount can be corrected directly, not only nudged.
-                        TextField("Qty", value: $component.quantity, format: .number.precision(.fractionLength(0...1)))
+                        TextField("Qty", value: $component.quantity, format: .number.precision(.fractionLength(0...1)),
+                                  prompt: .fieldPrompt("Qty"))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .textContentType(.none)
@@ -5309,7 +5311,7 @@ private struct MealReviewSheet: View {
                     ForEach($meals) { $meal in
                         VStack(alignment: .leading, spacing: 14) {
                             SheetField("Meal name") {
-                                TextField("Meal", text: $meal.name)
+                                TextField("Meal", text: $meal.name, prompt: .fieldPrompt("Meal"))
                                     .sheetTextInput()
                                     .accessibilityLabel("Meal name")
                             }
@@ -5394,7 +5396,7 @@ private struct MealReviewSheet: View {
     /// The name and yield of one offer the person is keeping.
     @ViewBuilder private func recipeOfferFields(_ offer: Binding<MealReviewRecipeOffer>) -> some View {
         SheetField("Recipe name") {
-            TextField("Recipe", text: offer.name)
+            TextField("Recipe", text: offer.name, prompt: .fieldPrompt("Recipe"))
                 .sheetTextInput()
                 .accessibilityIdentifier("mealReview.recipeName")
         }
@@ -6856,7 +6858,8 @@ struct RecipeBookSheet: View {
             }
             createAndPlannerButtons
 
-            TextField("Search recipes and products", text: $searchText)
+            TextField("Search recipes and products", text: $searchText,
+                      prompt: .fieldPrompt("Search recipes and products"))
                 .sheetTextInput()
             // Section labels name what you are looking at (FOOD-19): Your recipes, Saved from
             // web, Imported products — only the products had a heading before.

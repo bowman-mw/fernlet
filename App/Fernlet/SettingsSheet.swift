@@ -952,7 +952,8 @@ struct SettingsSheet: View {
                 Image(systemName: "magnifyingglass")
                     .font(.subheadline)
                     .foregroundStyle(Color.slate)
-                TextField("Search or type \"forget [keyword]\"", text: $memorySearch)
+                TextField("Search or type \"forget [keyword]\"", text: $memorySearch,
+                          prompt: .fieldPrompt("Search or type \"forget [keyword]\""))
                     .font(.fernlet(.body))
                     .autocorrectionDisabled()
                 if !memorySearch.isEmpty {
@@ -1582,7 +1583,8 @@ struct SettingsSheet: View {
     /// at-capacity note.
     private var newCareTaskEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextField("Moisturizer, meds, stretch...", text: $newCareTaskName)
+            TextField("Moisturizer, meds, stretch...", text: $newCareTaskName,
+                      prompt: .fieldPrompt("Moisturizer, meds, stretch..."))
                 .sheetTextInput()
                 // R3: cap the free-text label where it enters. The persisted settings array is
                 // synced, so an unbounded label is unbounded growth in the snapshot.
@@ -2635,7 +2637,7 @@ struct AppLockSettingsView: View {
                     }
 
                     if lockService.credentialKind == .alphanumeric {
-                        SecureField("Current password", text: $verifyCurrentPasscode)
+                        SecureField("Current password", text: $verifyCurrentPasscode, prompt: .fieldPrompt("Current password"))
                             .textContentType(.password)
                             .sheetTextInput()
 
@@ -2884,7 +2886,7 @@ private struct FernletLockChangePasscodeView: View {
 
             let oldKind = lockService.credentialKind ?? .pin6
             if oldKind == .alphanumeric {
-                SecureField("Current password", text: $currentPasscode)
+                SecureField("Current password", text: $currentPasscode, prompt: .fieldPrompt("Current password"))
                     .textContentType(.password)
                     .sheetTextInput()
                 Spacer()
@@ -2933,7 +2935,7 @@ private struct FernletLockChangePasscodeView: View {
 
             if let msg = errorMessage { errorBanner(msg) }
             if selectedKind == .alphanumeric {
-                SecureField("New password", text: $newPasscode)
+                SecureField("New password", text: $newPasscode, prompt: .fieldPrompt("New password"))
                     .textContentType(.newPassword)
                     .sheetTextInput()
                 Spacer()
@@ -2985,7 +2987,7 @@ private struct FernletLockChangePasscodeView: View {
             SectionLabel("Confirm new passcode")
             if let msg = errorMessage { errorBanner(msg) }
             if selectedKind == .alphanumeric {
-                SecureField("Confirm new password", text: $confirmPasscode)
+                SecureField("Confirm new password", text: $confirmPasscode, prompt: .fieldPrompt("Confirm new password"))
                     .textContentType(.newPassword)
                     .sheetTextInput()
                 Spacer()

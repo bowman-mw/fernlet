@@ -833,7 +833,8 @@ struct FriendsView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Color.slate)
-            TextField("Search by friend or session name", text: $sessionSearchText)
+            TextField("Search by friend or session name", text: $sessionSearchText,
+                      prompt: .fieldPrompt("Search by friend or session name"))
                 .autocorrectionDisabled()
         }
         .padding(.horizontal, 14)

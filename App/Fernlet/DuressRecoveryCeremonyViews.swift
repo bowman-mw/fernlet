@@ -654,7 +654,7 @@ private struct DuressCeremonyPrimaryFlow: View {
         submit: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            SecureField(placeholder, text: text)
+            SecureField(placeholder, text: text, prompt: .fieldPrompt(verbatim: placeholder))
                 .textContentType(.password)
                 .sheetTextInput()
                 .accessibilityIdentifier(identifier)

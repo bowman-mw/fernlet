@@ -601,13 +601,15 @@ private struct OnboardingGoalScreen: View {
                     // Each field is named by its caption: the caption is a separate element, so
                     // VoiceOver otherwise named the field by its example placeholder.
                     SheetField("Interests") {
-                        TextField("strength, running, mobility", text: $interests)
+                        TextField("strength, running, mobility", text: $interests,
+                                  prompt: .fieldPrompt("strength, running, mobility"))
                             .sheetTextInput()
                             .accessibilityLabel("Interests")
                     }
 
                     SheetField("Constraints") {
-                        TextField("shoulder issues, hotel gyms only", text: $constraints)
+                        TextField("shoulder issues, hotel gyms only", text: $constraints,
+                                  prompt: .fieldPrompt("shoulder issues, hotel gyms only"))
                             .sheetTextInput()
                             .accessibilityLabel("Constraints")
                     }
@@ -662,7 +664,7 @@ private struct OnboardingStarterScreen: View {
                     .accessibilityHidden(true)
 
                 SheetField("Name") {
-                    TextField("Fernlet", text: $starterName)
+                    TextField("Fernlet", text: $starterName, prompt: .fieldPrompt("Fernlet"))
                         .textInputAutocapitalization(.words)
                         .sheetTextInput()
                         // Read "Fernlet, text field" — the default name, with nothing saying it is one.
@@ -739,7 +741,7 @@ private struct OnboardingPersonalDetailsScreen: View {
                     Text("Age")
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
-                    TextField("30", text: ageText)
+                    TextField("30", text: ageText, prompt: .fieldPrompt("30"))
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.center)
                         .sheetTextInput(font: .fernlet(.label))
@@ -791,7 +793,7 @@ private struct OnboardingPersonalDetailsScreen: View {
                 backAction: backAction
             ) {
                 SheetField("Your name") {
-                    TextField("How friends will see you", text: $displayName)
+                    TextField("How friends will see you", text: $displayName, prompt: .fieldPrompt("How friends will see you"))
                         .textInputAutocapitalization(.words)
                         .sheetTextInput()
                         .accessibilityLabel("Your name")
@@ -893,9 +895,10 @@ private struct OnboardingChoiceRow: View {
                     Text(title)
                         .font(.fernlet(.headerMedium))
                         .foregroundStyle(Color.bark)
+                    // On the selected row's moss wash `slate` measured 4.44:1, so it goes to `bark`.
                     Text(subtitle)
                         .font(.fernlet(.bodySmall))
-                        .foregroundStyle(Color.slate)
+                        .foregroundStyle(isSelected ? Color.bark : Color.slate)
                         .fernletWrappingText()
                 }
                 Spacer(minLength: 8)

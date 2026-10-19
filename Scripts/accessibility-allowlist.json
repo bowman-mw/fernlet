@@ -166,5 +166,11 @@
   "path": "App/Fernlet/PrivacyPolicyView.swift",
   "line_contains": "Divider().background(Color.slate.opacity(0.4))",
   "reason": "A DIVIDER between sections of the privacy policy, measuring ~1.70:1 against the page. It is decoration, not information: every section it separates opens with its own heading (and VoiceOver never reaches a Divider), so WCAG 1.4.11 does not ask it to contrast. Raising it to 3:1 would make the policy's rules darker than its body text's quietest ink without telling anyone anything."
+ },
+ {
+  "rule": "A10-FIELD-PROMPT",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "TextField(\"\", text: $textValue)",
+  "reason": "MacroInputRow's inline gram editor never shows a prompt, so there is no placeholder ink to fix. The field exists only while `isEditing` is true, and the tap that sets it first writes the current value into `textValue` (`MacroGramEntry.display(grams)`), so the field opens prefilled; clearing it and leaving commits nothing and closes the field (`commit()` ends editing whether or not the text parses). Its title is empty because the row's own bark label beside it names the value."
  }
 ]

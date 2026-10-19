@@ -154,7 +154,7 @@ struct IngredientSubstitutionSheet: View {
                 FernletCard {
                     VStack(alignment: .leading, spacing: 10) {
                         SectionLabel("Search foods")
-                        TextField("Search for a replacement", text: $searchText)
+                        TextField("Search for a replacement", text: $searchText, prompt: .fieldPrompt("Search for a replacement"))
                             .sheetTextInput()
                             .accessibilityIdentifier("substitution.search")
                         if visibleSearchResults.isEmpty {

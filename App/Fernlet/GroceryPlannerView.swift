@@ -80,7 +80,7 @@ struct ShoppingListBuilderView: View {
                     EmptyState(text: "No recipes yet. Create one in the recipe book first.")
                         .frame(maxWidth: .infinity)
                 } else {
-                    TextField("Search recipes", text: $searchText)
+                    TextField("Search recipes", text: $searchText, prompt: .fieldPrompt("Search recipes"))
                         .sheetTextInput()
 
                     FernletCard {
@@ -552,7 +552,7 @@ private struct RecipePickerSheet: View {
 
     /// Step 1: the searchable A–Z recipe list. Tapping a row advances to the meal-slot step.
     @ViewBuilder private var recipeListStep: some View {
-        TextField("Search recipes", text: $searchText)
+        TextField("Search recipes", text: $searchText, prompt: .fieldPrompt("Search recipes"))
             .sheetTextInput()
         if recipes.isEmpty {
             EmptyState(text: "No recipes to add.")

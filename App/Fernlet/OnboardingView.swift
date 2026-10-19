@@ -96,8 +96,11 @@ struct LabeledProfilePicker<Content: View>: View {
             Text(label)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
+            // A menu picker draws its value in the tint, and nothing above this one sets it, so it was
+            // system blue (3.29:1 on the cream card). `mossInk` is the moss family's text token.
             content
                 .pickerStyle(.menu)
+                .tint(Color.mossInk)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

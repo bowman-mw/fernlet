@@ -476,7 +476,7 @@ struct LogPeriodSheet: View {
     private var temperatureField: some View {
         SheetField("Basal body temperature") {
             HStack(spacing: 10) {
-                TextField("Optional", text: $temperatureText)
+                TextField("Optional", text: $temperatureText, prompt: .fieldPrompt("Optional"))
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
                 Picker("Unit", selection: $temperatureUnit) {

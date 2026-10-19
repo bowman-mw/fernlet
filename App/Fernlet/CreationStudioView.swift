@@ -564,9 +564,11 @@ struct CreationStudioView: View {
             if !isCanvasBlank { pushUndoSnapshot() }
             pixels = Self.blankPixels(for: slot)
         } label: {
+            // `terracottaInk`, the destructive TEXT token: plain `terracotta` measured 4.16:1 here and
+            // has no Increase Contrast twin, so it failed on every route.
             Label("Clear canvas", systemImage: "trash")
                 .font(.fernlet(.label))
-                .foregroundStyle(Color.terracotta)
+                .foregroundStyle(Color.terracottaInk)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
@@ -606,7 +608,7 @@ struct CreationStudioView: View {
                     TextField("Name your item", text: Binding(
                         get: { name },
                         set: { name = String($0.prefix(ItemNameModeration.maxNameLength)) }
-                    ))
+                    ), prompt: .fieldPrompt("Name your item"))
                     .sheetTextInput()
                     .accessibilityIdentifier("studio.confirm.name")
                 }

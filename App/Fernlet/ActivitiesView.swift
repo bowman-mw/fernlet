@@ -94,7 +94,7 @@ struct ActivitiesView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if canHostMore {
-                TextField("Activity name", text: $draftTitle)
+                TextField("Activity name", text: $draftTitle, prompt: .fieldPrompt("Activity name"))
                     .font(.fernlet(.body))
                     .textFieldStyle(.plain)
                     .padding(12)
@@ -108,7 +108,8 @@ struct ActivitiesView: View {
                 chipRow(ActivityTypeOption.allCases, selected: draftType) { draftType = $0 } label: { $0.rawValue }
                 chipRow(ActivityDurationOption.allCases, selected: draftDuration) { draftDuration = $0 } label: { $0.rawValue }
 
-                TextField("Where? (optional, e.g. \"the park\")", text: $draftLocation)
+                TextField("Where? (optional, e.g. \"the park\")", text: $draftLocation,
+                          prompt: .fieldPrompt("Where? (optional, e.g. \"the park\")"))
                     // Same role, same size as the name field above it — the two used to render at
                     // different type sizes in the same form.
                     .font(.fernlet(.body))

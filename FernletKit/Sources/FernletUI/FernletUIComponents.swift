@@ -1411,6 +1411,32 @@ public struct SheetTextEditor: View {
     }
 }
 
+public extension Text {
+    /// A text field's prompt in an ink a reader can see: full-strength `slate`, in italic.
+    ///
+    /// A `TextField` or `SecureField` given no `prompt:` draws its title in the system placeholder
+    /// colour, which measured 1.71:1 on the cream field in default light, 2.43:1 in dark and 4.33:1
+    /// under Increase Contrast, under the 4.5:1 text floor on every route. Full `slate` is 4.78:1 on
+    /// parchment, 5.13:1 on cream and 6.90:1 under Increase Contrast. The italic and the slate-vs-bark
+    /// ink keep the prompt from reading as text the user typed, the same treatment as
+    /// ``SheetTextEditor``'s placeholder. Rule A10-FIELD-PROMPT in `Scripts/accessibility-scan.py`
+    /// refuses a field without one.
+    ///
+    /// Pass the field's own title, so the prompt says what the title says and adds no string:
+    /// `TextField("Meal", text: $name, prompt: .fieldPrompt("Meal"))`. The title stays the field's
+    /// accessibility label. The key is looked up in `Bundle.main`, which is right for the app-target
+    /// call sites; a package caller resolves its copy with `bundle: .module` and passes the result to
+    /// ``fieldPrompt(verbatim:)``.
+    static func fieldPrompt(_ key: LocalizedStringKey) -> Text {
+        Text(key).italic().foregroundStyle(Color.slate)
+    }
+
+    /// ``fieldPrompt(_:)`` for a title that is already final: a `String` the field was given verbatim.
+    static func fieldPrompt(verbatim content: String) -> Text {
+        Text(verbatim: content).italic().foregroundStyle(Color.slate)
+    }
+}
+
 /// A short free-text field on the same cream card as ``SheetTextEditor``, that grows with the text
 /// and whose Return key **submits** instead of inserting a newline.
 ///
@@ -1457,7 +1483,7 @@ public struct SheetGrowingTextField: View {
         // `TextField(_ titleKey:…)` uses the title as BOTH the drawn placeholder and the
         // accessibility label, so this control names itself; only ``SheetTextEditor`` (whose
         // `TextEditor` takes no title at all) needs the label attached by hand.
-        TextField(placeholder, text: $text, axis: .vertical)
+        TextField(placeholder, text: $text, prompt: .fieldPrompt(placeholder), axis: .vertical)
             .lineLimit(lineLimit)
             .submitLabel(submitLabel)
             .onSubmit { onSubmit?() }
