@@ -16,13 +16,18 @@ struct ProfileEditor: View {
         VStack(alignment: .leading, spacing: 16) {
             SheetField("Body profile") {
                 VStack(alignment: .leading, spacing: 12) {
+                    // Voice Control: each label carries its value ("Age: 30"), so the name a user
+                    // would say moves with every step; the field's own word does not.
                     Stepper("Age: \(profile.age)", value: $profile.age, in: 13...100)
+                        .accessibilityInputLabels([Text("Age")])
                     Stepper(BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds),
                             value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
                             in: BodyMeasurementEntry.weightRange(), step: 1)
+                        .accessibilityInputLabels([Text("Weight")])
                     Stepper(BodyMeasurementEntry.heightLabel(inches: profile.heightInches),
                             value: BodyMeasurementEntry.heightBinding($profile.heightInches),
                             in: BodyMeasurementEntry.heightRange(), step: 1)
+                        .accessibilityInputLabels([Text("Height")])
                     // Same two labels the onboarding step uses (LabeledProfilePicker) — the two
                     // surfaces edit one profile and used to name these fields differently
                     // ("Gender" / "Estimated lifestyle activity" here, nothing at all there).

@@ -679,6 +679,8 @@ struct SettingsSheet: View {
                 .buttonStyle(.plain)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.mossInk)
+                // Voice Control: both colour rows draw "Reset"; the row's title tells them apart.
+                .accessibilityInputLabels([Text("Reset"), Text("Reset \(title)")])
                 .disabled(hex.caseInsensitiveCompare(defaultHex) == .orderedSame)
         }
         .padding(12)
@@ -886,6 +888,8 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.plain)
                 .fernletIconButton("Remove \(widget.title) from Home")
+                // Voice Control: one X per widget row; the widget's name is what tells them apart.
+                .accessibilityInputLabels([Text("Remove \(widget.title)")])
             }
         }
         .padding(10)

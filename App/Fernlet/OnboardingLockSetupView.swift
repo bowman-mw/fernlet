@@ -121,5 +121,8 @@ struct OnboardingLockSetupView: View {
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.bark.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        // Voice Control: the card is named by its title and its sentence together; the title alone
+        // is the name a user says.
+        .accessibilityInputLabels([Text(title)])
     }
 }

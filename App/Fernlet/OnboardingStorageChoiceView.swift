@@ -187,6 +187,9 @@ struct OnboardingStorageChoiceView: View {
             )
         }
         .buttonStyle(.plain)
+        // Voice Control: the card is named by its title and its whole explanation; the title alone
+        // is the name a user says. `verbatim:` because `title` is drawn by `Text(_: String)` above.
+        .accessibilityInputLabels([Text(verbatim: title)])
         // T1-5: a hand-rolled selection card — the glyph swap and tint are otherwise the only
         // signal, on the choice that decides where the user's data lives.
         .accessibilityAddTraits(selectedStorage == choice ? .isSelected : [])

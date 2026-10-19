@@ -172,5 +172,83 @@
   "path": "App/Fernlet/FoodView.swift",
   "line_contains": "TextField(\"\", text: $textValue)",
   "reason": "MacroInputRow's inline gram editor never shows a prompt, so there is no placeholder ink to fix. The field exists only while `isEditing` is true, and the tap that sets it first writes the current value into `textValue` (`MacroGramEntry.display(grams)`), so the field opens prefilled; clearing it and leaving commits nothing and closes the field (`commit()` ends editing whether or not the text parses). Its title is empty because the row's own bark label beside it names the value."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/BarcodeScanView.swift",
+  "line_contains": "grams protein, \\(item.macros.carbs) grams carbs",
+  "reason": "Not actionable, so Voice Control never names it. This is `foodChip`, the created-item summary on the scan's success screen: an `HStack` flattened by `.accessibilityElement(children: .ignore)` with no tap gesture, no Button around it and no button trait, sitting beside the screen's one control (Done). The long label exists so VoiceOver reads the name and all three macros as one utterance; nothing here is ever spoken BY the user."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/CreationStudioView.swift",
+  "line_contains": "\"Preview of your item on your companion\"",
+  "reason": "Not actionable, so Voice Control never names it. The confirm step's companion render is a picture: `.accessibilityElement(children: .ignore)` mints one element so VoiceOver can say the drawing survived, and the site's own comment says there is nothing under it to tap. The controls on this screen are the Name field, the shop toggle and Save, each named by its own drawn text."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/DisposableCameraView.swift",
+  "line_contains": "\"Wind to open the viewfinder\"",
+  "reason": "Not actionable, so Voice Control never names it. The viewfinder group carries `.allowsHitTesting(false)` directly above this label, so no touch, tap or Voice Control 'Tap' can reach it; the label only tells a VoiceOver user what state the glass is in. The camera's controls (wind, shutter, the roster's hearts) are separate elements with their own short names."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+  "line_contains": "\"Fernlet QR code for the other phone to scan\"",
+  "reason": "Not actionable, so Voice Control never names it. A rendered QR `Image(uiImage:)` with no gesture and no button trait: the other phone's camera reads it, nobody taps it. The label (T2-20) names the object for VoiceOver at the place the instruction points to; it is never something a user says."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+  "line_contains": "\"Setting up the recovery ceremony\"",
+  "reason": "Not actionable, so Voice Control never names it. A bare indeterminate `ProgressView` shown alone while the ceremony coordinator is built; a spinner has no action, and the label exists only so VoiceOver does not meet a silent screen during a security ceremony."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+  "line_contains": "\"Preparing to recover this phone\"",
+  "reason": "Not actionable, so Voice Control never names it. The recover sheet's twin of the enrolment spinner: a bare indeterminate `ProgressView`, no gesture, no trait, shown only until the coordinator exists. The sheet's one control on this screen is the toolbar's Cancel, named by its drawn text."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "\"Photo on your other device\"",
+  "reason": "Not actionable, so Voice Control never names it. The meal-photo thumbnail's placeholder when the photo bytes live on another device: a filled `RoundedRectangle` with an SF Symbol overlay and no gesture of its own. The row it sits in is named by the meal, and that name is what a Voice Control user says."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/GuidedWorkout.swift",
+  "line_contains": "\"Exercise \\(position) of \\(total)",
+  "reason": "Not actionable, so Voice Control never names it. This is the guided run's progress LINE, a `Text` (or its accessibility-size short form) with no gesture: it reports how far through the session the user is. The run's controls (Done set, Skip, End session) are separate buttons with their own names."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/HomeView.swift",
+  "line_contains": "\"Care score \\(Int(value * 100)) percent, with a little warmth from a friend\"",
+  "reason": "Not actionable, so Voice Control never names it. `HealthBar` is a row of `RoundedRectangle` segments with no gesture or trait, drawn on Home's Today card and in the journal's day detail; the label reads the score to VoiceOver. Voice Control offers names and numbers only to things that can be activated, so this sentence is never one a user has to say."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/RecipePartsViews.swift",
+  "line_contains": "\"Part \\(position) of \\(count): \\(name)\"",
+  "reason": "Not actionable, so Voice Control never names it. `RecipePartHeader` is a section HEADER (`.isHeader`) over a multipart recipe's ingredient and step lists: two `Text`s flattened with `.ignore`, no gesture. VoiceOver's Headings rotor reads the label; Voice Control has nothing here to tap."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/VerifyQRViews.swift",
+  "line_contains": "\"Your verification code, as a QR code",
+  "reason": "Not actionable, so Voice Control never names it. The verification QR is a rendered `Image(uiImage:)` the other person's camera scans; it has no gesture and no button trait. The label (T2-20) makes the code narratable for a blind displayer; the sheet's controls are separate and short-named."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/HomeView.swift",
+  "line_contains": "\"\\(label) \\(current) of \\(goal) grams\"",
+  "reason": "Not actionable, so Voice Control never names it. Both hits are `MacroRing` (the ring form and its 4b·AX3 numeral form, byte-identical label lines, one entry for both): each is a `.combine`d figure of three `Text`s with no gesture, which reads 'Protein 76 of 93 grams' to VoiceOver instead of three fragments. The macro card has no control; the user never says this name."
+ },
+ {
+  "rule": "A9-INPUT-LABELS",
+  "path": "App/Fernlet/FoodView.swift",
+  "line_contains": "\\(foodItem.servingUnit), protein \\(grams.protein) grams",
+  "reason": "Not a control of its own, so Voice Control never names it. This label is on the serving-and-macros `Text` INSIDE `CatalogSuggestionRow.rowContent`; the control is the `Button` wrapping that content in `body`, and that Button carries `.accessibilityInputLabels([Text(verbatim: foodItem.name)])`, so a Voice Control user says the food's name. The long label exists so VoiceOver reads 'protein 3 grams' instead of the glance format 'P3g'. A9's chain walk stops at the Text's own chain and cannot see the Button's modifiers in another view property, which is why the site is listed here rather than fixed."
  }
 ]

@@ -756,12 +756,16 @@ private struct OnboardingPersonalDetailsScreen: View {
                         .accessibilityLabel("Age")
                         .accessibilityValue(Text(verbatim: "\(steppedAge.wrappedValue)"))
                 }
+                // Voice Control: each stepper's label carries its value ("Weight: 170 lb"), so the
+                // name a user would say moves with every step; the field's own word does not.
                 Stepper(BodyMeasurementEntry.weightLabel(pounds: profile.weightPounds),
                         value: BodyMeasurementEntry.weightBinding($profile.weightPounds),
                         in: BodyMeasurementEntry.weightRange(), step: 1)
+                    .accessibilityInputLabels([Text("Weight")])
                 Stepper(BodyMeasurementEntry.heightLabel(inches: profile.heightInches),
                         value: BodyMeasurementEntry.heightBinding($profile.heightInches),
                         in: BodyMeasurementEntry.heightRange(), step: 1)
+                    .accessibilityInputLabels([Text("Height")])
                 // Labelled, and with the same words Settings uses: `.menu` pickers outside a
                 // Form hide their own label, so these two rows read as a bare "Male ◇" and
                 // "Moderate ◇" with nothing saying what they set.
@@ -916,5 +920,8 @@ private struct OnboardingChoiceRow: View {
         // Selection was carried only by a check glyph's spoken name ("checkmark.circle.fill" vs
         // "circle") — the storage and intimacy cards on neighbouring steps already say "selected".
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // Voice Control: the row's name is its title AND its sentence of copy; the title alone is
+        // what a user reads off the card and says.
+        .accessibilityInputLabels([Text(verbatim: title)])
     }
 }

@@ -1992,6 +1992,9 @@ struct DisposableCameraView: View {
                         ? "Send good vibes to \(friendName)"
                         : "\(firstName) isn't reachable for a heart right now."
         )
+        // Voice Control: the heart is drawn with no words, and every row has one, so the friend's
+        // name is what makes it sayable and unique ("Heart Sam"), whichever state the label is in.
+        .accessibilityInputLabels([Text("Heart \(firstName)"), Text("Send good vibes to \(firstName)")])
     }
 
     /// Which pipe one heart tap takes.

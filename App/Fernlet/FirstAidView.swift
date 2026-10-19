@@ -169,6 +169,10 @@ struct FirstAidView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("firstAid.tool.\(tool.rawValue)")
+        // Voice Control: the card is named by its title and caption together; the title is what a
+        // user says. "5·4·3·2·1 grounding" also answers to the plain word, since a run of spoken
+        // digits is not something dictation reliably turns back into that title.
+        .accessibilityInputLabels(tool == .grounding ? [Text(verbatim: title), Text("Grounding")] : [Text(verbatim: title)])
     }
 
     /// A finished breathing session: quietly offer it to Apple Health as a mindful session.

@@ -588,12 +588,89 @@ refused.
 
 ### Voice Control — undeclared
 
-**Blocker.** `accessibilityInputLabels` had zero uses in the tree before batch A5 and now has a
-handful (T2-12); several controls' accessibility labels are still full sentences, which a Voice
-Control user must speak in their entirety to activate. Batch A5 named short spoken alternatives at
-the worst sites, which is a real improvement and not the criterion. The criterion is again
-*all common tasks*, and the same manual pass is owed — with the additional wrinkle that Voice
-Control's numbered-overlay mode must also be usable, which nobody has tried.
+**Apple's criterion:** *every common task can be completed with Voice Control* — by saying a
+control's name ("Tap Log water"), or, where two controls share a name or a control has none, by
+saying its number from the numbered overlay. The common tasks are the four above plus the
+fundamentals: onboarding, changing a setting, finding help.
+
+**Blocker: the device pass, and nothing else known.** The simulator cannot run Voice Control, so
+the one test that can clear this row is the owner's pass on a real iPhone, written out phrase by
+phrase in `Docs/Handoff/a11y-2026-10-18/voicecontrol-device-pass.md`: every task by voice, then a
+"Show numbers" pass of every screen on those paths. Until that pass succeeds the row stays
+undeclared. The code-side blocker this section used to name was sentence-long names on the
+common-task paths. It is cleared as far as the inventory and rule A9 can see, and what they cannot
+see is listed at the end of this section.
+
+**How a name is decided, and why sentences were the problem.** Voice Control names a control by its
+`accessibilityInputLabels` when it has them and by its accessibility label when it does not. Labels
+here are written for VoiceOver, so many were sentences or carried live state: a Voice Control user
+would have had to say "Tap Meals, 3 logged", a phrase that changes with every meal. Input labels
+are a second, short set of names for the same control. They leave the VoiceOver label untouched,
+and they lead with the text drawn on the control.
+
+**The inventory (2026-10-18).** `Tests/FernletUITests/VoiceControlNameInventoryUITests` walks every
+common-task screen and attaches, per screen, each control's spoken name, its identifier and the
+text drawn inside it. It flags names that are long, empty, duplicated, a raw SF Symbol identifier,
+or different from what is drawn. It covers 32 screen states: all eight onboarding screens, Home
+(top and scrolled), the meal sheet (empty, with catalog results, with a food chosen), the Food
+tab, the water and journal sheets, the Move tab, both workout-sheet kinds, the workout suggestion
+and its plan, the Private hub's journal, the Settings hub with Goal & nutrition, Appearance and
+Safety & reporting, and First aid. The guided runner is the one gap. The demo seed's plan for
+today is cardio, which the runner does not guide, so the suite records the plan and stops there.
+The runner's names are checked from source ("Done set", "Skip rest", "Skip exercise", "Close") and
+by the device pass. What the suite found on those paths:
+
+| Defect | Where | Fix |
+|---|---|---|
+| The name changes as the user logs | Home's six quick-log tiles ("Meals, 3 logged"); the weight, height and age steppers ("Weight: 170 lb") in onboarding and Goal & nutrition | The drawn noun, plus a "Log …" synonym on the tiles ("Log meal", "Log workout"); the field's word on the steppers |
+| Title plus a sentence of copy | The onboarding lock, storage, goal and eating-pattern cards; First aid's three tools; meal rows, catalog results and exercise rows ("Bench press, Upper - Chest, Front Delts, Triceps") | The title or the item's name alone |
+| Name is not the drawn text | Mood chips (drawn "Bright", named "Mood: Bright"); "Capture" (named "Capture food"); "Adjust" (named "Adjust meal"); the meal field (no label; its placeholder is an example) | The drawn word first |
+| A drawn glyph with a long name | Home's water plus ("Add a bottle of water"), the guided runner's X ("End session"), the developer email link (named by its address) | "Add water", "Close", "Email" |
+| No name at all | Settings › Appearance's bedtime and wake-up time pickers (an empty label, so reachable only by number). The workout suggestion's note field and onboarding's two name fields were named only by example placeholders too; the VoiceOver labels from #39 now name them | "Bedtime", "Wake-up"; nothing more for the three fields |
+| Many identical controls | Each meal row's Delete and Adjust; each session friend's heart; each meal-planner day's plus; Appearance's two colour Resets and each Home widget's remove X | A unique form with the meal, friend, weekday or row in it, beside the short one |
+
+In all, **38 input-label sites were added** (50 in the tree, from 12), several of them on shared
+components: one `QuickLogButton` names every tile, one `QuickMoodRow` names every mood chip, and one
+`CatalogSuggestionRow` names every catalog result. No `accessibilityLabel` text was changed.
+
+**What the inventory measured about itself, so its numbers are not misread.** XCUITest reports
+a SwiftUI button's drawn children as more elements of the button's own type. The first run
+therefore counted the five-button tab bar as fifteen "duplicated" names, one of them the raw symbol
+name `person.2.fill`. VoiceOver and Voice Control see one element per button, so the walk now stops
+at a control. And XCUITest has no attribute for input labels at all, so a long label that already
+has short input labels still reads as long in the listing. The suite fails only on a name that is
+an SF Symbol identifier, which no input label can excuse.
+
+**The mechanical half: rule A9 in the §4.5 wall** (an addition to §5's list of nine).
+`Scripts/accessibility-scan.py` and its Swift twin `AccessibilityBoundaryTests` now fail on a
+literal `.accessibilityLabel(…)` or `.fernletIconButton(…)` longer than four spoken words with no
+`.accessibilityInputLabels(…)` in the same modifier chain. Each interpolation counts as one word, a
+separator such as "·" counts as none, and a ternary is measured by its longer branch. It found 25
+sites. 11 were controls and now have input labels. 13 can never be activated (QR codes, progress
+spinners, the macro rings, the care-score bar, a section header), so Voice Control never names them.
+One is a label on the text inside a catalog result's button, whose own input labels already name
+the food. Each of those 14 is allowlisted with its reason. Its honest ceiling: it reads literals only, so
+a label in a variable or built by a function is invisible to it. It cannot judge whether an input
+label is good, unique on its screen, or the same as the drawn text. Those are the inventory's job
+and the device pass's.
+
+**What is still true and is not a blocker.**
+
+- **Shared names fall back to numbers by design.** On Home, the Move tab and the Move tile share a
+  name, so "Tap Move" shows numbers ("Tap Log workout" goes straight to the tile). The Walking and
+  Running chips match the list rows below them, and two meal rows' "Adjust" match each other. Voice
+  Control's numbered fallback is the intended answer there, and the device pass records each such
+  case.
+- **The Private hub's month grid exposes its blank leading and trailing cells as four buttons named
+  "Empty calendar cell".** They do nothing, so in the numbered overlay they are four numbers over
+  nothing. That is the element's kind rather than its name, so it belongs to the VoiceOver work. It
+  is recorded here because the device pass will meet it.
+- **Long names left on controls the common tasks do not use**, such as Home's "Trends, Review local
+  signals." and the Move tab's progress-photo tiles ("Progress photo from September 9, 2026", drawn "Sep 9").
+  Whether these are blockers depends on whether iOS accepts the first words of a long name. That is
+  the device pass's first experiment, and its answer decides whether they need input labels too.
+- **German runs longer**, as the Larger Text row says; input labels localize through the string
+  catalogs like every other display string, so a translator gets each one as its own key.
 
 ### Larger Text — undeclared
 

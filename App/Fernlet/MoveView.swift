@@ -967,6 +967,9 @@ struct WorkoutSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        // Voice Control: the chip's name carries last time's sets ("Rows, 3x10"); its exercise is
+        // what a user says.
+        .accessibilityInputLabels([Text(verbatim: entry.name)])
         .accessibilityIdentifier("workout.recentExercise.\(entry.name)")
         .accessibilityCustomContent(AccessibilityCustomContentKey("Last time"),
                                     entry.lastTimeRecallValues.map { Text(verbatim: $0) })
@@ -1749,6 +1752,8 @@ struct WorkoutSuggestionSheet: View {
                 .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
+        // Voice Control: the drawn line is five words; either half of it is enough.
+        .accessibilityInputLabels([Text("Already did this"), Text("Log it")])
         .accessibilityIdentifier("workout.logAlreadyDone")
     }
 
@@ -3322,6 +3327,9 @@ struct ExerciseSearchResultRow: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        // Voice Control: the row's name runs on through its category and every muscle it works;
+        // the exercise's name is what a user says.
+        .accessibilityInputLabels([Text(verbatim: exercise.name)])
     }
 }
 

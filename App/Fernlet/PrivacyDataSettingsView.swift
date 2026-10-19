@@ -982,6 +982,8 @@ struct PrivacyDataSettingsView: View {
                 // name stays the full one at every size while the drawn label keeps shortening.
                 // Identical to the derived label at default sizes, so nothing changes there.
                 .accessibilityLabel("Lock photos to this device")
+                // Voice Control: both drawn forms, the accessibility-size one first.
+                .accessibilityInputLabels([Text("Lock photos"), Text("Lock photos to this device")])
                 .accessibilityIdentifier("privacy.ownPhotos.lockToDevice")
 
                 Text(ownPhotoDeviceBindingExplanation)

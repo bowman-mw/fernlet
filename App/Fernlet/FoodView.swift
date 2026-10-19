@@ -2165,6 +2165,9 @@ private struct CatalogSuggestionRow: View {
         if let onSelect {
             Button(action: onSelect) { rowContent }
                 .buttonStyle(.plain)
+                // Voice Control: the row's name runs on through its source and serving line;
+                // the food's name is what a user says.
+                .accessibilityInputLabels([Text(verbatim: foodItem.name)])
         } else {
             // One element, then selected. The trait used to land on an uncombined HStack, which
             // splits into four elements — name, source, macros, check glyph — each read "selected".
@@ -3040,6 +3043,9 @@ struct MealSheet: View {
                             // typed. The field says what it is for instead.
                             .accessibilityLabel("What did you eat?")
                             .accessibilityIdentifier("mealComposer.search")
+                            // Voice Control: the field has no label of its own and its placeholder
+                            // is an example, so it is named by the question drawn above it.
+                            .accessibilityInputLabels([Text("What did you eat?"), Text("Search")])
                             mealCatalogSearchState
                         }
                     }
@@ -3231,6 +3237,8 @@ struct MealSheet: View {
                     mealSecondaryLabel("Capture", icon: "camera.fill")
                 }
                 .accessibilityLabel("Capture food")
+                // Voice Control: "Capture" is the word drawn on the button.
+                .accessibilityInputLabels([Text("Capture"), Text("Capture food")])
                 mealSecondaryButton("Scan label", icon: "barcode.viewfinder") {
                     path.append(.scanBarcode)
                 }
@@ -4272,6 +4280,9 @@ private struct MealRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Voice Control: the row's name is everything it draws — name, note and three
+                // macros; the meal's name is what a user says.
+                .accessibilityInputLabels([Text(verbatim: meal.name)])
                 trailingColumn
             }
             adjustLine
@@ -4338,6 +4349,9 @@ private struct MealRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Delete meal")
+            // Voice Control: every row has this X, so "Delete meal" alone brings up numbers; the
+            // meal's name makes each one sayable on its own.
+            .accessibilityInputLabels([Text("Delete meal"), Text("Delete \(meal.name)")])
         }
     }
 
@@ -4360,6 +4374,8 @@ private struct MealRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Adjust meal")
+            // Voice Control: "Adjust" is the word drawn; with the meal's name it is unique per row.
+            .accessibilityInputLabels([Text("Adjust"), Text("Adjust \(meal.name)")])
         }
     }
 

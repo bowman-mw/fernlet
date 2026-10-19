@@ -397,6 +397,9 @@ struct WeeklyMealPlannerView: View {
                     .foregroundStyle(Color.moss)
             }
             .fernletIconButton("Add a meal to \(dayHeading(key))")
+            // Voice Control: one plus per day card, so the weekday is what makes each sayable and
+            // unique; the full date in the label is more than anyone should have to dictate.
+            .accessibilityInputLabels([Text("Add to \(spokenWeekday(key))"), Text("Add meal \(spokenWeekday(key))")])
             .accessibilityIdentifier("mealPlanner.add")
         }
     }
@@ -476,6 +479,12 @@ struct WeeklyMealPlannerView: View {
     private func dayHeading(_ key: String) -> String {
         guard let date = FernletDate.date(fromDayKey: key) else { return key }
         return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+    }
+
+    /// The day's weekday alone ("Friday"): the part of ``dayHeading(_:)`` a Voice Control user says.
+    private func spokenWeekday(_ key: String) -> String {
+        guard let date = FernletDate.date(fromDayKey: key) else { return key }
+        return date.formatted(.dateTime.weekday(.wide))
     }
 
     /// The card's heading: "Today · Friday" for today (FOOD-35's at-a-glance marker beside the
