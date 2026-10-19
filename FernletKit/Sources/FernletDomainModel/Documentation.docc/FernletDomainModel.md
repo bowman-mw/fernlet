@@ -471,10 +471,25 @@ in-memory form state only — never on a ``RecipeIngredient``, the synced blob o
 - ``Equipment``
 - ``ExerciseTarget``
 - ``ExerciseInputKind``
+- ``MovementPlane``
+- ``ExerciseModality``
+- ``ExerciseDifficulty``
+- ``ExerciseMeasure``
 - ``WorkoutExerciseCatalog``
 - ``WorkoutSuggestion``
 
 ### Workout programming
+
+``WorkoutProgram`` fills each ``WorkoutSlotSpec`` with the best *eligible* catalog exercise. Eligibility
+is a requirement, not a score: rep-measured strength work (``ExerciseModality``, ``ExerciseMeasure``)
+that shares the slot's movement pattern, its ``MovementPlane`` when both name one, and at least one
+primary muscle — otherwise the slot is dropped and the session note names it. Among eligible
+exercises the score adds target fit, a tool preference by slot role and ``ExperienceLevel`` (barbell
+first for trained lifters' main lifts, dumbbells and machines for beginners, bands and bodyweight as
+fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a tie.
+``WorkoutSafetyFilter`` gates equipment on the exercise's tool or any alternative plus every piece of
+required gear (a pull-up bar, a bench). The split advances by the last logged split day
+(`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.
 
 - ``WorkoutProfile``
 - ``ExperienceLevel``

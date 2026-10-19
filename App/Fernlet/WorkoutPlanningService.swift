@@ -27,9 +27,10 @@ protocol WorkoutPlanningContext: AnyObject {
 /// Owns the FoundationModels workout-adjustment dependency, keeping it off the store/core path.
 /// Pure given its context inputs; the store keeps thin delegating wrappers so call sites are
 /// unchanged. `@MainActor` like its host, which it holds `unowned` — the store owns the service,
-/// never the reverse. Generation is deterministic (split rotation by weekday, equipment/injury
-/// filtering, logged progression); only ``adjustWorkoutDayPlan(_:request:)`` touches AI, and it
-/// degrades to the unchanged plan on an empty request, AI-off, or any model failure.
+/// never the reverse. Generation is deterministic (split rotation by the last logged split day,
+/// equipment/injury filtering, logged progression); only ``adjustWorkoutDayPlan(_:request:)``
+/// touches AI, and it degrades to the unchanged plan on an empty request, AI-off, or any model
+/// failure.
 @MainActor
 final class WorkoutPlanningService {
     /// The read-side seam into app state — `unowned` because the host (``FernletStore``) owns this
@@ -44,7 +45,11 @@ final class WorkoutPlanningService {
 
     /// How consistently the user has trained over the last 4 weeks — a recommendation input.
     func workoutConsistency() -> WorkoutConsistency {
-        let history = host.loadDays()
+        workoutConsistency(history: host.loadDays())
+    }
+
+    /// ``workoutConsistency()`` over an already-loaded history, so one plan build loads it once.
+    private func workoutConsistency(history: [String: FernletDay]) -> WorkoutConsistency {
         let calendar = Calendar.current
         let today = Date()
         var daysWithWorkout = 0
@@ -62,10 +67,14 @@ final class WorkoutPlanningService {
 
     /// Splits ranked for this user (goal + activity level + consistency + preferred days).
     func recommendedSplits() -> [TrainingSplit] {
+        recommendedSplits(history: host.loadDays())
+    }
+
+    private func recommendedSplits(history: [String: FernletDay]) -> [TrainingSplit] {
         WorkoutSplitRecommender.ranked(
             goal: host.settings.selectedGoal,
             experience: host.settings.workoutProfile.experience,
-            consistency: workoutConsistency(),
+            consistency: workoutConsistency(history: history),
             activity: host.settings.userProfile.activityLevel,
             preferredDays: host.settings.workoutProfile.trainingDaysPerWeek
         )
@@ -73,28 +82,51 @@ final class WorkoutPlanningService {
 
     /// The user's chosen split, or the top recommendation when on auto.
     func activeWorkoutSplit() -> TrainingSplit {
+        activeWorkoutSplit(history: host.loadDays())
+    }
+
+    private func activeWorkoutSplit(history: [String: FernletDay]) -> TrainingSplit {
         if let id = host.settings.workoutProfile.selectedSplitID,
            let chosen = WorkoutSplitCatalog.all.first(where: { $0.id == id }) {
             return chosen
         }
-        return recommendedSplits().first ?? WorkoutSplitCatalog.fallback
+        return recommendedSplits(history: history).first ?? WorkoutSplitCatalog.fallback
     }
 
-    /// Builds today's session(s) from the active split, rotating by weekday so the program is
-    /// consistent week to week. Equipment + injuries are applied deterministically by the engine,
-    /// and reps/sets reflect logged progression.
+    /// Builds today's session(s) from the active split: the day after the last split day the user
+    /// logged (``WorkoutProgram/nextDayIndex(in:recentSessionNames:)``), so every session comes
+    /// round in turn whichever weekdays they train. Equipment + injuries are applied
+    /// deterministically by the engine, and reps/sets reflect logged progression.
     func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
-        let rotation = Calendar.current.component(.weekday, from: Date())
+        let history = host.loadDays()
+        let split = activeWorkoutSplit(history: history)
+        let rotation = WorkoutProgram.nextDayIndex(
+            in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
+        )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,
             intensity: intensity,
             profile: host.settings.workoutProfile,
             location: host.settings.activeWorkoutLocation,
             context: context,
-            split: activeWorkoutSplit(),
+            split: split,
             rotationIndex: rotation,
             progression: host.settings.workoutProgression
         )
+    }
+
+    /// Logged workout names per past day, most recent first, over the rotation lookback — days
+    /// before today only, so today's plan does not move once its own session is logged.
+    private func recentWorkoutNamesByDay(history: [String: FernletDay]) -> [[String]] {
+        let calendar = Calendar.current
+        let today = Date()
+        var days: [[String]] = []
+        for offset in 1...WorkoutProgram.rotationLookbackDays {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            guard let record = history[FernletDate.dayKey(for: date)], !record.workouts.isEmpty else { continue }
+            days.append(record.workouts.map(\.name))
+        }
+        return days
     }
 
     /// The descriptor line of the rest-day plan. A `" - N min"` tail, because a mobility session's

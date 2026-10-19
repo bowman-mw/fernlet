@@ -973,11 +973,71 @@ public nonisolated enum ExerciseInputKind: String, Codable, Sendable {
     case none
 }
 
-/// One catalog exercise: primary/secondary muscles, equipment, movement pattern, and input kind.
+/// Which way a push or pull travels relative to the torso.
+///
+/// The distinction the slot specs name ("Vertical pull", "Horizontal push") that muscles alone
+/// cannot make: a row and a pulldown both list the lats as a primary mover. Only pushes and pulls
+/// carry one; `nil` on a catalog row means "either", so an untagged custom exercise is never
+/// excluded by it. FROZEN tokens: `rawValue` is the bundled catalog's JSON vocabulary.
+public nonisolated enum MovementPlane: String, Codable, CaseIterable, Sendable {
+    case horizontal
+    case vertical
+}
+
+/// What kind of training an exercise is.
+///
+/// Slot-filled strength sessions draw only `.strength` rows. Explosive jumps and throws
+/// (`.power`), conditioning moves (`.cardio`), stretches (`.mobility`) and balance drills belong
+/// to a session's warm-up, activation and cardio blocks instead, so a box jump can no longer fill a
+/// squat slot at 3 × 12. FROZEN tokens (catalog JSON vocabulary); a row without the key is
+/// `.strength`.
+public nonisolated enum ExerciseModality: String, Codable, CaseIterable, Sendable {
+    case strength
+    case power
+    case cardio
+    case mobility
+    case balance
+}
+
+/// How much skill and control an exercise asks for.
+///
+/// The planner leans beginners toward `.foundational` rows and away from `.advanced` ones (a dip,
+/// a pull-up, a Nordic curl), and breaks score ties toward the simpler movement for everyone. The
+/// raw values are the catalog's JSON numbers (1–3) and are FROZEN; a row without the key is
+/// `.standard`.
+public nonisolated enum ExerciseDifficulty: Int, Codable, CaseIterable, Comparable, Sendable {
+    case foundational = 1
+    case standard = 2
+    case advanced = 3
+
+    public static func < (lhs: ExerciseDifficulty, rhs: ExerciseDifficulty) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+/// Whether a set of an exercise is counted in repetitions or held for time.
+///
+/// A plank or a farmer's carry is `.seconds`: prescribing it "12–15 reps" is meaningless, so the
+/// rep-based slot planner leaves `.seconds` rows out. FROZEN tokens; a row without the key is
+/// `.reps`.
+public nonisolated enum ExerciseMeasure: String, Codable, Sendable {
+    case reps
+    case seconds
+}
+
+/// One catalog exercise: muscles, equipment, movement pattern and plane, modality, difficulty, and
+/// how a set is measured.
 ///
 /// The unit the program engine scores against slots and ``WorkoutSafetyFilter`` vets. Decode is
 /// legacy-tolerant: rows written with the old `muscles` string array map through
 /// `MuscleGroup.fromLegacyString` into `primaryMuscles`.
+///
+/// The curation fields (`plane`, `modality`, `difficulty`, `measure`, `alternativeEquipment`,
+/// `requiredGear`) are written by the bundled catalog. A custom row (coach-plan import) keeps
+/// their defaults, and `encode(to:)` writes each one only when it differs from its default, so a
+/// synced custom row's persisted shape is unchanged and an older build never meets the new keys.
+/// They decode through raw strings/ints, so an unknown token from a newer catalog falls back to the
+/// default instead of throwing the whole settings decode.
 public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Sendable {
     public var id: String { name }
 
@@ -999,6 +1059,21 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     public var equipment: Equipment
     public var movementPattern: MovementPattern
     public var inputKind: ExerciseInputKind
+    /// Vertical or horizontal, for pushes and pulls; `nil` matches any slot plane.
+    public var plane: MovementPlane?
+    /// Strength, power, cardio, mobility or balance — only `.strength` fills lifting slots.
+    public var modality: ExerciseModality
+    /// Skill demand, used to steer beginners and to break score ties toward the simpler move.
+    public var difficulty: ExerciseDifficulty
+    /// Reps or seconds — `.seconds` rows stay out of rep-based slots.
+    public var measure: ExerciseMeasure
+    /// Other tools the same movement works with (a goblet squat takes a dumbbell or a
+    /// kettlebell). Any one of `equipment` or these makes the exercise doable.
+    public var alternativeEquipment: [Equipment]
+    /// Specific pieces the movement cannot be done without (a pull-up needs a bar, a bench press a
+    /// bench). Every one must be checked at the location — on top of the coarse capability, which
+    /// alone cannot tell a pull-up bar from bare floor.
+    public var requiredGear: [GymEquipment]
 
     public var bodyRegion: BodyRegion {
         let regions = Set(primaryMuscles.map { $0.region })
@@ -1051,7 +1126,13 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         secondaryMuscles: Set<MuscleGroup> = [],
         equipment: Equipment = .none,
         movementPattern: MovementPattern = .isolation,
-        inputKind: ExerciseInputKind = .strength
+        inputKind: ExerciseInputKind = .strength,
+        plane: MovementPlane? = nil,
+        modality: ExerciseModality = .strength,
+        difficulty: ExerciseDifficulty = .standard,
+        measure: ExerciseMeasure = .reps,
+        alternativeEquipment: [Equipment] = [],
+        requiredGear: [GymEquipment] = []
     ) {
         self.name = name
         self.primaryMuscles = primaryMuscles
@@ -1059,6 +1140,12 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         self.equipment = equipment
         self.movementPattern = movementPattern
         self.inputKind = inputKind
+        self.plane = plane
+        self.modality = modality
+        self.difficulty = difficulty
+        self.measure = measure
+        self.alternativeEquipment = alternativeEquipment
+        self.requiredGear = requiredGear
     }
 
     public init(from decoder: Decoder) throws {
@@ -1076,6 +1163,20 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
             primaryMuscles = Set(legacy.compactMap(MuscleGroup.fromLegacyString))
             secondaryMuscles = []
         }
+        // Curation fields decode through raw values, so an unknown token falls back to the field's
+        // default (or is skipped, in a list) rather than throwing — see the type's note.
+        let planeToken = try container.decodeIfPresent(String.self, forKey: .plane)
+        plane = planeToken.flatMap(MovementPlane.init(rawValue:))
+        let modalityToken = try container.decodeIfPresent(String.self, forKey: .modality)
+        modality = modalityToken.flatMap(ExerciseModality.init(rawValue:)) ?? .strength
+        let difficultyValue = try container.decodeIfPresent(Int.self, forKey: .difficulty)
+        difficulty = difficultyValue.flatMap(ExerciseDifficulty.init(rawValue:)) ?? .standard
+        let measureToken = try container.decodeIfPresent(String.self, forKey: .measure)
+        measure = measureToken.flatMap(ExerciseMeasure.init(rawValue:)) ?? .reps
+        let alternatives = try container.decodeIfPresent([String].self, forKey: .alternativeEquipment) ?? []
+        alternativeEquipment = alternatives.compactMap(Equipment.init(rawValue:))
+        let gear = try container.decodeIfPresent([String].self, forKey: .requiredGear) ?? []
+        requiredGear = gear.compactMap(GymEquipment.init(rawValue:))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1086,6 +1187,13 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         try container.encode(equipment, forKey: .equipment)
         try container.encode(movementPattern, forKey: .movementPattern)
         try container.encode(inputKind, forKey: .inputKind)
+        // Curation fields only when they differ from the default (see the type's note).
+        try container.encodeIfPresent(plane, forKey: .plane)
+        if modality != .strength { try container.encode(modality, forKey: .modality) }
+        if difficulty != .standard { try container.encode(difficulty, forKey: .difficulty) }
+        if measure != .reps { try container.encode(measure, forKey: .measure) }
+        if !alternativeEquipment.isEmpty { try container.encode(alternativeEquipment, forKey: .alternativeEquipment) }
+        if !requiredGear.isEmpty { try container.encode(requiredGear, forKey: .requiredGear) }
     }
 
     /// Persisted JSON keys for an ``ExerciseTarget`` catalog row (`id` is derived from `name`, so
@@ -1094,6 +1202,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     /// `legacyMuscles` maps the old `muscles` string-array key so pre-split rows still decode.
     private enum CodingKeys: String, CodingKey {
         case name, primaryMuscles, secondaryMuscles, equipment, movementPattern, inputKind
+        case plane, modality, difficulty, measure, alternativeEquipment, requiredGear
         case legacyMuscles = "muscles"
     }
 }

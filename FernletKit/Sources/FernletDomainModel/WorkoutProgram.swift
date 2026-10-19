@@ -428,7 +428,7 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
 /// Not medical advice: it filters on coarse, user-supplied contraindications.
 public nonisolated enum WorkoutSafetyFilter {
     public static func feasible(_ exercise: ExerciseTarget, location: WorkoutLocation, profile: WorkoutProfile) -> Bool {
-        guard location.has(exercise.equipment) else { return false }
+        guard hasEquipment(for: exercise, at: location) else { return false }
         if profile.avoidedMovements.contains(exercise.movementPattern) { return false }
         if profile.avoidedMuscles.isEmpty == false {
             let worked = exercise.primaryMuscles.union(exercise.secondaryMuscles)
@@ -439,6 +439,27 @@ public nonisolated enum WorkoutSafetyFilter {
 
     public static func feasibleExercises(in catalog: [ExerciseTarget], location: WorkoutLocation, profile: WorkoutProfile) -> [ExerciseTarget] {
         catalog.filter { feasible($0, location: location, profile: profile) }
+    }
+
+    /// Whether the location can run the exercise at all: one of its tools (`equipment` or an
+    /// alternative) is available, and every specific piece it requires is owned there.
+    public static func hasEquipment(for exercise: ExerciseTarget, at location: WorkoutLocation) -> Bool {
+        missingEquipment(for: exercise, at: location).isEmpty
+    }
+
+    /// What the location lacks for the exercise, named for a reason line ("Home has no weight
+    /// bench") — empty when it has everything. The tool comes first when none of its options is
+    /// there; then each required piece that is not owned, in catalog order.
+    public static func missingEquipment(for exercise: ExerciseTarget, at location: WorkoutLocation) -> [String] {
+        var missing: [String] = []
+        let tools = [exercise.equipment] + exercise.alternativeEquipment
+        if !tools.contains(where: location.has) {
+            missing.append(exercise.equipment.displayName)
+        }
+        for gear in exercise.requiredGear where !location.ownedEquipment.contains(gear) {
+            missing.append(gear.displayName)
+        }
+        return missing
     }
 }
 
@@ -454,21 +475,31 @@ public nonisolated enum SlotRole: Sendable {
     case core          // trunk
 }
 
-/// A slot describes the INTENT of a movement (pattern + target region/muscles + role), not a fixed
-/// exercise. The engine fills it from the equipment- and injury-filtered catalog, so the same split
-/// adapts to the user's location and limits while keeping the structure consistent week to week.
+/// A slot describes the INTENT of a movement (pattern + plane + target region/muscles + role), not
+/// a fixed exercise. The engine fills it from the equipment- and injury-filtered catalog, so the
+/// same split adapts to the user's location and limits while keeping the structure consistent week
+/// to week.
+///
+/// The pattern, plane and muscles are requirements, not hints: an exercise must share the slot's
+/// movement pattern, its plane (when both name one), and at least one primary muscle, or the slot
+/// is dropped and the session note says so — never filled with an unrelated movement.
 public nonisolated struct WorkoutSlotSpec: Sendable {
 
-    public init(label: String, role: SlotRole, movement: MovementPattern? = nil, muscles: Set<MuscleGroup> = [], region: BodyRegion? = nil) {
+    public init(
+        label: String, role: SlotRole, movement: MovementPattern? = nil, plane: MovementPlane? = nil,
+        muscles: Set<MuscleGroup> = [], region: BodyRegion? = nil
+    ) {
         self.label = label
         self.role = role
         self.movement = movement
+        self.plane = plane
         self.muscles = muscles
         self.region = region
     }
     public var label: String
     public var role: SlotRole
     public var movement: MovementPattern?
+    public var plane: MovementPlane?
     public var muscles: Set<MuscleGroup> = []
     public var region: BodyRegion?
 }
@@ -602,30 +633,30 @@ public nonisolated enum WorkoutSessions {
     // (the catalog tags only movementPattern); "not used today" diversifies picks within a day.
     public static let fullBodyA = WorkoutSessionTemplate(title: "Full Body A", kind: .fullBody, slots: [
         WorkoutSlotSpec(label: "Squat", role: .main, movement: .squat, muscles: [.quads, .glutes]),
-        WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, muscles: [.chest]),
-        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
+        WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, plane: .horizontal, muscles: [.chest]),
+        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, plane: .horizontal, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Hinge", role: .accessory, movement: .hinge, muscles: [.hamstrings, .glutes]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
     public static let fullBodyB = WorkoutSessionTemplate(title: "Full Body B", kind: .fullBody, slots: [
         WorkoutSlotSpec(label: "Hinge", role: .main, movement: .hinge, muscles: [.hamstrings, .glutes]),
-        WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
-        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
+        WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, plane: .vertical, muscles: [.frontDelts, .sideDelts]),
+        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, plane: .vertical, muscles: [.lats, .upperBack]),
         WorkoutSlotSpec(label: "Lunge", role: .accessory, movement: .lunge, muscles: [.quads, .glutes]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
     public static let fullBodyC = WorkoutSessionTemplate(title: "Full Body C", kind: .fullBody, slots: [
         WorkoutSlotSpec(label: "Lunge", role: .main, movement: .lunge, muscles: [.quads, .glutes]),
-        WorkoutSlotSpec(label: "Incline push", role: .main, movement: .push, muscles: [.chest, .frontDelts]),
-        WorkoutSlotSpec(label: "Row", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
+        WorkoutSlotSpec(label: "Incline push", role: .main, movement: .push, plane: .horizontal, muscles: [.chest, .frontDelts]),
+        WorkoutSlotSpec(label: "Row", role: .main, movement: .pull, plane: .horizontal, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Carry / loaded", role: .accessory, movement: .carry, muscles: [.forearms, .traps]),
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
     public static let upper = WorkoutSessionTemplate(title: "Upper", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, muscles: [.chest]),
-        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
-        WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
-        WorkoutSlotSpec(label: "Vertical pull", role: .accessory, movement: .pull, muscles: [.lats]),
+        WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, plane: .horizontal, muscles: [.chest]),
+        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, plane: .horizontal, muscles: [.upperBack, .lats]),
+        WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, plane: .vertical, muscles: [.frontDelts, .sideDelts]),
+        WorkoutSlotSpec(label: "Vertical pull", role: .accessory, movement: .pull, plane: .vertical, muscles: [.lats, .upperBack]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
     ])
@@ -637,15 +668,15 @@ public nonisolated enum WorkoutSessions {
         WorkoutSlotSpec(label: "Core", role: .core, muscles: [.abs, .obliques], region: .core),
     ])
     public static let push = WorkoutSessionTemplate(title: "Push", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, muscles: [.chest]),
-        WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
-        WorkoutSlotSpec(label: "Incline push", role: .accessory, movement: .push, muscles: [.chest, .frontDelts]),
+        WorkoutSlotSpec(label: "Horizontal push", role: .main, movement: .push, plane: .horizontal, muscles: [.chest]),
+        WorkoutSlotSpec(label: "Vertical push", role: .main, movement: .push, plane: .vertical, muscles: [.frontDelts, .sideDelts]),
+        WorkoutSlotSpec(label: "Incline push", role: .accessory, movement: .push, plane: .horizontal, muscles: [.chest, .frontDelts]),
         WorkoutSlotSpec(label: "Side delts", role: .accessory, movement: .isolation, muscles: [.sideDelts]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
     ])
     public static let pull = WorkoutSessionTemplate(title: "Pull", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
-        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
+        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, plane: .vertical, muscles: [.lats, .upperBack]),
+        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, plane: .horizontal, muscles: [.upperBack, .lats]),
         WorkoutSlotSpec(label: "Rear delts", role: .accessory, movement: .isolation, muscles: [.rearDelts]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Hinge", role: .accessory, movement: .hinge, muscles: [.hamstrings, .glutes]),
@@ -659,21 +690,21 @@ public nonisolated enum WorkoutSessions {
     ])
     // Body-part sessions (specialized splits)
     public static let chest = WorkoutSessionTemplate(title: "Chest", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Flat press", role: .main, movement: .push, muscles: [.chest]),
-        WorkoutSlotSpec(label: "Incline press", role: .main, movement: .push, muscles: [.chest, .frontDelts]),
+        WorkoutSlotSpec(label: "Flat press", role: .main, movement: .push, plane: .horizontal, muscles: [.chest]),
+        WorkoutSlotSpec(label: "Incline press", role: .main, movement: .push, plane: .horizontal, muscles: [.chest, .frontDelts]),
         WorkoutSlotSpec(label: "Chest isolation", role: .accessory, movement: .isolation, muscles: [.chest]),
         WorkoutSlotSpec(label: "Dip / decline", role: .accessory, movement: .push, muscles: [.chest, .triceps]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
     ])
     public static let back = WorkoutSessionTemplate(title: "Back", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
-        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, muscles: [.upperBack, .lats]),
-        WorkoutSlotSpec(label: "Row variation", role: .accessory, movement: .pull, muscles: [.upperBack]),
+        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, plane: .vertical, muscles: [.lats, .upperBack]),
+        WorkoutSlotSpec(label: "Horizontal pull", role: .main, movement: .pull, plane: .horizontal, muscles: [.upperBack, .lats]),
+        WorkoutSlotSpec(label: "Row variation", role: .accessory, movement: .pull, plane: .horizontal, muscles: [.upperBack]),
         WorkoutSlotSpec(label: "Rear delts", role: .accessory, movement: .isolation, muscles: [.rearDelts]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
     ])
     public static let shoulders = WorkoutSessionTemplate(title: "Shoulders", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Overhead press", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
+        WorkoutSlotSpec(label: "Overhead press", role: .main, movement: .push, plane: .vertical, muscles: [.frontDelts, .sideDelts]),
         WorkoutSlotSpec(label: "Side delts", role: .accessory, movement: .isolation, muscles: [.sideDelts]),
         WorkoutSlotSpec(label: "Rear delts", role: .accessory, movement: .isolation, muscles: [.rearDelts]),
         WorkoutSlotSpec(label: "Front delts", role: .accessory, movement: .isolation, muscles: [.frontDelts]),
@@ -687,14 +718,14 @@ public nonisolated enum WorkoutSessions {
         WorkoutSlotSpec(label: "Forearms / grip", role: .accessory, movement: .isolation, muscles: [.forearms]),
     ])
     public static let arnoldChestBack = WorkoutSessionTemplate(title: "Chest & Back", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Flat press", role: .main, movement: .push, muscles: [.chest]),
-        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, muscles: [.lats]),
-        WorkoutSlotSpec(label: "Incline press", role: .accessory, movement: .push, muscles: [.chest]),
-        WorkoutSlotSpec(label: "Horizontal pull", role: .accessory, movement: .pull, muscles: [.upperBack]),
+        WorkoutSlotSpec(label: "Flat press", role: .main, movement: .push, plane: .horizontal, muscles: [.chest]),
+        WorkoutSlotSpec(label: "Vertical pull", role: .main, movement: .pull, plane: .vertical, muscles: [.lats, .upperBack]),
+        WorkoutSlotSpec(label: "Incline press", role: .accessory, movement: .push, plane: .horizontal, muscles: [.chest, .frontDelts]),
+        WorkoutSlotSpec(label: "Horizontal pull", role: .accessory, movement: .pull, plane: .horizontal, muscles: [.upperBack]),
         WorkoutSlotSpec(label: "Chest isolation", role: .accessory, movement: .isolation, muscles: [.chest]),
     ])
     public static let arnoldShouldersArms = WorkoutSessionTemplate(title: "Shoulders & Arms", kind: .strength, slots: [
-        WorkoutSlotSpec(label: "Overhead press", role: .main, movement: .push, muscles: [.frontDelts, .sideDelts]),
+        WorkoutSlotSpec(label: "Overhead press", role: .main, movement: .push, plane: .vertical, muscles: [.frontDelts, .sideDelts]),
         WorkoutSlotSpec(label: "Side delts", role: .accessory, movement: .isolation, muscles: [.sideDelts]),
         WorkoutSlotSpec(label: "Biceps", role: .accessory, movement: .isolation, muscles: [.biceps]),
         WorkoutSlotSpec(label: "Triceps", role: .accessory, movement: .isolation, muscles: [.triceps]),
@@ -1122,8 +1153,9 @@ public nonisolated enum WorkoutProgram {
         }
     }
 
-    /// Renders the session(s) for the next day in the user's persistent rotation. `rotationIndex`
-    /// (weekday) picks today's day so the program stays consistent week to week.
+    /// Renders the session(s) for one day of the split. `rotationIndex` picks the day (wrapped into
+    /// range); the app passes ``nextDayIndex(in:recentSessionNames:)`` so the program walks the
+    /// split in order, one completed day at a time.
     public static func dayPlan(
         goal: GoalType,
         intensity: WorkoutIntensity,
@@ -1171,6 +1203,41 @@ public nonisolated enum WorkoutProgram {
         return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped, locationName: location.name)
     }
 
+    /// How many past training days ``nextDayIndex(in:recentSessionNames:)`` looks through.
+    public static let rotationLookbackDays = 28
+    /// Workout names read per past day — a day logs a handful at most; this bounds the scan.
+    static let rotationNamesPerDay = 12
+
+    /// The split day to plan next: the day after the most recent split day the user logged, or the
+    /// first day when nothing recent belongs to this split.
+    ///
+    /// Sequence, not calendar: the old weekday rotation (`weekday % days`) handed someone who
+    /// trains Monday and Wednesday on a two-day split the same session every time, and gave every
+    /// calendar day a session. Now each finished day advances the program by one, whenever it
+    /// happens, so every session comes round in turn.
+    ///
+    /// - Parameter recentSessionNames: one entry per past day that logged workouts, most recent
+    ///   first, each the names logged that day. Pass days BEFORE today, so today's plan stays put
+    ///   once its session is logged. A day matches the split day sharing the most session display
+    ///   names with it ("Upper", "Morning · Easy cardio"); ties go to the earlier split day, which
+    ///   keeps a repeated day (Upper twice in Upper/Lower) alternating correctly.
+    public static func nextDayIndex(in split: TrainingSplit, recentSessionNames: [[String]]) -> Int {
+        guard !split.days.isEmpty else { return 0 }
+        let dayNames = split.days.map { day in
+            Set(day.sessions.map { sessionDisplayName($0, timeLabel: $0.time.label) })
+        }
+        for logged in recentSessionNames.prefix(rotationLookbackDays) {
+            let names = Set(logged.prefix(rotationNamesPerDay))
+            var best: (index: Int, overlap: Int)?
+            for (index, sessionNames) in dayNames.enumerated() {
+                let overlap = sessionNames.intersection(names).count
+                if overlap > 0, overlap > (best?.overlap ?? 0) { best = (index, overlap) }
+            }
+            if let best { return (best.index + 1) % split.days.count }
+        }
+        return 0
+    }
+
     /// The "there is always something to do" session used when a split renders nothing at all.
     private static var fallbackSession: SessionSuggestion {
         SessionSuggestion(
@@ -1213,7 +1280,11 @@ public nonisolated enum WorkoutProgram {
             var dropped: [String] = []
             var weeksDone = Int.max
             for slot in session.slots.prefix(profile.experience.maxSlotsPerDay) {
-                if let pick = bestExercise(for: slot, in: feasible, excluding: used, biasTokens: biasTokens) {
+                let pick = bestExercise(
+                    for: slot, in: feasible, excluding: used, biasTokens: biasTokens,
+                    experience: profile.experience, location: location
+                )
+                if let pick {
                     used.insert(pick.name)
                     let completions = progression[pick.name] ?? 0
                     weeksDone = min(weeksDone, completions)
@@ -1289,17 +1360,25 @@ public nonisolated enum WorkoutProgram {
         timeLabel.isEmpty ? session.title : "\(timeLabel) · \(session.title)"
     }
 
-    private static func bestExercise(
+    /// The highest-scoring eligible exercise for a slot, or nil when nothing is eligible (the slot
+    /// is then dropped and named in the session note). Ties fall to the name, so the pick is
+    /// deterministic; the equipment and difficulty terms in ``slotScore`` keep real ties rare.
+    static func bestExercise(
         for slot: WorkoutSlotSpec,
         in feasible: [ExerciseTarget],
         excluding used: Set<String>,
-        biasTokens: Set<String>
+        biasTokens: Set<String>,
+        experience: ExperienceLevel,
+        location: WorkoutLocation
     ) -> ExerciseTarget? {
         feasible
-            .filter { used.contains($0.name) == false }
-            .compactMap { exercise -> (ExerciseTarget, Int)? in
-                let score = slotScore(slot: slot, exercise: exercise, biasTokens: biasTokens)
-                return score > 0 ? (exercise, score) : nil
+            .filter { used.contains($0.name) == false && isEligible($0, for: slot) }
+            .map { exercise -> (ExerciseTarget, Int) in
+                let score = slotScore(
+                    slot: slot, exercise: exercise, biasTokens: biasTokens,
+                    experience: experience, location: location
+                )
+                return (exercise, score)
             }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
@@ -1308,13 +1387,39 @@ public nonisolated enum WorkoutProgram {
             .first?.0
     }
 
-    private static func slotScore(slot: WorkoutSlotSpec, exercise: ExerciseTarget, biasTokens: Set<String>) -> Int {
+    /// Whether an exercise can fill a slot at all: rep-measured strength work that shares the
+    /// slot's movement pattern, its plane (when both name one) and at least one primary muscle.
+    ///
+    /// These are the guards the old score-only picker lacked — any positive score used to win, so a
+    /// biceps slot could take an ab wheel, a vertical pull a cable row, and a squat slot a box jump.
+    public static func isEligible(_ exercise: ExerciseTarget, for slot: WorkoutSlotSpec) -> Bool {
+        guard exercise.modality == .strength, exercise.measure == .reps else { return false }
+        if let movement = slot.movement, exercise.movementPattern != movement { return false }
+        if let plane = slot.plane, let own = exercise.plane, own != plane { return false }
+        if !slot.muscles.isEmpty, exercise.primaryMuscles.isDisjoint(with: slot.muscles) { return false }
+        return true
+    }
+
+    /// How well an eligible exercise fits a slot for this lifter at this location.
+    ///
+    /// Target fit first (region, primary and secondary muscles, compound-vs-isolation for the
+    /// role), then a small penalty per primary muscle the slot does not ask for (a flat press beats
+    /// an incline press for a chest slot), then the preferred tool and the difficulty that suits
+    /// the lifter's level, then the user's interest words.
+    static func slotScore(
+        slot: WorkoutSlotSpec,
+        exercise: ExerciseTarget,
+        biasTokens: Set<String>,
+        experience: ExperienceLevel,
+        location: WorkoutLocation
+    ) -> Int {
         var score = 0
         if let movement = slot.movement, exercise.movementPattern == movement { score += 100 }
         if let region = slot.region, exercise.bodyRegion == region { score += 50 }
         if slot.muscles.isEmpty == false {
             score += exercise.primaryMuscles.intersection(slot.muscles).count * 40
             score += exercise.secondaryMuscles.intersection(slot.muscles).count * 12
+            score -= exercise.primaryMuscles.subtracting(slot.muscles).count * 8
         }
         switch slot.role {
         case .main:
@@ -1322,9 +1427,71 @@ public nonisolated enum WorkoutProgram {
         case .accessory, .core:
             score += exercise.movementPattern == .isolation ? 12 : 0
         }
+        let tools = ([exercise.equipment] + exercise.alternativeEquipment).filter(location.has)
+        score += tools.map { equipmentPreference($0, role: slot.role, experience: experience) }.max() ?? 0
+        score += difficultyFit(exercise.difficulty, experience: experience)
         let nameTokens = Set(exercise.name.lowercased().split(separator: " ").map(String.init))
         if nameTokens.isDisjoint(with: biasTokens) == false { score += 15 }
         return score
+    }
+
+    /// Preference for the tool an exercise is loaded with, by slot role and experience.
+    ///
+    /// Main lifts for trained lifters go to the barbell, then dumbbells; beginners start on the
+    /// dumbbell, machine and cable options that NASM and ACSM favor for novices (easier to learn,
+    /// easier to load in small steps). Accessory and core work prefers dumbbells, cables and
+    /// machines. Bands and bare bodyweight are the fallbacks when nothing loadable is there — the
+    /// gap that used to let "Band chest press" win a full gym's bench slot on alphabetical order.
+    static func equipmentPreference(_ equipment: Equipment, role: SlotRole, experience: ExperienceLevel) -> Int {
+        switch (role, experience) {
+        case (.main, .beginner):
+            switch equipment {
+            case .dumbbell: 30
+            case .machine: 28
+            case .cable: 26
+            case .kettlebell: 24
+            case .barbell: 16
+            case .bodyweight: 12
+            case .bench: 10
+            case .band: 8
+            case .cardio, .none: 0
+            }
+        case (.main, _):
+            switch equipment {
+            case .barbell: 30
+            case .dumbbell: 24
+            case .kettlebell: 18
+            case .machine, .cable: 16
+            case .bench: 10
+            case .bodyweight: 8
+            case .band: 4
+            case .cardio, .none: 0
+            }
+        case (.accessory, _), (.core, _):
+            switch equipment {
+            case .dumbbell, .cable: 20
+            case .machine: 18
+            case .kettlebell: 14
+            case .barbell, .bodyweight: 10
+            case .bench, .band: 8
+            case .none: 6
+            case .cardio: 0
+            }
+        }
+    }
+
+    /// How well an exercise's difficulty suits the lifter: beginners lean to foundational moves and
+    /// steer well clear of advanced ones; trained lifters lean slightly away from the regressions
+    /// (an incline push-up when a push-up is there).
+    static func difficultyFit(_ difficulty: ExerciseDifficulty, experience: ExperienceLevel) -> Int {
+        switch (experience, difficulty) {
+        case (.beginner, .foundational): 6
+        case (.beginner, .advanced): -60
+        case (.intermediate, .foundational): -4
+        case (.intermediate, .advanced): -10
+        case (.advanced, .foundational): -6
+        case (_, .standard), (.advanced, .advanced): 0
+        }
     }
 
     private static func selectionTokens(profile: WorkoutProfile, context: String) -> Set<String> {

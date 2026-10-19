@@ -428,7 +428,7 @@ The portable value-type layer that replaced the app's old `Models.swift`, split 
 | `Fernlet/Docs/Food-Catalog-Runtime-ODR-Options-2026-08-24.md` | Measured base/ODR/preservation distribution options, P0/P1/P2 projection boundary, and the owner decision required before any runtime catalog or ODR integration. |
 | `Fernlet/FoodDataSource/USDAFoodItems.json` | Source USDA food item dataset consumed by the build-time DB generator (not bundled at runtime). |
 | `Fernlet/FernletKit/Sources/FoodCatalog/Resources/FoodCatalog.sqlite` | The shipped read-only SQLite food catalog (FTS5), generated from `FoodDataSource/` and loaded via `Bundle.module`. |
-| `Fernlet/App/Fernlet/WorkoutExercises.json` | Bundled exercise dataset consumed by the workout system. |
+| `Fernlet/App/Fernlet/WorkoutExercises.json` | Bundled exercise dataset consumed by the workout system: muscles, tool (plus alternatives and required gear), movement pattern and plane, modality, difficulty (1-3) and measure (reps or seconds) per row. |
 | `Fernlet/FernletKit/Sources/AIProviders/FoundationFoodSelection.swift` | Foundation model availability and food selection model helpers. |
 | `Fernlet/FernletKit/Sources/AppServices/NutritionLabelScanner.swift` | Nutrition label scan result model, scan errors, and scanner implementation. |
 | `Fernlet/App/Fernlet/NutritionLabelCameraSheet.swift` | Camera and image picker UI for capturing nutrition labels and reviewing scan results. |
@@ -957,6 +957,7 @@ Unit tests live in one target here, built strict by `Scripts/spm-wall-check.sh` 
 | `Fernlet/Tests/FernletTests/TrainerExportTests.swift` | Trainer/nutritionist export bundle fail-closed category-exclusion tests. |
 | `Fernlet/Tests/FernletTests/WidgetBridgeTests.swift` | Widget-bridge snapshot mirroring and pending-action-queue codec tests. |
 | `Fernlet/Tests/FernletTests/WorkoutProgramTests.swift` | Workout-program location identity-stability and template-ID collision tests. |
+| `Fernlet/Tests/FernletTests/WorkoutExerciseSelectionTests.swift` | Pins the planner's exercise picks per location and level, slot eligibility over every template, gear gating, catalog curation, custom-row encoding, and rotation by the last logged split day. |
 | `Fernlet/Tests/FernletTests/WorkoutRecoveryTests.swift` | Logged-workout removal/edit recoverability and bookkeeping-reversal tests. |
 | `Fernlet/Tests/FernletTests/WorryBoxTests.swift` | Worry Box sealed repository round-trip, deletion, and key-migration tests; the service's lock lifecycle (closed no-passcode tab hides, the tap opens and folds, a foreign scope stays closed). |
 | `Fernlet/Tests/FernletTests/PrivateHubOpenCoordinatorTests.swift` | Design invariant I33: the no-passcode open coordinator over a real lock service and sealed store — first tap mints, dead rows show the card and nothing is minted or deleted, Remove deletes exactly the shown dead rows and clears the latches, a stale card deletes nothing, held notes, bookkeeping-only, never a card while a key may survive / recovery is owed / a row is undecided, the lost-key card. Also: a hidden period or intimacy kind is counted only as "other private entries" (and still removed), and the card promises a Sealed backup restore only when one will really run (review C-U2-R3, C-U2-R5). |
