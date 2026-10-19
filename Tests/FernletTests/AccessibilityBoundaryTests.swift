@@ -24,12 +24,13 @@
 //
 // WHAT THIS WALL CANNOT SEE — the honest ceiling, restated here because it is what stops the wall
 // being mistaken for coverage, and kept in step with the scanner's module docstring. It catches
-// nine named structural regressions. It does NOT catch a rawValue that reaches a label through a
+// ten named structural regressions. It does NOT catch a rawValue that reaches a label through a
 // function call or across a file, a string computed at runtime, a label that is present but WRONG,
+// a Voice Control name that differs from the text drawn on the control or repeats on its screen,
 // focus order, a missing custom action, an unhonored Reduce Motion, or anything about how a screen
 // actually sounds. Those stay manual, forever.
 //
-// ONE HOME PER RULE. The tempting ninth rule — "an accessibility label may not be a bare `String`"
+// ONE HOME PER RULE. The tempting extra rule — "an accessibility label may not be a bare `String`"
 // — is deliberately absent: a grep cannot distinguish `.accessibilityLabel(coverText)` (a `String`,
 // a real defect) from `.accessibilityLabel(titleKey)` (a `LocalizedStringKey`, correct). It lives
 // in `LocalizationBoundaryTests` as a TYPE check on the named members. Do not add it here too.
@@ -37,7 +38,7 @@
 import Foundation
 import Testing
 
-/// Grep-wall enforcing the nine mechanically decidable accessibility invariants of §4.5.
+/// Grep-wall enforcing the ten mechanically decidable accessibility invariants of §4.5.
 ///
 /// Each rule is a pure matcher over source text, exercised both against the real tree (with a
 /// file-count floor, so a green run cannot mean "the scan read nothing") and against planted
@@ -143,6 +144,12 @@ extension AccessibilityBoundaryTests {
     static let a7Lookback = 60
     /// Code lines joined so `Color.slate` wrapped before its `.opacity(…)` is read as one expression.
     static let a8Window = 2
+    /// Spoken words a literal label may run to before Voice Control needs a short name for it.
+    static let a9MaxLabelWords = 4
+    /// Code lines read so a wrapped label call is one call (the widest in the tree is nine).
+    static let a9CallLines = 10
+    /// Modifiers searched either side of a long label for its `.accessibilityInputLabels(`.
+    static let a9ChainSteps = 6
     /// Code lines joined so a field whose title or `Binding(get:set:)` wraps is read as one call.
     static let a10Window = 6
     /// `accessibilityAddTraits(` calls inspected inside one heading canary's braces.
@@ -452,6 +459,9 @@ extension AccessibilityBoundaryTests {
     static let mutedSlate = Pattern(
         #"\bslate\s*\.\s*(?:opacity\s*\(|secondary\b|tertiary\b|quaternary\b|quinary\b)"#)
     static let mutedSecondaryInk = Pattern(#"\bsecondaryText\s*\.\s*withAlphaComponent\s*\("#)
+    static let inputLabelsAnywhere = Pattern(#"\.\s*accessibilityInputLabels\s*\("#)
+    static let spokenNameCall = Pattern(#"\.\s*(?:accessibilityLabel|fernletIconButton)\s*\("#)
+    static let spokenWord = Pattern(#"\S*\w\S*"#)
     static let fieldHead = Pattern(#"\b(?:TextField|SecureField)\s*\("#)
     static let fieldPrompt = Pattern(#"\bprompt:\s*(?:Text)?\s*\.\s*fieldPrompt\s*\("#)
 
@@ -466,7 +476,8 @@ extension AccessibilityBoundaryTests {
     static let portedPatterns: [Pattern] = [
         combineArguments, ignoreElement, labelStep, labelAnywhere, gridColumn, scaledMetric,
         binding, boundArgument, imageBitmap, buttonHead, numericLiteral, identifier, structHead,
-        mutedSlate, mutedSecondaryInk, fieldHead, fieldPrompt
+        mutedSlate, mutedSecondaryInk, inputLabelsAnywhere, spokenNameCall, spokenWord,
+        fieldHead, fieldPrompt
     ]
 
     /// The two literal fragments of ``assignment``; its middle piece is COMPUTED on both sides, so
@@ -830,6 +841,151 @@ extension AccessibilityBoundaryTests {
     }
 }
 
+// MARK: - A9
+
+extension AccessibilityBoundaryTests {
+
+    /// `(spoken text, index just past the closing quote)` of the RAW literal opening at `start`.
+    ///
+    /// Each `\(…)` interpolation becomes the one word "X": a runtime value is at least one spoken
+    /// word, and counting it as exactly one keeps A9's errors on the low side. A newline ends the
+    /// literal too, so an unterminated quote stops at its line instead of swallowing the window.
+    static func readLiteral(_ chars: [Character], from start: Int) -> (text: String, end: Int) {
+        var out = ""
+        var i = start + 1
+        while i < chars.count {
+            if chars[i] == "\\" && i + 1 < chars.count && chars[i + 1] == "(" {
+                var depth = 0
+                var j = i + 1
+                while j < chars.count {
+                    if chars[j] == "(" { depth += 1 }
+                    if chars[j] == ")" {
+                        depth -= 1
+                        if depth == 0 { break }
+                    }
+                    j += 1
+                }
+                out += " X "
+                i = j + 1
+                continue
+            }
+            if chars[i] == "\\" { i += 2; continue }
+            if chars[i] == "\"" || chars[i] == "\n" { return (out, i + 1) }
+            out.append(chars[i])
+            i += 1
+        }
+        return (out, chars.count)
+    }
+
+    /// `(literal text, offset of its opening quote)` for each string literal inside the call whose
+    /// `(` is at or after `start`, read from RAW source.
+    ///
+    /// Literal-aware where ``callBounds(_:from:)`` is not, because it has to be: the words being
+    /// counted live inside the literals, which the code-only form has already collapsed to `""`. A
+    /// `)` inside a literal does not close the call, and a `//` outside one skips to the end of its
+    /// line. Bounded by the length of `chars`; every branch advances.
+    static func callLiterals(_ chars: [Character], from start: Int) -> [(text: String, offset: Int)] {
+        guard start >= 0, var i = offset(of: "(", in: chars, from: start) else { return [] }
+        var depth = 0
+        var literals: [(text: String, offset: Int)] = []
+        while i < chars.count {
+            if matches("//", chars, i) {
+                i = offset(of: "\n", in: chars, from: i) ?? chars.count
+                continue
+            }
+            if chars[i] == "\"" {
+                let read = readLiteral(chars, from: i)
+                literals.append((read.text, i))
+                i = read.end
+                continue
+            }
+            if chars[i] == "(" { depth += 1 }
+            if chars[i] == ")" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            i += 1
+        }
+        return literals
+    }
+
+    /// Words a person says for `text`: whitespace-separated runs holding a letter or a digit, so a
+    /// `·` or `—` separator is silent and costs nothing.
+    static func spokenWords(_ text: String) -> Int {
+        spokenWord.findAll(text).count
+    }
+
+    /// Whether `.accessibilityInputLabels(` sits in the modifier chain of the label at `index`,
+    /// whose call closes on `endIndex`.
+    ///
+    /// Read the way A1 reads a chain: the label's own line(s), then forward from the closing line
+    /// and — when the label line itself continues a chain — backward, one modifier at a time, each
+    /// walk stopping at the first line that does not begin with `.` and after at most
+    /// ``a9ChainSteps`` modifiers. Input labels written before the label count: modifier order does
+    /// not matter to Voice Control.
+    static func chainHasInputLabels(_ lines: [SourceLine], index: Int, endIndex: Int) -> Bool {
+        guard index >= 0, index <= endIndex, endIndex < lines.count else { return false }
+        for position in index...endIndex where inputLabelsAnywhere.search(lines[position].code) != nil {
+            return true
+        }
+        var step = endIndex + 1
+        for _ in 0..<a9ChainSteps {
+            guard step < lines.count else { break }
+            let code = lines[step].code.trimmingCharacters(in: .whitespaces)
+            guard code.hasPrefix(".") else { break }
+            if inputLabelsAnywhere.search(code) != nil { return true }
+            step += 1
+        }
+        guard lines[index].code.trimmingCharacters(in: .whitespaces).hasPrefix(".") else { return false }
+        step = index - 1
+        for _ in 0..<a9ChainSteps {
+            guard step >= 0 else { break }
+            let code = lines[step].code.trimmingCharacters(in: .whitespaces)
+            guard code.hasPrefix(".") else { break }
+            if inputLabelsAnywhere.search(code) != nil { return true }
+            step -= 1
+        }
+        return false
+    }
+
+    /// **A9** — a literal `.accessibilityLabel` (or `.fernletIconButton`, the FernletUI primitive
+    /// forty icon-only buttons take their label from) longer than ``a9MaxLabelWords`` spoken words
+    /// with no `.accessibilityInputLabels(` in its modifier chain.
+    ///
+    /// Voice Control names a control by its input labels when it has them and by its label when it
+    /// does not, so a label written as a sentence for VoiceOver is a sentence a Voice Control user
+    /// must say in full to tap the control. The words are counted over the call's RAW literals —
+    /// the longest one, so a ternary is measured by its longer branch — across a FIXED
+    /// ``a9CallLines``-line window; where the call closes comes from the code-only form, as in A1.
+    /// A finding reports the line holding the longest literal, so a wrapped label's allowlist entry
+    /// can name its words. A grep cannot tell a control from a static view, and Voice Control never
+    /// names a static one, so a long label on a view nothing can activate is allowlisted saying so.
+    static func inputLabelFindings(_ path: String, _ lines: [SourceLine]) -> [Finding] {
+        guard !path.isEmpty else { return [] }
+        var findings: [Finding] = []
+        for (index, line) in lines.enumerated() {
+            guard let codeMatch = spokenNameCall.search(line.code),
+                  let rawMatch = spokenNameCall.search(line.raw) else { continue }
+            let upper = min(index + a9CallLines, lines.count)
+            let raw = Array(lines[index..<upper].map(\.raw).joined(separator: "\n"))
+            let literals = callLiterals(raw, from: matchStart(rawMatch, in: line.raw))
+            var longest = (words: 0, offset: 0)
+            for literal in literals {
+                let words = spokenWords(literal.text)
+                if words > longest.words { longest = (words, literal.offset) }
+            }
+            guard longest.words > a9MaxLabelWords else { continue }
+            let win = window(lines, from: index, count: a9CallLines)
+            let close = callBounds(win.chars, from: matchStart(codeMatch, in: line.code))?.close ?? 0
+            let endIndex = min(index + win.line(at: close), lines.count - 1)
+            guard !chainHasInputLabels(lines, index: index, endIndex: endIndex) else { continue }
+            let at = index + raw[0..<longest.offset].filter { $0 == "\n" }.count
+            findings.append(Finding(rule: "A9-INPUT-LABELS", path: path, line: lines[at].number, text: lines[at].raw))
+        }
+        return findings
+    }
+}
+
 // MARK: - A10
 
 extension AccessibilityBoundaryTests {
@@ -929,7 +1085,7 @@ extension AccessibilityBoundaryTests {
         return paths.sorted()
     }
 
-    /// Runs all nine rules over the shipping tree.
+    /// Runs all ten rules over the shipping tree.
     static func scanTree() throws -> (findings: [Finding], filesScanned: Int) {
         var findings: [Finding] = []
         let paths = shippingFiles()
@@ -943,6 +1099,7 @@ extension AccessibilityBoundaryTests {
             findings += invertColorFindings(path, lines)
             findings += ignoreOnButtonFindings(path, lines)
             findings += mutedSlateFindings(path, lines)
+            findings += inputLabelFindings(path, lines)
             findings += fieldPromptFindings(path, lines)
         }
         // A3 asserts something EXISTS, so it runs off its own named paths rather than off the walk:
@@ -1065,6 +1222,8 @@ extension AccessibilityBoundaryTests {
             ("A7_LOOKBACK", Self.a7Lookback), ("A8_WINDOW", Self.a8Window),
             ("A10_WINDOW", Self.a10Window),
             ("ADD_TRAITS_SCAN_LIMIT", Self.addTraitsScanLimit),
+            ("A9_MAX_LABEL_WORDS", Self.a9MaxLabelWords), ("A9_CALL_LINES", Self.a9CallLines),
+            ("A9_CHAIN_STEPS", Self.a9ChainSteps),
             ("WRAPPER_UNWRAPS", Self.wrapperUnwraps)
         ]
         for (name, value) in bounds {
@@ -1608,6 +1767,96 @@ extension AccessibilityBoundaryTests {
 
         let ignoreInComment = "// .accessibilityElement(children: .ignore) would break the Button"
         #expect(Self.ignoreOnButtonFindings("F.swift", Self.sourceLines(ignoreInComment)).isEmpty)
+
+        let longLabelInComment = #"// .accessibilityLabel("Add a bottle of water to today")"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(longLabelInComment)).isEmpty)
+
+        let iconButton = """
+        Button { remove() } label: { Image(systemName: "xmark") }
+            .fernletIconButton("Remove \\(name) from this activity")
+        """
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(iconButton)).count == 1,
+                "the icon-button primitive sets the spoken name, so it is read like a label")
+    }
+
+    /// A9 fires on a sentence-long literal label with no input labels, and is satisfied by input
+    /// labels anywhere in the same chain — after the label, before it, on its own line, or with a
+    /// comment in between — but not by input labels on a view INSIDE the control.
+    @Test func inputLabelRuleFiresOnSentencesWithoutShortNames() {
+        let planted = """
+        Button { add() } label: { Image(systemName: "plus") }
+            .accessibilityLabel("Add a bottle of water")
+        """
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(planted)).count == 1)
+
+        let short = #"Button("x") {}.accessibilityLabel("Skip to next exercise")"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(short)).isEmpty,
+                "four words is a name, not a sentence")
+
+        let after = """
+        Button { add() } label: { Image(systemName: "plus") }
+            .accessibilityLabel("Add a bottle of water")
+            // Voice Control: the short name.
+            .accessibilityInputLabels([Text("Add water")])
+        """
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(after)).isEmpty)
+
+        let before = """
+        Button { add() } label: { Image(systemName: "plus") }
+            .accessibilityInputLabels([Text("Add water")])
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add a bottle of water")
+        """
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(before)).isEmpty,
+                "modifier order does not matter to Voice Control")
+
+        let sameLine = #"Button("+") {}.accessibilityLabel("Add a bottle of water").accessibilityInputLabels([Text("Add water")])"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(sameLine)).isEmpty)
+
+        let innerView = """
+        Button { add() } label: {
+            Image(systemName: "plus")
+                .accessibilityInputLabels([Text("Add water")])
+        }
+        .accessibilityLabel("Add a bottle of water")
+        """
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(innerView)).count == 1,
+                "input labels on a child view do not name the control the label is on")
+    }
+
+    /// A9 counts the words a person SAYS: an interpolation is one word, a separator is none, a
+    /// ternary is measured by its longer branch, a `)` inside a literal does not end the call, and
+    /// a wrapped label reports the line its words are on.
+    @Test func inputLabelRuleCountsSpokenWords() {
+        let interpolations = #".accessibilityLabel("Exercise \(position) of \(total) · \(minutes) min left")"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(interpolations)).count == 1,
+                "seven spoken words: each interpolation is one, the middle dot is none")
+
+        let fourValues = #".accessibilityLabel("\(a) \(b) — \(c) \(d)")"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(fourValues)).isEmpty)
+
+        let ternary = #".accessibilityLabel(isOn ? "Flash off" : "Turn the flash on now")"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(ternary)).count == 1,
+                "the longer branch is the one a user may have to say")
+
+        let parenInLiteral = #".accessibilityLabel(done ? "Done :)" : "Open the full settings page")"#
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(parenInLiteral)).count == 1,
+                "a ')' inside a literal is copy, not the end of the call")
+
+        let wrapped = """
+        Image(systemName: "heart")
+            .accessibilityLabel(
+                ready
+                    ? "Send good vibes to your friend now"
+                    : "Hearts settle"
+            )
+        """
+        let findings = Self.inputLabelFindings("F.swift", Self.sourceLines(wrapped))
+        #expect(findings.map(\.line) == [4], "the report names the line the sentence is on")
+
+        let wrappedWithShortName = wrapped + "\n    .accessibilityInputLabels([Text(\"Heart\")])"
+        #expect(Self.inputLabelFindings("F.swift", Self.sourceLines(wrappedWithShortName)).isEmpty,
+                "the chain walk starts where the wrapped call closes")
     }
 
     /// The tokenizer's sharpest edge, pinned on its own because getting it wrong is invisible: a

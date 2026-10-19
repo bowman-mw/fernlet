@@ -57,6 +57,17 @@ Checks (IDs match §4.5 and AccessibilityBoundaryTests):
                        from an Image, so every hit is reported, and the non-text sites (a disabled
                        control, a backdrop under a full-strength glyph, a placeholder fill) are
                        allowlisted one by one with the ratio that makes them safe.
+    A9-INPUT-LABELS    `.accessibilityLabel(` — or `.fernletIconButton(`, FernletUI's icon-button
+                       primitive, which sets the label for its caller — whose literal text runs past
+                       A9_MAX_LABEL_WORDS spoken words, with no `.accessibilityInputLabels(` in the
+                       same modifier chain. Voice
+                       Control names a control by its input labels when it has them and by its
+                       label when it does not, so a label written as a sentence for VoiceOver is a
+                       sentence a Voice Control user must say in full to tap it. The fix keeps the
+                       label and adds short input labels that lead with the visible text. A grep
+                       cannot tell a control from a static element, and Voice Control never names
+                       a static one, so a long label on a non-actionable view is allowlisted with
+                       why nothing can activate it.
     A10-FIELD-PROMPT   A `TextField(` / `SecureField(` that passes no `prompt: .fieldPrompt(…)`. A
                        field with no prompt draws its title in the SYSTEM placeholder colour, which
                        measured 1.71:1 on the cream field in default light, 2.43:1 in dark and 4.33:1
@@ -104,6 +115,12 @@ function call or a runtime branch:
     (`let ink = Color.slate` then `ink.opacity(0.5)`), or any OTHER ink at alpha (`bark`, the
     accents). The runtime contrast audit in `UXScreenProbe` is the backstop for those, and only
     on the screens its gallery visits.
+  * A9 COUNTS LITERAL WORDS ONLY. Each `\\(…)` interpolation counts as ONE word however long the
+    value it speaks, a label held in a variable or built by a function is not read at all, and a
+    ternary is measured by its longest branch. It cannot see whether the input labels it finds are
+    any good, whether a name is unique on its screen, or whether a short label matches the text
+    drawn beside it ("Mood: Bright" on a chip that draws "Bright") — the Voice Control inventory in
+    `Tests/FernletUITests/VoiceControlNameInventoryUITests` and the owner's device pass carry those.
   * A10 TRUSTS THE HELPER AND THE CALL'S SHAPE. It asks that a field's call passes
     `prompt: .fieldPrompt(`, not what that prompt says, and it reads the call across a FIXED
     A10_WINDOW of code lines, so a call longer than that window reports a false positive (shorten
@@ -143,6 +160,9 @@ A5_DERIVATION_PASSES = 3 # hops followed from a grid minimum back to a `@ScaledM
 A6_WINDOW = 12           # code lines after `Image(uiImage:)` searched for the Smart Invert opt-out
 A7_LOOKBACK = 60         # code lines searched backwards for the `Button` a `.ignore` chains onto
 A8_WINDOW = 2            # code lines joined so `Color.slate` wrapped before `.opacity(…)` is one expression
+A9_MAX_LABEL_WORDS = 4   # spoken words a literal label may run to before Voice Control needs a short name
+A9_CALL_LINES = 10       # code lines read so a wrapped label call is one call (widest in the tree: 9)
+A9_CHAIN_STEPS = 6       # modifiers searched either side of a long label for its input labels
 A10_WINDOW = 6           # code lines joined so a field whose `Binding(get:set:)` wraps is one call
 ADD_TRAITS_SCAN_LIMIT = 32  # `accessibilityAddTraits(` calls inspected inside one canary's braces
 WRAPPER_UNWRAPS = 3      # `Text(verbatim: …)`-style wrappers peeled off a spoken argument
@@ -211,6 +231,9 @@ IMAGE_BITMAP_RE = re.compile(r"\bImage\(\s*uiImage:")
 BUTTON_HEAD_RE = re.compile(r"\bButton\s*[({<]")
 MUTED_SLATE_RE = re.compile(r"\bslate\s*\.\s*(?:opacity\s*\(|secondary\b|tertiary\b|quaternary\b|quinary\b)")
 MUTED_SECONDARY_INK_RE = re.compile(r"\bsecondaryText\s*\.\s*withAlphaComponent\s*\(")
+INPUT_LABELS_RE = re.compile(r"\.\s*accessibilityInputLabels\s*\(")
+SPOKEN_NAME_CALL_RE = re.compile(r"\.\s*(?:accessibilityLabel|fernletIconButton)\s*\(")
+SPOKEN_WORD_RE = re.compile(r"\S*\w\S*")
 FIELD_HEAD_RE = re.compile(r"\b(?:TextField|SecureField)\s*\(")
 FIELD_PROMPT_RE = re.compile(r"\bprompt:\s*(?:Text)?\s*\.\s*fieldPrompt\s*\(")
 ADD_TRAITS_CALL = "accessibilityAddTraits("
@@ -219,6 +242,9 @@ WRAPPERS = ("Text(verbatim:", "Text(", "LocalizedStringKey(", "String(", "Option
 
 A1_DETAIL = ("a label in the same modifier chain as .combine REPLACES the fragments it gathered — "
              "allowlist it only if the label says strictly more than they do")
+A9_DETAIL = ("Voice Control names this control by its label, so a user must say the whole sentence to "
+             "tap it. Keep the label for VoiceOver and add .accessibilityInputLabels([…]) leading with "
+             "the visible text; a view nothing can activate goes in the allowlist saying so.")
 A6_DETAIL = ("Image(uiImage:) is a photograph or a rendered bitmap, and Smart Invert turns it into "
              "a colour negative. Add .accessibilityIgnoresInvertColors() (T2-10).")
 A8_DETAIL = ("slate under alpha 1 is below the 4.5:1 text floor by construction (full slate is "
@@ -515,7 +541,7 @@ def scan_rawvalue_spoken(rel, coded):
 
 
 # ---------------------------------------------------------------------------------------------
-# A4 / A5 / A6 / A7
+# A4 / A5 / A6 / A7 / A8 / A9
 # ---------------------------------------------------------------------------------------------
 
 def scan_font_scales(rel, coded):
@@ -692,6 +718,147 @@ def scan_muted_slate(rel, coded):
     return hits
 
 
+def read_literal(text, start):
+    """(spoken text, index just past the closing quote) of the RAW literal opening at `start`.
+
+    Each `\\(…)` interpolation becomes the one word "X": a runtime value is at least one spoken
+    word, and counting it as exactly one keeps A9's errors on the low side. A newline ends the
+    literal too — a single-line literal cannot span one, so an unterminated quote stops at the
+    line instead of swallowing the window."""
+    out, i, n = [], start + 1, len(text)
+    while i < n:
+        if text[i] == "\\" and i + 1 < n and text[i + 1] == "(":
+            depth, j = 0, i + 1
+            while j < n:
+                if text[j] == "(":
+                    depth += 1
+                elif text[j] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j += 1
+            out.append(" X ")
+            i = j + 1
+            continue
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] in ('"', "\n"):
+            return "".join(out), i + 1
+        out.append(text[i])
+        i += 1
+    return "".join(out), n
+
+
+def call_literals(text, start):
+    """(literal text, offset of its opening quote) for each string literal inside the call whose
+    '(' is at or after `start`, read from RAW source.
+
+    Literal-aware where `call_bounds` is not, because it has to be: the words being counted live
+    inside the literals, which the code-only form has already collapsed to `""`. A ')' inside a
+    literal does not close the call, and a `//` outside one skips to the end of its line. Bounded
+    by the length of `text`; every branch advances."""
+    i = text.find("(", start)
+    if i < 0:
+        return []
+    depth, literals, n = 0, [], len(text)
+    while i < n:
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        ch = text[i]
+        if ch == '"':
+            body, end = read_literal(text, i)
+            literals.append((body, i))
+            i = end
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    return literals
+
+
+def spoken_words(text):
+    """Words a person says for `text`: whitespace-separated runs holding a letter or a digit, so a
+    `·` or `—` separator is silent and costs nothing."""
+    return len(SPOKEN_WORD_RE.findall(text))
+
+
+def chain_has_input_labels(coded, index, end_index):
+    """Whether `.accessibilityInputLabels(` sits in the modifier chain of the label at `index`.
+
+    The chain is read the way A1 reads it: from the label's own line(s), forward from the line its
+    call closes on, and — when the label line itself continues a chain — backward, one modifier at
+    a time, each walk stopping at the first line that does not begin with `.` and after at most
+    A9_CHAIN_STEPS modifiers. Input labels written before the label count: modifier order does
+    not matter to Voice Control."""
+    for j in range(index, end_index + 1):
+        if INPUT_LABELS_RE.search(coded[j][1]):
+            return True
+    for j in range(end_index + 1, min(end_index + 1 + A9_CHAIN_STEPS, len(coded))):
+        step = coded[j][1].strip()
+        if not step.startswith("."):
+            break
+        if INPUT_LABELS_RE.search(step):
+            return True
+    if not coded[index][1].strip().startswith("."):
+        return False
+    for j in range(index - 1, max(-1, index - 1 - A9_CHAIN_STEPS), -1):
+        step = coded[j][1].strip()
+        if not step.startswith("."):
+            break
+        if INPUT_LABELS_RE.search(step):
+            return True
+    return False
+
+
+def scan_input_labels(rel, coded):
+    """A9: a literal label longer than A9_MAX_LABEL_WORDS spoken words with no input labels.
+
+    Two calls carry a spoken name: `.accessibilityLabel(` itself and `.fernletIconButton(`, the
+    FernletUI primitive forty icon-only buttons take their label from. Missing the second would
+    exempt exactly the controls that have no drawn text at all.
+
+    The words are counted over the call's RAW literals (the longest one, so a ternary is measured
+    by its longer branch) across a FIXED A9_CALL_LINES-line window, so a label wrapped as
+    `.accessibilityLabel(\\n "…"\\n)` is still read. Where the call closes is taken from the
+    code-only form, exactly as A1 takes it, so the chain walk starts on the right line. A hit
+    reports the line holding the longest literal rather than the `.accessibilityLabel(` line, so a
+    wrapped label's allowlist entry can name its words instead of a bare opening parenthesis."""
+    hits = []
+    for i, (_lineno, code, raw) in enumerate(coded):
+        m = SPOKEN_NAME_CALL_RE.search(code)
+        if m is None:
+            continue
+        head = SPOKEN_NAME_CALL_RE.search(raw)
+        if head is None:
+            continue
+        # `readlines()` keeps each line's own newline, so it is stripped before the join: the join
+        # is what makes one newline per code line, which is how a literal's offset maps to a line.
+        window = "\n".join(r.rstrip("\r\n") for _l, _c, r in coded[i:i + A9_CALL_LINES])
+        longest = (0, 0)
+        for text_, at in call_literals(window, head.start()):
+            words = spoken_words(text_)
+            if words > longest[0]:    # strictly greater: a tie keeps the FIRST literal, as the Swift port does
+                longest = (words, at)
+        if longest[0] <= A9_MAX_LABEL_WORDS:
+            continue
+        text, starts = joined(coded, i, A9_CALL_LINES)
+        bounds = call_bounds(text, m.start())
+        end_index = i + (line_of(starts, bounds[1]) if bounds else 0)
+        if chain_has_input_labels(coded, i, min(end_index, len(coded) - 1)):
+            continue
+        at = i + window.count("\n", 0, longest[1])
+        hits.append(hit("A9-INPUT-LABELS", rel, coded[at][0], coded[at][2],
+                        f"a {longest[0]}-word spoken name. " + A9_DETAIL))
+    return hits
+
+
 def scan_field_prompt(rel, coded):
     """A10: a `TextField(` / `SecureField(` call that passes no `prompt: .fieldPrompt(…)`.
 
@@ -833,6 +1000,7 @@ def scan_file(path, rel):
     hits.extend(scan_invert_colors(rel, coded))
     hits.extend(scan_ignore_on_button(rel, coded))
     hits.extend(scan_muted_slate(rel, coded))
+    hits.extend(scan_input_labels(rel, coded))
     hits.extend(scan_field_prompt(rel, coded))
     return hits
 
