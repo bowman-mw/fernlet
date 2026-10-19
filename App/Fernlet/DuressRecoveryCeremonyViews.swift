@@ -649,12 +649,12 @@ private struct DuressCeremonyPrimaryFlow: View {
     /// multi-step ceremony on a scrolling screen, and an auto-submitting pad would fire mid-scroll.
     private func credentialField(
         text: Binding<String>,
-        placeholder: String,
+        placeholder: LocalizedStringKey,
         identifier: String,
         submit: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            SecureField(placeholder, text: text, prompt: .fieldPrompt(verbatim: placeholder))
+            SecureField(placeholder, text: text, prompt: .fieldPrompt(placeholder))
                 .textContentType(.password)
                 .sheetTextInput()
                 .accessibilityIdentifier(identifier)

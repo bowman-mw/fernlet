@@ -860,7 +860,7 @@ private struct OnboardingDietaryPatternScreen: View {
         .accessibilityIdentifier("onboarding.diet")
     }
 
-    private func subtitle(for pattern: DietaryPattern) -> String {
+    private func subtitle(for pattern: DietaryPattern) -> LocalizedStringKey {
         switch pattern {
         case .balanced: "A flexible mix of meals and snacks."
         case .higherProtein: "More protein-forward ideas when useful."
@@ -876,8 +876,10 @@ private struct OnboardingDietaryPatternScreen: View {
 /// Used by ``OnboardingDietaryPatternScreen`` for its pattern choices; purely presentational, with
 /// selection state and the tap action owned by the caller.
 private struct OnboardingChoiceRow: View {
+    /// Stays `String`: the caller passes `DietaryPattern.label`, a domain display name, drawn
+    /// verbatim. That label is still English-only at its source; localizing it belongs there.
     var title: String
-    var subtitle: String
+    var subtitle: LocalizedStringKey
     var systemImage: String
     var isSelected: Bool
     var action: () -> Void

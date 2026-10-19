@@ -1018,10 +1018,7 @@ struct WorkoutSheet: View {
             incline: $draft.incline,
             details: $draft.details,
             resetToken: $draft.resetToken,
-            pickerTitle: logMode.pickerTitle,
-            searchPlaceholder: logMode.searchPlaceholder,
             mode: logMode,
-            addLabel: logMode.addLabel,
             historyStore: store,
             onAdd: addDraftExercise
         )
@@ -1072,11 +1069,22 @@ struct WorkoutSheet: View {
     }
 
     /// The name field is optional: the placeholder shows the name that will actually be saved.
+    ///
+    /// A resolved `String`, not a key, because two of its three answers are already final text: the
+    /// activity type's `displayName` and the name inferred from the exercises the user added. The
+    /// two authored fallbacks go through `String(localized:)`, so they reach the catalog instead of
+    /// riding the field's verbatim overload in English.
     private var namePlaceholder: String {
         if logMode == .activity {
-            return selectedActivityType?.displayName ?? "Optional, e.g. Saturday ride"
+            return selectedActivityType?.displayName
+                ?? String(localized: "move.workoutName.placeholder.activity",
+                          defaultValue: "Optional, e.g. Saturday ride",
+                          comment: "Placeholder in the optional workout-name field before an activity is chosen. Names an example activity.")
         }
-        return inferredStrengthName.isEmpty ? "Optional, e.g. Upper strength" : inferredStrengthName
+        guard inferredStrengthName.isEmpty else { return inferredStrengthName }
+        return String(localized: "move.workoutName.placeholder.strength",
+                      defaultValue: "Optional, e.g. Upper strength",
+                      comment: "Placeholder in the optional workout-name field before any exercise is added. Names an example strength session.")
     }
 
     /// Whether there is anything for the category preview to be derived FROM. Before an exercise or
@@ -3002,10 +3010,13 @@ struct WorkoutExerciseBuilder: View {
     @Binding var incline: String
     @Binding var details: String
     @Binding var resetToken: Int
-    var pickerTitle = "Exercise"
-    var searchPlaceholder = "Search exercise or muscle"
+    /// Catalog keys. Both sheets show the builder only while the Kind is strength, so they take these
+    /// defaults rather than forwarding `WorkoutMode`'s `pickerTitle`/`searchPlaceholder`/`addLabel`:
+    /// plain English `String`s in the domain module, which bound the verbatim overloads.
+    var pickerTitle: LocalizedStringKey = "Exercise"
+    var searchPlaceholder: LocalizedStringKey = "Search exercise or muscle"
     var mode: WorkoutMode = .strengthTraining
-    var addLabel = "Add exercise"
+    var addLabel: LocalizedStringKey = "Add exercise"
     var showAddButton = true
     /// Forwarded to ``ExerciseSearchPicker`` — see there.
     var autofocusSearch = false
@@ -3143,8 +3154,8 @@ struct ExerciseSearchPicker: View {
     @Binding var selectedExercise: ExerciseTarget?
     @Binding var resetToken: Int
     @State private var query = ""
-    var title = "Exercise"
-    var placeholder = "Search exercise or muscle"
+    var title: LocalizedStringKey = "Exercise"
+    var placeholder: LocalizedStringKey = "Search exercise or muscle"
     /// Puts the keyboard in the search field as the sheet opens. Only the speed-first Quick exercise
     /// sheet asks for it — a sheet with fields above the picker shouldn't yank focus past them.
     var autofocus = false
@@ -3219,14 +3230,12 @@ struct ExerciseSearchPicker: View {
     }
 
     var body: some View {
-        // `verbatim:` — `title` is a `String` fed from a domain enum's picker title, so it arrives
-        // already resolved rather than as authored copy written here.
-        SheetField(verbatim: title) {
+        SheetField(title) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(Color.slate)
-                    TextField(placeholder, text: $query, prompt: .fieldPrompt(verbatim: placeholder))
+                    TextField(placeholder, text: $query, prompt: .fieldPrompt(placeholder))
                         .textInputAutocapitalization(.words)
                         .autocorrectionDisabled(false)
                         .focused($searchFocused)
@@ -3412,7 +3421,7 @@ struct EditablePlannedExerciseRow: View {
     }
 
     private func editableField(
-        _ label: String,
+        _ label: LocalizedStringKey,
         text: Binding<String>,
         keyboard: UIKeyboardType = .default
     ) -> some View {
@@ -3420,7 +3429,7 @@ struct EditablePlannedExerciseRow: View {
             Text(label)
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
-            TextField(label, text: text, prompt: .fieldPrompt(verbatim: label))
+            TextField(label, text: text, prompt: .fieldPrompt(label))
                 .keyboardType(keyboard)
                 // Tabular DM Sans for the numeric fields, per the shared field idiom.
                 .sheetTextInput(font: keyboard == .default ? nil : .fernlet(.label))
@@ -4298,11 +4307,21 @@ struct WorkoutPlanSheet: View {
     }
 
     /// The name field is optional — the placeholder shows the name the plan will actually take.
+    ///
+    /// A resolved `String` for the same reason as ``WorkoutSheet``'s: the activity type's
+    /// `displayName` is already final text. The authored lines go through `String(localized:)`,
+    /// the split one with the split's localized title as its argument, so " workout" is no longer
+    /// English glued on in Swift.
     private var plannedNamePlaceholder: String {
         if logMode == .activity {
-            return selectedActivityType?.displayName ?? "Optional, e.g. Saturday ride"
+            return selectedActivityType?.displayName
+                ?? String(localized: "move.workoutName.placeholder.activity",
+                          defaultValue: "Optional, e.g. Saturday ride",
+                          comment: "Placeholder in the optional workout-name field before an activity is chosen. Names an example activity.")
         }
-        return "\(split.title) workout"
+        return String(localized: "move.plannedName.placeholder.split",
+                      defaultValue: "\(split.title) workout",
+                      comment: "Placeholder in the plan sheet's optional name field: the name the plan takes if left blank. The argument is the split's name, e.g. 'Upper' or 'Full Body'.")
     }
 
     private var exerciseText: String {
@@ -4430,10 +4449,7 @@ struct WorkoutPlanSheet: View {
             incline: $draft.incline,
             details: $draft.details,
             resetToken: $draft.resetToken,
-            pickerTitle: logMode.pickerTitle,
-            searchPlaceholder: logMode.searchPlaceholder,
             mode: logMode,
-            addLabel: logMode.addLabel,
             historyStore: store,
             onAdd: addDraftExercise
         )
