@@ -977,13 +977,17 @@ private struct RecipeImportSheet: View {
         // page's explicit "Re-import from source" affordance.
         if let existing = store.savedRecipe(matchingSourceURL: url) {
             existingRecipe = existing
-            notice = "\u{201C}\(existing.name)\u{201D} was already imported from this page."
+            notice = String(localized: "recipeImport.notice.alreadyImported",
+                            defaultValue: "\u{201C}\(existing.name)\u{201D} was already imported from this page.",
+                            comment: "Shown on the recipe import screen when the pasted link was imported before, so nothing is fetched and the saved recipe is offered instead. The placeholder is that saved recipe's name, kept in curly quotes.")
             return
         }
         existingRecipe = nil
 
         isImportingURL = true
-        notice = "Fetching recipe..."
+        notice = String(localized: "recipeImport.notice.fetching",
+                        defaultValue: "Fetching recipe...",
+                        comment: "Shown on the recipe import screen while the pasted recipe link is being fetched from the web.")
 
         Task {
             do {
@@ -995,7 +999,9 @@ private struct RecipeImportSheet: View {
                 // a slow image host never delays the import feedback — and an image failure never
                 // fails the import (the store marks the one attempt either way).
                 Task { await store.fetchRecipeWebImageIfNeeded(for: recipe) }
-                notice = "\(importedRecipe.name) added to your recipes."
+                notice = String(localized: "recipeImport.notice.added",
+                                defaultValue: "\(importedRecipe.name) added to your recipes.",
+                                comment: "Shown on the recipe import screen for a moment after a pasted link imported, just before the screen closes. The placeholder is the imported recipe's name.")
                 isImportingURL = false
                 do {
                     // A beat so the "added to your recipes" line can be read before the sheet goes.
@@ -1032,7 +1038,9 @@ private struct RecipeImportSheet: View {
             }
         }
         #else
-        notice = "Pasteboard recipe import is available on iOS."
+        notice = String(localized: "recipeImport.notice.iOSOnly",
+                        defaultValue: "Pasteboard recipe import is available on iOS.",
+                        comment: "Shown on the recipe import screen on a platform without a pasteboard to read a recipe link from. The app ships on iPhone only, so this is a fallback.")
         #endif
     }
 }
@@ -2807,7 +2815,7 @@ struct MealSheet: View {
         case .productPageImport:
             FoodProductPageImportView(store: store) { product in
                 description = product.name
-                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                notice = Self.productSavedNotice(product.name)
                 path.removeLast()
             }
         case .productSearch(let query):
@@ -2822,7 +2830,7 @@ struct MealSheet: View {
                 }
             ) { product in
                 description = product.name
-                notice = "\(product.name) was saved. Review the meal description, then save your meal."
+                notice = Self.productSavedNotice(product.name)
                 path.removeLast()
             }
         }
@@ -2955,7 +2963,7 @@ struct MealSheet: View {
         } else {
             // Same disarm as the direct resolve path: the meal is in, only the photo failed.
             didLogMeal = true
-            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+            notice = Self.photoNotSavedNotice
         }
     }
 
@@ -3360,6 +3368,23 @@ struct MealSheet: View {
         #endif
     }
 
+    /// The notice when a meal logged but its photo could not be sealed. Four commit paths reach it
+    /// (direct resolve, the review sheet, hand-entered macros and a picked catalog food), so the
+    /// sentence and its key live here once.
+    private static var photoNotSavedNotice: String {
+        String(localized: "mealSheet.notice.photoNotSaved",
+               defaultValue: "Your meal is logged, but its photo couldn't be saved to your private store.",
+               comment: "Shown on the meal sheet when the meal was logged but its photo could not be saved. The sheet stays open so this is read; saving again does not log the meal twice.")
+    }
+
+    /// The notice when a product page import saved a packaged food and filled the meal description
+    /// with its name. Both product-page routes (a pasted page and a web search) land here.
+    private static func productSavedNotice(_ productName: String) -> String {
+        String(localized: "mealSheet.notice.productSaved",
+               defaultValue: "\(productName) was saved. Review the meal description, then save your meal.",
+               comment: "Shown on the meal sheet after a packaged food was imported from a web product page and its name was put in the meal description. The placeholder is the product's name.")
+    }
+
     /// The Save bar's action, then the cached-product / web-search / typed-resolve cascade. Also
     /// reached by a Return press in the description field, which is why the photo-failure guard
     /// stays here even though the save bar itself hides once `didLogMeal` is set.
@@ -3426,7 +3451,7 @@ struct MealSheet: View {
             dismiss()
         } else {
             didLogMeal = true
-            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+            notice = Self.photoNotSavedNotice
         }
     }
 
@@ -3444,7 +3469,7 @@ struct MealSheet: View {
             dismiss()
         } else {
             didLogMeal = true
-            notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+            notice = Self.photoNotSavedNotice
         }
     }
 
@@ -3494,7 +3519,7 @@ struct MealSheet: View {
                 // notice is seen rather than the photo silently vanishing — but disarm Save so the
                 // notice can't be answered with a second tap that logs the meal again.
                 didLogMeal = true
-                notice = "Your meal is logged, but its photo couldn't be saved to your private store."
+                notice = Self.photoNotSavedNotice
             }
         }
     }
@@ -3578,7 +3603,9 @@ struct MealSheet: View {
             case .aiOff:
                 break
             case .nothingRecognized:
-                notice = "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?"
+                notice = String(localized: "mealSheet.notice.photoNotRecognized",
+                                defaultValue: "Fernlet couldn't quite tell what's in this photo — want to type what you ate instead?",
+                                comment: "Shown on the meal sheet when Identify from photo found nothing food-like in the picture. It invites typing the meal instead.")
             case .resolved(let described, let resolution):
                 description = described
                 reviewContext = MealReviewContext(resolution: resolution, photo: photo, photoData: capturedPhotoData)
@@ -3647,7 +3674,9 @@ struct MealSheet: View {
             if let payload, payload.isEmpty == false {
                 path.append(.captureBarcode(payload))
             } else {
-                captureError = "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead."
+                captureError = String(localized: "mealSheet.capture.noBarcode",
+                                      defaultValue: "Fernlet couldn't spot a barcode in that photo. Steady hands and a little more light usually does it — or type it instead.",
+                                      comment: "Shown in the meal sheet's capture banner, above a Try again button, when the person chose Look up the barcode but no barcode was found in the photo.")
             }
         }
     }
@@ -3667,7 +3696,9 @@ struct MealSheet: View {
             if let parsed {
                 path.append(.captureLabel(parsed))
             } else {
-                captureError = "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead."
+                captureError = String(localized: "mealSheet.capture.labelUnreadable",
+                                      defaultValue: "Fernlet couldn't read that label. Steady hands and a little more light usually does it — or type it instead.",
+                                      comment: "Shown in the meal sheet's capture banner, above a Try again button, when the person chose Read the label but no nutrition label could be read from the photo.")
             }
         }
     }
@@ -4014,8 +4045,12 @@ private struct FoodProductPageImportView: View {
     /// mode…") was a double negative naming a mode by a label the user may never have seen.
     private var webNutritionLookupDisabledMessage: String {
         store.settings.aiStatus == .off
-            ? "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web."
-            : "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web."
+            ? String(localized: "productImport.notice.webLookupOffWithAI",
+                     defaultValue: "Web nutrition lookup is off. Turn on AI features and Web nutrition lookup in Settings to search the web.",
+                     comment: "Shown on the product search screen when web lookup is off and AI features are off too. 'Web nutrition lookup' is the name of a switch in Settings › AI & data sources; translate it as that switch is translated.")
+            : String(localized: "productImport.notice.webLookupOff",
+                     defaultValue: "Web nutrition lookup is off. Turn on Web nutrition lookup in Settings to search the web.",
+                     comment: "Shown on the product search screen when web lookup is off but AI features are on. 'Web nutrition lookup' is the name of a switch in Settings › AI & data sources; translate it as that switch is translated.")
     }
 
     /// Records the web-nutrition lookup at DISPATCH with a provisional `.fellBack` outcome and returns the
@@ -5453,11 +5488,17 @@ private struct MealReviewSheet: View {
     private var reviewMessage: String {
         switch confidence {
         case .low:
-            return "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it."
+            return String(localized: "mealReview.message.lowConfidence",
+                          defaultValue: "Fernlet wasn't sure this matched what you ate, so it's a rough estimate. Adjust anything that looks off, then log it.",
+                          comment: "Shown at the top of the pre-log meal review when the match for what the person typed or photographed is low-confidence.")
         default:
             return unmatchedItems.isEmpty
-                ? "Double-check the items below before logging."
-                : "Fernlet matched part of what you typed. Check what's here before logging."
+                ? String(localized: "mealReview.message.checkItems",
+                         defaultValue: "Double-check the items below before logging.",
+                         comment: "Shown at the top of the pre-log meal review when every typed item was matched but the result still needs a look.")
+                : String(localized: "mealReview.message.partialMatch",
+                         defaultValue: "Fernlet matched part of what you typed. Check what's here before logging.",
+                         comment: "Shown at the top of the pre-log meal review when some of the typed words matched nothing; those words are listed below it.")
         }
     }
 }
@@ -5825,6 +5866,22 @@ struct RecipeDetailView: View {
         }
     }
 
+    /// The photo line when a picked or captured photo could not be sealed. Both pickers' failure
+    /// callbacks and both save paths say it, so the sentence and its key live here once.
+    private static var photoNotSavedNotice: String {
+        String(localized: "recipeDetail.photo.notSaved",
+               defaultValue: "Couldn't save this photo to your private store. Please try again.",
+               comment: "Shown under a recipe's photo when a new photo for the recipe could not be saved. Nothing changed, so trying again is safe.")
+    }
+
+    /// Stands in for the source link's host name when the link has none, inside the re-import
+    /// confirmation and the re-import lines.
+    private static var sourcePageFallback: String {
+        String(localized: "recipeDetail.reimport.sourcePage",
+               defaultValue: "the source page",
+               comment: "Stands in for a website's name when an imported recipe's source link has no host, inside sentences such as 'Re-import from %@?' and 'Refreshing from %@...'. Lowercase because it sits mid-sentence.")
+    }
+
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(recipe.name)
@@ -5933,7 +5990,7 @@ struct RecipeDetailView: View {
                     PhotoCaptureControl(
                         onCameraCapture: { save($0) },
                         onLibraryPickData: { data, _ in saveLibraryData(data) },
-                        onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
+                        onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
                         allowsLibraryChoice: true
                     ) {
                         photoIconChip("camera.fill")
@@ -5949,7 +6006,7 @@ struct RecipeDetailView: View {
             PhotoCaptureControl(
                 onCameraCapture: { save($0) },
                 onLibraryPickData: { data, _ in saveLibraryData(data) },
-                onLibraryPickFailed: { photoNotice = "Couldn't save this photo to your private store. Please try again." },
+                onLibraryPickFailed: { photoNotice = Self.photoNotSavedNotice },
                 allowsLibraryChoice: true
             ) {
                 HStack(spacing: 10) {
@@ -6330,7 +6387,7 @@ struct RecipeDetailView: View {
         // when it actually sealed to disk — otherwise a false success would show it, then it would vanish
         // on next open when the store read finds nothing.
         guard store.saveRecipePhoto(image, for: recipe.id) else {
-            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            photoNotice = Self.photoNotSavedNotice
             return
         }
         photo = image
@@ -6341,7 +6398,7 @@ struct RecipeDetailView: View {
     /// then show the just-sealed (≤1600px) bytes rather than re-decoding the full-resolution original.
     private func saveLibraryData(_ data: Data) {
         guard store.saveRecipePhoto(data: data, for: recipe.id) else {
-            photoNotice = "Couldn't save this photo to your private store. Please try again."
+            photoNotice = Self.photoNotSavedNotice
             return
         }
         photoNotice = nil
@@ -6358,7 +6415,7 @@ struct RecipeDetailView: View {
     /// it replaces the imported ingredients/macros on screen, which is why it routes through the
     /// shared destructive-confirmation affordance rather than firing on a bare tap.
     private func confirmReimportFromSource() {
-        let host = recipe.webImport?.sourceURL?.host() ?? "the source page"
+        let host = recipe.webImport?.sourceURL?.host() ?? Self.sourcePageFallback
         pendingDestructiveAction = DestructiveConfirmation(
             title: "Re-import from \(host)?",
             message: "Fernlet will contact \(host) and replace this recipe's imported ingredients and nutrition with whatever the page says now. Your photo and notes are kept.",
@@ -6377,14 +6434,18 @@ struct RecipeDetailView: View {
     /// picture gets a fresh download while the user is right here.
     private func reimportFromSource() {
         let current = recipe
-        let host = current.webImport?.sourceURL?.host() ?? "the source page"
+        let host = current.webImport?.sourceURL?.host() ?? Self.sourcePageFallback
         isReimporting = true
-        reimportNotice = "Refreshing from \(host)..."
+        reimportNotice = String(localized: "recipeDetail.reimport.refreshing",
+                                defaultValue: "Refreshing from \(host)...",
+                                comment: "Shown on a recipe while it is being re-imported from its source web page. The placeholder is the website's host name, for example www.example.com.")
         Task {
             do {
                 if let refreshed = try await store.reimportSavedRecipeFromSource(current) {
                     reimportedRecipe = refreshed
-                    reimportNotice = "Refreshed from \(host). Your photo and notes are kept."
+                    reimportNotice = String(localized: "recipeDetail.reimport.refreshed",
+                                            defaultValue: "Refreshed from \(host). Your photo and notes are kept.",
+                                            comment: "Shown on a recipe after its ingredients and nutrition were replaced with what its source web page says now. The placeholder is the website's host name.")
                     // The refresh re-armed the web-image attempt: if the recipe still has no
                     // picture, fetch it now (same post-pick screen guard as the first-open path).
                     if photo == nil, let fetched = await store.fetchRecipeWebImageIfNeeded(for: refreshed) {
@@ -6392,7 +6453,9 @@ struct RecipeDetailView: View {
                         if photo == nil { photo = prepared }
                     }
                 } else {
-                    reimportNotice = "This recipe was deleted, so there's nothing to refresh."
+                    reimportNotice = String(localized: "recipeDetail.reimport.recipeDeleted",
+                                            defaultValue: "This recipe was deleted, so there's nothing to refresh.",
+                                            comment: "Shown on a recipe when it was deleted while its re-import from the source web page was still running, so nothing was refreshed.")
                 }
             } catch {
                 reimportNotice = (error as? LocalizedError)?.errorDescription
@@ -6937,7 +7000,9 @@ struct RecipeBookSheet: View {
     /// same update but driving nothing but text.
     private func finishCreation(named recipeName: String) {
         isCreatingRecipe = false
-        createdNotice = "\u{201C}\(recipeName)\u{201D} added to your recipes."
+        createdNotice = String(localized: "recipeBook.notice.added",
+                               defaultValue: "\u{201C}\(recipeName)\u{201D} added to your recipes.",
+                               comment: "Shown in the recipe book for a few seconds after a recipe was created, whether it was typed in, pasted as recipe data or imported from a web page. The placeholder is the new recipe's name, kept in curly quotes.")
         // The line appears with no focus change while the pop moves VoiceOver's cursor, so the
         // landing is spoken once the pop has settled. An unstructured Task, as the sheet-closing
         // confirmations use, so nothing about this update cancels it. This is the one confirmation
