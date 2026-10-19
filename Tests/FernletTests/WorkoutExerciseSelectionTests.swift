@@ -25,15 +25,17 @@ struct WorkoutExerciseSelectionTests {
         at location: WorkoutLocation,
         experience: ExperienceLevel,
         goal: GoalType = .strength
-    ) -> (picked: [String], dropped: [String]) {
+    ) -> (picked: [String], activation: [String], dropped: [String]) {
         let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced,
                                   goalFit: [goal], days: [WorkoutSplitDay(title: "Day", sessions: [session])])
         let plan = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: experience),
             location: location, context: "", split: split, rotationIndex: 0
         )
-        let picked = plan.sessions.flatMap(\.exercises).filter(\.fromCatalog).map(\.name)
-        return (picked, plan.droppedSlots)
+        let exercises = plan.sessions.flatMap(\.exercises).filter(\.fromCatalog)
+        let picked = exercises.filter { $0.block == .lifting }.map(\.name)
+        let activation = exercises.filter { $0.block == .activation }.map(\.name)
+        return (picked, activation, plan.droppedSlots)
     }
 
     private func catalogExercise(_ name: String) -> ExerciseTarget? {
@@ -95,11 +97,12 @@ struct WorkoutExerciseSelectionTests {
     }
 
     /// Core slots no longer all go to "Medicine ball slam": it is a power move that needs a
-    /// medicine ball. A full gym gets an anti-rotation press; bare floor gets a dead bug.
+    /// medicine ball. A full gym gets an anti-rotation press; bare floor gets a dead bug. The core
+    /// pick now runs in the activation block, ahead of the lifting.
     @Test func coreSlotsGetARealCoreExercise() {
-        let gym = names(WorkoutSessions.fullBodyA, at: .fullGym, experience: .intermediate).picked
+        let gym = names(WorkoutSessions.fullBodyA, at: .fullGym, experience: .intermediate).activation
         #expect(gym.contains("Pallof press"))
-        let floor = names(WorkoutSessions.fullBodyA, at: Self.park, experience: .beginner).picked
+        let floor = names(WorkoutSessions.fullBodyA, at: Self.park, experience: .beginner).activation
         #expect(floor.contains("Dead bug"))
         #expect(!(gym + floor).contains("Medicine ball slam"))
     }
@@ -127,8 +130,9 @@ struct WorkoutExerciseSelectionTests {
                 for experience in ExperienceLevel.allCases {
                     let result = names(session, at: location, experience: experience)
                     var remaining = result.picked[...]
+                    // Core slots run in the activation block; the lifting picks follow the rest in order.
                     for slot in session.slots.prefix(experience.maxSlotsPerDay)
-                    where !result.dropped.contains(slot.label) {
+                    where slot.role != .core && !result.dropped.contains(slot.label) {
                         guard let name = remaining.popFirst(), let exercise = catalogExercise(name) else {
                             Issue.record("\(session.title) @ \(location.name): no pick for \(slot.label)")
                             break
@@ -153,10 +157,13 @@ struct WorkoutExerciseSelectionTests {
         let cableRow = try #require(catalogExercise("Cable row"))
         let boxJump = try #require(catalogExercise("Box jump"))
         let plank = try #require(catalogExercise("Plank"))
+        let stretch = try #require(catalogExercise("Low lunge stretch"))
+        let lunge = WorkoutSlotSpec(label: "Lunge", role: .accessory, movement: .lunge, muscles: [.quads, .glutes])
         #expect(!WorkoutProgram.isEligible(abWheel, for: biceps))
         #expect(!WorkoutProgram.isEligible(cableRow, for: verticalPull))
         #expect(!WorkoutProgram.isEligible(boxJump, for: squat), "plyometrics are not squat-slot strength work")
-        #expect(!WorkoutProgram.isEligible(plank, for: core), "a hold cannot be prescribed in reps")
+        #expect(!WorkoutProgram.isEligible(stretch, for: lunge), "a stretch is not lunge-slot strength work")
+        #expect(WorkoutProgram.isEligible(plank, for: core), "a hold is prescribed as a hold, so it may fill a core slot")
         #expect(WorkoutProgram.isEligible(try #require(catalogExercise("Lat pulldown")), for: verticalPull))
     }
 

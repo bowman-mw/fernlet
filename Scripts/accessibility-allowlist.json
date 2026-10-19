@@ -217,12 +217,6 @@
  },
  {
   "rule": "A9-INPUT-LABELS",
-  "path": "App/Fernlet/GuidedWorkout.swift",
-  "line_contains": "\"Exercise \\(position) of \\(total)",
-  "reason": "Not actionable, so Voice Control never names it. This is the guided run's progress LINE, a `Text` (or its accessibility-size short form) with no gesture: it reports how far through the session the user is. The run's controls (Done set, Skip, End session) are separate buttons with their own names."
- },
- {
-  "rule": "A9-INPUT-LABELS",
   "path": "App/Fernlet/HomeView.swift",
   "line_contains": "\"Care score \\(Int(value * 100)) percent, with a little warmth from a friend\"",
   "reason": "Not actionable, so Voice Control never names it. `HealthBar` is a row of `RoundedRectangle` segments with no gesture or trait, drawn on Home's Today card and in the journal's day detail; the label reads the score to VoiceOver. Voice Control offers names and numbers only to things that can be activated, so this sentence is never one a user has to say."

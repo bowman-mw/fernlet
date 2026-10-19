@@ -66,5 +66,13 @@ nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
         var restEndsAt: Date?
         var exerciseIndex: Int
         var totalExercises: Int
+        /// The FIXED hold window of a timed step being worked (a stretch, a plank), paired like the
+        /// rest window so `Text(timerInterval:)` never inverts; both nil for a rep-counted set.
+        var holdStartsAt: Date? = nil
+        var holdEndsAt: Date? = nil
+        /// The step's session block (`GuidedWorkoutRunState.BlockToken`) and side ("left"/"right"),
+        /// as raw strings; nil for an untagged lifting step and a two-sided one.
+        var blockRaw: String? = nil
+        var sideRaw: String? = nil
     }
 }

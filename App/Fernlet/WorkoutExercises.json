@@ -1424,5 +1424,334 @@
     "requiredGear": [
       "weightBench"
     ]
+  },
+  {
+    "name": "Standing forward fold",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "lowerBack",
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "hinge",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Low lunge stretch",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "lunge",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Side lunge stretch",
+    "primaryMuscles": [
+      "adductors"
+    ],
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "lunge",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Lying hamstring stretch",
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Butterfly stretch",
+    "primaryMuscles": [
+      "adductors"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Cat-cow",
+    "primaryMuscles": [
+      "lowerBack"
+    ],
+    "secondaryMuscles": [
+      "upperBack",
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Downward dog",
+    "primaryMuscles": [
+      "hamstrings",
+      "calves"
+    ],
+    "secondaryMuscles": [
+      "lats",
+      "frontDelts"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Child's pose",
+    "primaryMuscles": [
+      "lats",
+      "lowerBack"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Standing quad stretch",
+    "primaryMuscles": [
+      "quads"
+    ],
+    "secondaryMuscles": [
+      "abductors"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Wide-leg forward fold",
+    "primaryMuscles": [
+      "hamstrings",
+      "adductors"
+    ],
+    "secondaryMuscles": [
+      "lowerBack"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "hinge",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Cross-body shoulder stretch",
+    "primaryMuscles": [
+      "rearDelts"
+    ],
+    "secondaryMuscles": [
+      "upperBack"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Overhead triceps stretch",
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "secondaryMuscles": [
+      "lats"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Figure-four stretch",
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "abductors"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Doorway chest stretch",
+    "primaryMuscles": [
+      "chest"
+    ],
+    "secondaryMuscles": [
+      "frontDelts"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds"
+  },
+  {
+    "name": "Calf stretch",
+    "primaryMuscles": [
+      "calves"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Thread the needle",
+    "primaryMuscles": [
+      "upperBack"
+    ],
+    "secondaryMuscles": [
+      "rearDelts",
+      "obliques"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "twist",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Supine twist",
+    "primaryMuscles": [
+      "obliques",
+      "lowerBack"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "twist",
+    "inputKind": "none",
+    "modality": "mobility",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Single-leg stance",
+    "primaryMuscles": [
+      "abductors"
+    ],
+    "secondaryMuscles": [
+      "calves",
+      "abs"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "none",
+    "modality": "balance",
+    "difficulty": 1,
+    "measure": "seconds",
+    "unilateral": true
+  },
+  {
+    "name": "Squat jump",
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "squat",
+    "inputKind": "none",
+    "modality": "power",
+    "difficulty": 2
+  },
+  {
+    "name": "Lateral band walk",
+    "primaryMuscles": [
+      "abductors",
+      "glutes"
+    ],
+    "secondaryMuscles": [],
+    "equipment": "band",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1
+  },
+  {
+    "name": "Clamshell",
+    "primaryMuscles": [
+      "abductors"
+    ],
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "equipment": "bodyweight",
+    "movementPattern": "isolation",
+    "inputKind": "strength",
+    "difficulty": 1,
+    "unilateral": true
   }
 ]

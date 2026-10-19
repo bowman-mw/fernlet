@@ -1017,9 +1017,9 @@ public nonisolated enum ExerciseDifficulty: Int, Codable, CaseIterable, Comparab
 
 /// Whether a set of an exercise is counted in repetitions or held for time.
 ///
-/// A plank or a farmer's carry is `.seconds`: prescribing it "12–15 reps" is meaningless, so the
-/// rep-based slot planner leaves `.seconds` rows out. FROZEN tokens; a row without the key is
-/// `.reps`.
+/// A plank, a farmer's carry or a stretch is `.seconds`: prescribing it "12–15 reps" is
+/// meaningless, so the planner prescribes it as a hold (`PrescribedExercise.holdSeconds`) and the
+/// guided runner counts it down. FROZEN tokens; a row without the key is `.reps`.
 public nonisolated enum ExerciseMeasure: String, Codable, Sendable {
     case reps
     case seconds
@@ -1033,7 +1033,7 @@ public nonisolated enum ExerciseMeasure: String, Codable, Sendable {
 /// `MuscleGroup.fromLegacyString` into `primaryMuscles`.
 ///
 /// The curation fields (`plane`, `modality`, `difficulty`, `measure`, `alternativeEquipment`,
-/// `requiredGear`) are written by the bundled catalog. A custom row (coach-plan import) keeps
+/// `requiredGear`, `unilateral`) are written by the bundled catalog. A custom row (coach-plan import) keeps
 /// their defaults, and `encode(to:)` writes each one only when it differs from its default, so a
 /// synced custom row's persisted shape is unchanged and an older build never meets the new keys.
 /// They decode through raw strings/ints, so an unknown token from a newer catalog falls back to the
@@ -1065,7 +1065,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     public var modality: ExerciseModality
     /// Skill demand, used to steer beginners and to break score ties toward the simpler move.
     public var difficulty: ExerciseDifficulty
-    /// Reps or seconds — `.seconds` rows stay out of rep-based slots.
+    /// Reps or seconds — a `.seconds` row is prescribed as a timed hold.
     public var measure: ExerciseMeasure
     /// Other tools the same movement works with (a goblet squat takes a dumbbell or a
     /// kettlebell). Any one of `equipment` or these makes the exercise doable.
@@ -1074,6 +1074,9 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     /// bench). Every one must be checked at the location — on top of the coarse capability, which
     /// alone cannot tell a pull-up bar from bare floor.
     public var requiredGear: [GymEquipment]
+    /// Done one side at a time (a lunge stretch, a single-leg stance): the warm-up and cool-down
+    /// prescribe it twice, left then right.
+    public var unilateral: Bool
 
     public var bodyRegion: BodyRegion {
         let regions = Set(primaryMuscles.map { $0.region })
@@ -1132,7 +1135,8 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         difficulty: ExerciseDifficulty = .standard,
         measure: ExerciseMeasure = .reps,
         alternativeEquipment: [Equipment] = [],
-        requiredGear: [GymEquipment] = []
+        requiredGear: [GymEquipment] = [],
+        unilateral: Bool = false
     ) {
         self.name = name
         self.primaryMuscles = primaryMuscles
@@ -1146,6 +1150,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         self.measure = measure
         self.alternativeEquipment = alternativeEquipment
         self.requiredGear = requiredGear
+        self.unilateral = unilateral
     }
 
     public init(from decoder: Decoder) throws {
@@ -1177,6 +1182,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         alternativeEquipment = alternatives.compactMap(Equipment.init(rawValue:))
         let gear = try container.decodeIfPresent([String].self, forKey: .requiredGear) ?? []
         requiredGear = gear.compactMap(GymEquipment.init(rawValue:))
+        unilateral = try container.decodeIfPresent(Bool.self, forKey: .unilateral) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1194,6 +1200,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
         if measure != .reps { try container.encode(measure, forKey: .measure) }
         if !alternativeEquipment.isEmpty { try container.encode(alternativeEquipment, forKey: .alternativeEquipment) }
         if !requiredGear.isEmpty { try container.encode(requiredGear, forKey: .requiredGear) }
+        if unilateral { try container.encode(unilateral, forKey: .unilateral) }
     }
 
     /// Persisted JSON keys for an ``ExerciseTarget`` catalog row (`id` is derived from `name`, so
@@ -1202,7 +1209,7 @@ public nonisolated struct ExerciseTarget: Identifiable, Codable, Equatable, Send
     /// `legacyMuscles` maps the old `muscles` string-array key so pre-split rows still decode.
     private enum CodingKeys: String, CodingKey {
         case name, primaryMuscles, secondaryMuscles, equipment, movementPattern, inputKind
-        case plane, modality, difficulty, measure, alternativeEquipment, requiredGear
+        case plane, modality, difficulty, measure, alternativeEquipment, requiredGear, unilateral
         case legacyMuscles = "muscles"
     }
 }

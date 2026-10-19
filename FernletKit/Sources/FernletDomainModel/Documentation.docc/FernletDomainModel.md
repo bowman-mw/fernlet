@@ -491,6 +491,17 @@ fallbacks), and an ``ExerciseDifficulty`` fit; only then does the name break a t
 required gear (a pull-up bar, a bench). The split advances by the last logged split day
 (`WorkoutProgram.nextDayIndex(in:recentSessionNames:)`), not by weekday.
 
+A lifting session runs in ``SessionBlock`` order — the owner's layout (2026-10-19): the warm-up
+stretch flow (``WorkoutSessionBlocks/warmUpFlow``, 20–30 s holds), activation (the template's core
+slot, prescribed light, plus a single-leg balance hold and, for a trained lifter's leg day, 2 × 4
+squat jumps), the lifting, any cardio after it, and a cool-down of 45 s holds chosen to cover the
+muscles the lifting worked. Every step is a catalog row through the same safety filter. A timed
+movement carries `PrescribedExercise.holdSeconds` (its `reps` is the same duration as text, "40 s");
+a one-sided step carries `side`. Only the lifting block progresses
+(`SessionSuggestion.catalogExerciseNames`), an AI adjustment replaces only the lifting block, and
+the plan text a log records summarizes the warm-up and cool-down in one line each
+(``WorkoutSessionBlocks/planText(for:)``).
+
 - ``WorkoutProfile``
 - ``ExperienceLevel``
 - ``WorkoutLocation``
@@ -513,6 +524,9 @@ required gear (a pull-up bar, a bench). The split advances by the last logged sp
 - ``WorkoutGoalStyle``
 - ``WorkoutProgram``
 - ``PrescribedExercise``
+- ``SessionBlock``
+- ``ExerciseSide``
+- ``WorkoutSessionBlocks``
 - ``WorkoutRestGuidance``
 
 ### Coach plans

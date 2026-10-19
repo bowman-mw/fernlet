@@ -234,9 +234,17 @@ final class VoiceOverTaskUITests: XCTestCase {
             if app.buttons["workout.guided.close"].exists { return }
             let skipExercise = app.buttons["workout.guided.skipExercise"].firstMatch
             let skipRest = app.buttons["workout.guided.skipRest"].firstMatch
+            // The warm-up and cool-down are twenty-odd timed stretches; their quiet secondary skips
+            // the whole block (the cool-down skip finishes and logs), so the walk stays short.
+            let skipWarmUp = app.buttons["workout.guided.skipWarmUp"].firstMatch
+            let skipCoolDown = app.buttons["workout.guided.skipCoolDown"].firstMatch
             if skipRest.exists {
                 if !auditedResting { try walk.audit("Runner · resting"); auditedResting = true }
                 walk.activate(skipRest)
+            } else if skipWarmUp.exists {
+                walk.activate(skipWarmUp)
+            } else if skipCoolDown.exists {
+                walk.activate(skipCoolDown)
             } else if skipExercise.exists && skipExercise.isEnabled {
                 if !auditedWorking { try walk.audit("Runner · working"); auditedWorking = true }
                 walk.activate(skipExercise)

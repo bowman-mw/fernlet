@@ -184,7 +184,8 @@ final class WorkoutPlanningService {
             let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)
             do {
                 if let adjusted = try await FoundationWorkoutAdjustmentModel.adjust(
-                    payload, candidates: candidates, currentLines: session.exercises.map(\.line), gate: gate
+                    payload, candidates: candidates,
+                    currentLines: session.exercises.filter { $0.block == .lifting }.map(\.line), gate: gate
                 ) {
                     sessions[index] = WorkoutProgram.applyAdjustment(to: session, exercises: adjusted)
                 }
