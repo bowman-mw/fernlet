@@ -213,6 +213,8 @@ struct GuidedWorkoutSheet: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("End session")
+        // Voice Control: the button draws only an X, which people name "Close".
+        .accessibilityInputLabels([Text("End session"), Text("Close")])
         .accessibilityIdentifier("workout.guided.end")
     }
 
@@ -564,6 +566,8 @@ struct GuidedWorkoutSheet: View {
         // runner that also skips *rests* names nothing. The shortened text is the design decision;
         // the spoken name stays the whole one at every text size.
         .accessibilityLabel("Skip to next exercise")
+        // Voice Control: both drawn forms ("Skip" at accessibility sizes), plus a short one.
+        .accessibilityInputLabels([Text("Skip to next exercise"), Text("Skip exercise"), Text("Skip")])
         .accessibilityIdentifier("workout.guided.skipExercise")
     }
 

@@ -47,10 +47,14 @@ struct CompanionFeelingsSettingsCard: View {
             DatePicker("Bedtime", selection: Self.clockBinding($bedtimeMinute), displayedComponents: .hourAndMinute)
                 .font(.fernlet(.label))
                 .accessibilityIdentifier("settings.companionFeelings.bedtime")
+                // Voice Control: the compact picker reports no name of its own (measured: an empty
+                // label), so without this the time could only be reached by number.
+                .accessibilityInputLabels([Text("Bedtime")])
                 .id(dynamicTypeSize)
             DatePicker("Wake-up", selection: Self.clockBinding($wakeMinute), displayedComponents: .hourAndMinute)
                 .font(.fernlet(.label))
                 .accessibilityIdentifier("settings.companionFeelings.wake")
+                .accessibilityInputLabels([Text("Wake-up"), Text("Wake")])
                 .id(dynamicTypeSize)
             Text("Your companion gets sleepy at bedtime and wakes with you. It never mentions food or water in the last hour and a half before bed.")
                 .font(.fernlet(.bodySmall))

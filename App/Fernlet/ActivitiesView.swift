@@ -273,6 +273,8 @@ struct ActivitiesView: View {
                         }
                         .buttonStyle(.plain)
                         .fernletIconButton("Remove \(memberName) from this activity")
+                        // Voice Control: the row already says which activity; the name says who.
+                        .accessibilityInputLabels([Text("Remove \(memberName)")])
                     }
                 }
             }

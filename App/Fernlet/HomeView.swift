@@ -667,6 +667,8 @@ struct HomeView: View {
         }
         .accessibilityIdentifier("home.stressLine")
         .accessibilityLabel("Body signals — how Fernlet reads this")
+        // Voice Control: the chip's drawn title.
+        .accessibilityInputLabels([Text("Body signals")])
         .accessibilityHint("Explains how body signals are estimated")
     }
 
@@ -1323,6 +1325,7 @@ struct HomeView: View {
             noun: noun(for: item),
             state: stateText(for: item, short: dynamicTypeSize.isAccessibilitySize),
             accessibilityState: stateText(for: item, short: false),
+            spokenSynonym: spokenSynonym(for: item),
             systemImage: item.systemImage,
             active: isActive(item)
         ) {
@@ -1353,6 +1356,9 @@ struct HomeView: View {
                 // without a value of its own a double-tap here was followed by silence. VoiceOver
                 // re-reads a focused element's value when it changes.
                 .accessibilityValue(waterState(short: false))
+                // Voice Control: a bare plus glyph beside the Water tile, so the name has to say
+                // which plus — and stay apart from the tile's own "Water".
+                .accessibilityInputLabels([Text("Add water"), Text("Add bottle")])
                 .accessibilityIdentifier("home.water.quickAdd")
             }
         } else {
@@ -1373,6 +1379,23 @@ struct HomeView: View {
         case .care: Text("Care")
         case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
             Text(verbatim: item.title)
+        }
+    }
+
+    /// A second Voice Control name for a core tile, after its drawn noun. "Move" is also the tab
+    /// bar's name, so on Home "Tap Move" gets numbers; "Log workout" goes straight to the tile, and
+    /// the rest follow the same "Log …" form so the six are learnable as one set. Tool tiles keep
+    /// their drawn title alone.
+    private func spokenSynonym(for item: FernletShortcut) -> Text? {
+        switch item {
+        case .meal: Text("Log meal")
+        case .water: Text("Log water")
+        case .move: Text("Log workout")
+        case .sleep: Text("Log sleep")
+        case .journal: Text("Log journal")
+        case .care: Text("Log care")
+        case .logPeriod, .periodTracking, .intimacyTracking, .friends, .breathing, .grounding, .worryBox:
+            nil
         }
     }
 
@@ -2726,6 +2749,8 @@ struct QuickLogButton: View {
     /// The full (never AX-shortened) state read to VoiceOver, so every tile reads noun + state
     /// consistently regardless of text size.
     var accessibilityState: Text?
+    /// A second Voice Control name after the drawn noun ("Log meal"), or nil for the noun alone.
+    var spokenSynonym: Text? = nil
     var systemImage: String
     var active: Bool
     var action: () -> Void
@@ -2765,6 +2790,15 @@ struct QuickLogButton: View {
         // real one, so all six quick-log tiles would read "Meals, 3 logged" without ever saying
         // "button". `accessibilityLabelText` already replaces the noun/state the Button collapsed.
         .accessibilityLabel(accessibilityLabelText)
+        // Voice Control: the label carries the live state ("Meals, 3 logged"), so the name a user
+        // would have to say changes with every log. The drawn noun is the name that never moves.
+        .accessibilityInputLabels(spokenNames)
+    }
+
+    /// The tile's Voice Control names: the drawn noun first, then the synonym when there is one.
+    private var spokenNames: [Text] {
+        guard let spokenSynonym else { return [noun] }
+        return [noun, spokenSynonym]
     }
 
     /// Noun + full state, comma-joined — the one VoiceOver phrasing every tile shares (HOME-09).

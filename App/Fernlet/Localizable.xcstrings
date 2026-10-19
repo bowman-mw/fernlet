@@ -1169,6 +1169,9 @@
     "Add another part" : {
 
     },
+    "Add bottle" : {
+
+    },
     "Add by hand" : {
 
     },
@@ -1179,6 +1182,9 @@
 
     },
     "Add macros for this custom food." : {
+
+    },
+    "Add meal %@" : {
 
     },
     "Add personal details" : {
@@ -1211,7 +1217,13 @@
     "Add timer" : {
 
     },
+    "Add to %@" : {
+
+    },
     "Add to my plan" : {
+
+    },
+    "Add water" : {
 
     },
     "Add who was involved and any details you want to remember. This note stays encrypted on this device." : {
@@ -1241,6 +1253,9 @@
       "comment" : "Accessibility hint for Restore anyway on the intimate-log Sealed backup."
     },
     "Adjust" : {
+
+    },
+    "Adjust %@" : {
 
     },
     "Adjust meal" : {
@@ -1280,6 +1295,9 @@
 
     },
     "Allow web lookup" : {
+
+    },
+    "Already did this" : {
 
     },
     "Already did this — log it" : {
@@ -1648,6 +1666,9 @@
 
     },
     "Change how your companion looks" : {
+
+    },
+    "Change name" : {
 
     },
     "Change passcode" : {
@@ -2465,6 +2486,9 @@
     "Eggs eaten, against the 300 or so a hen lays in a year." : {
       "comment" : "Silly stat: how eggs are counted"
     },
+    "Email" : {
+
+    },
     "Email the developer" : {
 
     },
@@ -3182,6 +3206,9 @@
     "Health is turned off in Fernlet, but anything Fernlet wrote to Apple Health before that is still there, and Fernlet can still delete it — you don't have to turn Health back on. It can only ever delete its own; everything else in Apple Health is yours to delete in the Health app. If you've taken Fernlet's Health access away since, it will say so instead of claiming it's gone." : {
 
     },
+    "Heart %@" : {
+
+    },
     "Hearts" : {
 
     },
@@ -3195,6 +3222,9 @@
 
     },
     "Hearts travel in person for now — tap Send to turn on delivery while apart." : {
+
+    },
+    "Height" : {
 
     },
     "Hidden" : {
@@ -3660,10 +3690,19 @@
     "Log at least 3 cycles to see predictions." : {
 
     },
+    "Log care" : {
+
+    },
     "Log intimacy" : {
 
     },
+    "Log it" : {
+
+    },
     "Log it again" : {
+
+    },
+    "Log journal" : {
 
     },
     "Log meal" : {
@@ -3673,6 +3712,9 @@
 
     },
     "Log recipe as meal" : {
+
+    },
+    "Log sleep" : {
 
     },
     "Log this day" : {
@@ -3916,6 +3958,9 @@
 
     },
     "Moisturizer, meds, stretch..." : {
+
+    },
+    "Mood %@" : {
 
     },
     "Mood logged." : {
@@ -5321,6 +5366,9 @@
     "Reset" : {
 
     },
+    "Reset %@" : {
+
+    },
     "Reset app lock" : {
 
     },
@@ -5607,6 +5655,9 @@
 
     },
     "Sealed notes never leave this device. Samples live in Apple Health, under its protections." : {
+
+    },
+    "Search" : {
 
     },
     "Search again" : {
@@ -5931,6 +5982,9 @@
 
     },
     "Skip exact duplicate" : {
+
+    },
+    "Skip exercise" : {
 
     },
     "Skip for now" : {
@@ -6516,6 +6570,9 @@
     "This log stays on this device. It is never synced to iCloud, is kept out of your device backup, and is never part of a data export. “Delete everything” erases it." : {
 
     },
+    "This month" : {
+
+    },
     "This name can't be used in your shop. Rename it in the editor, then list it again. (Private items can be named anything.)" : {
 
     },
@@ -6671,6 +6728,9 @@
 
     },
     "Try tilting the product slightly to reduce glare." : {
+
+    },
+    "Tuck away" : {
 
     },
     "Tucked away." : {
@@ -6869,6 +6929,9 @@
 
     },
     "Waiting for another participant to second this decision." : {
+
+    },
+    "Wake" : {
 
     },
     "Wake-up" : {

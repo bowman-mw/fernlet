@@ -488,6 +488,8 @@ struct FriendsView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("friends.changeDisplayName")
             .accessibilityLabel("You appear as \(store.resolvedProximityDisplayName). Change the name friends see.")
+            // Voice Control: the row's drawn action word, not the two-sentence label.
+            .accessibilityInputLabels([Text("Change"), Text("Change name")])
         }
     }
 
@@ -529,6 +531,8 @@ struct FriendsView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("friends.friendShops")
                     .accessibilityLabel("Friend shops open, \(minutesLeft) minutes left")
+                    // Voice Control: the drawn title, without the countdown that changes by the minute.
+                    .accessibilityInputLabels([Text("Friend shops"), Text("Friend shops are open")])
                 }
             }
         }

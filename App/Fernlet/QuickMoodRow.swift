@@ -66,6 +66,9 @@ struct QuickMoodRow: View {
                     // On each chip, not the row: a hint on a `.contain` container is attached to
                     // no element VoiceOver lands on, so it was never spoken.
                     .accessibilityHint("One tap notes how today feels. No writing needed.")
+                    // Voice Control: the chip draws only the feeling's name, so "Tap Bright" has to
+                    // work on its own; "Mood Bright" keeps the label's own form sayable too.
+                    .accessibilityInputLabels([Text(verbatim: tag.label), Text("Mood \(tag.label)")])
                     .accessibilityIdentifier("quickMood.\(tag.rawValue)")
                 }
             }

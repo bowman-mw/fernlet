@@ -246,6 +246,8 @@ struct MonthCalendarCard<Cell: View, Footer: View>: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(title). Back to this month")
+            // Voice Control: "Today" is the word drawn under the month title.
+            .accessibilityInputLabels([Text("Today"), Text("This month")])
         }
     }
 }

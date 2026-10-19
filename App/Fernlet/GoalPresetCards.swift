@@ -77,6 +77,9 @@ private struct GoalPresetCard: View {
         // `.accessibilityElement(children: .combine)` here swallowed the identifier, so it's omitted.
         .accessibilityIdentifier("goalPreset.\(goal.rawValue)")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        // Voice Control: the card's name runs through its tagline and both summary lines; the goal
+        // name at its top is what a user says.
+        .accessibilityInputLabels([Text(verbatim: goal.displayName)])
     }
 
     private func summaryRow(icon: String, text: String) -> some View {

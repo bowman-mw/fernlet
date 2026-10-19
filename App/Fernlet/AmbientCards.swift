@@ -128,6 +128,8 @@ struct AmbientCardsView: View {
             .padding(.top, 22)
             .accessibilityIdentifier("home.receivedHeart")
             .accessibilityLabel("Good vibes from \(PresenceManager.firstName(of: heart.senderDisplayName, in: .fernlet)). Tap to tuck away.")
+            // Voice Control: the card draws "Good vibes" and "tap to tuck away"; either says it.
+            .accessibilityInputLabels([Text("Tuck away"), Text("Good vibes")])
         }
     }
 

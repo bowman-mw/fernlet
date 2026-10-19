@@ -101,6 +101,8 @@ struct SafetyReportingView: View {
                 }
                 .accessibilityIdentifier("safety.contactEmail")
                 .accessibilityLabel("Email the developer at \(Self.supportEmail)")
+                // Voice Control: the drawn text is an address nobody should have to dictate.
+                .accessibilityInputLabels([Text("Email"), Text("Email the developer"), Text("Contact")])
             }
         }
     }
