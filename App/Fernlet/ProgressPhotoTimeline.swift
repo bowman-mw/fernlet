@@ -719,6 +719,9 @@ struct ProgressPhotoDetailView: View {
                         Image(systemName: "figure.strengthtraining.traditional")
                             .font(.largeTitle.weight(.light))
                             .foregroundStyle(Color.slate)
+                            // Decorative placeholder while the photo decodes; unhidden, VoiceOver
+                            // would speak the symbol's name where the photo's date label will be.
+                            .accessibilityHidden(true)
                     }
             }
         }

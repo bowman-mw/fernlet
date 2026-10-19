@@ -1280,6 +1280,9 @@ struct HomeView: View {
                 Text("Quick log")
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
+                    // On the Headings rotor, so VoiceOver can jump down a long Home to the four
+                    // common tasks' starting points instead of swiping through every card above.
+                    .accessibilityAddTraits(.isHeader)
                 // Not lazy: a lazy grid tore down the tiles that larger text pushed off screen,
                 // and the audit read their vanished labels as fonts that ignore Dynamic Type.
                 EqualColumnGrid(columns: quickLogColumnCount, horizontalSpacing: 8, verticalSpacing: 8) {
@@ -1305,6 +1308,7 @@ struct HomeView: View {
                 Text("How today felt")
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
+                    .accessibilityAddTraits(.isHeader)
                 // One-tap mood check-in: a tag-only journal entry, no writing required. The card
                 // provides the name, so the row's own label stays off.
                 QuickMoodRow(store: store, showsLabel: false)
@@ -1344,6 +1348,10 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add a bottle of water")
+                // The count it changes is drawn on the tile beside it, a different element, so
+                // without a value of its own a double-tap here was followed by silence. VoiceOver
+                // re-reads a focused element's value when it changes.
+                .accessibilityValue(waterState(short: false))
                 .accessibilityIdentifier("home.water.quickAdd")
             }
         } else {

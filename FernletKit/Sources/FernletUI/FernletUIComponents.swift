@@ -852,6 +852,11 @@ public struct FernletDraftGuardModifier: ViewModifier {
         content
             .interactiveDismissDisabled(isDirty)
             .safeAreaInset(edge: .top, spacing: 0) { topInset }
+            // VoiceOver's escape (the two-finger scrub) does exactly what Cancel does. Without it
+            // the scrub on a dirty draft hit `interactiveDismissDisabled` and did nothing at all —
+            // no dismissal, no discard prompt, no sound — so the one gesture a VoiceOver user
+            // reaches for to leave a sheet was silently dead on every logging sheet with input.
+            .accessibilityAction(.escape) { cancelTapped() }
             .discardConfirmation(isPresented: $askingToDiscard, onDiscard: onDismiss)
     }
 

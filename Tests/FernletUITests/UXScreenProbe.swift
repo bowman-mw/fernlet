@@ -1438,8 +1438,12 @@ extension UXScreenProbe {
         // from this map entirely — the retired line was their only entry, so they are back to an
         // empty baseline and fail on their first new finding, which is where a clean screen
         // belongs. Same for `Sheet · Log intimacy` below.
+        // IDENTITY-KEY MIGRATION (2026-10-18): the display-name field gained the spoken name "Your
+        // name" for VoiceOver (it read its placeholder), so its unchanged clipped-text finding
+        // re-keys from `<no label>` under the SAME identifier — the disappearance and the
+        // appearance come in the same run. Not a new finding.
         "Onboarding · Personal details": [
-            "Text clipped — <no label> id=onboarding.displayName (49)",
+            "Text clipped — “Your name” id=onboarding.displayName (49)",
         ],
         "Settings · Core memory": [
             "Text clipped — <no label> (49)",

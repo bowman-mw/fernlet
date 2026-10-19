@@ -46,9 +46,15 @@ struct QuickMoodRow: View {
                 ForEach(FeelingTag.allCases) { tag in
                     let isCurrent = currentTag == tag
                     Button {
+                        let before = (count: store.day.journals.count, tag: store.day.journals.last?.tag)
                         withAnimation(.easeInOut(duration: 0.18)) {
                             store.logQuickMood(tag)
                         }
+                        // Spoken only when the store actually wrote: re-tapping today's check-in is
+                        // a no-op there, and an announcement for it would claim a log that did not
+                        // happen. A new entry or a re-tag is a write.
+                        let after = (count: store.day.journals.count, tag: store.day.journals.last?.tag)
+                        if after != before { TaskConfirmation.moodLogged.announce() }
                     } label: {
                         moodChipLabel(tag)
                     }
@@ -57,13 +63,15 @@ struct QuickMoodRow: View {
                     // from the style itself rather than a second, easy-to-drift call-site line.
                     .buttonStyle(ChipButtonStyle(selected: isCurrent))
                     .accessibilityLabel("Mood: \(tag.label)")
+                    // On each chip, not the row: a hint on a `.contain` container is attached to
+                    // no element VoiceOver lands on, so it was never spoken.
+                    .accessibilityHint("One tap notes how today feels. No writing needed.")
                     .accessibilityIdentifier("quickMood.\(tag.rawValue)")
                 }
             }
             .padding(.vertical, 1)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityHint("One tap notes how today feels. No writing needed.")
     }
 
     /// The chip's own content — the coloured dot plus the label — shared by every tag so Home and

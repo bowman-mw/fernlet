@@ -40,6 +40,16 @@
         }
       }
     },
+    "%@ %@, protein %@ grams, carbs %@ grams, fat %@ grams" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@, protein %3$@ grams, carbs %4$@ grams, fat %5$@ grams"
+          }
+        }
+      }
+    },
     "%@ %lld of %lld grams" : {
       "localizations" : {
         "en" : {
@@ -673,6 +683,12 @@
     "%lld meals logged" : {
 
     },
+    "%lld meals logged. Undo is at the bottom of the screen." : {
+
+    },
+    "%lld meals removed." : {
+
+    },
     "%lld min" : {
 
     },
@@ -1286,6 +1302,9 @@
       }
     },
     "Also include in trainer summaries" : {
+
+    },
+    "Amount of %@" : {
 
     },
     "Amounts written into the steps reflect the original %lld-serving recipe, not the %lld-serving scale above." : {
@@ -2351,6 +2370,9 @@
 
     },
     "Double tap to pet." : {
+
+    },
+    "Double-tap to type an amount." : {
 
     },
     "Drag to paint · pinch to zoom" : {
@@ -3436,6 +3458,9 @@
     "Journal entry" : {
 
     },
+    "Journal entry saved." : {
+
+    },
     "Journal memory summary" : {
 
     },
@@ -3794,6 +3819,9 @@
     "Meal breakdown" : {
 
     },
+    "Meal logged. Undo is at the bottom of the screen." : {
+
+    },
     "Meal micronutrient snapshots will appear here." : {
 
     },
@@ -3804,6 +3832,9 @@
 
     },
     "Meal planner" : {
+
+    },
+    "Meal removed." : {
 
     },
     "Meal type" : {
@@ -3885,6 +3916,9 @@
 
     },
     "Moisturizer, meds, stretch..." : {
+
+    },
+    "Mood logged." : {
 
     },
     "Mood: %@" : {
@@ -4000,6 +4034,19 @@
     },
     "Next cooking step" : {
 
+    },
+    "Next exercise: %@." : {
+
+    },
+    "Next exercise: %@. Set 1 of %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Next exercise: %1$@. Set 1 of %2$lld."
+          }
+        }
+      }
     },
     "Next month" : {
 
@@ -5320,6 +5367,9 @@
     "Rest skipped. Your next set is up." : {
 
     },
+    "Rest's over. Start your next set when you're ready." : {
+
+    },
     "Restarts the timer on the current cooking step." : {
 
     },
@@ -5705,10 +5755,23 @@
         }
       }
     },
+    "Set %lld of %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld of %2$lld."
+          }
+        }
+      }
+    },
     "Set a passcode" : {
 
     },
     "Set done. Resting now." : {
+
+    },
+    "Set done. Resting." : {
 
     },
     "Set done. Your next exercise is up." : {
@@ -6817,6 +6880,9 @@
     "Water" : {
 
     },
+    "Water today" : {
+
+    },
     "Water you've logged, at your bottle size." : {
       "comment" : "Silly stat: how water is counted"
     },
@@ -6971,7 +7037,13 @@
     "Workout exercises" : {
 
     },
+    "Workout finished and logged." : {
+
+    },
     "Workout in progress" : {
+
+    },
+    "Workout logged." : {
 
     },
     "Workout name (optional)" : {

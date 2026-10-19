@@ -329,6 +329,8 @@ struct JournalSheet: View {
             SheetSaveBar(disabled: text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                 store.addJournal(text: text, tag: tag)
                 dismiss()
+                // The event only — never the entry, which is sealed and would be spoken aloud.
+                Task { @MainActor in await TaskConfirmation.journalSaved.announceAfterSheetCloses() }
             }
         }
         .background(Color.parchment)
@@ -366,6 +368,8 @@ struct JournalSheet: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.goldenrod)
                         .padding(.top, 2)
+                        // Decorative: VoiceOver otherwise speaks the symbol before the prompt.
+                        .accessibilityHidden(true)
                     Text(prompt)
                         .font(.fernlet(.bubble))
                         .foregroundStyle(Color.bark)
@@ -553,6 +557,8 @@ struct JournalPromptNotificationView: View {
                 .foregroundStyle(Color.moss)
                 .frame(width: 30, height: 30)
                 .background(Color.moss.opacity(0.12), in: Circle())
+                // Decorative: the title beside it says what the banner is.
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.reason.title)
