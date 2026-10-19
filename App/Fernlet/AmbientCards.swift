@@ -355,19 +355,26 @@ struct AmbientCardsView: View {
         guard let lookbackStart = Calendar.current.date(byAdding: .day, value: -Self.forgottenWorkoutLookbackDays, to: Date()) else { return nil }
         let lookbackKey = FernletDate.dayKey(for: lookbackStart)
         var counts: [String: Int] = [:]
+        // Counted by the STORED name, drawn by `displayedName`: a blank-named activity is stored as
+        // its English default ("Pool Swim"), which the card would otherwise quote in English.
+        var shown: [String: String] = [:]
         var recent: Set<String> = []
         for (key, day) in days where key >= lookbackKey {
             for workout in day.workouts {
                 let name = workout.name.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { continue }
                 counts[name, default: 0] += 1
+                if shown[name] == nil {
+                    shown[name] = workout.displayedName.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
                 if key >= cutoffKey { recent.insert(name.lowercased()) }
             }
         }
         return counts
             .filter { $0.value >= 2 && !recent.contains($0.key.lowercased()) }
             .sorted { $0.value > $1.value }
-            .first?.key
+            .first
+            .map { shown[$0.key] ?? $0.key }
     }
 
     // MARK: - Weather-aware recovery

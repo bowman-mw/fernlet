@@ -75,6 +75,26 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
             .filter { !$0.isEmpty }
     }
 
+    /// The name a screen DRAWS for this row: ``name``, unless it is still a frozen English default,
+    /// which is drawn in the user's language instead.
+    ///
+    /// An activity logged with a blank name is stored as ``WorkoutActivityType/defaultName`` ("Pool
+    /// Swim"), and a completed plan carries a blank-named plan's ``WorkoutSplit/defaultPlanName``.
+    /// Display only: never persist, export, prompt with or match against this. Exports, prompts,
+    /// HealthKit's `fernlet.activityName`, the category inference and the guided reconciliation all
+    /// read ``name``, and a name field seeded from this saves back through ``savedName(editing:)``.
+    public var displayedName: String {
+        StoredWorkoutName.displayed(name, mode: mode, activityType: activityType,
+                                    matchesSplitDefault: plannedWorkoutID != nil)
+    }
+
+    /// The name to SAVE when a name field seeded with ``displayedName`` comes back as `typed` (already
+    /// trimmed): the stored ``name`` while the user left the drawn text alone, else what they typed.
+    /// Opening and saving a row in another language never rewrites its stored default.
+    public func savedName(editing typed: String) -> String {
+        typed == displayedName ? name : typed
+    }
+
     /// Genuinely Apple Health-owned: carries a `healthKitUUID` we did NOT author (an import from another
     /// app or a manual Health entry). Remove/edit are refused for these — our copy is a read-only mirror.
     public var isHealthImported: Bool { healthKitUUID != nil && healthKitAuthored != true }
@@ -282,6 +302,22 @@ public nonisolated struct PlannedWorkout: Identifiable, Codable, Equatable {
             .filter { !$0.isEmpty }
     }
 
+    /// The name a screen DRAWS for this plan: ``name``, unless it is still a frozen English default
+    /// (``WorkoutActivityType/defaultName`` or ``WorkoutSplit/defaultPlanName``, what the plan sheet
+    /// saves for a blank name), which is drawn in the user's language instead.
+    ///
+    /// Display only, on the same terms as ``Workout/displayedName``: the trainer export, the
+    /// exchange file, the coach-plan rename check and ``completedWorkout`` all carry ``name``.
+    public var displayedName: String {
+        StoredWorkoutName.displayed(name, mode: mode, activityType: activityType, matchesSplitDefault: true)
+    }
+
+    /// The name to SAVE when a name field seeded with ``displayedName`` comes back as `typed` (already
+    /// trimmed), as ``Workout/savedName(editing:)`` does for a logged row.
+    public func savedName(editing typed: String) -> String {
+        typed == displayedName ? name : typed
+    }
+
     public var completedWorkout: Workout {
         Workout(
             name: name,
@@ -457,6 +493,54 @@ public nonisolated enum WorkoutSplit: String, Codable, CaseIterable, Identifiabl
         case .fullBody, .recovery: .fullBody
         case .cardio: .cardio
         }
+    }
+
+    /// The FROZEN name a plan of this split is SAVED under when the plan sheet's name field is left
+    /// blank ("upper workout", "fullBody workout"). Never localize it.
+    ///
+    /// It is `PlannedWorkout.name` on every such plan, a completed plan carries it onto the logged
+    /// `Workout.name`, and `WorkoutExerciseCatalog.inferredCategory(for:)` keyword-matches the name,
+    /// so a localized spelling would have the same plan file under a different category on a device
+    /// set to another language. The raw value is the token in it, not the title, which is why the
+    /// English reads "fullBody workout". Screens read ``defaultPlanDisplayName``.
+    public var defaultPlanName: String { "\(rawValue) workout" }
+
+    /// The localized form of ``defaultPlanName``, for screens only: the plan sheet's name placeholder,
+    /// and a row whose stored name is still the default (``PlannedWorkout/displayedName``,
+    /// ``Workout/displayedName``). Never persist or match it.
+    public var defaultPlanDisplayName: String {
+        String(localized: "split.defaultPlanName", defaultValue: "\(title) workout", bundle: .module,
+               comment: "The name a planned workout takes when its name is left blank. The argument is the split's name, e.g. 'Upper' or 'Full Body'.")
+    }
+
+    /// The split whose ``defaultPlanName`` is exactly `name`, or nil when `name` is anything else.
+    public static func savingDefaultPlanName(_ name: String) -> WorkoutSplit? {
+        allCases.first { $0.defaultPlanName == name }
+    }
+}
+
+/// The one mapping from a STORED workout or plan name to the name a screen draws.
+///
+/// A blank name field saves a frozen English default (``WorkoutActivityType/defaultName``,
+/// ``WorkoutSplit/defaultPlanName``) because the name is persisted, synced, written to Health and
+/// keyword-matched. Drawn as stored, it reads English on every translated device. This swaps a
+/// stored default for its localized form at draw time, and leaves every other name, including any
+/// the user typed, exactly as it is. Display only: what it returns is never persisted, exported,
+/// put in a prompt or matched against; those read `name`.
+nonisolated enum StoredWorkoutName {
+    /// The name to draw for a row stored as `name`.
+    ///
+    /// `matchesSplitDefault` is whether the row can carry a split default at all: every plan can,
+    /// and a logged workout only when a plan's completion minted it (`plannedWorkoutID` is set).
+    static func displayed(_ name: String, mode: WorkoutMode, activityType: WorkoutActivityType?,
+                          matchesSplitDefault: Bool) -> String {
+        if mode == .activity, let activityType, name == activityType.defaultName {
+            return activityType.displayName
+        }
+        if matchesSplitDefault, let split = WorkoutSplit.savingDefaultPlanName(name) {
+            return split.defaultPlanDisplayName
+        }
+        return name
     }
 }
 
@@ -812,8 +896,9 @@ public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Iden
     }
 
     /// The localized activity name, for screens only: the activity picker, the chosen-activity row,
-    /// the "Log it again" summary and the name field's placeholder. Never persist or match it — a
-    /// workout saved with a blank name takes ``defaultName``.
+    /// the "Log it again" summary, the name field's placeholder, and any row whose stored name is
+    /// still ``defaultName`` (``Workout/displayedName``). Never persist or match it — a workout saved
+    /// with a blank name takes ``defaultName``.
     ///
     /// One case per line, unlike the two-line siblings: forty cases at two lines each exceed rule
     /// 4's 60-line body, which is met by formatting here because the extractor only harvests a

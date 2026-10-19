@@ -1471,7 +1471,7 @@ struct DayDetailView: View {
             } else {
                 ForEach(Array(day.workouts.enumerated()), id: \.element.id) { index, workout in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(workout.name)
+                        Text(workout.displayedName)
                             .font(.fernlet(.body))
                             .foregroundStyle(Color.bark)
                         // `displayWord`, not the frozen `rawValue`: the type beside it was already

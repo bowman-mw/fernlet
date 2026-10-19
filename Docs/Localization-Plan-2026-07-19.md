@@ -278,11 +278,37 @@ is localized for the picker, the chosen-activity row, the "Log it again" summary
 placeholder. The saved half has to stay English: the workout row and week calendar file a logged
 workout under a category by keyword-matching English words in its name, and a Health import rebuilt
 on devices set to different languages would otherwise flip its own name through the day-record
-merge. **Deliberately not done yet:** a history row whose name is a stored `defaultName` still
-draws that English name verbatim. Rendering it through `displayName` at the history sites, when
-`name == activityType.defaultName`, is the follow-up, the same shape as the plan sheet's stored
-`"\(split.rawValue) workout"`. `WorkoutMode.label` and `DietaryPattern.label` had no persisted or
-prompt reader and were localized in place.
+merge. `WorkoutMode.label` and `DietaryPattern.label` had no persisted or prompt reader and were
+localized in place.
+
+**Addendum (2026-10-19, stored default names drawn localized):** the residual above is closed. A
+row whose stored name is still a frozen default now DRAWS it through one domain mapping,
+`Workout.displayedName` / `PlannedWorkout.displayedName`: an activity-mode row named exactly its own
+type's `defaultName` draws `displayName`, and a plan (or the logged row a plan's completion mints)
+named exactly a split's `defaultPlanName` draws `defaultPlanDisplayName`. The plan sheet's inline
+`"\(split.rawValue) workout"` is forked the same way: `WorkoutSplit.defaultPlanName` keeps the
+stored bytes ("fullBody workout", pinned by `frozenSplitDefaultPlanNames`), and
+`defaultPlanDisplayName` is the domain key `split.defaultPlanName`, which replaced the app's
+`move.plannedName.placeholder.split` so the placeholder and the rows share one string. Every draw
+routes through it: Move's logged and planned rows (the week's day detail reuses both), the
+remove alert and complete button, the "Log it again" title, the Copy previous week card, the Journal
+day's Movement rows, the Home "Remember this one?" card, the coach-plan diff and its skipped-change
+lines, and the Shortcuts planned-workout picker. The three name fields seeded from a stored row (Log
+again, Edit workout, the plan sheet on an edited or copied plan) draw `displayedName` and save
+through `savedName(editing:)`, which hands the stored name back while the drawn text is untouched,
+so opening and saving a row on a translated device never stores a translation or changes its
+inferred category. What stays on `name`: the trainer and data exports, the exchange file and its
+filename, the Shortcuts revision fingerprint, HealthKit's `fernlet.activityName`, the day-summary
+prompt and the photowall's recent-activity names, guided reconciliation, the plan a removed
+completion rebuilds, the coach-plan issue `subject`, and the category inference. Pinned by
+`storedDefaultNamesDrawThroughTheDisplayHelper` and `theDrawnWorkoutNameSitesReadTheDisplayHelper`.
+`ActivityLevel.label` and `GuidanceIntensity.label` were traced to the onboarding pickers alone and
+localized in place (`activityLevel.*`, `guidanceIntensity.*`). **Still English:** an activity
+plan's `exercises` holds the same `defaultName` and is drawn as the plan row's first step and as a
+completed row's exercise line, and `WorkoutPlanSource.completionNote` ("Completed from user plan.")
+is persisted as a completed row's notes and drawn verbatim. Both are stored text read back as
+tokens (`reconstructPlannedWorkout` matches the note), so each needs the same draw-time mapping
+rather than a localized write.
 
 ---
 

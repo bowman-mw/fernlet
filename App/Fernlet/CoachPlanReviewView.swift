@@ -224,23 +224,23 @@ struct CoachPlanReviewView: View {
             }
 
             if resolved.action == .delete {
-                beforeAfterBlock(title: resolved.before.name, lines: resolved.before.exerciseLines,
+                beforeAfterBlock(title: resolved.before.displayedName, lines: resolved.before.exerciseLines,
                                  struck: true, tint: Color.slate)
             } else if exercisesChanged {
-                beforeAfterBlock(title: resolved.before.name, lines: resolved.before.exerciseLines,
+                beforeAfterBlock(title: resolved.before.displayedName, lines: resolved.before.exerciseLines,
                                  struck: false, tint: Color.slate)
                 Image(systemName: "arrow.down")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.slate)
-                beforeAfterBlock(title: after?.name ?? resolved.before.name,
+                beforeAfterBlock(title: after?.displayedName ?? resolved.before.displayedName,
                                  lines: after?.exerciseLines ?? [], struck: false, tint: Color.bark)
             } else {
                 // Nothing moved in the prescription — name the workout once and list what did change.
-                Text(resolved.before.name)
+                Text(resolved.before.displayedName)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                 if renamed, let after {
-                    changeLine("Renamed to \"\(after.name)\"")
+                    changeLine("Renamed to \"\(after.displayedName)\"")
                 }
                 if !exercisesChanged && !renamed && !noteChanged {
                     changeLine("Same exercises, updated details")

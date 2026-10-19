@@ -144,13 +144,21 @@ public nonisolated enum ActivityLevel: String, Codable, CaseIterable, Identifiab
 
     public var id: String { rawValue }
 
+    /// The localized level name, for the onboarding activity pickers. Display only: `rawValue` is
+    /// what ``UserNutritionProfile`` persists, the calorie target reads ``multiplier`` and the split
+    /// recommender switches on the case; nothing reads this text.
     public var label: String {
         switch self {
-        case .sedentary: "Sedentary"
-        case .light: "Light"
-        case .moderate: "Moderate"
-        case .active: "Active"
-        case .veryActive: "Very active"
+        case .sedentary: String(localized: "activityLevel.sedentary", defaultValue: "Sedentary",
+                                bundle: .module, comment: "Daily activity level: mostly sitting, little exercise")
+        case .light: String(localized: "activityLevel.light", defaultValue: "Light",
+                            bundle: .module, comment: "Daily activity level: light exercise a few days a week")
+        case .moderate: String(localized: "activityLevel.moderate", defaultValue: "Moderate",
+                               bundle: .module, comment: "Daily activity level: moderate exercise most days")
+        case .active: String(localized: "activityLevel.active", defaultValue: "Active",
+                             bundle: .module, comment: "Daily activity level: hard exercise most days")
+        case .veryActive: String(localized: "activityLevel.veryActive", defaultValue: "Very active",
+                                 bundle: .module, comment: "Daily activity level: hard daily exercise or a physical job")
         }
     }
 
@@ -204,11 +212,16 @@ public nonisolated enum GuidanceIntensity: String, Codable, CaseIterable, Identi
 
     public var id: String { rawValue }
 
+    /// The localized style name, for the onboarding guidance picker. Display only: `rawValue` is
+    /// what ``UserNutritionPreferences`` persists, and nothing reads this text as a token.
     public var label: String {
         switch self {
-        case .gentle: "Gentle"
-        case .steady: "Steady"
-        case .detailed: "Detailed"
+        case .gentle: String(localized: "guidanceIntensity.gentle", defaultValue: "Gentle",
+                             bundle: .module, comment: "Nutrition guidance style: the lightest touch, fewest details")
+        case .steady: String(localized: "guidanceIntensity.steady", defaultValue: "Steady",
+                             bundle: .module, comment: "Nutrition guidance style: the everyday middle setting")
+        case .detailed: String(localized: "guidanceIntensity.detailed", defaultValue: "Detailed",
+                               bundle: .module, comment: "Nutrition guidance style: the most detail in guidance copy")
         }
     }
 }

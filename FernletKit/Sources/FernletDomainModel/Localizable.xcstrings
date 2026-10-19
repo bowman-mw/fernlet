@@ -1,6 +1,66 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "activityLevel.active" : {
+      "comment" : "Daily activity level: hard exercise most days",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Active"
+          }
+        }
+      }
+    },
+    "activityLevel.light" : {
+      "comment" : "Daily activity level: light exercise a few days a week",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "activityLevel.moderate" : {
+      "comment" : "Daily activity level: moderate exercise most days",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moderate"
+          }
+        }
+      }
+    },
+    "activityLevel.sedentary" : {
+      "comment" : "Daily activity level: mostly sitting, little exercise",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sedentary"
+          }
+        }
+      }
+    },
+    "activityLevel.veryActive" : {
+      "comment" : "Daily activity level: hard daily exercise or a physical job",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Very active"
+          }
+        }
+      }
+    },
     "activityType.badminton" : {
       "comment" : "Workout activity type: badminton",
       "extractionState" : "extracted_with_value",
@@ -1321,6 +1381,42 @@
         }
       }
     },
+    "guidanceIntensity.detailed" : {
+      "comment" : "Nutrition guidance style: the most detail in guidance copy",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Detailed"
+          }
+        }
+      }
+    },
+    "guidanceIntensity.gentle" : {
+      "comment" : "Nutrition guidance style: the lightest touch, fewest details",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle"
+          }
+        }
+      }
+    },
+    "guidanceIntensity.steady" : {
+      "comment" : "Nutrition guidance style: the everyday middle setting",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady"
+          }
+        }
+      }
+    },
     "homeWidget.sillyStats" : {
       "comment" : "Home widget name: the card of deliberately useless lifetime stats",
       "extractionState" : "extracted_with_value",
@@ -2373,6 +2469,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Cardio"
+          }
+        }
+      }
+    },
+    "split.defaultPlanName" : {
+      "comment" : "The name a planned workout takes when its name is left blank. The argument is the split's name, e.g. 'Upper' or 'Full Body'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ workout"
           }
         }
       }

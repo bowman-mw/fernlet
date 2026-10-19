@@ -880,6 +880,137 @@ struct LocalizationBoundaryTests {
         }
     }
 
+    /// The name a plan is SAVED under when the plan sheet's name field is left blank (2026-10-19).
+    ///
+    /// It was `"\(split.rawValue) workout"` inline in the plan sheet; it is now
+    /// `WorkoutSplit.defaultPlanName`, forked from the localized `defaultPlanDisplayName` the
+    /// placeholder and the rows draw. These spellings are on every synced blank-named plan and on
+    /// the logged row its completion mints, and the category inference keyword-matches them, so they
+    /// stay byte-identical to what the inline literal wrote, raw values and all ("fullBody workout").
+    @Test func frozenSplitDefaultPlanNames() throws {
+        let names = WorkoutSplit.allCases.map(\.defaultPlanName)
+        #expect(
+            names == [
+                "workout workout", "upper workout", "lower workout", "fullBody workout", "push workout",
+                "pull workout", "legs workout", "cardio workout", "recovery workout",
+            ],
+            """
+            WorkoutSplit.defaultPlanName changed (now \(names)). It is the name a blank-named plan is \
+            PERSISTED under, and the logged row a completion mints carries it. Localize \
+            `defaultPlanDisplayName`, never this.
+            """
+        )
+        let source = try RepoRoot.source("App/Fernlet/MoveView.swift")
+        let writes = source.components(separatedBy: "return split.defaultPlanName").count - 1
+        #expect(
+            writes == 1,
+            """
+            App/Fernlet/MoveView.swift contains `return split.defaultPlanName` \(writes) time(s), expected 1: \
+            WorkoutPlanSheet.plannedName, the name a blank-named strength plan is saved under. A \
+            persisted name must be the frozen half; `defaultPlanDisplayName` is the user's language.
+            """
+        )
+    }
+
+    /// A row whose stored name is a frozen default DRAWS it in the user's language, and saves it back
+    /// untouched (2026-10-19).
+    ///
+    /// `Workout.displayedName` and `PlannedWorkout.displayedName` are the one mapping. They must
+    /// swap exactly the stored defaults (an activity's `defaultName` under its own type in activity
+    /// mode, a split's `defaultPlanName` on a plan or a plan's completion) and leave every other name
+    /// alone, and `savedName(editing:)` must hand the stored English back for a field left as drawn,
+    /// or opening and saving a row on a translated device rewrites it in that language.
+    @Test func storedDefaultNamesDrawThroughTheDisplayHelper() {
+        for type in WorkoutActivityType.allCases {
+            let logged = Workout(name: type.defaultName, type: type.fernletCategory, mode: .activity,
+                                 activityType: type, exercises: "", rpe: nil, notes: "", duration: 30,
+                                 intensity: .moderate)
+            #expect(logged.displayedName == type.displayName, "a blank-named \(type) row draws its displayName")
+            #expect(logged.savedName(editing: logged.displayedName) == type.defaultName,
+                    "a \(type) name left as drawn saves back as the stored defaultName")
+            let planned = PlannedWorkout(name: type.defaultName, split: .workout, source: .user, mode: .activity,
+                                         activityType: type, exercises: type.defaultName, notes: "", duration: 30)
+            #expect(planned.displayedName == type.displayName, "a blank-named \(type) plan draws its displayName")
+            #expect(planned.completedWorkout.displayedName == planned.displayedName,
+                    "a completed \(type) plan draws as the plan did")
+            #expect(planned.completedWorkout.name == type.defaultName, "completing a plan stores its name unchanged")
+        }
+
+        func activityRow(_ name: String, mode: WorkoutMode, type: WorkoutActivityType?) -> Workout {
+            Workout(name: name, type: .cardio, mode: mode, activityType: type, exercises: "", rpe: nil,
+                    notes: "", duration: nil, intensity: .moderate)
+        }
+        // Names the user typed, and defaults that are not this row's own, are drawn as stored.
+        #expect(activityRow("Saturday ride", mode: .activity, type: .cycling).displayedName == "Saturday ride")
+        #expect(activityRow("Running", mode: .activity, type: .walking).displayedName == "Running")
+        #expect(activityRow("Running", mode: .strengthTraining, type: nil).displayedName == "Running")
+        #expect(activityRow("Running", mode: .activity, type: nil).displayedName == "Running")
+        let renamed = activityRow(WorkoutActivityType.swimmingPool.defaultName, mode: .activity, type: .swimmingPool)
+        #expect(renamed.savedName(editing: "Laps with Sam") == "Laps with Sam", "a real rename saves as typed")
+
+        for split in WorkoutSplit.allCases {
+            let plan = PlannedWorkout(name: split.defaultPlanName, split: split, source: .user, notes: "", duration: nil)
+            #expect(plan.displayedName == split.defaultPlanDisplayName, "a blank-named \(split) plan draws localized")
+            #expect(plan.savedName(editing: plan.displayedName) == split.defaultPlanName)
+            let completion = plan.completedWorkout
+            #expect(completion.displayedName == split.defaultPlanDisplayName, "its completion draws as the plan did")
+            #expect(completion.name == split.defaultPlanName, "completing a plan stores its name unchanged")
+            // Only a plan's completion carries a split default; a typed log of the same words is the user's.
+            var typed = completion
+            typed.plannedWorkoutID = nil
+            #expect(typed.displayedName == split.defaultPlanName)
+        }
+        // A plan restored onto a coarser split (push → upper) still draws its own default's form.
+        let restored = PlannedWorkout(name: WorkoutSplit.push.defaultPlanName, split: .upper, source: .user,
+                                      notes: "", duration: nil)
+        #expect(restored.displayedName == WorkoutSplit.push.defaultPlanDisplayName)
+        #expect(WorkoutSplit.savingDefaultPlanName("Upper workout") == nil, "the frozen spelling is matched exactly")
+    }
+
+    /// Every site that DRAWS a workout's or plan's name reads `displayedName`, and every name field
+    /// seeded from one saves back through `savedName(editing:)` (2026-10-19).
+    ///
+    /// In English `displayedName` returns the stored activity name unchanged, so pointing one of these
+    /// back at `name` compiles, passes every other test, and only shows up on a translated device, as
+    /// an English "Pool Swim" in a German history. A seed that loses its `savedName` is worse: it
+    /// stores the translation, and the category inference stops matching it.
+    @Test func theDrawnWorkoutNameSitesReadTheDisplayHelper() throws {
+        let sites: [(path: String, needle: String, count: Int, what: String)] = [
+            ("App/Fernlet/MoveView.swift", "· \\(recent.workout.displayedName)\"", 1, "the Log it again card's title"),
+            ("App/Fernlet/MoveView.swift", "Text(workout.displayedName)", 1, "WorkoutRow's title, on Move and the week's day detail"),
+            ("App/Fernlet/MoveView.swift", "\"Remove \\(workout.displayedName)?\"", 1, "WorkoutRow's remove alert"),
+            ("App/Fernlet/MoveView.swift", "Text(plannedWorkout.displayedName)", 1, "PlannedWorkoutRow's title"),
+            ("App/Fernlet/MoveView.swift", "\"Mark \\(plannedWorkout.displayedName) complete\"", 1,
+             "PlannedWorkoutRow's complete button label"),
+            ("App/Fernlet/MoveView.swift", "subtitle: previousWeekPlan.displayedName", 1, "the plan sheet's Copy previous week card"),
+            ("App/Fernlet/MoveView.swift", "name = workout.displayedName", 1, "the log sheet's Log again prefill"),
+            ("App/Fernlet/MoveView.swift", "prefilledFrom?.savedName(editing: trimmed)", 1, "...and the name it saves"),
+            ("App/Fernlet/MoveView.swift", "_name = State(initialValue: workout.displayedName)", 1, "EditWorkoutSheet's name field"),
+            ("App/Fernlet/MoveView.swift", "updated.name = workout.savedName(editing: trimmedName)", 1, "...and the name it saves"),
+            ("App/Fernlet/MoveView.swift", "editingPlan?.displayedName", 1, "the plan sheet's name field on an edited plan"),
+            ("App/Fernlet/MoveView.swift", "name = plan.displayedName", 1, "the plan sheet's name field after Copy previous week"),
+            ("App/Fernlet/MoveView.swift", "nameSeedPlan?.savedName(editing: trimmed)", 1, "...and the name both save"),
+            ("App/Fernlet/JournalView.swift", "Text(workout.displayedName)", 1, "the Journal day's Movement rows"),
+            ("App/Fernlet/AmbientCards.swift", "workout.displayedName.trimmingCharacters", 1, "the Remember this one? card"),
+            ("App/Fernlet/CoachPlanReviewView.swift", "resolved.before.displayedName", 4, "the coach-plan diff's workout titles"),
+            ("App/Fernlet/CoachPlanImporter.swift", "\\(found.workout.displayedName)\\\"", 2, "the coach-plan review's skipped-change lines"),
+            ("App/Fernlet/ExchangeIntentService.swift", "name = workout.displayedName", 1, "the Shortcuts planned-workout picker"),
+        ]
+        for site in sites {
+            let source = try RepoRoot.source(site.path)
+            let found = source.components(separatedBy: site.needle).count - 1
+            #expect(
+                found == site.count,
+                """
+                \(site.path) contains `\(site.needle)` \(found) time(s), expected \(site.count): \(site.what). \
+                A drawn workout or plan name goes through `displayedName`, and a field seeded from it saves \
+                through `savedName(editing:)`; exports, prompts, Health metadata and matching keep `name`. \
+                If the site moved, re-point this pin at it.
+                """
+            )
+        }
+    }
+
     /// Recipe units (Docs/Ingredient-Search-Deep-Research-2026-09-29.md §6.6, fix F10).
     ///
     /// `RecipeUnit` raw values are the `unit` string on every persisted `RecipeIngredient`, they ride
@@ -2653,8 +2784,8 @@ struct LocalizationBoundaryTests {
                      source: "WorkoutSheet/WorkoutPlanSheet name placeholder's activity fallback, literal → String(localized:)"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.workoutName.placeholder.strength",
                      source: "WorkoutSheet.namePlaceholder's strength fallback, literal → String(localized:)"),
-        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.plannedName.placeholder.split",
-                     source: "WorkoutPlanSheet.plannedNamePlaceholder, English \" workout\" suffix → String(localized:)"),
+        // The split placeholder's key moved into the domain catalog as `split.defaultPlanName`
+        // (2026-10-19), pinned with the domain keys below.
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Exercise",
                      source: "ExerciseSearchPicker.title's default, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Search exercise or muscle",
@@ -2685,6 +2816,10 @@ struct LocalizationBoundaryTests {
                      source: "DietaryPattern.label, literal → String(localized:bundle: .module)"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "dietaryPattern.lowerCarb",
                      source: "DietaryPattern.label, literal → String(localized:bundle: .module)"),
+        // Stored default names drawn localized (2026-10-19): the plan sheet's split placeholder, once
+        // the app's `move.plannedName.placeholder.split`, and the rows that draw a plan saved under it.
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "split.defaultPlanName",
+                     source: "WorkoutSplit.defaultPlanDisplayName, the English \" workout\" suffix → String(localized:bundle: .module)"),
         // Duress recovery ceremony (2026-10-19): one key per forked member per flow (a revert drops
         // every caller's key at once), and every `String(localized:)` line, since each of those can
         // go back to a bare literal on its own.
@@ -2708,7 +2843,13 @@ struct LocalizationBoundaryTests {
                      source: "CeremonyButton.title in both flows, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Return the key",
                      source: "CeremonyButton.title in the custodian flow, forked String → LocalizedStringKey"),
-    ] + ["enrolled", "recovered", "destroyed"].map {
+    ] + ["sedentary", "light", "moderate", "active", "veryActive"].map {
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "activityLevel.\($0)",
+                     source: "ActivityLevel.label, literal → String(localized:bundle: .module) (2026-10-19)")
+    } + ["gentle", "steady", "detailed"].map {
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "guidanceIntensity.\($0)",
+                     source: "GuidanceIntensity.label, literal → String(localized:bundle: .module) (2026-10-19)")
+    } + ["enrolled", "recovered", "destroyed"].map {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "duress.ceremony.done.\($0)",
                      source: "the scanning flow's closing message, literal → String(localized:)")
     } + [
