@@ -269,7 +269,9 @@ struct PlannedWorkoutEntity: AppEntity {
     init(dayKey: String, workout: PlannedWorkout) {
         self.dayKey = dayKey
         workoutID = workout.id
-        name = workout.name
+        // Drawn, not stored: this only feeds `displayRepresentation`, the Shortcuts picker's title.
+        // The exported file's name and the revision fingerprint read the plan's stored `name`.
+        name = workout.displayedName
     }
 
     var displayRepresentation: DisplayRepresentation {

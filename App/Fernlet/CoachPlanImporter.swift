@@ -377,7 +377,7 @@ extension FernletStore {
             }
             guard found.dayKey >= today else {
                 issues.append(.init(kind: .unresolvableEdit, subject: found.workout.name,
-                                    detail: "\"\(found.workout.name)\" was planned for \(found.dayKey), which has "
+                                    detail: "\"\(found.workout.displayedName)\" was planned for \(found.dayKey), which has "
                                     + "already passed. Fernlet only changes workouts still ahead of you."))
                 continue
             }
@@ -391,7 +391,7 @@ extension FernletStore {
                 resolved.append(resolvedEdit)
             } else {
                 issues.append(.init(kind: .clamped, subject: found.workout.name,
-                                    detail: "\"\(found.workout.name)\" is already exactly what the change asks for; "
+                                    detail: "\"\(found.workout.displayedName)\" is already exactly what the change asks for; "
                                     + "nothing to do."))
             }
         }

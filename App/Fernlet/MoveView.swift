@@ -821,6 +821,9 @@ struct WorkoutSheet: View {
     /// The most recent logged workout of the current Kind — the "Log it again" card (MOVE-08).
     /// Re-queried when the Kind flips, so the card always offers the matching kind.
     @State private var lastLogged: RecentLoggedWorkout?
+    /// The row the name field was last prefilled from by "Log again". The field draws its
+    /// `displayedName`; ``typedName`` hands the stored name back while that text is untouched.
+    @State private var prefilledFrom: Workout?
 
     var intensity: WorkoutIntensity {
         if logMode == .activity {
@@ -851,11 +854,20 @@ struct WorkoutSheet: View {
                 intensity: .moderate
             ).inferredCategory
         }
-        return WorkoutExerciseCatalog.inferredCategory(for: "\(name)\n\(exerciseText)")
+        return WorkoutExerciseCatalog.inferredCategory(for: "\(typedName)\n\(exerciseText)")
     }
 
     private var exerciseText: String {
         exerciseRows.map(\.summary).joined(separator: "\n")
+    }
+
+    /// The name field's text as it will be SAVED and keyword-matched. A "Log again" prefill left as
+    /// drawn is the source row's stored name, not its translation (`Workout.savedName(editing:)`), so
+    /// on a translated device the logged copy keeps the English default and files under the same
+    /// category.
+    private var typedName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return prefilledFrom?.savedName(editing: trimmed) ?? trimmed
     }
 
     private var aggregatedMuscleGroups: Set<MuscleGroup> {
@@ -999,7 +1011,8 @@ struct WorkoutSheet: View {
     /// per-outing measures (distance stays blank; energy is calorie-opt-in territory).
     private func prefill(from recent: RecentLoggedWorkout) {
         let workout = recent.workout
-        name = workout.name
+        prefilledFrom = workout
+        name = workout.displayedName
         if logMode == .strengthTraining {
             draft.clear()
             exerciseRows = WorkoutSheetRules.exerciseEntries(from: workout.exercises)
@@ -1216,8 +1229,7 @@ struct WorkoutSheet: View {
     }
 
     private var workoutName: String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty { return trimmed }
+        if !typedName.isEmpty { return typedName }
         if logMode == .activity, let selectedActivityType {
             // `defaultName`, not `displayName`: this is PERSISTED as `Workout.name`, and the
             // workout row and week calendar file the row under a category by keyword-matching
@@ -1462,7 +1474,7 @@ struct LogAgainCard: View {
         let weekday = dynamicTypeSize.isAccessibilitySize
             ? date.formatted(.dateTime.weekday(.abbreviated))
             : date.formatted(.dateTime.weekday(.wide))
-        return "\(weekday) · \(recent.workout.name)"
+        return "\(weekday) · \(recent.workout.displayedName)"
     }
 
     /// "Bench press, Lat pulldown, Dip · 3 more" for strength; type + minutes for an activity.
@@ -2305,7 +2317,7 @@ struct WorkoutRow: View {
     /// Name plus the RPE capsule.
     private var titleRow: some View {
         HStack(alignment: .top) {
-            Text(workout.name).font(.fernlet(.headerMedium))
+            Text(workout.displayedName).font(.fernlet(.headerMedium))
             Spacer()
             if let rpe = workout.rpe {
                 Text("RPE \(rpe, specifier: "%.1g")")
@@ -2406,7 +2418,7 @@ struct WorkoutRow: View {
         // SUPPRESSES the `.cancel` button (leaving a lone red Remove) and anchors to the view root
         // rather than the row, so its arrow pointed at a different workout. The title names the
         // workout, so there is no doubt which one is about to go.
-        .alert("Remove \(workout.name)?", isPresented: $showRemoveConfirm) {
+        .alert("Remove \(workout.displayedName)?", isPresented: $showRemoveConfirm) {
             Button("Keep it", role: .cancel) {}
             Button("Remove", role: .destructive) { removeTapped() }
         } message: {
@@ -2457,7 +2469,9 @@ struct EditWorkoutSheet: View {
         self.workout = workout
         self.date = date
         self.onSaved = onSaved
-        _name = State(initialValue: workout.name)
+        // Drawn, not stored: a blank-named activity reads in the user's language, and `saveEdits`
+        // hands the stored English default back unless the user actually renames it.
+        _name = State(initialValue: workout.displayedName)
         _intensity = State(initialValue: workout.intensity)
         _duration = State(initialValue: workout.duration.map(String.init) ?? "")
         _rpe = State(initialValue: Self.rpeText(workout.rpe))
@@ -2474,7 +2488,7 @@ struct EditWorkoutSheet: View {
 
     /// Any editable field diverges from the row this sheet opened on.
     private var isDirty: Bool {
-        name != workout.name
+        name != workout.displayedName
             || intensity != workout.intensity
             || duration != (workout.duration.map(String.init) ?? "")
             || rpe != Self.rpeText(workout.rpe)
@@ -2526,7 +2540,7 @@ struct EditWorkoutSheet: View {
     private func saveEdits() {
         guard !trimmedName.isEmpty else { return }
         var updated = workout
-        updated.name = trimmedName
+        updated.name = workout.savedName(editing: trimmedName)
         updated.intensity = intensity
         updated.duration = WorkoutSheetRules.durationMinutes(from: duration)
         // Blank clears the RPE rather than pinning the old one — the field is how you correct it.
@@ -4113,7 +4127,7 @@ struct PlannedWorkoutRow: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Mark \(plannedWorkout.name) complete")
+            .accessibilityLabel("Mark \(plannedWorkout.displayedName) complete")
             // T2-12: "Mark upper body strength complete" is a sentence to speak at a checkbox.
             .accessibilityInputLabels([Text("Done"), Text("Complete"), Text("Mark complete")])
         } else {
@@ -4127,7 +4141,7 @@ struct PlannedWorkoutRow: View {
     /// Name plus the split / source / duration line.
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(plannedWorkout.name)
+            Text(plannedWorkout.displayedName)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             HStack(spacing: 8) {
@@ -4240,6 +4254,10 @@ struct WorkoutPlanSheet: View {
     /// "Suggest" pill. It lives here now because asking for a workout belongs beside planning one.
     @State private var showingSuggestion = false
     private let previousWeekPlan: PlannedWorkout?
+    /// The plan the name field was seeded from: the one being edited, or the one "Copy previous week"
+    /// copied. The field draws its `displayedName`; ``plannedName`` hands the stored name back while
+    /// that text is untouched.
+    @State private var nameSeedPlan: PlannedWorkout?
     /// A shallow snapshot of the seeded field values, so `isDirty` can tell an untouched sheet (whether
     /// blank-new or opened on an existing plan) from one the user has changed. Row edits fold into
     /// `plannedExerciseText`, so the string signature covers them without a deep row compare.
@@ -4253,7 +4271,7 @@ struct WorkoutPlanSheet: View {
         self.previousWeekPlan = store.previousWeekPlannedWorkout(for: dateKey)
         let copiedSplit = editingPlan?.split ?? store.copiedForwardWorkoutSplit(before: dateKey) ?? .fullBody
         let seedMode = editingPlan?.mode ?? (copiedSplit == .workout ? .activity : .strengthTraining)
-        let seedName = editingPlan?.name ?? ""
+        let seedName = editingPlan?.displayedName ?? ""
         let seedPlanned = editingPlan?.exercises ?? ""
         let seedDuration = editingPlan?.duration.map(String.init) ?? ""
         let seedDistance = editingPlan?.targetDistanceMiles.map { String($0) } ?? ""
@@ -4264,6 +4282,7 @@ struct WorkoutPlanSheet: View {
         _split = State(initialValue: copiedSplit)
         _logMode = State(initialValue: seedMode)
         _name = State(initialValue: seedName)
+        _nameSeedPlan = State(initialValue: editingPlan)
         _plannedExerciseText = State(initialValue: seedPlanned)
         _exerciseRows = State(initialValue: WorkoutSheetRules.exerciseEntries(from: seedPlanned))
         _duration = State(initialValue: seedDuration)
@@ -4309,26 +4328,29 @@ struct WorkoutPlanSheet: View {
 
     private var plannedName: String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty { return trimmed }
-        // `defaultName` and `rawValue`, not `displayName` and `title`: this string is PERSISTED as
-        // `PlannedWorkout.name`, a completed plan carries it onto the logged row, and
-        // `WorkoutExerciseCatalog.inferredCategory`/`targetSummary` then match ENGLISH keywords
-        // against it. A localized default name would have a plan created on a German device infer
-        // its own type differently. The placeholder below is display-only and keeps the localized
-        // names.
+        // A seeded name left as drawn saves as the stored name it was drawn from, so editing a
+        // blank-named plan on a translated device keeps its English default.
+        if !trimmed.isEmpty { return nameSeedPlan?.savedName(editing: trimmed) ?? trimmed }
+        // `defaultName` and `defaultPlanName`, not `displayName` and `defaultPlanDisplayName`: this
+        // string is PERSISTED as `PlannedWorkout.name`, a completed plan carries it onto the logged
+        // row, and `WorkoutExerciseCatalog.inferredCategory`/`targetSummary` then match ENGLISH
+        // keywords against it. A localized default name would have a plan created on a German
+        // device infer its own type differently. The placeholder below is display-only and keeps
+        // the localized names.
         if logMode == .activity, let selectedActivityType {
             return selectedActivityType.defaultName
         }
-        return "\(split.rawValue) workout"
+        return split.defaultPlanName
     }
 
     /// The name field is optional — the placeholder shows the name the plan will take, in the
     /// user's language; ``plannedName`` stores its frozen English form.
     ///
     /// A resolved `String` for the same reason as ``WorkoutSheet``'s: the activity type's
-    /// `displayName` is already final text. The authored lines go through `String(localized:)`,
-    /// the split one with the split's localized title as its argument, so " workout" is no longer
-    /// English glued on in Swift.
+    /// `displayName` is already final text. The activity fallback goes through
+    /// `String(localized:)`; the split line is `WorkoutSplit.defaultPlanDisplayName`, the same
+    /// localized form a row draws for a plan saved under it, so " workout" is not English glued on
+    /// in Swift.
     private var plannedNamePlaceholder: String {
         if logMode == .activity {
             return selectedActivityType?.displayName
@@ -4336,9 +4358,7 @@ struct WorkoutPlanSheet: View {
                           defaultValue: "Optional, e.g. Saturday ride",
                           comment: "Placeholder in the optional workout-name field before an activity is chosen. Names an example activity.")
         }
-        return String(localized: "move.plannedName.placeholder.split",
-                      defaultValue: "\(split.title) workout",
-                      comment: "Placeholder in the plan sheet's optional name field: the name the plan takes if left blank. The argument is the split's name, e.g. 'Upper' or 'Full Body'.")
+        return split.defaultPlanDisplayName
     }
 
     private var exerciseText: String {
@@ -4530,7 +4550,7 @@ struct WorkoutPlanSheet: View {
             if let previousWeekPlan {
                 entryCard(icon: "arrow.turn.down.right",
                           title: "Copy previous week",
-                          subtitle: previousWeekPlan.name) {
+                          subtitle: previousWeekPlan.displayedName) {
                     copyPreviousWeekPlan(previousWeekPlan)
                 }
             }
@@ -4652,7 +4672,8 @@ struct WorkoutPlanSheet: View {
     private func copyPreviousWeekPlan(_ plan: PlannedWorkout) {
         split = plan.split
         logMode = plan.mode
-        name = plan.name
+        nameSeedPlan = plan
+        name = plan.displayedName
         plannedExerciseText = plan.exercises
         exerciseRows = WorkoutSheetRules.exerciseEntries(from: plan.exercises)
         duration = plan.duration.map(String.init) ?? ""

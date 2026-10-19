@@ -8928,18 +8928,6 @@
         }
       }
     },
-    "move.plannedName.placeholder.split" : {
-      "comment" : "Placeholder in the plan sheet's optional name field: the name the plan takes if left blank. The argument is the split's name, e.g. 'Upper' or 'Full Body'.",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%@ workout"
-          }
-        }
-      }
-    },
     "move.space.accessibilityValue" : {
       "comment" : "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.",
       "extractionState" : "extracted_with_value",
