@@ -4,7 +4,8 @@
 //
 //  What VoiceOver hears when one of the declaration's common tasks lands — log a meal, log a mood,
 //  complete a workout — and while a guided workout moves from set to rest to set (VoiceOver dry run,
-//  2026-10-18; `Docs/Accessibility-Nutrition-Labels.md` §3).
+//  2026-10-18; `Docs/Accessibility-Nutrition-Labels.md` §3). The recipe book's "added" line joined
+//  the same day, as one of the off-path toasts that run follow-up adopted.
 //
 //  Before this file every one of those outcomes was silent. A sighted user sees the sheet close, the
 //  tile's count roll, the chip fill or the runner's screen change; a VoiceOver user hears the cursor
@@ -39,6 +40,11 @@ enum TaskConfirmation: Equatable {
     case workoutLogged
     /// The journal sheet saved an entry.
     case journalSaved
+    /// The recipe book's create branch saved a recipe and popped back to the book, whose "added"
+    /// line is now up. The recipe could be typed by hand, pasted as Fernlet recipe data, or imported
+    /// from a web page. The import screen's own "added" line hands off to this one rather than
+    /// speaking too, so each recipe is confirmed once.
+    case recipeAdded
 
     /// The sentence spoken. Event only, never the logged content.
     var sentence: LocalizedStringResource {
@@ -57,6 +63,8 @@ enum TaskConfirmation: Equatable {
             "Workout logged."
         case .journalSaved:
             "Journal entry saved."
+        case .recipeAdded:
+            "Recipe added to your recipe book."
         }
     }
 

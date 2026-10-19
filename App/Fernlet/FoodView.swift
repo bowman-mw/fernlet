@@ -999,6 +999,13 @@ private struct RecipeImportSheet: View {
                 isImportingURL = false
                 do {
                     // A beat so the "added to your recipes" line can be read before the sheet goes.
+                    // It is deliberately NOT stretched under VoiceOver and NOT spoken here. This
+                    // screen's only host, the recipe book's create branch, passes `onSaved`, so every
+                    // import lands back on the book. The book repeats this line, holds it for the
+                    // assistive notice window and speaks it once the pop settles
+                    // (`RecipeBookSheet.finishCreation`). Holding this screen 12 s would leave its
+                    // editor and Import bar live and then pull them away. Speaking here as well
+                    // would say the same thing twice. (Owner's pick, 2026-10-18.)
                     try await Task.sleep(for: .seconds(1.2))
                 } catch {
                     // Cancelled: the presenting sheet is already being torn down, so there is
@@ -6918,8 +6925,14 @@ struct RecipeBookSheet: View {
         }
         .task(id: createdNotice) {
             guard createdNotice != nil else { return }
+            // A confirmation line with nothing to act on, so the notice window applies. It is read
+            // as the line appears, because VoiceOver can be turned on mid-session. 4 s was gone
+            // before VoiceOver's cursor could reach it.
+            let window = FernletDismissalWindow.system.window(
+                standard: .seconds(4),
+                assistive: FernletDismissalWindow.assistiveNoticeWindow)
             do {
-                try await Task.sleep(for: .seconds(4))
+                try await Task.sleep(for: window)
             } catch {
                 // Superseded by a newer creation (or the book went away) — that one owns the line.
                 return
@@ -6941,6 +6954,12 @@ struct RecipeBookSheet: View {
     private func finishCreation(named recipeName: String) {
         isCreatingRecipe = false
         createdNotice = "\u{201C}\(recipeName)\u{201D} added to your recipes."
+        // The line appears with no focus change while the pop moves VoiceOver's cursor, so the
+        // landing is spoken once the pop has settled. An unstructured Task, as the sheet-closing
+        // confirmations use, so nothing about this update cancels it. This is the one confirmation
+        // for every way in, so a web import is not spoken twice. It speaks the event, not the name,
+        // which the line itself carries.
+        Task { @MainActor in await TaskConfirmation.recipeAdded.announceAfterSheetCloses() }
     }
 
     /// Closes the book only when it is a sheet. Pushed inside the Food stack there is nothing to
