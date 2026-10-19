@@ -200,7 +200,8 @@ nonisolated enum DuressCeremonyQR {
 /// phones.
 private struct CeremonyQRCard: View {
     let url: URL?
-    let instruction: String
+    /// A catalog key: every caller passes a literal, which a `String` here drew in English.
+    let instruction: LocalizedStringKey
 
     var body: some View {
         VStack(spacing: 14) {
@@ -235,9 +236,30 @@ private struct CeremonyQRCard: View {
     }
 }
 
+/// One step's instruction line, drawn in body type under the step's QR code or above its button.
+///
+/// A catalog key: every caller passes a literal, which the two flows' old `String` helpers drew in
+/// English. The one exception is the scanning flow's closing message, already resolved through
+/// `String(localized:)` where it is set, which comes in through ``init(verbatim:)``.
+private struct CeremonyInstruction: View {
+    private let text: Text
+
+    init(_ key: LocalizedStringKey) { text = Text(key) }
+
+    init(verbatim resolved: String) { text = Text(verbatim: resolved) }
+
+    var body: some View {
+        text
+            .font(.fernlet(.body))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+    }
+}
+
 /// The full-width action button both flows use to advance a step.
 private struct CeremonyButton: View {
-    let title: String
+    /// A catalog key: every caller passes a literal, which a `String` here drew in English.
+    let title: LocalizedStringKey
     var identifier: String?
     var destructive = false
     let action: () -> Void
@@ -260,31 +282,56 @@ private struct CeremonyButton: View {
 /// Maps the coordinator's `DuressRecoveryError` cases onto copy that says what to do next. Every
 /// case is a refusal before anything durable happened — that is a property of the coordinator, and
 /// it is why none of this copy has to warn about a half-finished state.
+///
+/// A resolved `String`, because the screen keeps it in `errorMessage` state and draws it verbatim,
+/// so each line goes through `String(localized:)` here rather than reaching `Text` as a key.
 private func ceremonyMessage(for error: Error) -> String {
     guard let recoveryError = error as? DuressRecoveryError else { return error.localizedDescription }
     switch recoveryError {
     case .identityUnavailable:
-        return "Fernlet couldn't reach this phone's identity keys. Close this and try again."
+        return String(localized: "duress.ceremony.error.identityUnavailable",
+                      defaultValue: "Fernlet couldn't reach this phone's identity keys. Close this and try again.",
+                      comment: "Recovery-device ceremony error: the phone's own identity keys could not be read.")
     case .invalidQRCode:
-        return "That code isn't a Fernlet code, or it has expired. Ask the other phone to show a fresh one."
+        return String(localized: "duress.ceremony.error.invalidQRCode",
+                      defaultValue: "That code isn't a Fernlet code, or it has expired. Ask the other phone to show a fresh one.",
+                      comment: "Recovery-device ceremony error: the scanned code is not a Fernlet code or has expired.")
     case .selfEnrollmentRefused:
-        return "That's this phone's own code. A recovery device has to be a different phone."
+        return String(localized: "duress.ceremony.error.selfEnrollmentRefused",
+                      defaultValue: "That's this phone's own code. A recovery device has to be a different phone.",
+                      comment: "Recovery-device ceremony error: the user scanned the same phone they are enrolling.")
     case .notTheEnrolledCustodian:
-        return "That phone isn't the recovery device this one was set up with."
+        return String(localized: "duress.ceremony.error.notTheEnrolledCustodian",
+                      defaultValue: "That phone isn't the recovery device this one was set up with.",
+                      comment: "Recovery-device ceremony error: the scanned phone is not the enrolled recovery device.")
     case .noRoundInProgress:
-        return "This step arrived out of order. Start again from the first code."
+        return String(localized: "duress.ceremony.error.noRoundInProgress",
+                      defaultValue: "This step arrived out of order. Start again from the first code.",
+                      comment: "Recovery-device ceremony error: a ceremony step arrived out of order.")
     case .challengeResponseRejected:
-        return "The other phone's answer didn't check out. Start again from the first code."
+        return String(localized: "duress.ceremony.error.challengeResponseRejected",
+                      defaultValue: "The other phone's answer didn't check out. Start again from the first code.",
+                      comment: "Recovery-device ceremony error: the other phone's answer code failed verification.")
     case .noRecoveryMaterial:
-        return "This phone has no recovery device set up."
+        return String(localized: "duress.ceremony.error.noRecoveryMaterial",
+                      defaultValue: "This phone has no recovery device set up.",
+                      comment: "Recovery-device ceremony error: recovery was started on a phone with no recovery device.")
     case .malformedPayload:
-        return "That code didn't scan cleanly. Try again, holding the phones steady."
+        return String(localized: "duress.ceremony.error.malformedPayload",
+                      defaultValue: "That code didn't scan cleanly. Try again, holding the phones steady.",
+                      comment: "Recovery-device ceremony error: the code did not scan cleanly.")
     case .signatureRejected:
-        return "That code wasn't signed by the phone it claims to come from."
+        return String(localized: "duress.ceremony.error.signatureRejected",
+                      defaultValue: "That code wasn't signed by the phone it claims to come from.",
+                      comment: "Recovery-device ceremony error: the code is not signed by the phone it names.")
     case .recoveryBlobUnreadable:
-        return "This phone can't open that request — it isn't the recovery device for it."
+        return String(localized: "duress.ceremony.error.recoveryBlobUnreadable",
+                      defaultValue: "This phone can't open that request — it isn't the recovery device for it.",
+                      comment: "Recovery-device ceremony error: this phone is not the recovery device for the request it scanned.")
     case .cryptoFailed:
-        return "Something went wrong signing that step. Close this and try again."
+        return String(localized: "duress.ceremony.error.cryptoFailed",
+                      defaultValue: "Something went wrong signing that step. Close this and try again.",
+                      comment: "Recovery-device ceremony error: a signing step failed.")
     }
 }
 
@@ -560,7 +607,7 @@ private struct DuressCeremonyPrimaryFlow: View {
     @ViewBuilder private var stepContent: some View {
         switch step {
         case .scanIdentity:
-            instruction("Start on your other phone: open Settings → App lock → Recovery device, choose \"This is the recovery device\", and scan the code it shows.")
+            CeremonyInstruction("Start on your other phone: open Settings → App lock → Recovery device, choose \"This is the recovery device\", and scan the code it shows.")
             CeremonyButton(title: "Scan their code", identifier: "duress.primary.scanIdentity") { showScanner = true }
         case .showChallenge:
             CeremonyQRCard(url: challengeURL, instruction: "Have your other phone scan this code.")
@@ -568,7 +615,7 @@ private struct DuressCeremonyPrimaryFlow: View {
                 step = .scanResponse
             }
         case .scanResponse:
-            instruction("Your other phone is now showing an answer code. Scan it.")
+            CeremonyInstruction("Your other phone is now showing an answer code. Scan it.")
             CeremonyButton(title: "Scan their answer", identifier: "duress.primary.scanResponse") { showScanner = true }
         case .enterPasscode:
             enterPasscodeStep
@@ -578,12 +625,12 @@ private struct DuressCeremonyPrimaryFlow: View {
                 step = .scanReply
             }
         case .scanReply:
-            instruction("Scan the code your other phone is showing now.")
+            CeremonyInstruction("Scan the code your other phone is showing now.")
             CeremonyButton(title: "Scan their reply", identifier: "duress.primary.scanReply") { showScanner = true }
         case .chooseNewPasscode:
             chooseNewPasscodeStep
         case .done(let message):
-            instruction(message)
+            CeremonyInstruction(verbatim: message)
             CeremonyButton(title: "Done", identifier: "duress.primary.done") { onFinish() }
         }
     }
@@ -625,7 +672,7 @@ private struct DuressCeremonyPrimaryFlow: View {
         }
     }
 
-    private func kindPicker(_ kind: FernletLockCredentialKind, title: String) -> some View {
+    private func kindPicker(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {
         Button {
             newKind = kind
             passcode = ""
@@ -661,13 +708,6 @@ private struct DuressCeremonyPrimaryFlow: View {
             CeremonyButton(title: "Continue", identifier: identifier + ".continue") { submit() }
                 .disabled(isSubmitting)
         }
-    }
-
-    private func instruction(_ text: String) -> some View {
-        Text(text)
-            .font(.fernlet(.body))
-            .foregroundStyle(Color.slate)
-            .fernletWrappingText()
     }
 
     // MARK: Ceremony steps
@@ -755,11 +795,17 @@ private struct DuressCeremonyPrimaryFlow: View {
                 passcode = ""
                 guard lockService.hasRecoveryCustodian,
                       lockService.custodianRecoveryBlob != blobBefore else {
-                    errorMessage = "That passcode didn't set up a recovery device. Check it and try again."
+                    errorMessage = String(
+                        localized: "duress.ceremony.error.enrollmentNotSaved",
+                        defaultValue: "That passcode didn't set up a recovery device. Check it and try again.",
+                        comment: "Recovery-device ceremony error: the passcode was accepted but no recovery device was saved.")
                     step = .scanIdentity
                     return
                 }
-                step = .done("This phone is set up. Your other phone now holds the only key that can open it again — keep it somewhere you can reach.")
+                step = .done(String(
+                    localized: "duress.ceremony.done.enrolled",
+                    defaultValue: "This phone is set up. Your other phone now holds the only key that can open it again — keep it somewhere you can reach.",
+                    comment: "Recovery-device ceremony, last screen after enrolling a recovery device."))
             } catch {
                 passcode = ""
                 errorMessage = error.localizedDescription
@@ -786,9 +832,15 @@ private struct DuressCeremonyPrimaryFlow: View {
                 passcode = ""
                 switch outcome {
                 case .unlockReestablished:
-                    step = .done("Your notes are back. Open the Private tab and enter your new passcode to see them — Face ID is off until you turn it back on in App lock.")
+                    step = .done(String(
+                        localized: "duress.ceremony.done.recovered",
+                        defaultValue: "Your notes are back. Open the Private tab and enter your new passcode to see them — Face ID is off until you turn it back on in App lock.",
+                        comment: "Recovery-device ceremony, last screen after the key came back. 'Private' is the tab's name; 'App lock' is the Settings row's name."))
                 case .destructionRequested:
-                    step = .done("Your recovery device asked Fernlet to let this data go rather than return it. Nothing was recovered. You can start fresh from Settings → App lock.")
+                    step = .done(String(
+                        localized: "duress.ceremony.done.destroyed",
+                        defaultValue: "Your recovery device asked Fernlet to let this data go rather than return it. Nothing was recovered. You can start fresh from Settings → App lock.",
+                        comment: "Recovery-device ceremony, last screen when the recovery device refused and asked for the data to be let go. 'Settings → App lock' names the screen."))
                 }
             } catch {
                 passcode = ""
@@ -811,6 +863,9 @@ private struct DuressCeremonyPrimaryFlow: View {
         case scanReply
         /// Recovery only: the NEW passcode the recovered key is re-locked under.
         case chooseNewPasscode
+        /// Already-localized text (each `.done` site resolves it through `String(localized:)`),
+        /// carried as `String` so `Step` stays `Equatable`; drawn with
+        /// ``CeremonyInstruction/init(verbatim:)``.
         case done(String)
     }
 }
@@ -875,11 +930,11 @@ private struct DuressCeremonyCustodianFlow: View {
                 step = .scanChallenge
             }
         case .scanChallenge:
-            instruction("The other phone is now showing a code of its own. Scan it.")
+            CeremonyInstruction("The other phone is now showing a code of its own. Scan it.")
             CeremonyButton(title: "Scan their code", identifier: "duress.custodian.scanChallenge") { showScanner = true }
         case .showResponse:
             CeremonyQRCard(url: responseURL, instruction: "Have the other phone scan this answer.")
-            instruction("If that phone is being set up, you're done. If it is recovering, it will show one more code.")
+            CeremonyInstruction("If that phone is being set up, you're done. If it is recovering, it will show one more code.")
             CeremonyButton(title: "Done", identifier: "duress.custodian.done") { onFinish() }
             Button("They're recovering — scan their next code") { step = .scanRequest }
                 .buttonStyle(.plain)
@@ -890,7 +945,7 @@ private struct DuressCeremonyCustodianFlow: View {
                 .background(Color.cream, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityIdentifier("duress.custodian.continueToRecovery")
         case .scanRequest:
-            instruction("Scan the request code the other phone is showing.")
+            CeremonyInstruction("Scan the request code the other phone is showing.")
             CeremonyButton(title: "Scan their request", identifier: "duress.custodian.scanRequest") { showScanner = true }
         case .decide:
             decideStep
@@ -931,13 +986,6 @@ private struct DuressCeremonyCustodianFlow: View {
                 answer(.destroy)
             }
         }
-    }
-
-    private func instruction(_ text: String) -> some View {
-        Text(text)
-            .font(.fernlet(.body))
-            .foregroundStyle(Color.slate)
-            .fernletWrappingText()
     }
 
     private func handleScan(_ url: URL) {

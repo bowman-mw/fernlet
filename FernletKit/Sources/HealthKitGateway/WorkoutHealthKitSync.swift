@@ -309,7 +309,10 @@ public final class WorkoutHealthKitSync {
             }
             return nil
         }()
-        let name = (ownMetadata?["fernlet.activityName"] as? String) ?? activityType.displayName
+        // `defaultName`, never `displayName`: a foreign sample carries no name of its own, so this
+        // one is PERSISTED, and a rebuild must produce the same row on every device whatever its
+        // language, or the day-record merge flips the name back and forth between them.
+        let name = (ownMetadata?["fernlet.activityName"] as? String) ?? activityType.defaultName
         let mode: WorkoutMode = {
             if sample.workoutActivityType == .traditionalStrengthTraining || sample.workoutActivityType == .functionalStrengthTraining {
                 return .strengthTraining

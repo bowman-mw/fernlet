@@ -206,7 +206,7 @@ struct WorkoutHealthKitSyncTests {
         sync.reconcileWorkouts([sample])
 
         let imported = try #require(context.upsertedWorkouts.first?.workout)
-        #expect(imported.name == WorkoutActivityType.running.displayName)
+        #expect(imported.name == WorkoutActivityType.running.defaultName)
         #expect(imported.notes.isEmpty)
         #expect(imported.exercises.isEmpty)
         #expect(imported.intensity == .moderate)

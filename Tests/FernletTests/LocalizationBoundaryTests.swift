@@ -818,6 +818,68 @@ struct LocalizationBoundaryTests {
         )
     }
 
+    /// The name a workout of a given activity type is SAVED under (2026-10-19).
+    ///
+    /// `WorkoutActivityType.displayName` used to be English literals doing two jobs: the picker's
+    /// label and the name stored when the name field is left blank. It is now localized, and the
+    /// stored half is forked into `defaultName`, which must keep these exact spellings: they are
+    /// sitting in `Workout.name` and `PlannedWorkout.name`/`.exercises` on every synced row, and the
+    /// workout row and week calendar file a logged workout under a category by keyword-matching
+    /// English words in its name. A respelling changes nothing visible in English and quietly
+    /// re-files history; a Health import rebuilt on a device in another language would flip the
+    /// row's name back and forth through the day-record merge.
+    @Test func frozenWorkoutActivityDefaultNames() {
+        let names = WorkoutActivityType.allCases.map(\.defaultName)
+        #expect(
+            names == [
+                "Running", "Walking", "Hiking", "Cycling", "Indoor Cycling",
+                "Yoga", "Pilates", "Barre", "Dance", "Social Dance",
+                "Pool Swim", "Open Water Swim", "Rowing", "Elliptical", "Stair Climbing", "Stairs",
+                "HIIT", "Kickboxing", "Martial Arts", "Climbing", "Jump Rope",
+                "Tennis", "Basketball", "Soccer", "Pickleball", "Badminton", "Table Tennis",
+                "Racquetball", "Squash",
+                "Core Training", "Flexibility", "Mind and Body", "Tai Chi",
+                "Functional Strength Training", "Traditional Strength Training",
+                "Cross Training", "Mixed Cardio", "Preparation and Recovery", "Cooldown",
+                "Other"
+            ],
+            """
+            WorkoutActivityType.defaultName changed (now \(names)). It is the name a blank-named \
+            activity is PERSISTED under and the name a foreign Health import takes, and the category \
+            inference keyword-matches it in English. Localize `displayName`, never this.
+            """
+        )
+    }
+
+    /// The four sites that SAVE an activity's name read the frozen half of the fork.
+    ///
+    /// In English `defaultName` and `displayName` are the same string, so pointing one of these
+    /// back at `displayName` compiles, passes every other test, and only shows up on a translated
+    /// device — as German names in synced rows and a Health import that renames itself.
+    @Test func theSavedActivityNameSitesReadTheFrozenName() throws {
+        let sites: [(path: String, needle: String, count: Int, what: String)] = [
+            ("App/Fernlet/MoveView.swift", "return selectedActivityType.defaultName", 2,
+             "WorkoutSheet.workoutName and WorkoutPlanSheet.plannedName, the names a blank-named log or plan is saved under"),
+            ("App/Fernlet/MoveView.swift", "return selectedActivityType?.defaultName ?? \"\"", 1,
+             "WorkoutPlanSheet.exerciseText, saved as PlannedWorkout.exercises"),
+            ("FernletKit/Sources/HealthKitGateway/WorkoutHealthKitSync.swift",
+             "?? activityType.defaultName", 1,
+             "the name a Health sample from another app is imported under"),
+        ]
+        for site in sites {
+            let source = try RepoRoot.source(site.path)
+            let found = source.components(separatedBy: site.needle).count - 1
+            #expect(
+                found == site.count,
+                """
+                \(site.path) contains `\(site.needle)` \(found) time(s), expected \(site.count): \(site.what). \
+                A persisted name must be `defaultName`; `displayName` is the user's language and differs \
+                per device. If the site moved, re-point this pin at it.
+                """
+            )
+        }
+    }
+
     /// Recipe units (Docs/Ingredient-Search-Deep-Research-2026-09-29.md §6.6, fix F10).
     ///
     /// `RecipeUnit` raw values are the `unit` string on every persisted `RecipeIngredient`, they ride
@@ -2491,6 +2553,21 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/OnboardingCoordinator.swift",
                      declaration: "private func subtitle(for pattern: DietaryPattern) -> LocalizedStringKey {",
                      role: "the onboarding eating-pattern rows' one-line descriptions"),
+        // Duress recovery ceremony (2026-10-19): the holes the field-title round left in this file.
+        // Every caller of each passes a literal; the one resolved line comes in through
+        // `CeremonyInstruction(verbatim:)`.
+        ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+                     declaration: "private func kindPicker(_ kind: FernletLockCredentialKind, title: LocalizedStringKey) -> some View {",
+                     role: "the new-passcode kind rows: 4-digit PIN, 6-digit PIN, Password"),
+        ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+                     declaration: "init(_ key: LocalizedStringKey) { text = Text(key) }",
+                     role: "CeremonyInstruction, each step's instruction line in both flows"),
+        ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+                     declaration: "let instruction: LocalizedStringKey",
+                     role: "CeremonyQRCard's line under each code"),
+        ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+                     declaration: "let title: LocalizedStringKey",
+                     role: "CeremonyButton, every step's advance button"),
     ]
 
     /// The members this round forked are still forked.
@@ -2594,7 +2671,54 @@ struct LocalizationBoundaryTests {
                      source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Lower-carb options without strict tracking.",
                      source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
-    ]
+        // Domain display names (2026-10-19). The forty `activityType.*` keys are checked from
+        // `allCases` in `everyActivityTypeNameReachedTheDomainCatalog`.
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "workoutMode.strengthTraining",
+                     source: "WorkoutMode.label, literal → String(localized:bundle: .module)"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "workoutMode.activity",
+                     source: "WorkoutMode.label, literal → String(localized:bundle: .module)"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "dietaryPattern.balanced",
+                     source: "DietaryPattern.label, literal → String(localized:bundle: .module)"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "dietaryPattern.higherProtein",
+                     source: "DietaryPattern.label, literal → String(localized:bundle: .module)"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "dietaryPattern.plantForward",
+                     source: "DietaryPattern.label, literal → String(localized:bundle: .module)"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings", key: "dietaryPattern.lowerCarb",
+                     source: "DietaryPattern.label, literal → String(localized:bundle: .module)"),
+        // Duress recovery ceremony (2026-10-19): one key per forked member per flow (a revert drops
+        // every caller's key at once), and every `String(localized:)` line, since each of those can
+        // go back to a bare literal on its own.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "4-digit PIN",
+                     source: "the ceremony's kindPicker title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "6-digit PIN",
+                     source: "the ceremony's kindPicker title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Password",
+                     source: "the ceremony's kindPicker title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Your other phone is now showing an answer code. Scan it.",
+                     source: "CeremonyInstruction in the scanning flow, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Scan the request code the other phone is showing.",
+                     source: "CeremonyInstruction in the custodian flow, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Have your other phone scan this code.",
+                     source: "CeremonyQRCard.instruction in the scanning flow, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Have the other phone scan this answer.",
+                     source: "CeremonyQRCard.instruction in the custodian flow, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "This is the phone I'm protecting",
+                     source: "CeremonyButton.title in the enrolment sheet, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "They've scanned it",
+                     source: "CeremonyButton.title in both flows, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Return the key",
+                     source: "CeremonyButton.title in the custodian flow, forked String → LocalizedStringKey"),
+    ] + ["enrolled", "recovered", "destroyed"].map {
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "duress.ceremony.done.\($0)",
+                     source: "the scanning flow's closing message, literal → String(localized:)")
+    } + [
+        "identityUnavailable", "invalidQRCode", "selfEnrollmentRefused", "notTheEnrolledCustodian",
+        "noRoundInProgress", "challengeResponseRejected", "noRecoveryMaterial", "malformedPayload",
+        "signatureRejected", "recoveryBlobUnreadable", "cryptoFailed", "enrollmentNotSaved",
+    ].map {
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "duress.ceremony.error.\($0)",
+                     source: "the ceremony's error copy, literal → String(localized:)")
+    }
 
     /// The forks actually reached a catalog.
     ///
@@ -2627,6 +2751,31 @@ struct LocalizationBoundaryTests {
             clean build and no other failing test — or the catalogs were not re-synced. Run \
             Scripts/sync-string-catalogs.sh and commit the diff with the code change:
             \(missing.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Every activity type's localized name reached the domain catalog (2026-10-19).
+    ///
+    /// Forty `String(localized:)` lines, each revertible to a bare literal on its own without a
+    /// compile error or a visible change in English, so they are checked from `allCases` rather
+    /// than pinned one by one in ``harvestedForkKeys``. The key is the case name, which is also the
+    /// raw value: the enum declares no custom raw values.
+    @Test func everyActivityTypeNameReachedTheDomainCatalog() throws {
+        let catalog = "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings"
+        let data = try Data(contentsOf: RepoRoot.url(catalog))
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        #expect(!strings.isEmpty, "\(catalog) parsed to zero keys — the catalog moved or broke")
+        let missing = WorkoutActivityType.allCases
+            .map { "activityType.\($0.rawValue)" }
+            .filter { strings[$0] == nil }
+        #expect(
+            missing.isEmpty,
+            """
+            \(missing.count) activity name(s) are not in \(catalog): \(missing). Either a \
+            `displayName` case went back to a bare English literal, or the catalogs were not \
+            re-synced. Run Scripts/sync-string-catalogs.sh and commit the diff with the code change.
             """
         )
     }
