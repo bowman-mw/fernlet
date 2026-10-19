@@ -764,13 +764,41 @@ public struct FernletLockSetupView: View {
         .tint(Color.moss)
     }
 
-    /// How long the success toast dwells before the sheet dismisses itself.
-    private static let successToastDwell: Duration = .seconds(1.5)
+    /// How long the success toast dwells before the sheet dismisses itself, read as it appears.
+    ///
+    /// 1.5 s is the sighted budget. Under VoiceOver or Switch Control the cursor cannot reach the
+    /// toast in that time, and the sheet closed before it could be read. The toast carries nothing
+    /// to act on, so the notice window applies. Holding the sheet that long is harmless:
+    /// ``completedStep`` has no live controls, and Cancel is gone.
+    ///
+    /// - Parameter window: Test seam; `nil` (production) resolves to ``FernletDismissalWindow/system``
+    ///   in the body, read at the moment of use, because VoiceOver can be turned on mid-setup.
+    static func successToastDwell(using window: FernletDismissalWindow? = nil) -> Duration {
+        (window ?? .system).window(standard: .seconds(1.5), assistive: FernletDismissalWindow.assistiveNoticeWindow)
+    }
+
+    /// Speaks the success toast as it appears.
+    ///
+    /// The toast arrives with no focus change, so a VoiceOver user heard nothing, and then the
+    /// sheet closed under them. This speaks the toast's own sentence, already resolved against
+    /// this module's catalog (a package caller's only correct form; see ``FernletAnnouncer``). It
+    /// is spoken as a success in both variants: the lock IS configured, and the Face ID variant is
+    /// a success with a caveat the user still has to hear. It speaks the event, never the passcode
+    /// or its kind.
+    ///
+    /// - Parameters:
+    ///   - biometricFailed: Whether the biometric opt-in the user asked for did not take.
+    ///   - biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+    ///   - announcer: Test seam; `nil` (production) resolves to ``FernletAnnouncer/system``.
+    static func announceSuccess(biometricFailed: Bool, biometry: String, using announcer: FernletAnnouncer? = nil) {
+        let message = successToastMessage(biometricFailed: biometricFailed, biometry: biometry)
+        (announcer ?? .system).announce(.success, resolved: message)
+    }
 
     /// Commits the configuration after the disclosure is acknowledged: builds the
     /// `FernletLockCredential` for the chosen kind, calls the lock service's
-    /// `configure(credential:)`, optionally enables biometrics, then shows the success
-    /// toast and dismisses. On a `configure` error the flow rewinds to the entry step
+    /// `configure(credential:)`, optionally enables biometrics, then shows and announces the
+    /// success toast and dismisses. On a `configure` error the flow rewinds to the entry step
     /// with both fields cleared.
     ///
     /// At most ONE configure runs at a time (``isFinalizing``): concurrent configures would each
@@ -803,8 +831,10 @@ public struct FernletLockSetupView: View {
                 }
 
                 withAnimation { showSuccess = true }
+                Self.announceSuccess(biometricFailed: biometricSetupFailed,
+                                     biometry: biometricName(lockService.biometricType))
                 do {
-                    try await Task.sleep(for: Self.successToastDwell)
+                    try await Task.sleep(for: Self.successToastDwell())
                 } catch {
                     // Cancelled: skip the toast dwell and dismiss immediately.
                 }
@@ -896,8 +926,19 @@ public struct FernletLockSetupView: View {
     /// The toast copy. The lock is always configured by the time it appears; an opt-in biometric
     /// enable that FAILED is named here rather than hidden behind an unqualified success.
     private var successToastMessage: String {
-        guard biometricSetupFailed else { return FernletLockCopy.Setup.toastConfigured }
-        return FernletLockCopy.Setup.toastBiometricFailed(biometricName(lockService.biometricType))
+        Self.successToastMessage(biometricFailed: biometricSetupFailed,
+                                 biometry: biometricName(lockService.biometricType))
+    }
+
+    /// The toast's sentence for either outcome. It is one function so the toast and its
+    /// announcement (``announceSuccess(biometricFailed:biometry:using:)``) cannot drift apart.
+    ///
+    /// - Parameters:
+    ///   - biometricFailed: Whether the biometric opt-in the user asked for did not take.
+    ///   - biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+    static func successToastMessage(biometricFailed: Bool, biometry: String) -> String {
+        guard biometricFailed else { return FernletLockCopy.Setup.toastConfigured }
+        return FernletLockCopy.Setup.toastBiometricFailed(biometry)
     }
 
     private var successToast: some View {
