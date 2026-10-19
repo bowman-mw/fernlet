@@ -1037,6 +1037,9 @@
     "A couple of readings looked close. Pick the one that fits." : {
 
     },
+    "A flexible mix of meals and snacks." : {
+
+    },
     "A gentle daily check-in reminder, only if you want one." : {
 
     },
@@ -1170,6 +1173,9 @@
 
     },
     "Add by hand" : {
+
+    },
+    "Add exercise" : {
 
     },
     "Add ingredient" : {
@@ -2637,6 +2643,9 @@
     "Excluding from device backup means your journals, intimate logs and cycle history won't be in any iPhone backup. Because they're encrypted with a key that never leaves this device, erasing or losing this device would lose them permanently. Exclude anyway?" : {
 
     },
+    "Exercise" : {
+
+    },
     "Exercise %lld of %lld · %lld min left" : {
       "localizations" : {
         "en" : {
@@ -3730,6 +3739,9 @@
     "Looking for nearby people..." : {
 
     },
+    "Lower-carb options without strict tracking." : {
+
+    },
     "MACROS" : {
 
     },
@@ -3931,6 +3943,12 @@
 
     },
     "More options for %@" : {
+
+    },
+    "More plants, legumes, grains, and produce." : {
+
+    },
+    "More protein-forward ideas when useful." : {
 
     },
     "More sets" : {
@@ -4567,6 +4585,9 @@
 
     },
     "Parts: %@" : {
+
+    },
+    "Passcode" : {
 
     },
     "Paste Fernlet recipe data here" : {
@@ -5616,6 +5637,9 @@
 
     },
     "Search by name" : {
+
+    },
+    "Search exercise or muscle" : {
 
     },
     "Search foods" : {
@@ -8592,6 +8616,18 @@
         }
       }
     },
+    "move.plannedName.placeholder.split" : {
+      "comment" : "Placeholder in the plan sheet's optional name field: the name the plan takes if left blank. The argument is the split's name, e.g. 'Upper' or 'Full Body'.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ workout"
+          }
+        }
+      }
+    },
     "move.space.accessibilityValue" : {
       "comment" : "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.",
       "extractionState" : "extracted_with_value",
@@ -8600,6 +8636,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@, %2$lld items"
+          }
+        }
+      }
+    },
+    "move.workoutName.placeholder.activity" : {
+      "comment" : "Placeholder in the optional workout-name field before an activity is chosen. Names an example activity.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional, e.g. Saturday ride"
+          }
+        }
+      }
+    },
+    "move.workoutName.placeholder.strength" : {
+      "comment" : "Placeholder in the optional workout-name field before any exercise is added. Names an example strength session.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Optional, e.g. Upper strength"
           }
         }
       }

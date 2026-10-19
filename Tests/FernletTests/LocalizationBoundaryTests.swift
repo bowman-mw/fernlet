@@ -2470,6 +2470,27 @@ struct LocalizationBoundaryTests {
         ForkedMember(path: "App/Fernlet/VerifyQRViews.swift",
                      declaration: "var prompt: LocalizedStringKey = \"Point at the code on your friend's screen.\"",
                      role: "VerifyQRScanSheet's line under the viewfinder"),
+        // Field titles (2026-10-18): the Sufficient Contrast field-prompt round mirrored each field's
+        // title into its prompt with `fieldPrompt(verbatim:)` where the title was a `String`, which
+        // kept these holes. Each title also names its field.
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var title: LocalizedStringKey = \"Exercise\"",
+                     role: "ExerciseSearchPicker's caption"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var placeholder: LocalizedStringKey = \"Search exercise or muscle\"",
+                     role: "ExerciseSearchPicker's search-field title and prompt"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "var addLabel: LocalizedStringKey = \"Add exercise\"",
+                     role: "WorkoutExerciseBuilder's Add button"),
+        ForkedMember(path: "App/Fernlet/MoveView.swift",
+                     declaration: "private func editableField( _ label: LocalizedStringKey,",
+                     role: "EditablePlannedExerciseRow's Sets/Reps/Weight/Speed/Incline/Details captions and field titles"),
+        ForkedMember(path: "App/Fernlet/DuressRecoveryCeremonyViews.swift",
+                     declaration: "private func credentialField( text: Binding<String>, placeholder: LocalizedStringKey,",
+                     role: "the duress recovery ceremony's passcode field title and prompt"),
+        ForkedMember(path: "App/Fernlet/OnboardingCoordinator.swift",
+                     declaration: "private func subtitle(for pattern: DietaryPattern) -> LocalizedStringKey {",
+                     role: "the onboarding eating-pattern rows' one-line descriptions"),
     ]
 
     /// The members this round forked are still forked.
@@ -2549,6 +2570,30 @@ struct LocalizationBoundaryTests {
                      source: "the duress recovery ceremony's VerifyQRScanSheet prompt, forked String → LocalizedStringKey"),
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Point at the code on the other phone's screen.",
                      source: "the duress recovery ceremony's VerifyQRScanSheet prompt, forked String → LocalizedStringKey"),
+        // Field titles (2026-10-18). "New passcode", "Sets", "Reps", "Weight", "Speed", "Incline" and
+        // "Details" were already harvested from other call sites.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.workoutName.placeholder.activity",
+                     source: "WorkoutSheet/WorkoutPlanSheet name placeholder's activity fallback, literal → String(localized:)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.workoutName.placeholder.strength",
+                     source: "WorkoutSheet.namePlaceholder's strength fallback, literal → String(localized:)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "move.plannedName.placeholder.split",
+                     source: "WorkoutPlanSheet.plannedNamePlaceholder, English \" workout\" suffix → String(localized:)"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Exercise",
+                     source: "ExerciseSearchPicker.title's default, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Search exercise or muscle",
+                     source: "ExerciseSearchPicker.placeholder's default, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Add exercise",
+                     source: "WorkoutExerciseBuilder.addLabel and the guided editor's picker title, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Passcode",
+                     source: "the duress recovery ceremony's credentialField placeholder, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "A flexible mix of meals and snacks.",
+                     source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "More protein-forward ideas when useful.",
+                     source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "More plants, legumes, grains, and produce.",
+                     source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: "Lower-carb options without strict tracking.",
+                     source: "OnboardingChoiceRow.subtitle, forked String → LocalizedStringKey"),
     ]
 
     /// The forks actually reached a catalog.
