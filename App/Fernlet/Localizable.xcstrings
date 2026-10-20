@@ -1230,8 +1230,16 @@
     "A second code you can give away" : {
 
     },
-    "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted." : {
-      "comment" : "Weekly totals screen: how the per-muscle set counts are worked out."
+    "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. A guided session marked done counts the sets it planned. Warm-ups, stretches, holds and ramp-up sets aren't counted." : {
+      "comment" : "Weekly totals screen: how the per-muscle set counts are worked out. 'Marked done' = the guided session's Mark done button, used instead of running it set by set.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. A guided session marked done counts the sets it planned. Warm-ups, stretches, holds and ramp-up sets aren't counted."
+          }
+        }
+      }
     },
     "A small daily care companion built around privacy, local control, and enoughness." : {
 
@@ -2458,8 +2466,16 @@
     "Counting every sealed surface…" : {
 
     },
-    "Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted." : {
-      "comment" : "Weekly totals screen: which workouts the aerobic minutes include."
+    "Counts cardio, sports and dance, including workouts from Apple Health. A strength session adds only the planned minutes of a cardio block inside it; yoga, Pilates and other mind-body sessions aren't counted." : {
+      "comment" : "Weekly totals screen: which workouts the aerobic minutes include. A 'cardio block' is a cardio part inside a lifting session, such as 'Easy cardio - 20 min'; its minutes count as planned.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Counts cardio, sports and dance, including workouts from Apple Health. A strength session adds only the planned minutes of a cardio block inside it; yoga, Pilates and other mind-body sessions aren't counted."
+          }
+        }
+      }
     },
     "Counts stored blobs by their format MARKER BYTES only — nothing is decrypted, and nothing is written or saved. One row per cryptographic surface; a surface that cannot be counted shows a dash and says why, never a zero." : {
 
