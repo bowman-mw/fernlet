@@ -468,7 +468,8 @@ private final class SpeechRig {
         #expect(rig.session.calls == [.configure(.phoneSpeaker), .activate, .configure(.phoneSpeaker), .activate])
         rig.voice.finish(line: 1)
         await rig.speaker.settled()
-        #expect(rig.session.calls.filter { $0 == .deactivate }.count == 1)
+        let deactivations = rig.session.calls.filter { $0 == .deactivate }.count
+        #expect(deactivations == 1)
         #expect(rig.session.calls.last == .deactivate)
         #expect(rig.voice.said == ["Hold's done.", "Next: Cat-cow."])
     }
