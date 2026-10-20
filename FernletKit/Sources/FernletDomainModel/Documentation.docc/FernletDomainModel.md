@@ -534,7 +534,8 @@ cool-down; and ``WorkoutSessionLength`` sets a 20, 30, 45 or 60-minute budget. `
 times a session by the guided runner's own rule — the plan card's estimate and the run's countdown start
 equal — and ``WorkoutSessionBudget`` fits each session into the budget in the owner's order: the short
 warm-up, cool-down stretches down to two, accessory work (the jumps, the accessory lifts from the last,
-the balance drill), accessory sets, then main-lift sets down to two. Main lifts are never dropped and
+the balance drill), accessory sets, the warm-up ramp cut to its one set nearest 60 % (never to none), then
+main-lift sets down to two. Main lifts are never dropped and
 nothing grows, so the injury limits and the guard's lighter sets hold; when even the shortest version is
 over, the note says how long it runs. A cardio session's descriptor minutes are capped instead.
 
@@ -663,14 +664,18 @@ estimate — so the same history always builds the same plan.
   ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
   level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
   itself now parks a newer build's equipment tokens and keys.
-- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets (about 40 % × 8, 60 % × 5,
-  80 % × 3) in front of a barbell or other big compound main lift that has a suggested weight, when
+- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets in front of the session's
+  FIRST heavy main lift — a compound main lift on a barbell or dumbbells — when it has a suggested
+  weight; when that lift can't ramp, no later lift does. A barbell ramp is the empty bar × 8, then
+  about 60 % × 5 and 80 % × 3; a dumbbell ramp is about 40 % × 8, 60 % × 5 and 80 % × 3 on the
+  dumbbells the location owns (its ``LoadLadder``), else 5 lb or 2 kg steps. It runs when
   ``WorkoutLoadContext/warmUpSets`` is on (the synced `FernletSettings.workoutWarmUpSets`, defaulting
   on for intermediate and advanced lifters) and the day is not light. Each is a single-set step tagged
   `.ramp` like the calibration's, so the log writes "(ramp-up)" and no estimate, plateau check or
-  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to drop. Barbell
-  warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the standard
-  45 lb / 20 kg bar and plates) says which plates go on each side, or the closest load it can make.
+  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to cut to one set.
+  Barbell warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the
+  standard 45 lb / 20 kg bar and plates, or the location's own bar and plates) says which plates go on
+  each side, or the closest load it can make.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
