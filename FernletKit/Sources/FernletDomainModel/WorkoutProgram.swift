@@ -375,10 +375,32 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
 
 /// A place the user trains and the equipment it has. Defaults assume a fully-stocked gym; the user
 /// can add a home/travel location with a narrower set. Bodyweight is always available everywhere.
+///
+/// Forward compatible both ways (2026-10-20). Equipment tokens a newer build added decode into
+/// ``unknownEquipmentTokens`` and are written back beside the known ones (``EnumDecodeCompat``), and
+/// any other key a newer build writes inside a location is parked in ``parkedUnknownKeys`` and written
+/// back — so a re-save here no longer drops a newer device's equipment or fields. The location's
+/// ``weights`` are NOT part of this encoding: ``FernletSettings`` carries them at its top level
+/// (`workoutLocationWeights`), because builds before this one drop unknown nested keys on a re-save.
 public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     public var id: UUID
     public var name: String
     public var ownedEquipment: Set<GymEquipment>
+    /// Equipment a newer build ticked that this one does not know, kept and written back under
+    /// `unknownOwnedEquipmentTokens` (deduplicated, bounded). Never shown or toggled here.
+    public var unknownEquipmentTokens: [String] = []
+    /// "Weights I have": the dumbbells, kettlebells, bar and plates here. Empty when not set.
+    /// Persisted at the settings blob's top level (see the type's note).
+    public var weights = WorkoutWeightInventory()
+    /// A weights entry this build could not read (a unit only a newer build knows), kept verbatim and
+    /// written back until the user sets this location's weights here (the last editor wins).
+    public var unreadableWeights: JSONValue?
+    /// Keys a newer build wrote inside this location that this one does not know, written back
+    /// verbatim at the location's own level. Never read for meaning.
+    public var parkedUnknownKeys: [String: JSONValue] = [:]
+
+    /// Most unknown keys parked from one location (R3).
+    public static let maxParkedKeys = 16
 
     public init(id: UUID = UUID(), name: String, ownedEquipment: Set<GymEquipment>) {
         self.id = id
@@ -390,18 +412,16 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try c.decode(String.self, forKey: .name)
-        // Defensive: drop any unknown raw values rather than throwing (handles older saves) — that
-        // is `compactMap` below. The decode itself only throws when the key is PRESENT and is not
-        // an array of strings, i.e. real corruption, which must not be silent (R7): the recovery is
-        // an empty equipment set that the next save persists, so it is named in the log.
-        var raws: [String] = []
-        do {
-            raws = try c.decodeIfPresent([String].self, forKey: .ownedEquipment) ?? []
-        } catch {
-            FernletAuditLog.log("workout.location.ownedEquipment.decodeFailed",
-                                context: ["error": error.localizedDescription])
-        }
-        ownedEquipment = Set(raws.compactMap(GymEquipment.init(rawValue:)))
+        // Unknown raw values park rather than throw or vanish (`splitRawTokens`). The decode itself
+        // only throws when a key is PRESENT and is not an array of strings, i.e. real corruption,
+        // which must not be silent (R7): the recovery is an empty list that the next save persists,
+        // so it is named in the log.
+        let raws = Self.tokens(c, .ownedEquipment)
+        let parked = Self.tokens(c, .unknownOwnedEquipmentTokens)
+        let split = EnumDecodeCompat.splitRawTokens(raws + parked, as: GymEquipment.self)
+        ownedEquipment = Set(split.known)
+        unknownEquipmentTokens = split.unknown
+        parkedUnknownKeys = try Self.parkedKeys(from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -409,12 +429,52 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
         try c.encode(id, forKey: .id)
         try c.encode(name, forKey: .name)
         try c.encode(ownedEquipment.map(\.rawValue).sorted(), forKey: .ownedEquipment)
+        // Written only when something is parked, so every location so far keeps its exact shape.
+        if !unknownEquipmentTokens.isEmpty {
+            try c.encode(unknownEquipmentTokens, forKey: .unknownOwnedEquipmentTokens)
+        }
+        guard !parkedUnknownKeys.isEmpty else { return }
+        let known = Set(CodingKeys.allCases.map(\.stringValue))
+        var parked = encoder.container(keyedBy: LocationParkedKey.self)
+        for (key, value) in parkedUnknownKeys.sorted(by: { $0.key < $1.key }) where !known.contains(key) {
+            try parked.encode(value, forKey: LocationParkedKey(stringValue: key))
+        }
     }
 
     /// Persisted JSON keys for a ``WorkoutLocation``'s wire format.
     ///
     /// `ownedEquipment` is written as sorted raw values (see `encode(to:)`) so output is deterministic.
-    private enum CodingKeys: String, CodingKey { case id, name, ownedEquipment }
+    /// `CaseIterable` so the decoder can tell which keys to park; renaming a case is a wire break.
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case id, name, ownedEquipment, unknownOwnedEquipmentTokens
+    }
+
+    /// The strings of one token-array key; empty, with the failure logged, when the key holds
+    /// something else.
+    private static func tokens(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> [String] {
+        do {
+            return try c.decodeIfPresent([String].self, forKey: key) ?? []
+        } catch {
+            FernletAuditLog.log("workout.location.\(key.stringValue).decodeFailed",
+                                context: ["error": error.localizedDescription])
+            return []
+        }
+    }
+
+    /// Every key this build does not know, with its raw value — at most ``maxParkedKeys``, taken in
+    /// key order so the same input always parks the same keys.
+    private static func parkedKeys(from decoder: Decoder) throws -> [String: JSONValue] {
+        let known = Set(CodingKeys.allCases.map(\.stringValue))
+        let container = try decoder.container(keyedBy: LocationParkedKey.self)
+        let unknown = container.allKeys.filter { !known.contains($0.stringValue) }
+            .sorted { $0.stringValue < $1.stringValue }
+            .prefix(maxParkedKeys)
+        var parked: [String: JSONValue] = [:]
+        for key in unknown {
+            parked[key.stringValue] = try container.decode(JSONValue.self, forKey: key)
+        }
+        return parked
+    }
 
     /// Equipment available regardless of location (no gear required).
     public static let alwaysAvailable: Set<Equipment> = [.bodyweight, .none]
@@ -461,6 +521,16 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
     nonisolated public static var home: WorkoutLocation {
         WorkoutLocation(id: homeID, name: "Home", ownedEquipment: [.dumbbells, .kettlebells, .resistanceBands, .yogaMat, .pullUpBar])
     }
+}
+
+/// A `CodingKey` that admits any string — how ``WorkoutLocation`` finds the keys a newer build added
+/// and writes them back by name. Non-failable `init(stringValue:)` satisfies the failable
+/// requirement, so the encode site needs no unwrap.
+private nonisolated struct LocationParkedKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+    init(stringValue: String) { self.stringValue = stringValue; self.intValue = nil }
+    init(intValue: Int) { self.stringValue = String(intValue); self.intValue = intValue }
 }
 
 // MARK: - Deterministic safety / equipment feasibility

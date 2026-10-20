@@ -91,15 +91,47 @@ public nonisolated enum WorkoutCalibration {
         return confidence == .high ? .strengthCheck : .submaximal
     }
 
-    /// The sets of one calibration, on the equipment's steps.
+    /// The sets of one calibration, on the equipment's steps — or, when the location has its weights
+    /// set (`ladder`), on loads it has (``snapped(_:onto:)``).
     ///
     /// - Parameters:
     ///   - todaysSuggested: the regular prescription's suggested weight, used by the strength check.
     ///   - todaysReps: the regular prescription's reps, used by the strength check.
+    ///   - ladder: the loads the location has for this lift; nil keeps the equipment's steps.
     public static func sets(
-        kind: CalibrationKind, oneRepMax: Double, todaysSuggested: Double?, todaysReps: Int, step: Double
+        kind: CalibrationKind, oneRepMax: Double, todaysSuggested: Double?, todaysReps: Int, step: Double,
+        ladder: LoadLadder? = nil
     ) -> [CalibrationSet] {
         guard oneRepMax > 0, oneRepMax.isFinite, step > 0 else { return [] }
+        let onSteps = stepSets(kind: kind, oneRepMax: oneRepMax, todaysSuggested: todaysSuggested,
+                               todaysReps: todaysReps, step: step)
+        guard let ladder else { return onSteps }
+        return snapped(onSteps, onto: ladder)
+    }
+
+    /// Each set placed on the nearest load the location has (a tie going lighter). Sparse weights can
+    /// land two sets on one load, so a ramp set that lands on or above the test (or first attempt), or
+    /// on the ramp set before it, is dropped — a ramp only ever climbs toward the test — and an attempt
+    /// that lands on the one before it is dropped too.
+    public static func snapped(_ sets: [CalibrationSet], onto ladder: LoadLadder) -> [CalibrationSet] {
+        let placed = sets.map {
+            CalibrationSet(step: $0.step, reps: $0.reps, weight: ladder.nearest(to: $0.weight), restSeconds: $0.restSeconds)
+        }
+        let key = placed.first { $0.step != .ramp }?.weight ?? .infinity
+        var kept: [CalibrationSet] = []
+        for set in placed {
+            let previous = kept.last(where: { $0.step == set.step })?.weight
+            if let previous, abs(previous - set.weight) <= WorkoutLoadEngine.weightTolerance, set.step != .test { continue }
+            if set.step == .ramp, set.weight >= key - WorkoutLoadEngine.weightTolerance { continue }
+            kept.append(set)
+        }
+        return kept
+    }
+
+    /// The sets on the equipment's steps (the protocol before any location's weights).
+    static func stepSets(
+        kind: CalibrationKind, oneRepMax: Double, todaysSuggested: Double?, todaysReps: Int, step: Double
+    ) -> [CalibrationSet] {
         switch kind {
         case .strengthCheck:
             let weight = todaysSuggested ?? testWeight(oneRepMax: oneRepMax, step: step)
