@@ -6,8 +6,9 @@ import FernletUI
 /// engine reads.
 ///
 /// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
-/// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
-/// sport/interests, and areas to work around — plus the guided runner's cue switches (Workout haptics,
+/// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience
+/// (with the synced "Warm-up sets before heavy lifts" switch, ``WarmUpSetsToggle``), sport/interests,
+/// and areas to work around — plus the guided runner's cue switches (Workout haptics,
 /// Workout sounds and Spoken cues, ``WorkoutCueSettingsSection``), which are device-local rather than part of the
 /// synced profile and are stored on Save like the rest. Injury-area chips expand to the muscle-group and
 /// movement-pattern sets the planner avoids. Changing the split is a plain edit — a neutral note
@@ -26,6 +27,9 @@ struct WorkoutSetupSheet: View {
     @State private var cuePreferences: FernletFeedbackPreferences
     /// The "Spoken cues" switch, a draft the same way.
     @State private var spokenCues: Bool
+    /// "Warm-up sets before heavy lifts": nil until chosen (the level's default shows), synced on Save.
+    @State private var warmUpSets: Bool?
+    private let initialWarmUpSets: Bool?
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -93,6 +97,8 @@ struct WorkoutSetupSheet: View {
         let spoken = WorkoutCuePreferences.spokenEnabled()
         _spokenCues = State(initialValue: spoken)
         self.initialSpokenCues = spoken
+        _warmUpSets = State(initialValue: settings.workoutWarmUpSets)
+        self.initialWarmUpSets = settings.workoutWarmUpSets
     }
 
     /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
@@ -104,6 +110,7 @@ struct WorkoutSetupSheet: View {
             || selectedSplitID != originalSelectedSplitID
             || cuePreferences != initialCuePreferences
             || spokenCues != initialSpokenCues
+            || warmUpSets != initialWarmUpSets
     }
 
     var body: some View {
@@ -279,6 +286,8 @@ struct WorkoutSetupSheet: View {
             if profile.experience != .beginner {
                 OneRepMaxOptIn(isOn: $profile.oneRepMaxTesting)
             }
+
+            WarmUpSetsToggle(choice: $warmUpSets, experience: profile.experience)
         }
     }
 
@@ -335,6 +344,7 @@ struct WorkoutSetupSheet: View {
         store.setSelectedSplit(selectedSplitID)
         WorkoutCuePreferences.save(cuePreferences)
         WorkoutCuePreferences.saveSpoken(spokenCues)
+        store.setWorkoutWarmUpSets(warmUpSets)
         dismiss()
     }
 }

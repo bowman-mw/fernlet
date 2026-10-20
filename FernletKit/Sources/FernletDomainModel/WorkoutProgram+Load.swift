@@ -20,16 +20,22 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     public var defaultUnit: LoadUnit
     public var recovery: RecoverySummary
     public var calibration: CalibrationSettings
+    /// Warm-up sets before heavy main lifts are on (``WorkoutWarmUpSets/isEnabled(preference:experience:)``,
+    /// resolved by the app from the setting and the lifter's level). Off by default here, so a context
+    /// built without saying so plans exactly as before.
+    public var warmUpSets: Bool
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
-        recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings()
+        recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
+        warmUpSets: Bool = false
     ) {
         self.exposures = exposures
         self.today = today
         self.defaultUnit = defaultUnit
         self.recovery = recovery
         self.calibration = calibration
+        self.warmUpSets = warmUpSets
     }
 
     /// One lift's sessions, oldest first.
@@ -83,8 +89,28 @@ extension WorkoutProgram {
             calibrationOpen = false
             notes = [calibration]
         }
+        addWarmUpSets(&loaded, inputs: inputs, load: load)
         assignFatigueContext(&loaded)
         return LoadPass(steps: loaded.map(\.exercise), targets: loaded.map(\.target), notes: notes + plateauNotes)
+    }
+
+    /// Puts warm-up sets in front of each heavy main lift (``WorkoutWarmUpSets``) when the lifter has
+    /// them on and today isn't a light day. Runs after the calibration, so a lift the calibration
+    /// already ramps into gets no second ramp; each warm-up is a copy of its lift's pick, so it shares
+    /// the lift's slot, target and fatigue context.
+    static func addWarmUpSets(_ loaded: inout [LoadedPick], inputs: SlotInputs, load: WorkoutLoadContext) {
+        guard load.warmUpSets, inputs.intensity != .light else { return }
+        var expanded: [LoadedPick] = []
+        for pick in loaded {
+            for step in WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern) {
+                var warmUp = pick
+                warmUp.exercise = step
+                warmUp.plan = nil
+                expanded.append(warmUp)
+            }
+            expanded.append(pick)
+        }
+        loaded = expanded
     }
 
     /// The plateau status of a rep-counted lift, nil for holds and lifts with no history.

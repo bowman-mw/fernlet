@@ -8,7 +8,9 @@ import FernletDomainModel
 /// becomes an ``ExerciseResult`` and its logged line ("Bench press - 3 x 8 @ 105 lb", with
 /// "(did 8, 8, 6)" when edited), and the session's text is rebuilt around those lines. A lift the
 /// runner skipped past is logged as skipped and never becomes a result, so a short-on-time skip is not
-/// read as a miss. The run state cannot import the domain, so tokens cross as raw strings here.
+/// read as a miss; a warm-up set it skipped leaves no trace. A warm-up set crosses as a calibration
+/// ramp, so it logs "(ramp-up)" and no estimate reads it. The run state cannot import the domain, so
+/// tokens cross as raw strings here.
 enum GuidedRunLoadLog {
 
     /// The run's tracking record for a planned step, or nil when the planner attached no guidance.
@@ -91,12 +93,15 @@ enum GuidedRunLoadLog {
     }
 
     /// The finished run's log: its text with each tracked lift's own line, and the results — or
-    /// nil when no step was tracked (a run from before load tracking keeps its plan text).
+    /// nil when no step was tracked (a run from before load tracking keeps its plan text). A ramp-up
+    /// set that was skipped ("Skip warm-up sets") leaves no line at all: the lift was not skipped,
+    /// only its warm-up.
     static func log(for state: GuidedWorkoutRunState) -> (text: String, results: [ExerciseResult])? {
         guard state.exercises.contains(where: { $0.tracking != nil }) else { return nil }
+        let kept = state.exercises.filter { !($0.isRampSet && $0.tracking?.skipped == true) }
         var lines: [UUID: String] = [:]
         var results: [ExerciseResult] = []
-        for exercise in state.exercises {
+        for exercise in kept {
             if let result = result(for: exercise) {
                 results.append(result)
                 lines[exercise.id] = result.loggedLine
@@ -104,7 +109,7 @@ enum GuidedRunLoadLog {
                 lines[exercise.id] = "\(exercise.name) - skipped"
             }
         }
-        let steps = state.exercises.map { prescribed($0) }
+        let steps = kept.map { prescribed($0) }
         return (WorkoutSessionBlocks.planText(for: steps, loggedLines: lines), results)
     }
 

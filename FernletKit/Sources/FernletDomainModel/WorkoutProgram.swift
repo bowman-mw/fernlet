@@ -1160,9 +1160,10 @@ public nonisolated enum WorkoutProgram {
 
         /// Names of the catalog exercises in this session's lifting block — the progression
         /// bookkeeping and the AI adjuster's subject. Warm-up stretches, the light activation work and
-        /// the cool-down are not progressed and never counted.
+        /// the cool-down are not progressed and never counted, and nor are a lift's warm-up sets
+        /// (``WorkoutWarmUpSets``), which would only repeat its name.
         public var catalogExerciseNames: [String] {
-            exercises.filter { $0.fromCatalog && $0.block == .lifting }.map(\.name)
+            exercises.filter { $0.fromCatalog && $0.block == .lifting && !WorkoutWarmUpSets.isWarmUpSet($0) }.map(\.name)
         }
 
         /// Builds the loggable `Workout` for this session. `loggedFromGuidedSession` tags the row as

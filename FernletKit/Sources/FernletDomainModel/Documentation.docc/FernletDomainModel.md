@@ -570,6 +570,14 @@ estimate — so the same history always builds the same plan.
 - **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
   weeks for people without a coach plan, a one-set strength check when the estimate is already
   trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
+- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets (about 40 % × 8, 60 % × 5,
+  80 % × 3) in front of a barbell or other big compound main lift that has a suggested weight, when
+  ``WorkoutLoadContext/warmUpSets`` is on (the synced `FernletSettings.workoutWarmUpSets`, defaulting
+  on for intermediate and advanced lifters) and the day is not light. Each is a single-set step tagged
+  `.ramp` like the calibration's, so the log writes "(ramp-up)" and no estimate, plateau check or
+  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to drop. Barbell
+  warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the standard
+  45 lb / 20 kg bar and plates) says which plates go on each side, or the closest load it can make.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -610,6 +618,11 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``CalibrationKind``
 - ``CalibrationSet``
 - ``CalibrationStep``
+- ``WorkoutWarmUpSets``
+- ``WarmUpSet``
+- ``PlateCalculator``
+- ``BarbellPlateSet``
+- ``PlateLoadout``
 
 ### Coach plans
 

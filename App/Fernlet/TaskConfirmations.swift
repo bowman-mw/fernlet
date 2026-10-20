@@ -136,6 +136,11 @@ enum GuidedRunAnnouncement {
             if let segment = exercise.segment {
                 return (.status, GuidedSegmentWords.changeLine(segment, seconds: exercise.holdSeconds ?? 0))
             }
+            // A warm-up set says which one ("Warm-up set 1 of 3: Back squat."), and the lift after its
+            // warm-ups says its working sets begin.
+            if let warmUp = GuidedWarmUpWords.changeLine(from: before, to: after) {
+                return (.status, warmUp)
+            }
             // A one-sided step (a stretch, a balance hold) says its side; a single timed step has no
             // set to count ("Set 1 of 1" for every stretch would be noise).
             switch exercise.sideRaw {

@@ -13,7 +13,9 @@ import FernletUI
 ///
 /// Edits the LIFTING block only. The warm-up, activation, cardio and cool-down blocks around it are
 /// generated, are not what anyone means by "edit my workout", and would blow the row cap (the warm-up
-/// alone is twenty-odd stretches); saving puts them back around the edited lifting rows unchanged.
+/// alone is twenty-odd stretches); saving puts them back around the edited lifting rows unchanged. A
+/// heavy lift's warm-up sets are generated the same way: hidden here, and put back in front of their
+/// lift on save (a lift moved keeps them, a lift removed takes them along).
 struct GuidedWorkoutEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
@@ -36,9 +38,9 @@ struct GuidedWorkoutEditorSheet: View {
         _rows = State(initialValue: Self.liftingRows(of: session))
     }
 
-    /// The session's lifting-block rows — what this editor shows and edits.
+    /// The session's lifting-block rows — what this editor shows and edits — without the warm-up sets.
     static func liftingRows(of session: WorkoutProgram.SessionSuggestion) -> [PrescribedExercise] {
-        session.exercises.filter { $0.block == .lifting }
+        WorkoutWarmUpSets.removingWarmUpSets(from: session.exercises.filter { $0.block == .lifting })
     }
 
     private var goal: GoalType { store.settings.selectedGoal }
@@ -364,7 +366,8 @@ struct GuidedWorkoutEditorSheet: View {
         var updated = session
         let before = session.exercises.filter { $0.block == .warmUp || $0.block == .activation }
         let after = session.exercises.filter { $0.block == .cardio || $0.block == .coolDown }
-        updated.exercises = before + rows + after
+        let lifting = WorkoutWarmUpSets.reattach(rows, from: session.exercises.filter { $0.block == .lifting })
+        updated.exercises = before + lifting + after
         // Rebuild the display list so the sheet card and the logged workout reflect the edits.
         let lines = WorkoutSessionBlocks.planText(for: updated.exercises)
         updated.suggestion.exercises = lines.isEmpty ? session.suggestion.exercises : lines
