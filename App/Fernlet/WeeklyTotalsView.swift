@@ -196,28 +196,34 @@ struct WeeklySetsSection: View {
     var muscleSets: [WeeklyTrainingSummary.MuscleSets]
 
     var body: some View {
-        FernletScrollSection("Hard sets per muscle") {
-            Text(verbatim: WeeklyTotalsCopy.setsReference)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-                .padding(.vertical, 6)
-            if muscleSets.isEmpty {
-                EmptyState(text: "No lifting sets logged.")
-            } else {
-                ForEach(muscleSets) { row in
-                    FernletRowDivider()
-                    WeeklyMuscleSetsRow(row: row)
-                }
-            }
-            FernletRowDivider()
-            Text("A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted.",
-                 comment: "Weekly totals screen: how the per-muscle set counts are worked out.")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-                .padding(.vertical, 6)
+        VStack(alignment: .leading, spacing: 8) {
+            WeeklySectionHeading("Hard sets per muscle")
+            FernletScrollSection { card }
         }
+    }
+
+    /// The card: the reference line, the rows (or the quiet empty line), and how sets are counted.
+    @ViewBuilder private var card: some View {
+        Text(verbatim: WeeklyTotalsCopy.setsReference)
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .padding(.vertical, 6)
+        if muscleSets.isEmpty {
+            EmptyState(text: "No lifting sets logged.")
+        } else {
+            ForEach(muscleSets) { row in
+                FernletRowDivider()
+                WeeklyMuscleSetsRow(row: row)
+            }
+        }
+        FernletRowDivider()
+        Text("A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted.",
+             comment: "Weekly totals screen: how the per-muscle set counts are worked out.")
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .padding(.vertical, 6)
     }
 }
 
@@ -252,34 +258,67 @@ struct WeeklyAerobicSection: View {
     var minutes: Int
 
     var body: some View {
-        FernletScrollSection("Aerobic minutes") {
-            if minutes > 0 {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(verbatim: WeeklyTotalsCopy.aerobicLine(minutes: minutes))
-                        .font(.fernlet(.body))
-                        .foregroundStyle(Color.bark)
-                        .fernletWrappingText()
-                    WeeklyAerobicBar(fraction: WeeklyTotalsCopy.aerobicFraction(minutes: minutes))
-                }
-                .padding(.vertical, 6)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Text(verbatim: WeeklyTotalsCopy.aerobicSpoken(minutes: minutes)))
-            } else {
-                EmptyState(text: "No aerobic minutes logged.")
-            }
-            FernletRowDivider()
-            Text(verbatim: WeeklyTotalsCopy.aerobicReference)
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-                .padding(.top, 6)
-            Text("Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted.",
-                 comment: "Weekly totals screen: which workouts the aerobic minutes include.")
-                .font(.fernlet(.labelSmall))
-                .foregroundStyle(Color.slate)
-                .fernletWrappingText()
-                .padding(.vertical, 6)
+        VStack(alignment: .leading, spacing: 8) {
+            WeeklySectionHeading("Aerobic minutes")
+            FernletScrollSection { card }
         }
+    }
+
+    /// The card: the total over its bar (or the quiet empty line), then the guideline and what counts.
+    @ViewBuilder private var card: some View {
+        if minutes > 0 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(verbatim: WeeklyTotalsCopy.aerobicLine(minutes: minutes))
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                WeeklyAerobicBar(fraction: WeeklyTotalsCopy.aerobicFraction(minutes: minutes))
+            }
+            .padding(.vertical, 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: WeeklyTotalsCopy.aerobicSpoken(minutes: minutes)))
+        } else {
+            EmptyState(text: "No aerobic minutes logged.")
+        }
+        FernletRowDivider()
+        Text(verbatim: WeeklyTotalsCopy.aerobicReference)
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .padding(.top, 6)
+        Text("Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted.",
+             comment: "Weekly totals screen: which workouts the aerobic minutes include.")
+            .font(.fernlet(.labelSmall))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .padding(.vertical, 6)
+    }
+}
+
+/// A section heading on the Weekly totals screen: sentence case in the label face, read by VoiceOver
+/// as a heading (h2, under the screen's h1 title).
+///
+/// Not the shared uppercase ``SectionLabel`` (a titled `FernletScrollSection`'s header). In the
+/// accessibility audit's Dynamic Type pass that caption, tracked and uppercased by `.textCase`,
+/// reported "HARD SETS PER MUSCLE" as clipped once it wrapped at accessibility sizes (bundle 6,
+/// 2026-10-20), the same finding the frozen audit baselines carry for other long captions ("WHAT
+/// DID YOU EAT?", "PERSONAL CARE TASKS"). Plain text with no tracking and no case transform wraps
+/// as it measures.
+struct WeeklySectionHeading: View {
+    let title: LocalizedStringKey
+
+    init(_ title: LocalizedStringKey) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.fernlet(.label))
+            .foregroundStyle(Color.slate)
+            .fernletWrappingText()
+            .padding(.horizontal, 4)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityHeading(.h2)
     }
 }
 

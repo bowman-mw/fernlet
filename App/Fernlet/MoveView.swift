@@ -2542,9 +2542,11 @@ struct WorkoutRow: View {
             Text(workout.displayedName).font(.fernlet(.headerMedium))
             Spacer()
             if let rpe = workout.rpe {
+                // The hues' TEXT inks: plain `moss` on its own 12% tint measured 3.44:1 (bundle 6,
+                // 2026-10-20); `mossInk` and `terracottaInk` are the 4.5:1 text tokens for these hues.
                 Text("RPE \(rpe, specifier: "%.1g")")
                     .font(.fernlet(.stat))
-                    .foregroundStyle(rpe >= 8 ? Color.terracotta : Color.moss)
+                    .foregroundStyle(rpe >= 8 ? Color.terracottaInk : Color.mossInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background((rpe >= 8 ? Color.terracotta : Color.moss).opacity(0.12), in: Capsule())
@@ -2552,11 +2554,12 @@ struct WorkoutRow: View {
         }
     }
 
-    /// Category, duration, and intensity.
+    /// Category, duration, and intensity, all in the row's full-strength `slate`. The category used to
+    /// be drawn in its accent hue, which as small text measured 3.95:1 for moss (bundle 6,
+    /// 2026-10-20) and less for goldenrod and dusty rose; the word itself carries the category.
     private var metaRow: some View {
         HStack(spacing: 12) {
             Text(verbatim: category.displayName)
-                .foregroundStyle(category.color)
             if let duration = workout.duration { Text("\(duration) min") }
             // Both halves of the fork are now localized: `WorkoutType.displayName` exists and this
             // site was still rendering the FROZEN `rawValue` beside the translated intensity word.
