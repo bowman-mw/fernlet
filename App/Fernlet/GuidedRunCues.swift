@@ -280,6 +280,14 @@ final class GuidedRunCueDirector {
         speak(GuidedRunSpokenCue.move(from: before, to: after, cause: cause), toVoiceOver: false)
     }
 
+    /// Says the run's first step aloud as it starts (``GuidedRunSpokenCue/start(_:)``), when spoken cues
+    /// are on and the app is in front — "First: Goblet squat. Suggested weight 35 pounds." The store
+    /// calls it once, from its Start (`FernletStore.startGuidedRun`), never on a resume. VoiceOver hears
+    /// the runner screen itself, so nothing is posted to it.
+    func started(_ state: GuidedWorkoutRunState) {
+        speak(GuidedRunSpokenCue.start(state), toVoiceOver: false)
+    }
+
     /// What the runner sheet's own VoiceOver line for a move gains while spoken cues are on: the new
     /// lift's suggested weight and last time, the one thing that line does not already say. Nil when
     /// spoken cues are off or the move lands on no weight.
