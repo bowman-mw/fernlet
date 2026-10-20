@@ -349,7 +349,8 @@ public nonisolated enum WorkoutSessionBudget {
     }
 
     /// "shorter warm-up; fewer cool-down stretches; left out Squat jump, Cable curl; fewer sets of
-    /// Bench press" — the trims in order, empty when there were none.
+    /// Bench press" — the trims in order, empty when there were none. The trims carry frozen names;
+    /// the summary draws them in the device's language (``WorkoutPlannerCopy/exerciseList(_:)``).
     static func changeSummary(_ trims: [Trim]) -> String {
         var dropped: [String] = []
         var fewerSets: [String] = []
@@ -366,8 +367,8 @@ public nonisolated enum WorkoutSessionBudget {
         var parts: [String] = []
         if trims.contains(.shortWarmUp) { parts.append(WorkoutPlannerCopy.budgetShorterWarmUp) }
         if coolDown { parts.append(WorkoutPlannerCopy.budgetFewerCoolDown) }
-        if !dropped.isEmpty { parts.append(WorkoutPlannerCopy.budgetLeftOut(dropped.joined(separator: ", "))) }
-        if !fewerSets.isEmpty { parts.append(WorkoutPlannerCopy.budgetFewerSets(fewerSets.joined(separator: ", "))) }
+        if !dropped.isEmpty { parts.append(WorkoutPlannerCopy.budgetLeftOut(WorkoutPlannerCopy.exerciseList(dropped))) }
+        if !fewerSets.isEmpty { parts.append(WorkoutPlannerCopy.budgetFewerSets(WorkoutPlannerCopy.exerciseList(fewerSets))) }
         return parts.joined(separator: "; ")
     }
 }

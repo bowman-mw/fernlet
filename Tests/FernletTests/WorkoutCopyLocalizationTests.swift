@@ -135,6 +135,41 @@ struct WorkoutCopyLocalizationTests {
         #expect(fitted == "Fitted to 30 min: shorter warm-up.")
     }
 
+    // MARK: - Exercise names in notes (N8)
+
+    /// A note names an exercise by its display name — the name the plan card draws — and a custom or
+    /// typed name as it is, in the order given.
+    @Test func notesNameExercisesByTheirDisplayNames() throws {
+        var mismatched: [String] = []
+        for entry in ExerciseHowToCatalog.allEntries where WorkoutPlannerCopy.exerciseName(entry.name) != entry.displayName {
+            mismatched.append(entry.name)
+        }
+        #expect(mismatched.isEmpty, "note names that are not the display name: \(mismatched)")
+        #expect(WorkoutPlannerCopy.exerciseName("My odd lift") == "My odd lift")
+        let squat = ExerciseHowToCatalog.displayName(for: "Back squat")
+        let bench = ExerciseHowToCatalog.displayName(for: "Bench press")
+        let list = WorkoutPlannerCopy.exerciseList(["Back squat", "My odd lift", "Bench press"])
+        #expect(list == "\(squat), My odd lift, \(bench)")
+        let budget = WorkoutSessionBudget.changeSummary([.accessory("Back squat"), .mainSet("Bench press")])
+        #expect(budget == "left out \(squat); fewer sets of \(bench)")
+        let lightened = WorkoutRecoveryGuard.lightenedNote(lifts: ["Back squat", "Bench press"])
+        #expect(lightened.hasPrefix("One set fewer on \(squat), \(bench) — "))
+        let calibration = WorkoutProgram.calibrationNote(kind: .submaximal, lift: "Bench press", sets: [], unit: .lb)
+        #expect(calibration.contains(bench))
+    }
+
+    /// The note builders draw names through ``WorkoutPlannerCopy/exerciseName(_:)`` and
+    /// ``WorkoutPlannerCopy/exerciseList(_:)`` rather than joining or splicing frozen names themselves:
+    /// the source pin that keeps a new list from slipping back to English names in another language.
+    @Test func theNoteBuildersDrawNamesThroughTheCopyHelpers() throws {
+        let drawing = ["WorkoutSessionBudget.swift", "WorkoutRecoveryGuard.swift", "WorkoutProgram+LoadNotes.swift"]
+        for file in drawing {
+            let source = Self.withoutCommentLines(try RepoRoot.source(Self.domainRoot + file))
+            #expect(source.contains("WorkoutPlannerCopy.exercise"), "\(file) no longer draws exercise names")
+            #expect(!source.contains(#".joined(separator: ", ")"#), "\(file) joins names itself; use WorkoutPlannerCopy.exerciseList")
+        }
+    }
+
     // MARK: - Frozen names
 
     /// The names a guided log is saved under, the rotation matches and the export carries stay

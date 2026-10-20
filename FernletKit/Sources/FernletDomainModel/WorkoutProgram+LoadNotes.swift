@@ -14,7 +14,8 @@ extension WorkoutProgram {
     static let maxProgressLines = 2
 
     /// What changed on the session's lifts, main lift first — at most two lines, plus one line for
-    /// lifts that still need a first weight. Stalled lifts are left to the plateau story.
+    /// lifts that still need a first weight. Stalled lifts are left to the plateau story. Each lift is
+    /// named in the device's language (``WorkoutPlannerCopy/exerciseName(_:)``, N8).
     static func progressNotes(_ loaded: [LoadedPick]) -> [String] {
         var lines: [String] = []
         var needsFirstWeight = false
@@ -22,8 +23,9 @@ extension WorkoutProgram {
             if let guidance = pick.exercise.guidance, guidance.isLoadable, guidance.prescription == nil {
                 needsFirstWeight = true
             }
+            let name = WorkoutPlannerCopy.exerciseName(pick.target.name)
             guard lines.count < maxProgressLines, let plan = pick.plan,
-                  let line = changeLine(pick.target.name, plan: plan) else { continue }
+                  let line = changeLine(name, plan: plan) else { continue }
             lines.append(line)
         }
         if needsFirstWeight {
@@ -32,7 +34,8 @@ extension WorkoutProgram {
         return lines
     }
 
-    /// One lift's change in a sentence, or nil when there is nothing worth saying.
+    /// One lift's change in a sentence, or nil when there is nothing worth saying. `name` is the name
+    /// the note draws — the caller's display name, never matched against.
     static func changeLine(_ name: String, plan: LiftPlan) -> String? {
         let weight = plan.prescription.map(\.suggestedText)
         if plan.recentered, plan.change != .recalibrated {
@@ -146,11 +149,12 @@ extension WorkoutProgram {
         return lines
     }
 
-    /// The calibration brief for the session note.
+    /// The calibration brief for the session note. `lift` is the frozen name; the note draws it in the
+    /// device's language (``WorkoutPlannerCopy/exerciseName(_:)``, N8).
     static func calibrationNote(kind: CalibrationKind, lift: String, sets: [CalibrationSet], unit: LoadUnit) -> String {
         let keySet = sets.first(where: { $0.step != .ramp }) ?? sets.last
         let weight = keySet.map { loadText($0.weight, unit) } ?? ""
-        return WorkoutPlannerCopy.calibration(kind, lift: lift, weight: weight)
+        return WorkoutPlannerCopy.calibration(kind, lift: WorkoutPlannerCopy.exerciseName(lift), weight: weight)
     }
 
     /// The count-based ladder's line when there is no load history to read (replaces the old
