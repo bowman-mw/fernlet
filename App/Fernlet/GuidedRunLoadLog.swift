@@ -108,13 +108,15 @@ enum GuidedRunLoadLog {
         return (WorkoutSessionBlocks.planText(for: steps, loggedLines: lines), results)
     }
 
-    /// A run step back as a domain step, for the plan-text layout (warm-up and cool-down summaries).
+    /// A run step back as a domain step, for the plan-text layout (warm-up and cool-down summaries, and
+    /// a cardio line's segments folded back into the line they came from).
     static func prescribed(_ exercise: GuidedWorkoutRunState.Exercise) -> PrescribedExercise {
         PrescribedExercise(
             id: exercise.id, name: exercise.name, sets: exercise.sets, reps: exercise.reps,
             role: role(fromRaw: exercise.roleRaw), fromCatalog: exercise.fromCatalog,
             block: SessionBlock(rawValue: exercise.block) ?? .lifting, holdSeconds: exercise.holdSeconds,
-            side: exercise.sideRaw.flatMap(ExerciseSide.init(rawValue:))
+            side: exercise.sideRaw.flatMap(ExerciseSide.init(rawValue:)),
+            segment: GuidedRunTimedLog.cardioSegment(of: exercise)
         )
     }
 

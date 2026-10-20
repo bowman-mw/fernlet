@@ -93,19 +93,25 @@ enum GuidedRunCuePlan {
     /// A rest cues its end (a zero-length rest has none). A timed step cues the end of its lead-in and
     /// the end of its hold — except the hold's end while the runner sheet is driving it
     /// (`sheetDrivesHoldEnd`): the sheet moves the step on at that instant and plays the one cue that
-    /// move deserves, which may outrank "hold ended" (a new block, a finish). Nothing else cues.
+    /// move deserves, which may outrank "hold ended" (a new block, a finish). A step with no lead-in
+    /// (a cardio segment that follows straight on) has no lead-in end to cue: its start IS the move
+    /// that just cued, so a segment change buzzes once, not twice. Nothing else cues.
     static func timedCues(for state: GuidedWorkoutRunState?, sheetDrivesHoldEnd: Bool) -> [TimedCue] {
         guard let state else { return [] }
         if state.isResting {
             return restEnd(of: state).map { [TimedCue(event: .restEnded, fireAt: $0)] } ?? []
         }
         guard let window = state.holdWindow else { return [] }
-        let started = TimedCue(event: .holdStarted, fireAt: window.lowerBound)
-        guard !sheetDrivesHoldEnd else { return [started] }
-        return [started, TimedCue(event: .holdEnded, fireAt: window.upperBound)]
+        var cues: [TimedCue] = []
+        if (state.currentExercise?.holdLeadIn ?? GuidedWorkoutRunState.holdLeadInSeconds) > 0 {
+            cues.append(TimedCue(event: .holdStarted, fireAt: window.lowerBound))
+        }
+        if !sheetDrivesHoldEnd { cues.append(TimedCue(event: .holdEnded, fireAt: window.upperBound)) }
+        return cues
     }
 
-    /// The cue a phone in the background should get: the current rest's end or the current hold's end.
+    /// The cue a phone in the background should get: the current rest's end or the current hold's end
+    /// — a cardio segment's as a segment's, whose words say a timed part ran out rather than a hold.
     /// The lead-in's end stays an in-app cue only — five seconds after a step starts is too soon, and
     /// too often, for a notification.
     static func backgroundCues(for state: GuidedWorkoutRunState?) -> [NotificationService.WorkoutCue] {
@@ -114,7 +120,8 @@ enum GuidedRunCuePlan {
             return restEnd(of: state).map { [NotificationService.WorkoutCue(kind: .restEnded, fireAt: $0)] } ?? []
         }
         guard let window = state.holdWindow else { return [] }
-        return [NotificationService.WorkoutCue(kind: .holdEnded, fireAt: window.upperBound)]
+        let kind: NotificationService.WorkoutCueKind = state.currentExercise?.segment == nil ? .holdEnded : .segmentEnded
+        return [NotificationService.WorkoutCue(kind: kind, fireAt: window.upperBound)]
     }
 
     /// Whether a cue due at `fireAt` may still play at `now` (see ``lateTolerance``).

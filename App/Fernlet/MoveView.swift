@@ -171,6 +171,7 @@ struct MoveView: View {
                 state: guidedCardState,
                 loggedSessionName: loggedGuidedSessionName,
                 isRestDay: store.needsRestToday,
+                readyIsTimed: guidedReadyIsTimed,
                 onStart: startTodaysGuidedWorkout
             )
         } else {
@@ -181,6 +182,14 @@ struct MoveView: View {
                 onStart: { showingSuggestSheet = true }
             )
         }
+    }
+
+    /// Whether the session the card would start is timed cardio or stretching rather than sets — the
+    /// card then says it times each part instead of promising "set by set".
+    private var guidedReadyIsTimed: Bool {
+        guard case .ready(let id) = guidedCardState,
+              let session = store.currentGuidedWorkoutPlan?.sessions.first(where: { $0.id == id }) else { return false }
+        return !session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
     }
 
     /// The name of today's guided session that is already accounted for, so the done card can say
@@ -473,16 +482,33 @@ struct MoveView: View {
 /// The guidable filter, in one place so the Move-root card and the Suggest sheet agree (reused, not
 /// reimplemented).
 ///
-/// A session is worth *guiding* through only when it carries real, set-based catalog work; pure
-/// cardio/mobility/rest carry descriptor lines with `sets == 0`. ``MoveView``,
+/// A session is worth *guiding* through when it carries real, set-based catalog work, or a cardio or
+/// mobility line the runner can time (``WorkoutTimedSessions``: steady and interval cardio, a mobility
+/// flow). A line it cannot time stays a descriptor (`sets == 0`) and its session unguided, and the rest
+/// day's gentle stretch is never the day's session — only an optional extra
+/// (``optionalStretch(in:excluding:loggedGuidedWorkoutNames:)``). ``MoveView``,
 /// ``WorkoutSuggestionSheet``, and ``GuidedWorkoutCardState`` all route their already-logged checks
 /// through these predicates, which is the invariant that keeps a session finished from one entry
 /// point excluded everywhere — including after a relaunch, when session ids are fresh but the tagged
 /// name in the day record survives.
 enum GuidedWorkoutAvailability {
-    /// A session with real, set-based catalog exercises (the guided runner needs sets to time rests).
+    /// A session with real, set-based catalog exercises, or a cardio or mobility line the runner can
+    /// time as countdowns.
     nonisolated static func isGuidable(_ session: WorkoutProgram.SessionSuggestion) -> Bool {
-        session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
+        session.exercises.contains { ($0.fromCatalog && $0.sets >= 1) || WorkoutTimedSessions.isGuidable($0) }
+    }
+
+    /// The rest day's gentle stretch, while it is still to do — offered as a quiet extra on the Suggest
+    /// sheet, never as today's workout: the day's readiness says rest, and rest stays the plan.
+    nonisolated static func optionalStretch(
+        in plan: WorkoutProgram.DayPlan,
+        excluding completed: Set<UUID>,
+        loggedGuidedWorkoutNames: Set<String> = []
+    ) -> WorkoutProgram.SessionSuggestion? {
+        plan.sessions.first { session in
+            !isGuidable(session) && session.exercises.contains(where: WorkoutTimedSessions.isOptionalStretch)
+                && !isAlreadyLogged(session, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
+        }
     }
 
     /// A session is already accounted for when its id is in the in-memory completed set OR today's
@@ -664,6 +690,8 @@ struct StartTodaysWorkoutCard: View {
     /// already-approved plan is framed as something that can wait. Geometry and actions are
     /// unchanged; only the words soften, so the choice stays the user's.
     var isRestDay: Bool = false
+    /// The `.ready` session is timed cardio or stretching, not sets: its line says the parts are timed.
+    var readyIsTimed: Bool = false
     /// Opens the runner (`.ready`) or the Suggest flow (`.noPlan`) — the parent decides.
     var onStart: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -764,6 +792,8 @@ struct StartTodaysWorkoutCard: View {
         switch state {
         case .ready where isRestDay:
             return Text(MoveRestDayCopy.cardApprovedPlan)
+        case .ready where readyIsTimed:
+            return Text("Ready when you are — I'll time each part and move you on. No pressure.")
         case .ready:
             return Text("Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure.")
         case .noPlan where isRestDay:
@@ -1824,6 +1854,7 @@ struct WorkoutSuggestionSheet: View {
             if !dynamicTypeSize.isAccessibilitySize, !remainingSessions.isEmpty {
                 logAlreadyDoneButton(remainingSessions)
             }
+            gentleStretchButton(in: dayPlan)
             if let guidable = guidableSession(in: dayPlan) {
                 startNowButton(guidable)
             }
@@ -1839,6 +1870,33 @@ struct WorkoutSuggestionSheet: View {
         .padding(.top, 12)
         .padding(.bottom, 20)
         .background(Color.parchment)
+    }
+
+    /// The rest day's optional gentle stretch (``GuidedWorkoutAvailability/optionalStretch(in:excluding:loggedGuidedWorkoutNames:)``),
+    /// about eight minutes on the floor — a quiet tint like "Already did this", never the screen's green:
+    /// on a day the person said they are unwell a stretch is offered, not pushed, and the plan stays rest.
+    @ViewBuilder private func gentleStretchButton(in dayPlan: WorkoutProgram.DayPlan) -> some View {
+        if let session = GuidedWorkoutAvailability.optionalStretch(
+            in: dayPlan, excluding: guidedCompletedSessionIDs, loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+        ) {
+            Button {
+                guidedSession = session
+            } label: {
+                Text("Guide me through a gentle stretch, about 8 minutes")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            // Voice Control: the drawn line is long; its first words, or the plain name, are enough.
+            .accessibilityInputLabels([Text("Gentle stretch"), Text("Guide me through a gentle stretch")])
+            .accessibilityIdentifier("workout.startGentleStretch")
+        }
     }
 
     /// The retroactive "already did this" action in the committed-plan bar.

@@ -4868,7 +4868,8 @@ final class FernletStore {
                 restSecondsOverride: $0.restSeconds,
                 block: SessionBlock(rawValue: $0.block) ?? .lifting,
                 holdSeconds: $0.holdSeconds,
-                side: $0.sideRaw.flatMap(ExerciseSide.init(rawValue:))
+                side: $0.sideRaw.flatMap(ExerciseSide.init(rawValue:)),
+                segment: GuidedRunTimedLog.cardioSegment(of: $0)
             )
         }
         return WorkoutProgram.SessionSuggestion(
@@ -4930,14 +4931,22 @@ final class FernletStore {
     /// The run's steps for `session`: each exercise's rest baked in (per-exercise override, else the
     /// research-based default), its load plan, and — for a counted lift — last time's numbers, so the
     /// Live Activity can show them with no app state. One history rollup covers the whole run, the
-    /// same data the runner's "Last time" pill reads, and none at all when no step shows them.
+    /// same data the runner's "Last time" pill reads, and none at all when no step shows them. A timed
+    /// cardio or mobility line is walked as its countdown segments or stretches
+    /// (``WorkoutTimedSessions/expand(_:feasible:)``), the stretches drawn from what this space and
+    /// these limits allow.
     private func guidedRunExercises(for session: WorkoutProgram.SessionSuggestion) -> [GuidedWorkoutRunState.Exercise] {
         guard !session.exercises.isEmpty else { return [] }
         let goal = settings.selectedGoal
-        let lastTimes = session.exercises.contains(where: { GuidedRunLoadLog.showsLastTime($0) })
+        let stretches = WorkoutTimedSessions.needsStretches(session.exercises)
+            ? WorkoutSafetyFilter.feasibleExercises(in: WorkoutExerciseCatalog.allExercises,
+                                                    location: settings.activeWorkoutLocation, profile: settings.workoutProfile)
+            : []
+        let steps = WorkoutTimedSessions.expand(session.exercises, feasible: stretches)
+        let lastTimes = steps.contains(where: { GuidedRunLoadLog.showsLastTime($0) })
             ? GuidedRunLoadLog.lastTimes(from: exerciseHistoryEntries())
             : [:]
-        return session.exercises.map { pe in
+        return steps.map { pe in
             let lastTime = GuidedRunLoadLog.showsLastTime(pe)
                 ? lastTimes[WorkoutExerciseCatalog.normalizedName(pe.name)] : nil
             return GuidedWorkoutRunState.Exercise(
@@ -4953,7 +4962,9 @@ final class FernletStore {
                 blockRaw: pe.block.rawValue,
                 sideRaw: pe.side?.rawValue,
                 tracking: GuidedRunLoadLog.tracking(for: pe),
-                lastTime: lastTime
+                lastTime: lastTime,
+                leadInSeconds: pe.segment?.followsOn == true ? 0 : nil,
+                segment: GuidedRunTimedLog.runSegment(pe.segment)
             )
         }
     }
@@ -5113,8 +5124,9 @@ final class FernletStore {
         // structured results; a run with nothing tracked logs its plan text as before.
         let loadLog = GuidedRunLoadLog.log(for: state)
         var workout = Workout(
-            name: state.title, type: type, mode: mode, exercises: loadLog?.text ?? state.suggestionExercisesText,
-            rpe: nil, notes: state.suggestionNotes, duration: nil,
+            name: state.title, type: type, mode: mode, activityType: GuidedRunTimedLog.activityType(for: state),
+            exercises: loadLog?.text ?? state.suggestionExercisesText,
+            rpe: nil, notes: state.suggestionNotes, duration: GuidedRunTimedLog.heldMinutes(for: state),
             loggedFromGuidedSession: true, intensity: intensity,
             exerciseResults: loadLog.flatMap { $0.results.isEmpty ? nil : $0.results }
         )

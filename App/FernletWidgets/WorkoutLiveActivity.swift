@@ -300,8 +300,10 @@ private func holdWindow(_ state: WorkoutActivityAttributes.ContentState) -> Clos
 }
 
 /// The working line for a timed step: the side and the hold ("Left side · hold 20 s"), or the set
-/// and the hold for a timed set ("Set 1 of 2 · hold 30 s"). Whole sentences, as ``setRepsLine(_:)``.
+/// and the hold for a timed set ("Set 1 of 2 · hold 30 s"), or a cardio segment's pace and round.
+/// Whole sentences, as ``setRepsLine(_:)``.
 private func holdLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
+    if let pace = state.paceRaw { return segmentLine(pace: pace, round: state.round, rounds: state.rounds) }
     if state.totalSets > 1 {
         return Text("Set \(state.setNumber) of \(state.totalSets) · hold \(state.reps)")
     }
@@ -309,6 +311,23 @@ private func holdLine(_ state: WorkoutActivityAttributes.ContentState) -> Text {
     case "left": return Text("Left side · hold \(state.reps)")
     case "right": return Text("Right side · hold \(state.reps)")
     default: return Text("Hold \(state.reps)")
+    }
+}
+
+/// A cardio segment's line: its pace in words — never by colour alone — and, for an interval, its
+/// round ("Hard · round 3 of 8"). The pace tokens are `GuidedWorkoutRunState.PaceToken`'s.
+private func segmentLine(pace: String, round: Int?, rounds: Int?) -> Text {
+    if let round, let rounds {
+        switch pace {
+        case GuidedWorkoutRunState.PaceToken.hard: return Text("Hard · round \(round) of \(rounds)")
+        case GuidedWorkoutRunState.PaceToken.easy: return Text("Easy · round \(round) of \(rounds)")
+        default: return Text("Round \(round) of \(rounds)")
+        }
+    }
+    switch pace {
+    case GuidedWorkoutRunState.PaceToken.hard: return Text("Hard pace")
+    case GuidedWorkoutRunState.PaceToken.easy: return Text("Easy pace")
+    default: return Text("Steady pace")
     }
 }
 

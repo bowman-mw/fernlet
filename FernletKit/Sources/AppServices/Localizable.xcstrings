@@ -132,6 +132,30 @@
           }
         }
       }
+    },
+    "notification.workoutCue.segmentEnded.body" : {
+      "comment" : "Body of the cardio segment-ended workout cue. Calm, never a hurry; the guided run waits on that part until the person opens Fernlet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change your pace when you're ready. The next part starts when you open Fernlet."
+          }
+        }
+      }
+    },
+    "notification.workoutCue.segmentEnded.title" : {
+      "comment" : "Title of the in-session cue delivered when one timed part of a guided cardio session (an interval's hard or easy part, or a steady stretch of cardio) runs out while Fernlet is in the background.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Time's up on this part"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

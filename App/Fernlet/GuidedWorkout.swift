@@ -217,6 +217,8 @@ struct GuidedWorkoutSheet: View {
             Text("Cardio · \(minutes) min left")
         case GuidedWorkoutRunState.BlockToken.coolDown:
             Text("Cool-down \(position) of \(total) · \(minutes) min left")
+        case GuidedWorkoutRunState.BlockToken.mobility:
+            Text("Stretch \(position) of \(total) · \(minutes) min left")
         default:
             Text("Exercise \(position) of \(total) · \(minutes) min left")
         }
@@ -260,7 +262,7 @@ struct GuidedWorkoutSheet: View {
             Text("Ready when you are")
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-            Text("We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good.")
+            GuidedReadyIntro.text(for: session)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
@@ -351,8 +353,14 @@ struct GuidedWorkoutSheet: View {
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
             }
+            // An interval's round; its pace is the countdown's caption, in words.
+            if let round = exercise.segment?.round, let rounds = exercise.segment?.rounds {
+                Text("Round \(round) of \(rounds)")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+            }
             if let window = run.holdWindow {
-                GuidedHoldTimer(window: window)
+                GuidedHoldTimer(window: window, paceRaw: exercise.segment?.paceRaw)
             }
 
             if Self.isSingleHold(exercise) {
@@ -419,7 +427,7 @@ struct GuidedWorkoutSheet: View {
     /// The dropped `GuidedUpNextList` as one spoken value. `formatted(.list(type: .and))` rather than
     /// a hand-joined string: the separator and the final conjunction are locale-dependent.
     private func upNextValue(_ run: GuidedWorkoutRunState) -> Text {
-        let names = upcomingExercises(run).map(\.name)
+        let names = upcomingExercises(run).map(GuidedSegmentWords.upNextName)
         guard !names.isEmpty else { return Text("Nothing after this one") }
         return Text(verbatim: names.formatted(.list(type: .and)))
     }
@@ -635,20 +643,21 @@ struct GuidedWorkoutSheet: View {
         .accessibilityIdentifier("workout.guided.skipExercise")
     }
 
-    /// The quiet "Skip warm-up" / "Skip cool-down" secondary, in the skip-to-next slot. Skipping the
-    /// cool-down finishes the session and logs it — the lifting is done.
+    /// The quiet "Skip warm-up" / "Skip cardio" / "Finish early" / "Skip cool-down" secondary, in the
+    /// skip-to-next slot (``GuidedBlockSkip``). Skipping the cool-down finishes the session and logs it —
+    /// the lifting is done — and "Finish early" logs a cardio or stretch session's time so far.
     private func skipBlockButton(_ run: GuidedWorkoutRunState) -> some View {
-        let warmUp = run.currentBlock == GuidedWorkoutRunState.BlockToken.warmUp
+        let skip = GuidedBlockSkip(run: run)
         return Button {
             announcingTransition(store.guidedSkipBlock, cue: .skip)
         } label: {
-            Text(warmUp ? "Skip warm-up" : "Skip cool-down")
+            skip.label
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
-        .accessibilityIdentifier(warmUp ? "workout.guided.skipWarmUp" : "workout.guided.skipCoolDown")
+        .accessibilityIdentifier(skip.identifier)
     }
 
     /// Runs one of the bottom bar's transitions, plays its haptic or sound cue, and says what it
@@ -702,6 +711,8 @@ struct GuidedWorkoutSheet: View {
         case GuidedWorkoutRunState.BlockToken.warmUp: Text("Ease into each stretch — no bouncing.")
         case GuidedWorkoutRunState.BlockToken.activation: Text("Light and steady — just waking things up.")
         case GuidedWorkoutRunState.BlockToken.coolDown: Text("Breathe out and let it go.")
+        case GuidedWorkoutRunState.BlockToken.cardio: GuidedSegmentWords.encouragement(run.currentExercise?.segment?.paceRaw)
+        case GuidedWorkoutRunState.BlockToken.mobility: Text("Ease in and breathe. Stop anywhere that feels like enough.")
         default:
             run.currentSet == 1 ? Text("No rush getting started.") : Text("Steady — you've got this.")
         }
@@ -888,18 +899,36 @@ private struct GuidedUpNextList: View {
                                     .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                             }
+                            // A cardio segment's pace — every segment shares its line's name.
+                            if let segment = exercise.segment {
+                                GuidedSegmentWords.caption(segment.paceRaw)
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                            }
                         }
                         Spacer(minLength: 8)
-                        if exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty {
-                            Text(verbatim: exercise.sets > 1 ? "\(exercise.sets) × \(exercise.reps)" : exercise.reps)
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                        }
+                        prescription(exercise)
                     }
                     .padding(12)
                     .background(Color.cream.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
                 }
             }
+        }
+    }
+}
+
+extension GuidedUpNextList {
+    /// The row's trailing prescription: "3 × 8" or a hold for a catalog step, a clock for a cardio
+    /// segment ("1:00"), nothing for an untimed line.
+    @ViewBuilder fileprivate func prescription(_ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        if exercise.segment != nil, let seconds = exercise.holdSeconds {
+            Text(verbatim: GuidedSegmentWords.clock(seconds: seconds))
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+        } else if exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty {
+            Text(verbatim: exercise.sets > 1 ? "\(exercise.sets) × \(exercise.reps)" : exercise.reps)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
         }
     }
 }
@@ -920,14 +949,23 @@ struct GuidedSideLabel {
 
 /// The hold countdown on a timed step's card: "Get into position" through the lead-in, then
 /// "Hold" over a countdown of the fixed window — never a live `Date()` range, so it clamps at 0:00
-/// rather than inverting (the same rule as the rest timer).
+/// rather than inverting (the same rule as the rest timer). A cardio segment reads "Get ready", then
+/// its pace in words ("Hard", "Easy", "Steady") over the same countdown.
 private struct GuidedHoldTimer: View {
     let window: ClosedRange<Date>
+    /// The cardio segment's pace token, or nil for a hold.
+    var paceRaw: String? = nil
     @State private var holding = false
+
+    /// The caption over the countdown, for the lead-in or the hold.
+    private var caption: Text {
+        guard let paceRaw else { return holding ? Text("Hold") : Text("Get into position") }
+        return holding ? GuidedSegmentWords.caption(paceRaw) : Text("Get ready")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(holding ? "Hold" : "Get into position")
+            caption
                 .font(.fernlet(.labelSmall))
                 .tracking(0.6)
                 .textCase(.uppercase)
@@ -958,7 +996,8 @@ private struct GuidedHoldTimer: View {
         }
         holding = true
         if let line = GuidedRunAnnouncement.holdStarted(leadInEndedAt: window.lowerBound, now: Date()) {
-            FernletAnnouncer.system.announce(.status, line)
+            // A segment's form of "Hold now." is "Go — hard." and the like.
+            FernletAnnouncer.system.announce(.status, paceRaw.map(GuidedSegmentWords.goLine) ?? line)
         }
     }
 }

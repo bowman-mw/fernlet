@@ -170,6 +170,8 @@ extension NotificationService {
         case restEnded
         /// A timed hold ran out.
         case holdEnded
+        /// A timed cardio segment ran out (an interval's hard or easy part, a steady stretch of cardio).
+        case segmentEnded
     }
 
     /// One in-session cue for a phone in the background: what ends, and when.
@@ -263,6 +265,13 @@ extension NotificationService {
             content.body = String(localized: "notification.workoutCue.holdEnded.body",
                                   defaultValue: "Ease out of it. The next step is ready when you are.", bundle: .module,
                                   comment: "Body of the hold-ended workout cue. Calm wording; the run moves on when the person opens Fernlet.")
+        case .segmentEnded:
+            content.title = String(localized: "notification.workoutCue.segmentEnded.title",
+                                   defaultValue: "Time's up on this part", bundle: .module,
+                                   comment: "Title of the in-session cue delivered when one timed part of a guided cardio session (an interval's hard or easy part, or a steady stretch of cardio) runs out while Fernlet is in the background.")
+            content.body = String(localized: "notification.workoutCue.segmentEnded.body",
+                                  defaultValue: "Change your pace when you're ready. The next part starts when you open Fernlet.", bundle: .module,
+                                  comment: "Body of the cardio segment-ended workout cue. Calm, never a hurry; the guided run waits on that part until the person opens Fernlet.")
         }
         content.sound = soundFileName.map { UNNotificationSound(named: UNNotificationSoundName(rawValue: $0)) }
         content.interruptionLevel = .active
