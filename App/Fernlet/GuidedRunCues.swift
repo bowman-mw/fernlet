@@ -25,6 +25,11 @@
 //  twice. While a run is live the runner sheet keeps the screen awake (Cooking's `keepsScreenAwake`),
 //  so a propped-up phone does not lock mid-rest and silence the in-app cues.
 //
+//  Spoken cues (idea 11) ride the same director: the same moments, the same foreground rule and the
+//  same lateness guard, with the words in `GuidedRunSpokenCue` and the voice in FernletUI's
+//  `FernletSpeaker`, behind their own "Spoken cues" switch (off by default). Never in the background
+//  and never in a notification: a locked phone gets the chime-or-buzz notification above, not speech.
+//
 
 import Foundation
 import UIKit
@@ -165,6 +170,12 @@ enum GuidedRunCuePlan {
 ///   ``GuidedRunCuePlan/isOnTime(_:now:)`` instead of buzzing about a moment that has passed.
 /// - *One cue per moment.* While the runner sheet drives a hold's end (``sheetDrivesHoldEnd``) this
 ///   director does not cue it as well; the sheet's own move carries the cue.
+/// - *Spoken cues are opt-in and in front only.* A moment is spoken (``GuidedRunSpokenCue``) only
+///   with the "Spoken cues" switch on and the app active, at the same instant as its haptic — a
+///   timed one only while on time, and once. With VoiceOver on it goes through the announcer, and
+///   only while the runner sheet is not on screen (``runnerOnScreen``): on screen, the sheet's own
+///   VoiceOver lines already say every moment, and a move's line carries the weight
+///   (``voiceOverAddition(from:to:)``), so VoiceOver never hears a moment twice.
 ///
 /// **Concurrency:** main-actor. The timer is one `Task` re-armed on change; background scheduling is a
 /// chain of `Task`s so two quick moves cannot land out of order on the notification center.
@@ -185,6 +196,8 @@ final class GuidedRunCueDirector {
     private let preferences: @MainActor () -> FernletFeedbackPreferences
     private let isAppActive: @MainActor () -> Bool
     private let scheduleBackground: BackgroundScheduler
+    private let speaker: FernletSpeaker
+    private let spokenCuesOn: @MainActor () -> Bool
 
     /// The run as of the last ``runChanged(to:)``.
     private var run: GuidedWorkoutRunState?
@@ -208,6 +221,11 @@ final class GuidedRunCueDirector {
         }
     }
 
+    /// True while the runner sheet is on screen showing the live run. Its own VoiceOver lines then say
+    /// every timed moment ("Rest's over…", "Hold now.") and every move, so under VoiceOver a spoken
+    /// cue adds nothing at those moments; with the sheet closed, the announcer says the spoken line.
+    var runnerOnScreen = false
+
     /// Creates a director. Every dependency is injectable; the defaults are production.
     ///
     /// - Parameters:
@@ -215,18 +233,25 @@ final class GuidedRunCueDirector {
     ///   - preferences: The person's switches, read at every play.
     ///   - isAppActive: Whether the app is in front, read at every play.
     ///   - scheduleBackground: Replaces the pending background cue.
+    ///   - speaker: The spoken-cue player; nil means `FernletSpeaker.system`.
+    ///   - spokenCuesOn: Whether "Spoken cues" is on, read at every spoken moment; nil reads
+    ///     ``WorkoutCuePreferences/spokenEnabled(in:)``.
     init(
         feedback: FernletFeedback? = nil,
         preferences: @escaping @MainActor () -> FernletFeedbackPreferences = { WorkoutCuePreferences.current() },
         isAppActive: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active },
         scheduleBackground: @escaping BackgroundScheduler = { cues, sound in
             await NotificationService.replaceWorkoutCues(cues, soundFileName: sound)
-        }
+        },
+        speaker: FernletSpeaker? = nil,
+        spokenCuesOn: (@MainActor () -> Bool)? = nil
     ) {
         self.feedback = feedback ?? .system
         self.preferences = preferences
         self.isAppActive = isAppActive
         self.scheduleBackground = scheduleBackground
+        self.speaker = speaker ?? .system
+        self.spokenCuesOn = spokenCuesOn ?? { WorkoutCuePreferences.spokenEnabled() }
     }
 
     /// The run changed (or went away): re-arm the in-app timer and replace the background cue.
@@ -236,10 +261,25 @@ final class GuidedRunCueDirector {
         syncBackground()
     }
 
-    /// Plays the cue for an in-app move, if it earns one (``GuidedRunCuePlan/transitionCue(from:to:cause:)``).
+    /// Plays the cue for an in-app move, if it earns one (``GuidedRunCuePlan/transitionCue(from:to:cause:)``),
+    /// and says the move aloud when spoken cues are on (``GuidedRunSpokenCue/move(from:to:cause:)``).
+    ///
+    /// Every move comes from the runner sheet, which announces it to VoiceOver itself, so the spoken
+    /// line carries nothing for VoiceOver here (the sheet's line gains ``voiceOverAddition(from:to:)``).
+    /// A skip that earns no haptic can still be spoken: it lands on a new step worth naming.
     func transition(from before: GuidedWorkoutRunState?, to after: GuidedWorkoutRunState?, cause: GuidedRunCuePlan.Cause) {
-        guard let event = GuidedRunCuePlan.transitionCue(from: before, to: after, cause: cause) else { return }
-        play(event)
+        if let event = GuidedRunCuePlan.transitionCue(from: before, to: after, cause: cause) {
+            play(event)
+        }
+        speak(GuidedRunSpokenCue.move(from: before, to: after, cause: cause), toVoiceOver: false)
+    }
+
+    /// What the runner sheet's own VoiceOver line for a move gains while spoken cues are on: the new
+    /// lift's suggested weight and last time, the one thing that line does not already say. Nil when
+    /// spoken cues are off or the move lands on no weight.
+    func voiceOverAddition(from before: GuidedWorkoutRunState?, to after: GuidedWorkoutRunState?) -> String? {
+        guard spokenCuesOn() else { return nil }
+        return GuidedRunSpokenCue.loadClause(from: before, to: after)
     }
 
     /// Waits for the current timer to finish (or be cancelled). A test seam: with every cue already
@@ -257,6 +297,14 @@ final class GuidedRunCueDirector {
     private func play(_ event: FernletFeedbackEvent) {
         guard isAppActive() else { return }
         feedback.play(event, preferences: preferences())
+    }
+
+    /// Says `words` through the speaker, if there are any, the app is in front and spoken cues are on.
+    /// `toVoiceOver` is whether VoiceOver should hear them too — false when the runner sheet already
+    /// says this moment to VoiceOver itself.
+    private func speak(_ words: String?, toVoiceOver: Bool) {
+        guard let words, isAppActive(), spokenCuesOn() else { return }
+        speaker.say(FernletSpokenLine(text: words, voiceOverText: toVoiceOver ? words : nil))
     }
 
     /// Re-arms the timer when the cues due have changed; an unchanged run keeps the timer it has, so
@@ -292,6 +340,7 @@ final class GuidedRunCueDirector {
                   GuidedRunCuePlan.isOnTime(cue.fireAt, now: Date()) else { continue }
             lastTimedCue = cue
             play(cue.event)
+            speak(GuidedRunSpokenCue.timed(cue.event, in: run), toVoiceOver: !runnerOnScreen)
         }
     }
 

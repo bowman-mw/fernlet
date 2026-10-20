@@ -2691,6 +2691,17 @@
     "Easy — you could keep this up for a long while." : {
 
     },
+    "Easy, round %lld of %lld." : {
+      "comment" : "Guided cardio, spoken cue: an interval's easy (recovery) part begins — its round and the rounds in all, e.g. 'Easy, round 3 of 8.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy, round %1$lld of %2$lld."
+          }
+        }
+      }
+    },
     "Eating enough, eating well." : {
 
     },
@@ -3591,6 +3602,17 @@
     "Hard — talking takes effort." : {
 
     },
+    "Hard, round %lld of %lld." : {
+      "comment" : "Guided cardio, spoken cue: an interval's hard part begins — its round and the rounds in all, e.g. 'Hard, round 3 of 8.' Hard for this person, not all-out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard, round %1$lld of %2$lld."
+          }
+        }
+      }
+    },
     "Have the other phone scan this answer." : {
 
     },
@@ -3682,6 +3704,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Hold now."
+          }
+        }
+      }
+    },
+    "Hold's done." : {
+      "comment" : "Guided workout, spoken cue: a timed hold (a stretch, a plank, a carry) ran out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold's done."
           }
         }
       }
@@ -6092,6 +6125,17 @@
     "Rest skipped. Your next set is up." : {
 
     },
+    "Rest's over." : {
+      "comment" : "Guided workout, spoken cue: a rest's timer reached zero. Gentle — the rest waits for the person; this only says the timer ran out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest's over."
+          }
+        }
+      }
+    },
     "Rest's over. Start your next set when you're ready." : {
 
     },
@@ -6183,6 +6227,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Round %1$lld of %2$lld, %3$@."
+          }
+        }
+      }
+    },
+    "Round %lld of %lld." : {
+      "comment" : "Guided cardio, spoken cue: an interval part with no named pace begins — its round and the rounds in all, e.g. 'Round 3 of 8.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld."
           }
         }
       }
@@ -6894,6 +6949,28 @@
     "Split into parts" : {
 
     },
+    "Spoken cues" : {
+      "comment" : "Workout setup sheet, Cues during a workout: the switch that turns on spoken cues — the runner says the next exercise, its weight, and when a rest or a hold ends. Off by default.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spoken cues"
+          }
+        }
+      }
+    },
+    "Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. In headphones your music dips while they speak and a podcast pauses, then both carry on; on the phone's speaker they follow your ring/silent switch. With VoiceOver on, VoiceOver says them instead." : {
+      "comment" : "Workout setup sheet: the note under the Spoken cues switch. Music is ducked (made quieter), never paused, in headphones; a podcast or audiobook pauses and resumes. 'ring/silent switch' is the iPhone's Ring/Silent switch or Action button setting.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. In headphones your music dips while they speak and a podcast pauses, then both carry on; on the phone's speaker they follow your ring/silent switch. With VoiceOver on, VoiceOver says them instead."
+          }
+        }
+      }
+    },
     "Sport" : {
 
     },
@@ -7538,6 +7615,17 @@
     "Time" : {
 
     },
+    "Time's up on this part." : {
+      "comment" : "Guided cardio, spoken cue: one timed part of a cardio session (an interval's hard or easy part, or a stretch of steady cardio) ran out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Time's up on this part."
+          }
+        }
+      }
+    },
     "Timer's up — tap Next when you're ready. Nothing advances on its own." : {
 
     },
@@ -8095,6 +8183,17 @@
     },
     "Workout collision policy" : {
 
+    },
+    "Workout done." : {
+      "comment" : "Guided workout, spoken cue: the last step is done and the workout was logged. Calm and factual — no praise.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout done."
+          }
+        }
+      }
     },
     "Workout exercises" : {
 
@@ -10717,6 +10816,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Weight"
+          }
+        }
+      }
+    },
+    "workout.spoken.sentences" : {
+      "comment" : "Guided workout, spoken cues and VoiceOver: two spoken sentences joined into one line, e.g. 'Next: Bench press.' then 'Suggested weight 105 pounds, last time 3 by 8 at 100 pounds'. Change only the separator or the order.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
           }
         }
       }
