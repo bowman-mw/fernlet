@@ -1058,6 +1058,22 @@ struct UXScreenProbe {
                 Its Dynamic Type finding is a separate, pre-existing issue for the Larger Text row.
                 """
         ),
+        AuditExemption(
+            auditType: .textClipped, descriptionContains: "Text clipped", elementLabel: "HOW LONG?",
+            reason: """
+                THE SUGGEST SHEET'S "HOW LONG?" CAPTION, CUT BY THE SCROLL VIEWPORT, NOT BY ITS WIDTH. \
+                Added 2026-10-20 with the session-length menu, which sits between the readiness chips \
+                and SPACE & EQUIPMENT in the configurator. The caption is the shared `SheetField` \
+                caption: nine characters, no line limit and no fixed frame, so no text size can \
+                truncate it. It first reported on `Sheet · Workout suggestion` and `AX5 · Sheet · \
+                Workout suggestion` in the same run (bundle 3) that stopped reporting \
+                `Full gym · # items` on both — the space row the new row pushed down. That is the \
+                configurator's own scroll edge moving one row, the cause the baseline notes already \
+                record for `ANYTHING ELSE?` and the space row. The label is drawn only on that sheet. \
+                Delete this entry if the configurator stops scrolling there, or if a screenshot ever \
+                shows the caption cut.
+                """
+        ),
     ]
 
     /// The shared reason for every ``mossTextExemptions`` entry.
@@ -1431,8 +1447,10 @@ extension UXScreenProbe {
             "Text clipped — “Log meal” (48)",
             "Text clipped — “WHAT DID YOU EAT?” (48)",
         ],
+        // 2026-10-20: `Text clipped — “Full gym · # items” (48)` deleted — it stopped reproducing in
+        // bundle 3 once the session-length row moved the space row down (see the `HOW LONG?`
+        // AuditExemption).
         "AX5 · Sheet · Workout suggestion": [
-            "Text clipped — “Full gym · # items” (48)",
             "Text clipped — “SPACE & EQUIPMENT” (48)",
             "Text clipped — “Suggest” (48)",
             "Text clipped — “Suggest” id=workout.suggest (9)",
@@ -1656,10 +1674,13 @@ extension UXScreenProbe {
         // suite's leftover, so this line had been pinning test order rather than the app. See the
         // matching note on `Move tab`, where the same rename ADDS a finding: the default name is
         // longer, and the Move header's segment clips at it where "Shed" did not.
+        //
+        // SESSION-LENGTH ROW (2026-10-20): `Text clipped — “Full gym · # items” (48)` deleted — it
+        // stopped reproducing in bundle 3 once the new "How long?" row moved the space row down, and
+        // the clip moved to that row's caption (the `HOW LONG?` AuditExemption).
         "Sheet · Workout suggestion": [
             "Potentially inaccessible text",
             "Text clipped",
-            "Text clipped — “Full gym · # items” (48)",
             "Text clipped — “SPACE & EQUIPMENT” (48)",
             "Text clipped — “Suggest a workout” id=workout.suggest (9)",
             "Text clipped — “Suggest workout” (48)",
