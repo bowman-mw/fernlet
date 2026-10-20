@@ -58,7 +58,8 @@ extension WorkoutProgram {
         case .holdForEquipment: return WorkoutPlannerCopy.holdForEquipment(name)
         case .repsFirst: return plan.cap.map { repsFirstLine(name, plan: plan, cap: $0) }
         case .setFirst: return plan.cap.map { setFirstLine(name, plan: plan, cap: $0) }
-        case .same, .firstTime: return nil
+        case .confirming: return WorkoutPlannerCopy.confirming(name)
+        case .same, .blockHold, .firstTime: return nil
         }
     }
 

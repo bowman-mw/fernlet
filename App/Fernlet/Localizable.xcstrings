@@ -3236,9 +3236,6 @@
     "Exercises and swaps" : {
       "comment" : "Workout setup: entry to custom exercises, hidden exercises and saved swaps"
     },
-    "Experience" : {
-
-    },
     "Expired" : {
 
     },
@@ -4115,6 +4112,17 @@
     },
     "How friends will see you" : {
 
+    },
+    "How long have you lifted regularly?" : {
+      "comment" : "Workout setup: the question that sets the person's training age, which paces how often their lifts move on. Answered with one of three durations.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How long have you lifted regularly?"
+          }
+        }
+      }
     },
     "How long?" : {
 
@@ -8191,6 +8199,17 @@
     },
     "This session stays on screen" : {
 
+    },
+    "This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it." : {
+      "comment" : "Workout setup: the note under 'How long have you lifted regularly?', saying what the answer does.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it."
+          }
+        }
+      }
     },
     "This tunes suggestions without locking you into rules." : {
 

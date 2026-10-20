@@ -29,6 +29,9 @@ enum WorkoutLoadContextBuilder {
     static let recoveryDays = 14
     /// Plausible logged sleep, in hours; anything outside is ignored.
     static let sleepHoursRange = 0.5...16.0
+    /// How far back a lift's first logged session is looked for (G8): two years and a week, past
+    /// which every lift reads as long-trained anyway.
+    static let trainingAgeDays = 7 * 105
 
     /// The context for today. `body` is the body profile in effect on this device (the typed one with
     /// this device's Health import laid over it, `effectiveUserProfile`); nil reads the synced one.
@@ -57,8 +60,42 @@ enum WorkoutLoadContextBuilder {
             warmUpSets: WorkoutWarmUpSets.isEnabled(
                 preference: settings.workoutWarmUpSets, experience: settings.workoutProfile.experience
             ),
-            traits: traits(body ?? settings.userProfile)
+            traits: traits(body ?? settings.userProfile),
+            experience: settings.workoutProfile.experience,
+            liftWeeks: liftWeeks(merged, todayDate: todayDate)
         )
+    }
+
+    /// Weeks from each lift's first logged session, within ``trainingAgeDays``, to today, by
+    /// normalized name — how the training-age answer is refined per lift (G8). Read from the same
+    /// sessions the planner reads: a row's results, and a hand-logged row's lines.
+    static func liftWeeks(_ days: [String: FernletDay], todayDate: Date) -> [String: Double] {
+        var first: [String: Date] = [:]
+        for day in days.values {
+            guard let date = FernletDate.date(fromDayKey: day.date) else { continue }
+            let age = todayDate.timeIntervalSince(date) / 86_400
+            guard age >= 0, age <= Double(trainingAgeDays) else { continue }
+            for key in liftKeys(day, date: date) where first[key].map({ date < $0 }) ?? true {
+                first[key] = date
+            }
+        }
+        return first.mapValues { WorkoutTrend.weeks(from: $0, to: todayDate) }
+    }
+
+    /// The normalized names of the lifts one day logged: its results (ramp sets aside) and its
+    /// hand-logged rows' lines.
+    static func liftKeys(_ day: FernletDay, date: Date) -> Set<String> {
+        var keys: Set<String> = []
+        for workout in day.workouts {
+            for result in workout.exerciseResults ?? [] where result.calibration != .ramp {
+                keys.insert(WorkoutExerciseCatalog.normalizedName(result.name))
+            }
+            guard workout.loggedFromGuidedSession != true else { continue }
+            for line in workout.exerciseLines {
+                if let logged = handLoggedExposure(line, date: date) { keys.insert(logged.key) }
+            }
+        }
+        return keys
     }
 
     /// The person's traits for the expected curve, read on this device only: age, sex and body weight.

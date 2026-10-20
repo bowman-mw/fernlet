@@ -28255,6 +28255,42 @@
         }
       }
     },
+    "experienceLevel.trainingAge.advanced" : {
+      "comment" : "Workout setup: answer to 'How long have you lifted regularly?' — two years or longer",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "More than 2 years"
+          }
+        }
+      }
+    },
+    "experienceLevel.trainingAge.beginner" : {
+      "comment" : "Workout setup: answer to 'How long have you lifted regularly?' — less than six months",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Under 6 months"
+          }
+        }
+      }
+    },
+    "experienceLevel.trainingAge.intermediate" : {
+      "comment" : "Workout setup: answer to 'How long have you lifted regularly?' — between six months and two years",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "6 months to 2 years"
+          }
+        }
+      }
+    },
     "feeling.bright" : {
       "comment" : "Journal mood tag: the brightest of the six moods",
       "extractionState" : "extracted_with_value",
@@ -31039,6 +31075,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@: back to %2$@ — add weight now (%3$@)."
+          }
+        }
+      }
+    },
+    "workoutNote.load.confirming" : {
+      "comment" : "Workout session note about one lift for someone past their first months of lifting: progress comes after two good sessions in a row, so today repeats the last one. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: the same again today — one more session like the last, and it moves on."
           }
         }
       }

@@ -10,7 +10,9 @@
 //   three sessions in eight weeks.
 // - Confidence sets how wide the prescribed range is: ±10 % low, ±5 % medium, one step at high.
 // - The next prescription follows the last result: completed → one more rep (or, at the top of the
-//   range, more weight and back to the bottom); tough or a miss → repeat; lighter only after two misses
+//   range, a fixed step heavier and back to the bottom — G4: one step upper body, one or two lower), as
+//   often as the lifter's training age allows (G3: every success for a beginner, two in a row from six
+//   months, once per block past two years); tough or a miss → repeat; lighter only after two misses
 //   on days with no sleep or readiness flag (G10, 2026-10-20: one session's estimated max moves 3–5 %
 //   from day to day, so one miss is mostly noise, and a miss after a short night or on a light day
 //   holds the load instead of counting).
@@ -36,6 +38,12 @@ public nonisolated enum LoadChange: Equatable, Sendable {
     case backToBottom
     /// Tough, or a miss that doesn't yet call for less: the same again.
     case same
+    /// Completed, but a lifter past their first six months on the lift steps after two successful
+    /// sessions in a row (G3): the same again, once more.
+    case confirming
+    /// Completed, but a lifter past two years on the lift steps once per block (G3): the same load
+    /// until the block's time is up.
+    case blockHold
     /// A second miss in a row on unflagged days: a little lighter.
     case lighter
     /// A third unflagged miss in a row: lighter and one set fewer, for one session.
@@ -136,9 +144,15 @@ public nonisolated enum WorkoutLoadEngine {
     /// Range half-widths by confidence.
     public static let lowConfidenceHalfWidth = 0.10
     public static let mediumConfidenceHalfWidth = 0.05
-    /// The weight step after a completed top-of-range session, as a fraction.
-    public static let upperBodyIncrease = 0.025
-    public static let lowerBodyIncrease = 0.05
+    /// The weight step after a completed top-of-range session (G4, 2026-10-20): fixed, not a
+    /// percentage. An upper-body lift moves one equipment step (5 lb; 2.5 kg, 2 on dumbbells — the
+    /// research's 2.5–5 lb, 1.25–2.5 kg); a lower-body lift one or two (5–10 lb, 2.5–5 kg), two once
+    /// this fraction of the load rounds to two steps. On a location's own weights the step lands on
+    /// the nearest load it has.
+    public static let lowerBodyStepFraction = 0.05
+    public static let lowerBodyMaxSteps = 2.0
+    /// The block a lifter past two years on a lift progresses by (G3): the load is held this long.
+    public static let blockDays = 28
     /// Misses in a row on unflagged days before the load goes lighter (G10: a flagged miss holds the
     /// load and never counts).
     public static let missesForLighter = 2
@@ -325,10 +339,14 @@ extension WorkoutLoadEngine {
         public var today: Date
         /// The location's weights; nil or empty moves by the equipment's usual steps.
         public var inventory: WorkoutWeightInventory?
+        /// How long the person has trained this lift (G3): a beginner steps after every successful
+        /// session, an intermediate after two in a row, an advanced lifter once per block.
+        public var tier: TrainingTier
 
         public init(
             scheme: RepScheme, baseSets: Int, exposures: [LiftExposure], equipment: Equipment?,
-            isLowerBody: Bool, defaultUnit: LoadUnit, today: Date, inventory: WorkoutWeightInventory? = nil
+            isLowerBody: Bool, defaultUnit: LoadUnit, today: Date, inventory: WorkoutWeightInventory? = nil,
+            tier: TrainingTier = .beginner
         ) {
             self.scheme = scheme
             self.baseSets = baseSets
@@ -338,6 +356,7 @@ extension WorkoutLoadEngine {
             self.defaultUnit = defaultUnit
             self.today = today
             self.inventory = inventory
+            self.tier = tier
         }
     }
 
@@ -411,7 +430,8 @@ extension WorkoutLoadEngine {
             let reps = inputs.scheme.contains(anchor.targetReps) ? anchor.targetReps : inputs.scheme.low
             return Outcome(reps: reps, setsDelta: 0, change: .afterBreak, move: .down(afterBreakDecrease))
         }
-        return outcome(of: anchor, history: history, scheme: inputs.scheme, loadable: loadable, cap: cap)
+        return outcome(of: anchor, history: history, scheme: inputs.scheme, loadable: loadable, cap: cap,
+                       tier: inputs.tier, today: inputs.today)
     }
 
     /// A lift with no regular session yet: the bottom of the range, and a suggestion only when a
@@ -455,7 +475,8 @@ extension WorkoutLoadEngine {
     /// with no sleep or readiness flag; a flagged miss (``LiftExposure/flag``) always holds and never
     /// counts toward a cut.
     static func outcome(
-        of anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, loadable: Bool, cap: LoadCap? = nil
+        of anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, loadable: Bool, cap: LoadCap? = nil,
+        tier: TrainingTier = .beginner, today: Date? = nil
     ) -> Outcome {
         let ceiling = cap == nil ? scheme.high : scheme.high + equipmentExtraReps
         let target = (scheme.low...ceiling).contains(anchor.targetReps) ? anchor.targetReps : scheme.low
@@ -473,6 +494,9 @@ extension WorkoutLoadEngine {
             return Outcome(reps: target, setsDelta: 0, change: .same, move: .hold)
         }
         if anchor.effort == .tough { return Outcome(reps: target, setsDelta: 0, change: .same, move: .hold) }
+        if !readyToStep(anchor, history: history, tier: tier, today: today ?? anchor.date) {
+            return Outcome(reps: target, setsDelta: 0, change: tier == .advanced ? .blockHold : .confirming, move: .hold)
+        }
         if anchor.overrideReason == .equipment || !loadable {
             return repsOnlyOutcome(target: target, scheme: scheme, equipmentCapped: anchor.overrideReason == .equipment)
         }
@@ -497,6 +521,36 @@ extension WorkoutLoadEngine {
                        change: equipmentCapped ? .holdForEquipment : .moreSets, move: .hold)
     }
 
+    /// Whether a completed session may take the next step yet, by training age (G3, 2026-10-20): a
+    /// beginner steps after every successful session; an intermediate after two in a row at the same
+    /// prescription (ACSM's two-for-two); an advanced lifter once per block — two in a row, with the
+    /// load held at least ``blockDays``. A success is completed without "tough" (about two reps left
+    /// in the tank), or with a set past its target.
+    static func readyToStep(_ anchor: LiftExposure, history: [LiftExposure], tier: TrainingTier, today: Date) -> Bool {
+        guard tier != .beginner else { return true }
+        let regular = history.filter { !$0.easierSession && $0.calibration == nil }
+        guard regular.count >= 2, let previous = regular.dropLast().last,
+              isSuccess(previous), samePrescription(previous, anchor) else { return false }
+        guard tier == .advanced else { return true }
+        let held = regular.reversed().prefix { samePrescription($0, anchor) }
+        guard let first = held.last else { return false }
+        return days(from: first.date, to: today) >= blockDays
+    }
+
+    /// Completed with reps to spare: not marked tough, or with a set past its target.
+    static func isSuccess(_ exposure: LiftExposure) -> Bool {
+        guard exposure.completed else { return false }
+        return exposure.effort != .tough || exposure.bestReps > exposure.targetReps
+    }
+
+    /// The same target reps at the same weight (in either unit), or both with no load.
+    static func samePrescription(_ a: LiftExposure, _ b: LiftExposure) -> Bool {
+        guard a.targetReps == b.targetReps else { return false }
+        guard let first = a.weight, let second = b.weight else { return a.weight == nil && b.weight == nil }
+        let unit = b.unit ?? a.unit ?? .lb
+        return abs(unit.converted(first, from: a.unit ?? unit) - second) <= weightTolerance
+    }
+
     /// Regular sessions in a row, newest backwards, that missed their target on an unflagged day. A
     /// flagged miss neither counts nor breaks the run; a completed session ends it.
     static func trailingMisses(_ history: [LiftExposure]) -> Int {
@@ -514,8 +568,9 @@ extension WorkoutLoadEngine {
         case .hold:
             return weight
         case .up:
-            let fraction = lowerBody ? lowerBodyIncrease : upperBodyIncrease
-            return max(weight + step, rounded(weight * (1 + fraction), toStep: step))
+            guard lowerBody else { return weight + step }
+            let steps = min(lowerBodyMaxSteps, max(1, (weight * lowerBodyStepFraction / step).rounded()))
+            return weight + steps * step
         case .down(let fraction):
             return max(step, min(weight - step, rounded(weight * (1 - fraction), toStep: step)))
         }

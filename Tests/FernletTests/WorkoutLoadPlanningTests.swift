@@ -25,9 +25,11 @@ struct WorkoutLoadPlanningTests {
     func pushSession(
         history: [String: [LiftExposure]] = [:], today: Int = 30,
         calibration: CalibrationSettings = CalibrationSettings(hasCoach: true),
-        progression: [String: Int] = [:], useLoad: Bool = true
+        progression: [String: Int] = [:], useLoad: Bool = true, experience: ExperienceLevel? = nil,
+        liftWeeks: [String: Double] = [:]
     ) throws -> WorkoutProgram.SessionSuggestion {
-        let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, calibration: calibration)
+        let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, calibration: calibration,
+                                      experience: experience, liftWeeks: liftWeeks)
         let plan = WorkoutProgram.dayPlan(
             goal: .wellness, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
             location: .fullGym, context: "", split: Self.pushSplit, rotationIndex: 0,
@@ -147,6 +149,52 @@ struct WorkoutLoadPlanningTests {
         #expect(lift.guidance?.easierSession == false)
         #expect(lift.guidance?.prescription?.suggested == 125)
         #expect(!session.suggestion.notes.contains("came in a little lower"))
+    }
+
+    @Test func theTrainingAgeAnswerIsAFloorThatEachLiftsLogRaises() {
+        func age(_ experience: ExperienceLevel?, weeks: Double) -> TrainingAge? {
+            WorkoutLoadContext(exposures: [:], today: day(0), defaultUnit: .lb, experience: experience,
+                               liftWeeks: [key("Bench press"): weeks]).trainingAge(for: "Bench press")
+        }
+        #expect(age(.intermediate, weeks: 4) == TrainingAge(weeks: 26))
+        #expect(age(.intermediate, weeks: 60) == TrainingAge(weeks: 60))
+        let advanced = age(.advanced, weeks: 4)
+        #expect(advanced == TrainingAge(weeks: 104))
+        // "Under 6 months" — also the default nobody changed — stays inferred, from the lift's own log.
+        let beginner = age(.beginner, weeks: 30)
+        #expect(beginner == TrainingAge(weeks: 30, isInferred: true))
+        let tier = beginner.map(\.tier)
+        #expect(tier == .intermediate)
+        #expect(age(nil, weeks: 30) == nil)
+    }
+
+    @Test func pastSixMonthsTheMainLiftRepeatsUntilTwoGoodSessionsInARow() throws {
+        let main = try #require(lifting(try pushSession()).first).name
+        let history = [key(main): [session(28, 135, reps: 9, target: 9)]]
+        let session = try pushSession(history: history, experience: .intermediate)
+        let lift = try #require(lifting(session).first { $0.name == main })
+        #expect(lift.reps == "9")
+        #expect(session.suggestion.notes.contains("\(main): the same again today — one more session like the last, and it moves on."))
+        let novice = try pushSession(history: history, experience: .beginner)
+        #expect(try #require(lifting(novice).first { $0.name == main }).reps == "10")
+    }
+
+    @Test func eachLiftsTrainingAgeIsReadFromItsFirstLoggedSession() throws {
+        func row(_ offset: Int) -> FernletDay {
+            FernletDay(date: FernletDate.dayKey(for: day(offset)), workouts: [
+                Workout(name: "Push", type: .upper, exercises: "Bench press 3x8 @100 lb", rpe: nil, notes: "",
+                        duration: nil, intensity: .moderate),
+            ])
+        }
+        let todayKey = FernletDate.dayKey(for: day(400))
+        let days = [row(100), row(390)]
+        let context = WorkoutLoadContextBuilder.build(
+            days: Dictionary(uniqueKeysWithValues: days.map { ($0.date, $0) }), today: FernletDay(date: todayKey),
+            todayKey: todayKey, settings: FernletSettings(), locale: Locale(identifier: "en_US")
+        )
+        let weeks = try #require(context.liftWeeks[key("Bench press")])
+        #expect(abs(weeks - 300.0 / 7) < 0.2)
+        #expect(context.experience == FernletSettings().workoutProfile.experience)
     }
 
     @Test func aDueCalibrationTurnsTheMainLiftIntoARampAndATest() throws {

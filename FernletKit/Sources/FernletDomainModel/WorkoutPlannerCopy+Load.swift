@@ -71,6 +71,14 @@ extension WorkoutPlannerCopy {
                       comment: "Workout session note about one lift: a lighter weight today because the reps fell short last time. Arguments: the exercise name, then the weight with its unit.")
     }
 
+    /// "Bench press: the same again today — one more session like the last, and it moves on."
+    static func confirming(_ name: String) -> String {
+        String(localized: "workoutNote.load.confirming",
+               defaultValue: "\(name): the same again today — one more session like the last, and it moves on.",
+               bundle: .module,
+               comment: "Workout session note about one lift for someone past their first months of lifting: progress comes after two good sessions in a row, so today repeats the last one. The argument is the exercise name.")
+    }
+
     /// "Bench press: lighter and one set fewer today — a reset, not a step back."
     static func lighterFewerSets(_ name: String) -> String {
         String(localized: "workoutNote.load.lighterFewerSets",

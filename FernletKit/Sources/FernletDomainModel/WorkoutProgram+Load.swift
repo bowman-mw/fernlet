@@ -32,11 +32,18 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     /// The person's age, sex and body weight, which nudge each lift's expected curve (G9: a
     /// long-trained lifter over 60 expects a steady line). Unknown by default.
     public var traits: LifterTraits
+    /// The answer to Workout setup's "How long have you lifted regularly?" (G8); nil when the
+    /// context does not say, which keeps every lift on the beginner pace with its age inferred.
+    public var experience: ExperienceLevel?
+    /// Weeks from each lift's first logged session (reading back two years) to today, by
+    /// ``WorkoutExerciseCatalog/normalizedName(_:)``: what refines the answer per lift.
+    public var liftWeeks: [String: Double]
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
         recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
-        warmUpSets: Bool = false, traits: LifterTraits = .unknown
+        warmUpSets: Bool = false, traits: LifterTraits = .unknown, experience: ExperienceLevel? = nil,
+        liftWeeks: [String: Double] = [:]
     ) {
         self.exposures = exposures
         self.today = today
@@ -45,6 +52,23 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         self.calibration = calibration
         self.warmUpSets = warmUpSets
         self.traits = traits
+        self.experience = experience
+        self.liftWeeks = liftWeeks
+    }
+
+    /// One lift's training age (G8): the setup answer as a floor — six months for "6 months to 2
+    /// years", two years for "more than 2 years" — raised by how long this lift has been logged. An
+    /// "under 6 months" answer (also the default nobody changed) keeps the age inferred, so the
+    /// trend judges the lift by its own earlier progress rather than by a beginner's curve that a
+    /// long-trained lifter would always fall short of. Nil when the context has no answer.
+    public func trainingAge(for name: String) -> TrainingAge? {
+        guard let experience else { return nil }
+        let logged = liftWeeks[WorkoutExerciseCatalog.normalizedName(name)] ?? 0
+        switch experience {
+        case .beginner: return TrainingAge(weeks: logged, isInferred: true)
+        case .intermediate: return TrainingAge(weeks: max(WorkoutTrend.intermediateWeeks, logged))
+        case .advanced: return TrainingAge(weeks: max(WorkoutTrend.advancedWeeks, logged))
+        }
     }
 
     /// One lift's sessions, oldest first.
@@ -138,7 +162,8 @@ extension WorkoutProgram {
         let unit = load.unit(for: history)
         let levelKg = WorkoutLoadEngine.estimate(from: history, unit: unit, today: load.today)
             .map { LoadUnit.kg.converted($0.oneRepMax, from: unit) }
-        let profile = TrendProfile(traits: load.traits, lowerBody: WorkoutLoadEngine.isLowerBody(target.movementPattern))
+        let profile = TrendProfile(trainingAge: load.trainingAge(for: target.name), traits: load.traits,
+                                   lowerBody: WorkoutLoadEngine.isLowerBody(target.movementPattern))
         return WorkoutPlateau.status(of: history, unit: unit, today: load.today, profile: profile, levelKg: levelKg)
     }
 
@@ -176,7 +201,8 @@ extension WorkoutProgram {
             scheme: scheme, baseSets: inputs.style.adjustedSets(for: pick.slot.role, energy: inputs.intensity),
             exposures: history, equipment: equipment,
             isLowerBody: WorkoutLoadEngine.isLowerBody(pick.target.movementPattern),
-            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights
+            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights,
+            tier: load.trainingAge(for: pick.target.name)?.tier ?? .beginner
         ))
         pick.exercise.sets = plan.sets
         pick.exercise.reps = "\(plan.reps)"

@@ -285,12 +285,20 @@ struct WorkoutSetupSheet: View {
                 }
             }
 
-            SheetField("Experience") {
-                FlowLayout(spacing: 8) {
-                    ForEach(ExperienceLevel.allCases) { level in
-                        Button(level.displayName) { profile.experience = level }
-                            .buttonStyle(ChipButtonStyle(selected: profile.experience == level))
+            // G8 (2026-10-20): the experience field asked as a training age. The same stored level —
+            // nothing new is kept — and each lift's own log refines it on this device.
+            SheetField("How long have you lifted regularly?") {
+                VStack(alignment: .leading, spacing: 8) {
+                    FlowLayout(spacing: 8) {
+                        ForEach(ExperienceLevel.allCases) { level in
+                            Button(level.trainingAgeLabel) { profile.experience = level }
+                                .buttonStyle(ChipButtonStyle(selected: profile.experience == level))
+                        }
                     }
+                    Text("This sets how often Fernlet moves your lifts on. Each lift's own log fine-tunes it.")
+                        .font(.fernlet(.labelSmall))
+                        .foregroundStyle(Color.slate)
+                        .fernletWrappingText()
                 }
             }
 

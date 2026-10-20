@@ -174,12 +174,14 @@ public nonisolated struct TrendProfile: Equatable, Sendable {
         self.lowerBody = lowerBody
     }
 
-    /// This profile as of `date`, an earlier session than `newest`: a known training age that much
-    /// younger (never under a week); an inferred one is read from the history either way.
+    /// This profile as of `date`, an earlier session than `newest`: a given training age that much
+    /// younger (never under a week), still known or inferred as it was; with none, the history is
+    /// read either way.
     public func asOf(_ date: Date, newest: Date) -> TrendProfile {
-        guard let age = trainingAge, !age.isInferred else { return self }
+        guard let age = trainingAge else { return self }
         var earlier = self
-        earlier.trainingAge = TrainingAge(weeks: age.weeks - WorkoutTrend.weeks(from: date, to: newest))
+        earlier.trainingAge = TrainingAge(weeks: age.weeks - WorkoutTrend.weeks(from: date, to: newest),
+                                          isInferred: age.isInferred)
         return earlier
     }
 }

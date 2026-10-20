@@ -32,11 +32,11 @@ struct WorkoutLoadEngineTests {
 
     func plan(
         _ history: [LiftExposure], scheme: RepScheme = RepScheme(low: 8, high: 12), sets: Int = 3,
-        equipment: Equipment? = .barbell, lowerBody: Bool = false, today: Int = 30
+        equipment: Equipment? = .barbell, lowerBody: Bool = false, today: Int = 30, tier: TrainingTier = .beginner
     ) -> LiftPlan {
         WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
             scheme: scheme, baseSets: sets, exposures: history, equipment: equipment,
-            isLowerBody: lowerBody, defaultUnit: .lb, today: day(today)
+            isLowerBody: lowerBody, defaultUnit: .lb, today: day(today), tier: tier
         ))
     }
 
@@ -110,6 +110,36 @@ struct WorkoutLoadEngineTests {
         let squat = plan([session(28, 225, reps: [5, 5, 5, 5], target: 5)], scheme: RepScheme(low: 5, high: 5), lowerBody: true)
         #expect(squat.change == .addWeight)
         #expect(squat.prescription?.suggested == 235)
+    }
+
+    @Test func theWeightStepIsFixedNotAPercentage() {
+        // G4: one step on an upper-body lift however heavy (2.5 % of 300 lb would have been 10 lb).
+        let bench = plan([session(28, 300, reps: [12, 12, 12], target: 12)])
+        #expect((bench.change, bench.prescription?.suggested) == (.backToBottom, 305))
+        // One or two steps on a lower-body lift: two once 5 % of the load rounds to two, never more.
+        let fives = RepScheme(low: 5, high: 5)
+        let heavy = plan([session(28, 400, reps: [5, 5, 5], target: 5)], scheme: fives, lowerBody: true)
+        #expect(heavy.prescription?.suggested == 410)
+        let light = plan([session(28, 100, reps: [5, 5, 5], target: 5)], scheme: fives, lowerBody: true)
+        #expect(light.prescription?.suggested == 105)
+    }
+
+    @Test func progressionWaitsForTwoGoodSessionsPastSixMonthsAndForTheBlockPastTwoYears() {
+        let novice = plan([session(28, 135, reps: [9, 9, 9], target: 9)])
+        #expect((novice.change, novice.reps) == (.moreReps, 10))
+        // G3: from six months, two successful sessions in a row at the same prescription (two-for-two).
+        let once = plan([session(28, 135, reps: [9, 9, 9], target: 9)], tier: .intermediate)
+        #expect((once.change, once.reps, once.prescription?.suggested) == (.confirming, 9, 135))
+        let twice = plan([24, 28].map { session($0, 135, reps: [9, 9, 9], target: 9) }, tier: .intermediate)
+        #expect((twice.change, twice.reps) == (.moreReps, 10))
+        let afterTough = plan([session(24, 135, reps: [9, 9, 9], target: 9, effort: .tough),
+                               session(28, 135, reps: [9, 9, 9], target: 9)], tier: .intermediate)
+        #expect(afterTough.change == .confirming)
+        // Past two years, once per block: the load held four weeks, the last two sessions good.
+        let midBlock = plan([20, 24, 28].map { session($0, 135, reps: [9, 9, 9], target: 9) }, tier: .advanced)
+        #expect((midBlock.change, midBlock.reps) == (.blockHold, 9))
+        let blockDone = plan([0, 14, 28].map { session($0, 135, reps: [9, 9, 9], target: 9) }, tier: .advanced)
+        #expect((blockDone.change, blockDone.reps) == (.moreReps, 10))
     }
 
     @Test func aMissRepeatsAndOnlyTwoUnflaggedMissesGoLighter() {

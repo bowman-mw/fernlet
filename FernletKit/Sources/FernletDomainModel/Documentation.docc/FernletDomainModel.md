@@ -641,8 +641,15 @@ estimate — so the same history always builds the same plan.
   the tank added back (sets of 12 or fewer, three sessions in eight weeks weighted 3:2:1) and sets a
   ``WeightPrescription`` whose width follows ``EstimateConfidence``: ±10 % low, ±5 % medium, one step
   at high, on the equipment's steps.
-- **Next session.** Completed → one more rep, or at the top of the range more weight and back to the
-  bottom ("add weight now"); tough or a miss → repeat; a second miss in a row on days with no sleep or
+- **Next session.** Completed → one more rep, or at the top of the range a fixed step heavier and back
+  to the bottom ("add weight now"; G4: one equipment step on an upper-body lift, one or two on a
+  lower-body one, landing on the location's own weights) — as often as the lift's training age allows
+  (G3, ``TrainingTier``: after every successful session in the first six months, after two in a row
+  from six months to two years (`LoadChange.confirming`), once per four-week block past that
+  (`LoadChange.blockHold`)). The training age is Workout setup's "How long have you lifted
+  regularly?" — the existing ``ExperienceLevel``, nothing new stored — raised per lift by how long that
+  lift has been logged (``WorkoutLoadContext/trainingAge(for:)``); "under 6 months" keeps the trend's
+  age inferred. Tough or a miss → repeat; a second miss in a row on days with no sleep or
   readiness flag → lighter; a third → lighter and a set fewer. A flagged miss (``WorkoutSessionFlag``)
   always holds the load and never counts toward a cut (G10, 2026-10-20). Two overrides the same way,
   or a "too heavy / too light" answer, re-center the estimate on the lifter's picks; a third override
