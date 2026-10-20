@@ -50,7 +50,8 @@ enum GuidedRunSpokenCue {
             return String(localized: GuidedSegmentWords.goLine(paceRaw))
         case .holdEnded:
             return paceRaw == nil ? holdDone : partDone
-        case .setLogged, .blockChanged, .workoutFinished:
+        // A zone drift (idea 9) speaks through the zone director's own VoiceOver line, not here.
+        case .setLogged, .blockChanged, .workoutFinished, .zoneDrift:
             return nil
         }
     }
