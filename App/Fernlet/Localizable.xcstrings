@@ -532,6 +532,28 @@
         }
       }
     },
+    "%lld bpm · aim %lld–%lld" : {
+      "comment" : "Guided cardio, Live Activity and runner: the live heart rate in beats per minute and the target range to aim for, e.g. '118 bpm · aim 110–125'. Gentle: 'aim', never a limit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld"
+          }
+        }
+      }
+    },
+    "%lld bpm · aim %lld–%lld · %@" : {
+      "comment" : "Guided cardio, Live Activity: the live heart rate, the range to aim for and where it sits, on one line, e.g. '118 bpm · aim 110–125 · in range'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld · %4$@"
+          }
+        }
+      }
+    },
     "%lld cal" : {
 
     },
@@ -1513,6 +1535,28 @@
     },
     "Age: %lld" : {
 
+    },
+    "Aim: a few words at a time" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: a few words at a time"
+          }
+        }
+      }
+    },
+    "Aim: talk in short sentences" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an easy or steady part (heart-rate zone 2), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: talk in short sentences"
+          }
+        }
+      }
     },
     "All done" : {
       "comment" : "Shown and spoken by the breathing pacer the moment a session reaches its full length."
@@ -2817,6 +2861,17 @@
     "During a session, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone." : {
 
     },
+    "During guided cardio, see your heart rate against a gentle target, from AirPods Pro 3, Powerbeats Pro 2 or a Bluetooth heart-rate strap paired with this iPhone. Turning it on asks Apple Health to let Fernlet read your heart rate. Apple Health keeps the readings, as it does for any workout; Fernlet keeps none. With no reading, the talk test guides you instead. Zone nudges add one light tap when you've drifted out of range for a while." : {
+      "comment" : "Workout setup: what the two heart-rate switches do, where the reading comes from and where it goes. Product names stay as Apple writes them. 'The talk test' = judging effort by how easily you can talk.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "During guided cardio, see your heart rate against a gentle target, from AirPods Pro 3, Powerbeats Pro 2 or a Bluetooth heart-rate strap paired with this iPhone. Turning it on asks Apple Health to let Fernlet read your heart rate. Apple Health keeps the readings, as it does for any workout; Fernlet keeps none. With no reading, the talk test guides you instead. Zone nudges add one light tap when you've drifted out of range for a while."
+          }
+        }
+      }
+    },
     "Each exercise as logged, most recent first." : {
 
     },
@@ -3906,6 +3961,50 @@
     "Heart %@" : {
 
     },
+    "Heart rate %lld, aiming for %lld to %lld, %@" : {
+      "comment" : "VoiceOver, guided cardio: the live heart rate, the range to aim for and where it sits, e.g. 'Heart rate 118, aiming for 110 to 125, a little high'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate %1$lld, aiming for %2$lld to %3$lld, %4$@"
+          }
+        }
+      }
+    },
+    "Heart rate a little high." : {
+      "comment" : "VoiceOver, guided cardio: spoken with the opt-in zone nudge when the heart rate has sat above the target range for a while. Gentle — never a warning.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate a little high."
+          }
+        }
+      }
+    },
+    "Heart rate a little low." : {
+      "comment" : "VoiceOver, guided cardio: spoken with the opt-in zone nudge when the heart rate has sat below the target range for a while. Gentle — never a push.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate a little low."
+          }
+        }
+      }
+    },
+    "Heart rate during cardio" : {
+      "comment" : "Workout setup, Cues during a workout: the switch that reads live heart rate during guided cardio (from earbuds or a strap, through Apple Health). Off until turned on.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate during cardio"
+          }
+        }
+      }
+    },
     "Hearts" : {
 
     },
@@ -4962,6 +5061,17 @@
     },
     "Nearby recipe shares" : {
       "extractionState" : "manual"
+    },
+    "Needs workout sharing with Apple Health — turn it on in Settings › Health." : {
+      "comment" : "Workout setup: shown under the heart-rate switches while Fernlet does not share workouts with Apple Health, which the live heart rate needs. 'Settings › Health' is Fernlet's own Settings screen.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Needs workout sharing with Apple Health — turn it on in Settings › Health."
+          }
+        }
+      }
     },
     "New item" : {
 
@@ -8909,6 +9019,28 @@
     "You marked yourself unwell, so today is for rest. If moving would feel good, keep it gentle — or skip it entirely." : {
 
     },
+    "You should be able to talk in short sentences." : {
+      "comment" : "Guided cardio: the talk test under the card for an easy or steady part (heart-rate zone 2), shown when there is no live heart rate.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You should be able to talk in short sentences."
+          }
+        }
+      }
+    },
+    "You should only manage a few words at a time." : {
+      "comment" : "Guided cardio: the talk test under the card for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Hard for this person, not all-out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You should only manage a few words at a time."
+          }
+        }
+      }
+    },
     "You were removed from that session. Anything you kept is already saved." : {
 
     },
@@ -9278,6 +9410,17 @@
     "Your verification code, as a QR code for the person you're connecting with to scan" : {
 
     },
+    "Zone nudges" : {
+      "comment" : "Workout setup, Cues during a workout: the switch for one light tap when the heart rate has drifted out of the target zone for a while. Off until turned on.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zone nudges"
+          }
+        }
+      }
+    },
     "^[%@ Burj Khalifa](inflect: true)" : {
       "comment" : "Silly stats comparison unit: the world's tallest building"
     },
@@ -9410,6 +9553,28 @@
     },
     "^[%lld tasks](inflect: true)" : {
 
+    },
+    "a little high" : {
+      "comment" : "Guided cardio: the live heart rate is above the target range. Gentle — never a warning; the person may ease off if they like.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little high"
+          }
+        }
+      }
+    },
+    "a little low" : {
+      "comment" : "Guided cardio: the live heart rate is below the target range. Gentle — never a push.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little low"
+          }
+        }
+      }
     },
     "a soft tap on each turn" : {
 
@@ -10212,6 +10377,17 @@
     },
     "iOS ended the background session" : {
 
+    },
+    "in range" : {
+      "comment" : "Guided cardio: the live heart rate is inside the target range. Calm, lower case, said beside the reading.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "in range"
+          }
+        }
+      }
     },
     "intent.water.logged" : {
       "comment" : "Siri confirmation after logging water. The number is how many bottles were logged; needs a plural variation per language, and English also needs the one-bottle form.",

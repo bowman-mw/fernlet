@@ -150,6 +150,14 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         static let easy = "easy"
     }
 
+    /// The heart-rate zone a segment of pace `paceRaw` aims for: 4 for an interval's hard part, 2 for an
+    /// easy or steady one. Spelled here because this shared file cannot import the domain; equal to
+    /// `HeartRateZones.targetZone(for:)` for every pace (pinned by a test). An unknown token (a newer
+    /// build's) aims as steady, which only ever changes a cue on screen.
+    nonisolated static func targetZone(paceRaw: String) -> Int {
+        paceRaw == PaceToken.hard ? 4 : 2
+    }
+
     /// One lift's load plan (fixed when the run starts) and what happened (set in the app as the
     /// lifter picks a weight, edits reps, taps an effort, or says why they left the range).
     ///
@@ -751,8 +759,17 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             load: currentLoad,
             paceRaw: currentExercise?.segment?.paceRaw,
             round: currentExercise?.segment?.round,
-            rounds: currentExercise?.segment?.rounds
+            rounds: currentExercise?.segment?.rounds,
+            zone: currentZone
         )
+    }
+
+    /// The current segment's heart-rate cue as the run alone knows it: the zone its pace aims for, which
+    /// the widget words as the talk test. Nil on every other step. The live reading is the app's to lay
+    /// over it (`GuidedZoneDirector`) — the run never stores a heart rate.
+    var currentZone: WorkoutActivityAttributes.ContentState.Zone? {
+        guard let segment = currentExercise?.segment else { return nil }
+        return WorkoutActivityAttributes.ContentState.Zone(target: Self.targetZone(paceRaw: segment.paceRaw))
     }
 
     /// The current set's load line for the Live Activity — the weight the runner shows (the

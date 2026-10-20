@@ -9,7 +9,8 @@
 //  could not start. `WorkoutTimedSessions` (FernletDomainModel) now turns them into timed steps when a
 //  run starts; this file is the app's half: the crossings between the domain's segments and the
 //  app-group run state, what a finished timed run logs (its activity type and the time actually held),
-//  and the words the runner draws and speaks for a segment. No heart rate yet (that is step 4b).
+//  and the words the runner draws and speaks for a segment. The heart-rate zone cue (step 4b) is
+//  `GuidedZones.swift`.
 //
 
 import SwiftUI

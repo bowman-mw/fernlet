@@ -17,6 +17,28 @@
     "%lld" : {
 
     },
+    "%lld bpm · aim %lld–%lld" : {
+      "comment" : "Guided cardio, Live Activity and runner: the live heart rate in beats per minute and the target range to aim for, e.g. '118 bpm · aim 110–125'. Gentle: 'aim', never a limit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld"
+          }
+        }
+      }
+    },
+    "%lld bpm · aim %lld–%lld · %@" : {
+      "comment" : "Guided cardio, Live Activity: the live heart rate, the range to aim for and where it sits, on one line, e.g. '118 bpm · aim 110–125 · in range'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld · %4$@"
+          }
+        }
+      }
+    },
     "%lld of %lld bottles" : {
       "localizations" : {
         "en" : {
@@ -119,6 +141,28 @@
     "Adds one bottle of water to today's Fernlet diary." : {
 
     },
+    "Aim: a few words at a time" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: a few words at a time"
+          }
+        }
+      }
+    },
+    "Aim: talk in short sentences" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an easy or steady part (heart-rate zone 2), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: talk in short sentences"
+          }
+        }
+      }
+    },
     "Cooking" : {
 
     },
@@ -193,6 +237,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Hard · round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Heart rate %lld, aiming for %lld to %lld, %@" : {
+      "comment" : "VoiceOver, guided cardio: the live heart rate, the range to aim for and where it sits, e.g. 'Heart rate 118, aiming for 110 to 125, a little high'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate %1$lld, aiming for %2$lld to %3$lld, %4$@"
           }
         }
       }
@@ -544,6 +599,28 @@
         }
       }
     },
+    "a little high" : {
+      "comment" : "Guided cardio: the live heart rate is above the target range. Gentle — never a warning; the person may ease off if they like.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little high"
+          }
+        }
+      }
+    },
+    "a little low" : {
+      "comment" : "Guided cardio: the live heart rate is below the target range. Gentle — never a push.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little low"
+          }
+        }
+      }
+    },
     "bottles today" : {
 
     },
@@ -759,6 +836,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Tired"
+          }
+        }
+      }
+    },
+    "in range" : {
+      "comment" : "Guided cardio: the live heart rate is inside the target range. Calm, lower case, said beside the reading.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "in range"
           }
         }
       }
