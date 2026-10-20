@@ -161,7 +161,9 @@ public nonisolated enum WorkoutSessionBlocks {
 
     /// The session's plan text: one summary line for the warm-up and one for the cool-down (their
     /// steps live in the guided run, not the log), and a line per activation, lifting and cardio
-    /// movement in between. This is what a logged workout records.
+    /// movement in between. This is what a logged workout records, so it stays frozen English — the
+    /// history parser and `descriptorMinutes` read it back — and a screen draws each line through
+    /// ``WorkoutPlanLine/displayed(_:)`` (2026-10-20, idea 16).
     public static func planText(for exercises: [PrescribedExercise]) -> String {
         planText(for: exercises, loggedLines: [:])
     }

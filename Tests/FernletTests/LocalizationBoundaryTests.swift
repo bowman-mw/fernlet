@@ -2861,6 +2861,26 @@ struct LocalizationBoundaryTests {
                      source: "the ceremony's error copy, literal → String(localized:)")
     }
 
+    /// Idea 16's forks (2026-10-20), kept apart from ``harvestedForkKeys`` so neither list's
+    /// concatenation grows past what the type checker resolves quickly.
+    static let workoutCopyForkKeys: [HarvestedKey] = {
+        var keys: [HarvestedKey] = []
+        for key in ["Auto — recommended", "Currently: %@", "Picks the best split for you", "Recommended"] {
+            keys.append(HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: key,
+                                     source: "WorkoutSetupView.splitOption, forked String → Text"))
+        }
+        for key in ["Distance (km)", "9 km/h"] {
+            keys.append(HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings", key: key,
+                                     source: "the metric distance label and treadmill speed placeholder"))
+        }
+        for gear in GymEquipment.allCases {
+            keys.append(HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                                     key: "gymEquipment.\(gear.rawValue)",
+                                     source: "GymEquipment.displayName, literal → String(localized:bundle: .module)"))
+        }
+        return keys
+    }()
+
     /// The forks actually reached a catalog.
     ///
     /// This is the half the other tests cannot show. Parts A, E and F prove no *bad* shape is left
@@ -2874,7 +2894,7 @@ struct LocalizationBoundaryTests {
     /// committed), not that a string moved.
     @Test func everyForkedStringActuallyReachedItsCatalog() throws {
         var missing: [String] = []
-        for entry in Self.harvestedForkKeys {
+        for entry in Self.harvestedForkKeys + Self.workoutCopyForkKeys {
             let url = RepoRoot.url(entry.catalog)
             let data = try Data(contentsOf: url)
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -2981,6 +3001,25 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "Remove %lld intimate logs this iPhone can't open?",
                      source: "Privacy & Data's intimate-log-backup Remove confirmation title"),
+        // Workout copy (2026-10-20, idea 16): the planner notes' count phrases and the split
+        // frequency, hand-authored with their English blocks in the commit that added them.
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "workoutNote.count.reps", source: "a planner note's rep count ('9 reps')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "workoutNote.count.sets", source: "a planner note's set count ('2 sets')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "workoutNote.count.weeks", source: "the plateau note's week count ('3 weeks')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "workoutNote.count.hours", source: "the 48-hour guard note's hour count ('48 hours')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "trainingSplit.frequency.daysPerWeek", source: "a split's frequency ('3 days/week')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "trainingSplit.frequency.days", source: "a two-session split's day count ('4 days')"),
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "trainingSplit.frequency.sessionsPerWeek", source: "a two-session split's session count"),
+        // Workout setup's Days-per-week stepper, which spliced an English "s" into its key.
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld days a week", source: "Workout setup's days-per-week stepper"),
     ]
 
     /// Every count-bearing key carries real plural variations.

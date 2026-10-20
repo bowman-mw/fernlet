@@ -158,13 +158,15 @@ final class WorkoutPlanningService {
     /// A single `.mobility` session whose only exercise is a non-catalog descriptor (`sets == 0`), so
     /// `GuidedWorkoutAvailability.isGuidable` is false: the Move root card settles on its "easy
     /// movement" state instead of offering "Start today's workout", and "Already did this — log it"
-    /// still logs it (at light intensity) if the user did move. Plain strings, like every other
-    /// generated plan's copy (the domain's plan text is not localized yet).
+    /// still logs it (at light intensity) if the user did move. The names and the movement line are
+    /// frozen English, like every generated plan's (a logged row is saved under the name, and the line
+    /// is parsed for its minutes); screens draw them through `WorkoutSessionNames`,
+    /// `WorkoutProgram.DayPlan.displayedSplitName` and `WorkoutPlanLine`. The note is localized.
     nonisolated static func restDayPlan(locationName: String) -> WorkoutProgram.DayPlan {
         let suggestion = WorkoutSuggestion(
             name: "Gentle movement",
             exercises: restDayMovementLine,
-            notes: "You marked yourself unwell, so rest is the real plan today. This is here only if moving would feel good."
+            notes: WorkoutPlannerCopy.restDayNote
         )
         let session = WorkoutProgram.SessionSuggestion(
             title: "Rest",
@@ -174,7 +176,8 @@ final class WorkoutPlanningService {
             suggestion: suggestion
         )
         return WorkoutProgram.DayPlan(
-            splitName: "Rest day", dayTitle: "Rest", sessions: [session], droppedSlots: [], locationName: locationName
+            splitName: TrainingSplit.restDayName, dayTitle: "Rest", sessions: [session], droppedSlots: [],
+            locationName: locationName
         )
     }
 

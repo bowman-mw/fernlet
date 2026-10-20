@@ -12,6 +12,7 @@
 
 import ActivityKit
 import Foundation
+import FernletDomainModel
 
 /// Requests the guided-workout Live Activity — the app-target-only half of the Live Activity flow.
 ///
@@ -27,7 +28,12 @@ enum WorkoutLiveActivityController {
 
     /// Begin a Live Activity for a guided run. No-op (in-app-only) when the user hasn't enabled Live
     /// Activities. Ends any activity already live first, so only one workout activity is ever on screen.
+    ///
+    /// The run state's `title` is the session's frozen English name (it is what the run logs under);
+    /// the activity's title is drawn in the user's language, here in the app, because the widget
+    /// extension cannot reach the domain's mapping.
     static func start(_ state: GuidedWorkoutRunState) {
-        LiveActivityStarter.start(state, attributes: WorkoutActivityAttributes(workoutTitle: state.title))
+        let title = WorkoutSessionNames.drawn(state.title)
+        LiveActivityStarter.start(state, attributes: WorkoutActivityAttributes(workoutTitle: title))
     }
 }

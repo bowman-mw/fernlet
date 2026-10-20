@@ -163,7 +163,7 @@ struct MoveView: View {
     /// primary opens the Suggest flow directly from the root — one sheet, not three.
     @ViewBuilder private var guidedEntryCard: some View {
         if let activeRun = store.guidedRunState, activeRun.isWorking || activeRun.isResting {
-            ResumeWorkoutCard(title: activeRun.title, isResting: activeRun.isResting) {
+            ResumeWorkoutCard(title: WorkoutSessionNames.drawn(activeRun.title), isResting: activeRun.isResting) {
                 if let session = store.guidedSessionForResume() { guidedSession = session }
             }
         } else if let guidedCardState {
@@ -193,7 +193,7 @@ struct MoveView: View {
                 completed: store.guidedCompletedSessionIDs,
                 loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
             )
-        }?.suggestion.name
+        }?.displayedName
     }
 
     /// Today's planned rows then today's logged rows, divided.
@@ -1202,7 +1202,8 @@ struct WorkoutSheet: View {
             rpe: logMode == .strengthTraining ? LocaleTolerantNumber.double(from: rpe) : nil,
             notes: notes,
             duration: WorkoutSheetRules.durationMinutes(from: duration),
-            distanceMiles: logMode == .activity ? LocaleTolerantNumber.double(from: distance) : nil,
+            // Typed in the device's units, stored in miles as always.
+            distanceMiles: logMode == .activity ? WorkoutMeasurementEntry.miles(fromEntry: distance) : nil,
             activeEnergyKcal: logMode == .activity ? LocaleTolerantNumber.double(from: energyKcal) : nil,
             effort: logMode == .activity ? LocaleTolerantNumber.int(from: effort) : nil,
             muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
@@ -1331,7 +1332,10 @@ enum WorkoutSheetRules {
     /// Shared by ``WorkoutPlanSheet`` (re-hydrating "Plan steps" on open) and ``WorkoutSheet``'s
     /// "Log it again" prefill (MOVE-08) — one parser, so the two sheets can never disagree about
     /// what a line means. Lines that match no catalog exercise are skipped, not invented.
-    static func exerciseEntries(from text: String) -> [WorkoutExerciseEntry] {
+    ///
+    /// A treadmill line stores its speed in mph; its Speed field reads in the device's units
+    /// (`imperial` nil reads this device), so a metric reopen shows km/h and re-saves the same mph.
+    static func exerciseEntries(from text: String, imperial: Bool? = nil) -> [WorkoutExerciseEntry] {
         text.components(separatedBy: .newlines).compactMap { line in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, let exercise = catalogExercise(namedBy: trimmed) else {
@@ -1358,7 +1362,9 @@ enum WorkoutSheetRules {
                 reps: setRep.groups.dropFirst().first ?? "",
                 weight: exercise.inputKind == .strength ? weight : "",
                 // `summary` writes "5.5 mph"; an older line carried the speed after "@".
-                speed: treadmill.map { $0.speed.isEmpty ? weight : $0.speed } ?? "",
+                speed: treadmill.map {
+                    WorkoutMeasurementEntry.speedEntry(fromStored: $0.speed.isEmpty ? weight : $0.speed, imperial: imperial)
+                } ?? "",
                 incline: treadmill?.incline ?? "",
                 details: details
             )
@@ -1589,7 +1595,7 @@ struct WorkoutSuggestionSheet: View {
                         .accessibilityHidden(true)
                     // Localizing interpolation, never a verbatim String build: "items" is display
                     // copy; the location name interpolates as data.
-                    Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
+                    Text("\(store.settings.activeWorkoutLocation.displayedName) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -1624,7 +1630,7 @@ struct WorkoutSuggestionSheet: View {
                 Image(systemName: "dumbbell")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.moss)
-                Text("Equipment & limits · \(store.settings.activeWorkoutLocation.name)")
+                Text("Equipment & limits · \(store.settings.activeWorkoutLocation.displayedName)")
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
@@ -1860,7 +1866,7 @@ struct WorkoutSuggestionSheet: View {
     /// row per exercise, and the session note.
     private func sessionCard(_ session: WorkoutProgram.SessionSuggestion) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(session.suggestion.name)
+            Text(session.displayedName)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             sessionMetaLine(session)
@@ -1923,9 +1929,11 @@ struct WorkoutSuggestionSheet: View {
         let prescription: String? = exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty
             ? (exercise.holdSeconds != nil && exercise.sets <= 1 ? exercise.reps : "\(exercise.sets) × \(exercise.reps)")
             : nil
+        // A descriptor step's name is frozen plan text ("Easy cardio - 20 min"), drawn localized.
+        let drawnName = exercise.fromCatalog ? exercise.name : WorkoutPlanLine.displayed(exercise.name)
         if dynamicTypeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
+                Text(drawnName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
@@ -1941,7 +1949,7 @@ struct WorkoutSuggestionSheet: View {
             }
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(exercise.name)
+                Text(drawnName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
@@ -2052,7 +2060,7 @@ struct WorkoutSuggestionSheet: View {
     /// `displayWord` is the localized half of the intensity's token/display fork — never
     /// interpolate the frozen `rawValue` into display copy.
     private var committedContextLine: some View {
-        let locationName = store.settings.activeWorkoutLocation.name
+        let locationName = store.settings.activeWorkoutLocation.displayedName
         let intensity = (store.committedGuidedIntensity ?? energy).displayWord
         return Text("\(locationName) · built for a \(intensity) day")
             .font(.fernlet(.labelSmall))
@@ -2232,7 +2240,7 @@ struct WorkoutSuggestionSheet: View {
             // as the first line of the scroll content.
             SheetHeader(
                 title: sheetTitle,
-                eyebrow: dayPlan.map { Text("\($0.splitName) · \($0.dayTitle)") },
+                eyebrow: dayPlan.map { Text("\($0.displayedSplitName) · \($0.displayedDayTitle)") },
                 onCancel: attemptCancel
             )
             ScrollView {
@@ -2377,12 +2385,16 @@ struct WorkoutRow: View {
         }
     }
 
-    /// Category, duration, and intensity.
+    /// Category, duration, distance, and intensity. The distance is stored in miles and read in the
+    /// device's units ("3.1 mi", "5 km").
     private var metaRow: some View {
         HStack(spacing: 12) {
             Text(verbatim: category.displayName)
                 .foregroundStyle(category.color)
             if let duration = workout.duration { Text("\(duration) min") }
+            if let miles = workout.distanceMiles, miles > 0 {
+                Text(verbatim: WorkoutMeasurementEntry.distanceText(miles: miles))
+            }
             // Both halves of the fork are now localized: `WorkoutType.displayName` exists and this
             // site was still rendering the FROZEN `rawValue` beside the translated intensity word.
             Text(verbatim: workout.intensity.displayWord)
@@ -2406,7 +2418,7 @@ struct WorkoutRow: View {
                 .foregroundStyle(Color.slate)
         }
         if !workout.notes.isEmpty {
-            Text(workout.notes)
+            Text(workout.displayedNotes)
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
         }
@@ -2667,7 +2679,9 @@ struct WorkoutExerciseRow: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.moss)
-            Text(exercise)
+            // The stored line is frozen plan text; it is drawn with the planner's descriptors in the
+            // user's language and a treadmill's mph in km/h on a metric device.
+            Text(WorkoutMeasurementEntry.drawnLine(exercise))
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2760,8 +2774,8 @@ struct MoveContextStrip: View {
     private var spaceValue: String {
         let count = location.ownedEquipment.count
         return dynamicTypeSize.isAccessibilitySize
-            ? "\(location.name) · \(count)"
-            : "\(location.name) · \(count) items"
+            ? "\(location.displayedName) · \(count)"
+            : "\(location.displayedName) · \(count) items"
     }
 
     /// Spoken when no movement goal is set. A shared constant rather than an inline `??` literal:
@@ -2778,7 +2792,7 @@ struct MoveContextStrip: View {
     /// English inside an otherwise translated sentence.
     private var spaceAccessibilityValue: String {
         String(localized: "move.space.accessibilityValue",
-               defaultValue: "\(location.name), \(location.ownedEquipment.count) items",
+               defaultValue: "\(location.displayedName), \(location.ownedEquipment.count) items",
                comment: "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.")
     }
 
@@ -2920,7 +2934,12 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     var incline: String
     var details: String
 
-    var summary: String {
+    var summary: String { summaryLine(imperial: nil) }
+
+    /// ``summary`` on a device that reads miles (`true`), kilometres (`false`), or this one (nil). The
+    /// line always stores a treadmill speed in mph: on a metric device the typed km/h is converted
+    /// (``WorkoutMeasurementEntry/storedSpeed(fromEntry:imperial:)``), and screens read it back in km/h.
+    func summaryLine(imperial: Bool?) -> String {
         var parts: [String] = [exercise.name]
         let cleanSets = sets.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanReps = reps.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2940,7 +2959,9 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
             }
             if !cleanWeight.isEmpty { parts.append("@\(cleanWeight)") }
         case .treadmill:
-            if !cleanSpeed.isEmpty { parts.append("\(cleanSpeed) mph") }
+            if !cleanSpeed.isEmpty {
+                parts.append("\(WorkoutMeasurementEntry.storedSpeed(fromEntry: cleanSpeed, imperial: imperial)) mph")
+            }
             if !cleanIncline.isEmpty { parts.append("\(cleanIncline)% incline") }
         case .none:
             break
@@ -3146,8 +3167,10 @@ struct WorkoutExerciseBuilder: View {
     /// Speed / incline / details — the treadmill prescription fields.
     @ViewBuilder private var treadmillFields: some View {
         HStack(alignment: .top, spacing: 12) {
+            // The speed is typed in the device's units; the saved line converts km/h to mph.
             SheetField("Speed", namesControl: true) {
-                TextField("5.5 mph", text: $speed, prompt: .fieldPrompt("5.5 mph"))
+                TextField(WorkoutMeasurementEntry.usesImperial ? "5.5 mph" : "9 km/h", text: $speed,
+                          prompt: .fieldPrompt(WorkoutMeasurementEntry.usesImperial ? "5.5 mph" : "9 km/h"))
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
@@ -3414,7 +3437,8 @@ struct LoggedExerciseRow: View {
                 Text(entry.exercise.name)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
-                Text(entry.summary.replacingOccurrences(of: entry.exercise.name, with: "").trimmingCharacters(in: .whitespaces))
+                Text(WorkoutMeasurementEntry.displayedSpeeds(in: entry.summary)
+                    .replacingOccurrences(of: entry.exercise.name, with: "").trimmingCharacters(in: .whitespaces))
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Text(entry.exercise.muscles.joined(separator: ", "))
@@ -4210,7 +4234,7 @@ struct PlannedWorkoutRow: View {
         if !stepLines.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
-                    Text(line)
+                    Text(WorkoutMeasurementEntry.drawnLine(line))
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.bark.opacity(0.82))
                         .lineLimit(2)
@@ -4321,7 +4345,8 @@ struct WorkoutPlanSheet: View {
         let seedName = editingPlan?.displayedName ?? ""
         let seedPlanned = editingPlan?.exercises ?? ""
         let seedDuration = editingPlan?.duration.map(String.init) ?? ""
-        let seedDistance = editingPlan?.targetDistanceMiles.map { String($0) } ?? ""
+        // Stored in miles; the field reads in the device's units (kilometres on a metric device).
+        let seedDistance = editingPlan?.targetDistanceMiles.map { WorkoutMeasurementEntry.entryText(miles: $0) } ?? ""
         let seedEnergy = editingPlan?.targetEnergyKcal.map { String($0) } ?? ""
         let seedEffort = editingPlan?.targetEffort.map(String.init) ?? ""
         let seedNotes = editingPlan?.notes ?? ""
@@ -4660,7 +4685,7 @@ struct WorkoutPlanSheet: View {
                 muscleGroups: plannedMuscleGroups,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 duration: WorkoutSheetRules.durationMinutes(from: duration),
-                targetDistanceMiles: LocaleTolerantNumber.double(from: distance),
+                targetDistanceMiles: WorkoutMeasurementEntry.miles(fromEntry: distance),
                 targetEnergyKcal: LocaleTolerantNumber.double(from: energyKcal),
                 targetEffort: LocaleTolerantNumber.int(from: effort),
                 createdAt: editingPlan?.createdAt ?? Date()

@@ -560,22 +560,35 @@
         }
       }
     },
-    "%lld day%@ a week" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld day%2$@ a week"
-          }
-        }
-      }
-    },
     "%lld day%@ of training will be included." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld day%2$@ of training will be included."
+          }
+        }
+      }
+    },
+    "%lld days a week" : {
+      "comment" : "Workout setup: how many days a week the person trains, e.g. '3 days a week'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld day a week"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld days a week"
+                }
+              }
+            }
           }
         }
       }
@@ -1054,6 +1067,9 @@
     "8-12" : {
 
     },
+    "9 km/h" : {
+
+    },
     "A Fernlet card they can open and save in Fernlet on iPhone." : {
 
     },
@@ -1492,6 +1508,9 @@
 
     },
     "Auto · %@" : {
+
+    },
+    "Auto — recommended" : {
 
     },
     "Average cycle length: %lld days" : {
@@ -2220,6 +2239,9 @@
     "Current password" : {
 
     },
+    "Currently: %@" : {
+
+    },
     "Custom color" : {
 
     },
@@ -2504,6 +2526,9 @@
 
     },
     "Distance" : {
+
+    },
+    "Distance (km)" : {
 
     },
     "Distance (mi)" : {
@@ -5128,6 +5153,9 @@
     "Pick up your last session" : {
 
     },
+    "Picks the best split for you" : {
+
+    },
     "Pizza Pie Chart" : {
       "comment" : "Silly stat title"
     },
@@ -5448,6 +5476,9 @@
 
     },
     "Recipes, plans, your photos and polaroids" : {
+
+    },
+    "Recommended" : {
 
     },
     "Recorded by a newer version of Fernlet. Shown exactly as it was recorded, because this version has no name for it." : {
@@ -8983,6 +9014,18 @@
     "grams — no calories here" : {
 
     },
+    "guided.replaceRun.message" : {
+      "comment" : "Confirmation before starting a guided workout while another is in progress. The argument is the other session's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is still going. Starting this one will let go of the sets you've already done there."
+          }
+        }
+      }
+    },
     "host" : {
 
     },
@@ -10119,6 +10162,18 @@
     },
     "woke up twice..." : {
 
+    },
+    "workoutSetup.consistencyNote" : {
+      "comment" : "Workout setup: a neutral note beside the split options. The argument is the split's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've been consistent with %@ — keep it unless something changed."
+          }
+        }
+      }
     },
     "worryBox.error.compose" : {
       "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",

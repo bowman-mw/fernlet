@@ -545,6 +545,14 @@ and eligibility judge it the same way; ``CustomExerciseLibrary`` checks the name
 with a bundled or another custom name) and the shared 500-exercise cap, and deleting one never touches
 a logged workout.
 
+The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``.
+
+- ``WorkoutPlannerCopy``
+- ``WorkoutSessionNames``
+- ``WorkoutSplitDayNames``
+- ``WorkoutSlotNames``
+- ``WorkoutLocationNames``
+- ``WorkoutPlanLine``
 - ``WorkoutExercisePreferences``
 - ``WorkoutExerciseSwapOptions``
 - ``CustomExerciseDraft``

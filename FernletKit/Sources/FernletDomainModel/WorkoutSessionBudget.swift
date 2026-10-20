@@ -187,7 +187,9 @@ public nonisolated enum WorkoutSessionBudget {
               minutes > budget else { return (descriptor, nil) }
         for separator in [" - ", " – ", " — "] {
             guard let range = descriptor.range(of: separator) else { continue }
-            return ("\(descriptor[..<range.lowerBound])\(separator)\(budget) min", "Shortened to fit \(budget) min.")
+            // The descriptor is plan TEXT and stays frozen English ("- 30 min" is what
+            // `descriptorMinutes` reads back); only the note is localized.
+            return ("\(descriptor[..<range.lowerBound])\(separator)\(budget) min", WorkoutPlannerCopy.budgetShortened(minutes: budget))
         }
         return (descriptor, nil)
     }
@@ -293,17 +295,16 @@ public nonisolated enum WorkoutSessionBudget {
 
     // MARK: - The note
 
-    /// The session note for an outcome (``Outcome/note``). Plain English, like the planner's other
-    /// notes: the plan text is persisted on the logged row and is not localized yet.
+    /// The session note for an outcome (``Outcome/note``): String Catalog keys
+    /// (``WorkoutPlannerCopy``), composed in the device's language when the plan is built.
     static func note(for outcome: Outcome) -> String? {
         let changes = changeSummary(outcome.trims)
         if outcome.fits {
             guard !changes.isEmpty else { return nil }
-            return "Fitted to \(outcome.budgetMinutes) min: \(changes)."
+            return WorkoutPlannerCopy.budgetFitted(minutes: outcome.budgetMinutes, changes: changes)
         }
-        let trimmed = changes.isEmpty ? "" : " Trimmed: \(changes)."
-        return "Runs about \(outcome.estimatedMinutes) min — over your \(outcome.budgetMinutes) min, but as short as "
-            + "today's session goes with its main lifts kept.\(trimmed)"
+        return WorkoutPlannerCopy.budgetOver(estimated: outcome.estimatedMinutes, budget: outcome.budgetMinutes,
+                                             changes: changes.isEmpty ? nil : changes)
     }
 
     /// "shorter warm-up; fewer cool-down stretches; left out Squat jump, Cable curl; fewer sets of
@@ -322,10 +323,10 @@ public nonisolated enum WorkoutSessionBudget {
             }
         }
         var parts: [String] = []
-        if trims.contains(.shortWarmUp) { parts.append("shorter warm-up") }
-        if coolDown { parts.append("fewer cool-down stretches") }
-        if !dropped.isEmpty { parts.append("left out \(dropped.joined(separator: ", "))") }
-        if !fewerSets.isEmpty { parts.append("fewer sets of \(fewerSets.joined(separator: ", "))") }
+        if trims.contains(.shortWarmUp) { parts.append(WorkoutPlannerCopy.budgetShorterWarmUp) }
+        if coolDown { parts.append(WorkoutPlannerCopy.budgetFewerCoolDown) }
+        if !dropped.isEmpty { parts.append(WorkoutPlannerCopy.budgetLeftOut(dropped.joined(separator: ", "))) }
+        if !fewerSets.isEmpty { parts.append(WorkoutPlannerCopy.budgetFewerSets(fewerSets.joined(separator: ", "))) }
         return parts.joined(separator: "; ")
     }
 }

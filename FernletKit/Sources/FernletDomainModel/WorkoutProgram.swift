@@ -14,11 +14,16 @@ public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifi
 
     public var id: String { rawValue }
 
+    /// The level's name on screen, localized (2026-10-20, idea 16). ``rawValue`` is the token the
+    /// profile persists and onboarding parses.
     public var displayName: String {
         switch self {
-        case .beginner: "Beginner"
-        case .intermediate: "Intermediate"
-        case .advanced: "Advanced"
+        case .beginner: String(localized: "experienceLevel.beginner", defaultValue: "Beginner", bundle: .module,
+                               comment: "Training experience level in Workout setup: new to lifting")
+        case .intermediate: String(localized: "experienceLevel.intermediate", defaultValue: "Intermediate", bundle: .module,
+                                   comment: "Training experience level in Workout setup: some lifting experience")
+        case .advanced: String(localized: "experienceLevel.advanced", defaultValue: "Advanced", bundle: .module,
+                               comment: "Training experience level in Workout setup: years of lifting")
         }
     }
 
@@ -249,30 +254,33 @@ public nonisolated enum GymEquipment: String, Codable, CaseIterable, Identifiabl
         }
     }
 
+    /// The piece's name on screen — the location editor's cards and the custom-exercise form's
+    /// required-gear chips — localized (2026-10-20, idea 16). ``rawValue`` is the frozen token: it is
+    /// what a location persists, the trainer export carries and the catalog's `requiredGear` names.
     public var displayName: String {
         switch self {
-        case .treadmill: "Treadmill"
-        case .exerciseBike: "Exercise bike"
-        case .rowingMachine: "Rowing machine"
-        case .elliptical: "Elliptical"
-        case .stairClimber: "Stair climber"
-        case .dumbbells: "Dumbbells"
-        case .barbell: "Barbell"
-        case .kettlebells: "Kettlebells"
-        case .weightPlates: "Weight plates"
-        case .weightBench: "Weight bench"
-        case .cableMachine: "Cable machine"
-        case .latPulldown: "Lat pulldown"
-        case .legPress: "Leg press"
-        case .smithMachine: "Smith machine"
-        case .chestPress: "Chest press"
-        case .pullUpBar: "Pull-up bar"
-        case .squatRack: "Squat rack"
-        case .resistanceBands: "Resistance bands"
-        case .medicineBall: "Medicine ball"
-        case .battleRopes: "Battle ropes"
-        case .yogaMat: "Yoga mat"
-        case .foamRoller: "Foam roller"
+        case .treadmill: String(localized: "gymEquipment.treadmill", defaultValue: "Treadmill", bundle: .module, comment: "Gym equipment: a treadmill")
+        case .exerciseBike: String(localized: "gymEquipment.exerciseBike", defaultValue: "Exercise bike", bundle: .module, comment: "Gym equipment: a stationary exercise bike")
+        case .rowingMachine: String(localized: "gymEquipment.rowingMachine", defaultValue: "Rowing machine", bundle: .module, comment: "Gym equipment: a rowing machine")
+        case .elliptical: String(localized: "gymEquipment.elliptical", defaultValue: "Elliptical", bundle: .module, comment: "Gym equipment: an elliptical trainer")
+        case .stairClimber: String(localized: "gymEquipment.stairClimber", defaultValue: "Stair climber", bundle: .module, comment: "Gym equipment: a stair-climbing machine")
+        case .dumbbells: String(localized: "gymEquipment.dumbbells", defaultValue: "Dumbbells", bundle: .module, comment: "Gym equipment: dumbbells")
+        case .barbell: String(localized: "gymEquipment.barbell", defaultValue: "Barbell", bundle: .module, comment: "Gym equipment: a barbell")
+        case .kettlebells: String(localized: "gymEquipment.kettlebells", defaultValue: "Kettlebells", bundle: .module, comment: "Gym equipment: kettlebells")
+        case .weightPlates: String(localized: "gymEquipment.weightPlates", defaultValue: "Weight plates", bundle: .module, comment: "Gym equipment: weight plates for a barbell")
+        case .weightBench: String(localized: "gymEquipment.weightBench", defaultValue: "Weight bench", bundle: .module, comment: "Gym equipment: a weight bench")
+        case .cableMachine: String(localized: "gymEquipment.cableMachine", defaultValue: "Cable machine", bundle: .module, comment: "Gym equipment: a cable machine")
+        case .latPulldown: String(localized: "gymEquipment.latPulldown", defaultValue: "Lat pulldown", bundle: .module, comment: "Gym equipment: a lat pulldown machine")
+        case .legPress: String(localized: "gymEquipment.legPress", defaultValue: "Leg press", bundle: .module, comment: "Gym equipment: a leg press machine")
+        case .smithMachine: String(localized: "gymEquipment.smithMachine", defaultValue: "Smith machine", bundle: .module, comment: "Gym equipment: a Smith machine, a barbell on guide rails")
+        case .chestPress: String(localized: "gymEquipment.chestPress", defaultValue: "Chest press", bundle: .module, comment: "Gym equipment: a chest press machine")
+        case .pullUpBar: String(localized: "gymEquipment.pullUpBar", defaultValue: "Pull-up bar", bundle: .module, comment: "Gym equipment: a pull-up bar")
+        case .squatRack: String(localized: "gymEquipment.squatRack", defaultValue: "Squat rack", bundle: .module, comment: "Gym equipment: a squat rack")
+        case .resistanceBands: String(localized: "gymEquipment.resistanceBands", defaultValue: "Resistance bands", bundle: .module, comment: "Gym equipment: elastic resistance bands")
+        case .medicineBall: String(localized: "gymEquipment.medicineBall", defaultValue: "Medicine ball", bundle: .module, comment: "Gym equipment: a medicine ball")
+        case .battleRopes: String(localized: "gymEquipment.battleRopes", defaultValue: "Battle ropes", bundle: .module, comment: "Gym equipment: heavy battle ropes")
+        case .yogaMat: String(localized: "gymEquipment.yogaMat", defaultValue: "Yoga mat", bundle: .module, comment: "Gym equipment: a yoga mat")
+        case .foamRoller: String(localized: "gymEquipment.foamRoller", defaultValue: "Foam roller", bundle: .module, comment: "Gym equipment: a foam roller")
         }
     }
 
@@ -338,20 +346,17 @@ public nonisolated struct LocationTemplate: Identifiable, Sendable {
 
     /// Mints a saved location from this template.
     ///
-    /// **Known localization debt — deliberately deferred (accessibility review A4, F4).** `name`
-    /// and `subtitle` are English literals, and this function BAKES `name` into the persisted
-    /// `WorkoutLocation`, which the user can then rename. Localizing them would therefore be worse
-    /// than leaving them: a French user's saved location would read "Salle de sport complète" until
-    /// they switched language, after which the stored English-era or French-era string would be
-    /// frozen and wrong — the exact trap `PersonalCareTask.displayLabel` documents and works around
-    /// for built-in care tasks.
+    /// `name` and `subtitle` stay the English literals, and this function BAKES `name` into the
+    /// persisted `WorkoutLocation`, which the user can then rename. Localizing the stored name would be
+    /// worse than leaving it: a French user's saved location would read "Salle de sport complète"
+    /// until they switched language, after which the stored string would be frozen and wrong — the
+    /// trap `PersonalCareTask.displayLabel` documents for built-in care tasks — and
+    /// `availableTemplates` tells saved presets apart by this name.
     ///
-    /// The fix has a known shape and is a schema change, not a copy change: give `WorkoutLocation`
-    /// an optional `templateID` written at mint time, resolve a built-in's display name live from
-    /// the template (falling back to the stored `name` for a renamed or user-created location), and
-    /// migrate existing rows by matching `name` against `LocationTemplate.all` — which is already
-    /// how `availableTemplates` decides what is saved. Until that lands, these five names stay
-    /// English on purpose.
+    /// Screens draw it localized instead (2026-10-20, idea 16), with no schema change: a location
+    /// whose stored name is still exactly a built-in English name draws ``WorkoutLocation/displayedName``,
+    /// and a template card draws ``displayName`` and ``displaySubtitle``. A renamed location draws its
+    /// own name.
     public func makeLocation() -> WorkoutLocation {
         WorkoutLocation(name: name, ownedEquipment: equipment)
     }
@@ -660,6 +665,9 @@ public nonisolated enum SessionTime: String, Sendable {
     case midday
     case evening
 
+    /// The FROZEN English time label that is part of a two-session day's session NAME ("Morning ·
+    /// Easy cardio"), which a guided log is saved under and the rotation matches. Never localize it;
+    /// screens read ``displayLabel``.
     public var label: String {
         switch self {
         case .any: ""
@@ -706,12 +714,17 @@ public nonisolated enum SplitSpecificity: Int, CaseIterable, Sendable {
     case focused = 2      // push/pull/legs
     case specialized = 3  // body-part / two-a-day
 
+    /// How specific the split is, on screen, localized (2026-10-20, idea 16). Display only.
     public var label: String {
         switch self {
-        case .minimal: "Very broad"
-        case .balanced: "Balanced"
-        case .focused: "Focused"
-        case .specialized: "Very specific"
+        case .minimal: String(localized: "splitSpecificity.minimal", defaultValue: "Very broad", bundle: .module,
+                              comment: "How specific a workout split is: very broad, like daily movement or full-body days")
+        case .balanced: String(localized: "splitSpecificity.balanced", defaultValue: "Balanced", bundle: .module,
+                               comment: "How specific a workout split is: balanced, like upper/lower days")
+        case .focused: String(localized: "splitSpecificity.focused", defaultValue: "Focused", bundle: .module,
+                              comment: "How specific a workout split is: focused, like push/pull/legs")
+        case .specialized: String(localized: "splitSpecificity.specialized", defaultValue: "Very specific", bundle: .module,
+                                  comment: "How specific a workout split is: very specific, like one body part a day")
         }
     }
 }
@@ -731,7 +744,11 @@ public nonisolated struct TrainingSplit: Identifiable, Sendable {
         self.days = days
     }
     public var id: String
+    /// The FROZEN English name: the trainer export's `splitName` and the day plan's `splitName`.
+    /// Screens read ``displayName`` (2026-10-20, idea 16).
     public var name: String
+    /// The one-line description on screen. Display only, so the catalog's summaries are localized
+    /// where they are written (``WorkoutSplitCatalog``).
     public var summary: String
     public var specificity: SplitSpecificity
     public var goalFit: Set<GoalType>
@@ -740,13 +757,21 @@ public nonisolated struct TrainingSplit: Identifiable, Sendable {
     public var daysPerWeek: Int { days.count }
     public var sessionsPerWeek: Int { days.reduce(0) { $0 + $1.sessions.count } }
 
+    /// "3 days/week", or "4 days · 8 sessions/week" when some days hold two sessions. Localized, with a
+    /// plural rule for each count (2026-10-20, idea 16).
     public var frequencySummary: String {
+        let days = daysPerWeek
         let sessions = sessionsPerWeek
-        let dayWord = daysPerWeek == 1 ? "day" : "days"
-        if sessions == daysPerWeek {
-            return "\(daysPerWeek) \(dayWord)/week"
+        if sessions == days {
+            return String(localized: "trainingSplit.frequency.daysPerWeek", defaultValue: "\(days) days/week", bundle: .module,
+                          comment: "How often a workout split trains, e.g. '3 days/week'")
         }
-        return "\(daysPerWeek) \(dayWord) · \(sessions) sessions/week"
+        let dayCount = String(localized: "trainingSplit.frequency.days", defaultValue: "\(days) days", bundle: .module,
+                              comment: "How many days a week a workout split trains, e.g. '4 days', shown before the session count")
+        let sessionCount = String(localized: "trainingSplit.frequency.sessionsPerWeek", defaultValue: "\(sessions) sessions/week",
+                                  bundle: .module,
+                                  comment: "How many sessions a week a workout split has, e.g. '8 sessions/week', shown after the day count")
+        return "\(dayCount) · \(sessionCount)"
     }
 }
 
@@ -902,19 +927,25 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Minimal / very broad ---
     public static let dailyMove = TrainingSplit(
         id: "daily-move", name: "Daily Movement",
-        summary: "Easy full-body days and walks — just keep moving.",
+        summary: String(localized: "trainingSplit.dailyMove.summary",
+                        defaultValue: "Easy full-body days and walks — just keep moving.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .minimal, goalFit: [.wellness, .mentalHealth, .recovery, .exploring],
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.easyCardio]), day("Day 3", [WorkoutSessions.fullBodyB])]
     )
     public static let fullBody2 = TrainingSplit(
         id: "full-body-2", name: "Full Body ×2",
-        summary: "Two full-body sessions a week. Simple and forgiving.",
+        summary: String(localized: "trainingSplit.fullBody2.summary",
+                        defaultValue: "Two full-body sessions a week. Simple and forgiving.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .minimal, goalFit: Set(GoalType.allCases),
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.fullBodyB])]
     )
     public static let recoveryFlow = TrainingSplit(
         id: "recovery-flow", name: "Recovery Flow",
-        summary: "Mobility and easy movement to feel better, not beat up.",
+        summary: String(localized: "trainingSplit.recoveryFlow.summary",
+                        defaultValue: "Mobility and easy movement to feel better, not beat up.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .minimal, goalFit: [.recovery, .mentalHealth, .wellness],
         days: [day("Day 1", [WorkoutSessions.mobility]), day("Day 2", [WorkoutSessions.easyCardio]), day("Day 3", [WorkoutSessions.fullBodyA])]
     )
@@ -922,19 +953,25 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Balanced ---
     public static let fullBody3 = TrainingSplit(
         id: "full-body-3", name: "Full Body ×3",
-        summary: "Three full-body sessions — the most efficient way to cover everything.",
+        summary: String(localized: "trainingSplit.fullBody3.summary",
+                        defaultValue: "Three full-body sessions — the most efficient way to cover everything.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .balanced, goalFit: Set(GoalType.allCases),
         days: [day("Day 1", [WorkoutSessions.fullBodyA]), day("Day 2", [WorkoutSessions.fullBodyB]), day("Day 3", [WorkoutSessions.fullBodyC])]
     )
     public static let upperLowerFull3 = TrainingSplit(
         id: "upper-lower-full-3", name: "Upper / Lower / Full",
-        summary: "A bit more focus than full-body, still only three days.",
+        summary: String(localized: "trainingSplit.upperLowerFull3.summary",
+                        defaultValue: "A bit more focus than full-body, still only three days.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep, .exploring],
         days: [day("Day 1", [WorkoutSessions.upper]), day("Day 2", [WorkoutSessions.lower]), day("Day 3", [WorkoutSessions.fullBodyC])]
     )
     public static let upperLower4 = TrainingSplit(
         id: "upper-lower-4", name: "Upper / Lower",
-        summary: "Four days alternating upper and lower body.",
+        summary: String(localized: "trainingSplit.upperLower4.summary",
+                        defaultValue: "Four days alternating upper and lower body.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .balanced, goalFit: [.strength, .weightManagement, .wellness, .sportsPrep],
         days: [day("Day 1", [WorkoutSessions.upper]), day("Day 2", [WorkoutSessions.lower]), day("Day 3", [WorkoutSessions.upper]), day("Day 4", [WorkoutSessions.lower])]
     )
@@ -942,13 +979,17 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Focused ---
     public static let ppl3 = TrainingSplit(
         id: "ppl-3", name: "Push / Pull / Legs",
-        summary: "Classic three-day split organised by movement.",
+        summary: String(localized: "trainingSplit.ppl3.summary",
+                        defaultValue: "Classic three-day split organised by movement.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.strength, .sportsPrep, .weightManagement],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let cardioStrength4 = TrainingSplit(
         id: "cardio-strength-4", name: "Cardio + Strength",
-        summary: "Morning cardio, evening lifting — for fat loss and conditioning.",
+        summary: String(localized: "trainingSplit.cardioStrength4.summary",
+                        defaultValue: "Morning cardio, evening lifting — for fat loss and conditioning.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.weightManagement, .wellness, .sportsPrep],
         days: [
             day("Day 1", [WorkoutSessions.easyCardio.at(.morning), WorkoutSessions.upper.at(.evening)]),
@@ -959,7 +1000,9 @@ public nonisolated enum WorkoutSplitCatalog {
     )
     public static let sportPrep = TrainingSplit(
         id: "sport-prep", name: "Sport Prep",
-        summary: "Sport-specific conditioning paired with strength work.",
+        summary: String(localized: "trainingSplit.sportPrep.summary",
+                        defaultValue: "Sport-specific conditioning paired with strength work.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.sportsPrep],
         days: [
             day("Day 1", [WorkoutSessions.sportConditioning.at(.morning), WorkoutSessions.lower.at(.evening)]),
@@ -970,13 +1013,17 @@ public nonisolated enum WorkoutSplitCatalog {
     )
     public static let pplUL5 = TrainingSplit(
         id: "ppl-ul-5", name: "PPL + Upper / Lower",
-        summary: "Five days mixing push/pull/legs with upper/lower.",
+        summary: String(localized: "trainingSplit.pplUL5.summary",
+                        defaultValue: "Five days mixing push/pull/legs with upper/lower.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.strength, .sportsPrep],
         days: [day("Push", [WorkoutSessions.push]), day("Pull", [WorkoutSessions.pull]), day("Legs", [WorkoutSessions.legs]), day("Upper", [WorkoutSessions.upper]), day("Lower", [WorkoutSessions.lower])]
     )
     public static let ppl6 = TrainingSplit(
         id: "ppl-6", name: "Push / Pull / Legs ×2",
-        summary: "Six high-frequency days for serious volume.",
+        summary: String(localized: "trainingSplit.ppl6.summary",
+                        defaultValue: "Six high-frequency days for serious volume.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .focused, goalFit: [.strength, .sportsPrep],
         days: [day("Push A", [WorkoutSessions.push]), day("Pull A", [WorkoutSessions.pull]), day("Legs A", [WorkoutSessions.legs]), day("Push B", [WorkoutSessions.push]), day("Pull B", [WorkoutSessions.pull]), day("Legs B", [WorkoutSessions.legs])]
     )
@@ -984,19 +1031,25 @@ public nonisolated enum WorkoutSplitCatalog {
     // --- Specialized / very specific ---
     public static let broSplit5 = TrainingSplit(
         id: "bro-5", name: "Bro Split",
-        summary: "One body part per day for maximum focus.",
+        summary: String(localized: "trainingSplit.bro5.summary",
+                        defaultValue: "One body part per day for maximum focus.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .specialized, goalFit: [.strength],
         days: [day("Chest", [WorkoutSessions.chest]), day("Back", [WorkoutSessions.back]), day("Shoulders", [WorkoutSessions.shoulders]), day("Arms", [WorkoutSessions.arms]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let arnold6 = TrainingSplit(
         id: "arnold-6", name: "Arnold Split",
-        summary: "Chest+back, shoulders+arms, legs — twice over, six days.",
+        summary: String(localized: "trainingSplit.arnold6.summary",
+                        defaultValue: "Chest+back, shoulders+arms, legs — twice over, six days.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .specialized, goalFit: [.strength],
         days: [day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs]), day("Chest & Back", [WorkoutSessions.arnoldChestBack]), day("Shoulders & Arms", [WorkoutSessions.arnoldShouldersArms]), day("Legs", [WorkoutSessions.legs])]
     )
     public static let twoADay = TrainingSplit(
         id: "two-a-day", name: "Two-a-Day Strength",
-        summary: "Two strength sessions a day — advanced, high volume.",
+        summary: String(localized: "trainingSplit.twoADay.summary",
+                        defaultValue: "Two strength sessions a day — advanced, high volume.", bundle: .module,
+                        comment: "One-line description of a workout split in Workout setup"),
         specificity: .specialized, goalFit: [.strength, .sportsPrep],
         days: [
             day("Day 1", [WorkoutSessions.push.at(.morning), WorkoutSessions.pull.at(.evening)]),
@@ -1018,11 +1071,15 @@ public nonisolated enum WorkoutConsistency: Int {
 
     public var points: Int { rawValue }
 
+    /// The consistency on screen, localized (2026-10-20, idea 16). Display only.
     public var label: String {
         switch self {
-        case .low: "Getting started"
-        case .medium: "Fairly consistent"
-        case .high: "Very consistent"
+        case .low: String(localized: "workoutConsistency.low", defaultValue: "Getting started", bundle: .module,
+                          comment: "How consistently the person has trained lately: just getting started")
+        case .medium: String(localized: "workoutConsistency.medium", defaultValue: "Fairly consistent", bundle: .module,
+                             comment: "How consistently the person has trained lately: fairly consistent")
+        case .high: String(localized: "workoutConsistency.high", defaultValue: "Very consistent", bundle: .module,
+                           comment: "How consistently the person has trained lately: very consistent")
         }
     }
 }
@@ -1473,13 +1530,15 @@ public nonisolated enum WorkoutProgram {
         return best?.index
     }
 
-    /// The "there is always something to do" session used when a split renders nothing at all.
+    /// The "there is always something to do" session used when a split renders nothing at all. Its
+    /// name and plan line are frozen English (screens draw them through ``WorkoutSessionNames`` and
+    /// ``WorkoutPlanLine``); its note is localized.
     private static var fallbackSession: SessionSuggestion {
         SessionSuggestion(
             title: "Move", timeLabel: "", kind: .fullBody,
             suggestion: WorkoutSuggestion(name: "Easy full body",
                                           exercises: "Full-body bodyweight circuit - 3 rounds",
-                                          notes: "A simple option for today.")
+                                          notes: WorkoutPlannerCopy.simpleOption)
         )
     }
 
@@ -1851,7 +1910,7 @@ public nonisolated enum WorkoutProgram {
         let after = session.exercises.filter { $0.block == .cardio || $0.block == .coolDown }
         updated.exercises = before + lifting + after
         var note = session.suggestion.notes
-        let adjustedTag = "Adjusted to your note."
+        let adjustedTag = WorkoutPlannerCopy.adjustedToNote
         if note.contains(adjustedTag) == false {
             note = note.isEmpty ? adjustedTag : "\(note) · \(adjustedTag)"
         }
@@ -1863,6 +1922,9 @@ public nonisolated enum WorkoutProgram {
         return updated
     }
 
+    /// A session's NAME — the frozen English its guided log is saved under and the rotation and the
+    /// guided reconciliation match ("Upper", "Morning · Easy cardio"). Screens draw it through
+    /// ``WorkoutSessionNames/drawn(_:)``; never localize it here.
     private static func sessionDisplayName(_ session: WorkoutSessionTemplate, timeLabel: String) -> String {
         timeLabel.isEmpty ? session.title : "\(timeLabel) · \(session.title)"
     }
@@ -2021,16 +2083,18 @@ public nonisolated enum WorkoutProgram {
         progressNotes: [String],
         hiddenDropped: [String] = []
     ) -> String {
-        var parts: [String] = [inputs.location.name]
+        // The note is display text composed now, in the device's language: the location reads by its
+        // drawn name and the dropped slots by theirs. `dropped` itself stays the frozen labels.
+        var parts: [String] = [inputs.location.displayedName]
         parts += progressNotes
         if includeContext, context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            parts.append("Noted: \(context.trimmingCharacters(in: .whitespacesAndNewlines))")
+            parts.append(WorkoutPlannerCopy.noted(context.trimmingCharacters(in: .whitespacesAndNewlines)))
         }
         if !inputs.limits.isEmpty {
-            parts.append("Worked around your noted limits.")
+            parts.append(WorkoutPlannerCopy.workedAroundLimits)
         }
         if dropped.isEmpty == false {
-            parts.append("Skipped \(dropped.joined(separator: ", ")) — no safe option here.")
+            parts.append(WorkoutPlannerCopy.skippedNoSafeOption(WorkoutSlotNames.drawnList(dropped)))
         }
         if hiddenDropped.isEmpty == false {
             parts.append(hiddenDropNote(hiddenDropped))
@@ -2038,10 +2102,10 @@ public nonisolated enum WorkoutProgram {
         return parts.joined(separator: " · ")
     }
 
-    /// The note for slots that only hidden exercises could fill. Plain English like the planner's
-    /// other notes (the plan text is persisted on the logged row and not localized yet).
+    /// The note for slots that only hidden exercises could fill. `labels` are the frozen slot labels;
+    /// the note names them in the device's language (``WorkoutSlotNames``).
     public static func hiddenDropNote(_ labels: [String]) -> String {
-        "Skipped \(labels.joined(separator: ", ")) — the only options here are ones you've hidden."
+        WorkoutPlannerCopy.skippedHidden(WorkoutSlotNames.drawnList(labels))
     }
 }
 

@@ -77,7 +77,10 @@ struct GuidedWorkoutSheet: View {
     /// Names the run that would be lost, so the trade is legible before it's made rather than after.
     private var replaceConfirmMessage: String {
         guard let other = store.activeGuidedRunBlockingStart(of: session) else { return "" }
-        return "\(other.title) is still going. Starting this one will let go of the sets you've already done there."
+        let name = WorkoutSessionNames.drawn(other.title)
+        return String(localized: "guided.replaceRun.message",
+                      defaultValue: "\(name) is still going. Starting this one will let go of the sets you've already done there.",
+                      comment: "Confirmation before starting a guided workout while another is in progress. The argument is the other session's name.")
     }
 
     var body: some View {
@@ -162,7 +165,7 @@ struct GuidedWorkoutSheet: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.suggestion.name)
+                Text(session.displayedName)
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 if let run, run.isWorking || run.isResting {
@@ -544,7 +547,7 @@ struct GuidedWorkoutSheet: View {
 
     private var completionMessage: Text {
         sessionsRemain
-            ? Text("\(session.suggestion.name) is logged. The rest of today's plan is there whenever you're ready.")
+            ? Text("\(session.displayedName) is logged. The rest of today's plan is there whenever you're ready.")
             : Text("That's logged for today.")
     }
 

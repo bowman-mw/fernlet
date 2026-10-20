@@ -47,7 +47,7 @@ struct WorkoutSetupSheet: View {
         let active = selected.flatMap { id in WorkoutSplitCatalog.all.first { $0.id == id } }
             ?? recommendedSplits.first ?? WorkoutSplitCatalog.fallback
         self.originalSelectedSplitID = selected
-        self.currentSplitName = active.name
+        self.currentSplitName = active.displayName
         self.isTrainingConsistently = store.workoutConsistency() != .low
         _selectedSplitID = State(initialValue: settings.workoutProfile.selectedSplitID)
         _profile = State(initialValue: settings.workoutProfile)
@@ -111,21 +111,24 @@ struct WorkoutSetupSheet: View {
     private var splitSection: some View {
         SheetField("Your split") {
             VStack(alignment: .leading, spacing: 8) {
+                // Text, not String: these literals used to be `String` arguments, which never reach the
+                // catalog. Split names, summaries and tags are already localized by the domain.
                 splitOption(
-                    title: "Auto — recommended",
-                    subtitle: recommendedSplits.first.map { "Currently: \($0.name)" } ?? "Picks the best split for you",
-                    tag: "",
+                    title: Text("Auto — recommended"),
+                    subtitle: recommendedSplits.first.map { Text("Currently: \($0.displayName)") }
+                        ?? Text("Picks the best split for you"),
+                    tag: nil,
                     selected: selectedSplitID == nil,
                     badge: nil
                 ) { selectedSplitID = nil }
 
                 ForEach(recommendedSplits) { split in
                     splitOption(
-                        title: split.name,
-                        subtitle: split.summary,
-                        tag: "\(split.specificity.label) · \(split.frequencySummary)",
+                        title: Text(verbatim: split.displayName),
+                        subtitle: Text(verbatim: split.summary),
+                        tag: Text(verbatim: "\(split.specificity.label) · \(split.frequencySummary)"),
                         selected: selectedSplitID == split.id,
-                        badge: split.id == recommendedSplits.first?.id ? "Recommended" : nil
+                        badge: split.id == recommendedSplits.first?.id ? Text("Recommended") : nil
                     ) { selectedSplitID = split.id }
                 }
 
@@ -146,15 +149,17 @@ struct WorkoutSetupSheet: View {
     /// rendered without its cancel button on iOS 26, so tapping outside abandoned the whole save.
     private var consistencyNote: String? {
         guard isTrainingConsistently else { return nil }
-        return "You've been consistent with \(currentSplitName) — keep it unless something changed."
+        return String(localized: "workoutSetup.consistencyNote",
+                      defaultValue: "You've been consistent with \(currentSplitName) — keep it unless something changed.",
+                      comment: "Workout setup: a neutral note beside the split options. The argument is the split's name.")
     }
 
     private func splitOption(
-        title: String,
-        subtitle: String,
-        tag: String,
+        title: Text,
+        subtitle: Text?,
+        tag: Text?,
         selected: Bool,
-        badge: String?,
+        badge: Text?,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -163,11 +168,11 @@ struct WorkoutSetupSheet: View {
                     .foregroundStyle(selected ? Color.moss : Color.slate)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(title)
+                        title
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         if let badge {
-                            Text(badge)
+                            badge
                                 .font(.fernlet(.labelSmall))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -175,12 +180,12 @@ struct WorkoutSetupSheet: View {
                                 .foregroundStyle(Color.moss)
                         }
                     }
-                    if subtitle.isEmpty == false {
-                        Text(subtitle).font(.fernlet(.bodySmall)).foregroundStyle(Color.slate)
+                    if let subtitle {
+                        subtitle.font(.fernlet(.bodySmall)).foregroundStyle(Color.slate)
                     }
-                    if tag.isEmpty == false {
+                    if let tag {
                         // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        Text(tag).font(.fernlet(.labelSmall)).foregroundStyle(Color.mossInk)
+                        tag.font(.fernlet(.labelSmall)).foregroundStyle(Color.mossInk)
                     }
                 }
                 Spacer(minLength: 0)
@@ -204,7 +209,7 @@ struct WorkoutSetupSheet: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.moss)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(store.settings.activeWorkoutLocation.name)
+                        Text(store.settings.activeWorkoutLocation.displayedName)
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         Text("\(store.settings.activeWorkoutLocation.ownedEquipment.count) pieces of equipment")
@@ -229,7 +234,8 @@ struct WorkoutSetupSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             SheetField("Days per week") {
                 Stepper(value: $profile.trainingDaysPerWeek, in: 1...6) {
-                    Text("\(profile.trainingDaysPerWeek) day\(profile.trainingDaysPerWeek == 1 ? "" : "s") a week")
+                    // One key with a plural rule ("1 day a week"), not an English "s" spliced in.
+                    Text("\(profile.trainingDaysPerWeek) days a week")
                         .foregroundStyle(Color.bark)
                 }
             }
