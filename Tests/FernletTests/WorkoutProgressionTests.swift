@@ -121,15 +121,15 @@ struct WorkoutProgressionTests {
         let squat = try #require(lifting(first).first)
         try #require(squat.name == "Goblet squat")
         let history = [key(squat.name): [24, 28].map { session($0, 25, reps: 12, target: 12) }]
-        let session = try plan(template: Self.squatOnly, location: garage(), history: history)
-        let lift = try #require(lifting(session).first)
+        let planned = try plan(template: Self.squatOnly, location: garage(), history: history)
+        let lift = try #require(lifting(planned).first)
         // The plan stays reps first at the heaviest pair; the harder step is only offered.
         #expect(lift.reps == "13")
         let suggested = lift.guidance?.prescription?.suggested
         #expect(suggested == 25)
         let harder = lift.guidance?.harderVariation
         #expect(harder == "Bulgarian split squat")
-        #expect(session.suggestion.notes.contains(
+        #expect(planned.suggestion.notes.contains(
             "If you'd like a harder step for Goblet squat, Bulgarian split squat works the same muscles"))
         // Below the heaviest pair nothing is offered.
         let lighter = try plan(template: Self.squatOnly, location: garage(),
@@ -187,9 +187,9 @@ struct WorkoutProgressionTests {
     }
 
     @Test func plannedLiftsCarryTheOwnedLoadsAroundTheSuggestion() throws {
-        let session = try plan(template: Self.squatOnly, location: garage(),
+        let dayPlan = try plan(template: Self.squatOnly, location: garage(),
                                history: [key("Goblet squat"): [session(28, 15, reps: 10, target: 10)]])
-        let lift = try #require(lifting(session).first)
+        let lift = try #require(lifting(dayPlan).first)
         let owned: [Double] = [5, 10, 15, 20, 25]
         let planned = lift.guidance?.loads
         #expect(planned == owned)
