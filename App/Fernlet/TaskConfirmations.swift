@@ -130,6 +130,13 @@ enum GuidedRunAnnouncement {
         guard after.isWorking, let exercise = after.currentExercise else { return nil }
         let countsSets = exercise.fromCatalog && exercise.sets >= 1
         if after.exerciseIndex != before.exerciseIndex {
+            // A cardio segment says its pace, length and round — its name ("Intervals") is the same for
+            // every part, so "Next: Intervals." would say nothing. One line per change: the haptic and
+            // sound cue are separate channels, and a segment that follows straight on has no lead-in
+            // line after it.
+            if let segment = exercise.segment {
+                return (.status, GuidedSegmentWords.changeLine(segment, seconds: exercise.holdSeconds ?? 0))
+            }
             // A one-sided step (a stretch, a balance hold) says its side; a single timed step has no
             // set to count ("Set 1 of 1" for every stretch would be noise).
             switch exercise.sideRaw {

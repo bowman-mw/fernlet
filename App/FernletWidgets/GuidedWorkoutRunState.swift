@@ -78,11 +78,22 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// show them with no app state; nil for a step never logged, a timed or uncounted step, and a
         /// run persisted before the Live Activity showed them.
         var lastTime: LastTime?
+        /// Seconds of "get ready" before this timed step's hold; nil is the usual
+        /// ``GuidedWorkoutRunState/holdLeadInSeconds``. A cardio segment that follows straight on from
+        /// the one before carries 0 — an interval's easy part starts the moment its hard part ends.
+        var leadInSeconds: Int?
+        /// The timed cardio segment this step is — its pace, round and source line; nil otherwise.
+        var segment: Segment?
+        /// Seconds of this step actually timed so far, added as each of its sets is moved on from (its
+        /// countdown running out, "Next", a skip, the Lock Screen) — kept for a cardio segment or a
+        /// stretch-session step only, and what such a run logs as its length. Nil until then.
+        var heldSeconds: Int?
 
         init(
             id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool,
             restSeconds: Int, holdSeconds: Int? = nil, blockRaw: String? = nil, sideRaw: String? = nil,
-            tracking: Tracking? = nil, displayName: String? = nil, lastTime: LastTime? = nil
+            tracking: Tracking? = nil, displayName: String? = nil, lastTime: LastTime? = nil,
+            leadInSeconds: Int? = nil, segment: Segment? = nil
         ) {
             self.id = id
             self.name = name
@@ -97,6 +108,8 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             self.tracking = tracking
             self.displayName = displayName
             self.lastTime = lastTime
+            self.leadInSeconds = leadInSeconds
+            self.segment = segment
         }
 
         /// The step's block, with an untagged step (any run built before blocks existed) as lifting.
@@ -105,6 +118,29 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// The name a screen, a spoken transition or the Live Activity draws: ``displayName`` when
         /// the app baked one in, else the frozen ``name``.
         var displayedName: String { displayName ?? name }
+
+        /// This step's lead-in before its hold starts, in seconds — never negative.
+        var holdLeadIn: Int { max(0, leadInSeconds ?? GuidedWorkoutRunState.holdLeadInSeconds) }
+    }
+
+    /// One timed cardio segment (the domain `CardioSegment`), spelled as tokens because this shared
+    /// file cannot import the domain.
+    struct Segment: Codable, Hashable {
+        /// "steady" | "hard" | "easy" — a ``PaceToken`` value.
+        var paceRaw: String
+        /// The 1-based round of an interval set, and the rounds in all; nil for a steady segment.
+        var round: Int?
+        var rounds: Int?
+        /// The plan line the segment was read from — what the log folds the segments back into.
+        var descriptor: String
+    }
+
+    /// The pace tokens, spelled here because this shared file cannot import the domain: each equals the
+    /// domain `CardioPace` case's raw value (pinned by a test), and like it is FROZEN.
+    enum PaceToken {
+        static let steady = "steady"
+        static let hard = "hard"
+        static let easy = "easy"
     }
 
     /// One lift's load plan (fixed when the run starts) and what happened (set in the app as the
@@ -179,6 +215,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         static let lifting = "lifting"
         static let cardio = "cardio"
         static let coolDown = "coolDown"
+        static let mobility = "mobility"
     }
 
     /// Seconds between a timed step starting and its hold starting: time to get into position, so a
@@ -324,10 +361,11 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// inverts however long the user takes; nil for a rep-counted set, while resting, or without a
     /// set start.
     var holdWindow: ClosedRange<Date>? {
-        guard phase == .working, let hold = currentExercise?.holdSeconds, hold > 0, let setStartedAt else {
+        guard phase == .working, let exercise = currentExercise, let hold = exercise.holdSeconds, hold > 0,
+              let setStartedAt else {
             return nil
         }
-        let start = setStartedAt.addingTimeInterval(TimeInterval(Self.holdLeadInSeconds))
+        let start = setStartedAt.addingTimeInterval(TimeInterval(exercise.holdLeadIn))
         return start...start.addingTimeInterval(TimeInterval(hold))
     }
 
@@ -342,10 +380,29 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         return (position, max(1, indices.count))
     }
 
-    /// Whether the warm-up or the cool-down can be skipped from here — the runner's quiet "Skip
-    /// warm-up" / "Skip cool-down" secondary.
+    /// Whether the rest of the current block can be skipped from here — the runner's quiet "Skip
+    /// warm-up" / "Skip cool-down" secondary, and "Skip cardio" / "Finish early" while a timed cardio
+    /// or stretch block still has more ahead (on its last step, "Next" does the same thing).
     var canSkipBlock: Bool {
-        (isWorking || isResting) && (currentBlock == BlockToken.warmUp || currentBlock == BlockToken.coolDown)
+        guard isWorking || isResting else { return false }
+        switch currentBlock {
+        case BlockToken.warmUp, BlockToken.coolDown: return true
+        case BlockToken.cardio, BlockToken.mobility: return hasMoreOfCurrentBlock
+        default: return false
+        }
+    }
+
+    /// Whether a later step belongs to the current step's block.
+    var hasMoreOfCurrentBlock: Bool {
+        let block = currentBlock
+        return exercises.indices.contains { $0 > exerciseIndex && exercises[$0].block == block }
+    }
+
+    /// Whether anything follows the current block — a skipped cardio block hands over to it ("Skip
+    /// cardio"); with nothing after, the skip finishes the session ("Finish early").
+    var hasStepAfterCurrentBlock: Bool {
+        let block = currentBlock
+        return exercises.indices.contains { $0 > exerciseIndex && exercises[$0].block != block }
     }
 
     /// Whether the run can jump past the rest of the current exercise to the next one — the
@@ -379,7 +436,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
                 total += Self.descriptorSeconds(named: exercise.name, fallback: descriptorSeconds)
                 continue
             }
-            let perSet = exercise.holdSeconds.map { $0 + Self.holdLeadInSeconds } ?? workSecondsPerSet
+            let perSet = exercise.holdSeconds.map { $0 + exercise.holdLeadIn } ?? workSecondsPerSet
             let setsAhead = index == exerciseIndex
                 ? max(0, exercise.sets - currentSet + 1)
                 : exercise.sets
@@ -421,6 +478,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// straight to the next exercise; last set of the last exercise → done.
     mutating func markSetDone(now: Date) {
         guard phase == .working, let exercise = currentExercise else { return }
+        recordHeld(now: now)
         let total = max(1, exercise.sets)
         if currentSet < total {
             currentSet += 1
@@ -477,13 +535,25 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         return true
     }
 
-    /// Skip the rest of the warm-up (to the first step after it) or of the cool-down. Skipping the
-    /// cool-down finishes the run NATURALLY — the work is done, so it is logged — and so does a
-    /// warm-up with nothing after it. Any other block is left alone (`canSkipBlock` is false there).
+    /// Skip the rest of the warm-up or of a timed cardio block (to the first step after it), or of the
+    /// cool-down or a stretch session. Skipping the cool-down finishes the run NATURALLY — the work is
+    /// done, so it is logged — and so does a block with nothing after it ("Finish early": the run logs
+    /// the time actually held). Any other block is left alone (`canSkipBlock` is false there).
     mutating func skipBlock(now: Date) {
         guard canSkipBlock else { return }
+        recordHeld(now: now)
         let block = currentBlock
         let next = exercises.indices.first { $0 > exerciseIndex && exercises[$0].block != block }
+        // A timed cardio block hands over to what follows it (the cool-down), as the warm-up does.
+        if block == BlockToken.cardio, let next {
+            exerciseIndex = next
+            currentSet = 1
+            restStartedAt = nil
+            restEndsAt = nil
+            setStartedAt = now
+            phase = .working
+            return
+        }
         guard block == BlockToken.warmUp, let next else {
             finish(at: now)
             return
@@ -494,6 +564,17 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         restEndsAt = nil
         setStartedAt = now
         phase = .working
+    }
+
+    /// Adds the current timed set's held seconds to its step — from the end of its lead-in to `now`, no
+    /// more than the hold, no less than nothing — for a cardio segment or a stretch-session step only,
+    /// whose run logs its length from them (`GuidedRunTimedLog`).
+    private mutating func recordHeld(now: Date) {
+        guard let window = holdWindow, exercises.indices.contains(exerciseIndex),
+              currentBlock == BlockToken.cardio || currentBlock == BlockToken.mobility else { return }
+        let hold = window.upperBound.timeIntervalSince(window.lowerBound)
+        let held = min(max(0, now.timeIntervalSince(window.lowerBound)), hold)
+        exercises[exerciseIndex].heldSeconds = (exercises[exerciseIndex].heldSeconds ?? 0) + Int(held.rounded())
     }
 
     /// Abandon the run: `.done` but `completedNaturally` stays false, so nothing is logged.
@@ -601,7 +682,10 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             holdEndsAt: holdWindow?.upperBound,
             blockRaw: currentExercise?.blockRaw,
             sideRaw: currentExercise?.sideRaw,
-            load: currentLoad
+            load: currentLoad,
+            paceRaw: currentExercise?.segment?.paceRaw,
+            round: currentExercise?.segment?.round,
+            rounds: currentExercise?.segment?.rounds
         )
     }
 

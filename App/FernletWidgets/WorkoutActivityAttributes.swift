@@ -82,6 +82,13 @@ nonisolated struct WorkoutActivityAttributes: ActivityAttributes {
         /// Nil for a step with nothing to show (a stretch, a cardio line, a lift never logged and
         /// given no weight), and in a payload from before load display existed.
         var load: Load? = nil
+        /// A timed cardio segment's pace — "steady" | "hard" | "easy", a
+        /// `GuidedWorkoutRunState.PaceToken` — and, for an interval, its round and the rounds in all.
+        /// Its countdown is the hold window above. Nil on every other step, and in a payload from
+        /// before guided cardio existed.
+        var paceRaw: String? = nil
+        var round: Int? = nil
+        var rounds: Int? = nil
 
         /// The numbers behind the set's load line: the weight the runner shows, the engine's range,
         /// and last time's sets, reps and weight.

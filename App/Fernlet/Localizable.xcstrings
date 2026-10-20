@@ -1134,6 +1134,17 @@
     "A mood, never a number." : {
 
     },
+    "A pace you could still talk at." : {
+      "comment" : "Guided cardio: the gentle line under the card during steady cardio — the talk test.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A pace you could still talk at."
+          }
+        }
+      }
+    },
     "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a session. Session messages are never stored — they disappear for everyone when the session ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them." : {
 
     },
@@ -2686,14 +2697,58 @@
         }
       }
     },
+    "Ease in and breathe. Stop anywhere that feels like enough." : {
+      "comment" : "Guided stretch session (a Mobility day or the rest day's gentle stretch): the gentle line under the card.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ease in and breathe. Stop anywhere that feels like enough."
+          }
+        }
+      }
+    },
     "Ease into each stretch — no bouncing." : {
 
+    },
+    "Ease right off and get your breath back." : {
+      "comment" : "Guided cardio: the gentle line under the card during an interval's easy (recovery) part.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ease right off and get your breath back."
+          }
+        }
+      }
     },
     "Easier version" : {
 
     },
     "Easy" : {
 
+    },
+    "Easy for %@. Round %lld of %lld." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an interval's easy (recovery) part begins. %1$@ is its length in words; then the round and the rounds in all.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy for %1$@. Round %2$lld of %3$lld."
+          }
+        }
+      }
+    },
+    "Easy pace for %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an easy steady segment (easy cardio, an easy walk) begins. %@ is its length in words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy pace for %@."
+          }
+        }
+      }
     },
     "Easy — you could keep this up for a long while." : {
 
@@ -3259,6 +3314,17 @@
     "Finish" : {
 
     },
+    "Finish early" : {
+      "comment" : "Guided workout: the quiet secondary that ends a timed cardio or stretch session before its last part and logs the time done so far.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Finish early"
+          }
+        }
+      }
+    },
     "Finish set" : {
 
     },
@@ -3434,8 +3500,30 @@
     "Gastrotrich Lifetimes" : {
       "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal"
     },
+    "Gentle stretch" : {
+      "comment" : "Voice Control name for the rest day's optional 'Guide me through a gentle stretch' button.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle stretch"
+          }
+        }
+      }
+    },
     "Get into position" : {
 
+    },
+    "Get ready" : {
+      "comment" : "Guided cardio: the caption over the countdown during the five seconds before a cardio part's time starts (a stretch says 'Get into position').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Get ready"
+          }
+        }
+      }
     },
     "Getting ready" : {
 
@@ -3451,6 +3539,39 @@
     },
     "Go back to it" : {
 
+    },
+    "Go — easy." : {
+      "comment" : "VoiceOver, guided cardio: spoken when the 'Get ready' lead-in ends and an easy part's time starts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go — easy."
+          }
+        }
+      }
+    },
+    "Go — hard." : {
+      "comment" : "VoiceOver, guided cardio: spoken when the 'Get ready' lead-in ends and a hard part's time starts — the cardio form of 'Hold now.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go — hard."
+          }
+        }
+      }
+    },
+    "Go — steady." : {
+      "comment" : "VoiceOver, guided cardio: spoken when the 'Get ready' lead-in ends and a steady session's time starts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go — steady."
+          }
+        }
+      }
     },
     "Goal" : {
 
@@ -3503,6 +3624,28 @@
     "Guidance style" : {
 
     },
+    "Guide me through a gentle stretch" : {
+      "comment" : "Voice Control name for the rest day's optional gentle stretch button: its drawn words without the length.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Guide me through a gentle stretch"
+          }
+        }
+      }
+    },
+    "Guide me through a gentle stretch, about 8 minutes" : {
+      "comment" : "Suggest sheet on a rest day (the person marked themselves unwell): a quiet, optional button that starts an eight-minute guided floor stretch. Never the screen's main action.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Guide me through a gentle stretch, about 8 minutes"
+          }
+        }
+      }
+    },
     "Hand a recipe over in person." : {
 
     },
@@ -3511,6 +3654,39 @@
     },
     "Haptics" : {
 
+    },
+    "Hard for %@. Round %lld of %lld." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an interval's hard part begins. %1$@ is its length in words ('1 minute'); then the round and the rounds in all.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard for %1$@. Round %2$lld of %3$lld."
+          }
+        }
+      }
+    },
+    "Hard for you, not all-out." : {
+      "comment" : "Guided cardio: the gentle line under the card during an interval's hard part. Effort is relative to the person; never a push to the limit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard for you, not all-out."
+          }
+        }
+      }
+    },
+    "Hard pace for %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as a hard steady segment begins. %@ is its length in words ('20 minutes').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard pace for %@."
+          }
+        }
+      }
     },
     "Hard — talking takes effort." : {
 
@@ -3704,6 +3880,28 @@
     },
     "I understand — continue" : {
 
+    },
+    "I'll time each part and tell you when it changes. Go at a pace that feels good — you can stop whenever you like." : {
+      "comment" : "Guided workout Ready screen for a timed cardio session (steady or intervals).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I'll time each part and tell you when it changes. Go at a pace that feels good — you can stop whenever you like."
+          }
+        }
+      }
+    },
+    "I'll time each stretch and move you on by myself. Ease in, and never bounce or push into pain." : {
+      "comment" : "Guided workout Ready screen for a Mobility day's timed stretch session.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I'll time each stretch and move you on by myself. Ease in, and never bounce or push into pain."
+          }
+        }
+      }
     },
     "I'm %lld or older" : {
 
@@ -3913,6 +4111,17 @@
     },
     "Journal, cycle, worry box" : {
 
+    },
+    "Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today." : {
+      "comment" : "Guided workout Ready screen for the rest day's optional gentle stretch, on a day the person marked themselves unwell. Never pushes.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today."
+          }
+        }
+      }
     },
     "Keep Fernlet data out of device backups?" : {
 
@@ -5617,6 +5826,17 @@
     "Ready when you are" : {
       "comment" : "Shown and spoken by the breathing pacer while no session is running. Unhurried and permission-giving — the tool waits, it does not prompt."
     },
+    "Ready when you are — I'll time each part and move you on. No pressure." : {
+      "comment" : "Move tab, 'Today's workout' card: today's session is timed cardio or a stretch session rather than sets.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready when you are — I'll time each part and move you on. No pressure."
+          }
+        }
+      }
+    },
     "Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure." : {
 
     },
@@ -6113,6 +6333,28 @@
     },
     "Room for a little more" : {
 
+    },
+    "Round %lld of %lld" : {
+      "comment" : "Guided cardio: an interval's round on the runner card, e.g. 'Round 3 of 8'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Round %lld of %lld, %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an interval part with no named pace begins: the round, the rounds in all, and its length in words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld, %3$@."
+          }
+        }
+      }
     },
     "Run a media at-rest conversion pass?" : {
 
@@ -6714,6 +6956,17 @@
     "Skip" : {
 
     },
+    "Skip cardio" : {
+      "comment" : "Guided workout: the quiet secondary that skips the rest of a timed cardio block and moves on to the cool-down.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skip cardio"
+          }
+        }
+      }
+    },
     "Skip cool-down" : {
 
     },
@@ -6906,6 +7159,17 @@
     "Stays sealed on this device only — worries never sync anywhere." : {
 
     },
+    "Steady pace for %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as a steady-state segment begins. %@ is its length in words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady pace for %@."
+          }
+        }
+      }
+    },
     "Steady — you've got this." : {
 
     },
@@ -6988,6 +7252,17 @@
     },
     "Strength" : {
 
+    },
+    "Stretch %lld of %lld · %lld min left" : {
+      "comment" : "Guided stretch session header: the stretch's position in the session, the stretches in all, and the minutes left.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stretch %1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
     },
     "Suggest" : {
 
@@ -7853,6 +8128,17 @@
     },
     "We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good." : {
 
+    },
+    "We'll walk through it together. Go at a pace that feels good." : {
+      "comment" : "Guided workout Ready screen for a session that is neither sets nor timed cardio or stretching.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "We'll walk through it together. Go at a pace that feels good."
+          }
+        }
+      }
     },
     "We've been friends for ^[%@ gastrotrich lifetime](inflect: true). They're tiny and live about three days." : {
       "comment" : "Companion line about how long the user has had the app"
@@ -10612,6 +10898,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "This session was open for more than 3 hours, so it's logged as 3. Edit the duration if you know the real time."
+          }
+        }
+      }
+    },
+    "workout.pace.easy" : {
+      "comment" : "Guided cardio: the pace of an interval's recovery part or an easy steady session, shown over its countdown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy"
+          }
+        }
+      }
+    },
+    "workout.pace.hard" : {
+      "comment" : "Guided cardio: the pace of an interval's work part, shown over its countdown. Hard for this person, not all-out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard"
+          }
+        }
+      }
+    },
+    "workout.pace.steady" : {
+      "comment" : "Guided cardio: the pace of a steady-state session, shown over its countdown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady"
           }
         }
       }

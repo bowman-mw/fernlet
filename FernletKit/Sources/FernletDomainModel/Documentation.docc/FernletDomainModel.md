@@ -551,6 +551,18 @@ and eligibility judge it the same way; ``CustomExerciseLibrary`` checks the name
 with a bundled or another custom name) and the shared 500-exercise cap, and deleting one never touches
 a logged workout.
 
+Cardio and mobility lines stay text in the plan — the text is the source of truth, and a session-length
+budget caps it — and become timed steps only when a guided run starts
+(``WorkoutTimedSessions/expand(_:feasible:)``, roadmap step 4a, 2026-10-20). ``WorkoutTimedSessions``
+reads a line strictly (``TimedDescriptor``): "Easy cardio - 20 min" is one steady countdown, "Intervals -
+8 × 1 min hard / 1 min easy" is sixteen ``CardioSegment``s of a ``CardioPace`` each, every part after
+the first following straight on with no lead-in; "Mobility flow - 15 min" is a stretch session in the
+owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block), and the rest day's
+gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
+certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
+run's log folds segments back into their line, and a cardio or mobility session logs as the matching
+``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). No heart rate yet.
+
 - ``WorkoutExercisePreferences``
 - ``WorkoutExerciseSwapOptions``
 - ``CustomExerciseDraft``
@@ -592,6 +604,10 @@ a logged workout.
 - ``SessionBlock``
 - ``ExerciseSide``
 - ``WorkoutSessionBlocks``
+- ``WorkoutTimedSessions``
+- ``TimedDescriptor``
+- ``CardioSegment``
+- ``CardioPace``
 - ``WorkoutRestGuidance``
 
 ### Load-aware progression and plateaus

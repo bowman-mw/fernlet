@@ -534,6 +534,9 @@ public nonisolated enum SessionBlock: String, Codable, CaseIterable, Sendable {
     case lifting
     case cardio
     case coolDown
+    /// A stretch session of its own — a Mobility day's flow or the rest day's gentle stretch — built
+    /// when its run starts (``WorkoutTimedSessions``). Never part of a lifting session.
+    case mobility
 }
 
 /// The side a one-sided stretch or drill is done on. FROZEN tokens (app-group run state).
@@ -1112,7 +1115,7 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
     public init(
         id: UUID = UUID(), name: String, sets: Int, reps: String, role: SlotRole, fromCatalog: Bool,
         restSecondsOverride: Int? = nil, block: SessionBlock = .lifting, holdSeconds: Int? = nil,
-        side: ExerciseSide? = nil, guidance: LoadGuidance? = nil
+        side: ExerciseSide? = nil, guidance: LoadGuidance? = nil, segment: CardioSegment? = nil
     ) {
         self.id = id
         self.name = name
@@ -1125,6 +1128,7 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
         self.holdSeconds = holdSeconds
         self.side = side
         self.guidance = guidance
+        self.segment = segment
     }
     public var id = UUID()
     public var name: String
@@ -1144,6 +1148,9 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
     /// The load plan for a rep-counted lift — its weight range, target reps, and calibration role —
     /// which the guided runner prescribes from and records against. Nil on everything else.
     public var guidance: LoadGuidance?
+    /// The timed cardio segment this step is, when the runner expanded a cardio line into countdowns
+    /// (``WorkoutTimedSessions/expand(_:feasible:)``); nil on every plan step.
+    public var segment: CardioSegment?
 
     /// The display text for a timed hold: "40 s".
     public static func holdText(seconds: Int) -> String { "\(seconds) s" }
@@ -1212,7 +1219,7 @@ public nonisolated enum WorkoutProgram {
             let mode: WorkoutMode = (kind == .strength || kind == .fullBody) ? .strengthTraining : .activity
             let type: WorkoutType = (kind == .cardio) ? .cardio : .fullBody
             return Workout(
-                name: suggestion.name, type: type, mode: mode, exercises: suggestion.exercises,
+                name: suggestion.name, type: type, mode: mode, activityType: activityType, exercises: suggestion.exercises,
                 rpe: nil, notes: suggestion.notes, duration: prescribedMinutes,
                 loggedFromGuidedSession: loggedFromGuidedSession ? true : nil,
                 intensity: intensity
@@ -1229,6 +1236,16 @@ public nonisolated enum WorkoutProgram {
         var prescribedMinutes: Int? {
             guard kind == .cardio || kind == .mobility else { return nil }
             return exercises.first.flatMap { WorkoutProgram.descriptorMinutes(in: $0.name) }
+        }
+
+        /// The activity a cardio or mobility session logs as, read from its descriptor
+        /// (``WorkoutTimedSessions/activityType(forDescriptor:)``), so Apple Health files it as interval,
+        /// steady or stretch work rather than "Other". Nil for any other session, and for the rest day's
+        /// gentle line, which may as well have been a walk.
+        var activityType: WorkoutActivityType? {
+            guard kind == .cardio || kind == .mobility, let line = exercises.first,
+                  !WorkoutTimedSessions.isOptionalStretch(line) else { return nil }
+            return WorkoutTimedSessions.activityType(forDescriptor: line.name)
         }
     }
 
