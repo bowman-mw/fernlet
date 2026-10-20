@@ -635,6 +635,15 @@ estimate — so the same history always builds the same plan.
 - **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
   weeks for people without a coach plan, a one-set strength check when the estimate is already
   trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
+- **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
+  plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
+  the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
+  load it can make (``LoadLadder``). The light-load guard holds with or without them: when the next
+  load is more than `WorkoutLoadEngine.lightLoadGuardRatio` (10 %) heavier, or there is none, the
+  lift adds reps up to three past the range, then a set, then takes the jump (``LoadCap``,
+  ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
+  level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
+  itself now parks a newer build's equipment tokens and keys.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -675,6 +684,10 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``CalibrationKind``
 - ``CalibrationSet``
 - ``CalibrationStep``
+- ``WorkoutWeightInventory``
+- ``WorkoutWeightPresets``
+- ``LoadLadder``
+- ``LoadCap``
 
 ### Coach plans
 

@@ -96,6 +96,9 @@
         }
       }
     },
+    "%@ bar" : {
+      "comment" : "Location editor, Weights I have: a bar to pick; the argument is its weight, e.g. 45 lb"
+    },
     "%@ didn't answer. Their Fernlet may be closed, locked, or busy sharing with someone else. Nothing was sent." : {
       "comment" : "Why a recipe share did not go out: the other phone never answered. %@ is the person's name."
     },
@@ -159,6 +162,9 @@
     },
     "%@ on this device, behind your app lock." : {
 
+    },
+    "%@ plates" : {
+      "comment" : "Location editor, Weights I have: a plate size's pair counter; the argument is the plate weight, e.g. 45 lb"
     },
     "%@ presets are behind Add." : {
 
@@ -1303,6 +1309,9 @@
     "Add by hand" : {
 
     },
+    "Add dumbbell" : {
+      "comment" : "Location editor, Weights I have: adds the typed dumbbell weight"
+    },
     "Add exercise" : {
 
     },
@@ -1311,6 +1320,9 @@
     },
     "Add its macros below, then save the custom ingredient." : {
 
+    },
+    "Add kettlebell" : {
+      "comment" : "Location editor, Weights I have: adds the typed kettlebell weight"
     },
     "Add macros for this custom food." : {
 
@@ -1444,6 +1456,9 @@
     },
     "Adjust with AI" : {
 
+    },
+    "Adjustable to %@" : {
+      "comment" : "Location editor, Weights I have: dumbbell preset, an adjustable pair in small steps; the argument is its heaviest setting, e.g. 52.5 lb"
     },
     "Adjusting…" : {
 
@@ -1656,6 +1671,9 @@
     },
     "Bananas for Scale" : {
       "comment" : "Silly stat title"
+    },
+    "Barbell" : {
+      "comment" : "Location editor, Weights I have: heading of the bar and plates block"
     },
     "Barcode lookup on Open Food Facts" : {
 
@@ -1955,8 +1973,17 @@
     "Choosing" : {
 
     },
+    "Clear barbell" : {
+      "comment" : "Location editor, Weights I have: button that clears the bar and plates"
+    },
     "Clear canvas" : {
 
+    },
+    "Clear dumbbells" : {
+      "comment" : "Location editor, Weights I have: button that empties the dumbbell list"
+    },
+    "Clear kettlebells" : {
+      "comment" : "Location editor, Weights I have: button that empties the kettlebell list"
     },
     "Clear search" : {
 
@@ -2670,6 +2697,12 @@
     },
     "Dream Cinema" : {
       "comment" : "Silly stat title: dream sleep measured in films"
+    },
+    "Dumbbell weight" : {
+      "comment" : "Location editor, Weights I have: field for a dumbbell weight not in the presets"
+    },
+    "Dumbbells" : {
+      "comment" : "Location editor, Weights I have: heading of the dumbbell block"
     },
     "Duplicate policy" : {
 
@@ -3807,6 +3840,9 @@
     "Holds a heart until you're next nearby." : {
 
     },
+    "Home set %@" : {
+      "comment" : "Location editor, Weights I have: dumbbell preset, a fixed home set; the argument is the range, e.g. 5–25 lb"
+    },
     "Home widgets" : {
 
     },
@@ -4186,6 +4222,12 @@
     "Kept on purpose" : {
 
     },
+    "Kettlebell weight" : {
+      "comment" : "Location editor, Weights I have: field for a kettlebell size not offered as a chip"
+    },
+    "Kettlebells" : {
+      "comment" : "Location editor, Weights I have: heading of the kettlebell block"
+    },
     "Kind" : {
 
     },
@@ -4276,6 +4318,9 @@
     },
     "Loading tier 2 memories…" : {
 
+    },
+    "Loads you can make: %@" : {
+      "comment" : "Location editor, Weights I have: the lightest to heaviest barbell load the bar and plates make, e.g. 45–405 lb"
     },
     "Local backup" : {
 
@@ -5258,6 +5303,9 @@
     "Optional" : {
 
     },
+    "Optional. With these set, Fernlet suggests only weights you can make here, and adds reps before a big jump." : {
+      "comment" : "Location editor: what listing the weights a space has does"
+    },
     "Options for %@" : {
 
     },
@@ -5349,6 +5397,9 @@
     },
     "Pain, form issues, stopped early..." : {
 
+    },
+    "Pairs, by the weight of one dumbbell." : {
+      "comment" : "Location editor, Weights I have: how dumbbell weights are counted"
     },
     "Part %lld of %lld" : {
       "localizations" : {
@@ -5789,6 +5840,9 @@
     "RPE (1–10)" : {
 
     },
+    "Rack %@" : {
+      "comment" : "Location editor, Weights I have: dumbbell preset, a full gym rack; the argument is the range, e.g. 5–100 lb"
+    },
     "Ramp-up set — light, just getting ready." : {
 
     },
@@ -6165,6 +6219,9 @@
     },
     "Replaces a backup this iPhone can't open." : {
       "comment" : "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs)."
+    },
+    "Replaces your dumbbell list" : {
+      "comment" : "Location editor, Weights I have: VoiceOver hint on a dumbbell preset"
     },
     "Report" : {
 
@@ -7413,6 +7470,9 @@
     "Tap anywhere when you're ready for the next one — take all the time you like." : {
 
     },
+    "Tap each size you have." : {
+      "comment" : "Location editor, Weights I have: how to use the kettlebell size chips"
+    },
     "Tap to log it again with today's time." : {
 
     },
@@ -7436,6 +7496,9 @@
     },
     "That code didn't match" : {
 
+    },
+    "That list is full. Remove one to add another." : {
+      "comment" : "Location editor, Weights I have: shown when a typed weight can't be added because the list is at its limit"
     },
     "That phone can no longer recover this one. Your data is untouched — but if you arm the recovery lock again you will need to enrol a device first." : {
 
@@ -7493,6 +7556,9 @@
     },
     "The %@ preset is behind Add." : {
 
+    },
+    "The bar, and how many pairs of each plate." : {
+      "comment" : "Location editor, Weights I have: what the barbell block asks for"
     },
     "The box holds about 300 characters." : {
 
@@ -8209,6 +8275,9 @@
           }
         }
       }
+    },
+    "Weights I have" : {
+      "comment" : "Location editor: heading of the optional list of dumbbells, kettlebells, bar and plates a space has"
     },
     "Welcome to Fernlet" : {
 
@@ -8937,6 +9006,9 @@
     },
     "^[%lld ingredient](inflect: true) weighed by a USDA typical size (estimate)" : {
 
+    },
+    "^[%lld pair](inflect: true)" : {
+      "comment" : "Location editor, Weights I have: how many pairs of one plate size are owned"
     },
     "^[%lld pat](inflect: true)" : {
       "comment" : "Silly stat headline: lifetime pats"

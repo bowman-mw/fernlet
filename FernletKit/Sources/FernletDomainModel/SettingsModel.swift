@@ -235,6 +235,10 @@ public nonisolated struct FernletSettings: Codable {
     /// encoded at THIS blob's top level (`workoutInjuryAreas` + `unknownWorkoutInjuryAreaTokens`),
     /// not inside the nested profile, so an older build's key parking keeps it through a re-save.
     public var workoutProfile: WorkoutProfile = WorkoutProfile()
+    /// Where the user trains. Each location's "Weights I have" (``WorkoutLocation/weights``) is
+    /// encoded at THIS blob's top level as `workoutLocationWeights` (location id → entry, written only
+    /// when some location has weights), not inside the nested locations, so an older build's key
+    /// parking keeps it through a re-save.
     public var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
     public var activeWorkoutLocationID: UUID? = nil
     /// Times each catalog exercise has been completed from a suggested session — drives week-to-week
@@ -559,6 +563,11 @@ public nonisolated struct FernletSettings: Codable {
         workoutLocations = decodedLocations.isEmpty
             ? [WorkoutLocation.fullGym]
             : Array(decodedLocations.prefix(Self.maxWorkoutLocations))
+        // Each location's weights ride at the top level (see `workoutLocations`); read as raw JSON so
+        // a shape this build doesn't expect is skipped or kept, never thrown on.
+        WorkoutLocation.adoptWeights(
+            from: try container.decodeIfPresent(JSONValue.self, forKey: .workoutLocationWeights),
+            into: &workoutLocations)
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
         // R3: accumulates across coach-plan imports with no per-import total; the registry applies
@@ -661,7 +670,8 @@ public nonisolated struct FernletSettings: Codable {
         // `workoutInjuryAreas` / `unknownWorkoutInjuryAreaTokens` are the exception the other way: no
         // stored property of their own, they carry `workoutProfile`'s injury picker at the top level,
         // where an older build's key parking keeps them through a re-save. `workoutHiddenExercises` /
-        // `workoutExerciseAlternates` are the same kind: they carry `workoutExercisePreferences`.
+        // `workoutExerciseAlternates` are the same kind: they carry `workoutExercisePreferences`, and
+        // `workoutLocationWeights` carries each `workoutLocations` entry's weights.
         case bottleOz, hydrationTarget, showDeveloperNotes, connectionInspectorMode,
              unknownConnectionInspectorModeToken, companionAppearance, equippedItemIDsBySlot,
              localDesignerID, ownedDesignerIDs, knownDesignerNames, selectedGoal,
@@ -679,7 +689,7 @@ public nonisolated struct FernletSettings: Codable {
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
              workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
-             workoutLocations, activeWorkoutLocationID, workoutProgression,
+             workoutLocations, workoutLocationWeights, activeWorkoutLocationID, workoutProgression,
              customExercises, workoutHiddenExercises, workoutExerciseAlternates,
              workoutSessionLength, unknownWorkoutSessionLengthToken,
              workoutWarmUp, unknownWorkoutWarmUpToken, workoutCoolDown, unknownWorkoutCoolDownToken,
@@ -797,6 +807,11 @@ public nonisolated struct FernletSettings: Codable {
             try container.encode(workoutProfile.unknownInjuryAreaTokens, forKey: .unknownWorkoutInjuryAreaTokens)
         }
         try container.encode(workoutLocations, forKey: .workoutLocations)
+        // Written only when some location has weights, so a blob without any keeps its old shape.
+        let locationWeights = WorkoutLocation.weightsValue(for: workoutLocations)
+        if !locationWeights.isEmpty {
+            try container.encode(locationWeights, forKey: .workoutLocationWeights)
+        }
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
         try container.encode(workoutProgression, forKey: .workoutProgression)
         try container.encode(customExercises, forKey: .customExercises)

@@ -11,6 +11,9 @@
 // - Confidence sets how wide the prescribed range is: ±10 % low, ±5 % medium, one step at high.
 // - The next prescription follows the last result: completed → one more rep (or, at the top of the
 //   range, more weight and back to the bottom); tough or a small miss → repeat; a real miss → lighter.
+// - Weights land on what the location has (``WorkoutWeightInventory``) when it says, and a step that
+//   would raise the load by more than ``WorkoutLoadEngine/lightLoadGuardRatio`` — or a step that
+//   doesn't exist there — waits for reps first, then a set (WorkoutLoadEngine+Inventory.swift).
 //
 // Numbers the owner approved on 2026-10-19 live in the named constants below.
 
@@ -42,6 +45,12 @@ public nonisolated enum LoadChange: Equatable, Sendable {
     case holdForPain
     /// The lifter's equipment tops out: the same weight, more reps.
     case holdForEquipment
+    /// The next load is too big a jump, or there is none here (``LiftPlan/cap``): one more rep at the
+    /// same weight first, up to ``WorkoutLoadEngine/equipmentExtraReps`` past the range.
+    case repsFirst
+    /// Past the range by the extra reps: one more set at the same weight before the jump (or, with
+    /// nothing heavier here, instead of it).
+    case setFirst
 }
 
 /// A rep target or range read from a prescription's reps text ("5", "8-12").
@@ -96,6 +105,10 @@ public nonisolated struct LiftPlan: Equatable, Sendable {
     public var unit: LoadUnit
     /// The range was re-centered on the lifter's own recent picks.
     public var recentered: Bool = false
+    /// Why the weight waits for reps (``LoadChange/repsFirst``, ``LoadChange/setFirst``); nil otherwise.
+    public var cap: LoadCap? = nil
+    /// The gear the lift is loaded with, for the note's noun ("your next dumbbell").
+    public var equipment: Equipment? = nil
 }
 
 /// The deterministic rules of load-aware progression: estimate, confidence, range, next step.
@@ -269,11 +282,16 @@ public nonisolated enum WorkoutLoadEngine {
     }
 
     /// The range around a suggested weight: ±10 % at low confidence, ±5 % at medium, one step up at
-    /// high — always on the equipment's steps and never below one step.
+    /// high — always on the equipment's steps and never below one step. With a `ladder` (the
+    /// location's weights) every value is a load the location has instead
+    /// (``rangeOnLoads(_:suggested:confidence:step:unit:)``).
     public static func prescription(
-        suggested: Double, confidence: EstimateConfidence, step: Double, unit: LoadUnit
+        suggested: Double, confidence: EstimateConfidence, step: Double, unit: LoadUnit, ladder: LoadLadder? = nil
     ) -> WeightPrescription? {
         guard step > 0, suggested > 0, suggested.isFinite else { return nil }
+        if let ladder {
+            return rangeOnLoads(ladder, suggested: suggested, confidence: confidence, step: step, unit: unit)
+        }
         let center = max(step, rounded(suggested, toStep: step))
         guard confidence != .high else {
             return WeightPrescription(low: center, high: center + step, suggested: center,
@@ -301,10 +319,12 @@ extension WorkoutLoadEngine {
         public var isLowerBody: Bool
         public var defaultUnit: LoadUnit
         public var today: Date
+        /// The location's weights; nil or empty moves by the equipment's usual steps.
+        public var inventory: WorkoutWeightInventory?
 
         public init(
             scheme: RepScheme, baseSets: Int, exposures: [LiftExposure], equipment: Equipment?,
-            isLowerBody: Bool, defaultUnit: LoadUnit, today: Date
+            isLowerBody: Bool, defaultUnit: LoadUnit, today: Date, inventory: WorkoutWeightInventory? = nil
         ) {
             self.scheme = scheme
             self.baseSets = baseSets
@@ -313,6 +333,7 @@ extension WorkoutLoadEngine {
             self.isLowerBody = isLowerBody
             self.defaultUnit = defaultUnit
             self.today = today
+            self.inventory = inventory
         }
     }
 
@@ -323,79 +344,113 @@ extension WorkoutLoadEngine {
         case down(Double)
     }
 
-    /// The decision ``outcome(of:history:scheme:loadable:)`` reaches before any weight math.
+    /// The decision ``outcome(of:history:scheme:loadable:cap:)`` reaches before any weight math.
     struct Outcome: Equatable {
         var reps: Int
         var setsDelta: Int
         var change: LoadChange
         var move: WeightMove
+        /// Set when the weight waits for reps because the next load is too big or missing.
+        var cap: LoadCap? = nil
     }
 
     /// The next session of one lift.
+    ///
+    /// With weights set at the location (``LiftInputs/inventory``), the last weight is first placed
+    /// on what the location can load and every move lands on a load it has (``LoadLadder``). With or
+    /// without them, a step up that the light-load guard calls too big — or one that doesn't exist —
+    /// becomes reps first, then a set (``loadCap(from:step:lowerBody:ladder:)``).
     public static func plan(_ inputs: LiftInputs) -> LiftPlan {
         let history = inputs.exposures.filter { $0.calibration != .ramp }
         let unit = history.last(where: { $0.unit != nil })?.unit ?? inputs.defaultUnit
         let step = inputs.equipment.flatMap { Self.step(for: $0, unit: unit) }
+        let ladder = step == nil ? nil : inputs.equipment.flatMap { inputs.inventory?.ladder(for: $0, in: unit) }
         let estimate = Self.estimate(from: history, unit: unit, today: inputs.today)
         let ask = askReasonOnOverride(history, today: inputs.today)
         guard let anchor = history.last(where: { !$0.easierSession && $0.calibration == nil }) else {
-            return firstPlan(inputs, estimate: estimate, step: step, unit: unit, ask: ask)
+            return firstPlan(inputs, estimate: estimate, step: step, ladder: ladder, unit: unit, ask: ask)
         }
-        var outcome: Outcome
-        if days(from: anchor.date, to: inputs.today) > breakDays {
-            let reps = inputs.scheme.contains(anchor.targetReps) ? anchor.targetReps : inputs.scheme.low
-            outcome = Outcome(reps: reps, setsDelta: 0, change: .afterBreak, move: .down(afterBreakDecrease))
-        } else {
-            outcome = self.outcome(of: anchor, history: history, scheme: inputs.scheme, loadable: step != nil)
+        let base = anchor.weight.map { placed(unit.converted($0, from: anchor.unit ?? unit), on: ladder) }
+        let cap = step.flatMap { step in
+            base.flatMap { loadCap(from: $0, step: step, lowerBody: inputs.isLowerBody, ladder: ladder) }
         }
-        var weight = anchor.weight.map { unit.converted($0, from: anchor.unit ?? unit) }
-        if let step, let base = weight { weight = moved(base, by: outcome.move, step: step, lowerBody: inputs.isLowerBody) }
-        let rebaseline = recalibrationReason(anchor: anchor, history: history, scheme: inputs.scheme)
-        if rebaseline, let estimate, let step {
+        var outcome = anchorOutcome(anchor, history: history, inputs: inputs, loadable: step != nil, cap: cap)
+        var weight = base
+        if let step, let base {
+            weight = movedOnto(base, by: outcome.move, step: step, lowerBody: inputs.isLowerBody, ladder: ladder)
+        }
+        let ceiling = cap == nil ? inputs.scheme.high : inputs.scheme.high + equipmentExtraReps
+        if recalibrationReason(anchor: anchor, history: history, scheme: inputs.scheme, ceiling: ceiling),
+           let estimate, let step {
             outcome.reps = inputs.scheme.contains(outcome.reps) ? outcome.reps : inputs.scheme.low
             weight = workingWeight(oneRepMax: estimate.oneRepMax, reps: outcome.reps, step: step)
             outcome.change = .recalibrated
+            if outcome.cap != nil { outcome.setsDelta = min(0, outcome.setsDelta) }
+            outcome.cap = nil
         }
         let confidence = estimate?.confidence ?? (weight == nil ? .none : .low)
         let prescription = step.flatMap { step in
-            weight.flatMap { Self.prescription(suggested: $0, confidence: confidence, step: step, unit: unit) }
+            weight.flatMap { Self.prescription(suggested: $0, confidence: confidence, step: step, unit: unit, ladder: ladder) }
         }
         return LiftPlan(
             sets: max(1, inputs.baseSets + outcome.setsDelta), reps: outcome.reps, prescription: prescription,
             change: outcome.change, askReasonOnOverride: ask, previousWeight: anchor.weight, unit: unit,
-            recentered: estimate?.recentered ?? false
+            recentered: estimate?.recentered ?? false, cap: outcome.cap, equipment: inputs.equipment
         )
+    }
+
+    /// The anchor's decision: a little lighter after a long break, else what its result says.
+    static func anchorOutcome(
+        _ anchor: LiftExposure, history: [LiftExposure], inputs: LiftInputs, loadable: Bool, cap: LoadCap?
+    ) -> Outcome {
+        guard days(from: anchor.date, to: inputs.today) <= breakDays else {
+            let reps = inputs.scheme.contains(anchor.targetReps) ? anchor.targetReps : inputs.scheme.low
+            return Outcome(reps: reps, setsDelta: 0, change: .afterBreak, move: .down(afterBreakDecrease))
+        }
+        return outcome(of: anchor, history: history, scheme: inputs.scheme, loadable: loadable, cap: cap)
     }
 
     /// A lift with no regular session yet: the bottom of the range, and a suggestion only when a
     /// calibration already gave an estimate.
     static func firstPlan(
-        _ inputs: LiftInputs, estimate: LoadEstimate?, step: Double?, unit: LoadUnit, ask: Bool
+        _ inputs: LiftInputs, estimate: LoadEstimate?, step: Double?, ladder: LoadLadder?, unit: LoadUnit, ask: Bool
     ) -> LiftPlan {
         let reps = inputs.scheme.low
         var prescription: WeightPrescription?
         if let estimate, let step {
             let weight = workingWeight(oneRepMax: estimate.oneRepMax, reps: reps, step: step)
-            prescription = self.prescription(suggested: weight, confidence: estimate.confidence, step: step, unit: unit)
+            prescription = self.prescription(
+                suggested: weight, confidence: estimate.confidence, step: step, unit: unit, ladder: ladder
+            )
         }
         return LiftPlan(
             sets: max(1, inputs.baseSets), reps: reps, prescription: prescription,
             change: prescription == nil ? .firstTime : .recalibrated, askReasonOnOverride: ask,
-            previousWeight: nil, unit: unit
+            previousWeight: nil, unit: unit, equipment: inputs.equipment
         )
     }
 
     /// Rebaseline from the estimate when the newest session was a calibration, or the goal's reps
-    /// moved out from under the anchor (5s after a block of 8–12s).
-    static func recalibrationReason(anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme) -> Bool {
+    /// moved out from under the anchor (5s after a block of 8–12s). A lift working through its extra
+    /// reps (`ceiling` above the range, while the next load waits) has not moved out from under it.
+    static func recalibrationReason(
+        anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, ceiling: Int? = nil
+    ) -> Bool {
         guard let newest = history.last else { return false }
         if newest.calibration == .test || newest.calibration == .attempt { return true }
-        return !scheme.contains(anchor.targetReps)
+        let top = max(scheme.high, ceiling ?? scheme.high)
+        return !(scheme.low...top).contains(anchor.targetReps)
     }
 
-    /// The rep and load decision from the anchor session's result.
-    static func outcome(of anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, loadable: Bool) -> Outcome {
-        let target = scheme.contains(anchor.targetReps) ? anchor.targetReps : scheme.low
+    /// The rep and load decision from the anchor session's result. With a `cap` (the next load is
+    /// too big a jump or missing), targets up to ``equipmentExtraReps`` past the range still count,
+    /// and a completed session at the top climbs reps, then a set, before the load moves
+    /// (``cappedOutcome(target:scheme:cap:anchor:history:)``).
+    static func outcome(
+        of anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, loadable: Bool, cap: LoadCap? = nil
+    ) -> Outcome {
+        let ceiling = cap == nil ? scheme.high : scheme.high + equipmentExtraReps
+        let target = (scheme.low...ceiling).contains(anchor.targetReps) ? anchor.targetReps : scheme.low
         if anchor.overrideReason == .pain {
             return Outcome(reps: target, setsDelta: 0, change: .holdForPain, move: .hold)
         }
@@ -412,6 +467,9 @@ extension WorkoutLoadEngine {
         if anchor.effort == .tough { return Outcome(reps: target, setsDelta: 0, change: .same, move: .hold) }
         if anchor.overrideReason == .equipment || !loadable {
             return repsOnlyOutcome(target: target, scheme: scheme, equipmentCapped: anchor.overrideReason == .equipment)
+        }
+        if let cap, target >= scheme.high {
+            return cappedOutcome(target: target, scheme: scheme, cap: cap, anchor: anchor, history: history)
         }
         if scheme.isRange && target < scheme.high {
             return Outcome(reps: target + 1, setsDelta: 0, change: .moreReps, move: .hold)

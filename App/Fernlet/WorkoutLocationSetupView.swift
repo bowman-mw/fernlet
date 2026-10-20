@@ -20,6 +20,10 @@ import FernletUI
 /// "Train here") — never the list rows' staged `activeID`, so deleting or editing an unrelated
 /// location can't smuggle a staged switch past Cancel.
 ///
+/// The equipment step ends with "Weights I have" (``WorkoutWeightInventorySection``) for a space with
+/// dumbbells, kettlebells or a barbell: the loads the planner may suggest there. It edits the same
+/// draft and commits with the same exits as the equipment grid.
+///
 /// Adding a location never changes which one is ACTIVE: tapping a preset used to append it *and*
 /// make it active, so merely peeking at "Home setup" and backing out re-pointed every future
 /// suggestion at a gym the user doesn't train in — with no Save tapped and nothing said. The switch
@@ -330,6 +334,13 @@ struct WorkoutLocationSetupView: View {
                     ForEach(EquipmentCategory.allCases) { category in
                         equipmentCategorySection(category)
                     }
+                    // "Weights I have": optional, below the grid, only for free-weight spaces.
+                    if let editing = editingLocation, WorkoutWeightInventorySection.applies(to: editing) {
+                        WorkoutWeightInventorySection(
+                            weights: editingWeightsBinding, capabilities: editing.capabilities,
+                            userUnit: WorkoutLoadContextBuilder.defaultUnit(for: .current)
+                        )
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 10)
@@ -536,6 +547,20 @@ struct WorkoutLocationSetupView: View {
             set: { newValue in
                 guard let index = editingIndex, locations.indices.contains(index) else { return }
                 locations[index].name = newValue
+            }
+        )
+    }
+
+    /// Writes straight into the edited location's weights, guarded like ``editingNameBinding``. Setting
+    /// them here also drops an entry a newer build wrote that this one couldn't read: the last editor
+    /// wins, as with every parked value.
+    private var editingWeightsBinding: Binding<WorkoutWeightInventory> {
+        Binding(
+            get: { editingLocation?.weights ?? WorkoutWeightInventory() },
+            set: { newValue in
+                guard let index = editingIndex, locations.indices.contains(index) else { return }
+                locations[index].weights = newValue
+                locations[index].unreadableWeights = nil
             }
         )
     }

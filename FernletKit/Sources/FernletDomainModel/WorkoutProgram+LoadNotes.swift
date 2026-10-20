@@ -50,8 +50,58 @@ extension WorkoutProgram {
         case .holdForPain:
             return "\(name): holding steady after it hurt last time. If it still hurts, try a different exercise or check with a professional."
         case .holdForEquipment: return "\(name): same weight, one more rep — working with the equipment you have."
+        case .repsFirst: return plan.cap.map { repsFirstLine(name, plan: plan, cap: $0) }
+        case .setFirst: return plan.cap.map { setFirstLine(name, plan: plan, cap: $0) }
         case .same, .firstTime: return nil
         }
+    }
+
+    /// Why the weight waits, with today's reps: "Dumbbell press: your next dumbbell is 25 lb, so add
+    /// reps first — 13 today."
+    static func repsFirstLine(_ name: String, plan: LiftPlan, cap: LoadCap) -> String {
+        switch cap {
+        case .bigStep(let from, let to, let owned):
+            let next = loadText(to, plan.unit)
+            guard owned else {
+                return "\(name): \(next) would be a big jump from \(loadText(from, plan.unit)), so add reps first — \(plan.reps) today."
+            }
+            return "\(name): \(nextLoadPhrase(next, equipment: plan.equipment)), so add reps first — \(plan.reps) today."
+        case .heaviest(let top):
+            return "\(name): \(heaviestPhrase(loadText(top, plan.unit), equipment: plan.equipment)), so more reps instead — \(plan.reps) today."
+        }
+    }
+
+    /// The extra set: "Dumbbell press: one more set today, then up to 25 lb."
+    static func setFirstLine(_ name: String, plan: LiftPlan, cap: LoadCap) -> String {
+        switch cap {
+        case .bigStep(_, let to, _):
+            return "\(name): one more set today, then up to \(loadText(to, plan.unit))."
+        case .heaviest(let top):
+            return "\(name): one more set today — \(heaviestPhrase(loadText(top, plan.unit), equipment: plan.equipment))."
+        }
+    }
+
+    /// "your next dumbbell is 25 lb", by the gear the lift is loaded with.
+    static func nextLoadPhrase(_ load: String, equipment: Equipment?) -> String {
+        switch equipment {
+        case .dumbbell: "your next dumbbell is \(load)"
+        case .kettlebell: "your next kettlebell is \(load)"
+        default: "the next load your bar and plates make is \(load)"
+        }
+    }
+
+    /// "25 lb is your heaviest dumbbell", by the gear the lift is loaded with.
+    static func heaviestPhrase(_ load: String, equipment: Equipment?) -> String {
+        switch equipment {
+        case .dumbbell: "\(load) is your heaviest dumbbell"
+        case .kettlebell: "\(load) is your heaviest kettlebell"
+        default: "\(load) is the most your bar and plates make"
+        }
+    }
+
+    /// "25 lb": a load as the notes print it.
+    static func loadText(_ weight: Double, _ unit: LoadUnit) -> String {
+        "\(WorkoutLoadEngine.weightText(weight)) \(unit.rawValue)"
     }
 
     /// The plateau story for the session's first stalled lift: that it's normal, the rest check

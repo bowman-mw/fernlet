@@ -127,7 +127,53 @@ final class WorkoutLocationUITests: XCTestCase {
                       "the rename did not persist across a swipe-dismiss straight from the equipment step")
     }
 
+    /// "Weights I have" commits with the equipment step: a dumbbell preset chosen there is still
+    /// selected — with its five pairs — after Save location and a reopen. Identifiers, not labels, so
+    /// it holds in pounds or kilograms (both home sets are five pairs).
+    func testDumbbellPresetSticksAfterReopeningTheSheet() throws {
+        let app = UXTestApp.launch()
+        _ = try openLocationSheet(in: app)
+        try openEquipmentStepOfFirstLocation(in: app)
+
+        let preset = app.buttons["workout.location.weights.dumbbells.homeSet"].firstMatch
+        XCTAssertTrue(scrollUntilHittable(preset, in: app), "no dumbbell presets under the equipment grid")
+        preset.tap()
+        let pairs = app.buttons.matching(identifier: "workout.location.weights.dumbbell")
+        XCTAssertTrue(waitForCount(pairs, toReach: 5), "the home set did not list five pairs")
+
+        let save = app.buttons["Save location"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "no save bar on the equipment step")
+        save.tap()
+
+        _ = try openLocationSheet(in: app)
+        try openEquipmentStepOfFirstLocation(in: app)
+        let reopened = app.buttons["workout.location.weights.dumbbells.homeSet"].firstMatch
+        XCTAssertTrue(scrollUntilHittable(reopened, in: app), "the presets are gone after reopening")
+        XCTAssertTrue(reopened.isSelected, "the saved home set is not shown as chosen")
+        XCTAssertTrue(waitForCount(app.buttons.matching(identifier: "workout.location.weights.dumbbell"), toReach: 5),
+                      "the five pairs did not survive Save location and a reopen")
+    }
+
     // MARK: - Helpers
+
+    /// The pencil on the first saved space (the demo seed's full gym, which has every free weight),
+    /// landing on its equipment step.
+    private func openEquipmentStepOfFirstLocation(in app: XCUIApplication) throws {
+        let edit = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Edit")).firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "no edit affordance")
+        edit.tap()
+        XCTAssertTrue(app.staticTexts["What's available?"].waitForExistence(timeout: 5), "the equipment step did not open")
+    }
+
+    /// Scrolls the equipment step until `element` can be tapped; bounded, false if it never can.
+    private func scrollUntilHittable(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        let list = app.scrollViews.firstMatch
+        for _ in 0..<12 {
+            if element.exists && element.isHittable { return true }
+            list.swipeUp()
+        }
+        return element.exists && element.isHittable
+    }
 
     /// Walks Move → the location setup sheet. Driven by a11y id, never by tapping blind: the Space
     /// segment's LABEL is the location's name, which this suite renames.
