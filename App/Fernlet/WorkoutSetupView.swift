@@ -20,6 +20,8 @@ struct WorkoutSetupSheet: View {
     @State private var interestsText: String
     @State private var injuryDraft: WorkoutInjuryDraft
     @State private var selectedSplitID: String?
+    /// Session length and the stretch switches (``WorkoutSessionOptions``), saved with the rest.
+    @State private var sessionOptions: WorkoutSessionOptions
     @State private var showingLocations = false
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
@@ -33,6 +35,7 @@ struct WorkoutSetupSheet: View {
     private let initialProfile: WorkoutProfile
     private let initialInterestsText: String
     private let initialInjuryDraft: WorkoutInjuryDraft
+    private let initialSessionOptions: WorkoutSessionOptions
 
     init(store: FernletStore) {
         self.store = store
@@ -53,6 +56,8 @@ struct WorkoutSetupSheet: View {
         self.initialProfile = settings.workoutProfile
         self.initialInterestsText = seedInterests
         self.initialInjuryDraft = draft
+        _sessionOptions = State(initialValue: settings.workoutSessionOptions)
+        self.initialSessionOptions = settings.workoutSessionOptions
     }
 
     /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
@@ -62,6 +67,7 @@ struct WorkoutSetupSheet: View {
             || interestsText != initialInterestsText
             || injuryDraft != initialInjuryDraft
             || selectedSplitID != originalSelectedSplitID
+            || sessionOptions != initialSessionOptions
     }
 
     var body: some View {
@@ -71,6 +77,7 @@ struct WorkoutSetupSheet: View {
                     splitSection
                     locationsEntry
                     frequencySection
+                    WorkoutSessionSection(options: $sessionOptions)
                     sportInterestsSection
                     WorkoutInjurySection(draft: $injuryDraft, notes: $profile.injuryNotes)
                 }
@@ -268,6 +275,7 @@ struct WorkoutSetupSheet: View {
 
         store.setWorkoutProfile(updated)
         store.setSelectedSplit(selectedSplitID)
+        store.setWorkoutSessionOptions(sessionOptions)
         dismiss()
     }
 }

@@ -4556,6 +4556,11 @@ final class FernletStore {
         diary.setSelectedSplit(id)
     }
 
+    /// Saves Workout setup's session length and stretch switches (``WorkoutSessionOptions``).
+    func setWorkoutSessionOptions(_ options: WorkoutSessionOptions) {
+        diary.setWorkoutSessionOptions(options)
+    }
+
     /// How consistently the user has trained over the last 4 weeks — a recommendation input.
     func workoutConsistency() -> WorkoutConsistency {
         workoutPlanningService.workoutConsistency()
@@ -4579,11 +4584,15 @@ final class FernletStore {
     /// the plan is ``WorkoutPlanningService/restDayPlan(locationName:)``, one gentle un-guided
     /// movement line the user can take or leave, so neither the preview nor a committed plan can put
     /// strength work in front of someone who said they are unwell.
-    func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
+    ///
+    /// `sessionLength` is the plan sheet's one-day length; nil uses Workout setup's.
+    func workoutDayPlan(
+        intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
+    ) -> WorkoutProgram.DayPlan {
         if needsRestToday {
             return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name)
         }
-        return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context)
+        return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
     }
 
     /// Records that catalog exercises were completed, advancing their week-to-week progression.
@@ -4686,11 +4695,14 @@ final class FernletStore {
     /// Commits today's plan (generating it once if today has none yet) and returns it — used when the
     /// user actually starts, from the card or from the Suggest sheet's "Suggest" button. A same-day
     /// call reuses the committed instance so its session IDs and any completions survive; only a new
-    /// day (re)generates and clears the completed-session set.
+    /// day (re)generates and clears the completed-session set. `sessionLength` is the Suggest sheet's
+    /// one-day length (nil: Workout setup's); like `context`, it shapes only the plan it builds.
     @discardableResult
-    func commitTodaysGuidedWorkoutPlan(intensity: WorkoutIntensity, context: String = "") -> WorkoutProgram.DayPlan {
+    func commitTodaysGuidedWorkoutPlan(
+        intensity: WorkoutIntensity, context: String = "", sessionLength: WorkoutSessionLength? = nil
+    ) -> WorkoutProgram.DayPlan {
         if let plan = currentGuidedWorkoutPlan { return plan }
-        let plan = workoutDayPlan(intensity: intensity, context: context)
+        let plan = workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
         guidedPlanStorage = plan
         guidedPlanDayKey = todayKey
         committedGuidedIntensityStorage = intensity

@@ -316,11 +316,13 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// - every remaining set of a catalog exercise costs `workSecondsPerSet` (default 45s — a
     ///   typical 8–12-rep working set), plus that exercise's baked `restSeconds` between its own
     ///   sets (`sets - 1` rests per exercise; an in-flight rest counts as one whole rest);
-    /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs
-    ///   `descriptorSeconds` (default 5 min);
+    /// - a descriptor line (`sets == 0` — cardio/mobility walked as one step) costs the minutes it
+    ///   names ("Conditioning intervals - 12 min"), else `descriptorSeconds` (default 5 min);
     /// - the working phase counts the current set as still ahead; the resting phase counts the
     ///   upcoming set (the counter already advanced when the rest began).
     ///
+    /// At the start of a run this is the plan card's estimate to the second (the domain's
+    /// `WorkoutSessionTime`, which a session-length budget fits by; pinned by a test).
     /// Pure over the value's own fields — no clock — so it stays deterministic and testable.
     /// Bounded: one pass over `exercises` (capped by the plan-session exercise limit).
     func estimatedSecondsRemaining(workSecondsPerSet: Int = 45, descriptorSeconds: Int = 300) -> Int {
@@ -328,7 +330,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         var total = 0
         for (index, exercise) in exercises.enumerated() where index >= exerciseIndex {
             if exercise.sets < 1 {
-                total += descriptorSeconds
+                total += Self.descriptorSeconds(named: exercise.name, fallback: descriptorSeconds)
                 continue
             }
             let perSet = exercise.holdSeconds.map { $0 + Self.holdLeadInSeconds } ?? workSecondsPerSet
@@ -341,6 +343,22 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             total += setsAhead * perSet + restsAhead * max(0, exercise.restSeconds)
         }
         return total
+    }
+
+    /// A descriptor step's seconds: the minutes its trailing clause names ("Steady cardio - 20 min"
+    /// → 1,200), else `fallback`. The rule of the domain's `WorkoutProgram.descriptorMinutes(in:)` —
+    /// the first of " - ", " – ", " — " splits, and the clause must be a number then "min" — spelled
+    /// here because this shared file cannot import the domain (a test pins the two equal).
+    nonisolated static func descriptorSeconds(named name: String, fallback: Int) -> Int {
+        for separator in [" - ", " – ", " — "] {
+            guard let range = name.range(of: separator) else { continue }
+            let clause = name[range.upperBound...].trimmingCharacters(in: .whitespaces)
+            let digits = clause.prefix(while: \.isNumber)
+            let unit = clause.dropFirst(digits.count).trimmingCharacters(in: .whitespaces).lowercased()
+            guard let minutes = Int(digits), minutes > 0, minutes <= 600, unit.hasPrefix("min") else { return fallback }
+            return minutes * 60
+        }
+        return fallback
     }
 
     // MARK: Transitions (pure — mirror the old WorkoutSessionRunner state machine)

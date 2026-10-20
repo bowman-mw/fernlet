@@ -249,6 +249,25 @@ public nonisolated struct FernletSettings: Codable {
     /// living in the synced settings blob means it reaches the user's other devices and is cleared
     /// by a settings wipe like every other preference.
     public var customExercises: [ExerciseTarget] = []
+    /// How long a session may run (``WorkoutSessionLength``): the planner fits each session into it
+    /// (``WorkoutSessionBudget``). `.noLimit`, the default, plans exactly as before.
+    public var workoutSessionLength: WorkoutSessionLength = .noLimit {
+        didSet { unknownWorkoutSessionLengthToken = nil }
+    }
+    /// Unknown `workoutSessionLength` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutSessionLengthToken: String? = nil
+    /// How much of the warm-up stretch flow a lifting session walks (``WorkoutWarmUpMode``).
+    public var workoutWarmUp: WorkoutWarmUpMode = .full {
+        didSet { unknownWorkoutWarmUpToken = nil }
+    }
+    /// Unknown `workoutWarmUp` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutWarmUpToken: String? = nil
+    /// Whether a lifting session ends with its cool-down stretches (``WorkoutCoolDownMode``).
+    public var workoutCoolDown: WorkoutCoolDownMode = .full {
+        didSet { unknownWorkoutCoolDownToken = nil }
+    }
+    /// Unknown `workoutCoolDown` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutCoolDownToken: String? = nil
     /// Opt-in gate for the manual coach exchange — the clipboard export and the paste-a-plan-back
     /// import on the Move tab.
     ///
@@ -286,6 +305,11 @@ public nonisolated struct FernletSettings: Codable {
     /// - NOT a `CodingKeys` case, so it is never emitted under its own key and never mistaken for a
     ///   known key when the parking set is computed.
     public var parkedUnknownKeys: [String: JSONValue] = [:]
+
+    /// The three session preferences as the planner reads them (``WorkoutSessionOptions``).
+    public var workoutSessionOptions: WorkoutSessionOptions {
+        WorkoutSessionOptions(length: workoutSessionLength, warmUp: workoutWarmUp, coolDown: workoutCoolDown)
+    }
 
     /// The location whose equipment drives workout suggestions. Falls back to the first location
     /// (or a full gym) so this is always non-nil.
@@ -535,12 +559,34 @@ public nonisolated struct FernletSettings: Codable {
         // the same ceiling, so decode and registry can never disagree about what is retained.
         customExercises = Array((try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? [])
             .prefix(WorkoutExerciseCatalog.maxCustomExercises))
+        try decodeWorkoutSession(from: container)
         coachExchangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .coachExchangeEnabled) ?? false
         trainerExportIncludesGoal = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesGoal) ?? false
         trainerExportIncludesHydration = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesHydration) ?? false
         trainerExportIncludesSleep = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSleep) ?? false
         trainerExportIncludesSickness = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSickness) ?? false
         trainerExportIncludesWellbeing = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesWellbeing) ?? false
+    }
+
+    /// The session-length budget and the stretch switches: tolerant scalar enums with parked tokens
+    /// (``EnumDecodeCompat``). Each value is assigned before its token, because the value's `didSet`
+    /// clears the token.
+    private mutating func decodeWorkoutSession(from container: KeyedDecodingContainer<CodingKeys>) throws {
+        let lengthSplit = try container.decodeTolerantEnum(
+            WorkoutSessionLength.self, forKey: .workoutSessionLength,
+            parkedTokenKey: .unknownWorkoutSessionLengthToken, default: .noLimit)
+        workoutSessionLength = lengthSplit.value
+        unknownWorkoutSessionLengthToken = lengthSplit.parkedToken
+        let warmUpSplit = try container.decodeTolerantEnum(
+            WorkoutWarmUpMode.self, forKey: .workoutWarmUp,
+            parkedTokenKey: .unknownWorkoutWarmUpToken, default: .full)
+        workoutWarmUp = warmUpSplit.value
+        unknownWorkoutWarmUpToken = warmUpSplit.parkedToken
+        let coolDownSplit = try container.decodeTolerantEnum(
+            WorkoutCoolDownMode.self, forKey: .workoutCoolDown,
+            parkedTokenKey: .unknownWorkoutCoolDownToken, default: .full)
+        workoutCoolDown = coolDownSplit.value
+        unknownWorkoutCoolDownToken = coolDownSplit.parkedToken
     }
 
     /// Clamps `value` into `range` — the boundary guard for the scalar settings a corrupt or foreign
@@ -620,7 +666,9 @@ public nonisolated struct FernletSettings: Codable {
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
              workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
              workoutLocations, activeWorkoutLocationID, workoutProgression,
-             customExercises, coachExchangeEnabled, trainerExportIncludesGoal,
+             customExercises, workoutSessionLength, unknownWorkoutSessionLengthToken,
+             workoutWarmUp, unknownWorkoutWarmUpToken, workoutCoolDown, unknownWorkoutCoolDownToken,
+             coachExchangeEnabled, trainerExportIncludesGoal,
              trainerExportIncludesHydration, trainerExportIncludesSleep,
              trainerExportIncludesSickness, trainerExportIncludesWellbeing
     }
@@ -737,6 +785,12 @@ public nonisolated struct FernletSettings: Codable {
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
         try container.encode(workoutProgression, forKey: .workoutProgression)
         try container.encode(customExercises, forKey: .customExercises)
+        try container.encode(workoutSessionLength, forKey: .workoutSessionLength)
+        try container.encodeIfPresent(unknownWorkoutSessionLengthToken, forKey: .unknownWorkoutSessionLengthToken)
+        try container.encode(workoutWarmUp, forKey: .workoutWarmUp)
+        try container.encodeIfPresent(unknownWorkoutWarmUpToken, forKey: .unknownWorkoutWarmUpToken)
+        try container.encode(workoutCoolDown, forKey: .workoutCoolDown)
+        try container.encodeIfPresent(unknownWorkoutCoolDownToken, forKey: .unknownWorkoutCoolDownToken)
         try container.encode(coachExchangeEnabled, forKey: .coachExchangeEnabled)
         try container.encode(trainerExportIncludesGoal, forKey: .trainerExportIncludesGoal)
         try container.encode(trainerExportIncludesHydration, forKey: .trainerExportIncludesHydration)

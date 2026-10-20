@@ -520,12 +520,30 @@ overlap is the split's own order, which moving would only push back every pass �
 a set off each overlapping lift, saying why in the note. Recovery and mobility days, and the warm-up,
 activation and cool-down, are exempt.
 
+A session's length follows ``WorkoutSessionOptions`` (synced settings with frozen tokens and parked
+decoding): ``WorkoutWarmUpMode`` walks the owner's flow in full (exactly as written), short (about four
+minutes of it, a subset in its order chosen for the day's worked areas,
+``WorkoutSessionBlocks/shortWarmUpSeconds``) or not at all; ``WorkoutCoolDownMode`` keeps or drops the
+cool-down; and ``WorkoutSessionLength`` sets a 20, 30, 45 or 60-minute budget. ``WorkoutSessionTime``
+times a session by the guided runner's own rule — the plan card's estimate and the run's countdown start
+equal — and ``WorkoutSessionBudget`` fits each session into the budget in the owner's order: the short
+warm-up, cool-down stretches down to two, accessory work (the jumps, the accessory lifts from the last,
+the balance drill), accessory sets, then main-lift sets down to two. Main lifts are never dropped and
+nothing grows, so the injury limits and the guard's lighter sets hold; when even the shortest version is
+over, the note says how long it runs. A cardio session's descriptor minutes are capped instead.
+
 - ``WorkoutProfile``
 - ``BodyArea``
 - ``InjurySeverity``
 - ``InjuryLimits``
 - ``InjuryNoteMatcher``
 - ``WorkoutRecoveryGuard``
+- ``WorkoutSessionOptions``
+- ``WorkoutSessionLength``
+- ``WorkoutWarmUpMode``
+- ``WorkoutCoolDownMode``
+- ``WorkoutSessionTime``
+- ``WorkoutSessionBudget``
 - ``ExperienceLevel``
 - ``WorkoutLocation``
 - ``LocationTemplate``

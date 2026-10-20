@@ -1281,6 +1281,10 @@ public nonisolated enum WorkoutProgram {
     /// With `recent`, the 48-hour guard (``WorkoutRecoveryGuard``) may move to another split day or
     /// lighten the lifts whose primary muscles worked hard inside its window, and says so in the
     /// first session's note. Without it the rotation's day is planned as it is.
+    ///
+    /// `options` shape each session's length (``WorkoutSessionOptions``): the warm-up flow in full,
+    /// short or off, the cool-down on or off, and a time budget each session is fitted into
+    /// (``WorkoutSessionBudget``). The default plans exactly as before.
     public static func dayPlan(
         goal: GoalType,
         intensity: WorkoutIntensity,
@@ -1292,6 +1296,7 @@ public nonisolated enum WorkoutProgram {
         progression: [String: Int] = [:],
         load: WorkoutLoadContext? = nil,
         recent: WorkoutRecoveryGuard.RecentTraining? = nil,
+        options: WorkoutSessionOptions = WorkoutSessionOptions(),
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> DayPlan {
         // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
@@ -1321,7 +1326,7 @@ public nonisolated enum WorkoutProgram {
             let inputs = SlotInputs(
                 goal: goal, intensity: intensity, style: style, feasible: feasible, biasTokens: biasTokens,
                 profile: profile, location: location, progression: progression, load: load,
-                limits: limits, recentHard: recent?.hardMuscles ?? []
+                limits: limits, recentHard: recent?.hardMuscles ?? [], options: options
             )
             let rendered = render(
                 session: session, inputs: inputs, context: context, used: &dayUsed,
@@ -1412,11 +1417,15 @@ public nonisolated enum WorkoutProgram {
 
         switch session.kind {
         case .cardio, .mobility:
-            let detail = session.conditioning ?? inputs.style.conditioningLabel
+            // The descriptor IS the session, so a time budget caps the minutes it names.
+            let capped = WorkoutSessionBudget.capped(session.conditioning ?? inputs.style.conditioningLabel,
+                                                     length: inputs.options.length)
+            let detail = capped.text
             let exercises = [PrescribedExercise(name: detail, sets: 0, reps: "", role: .accessory, fromCatalog: false)]
             let suggestion = WorkoutSuggestion(
                 name: name, exercises: detail,
-                notes: notes(inputs: inputs, context: context, dropped: [], includeContext: !isMultiSession, progressNotes: [])
+                notes: notes(inputs: inputs, context: context, dropped: [], includeContext: !isMultiSession,
+                             progressNotes: capped.note.map { [$0] } ?? [])
             )
             return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: exercises, suggestion: suggestion), [])
 
@@ -1450,6 +1459,8 @@ public nonisolated enum WorkoutProgram {
         /// Primary muscles that got hard working sets inside the 48-hour window: a lifting pick
         /// working one of them gives up a set (``WorkoutRecoveryGuard``).
         var recentHard: Set<MuscleGroup> = []
+        /// The session's length: the stretch blocks it walks and the time budget it is fitted into.
+        var options = WorkoutSessionOptions()
     }
 
     /// One filled slot: the prescribed step, the catalog row behind it, the slot it fills, and the
@@ -1467,12 +1478,12 @@ public nonisolated enum WorkoutProgram {
     )
 
     /// A lifting session's movements in run order — warm-up, activation, lifting, cardio,
-    /// cool-down — plus the slots it dropped and what its note says about progression.
+    /// cool-down — plus the slots it dropped and what its note says about progression and time.
     ///
     /// The template's core slot moves into the activation block, ahead of the lifting, and is
-    /// prescribed light; a session without one gets a light core pick there anyway. With a load
-    /// context the lifting block runs through the load pass (``applyLoad(_:inputs:load:used:calibrationOpen:)``).
-    /// The cool-down stretches the muscles the lifting picks actually worked.
+    /// prescribed light; a session without one gets a light core pick there anyway. The lifting
+    /// block is ``liftingBlock(_:inputs:used:dropped:calibrationOpen:)``; the stretch blocks and the
+    /// time budget are ``sessionBlocks(activation:lifting:cardio:mainLabels:inputs:)``.
     private static func buildBlocks(
         session: WorkoutSessionTemplate, inputs: SlotInputs, used: inout Set<String>, calibrationOpen: inout Bool
     ) -> (exercises: [PrescribedExercise], dropped: [String], progressNotes: [String]) {
@@ -1482,7 +1493,7 @@ public nonisolated enum WorkoutProgram {
         var dropped: [String] = []
         let core = fill(coreSlots.isEmpty ? [activationCoreSlot] : coreSlots, block: .activation,
                         inputs: inputs, used: &used, dropped: &dropped, reportDrops: !coreSlots.isEmpty)
-        let lifting = fill(liftSlots, block: .lifting, inputs: inputs, used: &used, dropped: &dropped, reportDrops: true)
+        var lifting = liftingBlock(liftSlots, inputs: inputs, used: &used, dropped: &dropped, calibrationOpen: &calibrationOpen)
         let legPatterns: Set<MovementPattern> = [.squat, .hinge, .lunge]
         let trainsLegs = liftSlots.contains { $0.movement.map(legPatterns.contains) ?? false }
         let activation = core.map(\.exercise) + WorkoutSessionBlocks.balanceAndJumps(
@@ -1492,25 +1503,81 @@ public nonisolated enum WorkoutProgram {
         var cardio: [PrescribedExercise] = []
         if session.kind == .sport { cardio.append(descriptorStep(inputs.style.conditioningLabel)) }
         if let extra = session.conditioning { cardio.append(descriptorStep(extra)) }
-        var liftingSteps = lifting.map(\.exercise)
-        var liftingTargets = lifting.map(\.target)
-        var progressNotes = ladderNote(lifting, style: inputs.style)
+        if lifting.steps.isEmpty && cardio.isEmpty {
+            lifting.steps = [descriptorStep("Full-body bodyweight circuit - 3 rounds", block: .lifting)]
+        }
+        let mainLabels = Set(liftSlots.filter { $0.role == .main }.map(\.label))
+        let fitted = sessionBlocks(activation: activation, lifting: lifting, cardio: cardio,
+                                   mainLabels: mainLabels, inputs: inputs)
+        return (fitted.exercises, dropped, (fitted.note.map { [$0] } ?? []) + lifting.notes)
+    }
+
+    /// A session's lifting block on its way to the plan: its steps, with the catalog rows and the
+    /// slots behind them (parallel, until the fallback circuit stands in for an empty block), and
+    /// what the session note says about progression.
+    struct LiftingBlock {
+        var steps: [PrescribedExercise]
+        var targets: [ExerciseTarget]
+        var slots: [WorkoutSlotSpec]
+        var notes: [String]
+    }
+
+    /// The lifting slots filled, through the load pass when there is one
+    /// (``applyLoad(_:inputs:load:used:calibrationOpen:)``), then the 48-hour guard's lighter sets.
+    static func liftingBlock(
+        _ slots: [WorkoutSlotSpec], inputs: SlotInputs, used: inout Set<String>, dropped: inout [String],
+        calibrationOpen: inout Bool
+    ) -> LiftingBlock {
+        let picks = fill(slots, block: .lifting, inputs: inputs, used: &used, dropped: &dropped, reportDrops: true)
+        var block = LiftingBlock(steps: picks.map(\.exercise), targets: picks.map(\.target),
+                                 slots: picks.map(\.slot), notes: ladderNote(picks, style: inputs.style))
         if let load = inputs.load {
-            let pass = applyLoad(lifting, inputs: inputs, load: load, used: &used, calibrationOpen: &calibrationOpen)
-            liftingSteps = pass.steps
-            liftingTargets = pass.targets
-            progressNotes = pass.notes
+            let pass = applyLoad(picks, inputs: inputs, load: load, used: &used, calibrationOpen: &calibrationOpen)
+            block = LiftingBlock(steps: pass.steps, targets: pass.targets, slots: pass.slots, notes: pass.notes)
         }
-        let recovery = lightened(liftingSteps, targets: liftingTargets, recentHard: inputs.recentHard)
-        liftingSteps = recovery.steps
-        if let note = recovery.note { progressNotes.insert(note, at: 0) }
-        if liftingSteps.isEmpty && cardio.isEmpty {
-            liftingSteps = [descriptorStep("Full-body bodyweight circuit - 3 rounds", block: .lifting)]
+        let recovery = lightened(block.steps, targets: block.targets, recentHard: inputs.recentHard)
+        block.steps = recovery.steps
+        if let note = recovery.note { block.notes.insert(note, at: 0) }
+        return block
+    }
+
+    /// The session in run order with the stretch blocks the options ask for — the owner's warm-up
+    /// flow in full, the short day-aware version (``WorkoutSessionBlocks/shortWarmUpSeconds``) or
+    /// none; the cool-down for the worked muscles or none — fitted to the time budget when one is
+    /// set (``WorkoutSessionBudget``), with the budget's note.
+    ///
+    /// A lifting step is a main lift when its slot is one of the template's main slots
+    /// (`mainLabels`), so a main lift eased to accessory work for a mild injury is still never
+    /// dropped. Only the lifting picks' muscles choose the stretches.
+    static func sessionBlocks(
+        activation: [PrescribedExercise], lifting: LiftingBlock, cardio: [PrescribedExercise],
+        mainLabels: Set<String>, inputs: SlotInputs
+    ) -> (exercises: [PrescribedExercise], note: String?) {
+        let options = inputs.options
+        let worked = lifting.targets.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.primaryMuscles) }
+        let budget = options.length.minutes
+        let wantsShort = options.warmUp == .short || (options.warmUp == .full && budget != nil)
+        let short = wantsShort ? WorkoutSessionBlocks.shortWarmUp(feasible: inputs.feasible, worked: worked) : []
+        let warmUp: [PrescribedExercise]
+        switch options.warmUp {
+        case .full: warmUp = WorkoutSessionBlocks.warmUp(feasible: inputs.feasible)
+        case .short: warmUp = short
+        case .off: warmUp = []
         }
-        let worked = liftingTargets.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.primaryMuscles) }
-        let exercises = WorkoutSessionBlocks.warmUp(feasible: inputs.feasible) + activation + liftingSteps
-            + cardio + WorkoutSessionBlocks.coolDown(worked: worked, feasible: inputs.feasible)
-        return (exercises, dropped, progressNotes)
+        let coolDown = options.coolDown == .off
+            ? [] : WorkoutSessionBlocks.coolDown(worked: worked, feasible: inputs.feasible)
+        let mainLift = lifting.steps.indices.map { index in
+            index < lifting.slots.count && mainLabels.contains(lifting.slots[index].label)
+        }
+        let blocks = WorkoutSessionBudget.Blocks(
+            warmUp: warmUp, activation: activation, lifting: lifting.steps, mainLift: mainLift,
+            cardio: cardio, coolDown: coolDown
+        )
+        guard let budget else { return (blocks.exercises, nil) }
+        let outcome = WorkoutSessionBudget.fit(
+            blocks, budgetMinutes: budget, goal: inputs.goal, shortWarmUp: options.warmUp == .full ? short : nil
+        )
+        return (outcome.blocks.exercises, outcome.note)
     }
 
     /// Fills slots in order with their best eligible pick, prescribing each for its block, and
