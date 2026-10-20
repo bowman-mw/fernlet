@@ -562,7 +562,9 @@ owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block)
 gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
 certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
 run's log folds segments back into their line, and a cardio or mobility session logs as the matching
-``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). Each segment's pace aims for a heart-rate zone (roadmap step 4b): ``HeartRateZones`` builds five zones from age by Tanaka (208 − 0.7 × age) and, when a trusted resting heart rate is given, by Karvonen's heart-rate reserve (percent of maximum otherwise), and maps easy and steady to zone 2 and hard to zone 4. Pure; the live reading is the app's.
+``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). A guided sport session logs the sport
+named in Workout setup when Fernlet models it (``WorkoutSportActivity``: pickleball, tennis, basketball…),
+else the generic type. Each segment's pace aims for a heart-rate zone (roadmap step 4b): ``HeartRateZones`` builds five zones from age by Tanaka (208 − 0.7 × age) and, when a trusted resting heart rate is given, by Karvonen's heart-rate reserve (percent of maximum otherwise), and maps easy and steady to zone 2 and hard to zone 4. Pure; the live reading is the app's.
 
 A ``PlannedWorkout`` — planned ahead by the person or put on the calendar by a coach's plan — runs in the
 guided runner as written (comparison report idea 17, 2026-10-20). The app reads each line with its own
@@ -623,6 +625,7 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``ExerciseSide``
 - ``WorkoutSessionBlocks``
 - ``WorkoutTimedSessions``
+- ``WorkoutSportActivity``
 - ``TimedDescriptor``
 - ``CardioSegment``
 - ``CardioPace``
