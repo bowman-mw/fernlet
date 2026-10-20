@@ -893,6 +893,29 @@
     "%lld tracked" : {
 
     },
+    "%lld warm-up sets" : {
+      "comment" : "Workout plan and the runner's Ready list: a lift's lighter warm-up sets, folded into one row, e.g. '3 warm-up sets'. Needs a plural variation per language; English also needs the one-set form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld warm-up set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld warm-up sets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld × %@" : {
       "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
       "localizations" : {
@@ -1683,6 +1706,17 @@
     "Bananas for Scale" : {
       "comment" : "Silly stat title"
     },
+    "Bar: %@" : {
+      "comment" : "Guided workout, Plates: the bar the plates go on, e.g. 'Bar: 45 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bar: %@"
+          }
+        }
+      }
+    },
     "Barbell" : {
       "comment" : "Location editor, Weights I have: heading of the bar and plates block"
     },
@@ -1838,6 +1872,17 @@
     },
     "Can't be done without" : {
 
+    },
+    "Can't load %@ exactly." : {
+      "comment" : "Guided workout, Plates: the chosen weight can't be made with the bar and plates, e.g. 'Can't load 137 lb exactly.' The closest weight follows.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Can't load %@ exactly."
+          }
+        }
+      }
     },
     "Can't look for nearby friends" : {
 
@@ -2007,6 +2052,17 @@
     },
     "Closed" : {
 
+    },
+    "Closest: %@" : {
+      "comment" : "Guided workout, Plates: the nearest weight the bar and plates can make, e.g. 'Closest: 135 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Closest: %@"
+          }
+        }
+      }
     },
     "Clothing" : {
 
@@ -2746,6 +2802,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Each set gets its own reps and weight."
+          }
+        }
+      }
+    },
+    "Each side: %@" : {
+      "comment" : "Guided workout, Plates: the plates on each side of the bar, heaviest first, e.g. 'Each side: 45, 10, and 2.5 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each side: %@"
           }
         }
       }
@@ -4215,6 +4282,17 @@
         }
       }
     },
+    "Just the bar" : {
+      "comment" : "Guided workout, Plates: the weight is the empty bar, with no plates on it.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Just the bar"
+          }
+        }
+      }
+    },
     "Keep Fernlet data out of device backups?" : {
 
     },
@@ -4344,6 +4422,17 @@
     },
     "Light and steady — just waking things up." : {
 
+    },
+    "Light on purpose — just getting ready." : {
+      "comment" : "Guided workout: the cue on a warm-up set (a lighter set before a lift's working sets or a strength check).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light on purpose — just getting ready."
+          }
+        }
+      }
     },
     "Lighter" : {
 
@@ -5697,6 +5786,17 @@
     "Plans your workouts around this space" : {
 
     },
+    "Plates" : {
+      "comment" : "Guided workout: the disclosure under a barbell lift's weight that shows the plates for each side.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plates"
+          }
+        }
+      }
+    },
     "Please try again." : {
 
     },
@@ -5886,9 +5986,6 @@
     },
     "Rack %@" : {
       "comment" : "Location editor, Weights I have: dumbbell preset, a full gym rack; the argument is the range, e.g. 5–100 lb"
-    },
-    "Ramp-up set — light, just getting ready." : {
-
     },
     "Range %@ · suggested %@" : {
       "localizations" : {
@@ -7132,6 +7229,28 @@
     "Skip warm-up" : {
 
     },
+    "Skip warm-up sets" : {
+      "comment" : "Guided workout: the quiet secondary on a warm-up set that skips the lift's remaining warm-up sets and goes to its first working set.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skip warm-up sets"
+          }
+        }
+      }
+    },
+    "Skip warm-ups" : {
+      "comment" : "Guided workout, Voice Control: a short name for 'Skip warm-up sets'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skip warm-ups"
+          }
+        }
+      }
+    },
     "Sleep" : {
 
     },
@@ -7158,6 +7277,17 @@
     },
     "Small tools for a heavy moment. Pick whatever feels kind — or nothing at all." : {
 
+    },
+    "Smooth, easy reps — save your effort for the working sets." : {
+      "comment" : "Guided workout: the gentle line under a warm-up set's card.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Smooth, easy reps — save your effort for the working sets."
+          }
+        }
+      }
     },
     "Snap a photo when you log a meal and it'll show up here as a polaroid." : {
 
@@ -7466,6 +7596,17 @@
     },
     "Suggest workout" : {
 
+    },
+    "Suggested %@" : {
+      "comment" : "Guided workout: the weight Fernlet suggests for a set with one fixed weight (a warm-up set or a strength check), e.g. 'Suggested 95 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested %@"
+          }
+        }
+      }
     },
     "Suggested weight %@" : {
       "comment" : "VoiceOver, Live Activity: the weight Fernlet suggests for this set, e.g. 'Suggested weight 105 pounds'.",
@@ -8148,6 +8289,17 @@
     "Two minutes per brushing." : {
       "comment" : "Silly stat: how brushing time is counted"
     },
+    "Two or three lighter sets that build up to the working weight on barbell and other big lifts. Never on a light day, or before a lift has a weight to build up to." : {
+      "comment" : "Workout setup: the note under 'Warm-up sets before heavy lifts'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two or three lighter sets that build up to the working weight on barbell and other big lifts. Never on a light day, or before a lift has a weight to build up to."
+          }
+        }
+      }
+    },
     "Type %@ to confirm" : {
 
     },
@@ -8302,6 +8454,50 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Warm-up %1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
+    },
+    "Warm-up set" : {
+      "comment" : "Guided workout, Up next list: the caption under a lighter warm-up set before a lift.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up set"
+          }
+        }
+      }
+    },
+    "Warm-up set %lld of %lld" : {
+      "comment" : "Guided workout: the label on a lighter warm-up set before a lift's working sets, e.g. 'Warm-up set 1 of 3'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up set %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Warm-up set %lld of %lld: %@." : {
+      "comment" : "Guided workout, VoiceOver and spoken cues: the run moved onto a lighter warm-up set, e.g. 'Warm-up set 1 of 3: Back squat.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up set %1$lld of %2$lld: %3$@."
+          }
+        }
+      }
+    },
+    "Warm-up sets before heavy lifts" : {
+      "comment" : "Workout setup: the switch that puts lighter warm-up sets before barbell and other big lifts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up sets before heavy lifts"
           }
         }
       }
@@ -8505,6 +8701,17 @@
     },
     "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
 
+    },
+    "Working sets: %@. Set 1 of %lld." : {
+      "comment" : "Guided workout, VoiceOver: the warm-up sets are done and the lift's working sets begin, e.g. 'Working sets: Back squat. Set 1 of 3.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Working sets: %1$@. Set 1 of %2$lld."
+          }
+        }
+      }
     },
     "Workout" : {
 

@@ -300,7 +300,8 @@ struct GuidedWorkoutSheet: View {
                 GuidedPreviousLiftFix(store: store, run: run)
                 GuidedLoadPanel(store: store, exercise: exercise, isLastSet: run.currentSet >= run.totalSetsForCurrent)
 
-                if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) {
+                // A warm-up set is one set: its card says "Warm-up set 1 of 3", so no strip of one.
+                if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) && !exercise.isRampSet {
                     GuidedSetStrip(total: run.totalSetsForCurrent, completed: run.setsCompletedForCurrent)
                     restPreview(run, exercise)
                 }
@@ -366,6 +367,12 @@ struct GuidedWorkoutSheet: View {
                     }
                 }
             }
+            if let warmUp = run.warmUpPosition {
+                GuidedWarmUpWords.setLabel(index: warmUp.index, count: warmUp.count)
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.mossInk)
+                    .accessibilityIdentifier("workout.guided.warmUpSet")
+            }
             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
                 side.text
                     .font(.fernlet(.body))
@@ -393,7 +400,10 @@ struct GuidedWorkoutSheet: View {
                 EmptyView()
             } else if exercise.fromCatalog && exercise.sets >= 1 {
                 HStack(spacing: 10) {
-                    metricPill(title: "Set", value: setCounterText(run))
+                    // A warm-up set's place is its label above; "Set 1 of 1" would say nothing.
+                    if !exercise.isRampSet {
+                        metricPill(title: "Set", value: setCounterText(run))
+                    }
                     if !exercise.reps.isEmpty {
                         metricPill(title: exercise.holdSeconds == nil ? "Reps" : "Hold", value: exercise.reps)
                     }
@@ -617,6 +627,8 @@ struct GuidedWorkoutSheet: View {
                 }
                 if run.canSkipBlock {
                     skipBlockButton(run)
+                } else if run.canSkipWarmUpSets {
+                    skipWarmUpSetsButton
                 } else {
                     skipToNextButton(run)
                 }
@@ -685,6 +697,24 @@ struct GuidedWorkoutSheet: View {
         .accessibilityIdentifier(skip.identifier)
     }
 
+    /// The quiet "Skip warm-up sets" secondary on a lift's warm-up set, in the skip-to-next slot:
+    /// straight to the lift's first working set, the skipped warm-ups left out of the log.
+    private var skipWarmUpSetsButton: some View {
+        Button {
+            announcingTransition(store.guidedSkipWarmUpSets, cue: .skip)
+        } label: {
+            Text("Skip warm-up sets",
+                 comment: "Guided workout: the quiet secondary on a warm-up set that skips the lift's remaining warm-up sets and goes to its first working set.")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+        }
+        .buttonStyle(.plain)
+        .fernletTapTarget()
+        // Voice Control: the drawn words, plus a short form.
+        .accessibilityInputLabels([Text("Skip warm-up sets"), Text("Skip warm-ups")])
+        .accessibilityIdentifier("workout.guided.skipWarmUpSets")
+    }
+
     /// Runs one of the bottom bar's transitions, plays its haptic or sound cue, and says what it
     /// changed.
     ///
@@ -745,8 +775,7 @@ struct GuidedWorkoutSheet: View {
         case GuidedWorkoutRunState.BlockToken.coolDown: Text("Breathe out and let it go.")
         case GuidedWorkoutRunState.BlockToken.cardio: GuidedSegmentWords.encouragement(run.currentExercise?.segment?.paceRaw)
         case GuidedWorkoutRunState.BlockToken.mobility: Text("Ease in and breathe. Stop anywhere that feels like enough.")
-        default:
-            run.currentSet == 1 ? Text("No rush getting started.") : Text("Steady — you've got this.")
+        default: GuidedWarmUpWords.liftingEncouragement(run)
         }
     }
 
@@ -931,6 +960,11 @@ private struct GuidedUpNextList: View {
                                     .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                             }
+                            if exercise.isRampSet {
+                                GuidedWarmUpWords.upNextCaption
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                            }
                             // A cardio segment's pace — every segment shares its line's name.
                             if let segment = exercise.segment {
                                 GuidedSegmentWords.caption(segment.paceRaw)
@@ -1050,8 +1084,12 @@ private struct GuidedReadyList: View {
             if !warmUp.isEmpty {
                 row(Text("Warm-up · \(warmUp.count) stretches · \(WorkoutSessionBlocks.minutes(of: warmUp)) min"))
             }
-            ForEach(exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
-                row(Text(verbatim: writtenLines[exercise.id] ?? exercise.displayLine))
+            // A lift's warm-up sets fold into one row ("Back squat · 3 warm-up sets"); a planned workout's
+            // own written line comes first, else the step's line in the user's language.
+            ForEach(GuidedPlanRow.rows(exercises.filter { $0.block != .warmUp && $0.block != .coolDown })) { item in
+                row(item.warmUpCount > 0
+                    ? GuidedWarmUpWords.summary(name: item.step.displayName, count: item.warmUpCount)
+                    : Text(verbatim: writtenLines[item.step.id] ?? item.step.displayLine))
             }
             if !coolDown.isEmpty {
                 row(Text("Cool-down · \(coolDown.count) stretches · \(WorkoutSessionBlocks.minutes(of: coolDown)) min"))

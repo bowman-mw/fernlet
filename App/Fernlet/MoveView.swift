@@ -2045,8 +2045,13 @@ struct WorkoutSuggestionSheet: View {
                 if !warmUp.isEmpty {
                     blockSummaryRow(Text("Warm-up · \(warmUp.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: warmUp))
                 }
-                ForEach(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
-                    sessionExerciseRow(exercise)
+                // A lift's warm-up sets fold into one row ("Back squat · 3 warm-up sets").
+                ForEach(GuidedPlanRow.rows(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown })) { row in
+                    if row.warmUpCount > 0 {
+                        GuidedWarmUpPlanRow(name: row.step.name, count: row.warmUpCount)
+                    } else {
+                        sessionExerciseRow(row.step)
+                    }
                 }
                 if !coolDown.isEmpty {
                     blockSummaryRow(Text("Cool-down · \(coolDown.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: coolDown))
@@ -2079,12 +2084,12 @@ struct WorkoutSuggestionSheet: View {
     }
 
     /// "5 exercises · ~45 min" under the session name. The count is the movements listed one per row
-    /// (activation, lifting, cardio); the time includes the warm-up and cool-down, by the same
-    /// estimate the planner fits a session-length budget with and the runner counts down from
-    /// (``WorkoutSessionTime``) — so a session set to 30 minutes says ~30 here and in the run.
+    /// (activation, lifting, cardio; a lift's warm-up sets are not one); the time includes the warm-up and
+    /// cool-down, by the same estimate the planner fits a session-length budget with and the runner counts
+    /// down from (``WorkoutSessionTime``) — so a session set to 30 minutes says ~30 here and in the run.
     private func sessionMetaLine(_ session: WorkoutProgram.SessionSuggestion) -> Text {
         let minutes = WorkoutSessionTime.minutes(of: session.exercises, goal: store.settings.selectedGoal)
-        let count = session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.count
+        let count = GuidedPlanRow.movementCount(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown })
         return count == 1
             ? Text("1 exercise · ~\(minutes) min")
             : Text("\(count) exercises · ~\(minutes) min")

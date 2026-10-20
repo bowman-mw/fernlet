@@ -295,6 +295,12 @@ public nonisolated struct FernletSettings: Codable {
     public var trainerExportIncludesSleep: Bool = false
     public var trainerExportIncludesSickness: Bool = false
     public var trainerExportIncludesWellbeing: Bool = false
+    /// "Warm-up sets before heavy lifts" (Workout setup): `true` / `false` once the lifter has chosen,
+    /// nil until then — nil follows their level (on for intermediate and advanced, off for beginners;
+    /// ``WorkoutWarmUpSets/isEnabled(preference:experience:)``), so a level change moves an untouched
+    /// default with it. Synced, because it shapes the plan every device builds; at the top level, so an
+    /// older build parks the key and writes it back (`parkedUnknownKeys`). Absent from a blob until set.
+    public var workoutWarmUpSets: Bool? = nil
 
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
@@ -588,6 +594,7 @@ public nonisolated struct FernletSettings: Codable {
         trainerExportIncludesSleep = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSleep) ?? false
         trainerExportIncludesSickness = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSickness) ?? false
         trainerExportIncludesWellbeing = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesWellbeing) ?? false
+        workoutWarmUpSets = try container.decodeIfPresent(Bool.self, forKey: .workoutWarmUpSets)
     }
 
     /// The session-length budget and the stretch switches: tolerant scalar enums with parked tokens
@@ -696,6 +703,7 @@ public nonisolated struct FernletSettings: Codable {
              coachExchangeEnabled, trainerExportIncludesGoal,
              trainerExportIncludesHydration, trainerExportIncludesSleep,
              trainerExportIncludesSickness, trainerExportIncludesWellbeing
+        case workoutWarmUpSets
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -834,6 +842,8 @@ public nonisolated struct FernletSettings: Codable {
         try container.encode(trainerExportIncludesSleep, forKey: .trainerExportIncludesSleep)
         try container.encode(trainerExportIncludesSickness, forKey: .trainerExportIncludesSickness)
         try container.encode(trainerExportIncludesWellbeing, forKey: .trainerExportIncludesWellbeing)
+        // Written only once chosen, so every blob saved before keeps its shape exactly.
+        try container.encodeIfPresent(workoutWarmUpSets, forKey: .workoutWarmUpSets)
     }
 
     /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when

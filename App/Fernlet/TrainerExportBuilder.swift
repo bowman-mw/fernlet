@@ -583,7 +583,8 @@ extension FernletStore {
     /// what you last moved. It reads the SAME free-text lines the workout rows already carry
     /// (`Workout.exerciseLines`) rather than any new storage, which is why it must be honest about
     /// what it couldn't read — `unparsedLines` counts every line that yielded no sets/reps, and the
-    /// caller surfaces it in the export.
+    /// caller surfaces it in the export. A ramp-up line ("… (ramp-up)": a warm-up set or a
+    /// calibration's ramp) is neither: it is skipped, because it is never a working set.
     static func rollUpExerciseHistory(days: [FernletDay]) -> (entries: [TrainerExportBundle.ExerciseHistoryEntry],
                                                               unparsedLines: Int) {
         var byExercise: [String: ExerciseAccumulator] = [:]
@@ -593,7 +594,7 @@ extension FernletStore {
         // dictionary happened to yield last.
         for day in days.sorted(by: { $0.date < $1.date }) {
             for workout in day.workouts {
-                for line in workout.exerciseLines {
+                for line in workout.exerciseLines where !WorkoutWarmUpSets.isRampLine(line) {
                     guard let parsed = ExerciseLineParser.parse(line) else {
                         unparsed += 1
                         continue

@@ -124,6 +124,10 @@ struct GuidedWorkoutRunState: Codable, Hashable {
 
         /// This step's lead-in before its hold starts, in seconds — never negative.
         var holdLeadIn: Int { max(0, leadInSeconds ?? GuidedWorkoutRunState.holdLeadInSeconds) }
+
+        /// A ramp-up set: a warm-up set before a heavy lift, or a calibration's ramp — light, one set,
+        /// never a working set. The runner calls both "Warm-up set"; the log tags both "(ramp-up)".
+        var isRampSet: Bool { tracking?.calibrationRaw == CalibrationToken.ramp }
     }
 
     /// One timed cardio segment (the domain `CardioSegment`), spelled as tokens because this shared
@@ -384,11 +388,43 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     var currentBlock: String { currentExercise?.block ?? BlockToken.lifting }
 
     /// The current step's 1-based position within its block, and the block's size ("Warm-up · 3 of 23").
+    /// A lift's ramp-up sets count as the lift they lead into, so a session with warm-up sets still
+    /// reads "Exercise 2 of 5" — the card itself says "Warm-up set 1 of 3".
     var blockPosition: (index: Int, count: Int) {
         let block = currentBlock
-        let indices = exercises.indices.filter { exercises[$0].block == block }
-        let position = (indices.firstIndex(of: exerciseIndex) ?? 0) + 1
+        let indices = exercises.indices.filter { exercises[$0].block == block && !exercises[$0].isRampSet }
+        let anchor = currentExercise?.isRampSet == true
+            ? indices.first(where: { $0 > exerciseIndex }) ?? exerciseIndex
+            : exerciseIndex
+        let position = (indices.firstIndex(of: anchor) ?? 0) + 1
         return (position, max(1, indices.count))
+    }
+
+    /// The current step's place among its lift's ramp-up sets ("Warm-up set 2 of 3"): the ramp-up
+    /// steps of the same lift in a row around the cursor. Nil on any other step.
+    var warmUpPosition: (index: Int, count: Int)? {
+        guard currentExercise?.isRampSet == true else { return nil }
+        let run = warmUpRun(around: exerciseIndex)
+        return (exerciseIndex - run.lowerBound + 1, run.count)
+    }
+
+    /// Whether the rest of the current lift's warm-up sets can be skipped — the runner's quiet "Skip
+    /// warm-up sets" secondary, on a ramp-up step whose lift is still ahead.
+    var canSkipWarmUpSets: Bool {
+        guard isWorking || isResting, currentExercise?.isRampSet == true else { return false }
+        return warmUpRun(around: exerciseIndex).upperBound < exercises.count - 1
+    }
+
+    /// The ramp-up steps of one lift in a row that include `index` (just `index` off a ramp-up step).
+    /// Bounded: each walk moves one step at a time inside `exercises`.
+    private func warmUpRun(around index: Int) -> ClosedRange<Int> {
+        guard exercises.indices.contains(index) else { return index...index }
+        let name = exercises[index].name
+        var start = index
+        while start > 0, exercises[start - 1].isRampSet, exercises[start - 1].name == name { start -= 1 }
+        var end = index
+        while end + 1 < exercises.count, exercises[end + 1].isRampSet, exercises[end + 1].name == name { end += 1 }
+        return start...end
     }
 
     /// Whether the rest of the current block can be skipped from here — the runner's quiet "Skip
@@ -572,6 +608,23 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             return
         }
         exerciseIndex = next
+        currentSet = 1
+        restStartedAt = nil
+        restEndsAt = nil
+        setStartedAt = now
+        phase = .working
+    }
+
+    /// Skip the current lift's remaining warm-up sets, the current one included, to its first working
+    /// set — "Skip warm-up sets". The skipped sets are marked skipped, so the log leaves them out; any
+    /// done before stay logged as ramp-ups. Nothing else moves (`canSkipWarmUpSets` guards it).
+    mutating func skipWarmUpSets(now: Date) {
+        guard canSkipWarmUpSets else { return }
+        let run = warmUpRun(around: exerciseIndex)
+        for index in exerciseIndex...run.upperBound where exercises[index].tracking != nil {
+            exercises[index].tracking?.skipped = true
+        }
+        exerciseIndex = run.upperBound + 1
         currentSet = 1
         restStartedAt = nil
         restEndsAt = nil

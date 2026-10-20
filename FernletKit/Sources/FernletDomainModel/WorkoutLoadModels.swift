@@ -479,11 +479,15 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
     public var calibration: CalibrationStep?
     public var easierSession: Bool
     public var compoundsBefore: Int
+    /// True on a warm-up set the planner put before a heavy main lift (``WorkoutWarmUpSets``) — a
+    /// `.ramp` step like a calibration's, told apart so a time budget can drop it and the plan editor
+    /// can hide it. Plan-only: the run and the log know it as a ramp set.
+    public var warmUp: Bool
 
     public init(
         targetReps: Int, prescription: WeightPrescription? = nil, equipment: Equipment? = nil,
         unit: LoadUnit = .lb, askReasonOnOverride: Bool = false, calibration: CalibrationStep? = nil,
-        easierSession: Bool = false, compoundsBefore: Int = 0
+        easierSession: Bool = false, compoundsBefore: Int = 0, warmUp: Bool = false
     ) {
         self.targetReps = targetReps
         self.prescription = prescription
@@ -493,6 +497,7 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
         self.calibration = calibration
         self.easierSession = easierSession
         self.compoundsBefore = compoundsBefore
+        self.warmUp = warmUp
     }
 
     /// The lift takes a load (the runner shows a weight picker even with no suggestion yet).

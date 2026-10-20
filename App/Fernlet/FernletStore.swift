@@ -5032,6 +5032,14 @@ final class FernletStore {
         applyGuidedTransition(state)
     }
 
+    /// Skip the current lift's remaining warm-up sets from the in-app sheet — the runner's quiet "Skip
+    /// warm-up sets" — straight to its first working set. The skipped sets leave no line in the log.
+    func guidedSkipWarmUpSets() {
+        guard var state = guidedRunState, state.canSkipWarmUpSets else { return }
+        state.skipWarmUpSets(now: Date())
+        applyGuidedTransition(state)
+    }
+
     /// Mirrors a guided-run transition to the app-group file, naming a failed write (R7).
     ///
     /// Recovery is the next event: the following transition rewrites the file and the foreground

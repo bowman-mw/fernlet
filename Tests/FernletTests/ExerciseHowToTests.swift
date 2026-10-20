@@ -239,7 +239,7 @@ struct ExerciseHowToTests {
              "the runner's exercise title, its resting Next up and its Up next list"),
             ("App/Fernlet/GuidedTimedRun.swift", "exercise.displayName ?? exercise.name", 1,
              "the runner's Up next rotor entry (through GuidedSegmentWords.upNextName)"),
-            ("App/Fernlet/GuidedWorkout.swift", "writtenLines[exercise.id] ?? exercise.displayLine", 1,
+            ("App/Fernlet/GuidedWorkout.swift", "writtenLines[item.step.id] ?? item.step.displayLine", 1,
              "the runner's Ready list (a planned run's own written line first)"),
             ("App/Fernlet/TaskConfirmations.swift", "\\(exercise.displayedName)", 5, "the spoken transitions"),
             ("App/FernletWidgets/GuidedWorkoutRunState.swift", "exerciseName: currentExercise?.displayedName", 1,

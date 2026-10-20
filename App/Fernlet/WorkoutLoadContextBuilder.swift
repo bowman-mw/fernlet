@@ -15,7 +15,8 @@ import FernletFoundation
 /// A guided row WITHOUT results is skipped: it records the plan that was suggested, not what was
 /// lifted (every guided log before load tracking, and the "Mark done" path), so reading it would make
 /// a fixed "4 x 5" plan look like a stall every week. Sleep and protein over the last two weeks feed
-/// the plateau's rest check; the newest calibration test dates the next one. Pure over its inputs.
+/// the plateau's rest check; the newest calibration test dates the next one; the warm-up-sets setting
+/// and the lifter's level say whether heavy lifts get warm-up sets. Pure over its inputs.
 enum WorkoutLoadContextBuilder {
     /// How far back sessions are read (the plateau's lookback).
     static let lookbackDays = WorkoutPlateau.lookbackDays
@@ -45,7 +46,10 @@ enum WorkoutLoadContextBuilder {
         return WorkoutLoadContext(
             exposures: sessions.byLift, today: todayDate, defaultUnit: unit,
             recovery: recovery(window, todayDate: todayDate, settings: settings),
-            calibration: CalibrationSettings(hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration)
+            calibration: CalibrationSettings(hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration),
+            warmUpSets: WorkoutWarmUpSets.isEnabled(
+                preference: settings.workoutWarmUpSets, experience: settings.workoutProfile.experience
+            )
         )
     }
 
@@ -98,9 +102,11 @@ enum WorkoutLoadContextBuilder {
     }
 
     /// One hand-logged line as a completed session keyed by its lift, or nil for a hold, a rep
-    /// range, or a line with no sets×reps.
+    /// range, a ramp-up set copied from a guided log ("… (ramp-up)", which is never a working set), or
+    /// a line with no sets×reps.
     static func handLoggedExposure(_ line: String, date: Date) -> (key: String, exposure: LiftExposure)? {
-        guard let parsed = ExerciseLineParser.parse(line), let reps = parsed.repsCount, reps > 0,
+        guard !WorkoutWarmUpSets.isRampLine(line),
+              let parsed = ExerciseLineParser.parse(line), let reps = parsed.repsCount, reps > 0,
               let sets = parsed.sets, sets > 0 else { return nil }
         let key = WorkoutExerciseCatalog.normalizedName(parsed.name)
         guard !key.isEmpty else { return nil }

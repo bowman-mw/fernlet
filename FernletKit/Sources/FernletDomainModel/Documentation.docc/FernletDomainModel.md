@@ -654,6 +654,14 @@ estimate — so the same history always builds the same plan.
   ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
   level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
   itself now parks a newer build's equipment tokens and keys.
+- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets (about 40 % × 8, 60 % × 5,
+  80 % × 3) in front of a barbell or other big compound main lift that has a suggested weight, when
+  ``WorkoutLoadContext/warmUpSets`` is on (the synced `FernletSettings.workoutWarmUpSets`, defaulting
+  on for intermediate and advanced lifters) and the day is not light. Each is a single-set step tagged
+  `.ramp` like the calibration's, so the log writes "(ramp-up)" and no estimate, plateau check or
+  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to drop. Barbell
+  warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the standard
+  45 lb / 20 kg bar and plates) says which plates go on each side, or the closest load it can make.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -698,6 +706,11 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutWeightPresets``
 - ``LoadLadder``
 - ``LoadCap``
+- ``WorkoutWarmUpSets``
+- ``WarmUpSet``
+- ``PlateCalculator``
+- ``BarbellPlateSet``
+- ``PlateLoadout``
 
 ### Coach plans
 

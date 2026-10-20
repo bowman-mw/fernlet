@@ -106,11 +106,16 @@ enum GuidedRunSpokenCue {
 
     // MARK: The new step
 
-    /// "Next: Cat-cow, left side.", "Next: Row. Suggested weight …", or an interval's "Hard, round 3
-    /// of 8." — VoiceOver's own words for the same step, minus its set count.
+    /// "Next: Cat-cow, left side.", "Next: Row. Suggested weight …", a warm-up set's "Warm-up set 1 of
+    /// 3: Back squat. Suggested weight 95 pounds …", or an interval's "Hard, round 3 of 8." — VoiceOver's
+    /// own words for the same step, minus its set count.
     private static func nextStep(_ exercise: GuidedWorkoutRunState.Exercise, in run: GuidedWorkoutRunState) -> String {
         if let segment = exercise.segment {
             return segmentLine(segment, seconds: exercise.holdSeconds ?? 0)
+        }
+        if let warmUp = run.warmUpPosition {
+            let line = GuidedWarmUpWords.setLine(index: warmUp.index, count: warmUp.count, name: exercise.name)
+            return sentences(String(localized: line), loadClause(for: run))
         }
         let named: String
         switch exercise.sideRaw {
