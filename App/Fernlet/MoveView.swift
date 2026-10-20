@@ -963,7 +963,8 @@ struct WorkoutSheet: View {
             prefillDraft(from: entry)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: entry.name)
+                // Drawn through the display lookup; the chip still prefills by the logged name.
+                Text(verbatim: ExerciseHowToCatalog.displayName(for: entry.name))
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                 if let recall = entry.lastTimeRecallValues, !dynamicTypeSize.isAccessibilitySize {
@@ -981,7 +982,7 @@ struct WorkoutSheet: View {
         .buttonStyle(.plain)
         // Voice Control: the chip's name carries last time's sets ("Rows, 3x10"); its exercise is
         // what a user says.
-        .accessibilityInputLabels([Text(verbatim: entry.name)])
+        .accessibilityInputLabels([Text(verbatim: ExerciseHowToCatalog.displayName(for: entry.name))])
         .accessibilityIdentifier("workout.recentExercise.\(entry.name)")
         .accessibilityCustomContent(AccessibilityCustomContentKey("Last time"),
                                     entry.lastTimeRecallValues.map { Text(verbatim: $0) })
@@ -1536,6 +1537,8 @@ struct WorkoutSuggestionSheet: View {
     @State private var guidedSession: WorkoutProgram.SessionSuggestion?
     // Set when the user taps "Edit"; presents the manual workout editor for that session. nil = closed.
     @State private var editingSession: WorkoutProgram.SessionSuggestion?
+    // Set when the user taps a plan row's info button; presents that exercise's how-to. nil = closed.
+    @State private var howTo: ExerciseHowToRequest?
 
     // Today's plan and the set of already-logged sessions live on the store, shared with the Move-root
     // "Start today's workout" card. Reading them here (instead of a private @State) is what lets a
@@ -1912,31 +1915,36 @@ struct WorkoutSuggestionSheet: View {
             : Text("\(count) exercises · ~\(minutes) min")
     }
 
-    /// One exercise's prescription row: name beside "4 × 8–12". At accessibility sizes name and
-    /// prescription stop sharing a line (1d·AX3).
+    /// One exercise's prescription row: name beside "4 × 8–12", with the how-to button at the end of
+    /// a catalog exercise's row. At accessibility sizes name and prescription stop sharing a line
+    /// (1d·AX3). The name is drawn through `displayName`; the plan keeps the frozen one.
     @ViewBuilder private func sessionExerciseRow(_ exercise: PrescribedExercise) -> some View {
         let prescription: String? = exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty
             ? (exercise.holdSeconds != nil && exercise.sets <= 1 ? exercise.reps : "\(exercise.sets) × \(exercise.reps)")
             : nil
         if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
-                    side.text
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: exercise.displayName)
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                    if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
+                        side.text
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
+                    if let prescription {
+                        Text(verbatim: prescription)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
                 }
-                if let prescription {
-                    Text(verbatim: prescription)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                sessionHowToButton(exercise)
             }
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(exercise.name)
+                Text(verbatim: exercise.displayName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
@@ -1950,6 +1958,17 @@ struct WorkoutSuggestionSheet: View {
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
+                sessionHowToButton(exercise)
+            }
+        }
+    }
+
+    /// The row's how-to button, for a catalog exercise with bundled how-to text; nothing otherwise
+    /// (a cardio descriptor line, a custom exercise).
+    @ViewBuilder private func sessionHowToButton(_ exercise: PrescribedExercise) -> some View {
+        if ExerciseHowToCatalog.entry(for: exercise.name) != nil {
+            ExerciseHowToButton(exerciseName: exercise.name) {
+                howTo = ExerciseHowToRequest(name: exercise.name)
             }
         }
     }
@@ -2051,6 +2070,9 @@ struct WorkoutSuggestionSheet: View {
             equipmentLimitsButton
             reworkPlanAffordance
         }
+        // One presenter for every row's info button, on the plan rather than on each card, so two
+        // sessions never bind two sheets to the same state.
+        .exerciseHowToSheet($howTo)
     }
 
     /// The one italic "what happens next" line of the committed plan (1d); rendered in the scroll
@@ -3285,7 +3307,7 @@ struct ExerciseSearchPicker: View {
     private func selectFirstResult() {
         guard selectedExercise == nil, let first = results.first else { return }
         selectedExercise = first
-        query = first.name
+        query = first.displayName
         searchFocused = false
     }
 
@@ -3316,7 +3338,7 @@ struct ExerciseSearchPicker: View {
                         ForEach(results) { exercise in
                             ExerciseSearchResultRow(exercise: exercise, isSelected: false) {
                                 selectedExercise = exercise
-                                query = exercise.name
+                                query = exercise.displayName
                             }
                         }
                     }
@@ -3362,7 +3384,7 @@ struct ExerciseSearchResultRow: View {
                     .frame(width: 9, height: 9)
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(exercise.name)
+                    Text(verbatim: exercise.displayName)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     // `displayName`, not `rawValue` — the seventh site of this class in this file.
@@ -3384,7 +3406,7 @@ struct ExerciseSearchResultRow: View {
         .buttonStyle(.plain)
         // Voice Control: the row's name runs on through its category and every muscle it works;
         // the exercise's name is what a user says.
-        .accessibilityInputLabels([Text(verbatim: exercise.name)])
+        .accessibilityInputLabels([Text(verbatim: exercise.displayName)])
     }
 }
 
@@ -3399,7 +3421,7 @@ struct LoggedExerciseRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.exercise.name)
+                Text(verbatim: entry.exercise.displayName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 Text(entry.summary.replacingOccurrences(of: entry.exercise.name, with: "").trimmingCharacters(in: .whitespaces))
@@ -3416,7 +3438,7 @@ struct LoggedExerciseRow: View {
                     .foregroundStyle(Color.slate)
             }
             .buttonStyle(.plain)
-            .fernletIconButton("Remove \(entry.exercise.name)")
+            .fernletIconButton("Remove \(entry.exercise.displayName)")
             // T2-12: the spoken name interpolates the exercise, so a Voice Control user had to
             // say "tap remove barbell back squat". Duplicate short names across rows are fine —
             // Voice Control numbers ambiguous matches.
@@ -3441,7 +3463,7 @@ struct EditablePlannedExerciseRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.exercise.name)
+                    Text(verbatim: entry.exercise.displayName)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     Text(entry.exercise.muscles.joined(separator: ", "))
@@ -3455,7 +3477,7 @@ struct EditablePlannedExerciseRow: View {
                         .foregroundStyle(Color.slate)
                 }
                 .buttonStyle(.plain)
-                .fernletIconButton("Remove \(entry.exercise.name)")
+                .fernletIconButton("Remove \(entry.exercise.displayName)")
                 // T2-12, as on ``LoggedExerciseRow``.
                 .accessibilityInputLabels([Text("Remove")])
             }

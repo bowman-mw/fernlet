@@ -75,6 +75,10 @@ byte-identical to what already shipped and a separate reader-facing property add
 - ``MealType/displayName`` and ``WorkoutType/displayName`` — persisted categories that are also the
   vocabulary the meal-parsing prompt hands the model, the input `WorkoutExerciseCatalog.inferType`
   matches against, and fields of the trainer export.
+- ``ExerciseHowToCatalog/displayName(for:)`` — an exercise's ``ExerciseTarget/name`` is its identity,
+  plan and log text, progression key, prompt vocabulary and coach-plan wire, so it never translates;
+  screens draw it through this exact-match lookup (``ExerciseTarget/displayName``,
+  ``PrescribedExercise/displayLine``), which also carries each exercise's localized how-to text.
 
 Two more strings read exactly like UI copy and are not: ProximityKit's `PayloadSummary` `title`, `subtitle`,
 and every `extraDetails` key and value are folded into the Ed25519 canonical signing bytes by
@@ -476,6 +480,8 @@ in-memory form state only — never on a ``RecipeIngredient``, the synced blob o
 - ``ExerciseDifficulty``
 - ``ExerciseMeasure``
 - ``WorkoutExerciseCatalog``
+- ``ExerciseHowTo``
+- ``ExerciseHowToCatalog``
 - ``WorkoutSuggestion``
 
 ### Workout programming

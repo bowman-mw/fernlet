@@ -51,6 +51,8 @@ struct GuidedWorkoutSheet: View {
     /// presentation from `exerciseHistoryEntries()` (one full-history rollup) rather than
     /// re-rolling per exercise.
     @State private var lastWeightByName: [String: String] = [:]
+    /// The exercise whose how-to sheet is open, by frozen name; nil when none is.
+    @State private var howTo: ExerciseHowToRequest?
 
     init(
         store: FernletStore,
@@ -104,6 +106,7 @@ struct GuidedWorkoutSheet: View {
         }
         .background(Color.parchment)
         .interactiveDismissDisabled(isLive)
+        .exerciseHowToSheet($howTo)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
             showReplaceConfirm: $showReplaceConfirm,
@@ -333,7 +336,17 @@ struct GuidedWorkoutSheet: View {
     /// The cream card naming the current exercise with its Set / Reps / Last-time pills.
     private func exerciseCard(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            exerciseTitle(run, exercise)
+            HStack(alignment: .top, spacing: 8) {
+                exerciseTitle(run, exercise)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                // How to do it, beside the name it explains: the cues, the common mistake and an
+                // easier version, for a catalog exercise only.
+                if ExerciseHowToCatalog.entry(for: exercise.name) != nil {
+                    ExerciseHowToButton(exerciseName: exercise.name) {
+                        howTo = ExerciseHowToRequest(name: exercise.name)
+                    }
+                }
+            }
             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
                 side.text
                     .font(.fernlet(.body))
@@ -383,7 +396,7 @@ struct GuidedWorkoutSheet: View {
     /// `Text(verbatim:)` while its "nothing yet" case can be a localized literal.
     @ViewBuilder
     private func exerciseTitle(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
-        let title = Text(exercise.name)
+        let title = Text(verbatim: exercise.displayedName)
             .font(.fernlet(.displayMedium))
             .foregroundStyle(Color.bark)
         if dynamicTypeSize.isAccessibilitySize {
@@ -407,7 +420,7 @@ struct GuidedWorkoutSheet: View {
     /// The dropped `GuidedUpNextList` as one spoken value. `formatted(.list(type: .and))` rather than
     /// a hand-joined string: the separator and the final conjunction are locale-dependent.
     private func upNextValue(_ run: GuidedWorkoutRunState) -> Text {
-        let names = upcomingExercises(run).map(\.name)
+        let names = upcomingExercises(run).map(\.displayedName)
         guard !names.isEmpty else { return Text("Nothing after this one") }
         return Text(verbatim: names.formatted(.list(type: .and)))
     }
@@ -488,7 +501,7 @@ struct GuidedWorkoutSheet: View {
                     Text("Next up")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
-                    Text(exercise.name)
+                    Text(verbatim: exercise.displayedName)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     if exercise.fromCatalog && exercise.sets >= 1 {
@@ -821,7 +834,7 @@ private struct GuidedUpNextList: View {
                 ForEach(exercises) { exercise in
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(exercise.name)
+                            Text(verbatim: exercise.displayedName)
                                 .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
@@ -913,7 +926,7 @@ private struct GuidedReadyList: View {
                 row(Text("Warm-up · \(warmUp.count) stretches · \(WorkoutSessionBlocks.minutes(of: warmUp)) min"))
             }
             ForEach(exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
-                row(Text(verbatim: exercise.line))
+                row(Text(verbatim: exercise.displayLine))
             }
             if !coolDown.isEmpty {
                 row(Text("Cool-down · \(coolDown.count) stretches · \(WorkoutSessionBlocks.minutes(of: coolDown)) min"))

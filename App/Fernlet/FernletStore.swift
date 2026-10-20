@@ -4905,7 +4905,10 @@ final class FernletStore {
                 holdSeconds: pe.holdSeconds,
                 blockRaw: pe.block.rawValue,
                 sideRaw: pe.side?.rawValue,
-                tracking: GuidedRunLoadLog.tracking(for: pe)
+                tracking: GuidedRunLoadLog.tracking(for: pe),
+                // The drawn name, baked in for the Live Activity and the Lock Screen intents, which
+                // cannot reach the domain lookup. `name` above stays the frozen one the log reads.
+                displayName: pe.displayName
             )
         }
         guard !exercises.isEmpty else { return false }

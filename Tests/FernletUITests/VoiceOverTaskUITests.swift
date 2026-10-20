@@ -203,6 +203,44 @@ final class VoiceOverTaskUITests: XCTestCase {
                       "the runner did not close after Done")
     }
 
+    /// How to do an exercise, from the suggested plan's first exercise row: the info button is a
+    /// named control, the how-to sheet passes the audit and carries its safety line, and Done closes
+    /// it. Same Strength-goal setup as the guided walk, so the plan has catalog lifts with how-tos.
+    @MainActor
+    func testExerciseHowToWithVoiceOverOnly() throws {
+        let app = UXTestApp.launch(openSheet: "settings")
+        let walk = VoiceOverWalk(app, task: "Read how to do an exercise", in: self)
+
+        walk.press("settings.row.goalNutrition")
+        let strength = walk.button("goalPreset.strength")
+        walk.activate(strength)
+        XCTAssertTrue(strength.wait(for: \.isSelected, toEqual: true, timeout: 4))
+        walk.activate(app.navigationBars.buttons["Settings"].firstMatch)
+        walk.press("settings.done")
+
+        walk.press("Move")
+        guard app.buttons["workout.suggestToday"].firstMatch.waitForExistence(timeout: 4) else {
+            throw XCTSkip("the Move card offers no Suggest (a plan or a run from an earlier launch is live)")
+        }
+        walk.press("workout.suggestToday")
+        walk.press("workout.suggest")
+        let info = app.buttons["workout.howTo.open"].firstMatch
+        guard info.waitForExistence(timeout: 10) else {
+            throw XCTSkip("today's suggested plan has no catalog exercise with a how-to")
+        }
+        walk.assertSpeaksWords(info, describe: "the how-to button")
+        XCTAssertTrue(info.label.hasPrefix("How to do "), "the how-to button reads '\(info.label)'")
+        walk.activate(info)
+
+        walk.element("sheet.exerciseHowTo")
+        try walk.audit("Exercise how-to")
+        XCTAssertTrue(app.staticTexts["Stop if you feel sharp pain."].waitForExistence(timeout: 4),
+                      "the how-to sheet lost its safety line")
+        walk.press("sheet.done")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.exerciseHowTo"].waitForNonExistence(timeout: 6),
+                      "the how-to sheet did not close after Done")
+    }
+
     /// Suggest → plan → Start now → Start: the way into a fresh guided run.
     @MainActor
     private func startSuggestedRun(_ walk: VoiceOverWalk, app: XCUIApplication) throws {

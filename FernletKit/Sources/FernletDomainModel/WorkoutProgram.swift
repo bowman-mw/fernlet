@@ -1110,9 +1110,16 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
 
     /// The plan-text line. A timed single step reads "Low lunge stretch (left) - 20 s"; a timed set
     /// "Plank - 2 x 30 s", which the history parser reads back as a hold, never as reps.
-    public var line: String {
-        guard fromCatalog else { return name }
-        let label = side.map { "\(name) (\($0.rawValue))" } ?? name
+    ///
+    /// Carries the FROZEN ``name``: this is the text a logged row stores and the history parser
+    /// reads back. Screens draw ``displayLine``.
+    public var line: String { planLine(naming: name) }
+
+    /// The line's layout around `exerciseName` — ``name`` for the stored ``line``, the display name
+    /// for ``displayLine``. A non-catalog step is its name alone.
+    func planLine(naming exerciseName: String) -> String {
+        guard fromCatalog else { return exerciseName }
+        let label = side.map { "\(exerciseName) (\($0.rawValue))" } ?? exerciseName
         if let holdSeconds {
             let hold = Self.holdText(seconds: holdSeconds)
             return sets > 1 ? "\(label) - \(sets) x \(hold)" : "\(label) - \(hold)"

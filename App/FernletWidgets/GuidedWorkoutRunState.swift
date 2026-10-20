@@ -69,11 +69,16 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// The load plan and what actually happened, for a rep-counted lift the planner prescribed;
         /// nil on every other step and in a run persisted before load tracking existed.
         var tracking: Tracking?
+        /// The name screens draw for this step, in the user's language, baked in by the app when the
+        /// run is built (this file cannot import the domain's lookup). Display only: ``name`` stays
+        /// the FROZEN catalog name that logging, progression and matching read. Nil in a run persisted
+        /// before display names existed, which then draws ``name``.
+        var displayName: String?
 
         init(
             id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool,
             restSeconds: Int, holdSeconds: Int? = nil, blockRaw: String? = nil, sideRaw: String? = nil,
-            tracking: Tracking? = nil
+            tracking: Tracking? = nil, displayName: String? = nil
         ) {
             self.id = id
             self.name = name
@@ -86,10 +91,15 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             self.blockRaw = blockRaw
             self.sideRaw = sideRaw
             self.tracking = tracking
+            self.displayName = displayName
         }
 
         /// The step's block, with an untagged step (any run built before blocks existed) as lifting.
         var block: String { blockRaw ?? BlockToken.lifting }
+
+        /// The name a screen, a spoken transition or the Live Activity draws: ``displayName`` when
+        /// the app baked one in, else the frozen ``name``.
+        var displayedName: String { displayName ?? name }
     }
 
     /// One lift's load plan (fixed when the run starts) and what happened (set in the app as the
@@ -487,7 +497,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// activity is ended the instant a run finishes, so `.done`'s rendered phase is moot).
     var contentState: WorkoutActivityAttributes.ContentState {
         WorkoutActivityAttributes.ContentState(
-            exerciseName: currentExercise?.name ?? "",
+            exerciseName: currentExercise?.displayedName ?? "",
             setNumber: currentSet,
             totalSets: totalSetsForCurrent,
             reps: currentExercise?.reps ?? "",

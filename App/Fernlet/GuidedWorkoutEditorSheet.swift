@@ -99,12 +99,12 @@ struct GuidedWorkoutEditorSheet: View {
     @ViewBuilder private func exerciseCard(index: Int, row: PrescribedExercise) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 8) {
-                Text(row.name)
+                Text(verbatim: row.displayName)
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 GuidedEditorRowControls(
-                    exerciseName: row.name,
+                    exerciseName: row.displayName,
                     canMoveUp: index > 0,
                     canMoveDown: index < rows.count - 1,
                     // Keep at least one exercise — an empty session isn't guidable and would leave a
@@ -384,7 +384,8 @@ struct GuidedWorkoutEditorSheet: View {
 /// Split out of the card body so it stays inside the Power-of-10 length budget; the enclosing
 /// `HStack` still lays the three chips out exactly as before.
 private struct GuidedEditorRowControls: View {
-    /// Named in each chip's VoiceOver label — "Move up" alone doesn't say what moves.
+    /// Named in each chip's VoiceOver label — "Move up" alone doesn't say what moves. The drawn
+    /// name (`displayName`), so it is spoken as the card shows it.
     let exerciseName: String
     let canMoveUp: Bool
     let canMoveDown: Bool
