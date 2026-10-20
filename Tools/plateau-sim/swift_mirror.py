@@ -300,6 +300,52 @@ def reading_state(points, explicit_weeks, older, lower_body):
     return "slowing" if previous > 0 and upper < previous / 2 else "progressing"
 
 
+EASED_Z = EXPECTED_Z
+EASED_MINIMUM_DROP = 0.03
+EASED_NOISE_ERRORS = 1.0
+
+
+def is_eased_candidate(points, resolved):
+    """WorkoutTrend.isEasedCandidate: weeks of a line falling beyond noise (G7's strength-held check)."""
+    if not points or not is_adherent(points):
+        return False
+    tier = resolved.tier
+    minimum, _, _, stall_weeks, prior, _ = TIERS[tier]
+    last = points[-1].day
+    window = [p for p in points if last - p.day <= stall_weeks * 7]
+    flagged = sum(1 for p in window if p.flagged)
+    if not window or len(window) - flagged < minimum or flagged * 2 >= len(window):
+        return False
+    span = weeks_between(window[0].day, last)
+    if span < stall_weeks - 0.5:
+        return False
+    trend = fit_window(window, prior, FLAGGED_WEIGHT, resolved.lower_body)
+    if trend is None:
+        return False
+    sigma = noise(window, tier, trend)
+    fall = fit_window(window, sigma, 0.0, resolved.lower_body)
+    if fall is None:
+        return False
+    slope = fall[0].slope
+    error = sigma / math.sqrt(fall[0].sxx)
+    return slope + EASED_Z * error < 0 and -slope * span >= max(EASED_MINIMUM_DROP, EASED_NOISE_ERRORS * sigma)
+
+
+def has_eased(points, explicit_weeks, older, lower_body):
+    """WorkoutTrend.hasEased: the candidate on three readings in a row, each as of its own newest session."""
+    points = points[-MAX_POINTS:]
+    if len(points) <= STALL_PERSISTENCE:
+        return False
+    first, newest = points[0].day, points[-1].day
+    for back in range(STALL_PERSISTENCE):
+        prefix = points[:len(points) - back]
+        last = prefix[-1].day
+        weeks = None if explicit_weeks is None else explicit_weeks - weeks_between(last, newest)
+        if not is_eased_candidate(prefix, resolve(weeks, older, lower_body, first, last)):
+            return False
+    return True
+
+
 # ---------------------------------------------------------------------------------------------
 # The harness, as WorkoutPlateauSimulationTests runs it
 # ---------------------------------------------------------------------------------------------
@@ -337,6 +383,33 @@ def run(count, weeks, stall, explicit, cohort=None):
 def rates(rows):
     n = max(1, len(rows))
     return (sum(r[0] for _, r in rows), sum(r[1] for _, r in rows), sum(r[2] for _, r in rows), n)
+
+
+def eased_tally(count, weeks, explicit, decline=None):
+    """(histories called eased before the decline began or with none, called after it, delays in weeks).
+    `decline` is (start week, total fraction, weeks to reach it), applied to every score after the start."""
+    early = late = 0
+    delays = []
+    for i in range(count):
+        h = sim.make_history(i, weeks)
+        points = [Point(float(s.day), s.score, s.flagged, s.firm) for s in h.sessions]
+        if decline:
+            start, total, span = decline
+            for p in points:
+                w = p.day / 7.0
+                if w > start:
+                    p.score *= 1 - total * min(1.0, (w - start) / span)
+        for k in range(1, len(points) + 1):
+            day = points[k - 1].day
+            weeks_known = h.t0_weeks + day / 7.0 if explicit else None
+            if has_eased(points[:k], weeks_known, h.cohort == "older", h.lower_body):
+                if decline and day / 7.0 > decline[0]:
+                    late += 1
+                    delays.append(day / 7.0 - decline[0])
+                else:
+                    early += 1
+                break
+    return early, late, sorted(delays)
 
 
 def main(argv):

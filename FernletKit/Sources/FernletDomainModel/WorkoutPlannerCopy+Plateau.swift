@@ -63,20 +63,44 @@ extension WorkoutPlannerCopy {
                comment: "Workout session note: a related exercise is added beside a lift that has held steady; the lift stays in the plan. Arguments: the added exercise, then the lift.")
     }
 
-    /// The ladder's last step, by goal: calm, with options and no push.
-    static func holdingSteady(_ name: String, goal: GoalType) -> String {
+    /// The ladder's last step, by goal: calm, with options and no push. For a lifter of 60 or more,
+    /// holding strength is said to be the progress it is (G9).
+    static func holdingSteady(_ name: String, goal: GoalType, older: Bool = false) -> String {
+        if older {
+            return String(localized: "workoutNote.plateau.holdingSteady.older",
+                          defaultValue: "\(name) is holding steady — after years of training, that's strength well kept. Keep training it as it is, or change it up whenever you like.",
+                          bundle: .module,
+                          comment: "Workout session note for a lifter aged 60 or more whose lift has held steady for a long while: holding strength is a good outcome. The argument is the exercise name.")
+        }
         switch goal {
         case .strength, .sportsPrep:
-            String(localized: "workoutNote.plateau.holdingSteady.strength",
-                   defaultValue: "\(name) is holding steady, and steady is fine. Keep training it as it is, try a different rep range for a while, or give another lift the spotlight — whichever suits you.",
-                   bundle: .module,
-                   comment: "Workout session note for a strength-focused person whose lift has held steady for a long while. The argument is the exercise name.")
+            return String(localized: "workoutNote.plateau.holdingSteady.strength",
+                          defaultValue: "\(name) is holding steady, and steady is fine. Keep training it as it is, try a different rep range for a while, or give another lift the spotlight — whichever suits you.",
+                          bundle: .module,
+                          comment: "Workout session note for a strength-focused person whose lift has held steady for a long while. The argument is the exercise name.")
         case .wellness, .weightManagement, .mentalHealth, .recovery, .exploring:
-            String(localized: "workoutNote.plateau.holdingSteady",
-                   defaultValue: "\(name) is holding steady, and that's a good place to be. Keep training it as it is, or change it up whenever you like.",
-                   bundle: .module,
-                   comment: "Workout session note for a lift that has held steady for a long while, for a person not training mainly for strength. The argument is the exercise name.")
+            return String(localized: "workoutNote.plateau.holdingSteady",
+                          defaultValue: "\(name) is holding steady, and that's a good place to be. Keep training it as it is, or change it up whenever you like.",
+                          bundle: .module,
+                          comment: "Workout session note for a lift that has held steady for a long while, for a person not training mainly for strength. The argument is the exercise name.")
         }
+    }
+
+    /// Weight management's quiet check (G7): "Bench press has eased a little over recent weeks. That
+    /// can happen alongside a calorie deficit." Never a push to eat more.
+    static func easedLead(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.eased",
+               defaultValue: "\(name) has eased a little over recent weeks. That can happen alongside a calorie deficit.",
+               bundle: .module,
+               comment: "Workout session note for someone managing their weight: a lift's strength has dropped a little for several weeks. Calm, never a suggestion to eat more. The argument is the exercise name.")
+    }
+
+    /// The training option beside ``easedLead(_:)``.
+    static var easedOption: String {
+        String(localized: "workoutNote.plateau.easedOption",
+               defaultValue: "Today's plan keeps your usual weights and sets, which is what holds strength.",
+               bundle: .module,
+               comment: "Workout session note: the plan keeps the person's usual weights and sets, because that holds strength while losing weight.")
     }
 
     /// A dip's first line: "Back squat came in a little lower the last two times. That happens, and it
@@ -103,12 +127,19 @@ extension WorkoutPlannerCopy {
                       comment: "Workout session note: a lighter session after two lower ones, with fewer sets and the weight kept. Arguments: the exercise name, a number of sets (e.g. '2 sets'), then a weight with its unit.")
     }
 
-    /// The slowing note: soft, and the plan stays.
-    static func slowing(_ name: String) -> String {
-        String(localized: "workoutNote.plateau.slowing",
-               defaultValue: "\(name) is coming along more slowly now, which is the normal curve as strength builds. Today's plan stays as it is.",
-               bundle: .module,
-               comment: "Workout session note: a lift is still improving but more slowly than before. The argument is the exercise name.")
+    /// The slowing note: soft, and the plan stays. For a lifter of 60 or more, the age-adjusted
+    /// expectation in plain words (G9).
+    static func slowing(_ name: String, older: Bool = false) -> String {
+        guard older else {
+            return String(localized: "workoutNote.plateau.slowing",
+                          defaultValue: "\(name) is coming along more slowly now, which is the normal curve as strength builds. Today's plan stays as it is.",
+                          bundle: .module,
+                          comment: "Workout session note: a lift is still improving but more slowly than before. The argument is the exercise name.")
+        }
+        return String(localized: "workoutNote.plateau.slowing.older",
+                      defaultValue: "\(name) is coming along more slowly now — at this stage, holding strength steady counts as progress too. Today's plan stays as it is.",
+                      bundle: .module,
+                      comment: "Workout session note for a lifter aged 60 or more: a lift is improving more slowly, which is expected, and keeping strength is itself progress. The argument is the exercise name.")
     }
 
     /// Too early to read the trend: half or more of the recent sessions were flagged.

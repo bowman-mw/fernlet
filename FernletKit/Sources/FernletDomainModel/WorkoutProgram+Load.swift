@@ -38,12 +38,14 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     /// Weeks from each lift's first logged session (reading back two years) to today, by
     /// ``WorkoutExerciseCatalog/normalizedName(_:)``: what refines the answer per lift.
     public var liftWeeks: [String: Double]
+    /// The lifting focus (G6): Strength, Size, or Both — the default, which keeps the goal's mix.
+    public var focus: WorkoutStrengthFocus
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
         recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
         warmUpSets: Bool = false, traits: LifterTraits = .unknown, experience: ExperienceLevel? = nil,
-        liftWeeks: [String: Double] = [:]
+        liftWeeks: [String: Double] = [:], focus: WorkoutStrengthFocus = .both
     ) {
         self.exposures = exposures
         self.today = today
@@ -54,6 +56,7 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         self.traits = traits
         self.experience = experience
         self.liftWeeks = liftWeeks
+        self.focus = focus
     }
 
     /// One lift's training age (G8): the setup answer as a floor — six months for "6 months to 2
@@ -116,9 +119,10 @@ extension WorkoutProgram {
         _ picks: [SlotPick], inputs: SlotInputs, load: WorkoutLoadContext,
         used: inout Set<String>, calibrationOpen: inout Bool
     ) -> LoadPass {
+        let tracking = PlateauTracking.forGoal(inputs.goal)
         var loaded = picks.map { pick in
             LoadedPick(exercise: pick.exercise, target: pick.target, slot: pick.slot,
-                       plateau: plateauStatus(of: pick.target, load: load))
+                       plateau: plateauStatus(of: pick.target, role: pick.slot.role, tracking: tracking, load: load))
         }
         addVariant(&loaded, inputs: inputs, used: &used)
         for index in loaded.indices { plan(&loaded[index], inputs: inputs, load: load) }
@@ -166,13 +170,25 @@ extension WorkoutProgram {
         loaded = expanded
     }
 
-    /// The trend status of a rep-counted lift (``WorkoutPlateau/status(of:unit:today:profile:levelKg:)``),
-    /// nil for holds and lifts with no history. The lift's estimated max, in kilograms, lets the
-    /// expected curve tell a strong lifter from a newer one.
-    static func plateauStatus(of target: ExerciseTarget, load: WorkoutLoadContext) -> PlateauStatus? {
-        guard target.measure != .seconds else { return nil }
+    /// The trend status of a rep-counted lift, as much as the goal hears (G7, ``PlateauTracking``):
+    /// none for the gentler goals; weight management's quiet strength-held check
+    /// (``WorkoutPlateau/strengthHeldStatus(of:unit:today:profile:)``); and for strength and sports
+    /// prep the main lifts' full trend (``WorkoutPlateau/status(of:unit:today:profile:levelKg:)``). Nil
+    /// for holds and lifts with no history. The lift's estimated max, in kilograms, lets the expected
+    /// curve tell a strong lifter from a newer one.
+    static func plateauStatus(
+        of target: ExerciseTarget, role: SlotRole, tracking: PlateauTracking, load: WorkoutLoadContext
+    ) -> PlateauStatus? {
+        guard target.measure != .seconds, tracking != .off else { return nil }
         let history = load.history(for: target.name)
         guard !history.isEmpty else { return nil }
+        guard tracking == .mainLifts else {
+            let profile = TrendProfile(trainingAge: load.trainingAge(for: target.name), traits: load.traits,
+                                       lowerBody: WorkoutLoadEngine.isLowerBody(target.movementPattern))
+            return WorkoutPlateau.strengthHeldStatus(of: history, unit: load.unit(for: history), today: load.today,
+                                                     profile: profile)
+        }
+        guard role == .main else { return nil }
         let unit = load.unit(for: history)
         let levelKg = WorkoutLoadEngine.estimate(from: history, unit: unit, today: load.today)
             .map { LoadUnit.kg.converted($0.oneRepMax, from: unit) }
@@ -199,23 +215,26 @@ extension WorkoutProgram {
 
     /// Gives one rep-counted lift its next sets, reps and weight range from its own history. A lift
     /// with no history keeps the count-based ladder and gets guidance with no suggested weight, so the
-    /// runner asks the lifter to pick one. A trained Strength lifter's main lift follows the block
-    /// calendar's reps and sets (``WorkoutBlocks``) instead of the goal's.
+    /// runner asks the lifter to pick one. The person's focus shapes the reps and sets (G6,
+    /// ``WorkoutStrengthFocus``), and a trained Strength lifter's main lift follows the block
+    /// calendar's (``WorkoutBlocks``) instead of the goal's.
     static func plan(_ pick: inout LoadedPick, inputs: SlotInputs, load: WorkoutLoadContext) {
+        let role = pick.slot.role
         guard pick.exercise.fromCatalog, pick.exercise.holdSeconds == nil,
-              let styleScheme = RepScheme(inputs.style.reps(for: pick.slot.role)) else { return }
+              let styleScheme = RepScheme(load.focus.reps(for: role) ?? inputs.style.reps(for: role)) else { return }
         let history = load.history(for: pick.target.name)
         let equipment = loadEquipment(for: pick.target, at: inputs.location)
         let tier = load.trainingAge(for: pick.target.name)?.tier ?? .beginner
-        let block = WorkoutBlocks.applies(goal: inputs.goal, tier: tier, role: pick.slot.role)
+        let block = WorkoutBlocks.applies(goal: inputs.goal, focus: load.focus, tier: tier, role: role)
             ? WorkoutBlocks.week(on: load.today) : nil
         let scheme = block.map { RepScheme(low: $0.phase.reps, high: $0.phase.reps) } ?? styleScheme
+        let styleSets = inputs.style.adjustedSets(for: role, energy: inputs.intensity)
         let sets = block.map { WorkoutBlocks.sets($0.phase, energy: inputs.intensity) }
-            ?? inputs.style.adjustedSets(for: pick.slot.role, energy: inputs.intensity)
+            ?? min(max(styleSets, WorkoutStrengthFocus.maxSets), styleSets + load.focus.extraSets(tier))
         pick.block = block
-        if let block {
+        if block != nil || load.focus != .both {
             pick.exercise.sets = sets
-            pick.exercise.reps = "\(block.phase.reps)"
+            pick.exercise.reps = "\(scheme.low)"
         }
         guard !history.isEmpty else {
             var first = LoadGuidance(
@@ -436,7 +455,8 @@ extension WorkoutProgram {
     /// Turns the session's main lift into this month's calibration when one is due, and takes a set
     /// off each accessory. Returns the note, or nil when nothing changed.
     static func expandCalibration(_ loaded: inout [LoadedPick], inputs: SlotInputs, load: WorkoutLoadContext) -> String? {
-        guard WorkoutCalibration.isDue(load.calibration, intensity: inputs.intensity, today: load.today),
+        guard PlateauTracking.forGoal(inputs.goal).runsStrengthTest,
+              WorkoutCalibration.isDue(load.calibration, intensity: inputs.intensity, today: load.today),
               let index = loaded.firstIndex(where: {
                   $0.slot.role == .main && $0.exercise.guidance?.isLoadable == true
                       && $0.exercise.guidance?.easierSession != true && $0.variantOf == nil

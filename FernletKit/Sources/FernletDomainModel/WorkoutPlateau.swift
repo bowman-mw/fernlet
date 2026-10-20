@@ -64,7 +64,8 @@ public nonisolated enum PlateauStage: String, CaseIterable, Sendable {
 /// What the planner should say or do about one lift's trend: a stall on the ladder, a dip, a soft
 /// "slowing" note, or "too early to tell" when half the window was flagged. A progressing lift has none.
 public nonisolated struct PlateauStatus: Equatable, Sendable {
-    /// `.stalled`, `.dipping`, `.slowing` or `.tooEarly` — never `.progressing`.
+    /// `.stalled`, `.dipping`, `.slowing`, `.tooEarly`, or weight management's `.eased` — never
+    /// `.progressing`.
     public var state: TrendState
     /// The ladder step while stalled; nil otherwise.
     public var stage: PlateauStage?
@@ -105,6 +106,30 @@ public nonisolated struct RecoverySummary: Equatable, Sendable {
         guard proteinDays >= WorkoutPlateau.proteinMinimumDays, let ratio = averageProteinRatio else { return false }
         return ratio < WorkoutPlateau.proteinLowRatio
     }
+}
+
+/// How much of the trend a goal hears (G7, 2026-10-20). Wellness, mental health, recovery and
+/// exploring track minutes and sessions, never a plateau; weight management hears only a quiet
+/// "strength held" check after a sustained drop; strength and sports prep follow their main lifts.
+public nonisolated enum PlateauTracking: Sendable {
+    /// No plateau notes and no strength test.
+    case off
+    /// Only ``WorkoutPlateau/strengthHeldStatus(of:unit:today:profile:)``; no strength test.
+    case strengthHeld
+    /// The full trend and ladder on main lifts, and the monthly strength test.
+    case mainLifts
+
+    /// The tracking a goal gets.
+    public static func forGoal(_ goal: GoalType) -> PlateauTracking {
+        switch goal {
+        case .strength, .sportsPrep: .mainLifts
+        case .weightManagement: .strengthHeld
+        case .wellness, .mentalHealth, .recovery, .exploring: .off
+        }
+    }
+
+    /// Whether the monthly strength test (``WorkoutCalibration``) runs for this tracking.
+    public var runsStrengthTest: Bool { self == .mainLifts }
 }
 
 /// Reads a lift's trend into what the planner does about it.
@@ -161,7 +186,7 @@ public nonisolated enum WorkoutPlateau {
         let onset = onsetIndex(points, profile: profile, levelKg: levelKg)
         let weeks = weeksSinceBest(points, today: today)
         switch reading.state {
-        case .progressing:
+        case .progressing, .eased:
             return nil
         case .dipping:
             // A deload logged since the two low sessions answered them; the next regular session decides.
@@ -191,10 +216,30 @@ public nonisolated enum WorkoutPlateau {
             switch WorkoutTrend.reading(of: prefix, profile: asOf, levelKg: levelKg).state {
             case .stalled: onset = onset ?? end - 1
             case .progressing: onset = nil
-            case .slowing, .dipping, .tooEarly: break
+            case .slowing, .dipping, .tooEarly, .eased: break
             }
         }
         return onset
+    }
+
+    /// Weight management's quiet check (G7): a status only when the lift's line has fallen beyond
+    /// noise for weeks (``WorkoutTrend/hasEased(_:profile:)``), else nil — no stall, dip or slowing
+    /// note ever. Not while overrides explain the numbers or the lift is on a break.
+    public static func strengthHeldStatus(
+        of exposures: [LiftExposure], unit: LoadUnit, today: Date, profile: TrendProfile? = nil
+    ) -> PlateauStatus? {
+        let history = Array(exposures.filter { $0.calibration != .ramp }.suffix(WorkoutLoadEngine.maxExposuresPerLift))
+        guard let last = history.last, WorkoutLoadEngine.days(from: last.date, to: today) <= staleDays else {
+            return nil
+        }
+        guard history.suffix(overrideSessions).filter({ $0.overrideDirection != nil }).count < overridesThatExplain else {
+            return nil
+        }
+        let points = WorkoutTrend.points(from: history, unit: unit)
+        let profile = profile ?? TrendProfile()
+        guard WorkoutTrend.hasEased(points, profile: profile) else { return nil }
+        let reading = WorkoutTrend.reading(of: points, profile: profile)
+        return PlateauStatus(state: .eased, weeksHeld: weeksSinceBest(points, today: today), reading: reading)
     }
 
     /// The ladder step `sessionsSinceOnset` sessions after the stall was called. No cycling: after the

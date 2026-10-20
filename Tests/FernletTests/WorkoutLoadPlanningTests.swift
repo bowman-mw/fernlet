@@ -26,12 +26,13 @@ struct WorkoutLoadPlanningTests {
         history: [String: [LiftExposure]] = [:], today: Int = 30,
         calibration: CalibrationSettings = CalibrationSettings(hasCoach: true),
         progression: [String: Int] = [:], useLoad: Bool = true, experience: ExperienceLevel? = nil,
-        liftWeeks: [String: Double] = [:]
+        liftWeeks: [String: Double] = [:], goal: GoalType = .wellness, traits: LifterTraits = .unknown,
+        focus: WorkoutStrengthFocus = .both
     ) throws -> WorkoutProgram.SessionSuggestion {
         let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, calibration: calibration,
-                                      experience: experience, liftWeeks: liftWeeks)
+                                      traits: traits, experience: experience, liftWeeks: liftWeeks, focus: focus)
         let plan = WorkoutProgram.dayPlan(
-            goal: .wellness, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
+            goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
             location: .fullGym, context: "", split: Self.pushSplit, rotationIndex: 0,
             progression: progression, load: useLoad ? load : nil
         )
@@ -50,23 +51,24 @@ struct WorkoutLoadPlanningTests {
                      structured: true)
     }
 
-    /// Three sessions a week (days 0, 2 and 4) at 8 reps: six weeks climbing 5 lb a week from 100 lb,
+    /// Three sessions a week (days 0, 2 and 4) of fives: six weeks climbing 5 lb a week from 100 lb,
     /// then `flatWeeks` weeks flat at 130 lb. With an inferred training age the trend calls the stall
-    /// after nine flat weeks (``WorkoutTrend``; `Tools/plateau-sim/swift_mirror.py` replays it).
+    /// after nine flat weeks, and reads it as slowing for the first few (``WorkoutTrend``;
+    /// `Tools/plateau-sim/swift_mirror.py` replays it).
     func climbThenFlat(flatWeeks: Int) -> [LiftExposure] {
         (0..<(6 + flatWeeks)).flatMap { week in
-            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(min(week, 6)), reps: 8, target: 8) }
+            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(min(week, 6)), reps: 5, target: 5) }
         }
     }
 
-    /// Six weeks climbing, then two sessions well under the line (125 lb × 6 against 8 asked) — a dip,
+    /// Six weeks climbing, then two sessions well under the line (125 lb × 3 against 5 asked) — a dip,
     /// or with `flag` two low sessions after short nights.
     func dipped(flag: WorkoutSessionFlag? = nil) -> [LiftExposure] {
         let climbing = (0..<6).flatMap { week in
-            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(week), reps: 8, target: 8) }
+            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(week), reps: 5, target: 5) }
         }
         let low = [42, 44].map { offset -> LiftExposure in
-            var missed = session(offset, 125, reps: 6, target: 8)
+            var missed = session(offset, 125, reps: 3, target: 5)
             missed.flag = flag
             return missed
         }
@@ -104,8 +106,8 @@ struct WorkoutLoadPlanningTests {
     }
 
     @Test func aStallStartsWithAFairRetestUpFrontWithLongerRest() throws {
-        let second = lifting(try pushSession())[1]
-        let session = try pushSession(history: [key(second.name): climbThenFlat(flatWeeks: 9)], today: 104)
+        let second = lifting(try pushSession(goal: .strength))[1]
+        let session = try pushSession(history: [key(second.name): climbThenFlat(flatWeeks: 9)], today: 104, goal: .strength)
         let first = try #require(lifting(session).first)
         #expect(first.name == second.name)
         let rest = try #require(first.restSecondsOverride)
@@ -118,20 +120,20 @@ struct WorkoutLoadPlanningTests {
     }
 
     @Test func theLoadingChangeIsAShortHeavierBlock() throws {
-        let main = try #require(lifting(try pushSession()).first).name
-        let session = try pushSession(history: [key(main): climbThenFlat(flatWeeks: 10)], today: 111)
+        let main = try #require(lifting(try pushSession(goal: .strength)).first).name
+        let session = try pushSession(history: [key(main): climbThenFlat(flatWeeks: 10)], today: 111, goal: .strength)
         let lift = try #require(lifting(session).first { $0.name == main })
-        // The plan's next step is 9 reps at 130 lb; the block takes two reps off and loads the estimate
-        // for 7 (130 × (1 + 10/30) ÷ (1 + 9/30) ≈ 133, on the 5 lb step).
-        #expect(lift.reps == "7")
-        #expect(lift.guidance?.targetReps == 7)
+        // The plan's next step is 5 reps at 135 lb; the block takes two reps off and loads the estimate
+        // for 3 (130 × (1 + 7/30) ÷ (1 + 5/30) ≈ 137, on the 5 lb step), never under today's 135.
+        #expect(lift.reps == "3")
+        #expect(lift.guidance?.targetReps == 3)
         #expect(lift.guidance?.prescription?.suggested == 135)
-        #expect(session.suggestion.notes.contains("For the next few sessions, \(main) goes a little heavier for fewer reps — 7 reps at about 135 lb."))
+        #expect(session.suggestion.notes.contains("For the next few sessions, \(main) goes a little heavier for fewer reps — 3 reps at about 135 lb."))
     }
 
     @Test func aDipGetsADeloadHalfTheSetsAtTheKeptLoad() throws {
-        let main = try #require(lifting(try pushSession()).first)
-        let session = try pushSession(history: [key(main.name): dipped()], today: 46)
+        let main = try #require(lifting(try pushSession(goal: .strength)).first)
+        let session = try pushSession(history: [key(main.name): dipped()], today: 46, goal: .strength)
         let lift = try #require(lifting(session).first { $0.name == main.name })
         #expect(lift.sets == (main.sets + 1) / 2)
         #expect(lift.guidance?.easierSession == true)
@@ -142,8 +144,9 @@ struct WorkoutLoadPlanningTests {
     }
 
     @Test func lowSessionsAfterShortNightsHoldTheLoadWithNoDeload() throws {
-        let main = try #require(lifting(try pushSession()).first)
-        let session = try pushSession(history: [key(main.name): dipped(flag: WorkoutSessionFlag(sleep: .shortNight))], today: 46)
+        let main = try #require(lifting(try pushSession(goal: .strength)).first)
+        let session = try pushSession(history: [key(main.name): dipped(flag: WorkoutSessionFlag(sleep: .shortNight))],
+                                      today: 46, goal: .strength)
         let lift = try #require(lifting(session).first { $0.name == main.name })
         #expect(lift.sets == main.sets)
         #expect(lift.guidance?.easierSession == false)
@@ -200,15 +203,16 @@ struct WorkoutLoadPlanningTests {
     }
 
     @Test func aDueCalibrationTurnsTheMainLiftIntoARampAndATest() throws {
-        let baseline = try pushSession()
+        let baseline = try pushSession(goal: .strength)
         let main = try #require(lifting(baseline).first).name
         let history = [key(main): [session(21, 135, reps: 10, target: 10), session(28, 135, reps: 10, target: 10)]]
-        let session = try pushSession(history: history, calibration: CalibrationSettings())
+        // Strength and sports prep keep the monthly strength check (G7).
+        let session = try pushSession(history: history, calibration: CalibrationSettings(), goal: .strength)
         let steps = lifting(session).filter { $0.name == main }
         #expect(steps.map(\.guidance?.calibration) == [.ramp, .ramp, .ramp, .test])
         #expect(steps.first?.line.hasSuffix("(ramp-up)") == true)
         let accessorySets = { (s: WorkoutProgram.SessionSuggestion) in lifting(s).filter { $0.role == .accessory }.map(\.sets) }
-        let uncalibrated = try pushSession(history: history)
+        let uncalibrated = try pushSession(history: history, goal: .strength)
         #expect(accessorySets(session) == accessorySets(uncalibrated).map { max(1, $0 - 1) })
         #expect(session.suggestion.notes.contains("Strength check today: \(main) builds up over a few lighter sets"))
     }

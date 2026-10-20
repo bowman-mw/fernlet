@@ -39,10 +39,10 @@ struct WorkoutProgressionTests {
         goal: GoalType = .wellness, template: WorkoutSessionTemplate = WorkoutSessions.push,
         location: WorkoutLocation = .fullGym, history: [String: [LiftExposure]] = [:], today: Int = 30,
         experience: ExperienceLevel? = nil, calibration: CalibrationSettings = CalibrationSettings(hasCoach: true),
-        length: WorkoutSessionLength = .noLimit
+        length: WorkoutSessionLength = .noLimit, traits: LifterTraits = .unknown, focus: WorkoutStrengthFocus = .both
     ) throws -> WorkoutProgram.SessionSuggestion {
         let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, calibration: calibration,
-                                      experience: experience)
+                                      traits: traits, experience: experience, focus: focus)
         let plan = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .beginner), location: location,
             context: "", split: Self.split(template), rotationIndex: 0, load: load,
@@ -82,10 +82,12 @@ struct WorkoutProgressionTests {
         #expect(week(-10) == BlockWeek(phase: .volume, week: 1))
         #expect(BlockPhase.volume.reps == 6 && BlockPhase.heavier.reps == 3)
         #expect(WorkoutBlocks.sets(.heavier, energy: .light) == 4 && WorkoutBlocks.sets(.volume, energy: .hard) == 5)
-        #expect(WorkoutBlocks.applies(goal: .strength, tier: .intermediate, role: .main))
-        #expect(!WorkoutBlocks.applies(goal: .strength, tier: .beginner, role: .main))
-        #expect(!WorkoutBlocks.applies(goal: .wellness, tier: .advanced, role: .main))
-        #expect(!WorkoutBlocks.applies(goal: .strength, tier: .advanced, role: .accessory))
+        #expect(WorkoutBlocks.applies(goal: .strength, focus: .both, tier: .intermediate, role: .main))
+        #expect(WorkoutBlocks.applies(goal: .strength, focus: .strength, tier: .advanced, role: .main))
+        #expect(!WorkoutBlocks.applies(goal: .strength, focus: .size, tier: .advanced, role: .main))
+        #expect(!WorkoutBlocks.applies(goal: .strength, focus: .both, tier: .beginner, role: .main))
+        #expect(!WorkoutBlocks.applies(goal: .wellness, focus: .strength, tier: .advanced, role: .main))
+        #expect(!WorkoutBlocks.applies(goal: .strength, focus: .both, tier: .advanced, role: .accessory))
     }
 
     @Test func aTrainedStrengthLiftersMainLiftsFollowTheBlockCalendar() throws {
@@ -196,15 +198,162 @@ struct WorkoutProgressionTests {
         #expect(ladder.window(around: 100, count: 10).last == 100)
     }
 
+    // MARK: - G7 what each goal hears
+
+    /// Three sessions a week of fives: six weeks climbing 5 lb a week from 100 lb, then `flatWeeks`
+    /// flat at 130 lb — with the age inferred, slowing after a few flat weeks and stalled after nine.
+    func climbThenFlat(flatWeeks: Int) -> [LiftExposure] {
+        (0..<(6 + flatWeeks)).flatMap { week in
+            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(min(week, 6)), reps: 5, target: 5) }
+        }
+    }
+
+    /// Fourteen weeks of eights: six climbing 2.5 lb a week, then eight falling 1.5 lb a week — weeks
+    /// of a line falling beyond noise (`Tools/plateau-sim/swift_mirror.py` replays it).
+    func easing() -> [LiftExposure] {
+        (0..<14).flatMap { week -> [LiftExposure] in
+            let weight = week < 6 ? 100 + 2.5 * Double(week) : 112.5 - 1.5 * Double(week - 5)
+            return [0, 2, 4].map { session(week * 7 + $0, weight, reps: 8, target: 8) }
+        }
+    }
+
+    @Test func gentlerGoalsHearNoPlateauAndRunNoStrengthTest() throws {
+        for goal in [GoalType.wellness, .mentalHealth, .recovery, .exploring] {
+            let main = try #require(lifting(try plan(goal: goal)).first).name
+            let session = try plan(goal: goal, history: [key(main): climbThenFlat(flatWeeks: 9)], today: 104,
+                                   calibration: CalibrationSettings())
+            let notes = session.suggestion.notes
+            #expect(!notes.contains("held steady"), "\(goal) heard a plateau")
+            let tested = lifting(session).contains { $0.guidance?.calibration != nil }
+            #expect(!tested, "\(goal) ran a strength test")
+        }
+        #expect(PlateauTracking.forGoal(.recovery) == .off)
+    }
+
+    @Test func weightManagementHearsOnlyAQuietStrengthHeldCheck() throws {
+        let main = try #require(lifting(try plan(goal: .weightManagement)).first).name
+        let stalled = try plan(goal: .weightManagement, history: [key(main): climbThenFlat(flatWeeks: 9)], today: 104,
+                               calibration: CalibrationSettings())
+        #expect(!stalled.suggestion.notes.contains("held steady"))
+        let tested = lifting(stalled).contains { $0.guidance?.calibration != nil }
+        #expect(!tested)
+        let eased = try plan(goal: .weightManagement, history: [key(main): easing()], today: 97)
+        let notes = eased.suggestion.notes
+        #expect(notes.contains("\(main) has eased a little over recent weeks. That can happen alongside a calorie deficit."))
+        #expect(notes.contains("Today's plan keeps your usual weights and sets, which is what holds strength."))
+        #expect(!notes.contains("eat more"))
+        let deloaded = lifting(eased).contains { $0.guidance?.easierSession == true }
+        #expect(!deloaded)
+        #expect(!PlateauTracking.forGoal(.weightManagement).runsStrengthTest)
+    }
+
+    @Test func strengthAndSportsPrepFollowTheirMainLiftsOnly() throws {
+        let lifts = lifting(try plan(goal: .strength))
+        let accessory = try #require(lifts.first { $0.role == .accessory }).name
+        let session = try plan(goal: .strength, history: [key(accessory): climbThenFlat(flatWeeks: 9)], today: 104)
+        #expect(!session.suggestion.notes.contains("held steady"))
+        #expect(PlateauTracking.forGoal(.sportsPrep) == .mainLifts)
+        #expect(PlateauTracking.forGoal(.strength).runsStrengthTest)
+    }
+
+    // MARK: - The ladder's later steps, with a known training age
+
+    /// Fives three times a week: six weeks climbing 5 lb a week, then `weeks` more at 130 lb less
+    /// `drop` a week. With "6 months to 2 years" answered, twelve flat weeks sit nine sessions into a
+    /// stall (the variant step) and sixteen falling half a pound a week, twenty-four (holding steady).
+    func climbThen(weeks: Int, drop: Double) -> [LiftExposure] {
+        (0..<(6 + weeks)).flatMap { week -> [LiftExposure] in
+            let weight = 100 + 5 * Double(min(week, 6)) - drop * Double(max(0, week - 6))
+            return [0, 2, 4].map { session(week * 7 + $0, weight, reps: 5, target: 5) }
+        }
+    }
+
+    @Test func aLongStallAddsAVariantBesideTheLiftWhichStays() throws {
+        let today = 17 * 7 + 6
+        let baseline = lifting(try plan(goal: .strength, today: today, experience: .intermediate))
+        let main = try #require(baseline.first)
+        let session = try plan(goal: .strength, history: [key(main.name): climbThen(weeks: 12, drop: 0)],
+                               today: today, experience: .intermediate)
+        let lifts = lifting(session)
+        let index = try #require(lifts.firstIndex { $0.name == main.name })
+        try #require(index + 1 < lifts.count)
+        let variant = lifts[index + 1]
+        #expect(variant.name != main.name && variant.role == .accessory)
+        #expect(lifts[index].sets == max(2, main.sets - 1))
+        #expect(session.suggestion.notes.contains("For a few weeks, \(variant.name) joins \(main.name), which keeps going with one set fewer"))
+    }
+
+    @Test func pastTheVariantTheLiftIsHoldingSteadyWithCalmOptions() throws {
+        let main = try #require(lifting(try plan(goal: .strength, experience: .intermediate)).first).name
+        let session = try plan(goal: .strength, history: [key(main): climbThen(weeks: 16, drop: 0.5)],
+                               today: 21 * 7 + 6, experience: .intermediate)
+        #expect(session.suggestion.notes.contains("\(main) is holding steady, and steady is fine."))
+        let names = lifting(session).map(\.name)
+        #expect(names.contains(main))
+        #expect(!session.suggestion.notes.contains("joins \(main)"))
+    }
+
+    // MARK: - G9 age-adjusted expectations
+
+    @Test func anOlderLiftersSlowingNoteSaysHoldingStrengthIsProgress() throws {
+        let main = try #require(lifting(try plan(goal: .strength)).first).name
+        let history = [key(main): climbThenFlat(flatWeeks: 4)]
+        let younger = try plan(goal: .strength, history: history, today: 69)
+        #expect(younger.suggestion.notes.contains("\(main) is coming along more slowly now, which is the normal curve"))
+        let older = try plan(goal: .strength, history: history, today: 69, traits: LifterTraits(ageYears: 66))
+        #expect(older.suggestion.notes.contains("holding strength steady counts as progress too"))
+    }
+
+    // MARK: - G6 the training focus
+
+    @Test func theFocusShapesRepsAndSets() throws {
+        let both = lifting(try plan(goal: .strength))
+        let size = lifting(try plan(goal: .strength, experience: .intermediate, focus: .size))
+        let strength = lifting(try plan(goal: .strength, focus: .strength))
+        let bothMain = try #require(both.first)
+        let sizeMain = try #require(size.first)
+        #expect(bothMain.reps == "5")
+        #expect(sizeMain.reps == "6")
+        #expect(sizeMain.sets == min(WorkoutStrengthFocus.maxSets, bothMain.sets + 1))
+        let sizeAccessory = try #require(size.first { $0.role == .accessory })
+        #expect(sizeAccessory.reps == "10")
+        let strengthMain = try #require(strength.first)
+        #expect(strengthMain.reps == "3")
+        #expect(WorkoutStrengthFocus.both.reps(for: .main) == nil)
+        #expect(WorkoutStrengthFocus.size.extraSets(.advanced) == 2 && WorkoutStrengthFocus.strength.extraSets(.advanced) == 0)
+    }
+
+    @Test func theFocusSyncsAsAFrozenTokenAndAnUnknownOneIsParked() throws {
+        func object(_ settings: FernletSettings) throws -> [String: Any] {
+            try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
+        }
+        let fresh = FernletSettings()
+        #expect(fresh.workoutStrengthFocus == .both)
+        let freshHasKey = try object(fresh)["workoutStrengthFocus"] != nil
+        #expect(!freshHasKey, "the default keeps every blob's old shape")
+        var chosen = FernletSettings()
+        chosen.workoutStrengthFocus = .size
+        let back = try JSONDecoder().decode(FernletSettings.self, from: JSONEncoder().encode(chosen))
+        #expect(back.workoutStrengthFocus == .size)
+        let newer = try JSONDecoder().decode(FernletSettings.self, from: Data(#"{"workoutStrengthFocus":"power"}"#.utf8))
+        #expect(newer.workoutStrengthFocus == .both)
+        #expect(newer.unknownWorkoutStrengthFocusToken == "power")
+        let parked = try object(newer)["unknownWorkoutStrengthFocusToken"] as? String
+        #expect(parked == "power")
+        let tokens = WorkoutStrengthFocus.allCases.map(\.rawValue)
+        let frozen = ["strength", "size", "both"]
+        #expect(tokens == frozen)
+    }
+
     // MARK: - N3 the strength check's roomier day
 
     @Test func aStrengthCheckThatCannotFitTheBudgetWaitsForARoomierDay() throws {
-        let main = try #require(lifting(try plan()).first).name
+        let main = try #require(lifting(try plan(goal: .strength)).first).name
         let history = [key(main): [21, 28].map { session($0, 135, reps: 10, target: 10) }]
-        let roomy = try plan(history: history, calibration: CalibrationSettings())
+        let roomy = try plan(goal: .strength, history: history, calibration: CalibrationSettings())
         let checked = lifting(roomy).contains { $0.guidance?.calibration == .test }
         #expect(checked)
-        let short = try plan(history: history, calibration: CalibrationSettings(), length: .min20)
+        let short = try plan(goal: .strength, history: history, calibration: CalibrationSettings(), length: .min20)
         let squeezed = lifting(short).contains { $0.guidance?.calibration != nil }
         #expect(!squeezed)
         #expect(short.suggestion.notes.contains("The monthly strength check moves to a day with more time"))

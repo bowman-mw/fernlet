@@ -62,7 +62,8 @@ enum WorkoutLoadContextBuilder {
             ),
             traits: traits(body ?? settings.userProfile),
             experience: settings.workoutProfile.experience,
-            liftWeeks: liftWeeks(merged, todayDate: todayDate)
+            liftWeeks: liftWeeks(merged, todayDate: todayDate),
+            focus: settings.workoutStrengthFocus
         )
     }
 

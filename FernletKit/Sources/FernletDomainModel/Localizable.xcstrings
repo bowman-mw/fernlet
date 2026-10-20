@@ -30556,6 +30556,78 @@
         }
       }
     },
+    "workoutFocus.both" : {
+      "comment" : "Workout setup: the lifting focus that mixes strength and muscle building",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Both"
+          }
+        }
+      }
+    },
+    "workoutFocus.both.summary" : {
+      "comment" : "Workout setup: what the Both focus does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A mix of strength and muscle-building work."
+          }
+        }
+      }
+    },
+    "workoutFocus.size" : {
+      "comment" : "Workout setup: the lifting focus on building muscle — moderate weights, more reps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Size"
+          }
+        }
+      }
+    },
+    "workoutFocus.size.summary" : {
+      "comment" : "Workout setup: what the Size focus does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moderate weights for more reps, about 6 to 15, with sets added over time."
+          }
+        }
+      }
+    },
+    "workoutFocus.strength" : {
+      "comment" : "Workout setup: the lifting focus on getting stronger — heavier weights, fewer reps",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Strength"
+          }
+        }
+      }
+    },
+    "workoutFocus.strength.summary" : {
+      "comment" : "Workout setup: what the Strength focus does",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heavier main lifts for fewer reps, about 3 to 5."
+          }
+        }
+      }
+    },
     "workoutIntensity.hard" : {
       "comment" : "Workout intensity, mid-sentence: a demanding day",
       "extractionState" : "extracted_with_value",
@@ -31451,6 +31523,30 @@
         }
       }
     },
+    "workoutNote.plateau.eased" : {
+      "comment" : "Workout session note for someone managing their weight: a lift's strength has dropped a little for several weeks. Calm, never a suggestion to eat more. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ has eased a little over recent weeks. That can happen alongside a calorie deficit."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.easedOption" : {
+      "comment" : "Workout session note: the plan keeps the person's usual weights and sets, because that holds strength while losing weight.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Today's plan keeps your usual weights and sets, which is what holds strength."
+          }
+        }
+      }
+    },
     "workoutNote.plateau.extraSet" : {
       "comment" : "Workout session note for a lift that has held steady and takes no added weight: one more set for a while. Both arguments are the exercise name.",
       "extractionState" : "extracted_with_value",
@@ -31483,6 +31579,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ is holding steady, and that's a good place to be. Keep training it as it is, or change it up whenever you like."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.holdingSteady.older" : {
+      "comment" : "Workout session note for a lifter aged 60 or more whose lift has held steady for a long while: holding strength is a good outcome. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is holding steady — after years of training, that's strength well kept. Keep training it as it is, or change it up whenever you like."
           }
         }
       }
@@ -31579,6 +31687,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@ is coming along more slowly now, which is the normal curve as strength builds. Today's plan stays as it is."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.slowing.older" : {
+      "comment" : "Workout session note for a lifter aged 60 or more: a lift is improving more slowly, which is expected, and keeping strength is itself progress. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is coming along more slowly now — at this stage, holding strength steady counts as progress too. Today's plan stays as it is."
           }
         }
       }

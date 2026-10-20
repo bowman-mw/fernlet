@@ -77,6 +77,22 @@ struct WorkoutPlateauSimulationTests {
         #expect(median >= 9, "median delay \(median) weeks, the mirror's is 13.3")
     }
 
+    /// G7: weight management's quiet "strength held" check (`WorkoutTrend.hasEased`). On the steady
+    /// histories it speaks for 2 of 400 with the training age known and 9 inferred (the mirror's
+    /// counts); laid over a real 6 % fall across 8 weeks from week 4, it finds 55 of 100, a median 8.6
+    /// weeks in, and never before the fall begins.
+    @Test func theStrengthHeldCheckStaysQuietOnSteadyLinesAndHearsARealFall() {
+        let steady = Self.easedTally(count: 400, weeks: 12, known: true)
+        #expect(steady.early <= 5, "known: \(steady.early) of 400, the mirror's 2")
+        let inferred = Self.easedTally(count: 400, weeks: 12, known: false)
+        #expect(inferred.early <= 12, "inferred: \(inferred.early) of 400, the mirror's 9")
+        let falling = Self.easedTally(count: 100, weeks: 20, known: true, decline: (start: 4, total: 0.06, weeks: 8))
+        #expect(falling.early <= 2)
+        #expect(falling.delays.count >= 40 && falling.delays.count <= 70, "found \(falling.delays.count), the mirror's 55")
+        let median = Self.median(falling.delays)
+        #expect(median >= 6 && median <= 11, "median \(median) weeks, the mirror's 8.6")
+    }
+
     @Test func theStreamIsSplitMix64AndTheHistoriesAreDeterministic() {
         var rng = SplitMix64(seed: 0)
         let first = rng.next()
@@ -272,13 +288,13 @@ struct WorkoutPlateauSimulationTests {
     /// Every prefix of a history scored by both rules: a stall call before the true stall (or with
     /// none) is false, the first call after it sets the delay, and a dip outside the true one is false.
     static func outcome(of history: History, known: Bool) -> Outcome {
-        let points = points(history)
+        let points = Self.points(history)
         let onset = history.stallWeek.map { $0 * 7 }
         var outcome = Outcome()
         for end in points.indices {
             let day = history.sessions[end].day
-            let state = WorkoutTrend.reading(of: Array(points[...end]), profile: profile(history, day: day, known: known)).state
-            let old = oldRuleStalled(history.sessions[...end])
+            let state = WorkoutTrend.reading(of: Array(points[...end]), profile: Self.profile(history, day: day, known: known)).state
+            let old = Self.oldRuleStalled(history.sessions[...end])
             if let onset, day >= onset {
                 if old, outcome.oldDelay == nil { outcome.oldDelay = (day - onset) / 7 }
                 if state == .stalled, outcome.newDelay == nil { outcome.newDelay = (day - onset) / 7 }
@@ -302,7 +318,7 @@ struct WorkoutPlateauSimulationTests {
     static func tally(count: Int, weeks: Int, stall: Bool, known: Bool, cohort: Cohort? = nil) -> Tally {
         var tally = Tally()
         for index in 0..<count {
-            let result = outcome(of: history(index: index, weeks: weeks, stall: stall, cohort: cohort), known: known)
+            let result = Self.outcome(of: Self.history(index: index, weeks: weeks, stall: stall, cohort: cohort), known: known)
             tally.oldFalse += result.oldFalse ? 1 : 0
             tally.newFalse += result.newFalse ? 1 : 0
             tally.falseDips += result.falseDip ? 1 : 0
@@ -310,6 +326,35 @@ struct WorkoutPlateauSimulationTests {
             if let delay = result.newDelay { tally.newDelays.append(delay) }
         }
         return tally
+    }
+
+    /// The strength-held check over every prefix of each history, stopping at its first call:
+    /// `early` counts calls with no fall (or before it began), `delays` the weeks into the fall of the
+    /// rest. `decline` takes `total` off every score, reached `weeks` after `start`.
+    static func easedTally(
+        count: Int, weeks: Int, known: Bool, decline: (start: Double, total: Double, weeks: Double)? = nil
+    ) -> (early: Int, delays: [Double]) {
+        var early = 0
+        var delays: [Double] = []
+        for index in 0..<count {
+            var drawn = Self.history(index: index, weeks: weeks, stall: false, cohort: nil)
+            if let decline {
+                for i in drawn.sessions.indices where drawn.sessions[i].day / 7 > decline.start {
+                    let into = min(1, (drawn.sessions[i].day / 7 - decline.start) / decline.weeks)
+                    drawn.sessions[i].score *= 1 - decline.total * into
+                }
+            }
+            let trend = Self.points(drawn)
+            for end in trend.indices {
+                let day = drawn.sessions[end].day
+                guard WorkoutTrend.hasEased(Array(trend[...end]), profile: Self.profile(drawn, day: day, known: known)) else {
+                    continue
+                }
+                if let decline, day / 7 > decline.start { delays.append(day / 7 - decline.start) } else { early += 1 }
+                break
+            }
+        }
+        return (early, delays)
     }
 
     /// The prototype's median: the upper middle of an even count.

@@ -71,10 +71,10 @@ public nonisolated enum WorkoutBlocks {
         return BlockWeek(phase: phase, week: (days % phaseDays) / 7 + 1)
     }
 
-    /// Whether a lift follows the block calendar: a main lift, for someone whose goal is Strength,
-    /// past their first six months on that lift.
-    public static func applies(goal: GoalType, tier: TrainingTier, role: SlotRole) -> Bool {
-        guard goal == .strength, role == .main else { return false }
+    /// Whether a lift follows the block calendar: a main lift, for someone whose goal is Strength and
+    /// whose focus is not Size (G6), past their first six months on that lift.
+    public static func applies(goal: GoalType, focus: WorkoutStrengthFocus, tier: TrainingTier, role: SlotRole) -> Bool {
+        guard goal == .strength, focus != .size, role == .main else { return false }
         return tier != .beginner
     }
 

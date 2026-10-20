@@ -8347,6 +8347,17 @@
     "Trainer summaries and manual plan exchange" : {
 
     },
+    "Training focus" : {
+      "comment" : "Workout setup: the choice between Strength, Size and Both, which shapes reps and sets.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Training focus"
+          }
+        }
+      }
+    },
     "Training here" : {
 
     },

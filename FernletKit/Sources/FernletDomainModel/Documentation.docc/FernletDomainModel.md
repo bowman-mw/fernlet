@@ -677,6 +677,17 @@ estimate — so the same history always builds the same plan.
   helper-muscle support step is gone; the old ladder's tokens resolve to the nearest new step
   (``PlateauStage/resolve(token:parkedToken:)``). The session note gives at most two context lines and
   always a plain training option.
+- **What each goal hears (G7, 2026-10-20).** ``PlateauTracking``: wellness, mental health, recovery
+  and exploring get no plateau notes and no monthly strength test — they track minutes and sessions;
+  weight management hears only a quiet "strength held" check
+  (``WorkoutPlateau/strengthHeldStatus(of:unit:today:profile:)``, ``WorkoutTrend/hasEased(_:profile:)``:
+  weeks of a line falling beyond noise, said as something a calorie deficit can bring, never a push to
+  eat more); strength and sports prep follow their main lifts' full trend and keep the test.
+- **Training focus (G6).** ``WorkoutStrengthFocus``, a synced Workout setup choice: Strength (main
+  lifts 3–5 reps), Size (6–10 main, 10–15 the rest, a set more past six months on a lift and two past
+  two years) or Both — the default, the goal's own mix. A Size focus never follows the blocks.
+- **Age-adjusted copy (G9).** For a lifter of 60 or more the slowing and holding-steady notes say
+  that holding strength is progress, and a long-trained lifter past 60 expects a steady line.
 - **Blocks (G2, 2026-10-20).** A trained Strength lifter's main lifts follow ``WorkoutBlocks``: four
   weeks of volume (``BlockPhase/volume``, 4 × 6) then four heavier (``BlockPhase/heavier``, 5 × 3),
   counted from one fixed Monday so every device agrees (``BlockWeek``). The engine rebaselines each
@@ -770,6 +781,8 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutBlocks``
 - ``BlockPhase``
 - ``BlockWeek``
+- ``WorkoutStrengthFocus``
+- ``PlateauTracking``
 - ``BarbellPlateSet``
 - ``PlateLoadout``
 

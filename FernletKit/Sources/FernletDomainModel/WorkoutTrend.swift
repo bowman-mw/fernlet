@@ -50,6 +50,9 @@ public nonisolated enum TrendState: String, CaseIterable, Sendable {
     case dipping
     /// Too few clean sessions, or half or more of the window flagged.
     case tooEarly
+    /// The line has fallen beyond noise for weeks (``WorkoutTrend/hasEased(_:profile:)``): the quiet
+    /// "strength held" check weight management hears instead of the plateau ladder (G7).
+    case eased
 }
 
 /// Training age, in tiers that set the trend's window, its noise prior and the expected curve.
@@ -263,6 +266,13 @@ public nonisolated enum WorkoutTrend {
     public static let adherenceDays = 28.0
     public static let adherenceSessions = 3
     public static let adherenceGapDays = 14.0
+    /// The "strength held" check (G7, weight management): the slope's upper one-sided 95 % bound under
+    /// zero over the stall window, on ``stallPersistence`` readings in a row, with the line down at
+    /// least this much (log units) and at least ``easedNoiseErrors`` typical errors — tuned in
+    /// simulation (`Tools/plateau-sim/swift_mirror.py`): 0.5 % of steady histories called over 12 weeks
+    /// with the training age known, 2.3 % inferred.
+    public static let easedMinimumDrop = 0.03
+    public static let easedNoiseErrors = 1.0
     /// The expected curve: b is raised for women and lighter or weaker lifters, lowered for strong
     /// men, and zero for long-trained lifters over 60 (G9: a steady line is success).
     public static let femaleRateFactor = 1.15
@@ -379,6 +389,45 @@ public nonisolated enum WorkoutTrend {
         guard let expected else { return false }
         let slope = stall.fit.slope
         return (slope + upperBoundZ * error) * 4 < stallGainPerFourWeeks && slope + expectedMarginZ * error < expected
+    }
+
+    // MARK: The strength-held check
+
+    /// Whether the lift's line has fallen beyond noise for weeks (G7): ``isEasedCandidate(_:resolved:)``
+    /// on ``stallPersistence`` readings in a row, each taken as of its own newest session.
+    public static func hasEased(_ points: [TrendPoint], profile: TrendProfile) -> Bool {
+        let points = Array(points.suffix(WorkoutLoadEngine.maxExposuresPerLift))
+        guard points.count > stallPersistence, let first = points.first?.date, let newest = points.last?.date else {
+            return false
+        }
+        for back in 0..<stallPersistence {
+            let prefix = Array(points.prefix(points.count - back))
+            guard let last = prefix.last?.date else { return false }
+            let resolved = resolve(profile.asOf(last, newest: newest), first: first, last: last, levelKg: nil)
+            guard isEasedCandidate(prefix, resolved: resolved) else { return false }
+        }
+        return true
+    }
+
+    /// One reading of the strength-held check on the stall window: steady training, enough clean
+    /// sessions, flagged sessions that fell short left out, the slope's upper 95 % bound under zero,
+    /// and the line down at least ``easedMinimumDrop`` and ``easedNoiseErrors`` typical errors.
+    static func isEasedCandidate(_ points: [TrendPoint], resolved: ResolvedProfile) -> Bool {
+        guard let last = points.last, isAdherent(points) else { return false }
+        let tier = resolved.tier
+        let window = points.filter { days(from: $0.date, to: last.date) <= tier.stallWeeks * 7 }
+        let flagged = window.filter { $0.flag != nil }.count
+        guard let start = window.first, window.count - flagged >= tier.minimumSessions, flagged * 2 < window.count
+        else { return false }
+        let span = weeks(from: start.date, to: last.date)
+        guard span >= tier.stallWeeks - 0.5,
+              let trend = fitWindow(window, sigma: tier.noisePrior, shortWeight: flaggedWeight, lowerBody: resolved.lowerBody)
+        else { return false }
+        let sigma = noise(window, tier: tier, trend: trend)
+        guard let fall = fitWindow(window, sigma: sigma, shortWeight: 0, lowerBody: resolved.lowerBody) else { return false }
+        let slope = fall.fit.slope
+        let error = sigma / fall.fit.sxx.squareRoot()
+        return slope + expectedMarginZ * error < 0 && -slope * span >= max(easedMinimumDrop, easedNoiseErrors * sigma)
     }
 
     /// At least three sessions in the four weeks before the newest, none more than two weeks apart.

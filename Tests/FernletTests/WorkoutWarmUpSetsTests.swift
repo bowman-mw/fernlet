@@ -38,13 +38,13 @@ struct WorkoutWarmUpSetsTests {
     /// A Push day for an intermediate lifter at a full gym, with the given history and switches.
     func pushSession(
         history: [String: [LiftExposure]] = [:], warmUpSets: Bool = true, intensity: WorkoutIntensity = .moderate,
-        calibrationDue: Bool = false
+        calibrationDue: Bool = false, goal: GoalType = .wellness
     ) throws -> WorkoutProgram.SessionSuggestion {
         let calibration = calibrationDue ? CalibrationSettings() : CalibrationSettings(hasCoach: true)
         let load = WorkoutLoadContext(exposures: history, today: day(30), defaultUnit: .lb,
                                       calibration: calibration, warmUpSets: warmUpSets)
         let plan = WorkoutProgram.dayPlan(
-            goal: .wellness, intensity: intensity, profile: WorkoutProfile(experience: .intermediate),
+            goal: goal, intensity: intensity, profile: WorkoutProfile(experience: .intermediate),
             location: .fullGym, context: "", split: Self.pushSplit, rotationIndex: 0, load: load
         )
         return try #require(plan.sessions.first)
@@ -285,7 +285,8 @@ struct WorkoutWarmUpSetsTests {
     @Test func aCalibratedLiftKeepsItsOwnRampAndGetsNoSecond() throws {
         let main = try mainLift()
         let history = [key(main.name): [lifted(21, 135, reps: 10), lifted(28, 135, reps: 10)]]
-        let session = try pushSession(history: history, calibrationDue: true)
+        // The monthly strength check runs for strength and sports prep (G7).
+        let session = try pushSession(history: history, calibrationDue: true, goal: .strength)
         let steps = lifting(session).filter { $0.name == main.name }
         let tags = steps.map { $0.guidance?.calibration }
         let expected: [CalibrationStep?] = [.ramp, .ramp, .ramp, .test]

@@ -34,6 +34,8 @@ struct WorkoutSetupSheet: View {
     /// "Warm-up sets before heavy lifts": nil until chosen (the level's default shows), synced on Save.
     @State private var warmUpSets: Bool?
     private let initialWarmUpSets: Bool?
+    @State private var strengthFocus: WorkoutStrengthFocus
+    private let initialStrengthFocus: WorkoutStrengthFocus
     /// The heart-rate switches' draft (device-local, like the cue switches).
     @State private var zonePreferences: WorkoutZonePreferences
     private let recommendedSplits: [TrainingSplit]
@@ -86,6 +88,8 @@ struct WorkoutSetupSheet: View {
         self.initialSpokenCues = spoken
         _warmUpSets = State(initialValue: settings.workoutWarmUpSets)
         self.initialWarmUpSets = settings.workoutWarmUpSets
+        _strengthFocus = State(initialValue: settings.workoutStrengthFocus)
+        self.initialStrengthFocus = settings.workoutStrengthFocus
         let zones = WorkoutZonePreferences.current()
         _zonePreferences = State(initialValue: zones)
         self.initialZonePreferences = zones
@@ -103,6 +107,7 @@ struct WorkoutSetupSheet: View {
             || sessionOptions != initialSessionOptions
             || spokenCues != initialSpokenCues
             || warmUpSets != initialWarmUpSets
+            || strengthFocus != initialStrengthFocus
             || zonePreferences != initialZonePreferences
     }
 
@@ -302,11 +307,31 @@ struct WorkoutSetupSheet: View {
                 }
             }
 
+            focusField
+
             if profile.experience != .beginner {
                 OneRepMaxOptIn(isOn: $profile.oneRepMaxTesting)
             }
 
             WarmUpSetsToggle(choice: $warmUpSets, experience: profile.experience)
+        }
+    }
+
+    /// G6 (2026-10-20): Strength, Size, or Both — what the lifting aims at, with a line on what each does.
+    private var focusField: some View {
+        SheetField("Training focus") {
+            VStack(alignment: .leading, spacing: 8) {
+                FlowLayout(spacing: 8) {
+                    ForEach(WorkoutStrengthFocus.allCases) { focus in
+                        Button(focus.displayName) { strengthFocus = focus }
+                            .buttonStyle(ChipButtonStyle(selected: strengthFocus == focus))
+                    }
+                }
+                Text(verbatim: strengthFocus.summary)
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
         }
     }
 
@@ -343,6 +368,7 @@ struct WorkoutSetupSheet: View {
         store.setWorkoutSessionOptions(sessionOptions)
         WorkoutCuePreferences.saveSpoken(spokenCues)
         store.setWorkoutWarmUpSets(warmUpSets)
+        store.setWorkoutStrengthFocus(strengthFocus)
         WorkoutZonePreferences.save(zonePreferences)
         dismiss()
     }

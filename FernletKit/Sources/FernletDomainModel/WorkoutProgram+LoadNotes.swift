@@ -112,13 +112,14 @@ extension WorkoutProgram {
     /// Context lines a plateau story carries at most, before its plain training option.
     static let maxContextLines = 2
 
-    /// The trend story for one lift of the session: a stalled or dipping lift first, else a slowing
-    /// one, else one whose window was mostly flagged. At most ``maxContextLines`` context lines (what
-    /// the trend shows, and what happened alongside it), then always a plain training option. Calm by
-    /// rule: steady is normal, a dip happens, and a flag is said as co-occurrence, never as blame.
+    /// The trend story for one lift of the session: a stalled, dipping or eased lift first, else a
+    /// slowing one, else one whose window was mostly flagged. At most ``maxContextLines`` context lines
+    /// (what the trend shows, and what happened alongside it), then always a plain training option.
+    /// Calm by rule: steady is normal, a dip happens, a flag is said as co-occurrence, never as blame,
+    /// and for a lifter of 60 or more, holding strength is said to be the progress it is (G9).
     static func plateauStory(_ loaded: [LoadedPick], inputs: SlotInputs) -> [String]? {
         let lifts = loaded.filter { $0.variantOf == nil && $0.exercise.guidance?.warmUp != true }
-        let order: [TrendState] = [.stalled, .dipping, .slowing, .tooEarly]
+        let order: [TrendState] = [.stalled, .dipping, .eased, .slowing, .tooEarly]
         var chosen: LoadedPick?
         for state in order where chosen == nil {
             chosen = lifts.first { $0.plateau?.state == state }
@@ -128,7 +129,8 @@ extension WorkoutProgram {
         var context: [String] = []
         if let lead = leadLine(name, status: status) { context.append(lead) }
         if let flags = flagContextLine(status.reading) { context.append(flags) }
-        let option = trainingOption(pick, name: name, status: status, loaded: loaded, goal: inputs.goal)
+        let older = (inputs.load?.traits.ageYears ?? 0) >= WorkoutTrend.olderAdultYears
+        let option = trainingOption(pick, name: name, status: status, loaded: loaded, goal: inputs.goal, older: older)
         return Array(context.prefix(maxContextLines)) + [option]
     }
 
@@ -139,6 +141,8 @@ extension WorkoutProgram {
             return status.stage == .holdingSteady ? nil : plateauLead(name, weeks: status.weeksHeld)
         case .dipping:
             return WorkoutPlannerCopy.dipLead(name)
+        case .eased:
+            return WorkoutPlannerCopy.easedLead(name)
         case .slowing, .tooEarly, .progressing:
             return nil
         }
@@ -158,15 +162,17 @@ extension WorkoutProgram {
 
     /// The plain training option: what today does about the trend, by its state and ladder step.
     static func trainingOption(
-        _ pick: LoadedPick, name: String, status: PlateauStatus, loaded: [LoadedPick], goal: GoalType
+        _ pick: LoadedPick, name: String, status: PlateauStatus, loaded: [LoadedPick], goal: GoalType, older: Bool
     ) -> String {
         let guidance = pick.exercise.guidance
         let weight = guidance?.prescription.map(\.suggestedText)
         switch status.state {
         case .dipping:
             return WorkoutPlannerCopy.deload(name, sets: pick.exercise.sets, weight: weight)
+        case .eased:
+            return WorkoutPlannerCopy.easedOption
         case .slowing:
-            return WorkoutPlannerCopy.slowing(name)
+            return WorkoutPlannerCopy.slowing(name, older: older)
         case .tooEarly, .progressing:
             return WorkoutPlannerCopy.tooEarly(name)
         case .stalled:
@@ -182,11 +188,11 @@ extension WorkoutProgram {
             return WorkoutPlannerCopy.heavierBlock(name, reps: reps, weight: weight)
         case .variant:
             guard let variant = loaded.first(where: { $0.variantOf == pick.target.name }) else {
-                return WorkoutPlannerCopy.holdingSteady(name, goal: goal)
+                return WorkoutPlannerCopy.holdingSteady(name, goal: goal, older: older)
             }
             return WorkoutPlannerCopy.variantBeside(ExerciseHowToCatalog.displayName(for: variant.target.name), lift: name)
         case .holdingSteady:
-            return WorkoutPlannerCopy.holdingSteady(name, goal: goal)
+            return WorkoutPlannerCopy.holdingSteady(name, goal: goal, older: older)
         }
     }
 
