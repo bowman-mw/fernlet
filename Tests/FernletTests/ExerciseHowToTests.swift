@@ -286,7 +286,7 @@ struct ExerciseHowToTests {
         let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
         let order = [
             "title: Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))",
-            "ExerciseDemonstrationSlot(exerciseName: exerciseName, sex: sex)",
+            "ExerciseDemonstrationSlot(",
             "ExerciseHowToFacts(target:",
             "ExerciseHowToSteps(cues: entry.cues)",
             "ExerciseHowToNote(title: \"Common mistake\"",

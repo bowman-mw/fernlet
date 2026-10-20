@@ -195,6 +195,32 @@ struct ExerciseDemonstrationTests {
         #expect(ExerciseDemonstrationPlaceholder.glyph(for: nil) == .yogaMat)
     }
 
+    /// The tile is half the sheet's visible height, held between 160 and 320 points. So at the medium
+    /// detent (about 380 points of content on a 6.3-inch phone) the first cues show under it, and
+    /// expanded it is full size. Before the first measurement it draws full size.
+    @Test func theTileIsHalfTheVisibleHeightBetweenItsBounds() {
+        let heights: [CGFloat] = [0, .infinity, -40, 200, 380, 640, 800]
+        let sides = heights.map { ExerciseDemonstrationLayout.side(forVisibleHeight: $0) }
+        #expect(sides == [320, 320, 320, 160, 190, 320, 320])
+    }
+
+    /// The placeholder is a square the size of the media, with the exercise's drawn name in a text
+    /// box. Its type stops at the first accessibility size because the heading above carries the name
+    /// at every size, and both the media and the placeholder take the sheet-sized side.
+    @Test func thePlaceholderIsASquareNamingTheExercise() throws {
+        let view = try RepoRoot.source("App/Fernlet/ExerciseDemonstrationView.swift")
+        let start = try #require(view.range(of: "struct ExerciseDemonstrationPlaceholder"))
+        let placeholder = view[start.lowerBound...]
+        #expect(placeholder.contains("Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))"))
+        #expect(placeholder.contains(".aspectRatio(1, contentMode: .fit)"))
+        #expect(placeholder.contains(".frame(maxWidth: side)"))
+        #expect(placeholder.contains(".dynamicTypeSize(...DynamicTypeSize.accessibility1)"))
+        let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
+        #expect(sheet.contains("side: ExerciseDemonstrationLayout.side(forVisibleHeight: visibleHeight)"))
+        #expect(sheet.contains("fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName, side: side)"))
+        #expect(sheet.contains("exerciseName: exerciseName, target: WorkoutExerciseCatalog.exercise(named: exerciseName), side: side)"))
+    }
+
     // MARK: - The player
 
     /// Frames decode one at a time, downsampled to the requested size, with the GIF's own delays and

@@ -7,7 +7,9 @@
 //  reached from the guided runner's exercise card and the plan's exercise rows. The text is the
 //  domain's bundled, localized `ExerciseHowToCatalog`; this file only lays it out. The slot at the top
 //  draws the exercise's demonstration (idea 8, `ExerciseDemonstrationView.swift`): the licensed media
-//  this build carries for the profile's sex, or a placeholder tile when it carries none.
+//  this build carries for the profile's sex, or a placeholder square with the exercise's name when it
+//  carries none. The square is about half the visible height at the medium detent and full size when
+//  expanded.
 //
 
 import SwiftUI
@@ -71,6 +73,8 @@ struct ExerciseHowToSheet: View {
     let exerciseName: String
     /// The profile's sex: the demonstration shows that version first.
     let sex: BiologicalSex
+    /// The scroll area's height, which sizes the demonstration; zero until first measured.
+    @State private var visibleHeight: CGFloat = 0
 
     private var entry: ExerciseHowTo? { ExerciseHowToCatalog.entry(for: exerciseName) }
 
@@ -82,7 +86,9 @@ struct ExerciseHowToSheet: View {
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    ExerciseDemonstrationSlot(exerciseName: exerciseName, sex: sex)
+                    ExerciseDemonstrationSlot(
+                        exerciseName: exerciseName, sex: sex,
+                        side: ExerciseDemonstrationLayout.side(forVisibleHeight: visibleHeight))
                     if let entry {
                         ExerciseHowToFacts(target: WorkoutExerciseCatalog.exercise(named: exerciseName))
                         ExerciseHowToSteps(cues: entry.cues)
@@ -98,6 +104,7 @@ struct ExerciseHowToSheet: View {
                 }
                 .padding(20)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { visibleHeight = $0 }
         }
         .background(Color.parchment)
         .uxScreenAnchor("sheet.exerciseHowTo")
@@ -109,21 +116,25 @@ struct ExerciseHowToSheet: View {
 /// `ExerciseDemonstrationLibrary` picks the file from what this build carries: the profile's sex
 /// first, then the other's, a still under Reduce Motion. A silent loop or a still reads as one image,
 /// "Demonstration of <name>", with the numbered cues below as its description. With no licensed file
-/// bundled (any build from a clean clone) it draws the decorative equipment tile, which VoiceOver
-/// skips, so the sheet still reads name first, then the facts and cues.
+/// bundled (any build from a clean clone) it draws the decorative placeholder square, which shows the
+/// exercise's name and which VoiceOver skips, so the sheet still reads name first, then the facts and cues.
 struct ExerciseDemonstrationSlot: View {
     /// The frozen catalog name the media is looked up by.
     let exerciseName: String
     let sex: BiologicalSex
+    /// The square's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
+    let side: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let demonstration = ExerciseDemonstrationLibrary.demonstration(
             for: exerciseName, sex: sex, reduceMotion: reduceMotion)
         if let fileName = demonstration.fileName {
-            ExerciseDemonstrationMedia(fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName)
+            ExerciseDemonstrationMedia(
+                fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName, side: side)
         } else {
-            ExerciseDemonstrationPlaceholder(target: WorkoutExerciseCatalog.exercise(named: exerciseName))
+            ExerciseDemonstrationPlaceholder(
+                exerciseName: exerciseName, target: WorkoutExerciseCatalog.exercise(named: exerciseName), side: side)
         }
     }
 }

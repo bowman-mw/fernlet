@@ -50,7 +50,9 @@ The how-to sheet picks, for the exercise and the sex in the user's profile:
 1. that sex's GIF, playing in a loop;
 2. the other sex's GIF;
 3. an illustration, that sex's first, then the other's;
-4. a placeholder: a calm tile with the exercise's equipment glyph, hidden from VoiceOver.
+4. a placeholder: a blank cream square, the same size as the media. It shows the exercise's equipment glyph
+   over a framed text box with its name, and is hidden from VoiceOver. Each licensed file that lands here
+   replaces its exercise's square on the next build.
 
 With Reduce Motion on, an illustration comes first; if only a GIF is present, its first frame shows,
 held still. Only files actually in the bundle count, so a missing file simply falls through to the

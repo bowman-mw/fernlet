@@ -13,17 +13,29 @@ import ImageIO
 import FernletDomainModel
 import FernletUI
 
-/// The demonstration tile's fixed geometry. The media is a picture, not text, so it does not grow
-/// with Dynamic Type; the sheet scrolls instead.
+/// The demonstration tile's geometry. The media is a picture, not text, so it does not grow with
+/// Dynamic Type; the sheet scrolls instead.
+///
+/// The tile is square, and its side follows the height the sheet shows. At the medium detent it is
+/// about half of what is visible, so the first cues still show under it. At the large detent it is
+/// the full ``maxSide``.
 enum ExerciseDemonstrationLayout {
     /// The longest side a demonstration is drawn at, in points (square, centred, narrower on a
     /// narrow sheet). Frames are decoded at this size times the display scale.
     static let maxSide: CGFloat = 320
-    /// The placeholder tile's height: lower than the media, so a build without media keeps the cues
-    /// near the top of the sheet.
-    static let placeholderHeight: CGFloat = 132
-    static let glyphSize: CGFloat = 56
+    /// The smallest side, however short the sheet.
+    static let minSide: CGFloat = 160
+    /// The share of the sheet's visible height the tile takes before it reaches ``maxSide``.
+    static let visibleShare: CGFloat = 0.5
+    static let glyphSize: CGFloat = 40
     static let cornerRadius: CGFloat = 16
+
+    /// The tile's side for a sheet showing `visibleHeight` points of content: half of it, held between
+    /// ``minSide`` and ``maxSide``. Zero (not yet measured) or anything unusable gives ``maxSide``.
+    static func side(forVisibleHeight visibleHeight: CGFloat) -> CGFloat {
+        guard visibleHeight.isFinite, visibleHeight > 0 else { return maxSide }
+        return min(max(visibleHeight * visibleShare, minSide), maxSide)
+    }
 }
 
 /// One bundled demonstration file drawn as a square tile: a looping animation or a still.
@@ -38,6 +50,8 @@ struct ExerciseDemonstrationMedia: View {
     let animates: Bool
     /// The frozen catalog name; the spoken label draws its display name.
     let exerciseName: String
+    /// The tile's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
+    let side: CGFloat
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.scenePhase) private var scenePhase
@@ -69,7 +83,7 @@ struct ExerciseDemonstrationMedia: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: ExerciseDemonstrationLayout.maxSide)
+        .frame(maxWidth: side)
         .clipShape(RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spokenName)
@@ -183,21 +197,47 @@ struct ExerciseDemonstrationFrames {
     }
 }
 
-/// The tile shown when this build carries no demonstration for the exercise: the exercise's equipment
-/// glyph, small and muted, on the cream card colour, in light and dark.
+/// The tile shown when this build carries no demonstration for the exercise: a stand-in picture the
+/// size and shape of the real one. It's a blank cream square with the equipment glyph, small and muted,
+/// over a framed text box holding the exercise's drawn name, in light and dark. The licensed media
+/// replaces it file by file as it lands in the drop folder; nothing else changes.
 ///
-/// Decorative, so VoiceOver skips it: the heading above names the exercise and the facts below name
-/// the equipment. It says nothing about media to come.
+/// Decorative, so VoiceOver skips it: the heading above already names the exercise and the facts below
+/// name the equipment. It says nothing about media to come. Its name is the heading's copy, so its type
+/// stops growing at the first accessibility size and shrinks to fit rather than overflow the square.
+/// The heading grows without limit.
 struct ExerciseDemonstrationPlaceholder: View {
+    /// The frozen catalog name; the box draws its display name.
+    let exerciseName: String
     let target: ExerciseTarget?
+    /// The tile's side, from ``ExerciseDemonstrationLayout/side(forVisibleHeight:)``.
+    let side: CGFloat
 
     var body: some View {
-        EquipmentGlyph(item: Self.glyph(for: target), size: ExerciseDemonstrationLayout.glyphSize)
-            .foregroundStyle(Color.softTaupe)
-            .frame(maxWidth: .infinity)
-            .frame(height: ExerciseDemonstrationLayout.placeholderHeight)
-            .background(Color.cream, in: RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
-            .accessibilityHidden(true)
+        ZStack {
+            Color.cream
+            VStack(spacing: 14) {
+                EquipmentGlyph(item: Self.glyph(for: target), size: ExerciseDemonstrationLayout.glyphSize)
+                    .foregroundStyle(Color.softTaupe)
+                Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))
+                    .font(.fernlet(.headerMedium))
+                    .foregroundStyle(Color.bark)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.6)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.parchment, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.softTaupe, lineWidth: 1))
+            }
+            .padding(20)
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .frame(maxWidth: side)
+        .clipShape(RoundedRectangle(cornerRadius: ExerciseDemonstrationLayout.cornerRadius))
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
     }
 
     /// The glyph for an exercise: the tool it is done with, or for a bodyweight move the one piece of
