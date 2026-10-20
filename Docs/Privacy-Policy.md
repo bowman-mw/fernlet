@@ -66,9 +66,10 @@
      settings Fernlet stores: per-set weights, warm-up sets, the suggested weight, the
      Easy/Good/Tough rating, the reason for choosing a weight outside the suggested range (pain
      among them), training experience, a per-lift estimate of training age, weights on hand, warm-up
-     preference, injuries and the avoid lists, and an optional maximum heart rate. New disclosures
-     of processing on the device and of fields kept with workouts and settings; nothing new leaves
-     the device and no promise is weakened under §13). Before
+     preference, injuries and the avoid lists, and an optional maximum heart rate, which is kept on
+     the device only (UserDefaults `fernlet.workoutCues.maxHeartRate`: never synced, cleared by
+     Delete Everything). New disclosures of processing on the device and of fields kept with
+     workouts and settings; nothing new leaves the device and no promise is weakened under §13). Before
      submission: (1) host this text at a public URL and enter that URL in App Store Connect, and
      (2) keep it in sync with the in-app copy in App/Fernlet/PrivacyPolicyView.swift (Settings →
      Privacy Policy) AND the hosted copy in Site/privacy/index.html. Any material change: update
@@ -127,7 +128,8 @@ Almost everything, including:
 - **Workout settings:** your training experience, how long you have trained each lift (which
   Fernlet works out on your device from your logged workouts), the weights you have at each place
   you train, whether you want warm-up sets, any injuries and the muscles and movements you avoid, and
-  an optional maximum heart rate you enter for your heart-rate zones.
+  an optional maximum heart rate you enter for your heart-rate zones. That maximum heart rate is
+  kept on this device only: it is never synced, and **Delete Everything** removes it.
 - **Journal entries** and the gentle reflections derived from them.
 - **Memories** — short notes Fernlet keeps so it can respond to you thoughtfully over time. A
   memory drawn from a journal entry never holds your words: it keeps only that entry's mood (for
