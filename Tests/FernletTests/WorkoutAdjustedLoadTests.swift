@@ -78,13 +78,18 @@ struct WorkoutAdjustedLoadTests {
         steps.filter { WorkoutWarmUpSets.isWarmUpSet($0) }
     }
 
+    /// The working step named `name` in `steps` (never one of its warm-up sets), if any.
+    func working(_ name: String, in steps: [PrescribedExercise]) -> PrescribedExercise? {
+        steps.last { $0.name == name && !WorkoutWarmUpSets.isWarmUpSet($0) }
+    }
+
     // MARK: - Guidance
 
     @Test func aKeptLiftAtTheSameRepsKeepsItsGuidance() throws {
         let load = context([key("Back squat"): [lifted(28, 200)]])
         let steps = reloaded([picked("Lateral raise", reps: "12", role: .accessory), picked("Back squat")],
                              original: original(), load: load)
-        let squat = try #require(steps.last { $0.name == "Back squat" })
+        let squat = try #require(working("Back squat", in: steps))
         let suggested = squat.guidance?.prescription?.suggested
         #expect(suggested == 135, "the planner's prescription, not a new one from history")
         let raise = try #require(steps.first)
@@ -96,10 +101,11 @@ struct WorkoutAdjustedLoadTests {
     @Test func aNewOrChangedLiftIsPrescribedFromItsHistory() throws {
         let load = context([key("Bench press"): [lifted(21, 135), lifted(28, 135)], key("Back squat"): [lifted(28, 185)]])
         let steps = reloaded([picked("Bench press"), picked("Back squat", reps: "12")], original: original(), load: load)
-        let bench = try #require(steps.last { $0.name == "Bench press" })
-        let benchWeight = try #require(bench.guidance?.prescription?.suggested)
+        let bench = try #require(working("Bench press", in: steps))
+        let benchSuggested = bench.guidance?.prescription?.suggested
+        let benchWeight = try #require(benchSuggested)
         #expect(benchWeight > 0)
-        let squat = try #require(steps.last { $0.name == "Back squat" })
+        let squat = try #require(working("Back squat", in: steps))
         let target = try #require(WorkoutExerciseCatalog.exercise(named: "Back squat"))
         let engine = WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
             scheme: RepScheme(low: 12, high: 12), baseSets: 3, exposures: [lifted(28, 185)], equipment: target.equipment,
@@ -117,7 +123,7 @@ struct WorkoutAdjustedLoadTests {
 
     @Test func liftsTheCatalogDoesNotKnowGetNoGuidance() throws {
         let steps = reloaded([picked("Mystery lift"), picked("Back squat")], original: original(), load: context())
-        let mystery = try #require(steps.first { $0.name == "Mystery lift" })
+        let mystery = try #require(working("Mystery lift", in: steps))
         let none = mystery.guidance == nil
         #expect(none)
     }
