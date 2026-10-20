@@ -305,6 +305,65 @@ struct ExerciseHowToTests {
                     "\(path) presents the how-to sheet from exactly one place")
         }
     }
+
+    // MARK: - The es/fr/de drafts stay dormant
+
+    /// The domain catalog carries Spanish, French and German drafts of every exercise string, all
+    /// marked `needs_review` and none reviewed yet. They stay out of sight only while the app itself
+    /// ships English alone: a package's resource bundle resolves to the language the MAIN bundle
+    /// resolved to, so with no non-English entry in any app-target catalog (no `es.lproj`, `fr.lproj`
+    /// or `de.lproj` in the app or an extension) and no `CFBundleAllowMixedLocalizations`, a device
+    /// set to Spanish still draws the English defaults. Either change turns the drafts on in that
+    /// language, unreviewed, beside English everywhere else. Turning a language on app-wide is a later
+    /// phase (Docs/Localization-Plan-2026-07-19.md §4): have the drafts reviewed first, then update
+    /// this test.
+    @Test func theDraftTranslationsStayDormantWhileTheAppShipsOnlyEnglish() throws {
+        let catalogs = Self.appFiles { $0.pathExtension == "xcstrings" }
+        #expect(catalogs.count >= 6, "found \(catalogs.count) app-target catalogs; the scan lost its root")
+        for catalog in catalogs {
+            let json = try JSONSerialization.jsonObject(with: Data(contentsOf: catalog)) as? [String: Any]
+            let strings = json?["strings"] as? [String: Any] ?? [:]
+            var languages = Set<String>()
+            for case let entry as [String: Any] in strings.values {
+                languages.formUnion((entry["localizations"] as? [String: Any])?.keys.map { $0 } ?? [])
+            }
+            let others = languages.subtracting(["en"]).sorted()
+            #expect(others.isEmpty, "\(catalog.path) carries \(others): that compiles a lproj into an app bundle and turns the unreviewed exercise drafts on in that language")
+        }
+        let plists = Self.appFiles { $0.lastPathComponent == "Info.plist" }
+        #expect(plists.count >= 4, "found \(plists.count) app-target Info.plists; the scan lost its root")
+        for path in plists {
+            let data = try Data(contentsOf: path)
+            let plist = try #require(try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+            let mixed = plist["CFBundleAllowMixedLocalizations"] != nil
+            #expect(!mixed, "\(path.path) sets CFBundleAllowMixedLocalizations, so package bundles follow the device language")
+        }
+        let project = try RepoRoot.source("App/Fernlet.xcodeproj/project.pbxproj")
+        #expect(!project.contains("AllowMixedLocalizations"), "a target's build settings allow mixed localizations")
+        // What this protects is really there: the drafts are in the domain catalog.
+        let domain = try Self.catalogStrings()
+        let bench = (domain["exercise.benchPress.name"] as? [String: Any])?["localizations"] as? [String: Any]
+        let benchLanguages = Set(bench?.keys.map { $0 } ?? [])
+        #expect(benchLanguages.isSuperset(of: ["de", "es", "fr"]), "the exercise drafts are gone from the domain catalog")
+    }
+
+    /// The files under `App/` that `matches` accepts, skipping build output, package checkouts and
+    /// per-user Xcode state (an `App/build` DerivedData holds other packages' catalogs and plists).
+    static func appFiles(_ matches: (URL) -> Bool) -> [URL] {
+        guard let walker = FileManager.default.enumerator(at: RepoRoot.url("App"), includingPropertiesForKeys: nil) else {
+            return []
+        }
+        let skipped: Set<String> = ["build", "DerivedData", "SourcePackages", ".build", "xcuserdata"]
+        var found: [URL] = []
+        while let url = walker.nextObject() as? URL {
+            if skipped.contains(url.lastPathComponent) {
+                walker.skipDescendants()
+            } else if matches(url) {
+                found.append(url)
+            }
+        }
+        return found
+    }
 }
 
 /// A guided run started from the store bakes in each step's drawn name, and finishing it logs and
