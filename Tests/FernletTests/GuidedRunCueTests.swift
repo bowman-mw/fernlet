@@ -62,11 +62,14 @@ private final class BackgroundRecorder {
     private static let hapticsOnly = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
     private static let bothOff = FernletFeedbackPreferences(hapticsEnabled: false, soundsEnabled: false)
 
-    private static func run(_ exercises: [GuidedWorkoutRunState.Exercise], at origin: Date = GuidedRunCueTests.start) -> GuidedWorkoutRunState {
+    /// A run starting at `origin` (nil: the fixed ``start``). The default is resolved in the body, not
+    /// in the signature: a default argument is evaluated outside the main actor, where this suite's
+    /// statics are out of reach.
+    private static func run(_ exercises: [GuidedWorkoutRunState.Exercise], at origin: Date? = nil) -> GuidedWorkoutRunState {
         GuidedWorkoutRunState(
             sessionID: UUID(), committedDayKey: "2026-10-20", intensityRaw: "moderate", title: "Cues",
             suggestionExercisesText: "", suggestionNotes: "", sessionKindRaw: "strength",
-            exercises: exercises, setStartedAt: origin
+            exercises: exercises, setStartedAt: origin ?? start
         )
     }
 
@@ -304,12 +307,15 @@ private final class BackgroundRecorder {
 
     // MARK: The director
 
+    /// A director over recorders. `preferences` nil means haptics only, resolved in the body for the
+    /// same reason as ``run(_:at:)``.
     private func director(
         _ cues: CueRecorder, _ background: BackgroundRecorder,
-        preferences: FernletFeedbackPreferences = GuidedRunCueTests.hapticsOnly, active: Bool = true
+        preferences: FernletFeedbackPreferences? = nil, active: Bool = true
     ) -> GuidedRunCueDirector {
-        GuidedRunCueDirector(
-            feedback: cues.feedback, preferences: { preferences }, isAppActive: { active },
+        let switches = preferences ?? Self.hapticsOnly
+        return GuidedRunCueDirector(
+            feedback: cues.feedback, preferences: { switches }, isAppActive: { active },
             scheduleBackground: background.scheduler
         )
     }
