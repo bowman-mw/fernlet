@@ -234,6 +234,15 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// True only after the run was walked all the way to the end. An abandon leaves it false, so
     /// nothing is logged.
     var completedNaturally: Bool
+    /// When the run began: stamped once when the app starts it and never moved, so a run resumed
+    /// after a relaunch, or advanced from the Lock Screen, keeps its real start. The logged
+    /// workout's duration counts from here. Nil in a run persisted before durations were recorded,
+    /// which then logs without one.
+    var startedAt: Date?
+    /// When the run finished naturally, stamped by the finishing transition itself, so a finish
+    /// tapped on the Lock Screen and logged at the app's next reconcile still ends at the tap. Nil
+    /// until then, and after an abandon.
+    var finishedAt: Date?
     /// When this run was last written to the app group. Stamped on every persist. Reconcile uses its
     /// age to tell a live run (recently touched — e.g. a rest that crossed local midnight) from a run
     /// the process merely outlived (untouched for hours → abandoned), instead of keying off the day.
@@ -424,7 +433,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             setStartedAt = now
             phase = .working
         } else {
-            finish()
+            finish(at: now)
         }
     }
 
@@ -434,7 +443,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         restStartedAt = nil
         restEndsAt = nil
         if currentExercise == nil {
-            finish()
+            finish(at: now)
         } else {
             setStartedAt = now
             phase = .working
@@ -476,7 +485,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         let block = currentBlock
         let next = exercises.indices.first { $0 > exerciseIndex && exercises[$0].block != block }
         guard block == BlockToken.warmUp, let next else {
-            finish()
+            finish(at: now)
             return
         }
         exerciseIndex = next
@@ -502,10 +511,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         phase = .resting
     }
 
-    private mutating func finish() {
+    /// The natural finish, stamped with the transition's own time (``finishedAt``).
+    private mutating func finish(at now: Date) {
         restStartedAt = nil
         restEndsAt = nil
         completedNaturally = true
+        finishedAt = now
         phase = .done
     }
 

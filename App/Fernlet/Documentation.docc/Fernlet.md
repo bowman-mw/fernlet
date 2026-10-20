@@ -184,6 +184,7 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``WorkoutLiveActivityController``
 - ``LiveActivityStarter``
 - ``WorkoutTombstoneStore``
+- ``GuidedRunDuration``
 - ``ProgressPhotoSection``
 - ``ProgressPhotoSectionContent``
 - ``ProgressPhotoLockNudgeCard``
