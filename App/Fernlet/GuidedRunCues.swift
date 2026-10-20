@@ -204,7 +204,7 @@ final class GuidedRunCueDirector {
     /// Creates a director. Every dependency is injectable; the defaults are production.
     ///
     /// - Parameters:
-    ///   - feedback: The haptic and sound player.
+    ///   - feedback: The haptic and sound player; nil means the production player.
     ///   - preferences: The person's switches, read at every play.
     ///   - isAppActive: Whether the app is in front, read at every play.
     ///   - scheduleBackground: Replaces the pending background cue.
