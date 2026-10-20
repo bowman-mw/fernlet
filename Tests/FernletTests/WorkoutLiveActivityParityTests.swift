@@ -311,6 +311,81 @@ private final class RestCueRecorder {
         #expect(withPartialLoad.load == Load(weight: 105))
     }
 
+    // MARK: Warm-up sets (round 2, R2)
+
+    /// Three single-set warm-ups of a back squat, then its three working sets.
+    private static func rampedRun() -> GuidedWorkoutRunState {
+        var ramp = tracking(selected: 45, suggested: 45)
+        ramp.calibrationRaw = GuidedWorkoutRunState.CalibrationToken.ramp
+        let warmUps = (0..<3).map { _ in lift("Back squat", sets: 1, tracking: ramp) }
+        return run(warmUps + [lift("Back squat", tracking: tracking())])
+    }
+
+    /// The content state carries the warm-up position the runner shows ("Warm-up set 2 of 3"), and
+    /// none once the working sets begin.
+    @Test func theContentStateCarriesTheWarmUpPosition() {
+        var state = Self.rampedRun()
+        let first = state.contentState
+        #expect(first.warmUpSet == 1)
+        #expect(first.warmUpSets == 3)
+        state.markSetDone(now: Self.t0)
+        let second = state.contentState
+        #expect(second.warmUpSet == 2)
+        #expect(second.warmUpSets == 3)
+        let positionIndex = second.warmUp.map { $0.index }
+        #expect(positionIndex == 2)
+        state.markSetDone(now: Self.t0)
+        state.markSetDone(now: Self.t0)
+        let working = state.contentState
+        #expect(working.warmUpSet == nil)
+        #expect(working.warmUpSets == nil)
+        let noPosition = working.warmUp == nil
+        #expect(noPosition)
+        let plain = Self.run([Self.lift("Bench press")]).contentState
+        #expect(plain.warmUpSet == nil)
+    }
+
+    /// A payload from before the warm-up label decodes with no position, and a position out of order
+    /// draws nothing rather than "Warm-up 4 of 3".
+    @Test func olderPayloadsDecodeWithNoWarmUpPosition() throws {
+        let old = """
+            {"exerciseName":"Back squat","setNumber":1,"totalSets":1,"reps":"8","phase":"working",\
+            "exerciseIndex":0,"totalExercises":4}
+            """
+        let decoded = try JSONDecoder().decode(WorkoutActivityAttributes.ContentState.self, from: Data(old.utf8))
+        #expect(decoded.warmUpSet == nil)
+        #expect(decoded.warmUpSets == nil)
+        var broken = decoded
+        broken.warmUpSet = 4
+        broken.warmUpSets = 3
+        let none = broken.warmUp == nil
+        #expect(none)
+        let content = Self.rampedRun().contentState
+        let data = try JSONEncoder().encode(content)
+        let back = try JSONDecoder().decode(WorkoutActivityAttributes.ContentState.self, from: data)
+        #expect(back == content)
+    }
+
+    /// The Live Activity says "Warm-up 1 of 3 · 8 reps" on the Lock Screen and in the expanded Island,
+    /// "Warm-up 1 of 3" in the expanded trailing slot, and "1/3" in the compact slot, spoken in words.
+    @Test func theLiveActivityLabelsWarmUpSets() throws {
+        let widget = try RepoRoot.source("App/FernletWidgets/WorkoutLiveActivity.swift")
+        let setLine = try #require(Self.section(of: widget, from: "private func setRepsLine",
+                                                to: "/// \"Warm-up 1 of 3\""))
+        #expect(setLine.contains("Text(\"Warm-up \\(warmUp.index) of \\(warmUp.count) · \\(state.reps) reps\""))
+        let trailing = try #require(Self.section(of: widget, from: "private struct WorkoutIslandTrailing",
+                                                 to: "private struct WorkoutIslandCenter"))
+        #expect(trailing.contains("warmUpLabel(warmUp)"))
+        let compact = try #require(Self.section(of: widget, from: "private struct WorkoutIslandCompactTrailing",
+                                                to: "private struct WorkoutIslandMinimal"))
+        #expect(compact.contains("Text(\"\\(warmUp.index)/\\(warmUp.count)\")"))
+        #expect(compact.contains(".accessibilityLabel(warmUpLabel(warmUp))"))
+        #expect(widget.contains("Text(\"Warm-up \\(warmUp.index) of \\(warmUp.count)\","))
+        let catalog = try RepoRoot.source("App/FernletWidgets/Localizable.xcstrings")
+        #expect(catalog.contains("\"Warm-up %lld of %lld\" : {"))
+        #expect(catalog.contains("\"Warm-up %lld of %lld · %@ reps\" : {"))
+    }
+
     /// A run saved before last time's numbers existed still decodes, keeping its weight plan.
     @Test func aRunSavedBeforeLastTimeStillDecodes() throws {
         let last = GuidedWorkoutRunState.LastTime(sets: 3, reps: "8", weight: 100, unitRaw: "lb")
