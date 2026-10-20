@@ -110,7 +110,8 @@ enum GuidedSegmentWords {
     /// An up-next row's spoken and listed name: the pace and length for a segment ("Easy 1:00"), the
     /// exercise's name otherwise.
     nonisolated static func upNextName(_ exercise: GuidedWorkoutRunState.Exercise) -> String {
-        guard let segment = exercise.segment else { return exercise.displayedName }
+        // The stored fields, not `displayedName` (a main-actor computed property in the app target).
+        guard let segment = exercise.segment else { return exercise.displayName ?? exercise.name }
         return "\(paceWord(segment.paceRaw)) \(clock(seconds: exercise.holdSeconds ?? 0))"
     }
 
