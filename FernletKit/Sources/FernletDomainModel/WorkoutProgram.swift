@@ -7,7 +7,7 @@ import FernletFoundation
 ///
 /// Caps accessory slots per session (`maxSlotsPerDay`) and contributes points toward the
 /// recommended split specificity; decodes tolerantly on ``WorkoutProfile``.
-public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum ExperienceLevel: String, Codable, CaseIterable, Identifiable, Sendable {
     case beginner
     case intermediate
     case advanced
