@@ -205,6 +205,20 @@ struct MoveView: View {
         }?.suggestion.name
     }
 
+    /// Today's planned row's Start: opens the guided runner — its Ready screen lists the plan as written,
+    /// or, when this plan's run is already under way, the run itself. Nil (no Start) for a plan with
+    /// nothing the runner can walk.
+    private func startAction(for planned: PlannedWorkout) -> (() -> Void)? {
+        guard PlannedWorkoutRun.canGuide(planned) else { return nil }
+        return {
+            guard let session = store.guidedSession(forPlanned: planned, date: store.todayKey) else {
+                FernletAuditLog.log("workout.plannedRun.notGuidable")
+                return
+            }
+            guidedSession = session
+        }
+    }
+
     /// Today's planned rows then today's logged rows, divided.
     private var todaysMovementSection: some View {
         FernletScrollSection("Today's movement") {
@@ -226,7 +240,8 @@ struct MoveView: View {
                         onDelete: {
                             store.deletePlannedWorkout(plannedWorkout, date: store.todayKey)
                             refreshAllDays()
-                        }
+                        },
+                        onStart: startAction(for: plannedWorkout)
                     )
                     if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
                         FernletRowDivider()
@@ -339,24 +354,26 @@ struct MoveView: View {
 
     /// The guided runner sheet for `session`, with the "other sessions remain" copy resolved.
     private func guidedRunnerSheet(_ session: WorkoutProgram.SessionSuggestion) -> some View {
-        GuidedWorkoutSheet(
-            store: store,
-            session: session,
-            sessionsRemain: store.currentGuidedWorkoutPlan.map { plan in
-                // Route through the reconciliation seam (not an id-only check) so the done copy stays
-                // truthful after a relaunch, when the completed-id set is empty but the day record
-                // (by tagged name) still knows what's been guided.
-                plan.sessions.contains {
-                    $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
-                        $0, completed: store.guidedCompletedSessionIDs,
-                        loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-                    )
-                }
-            } ?? false
-        )
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(20)
+        GuidedWorkoutSheet(store: store, session: session, sessionsRemain: otherSessionsRemain(after: session))
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
+    }
+
+    /// Whether other sessions of today's committed plan still need doing after `session` — the runner's
+    /// done copy then names what was logged. Never for a planned workout's run, which is not one of the
+    /// plan's sessions.
+    private func otherSessionsRemain(after session: WorkoutProgram.SessionSuggestion) -> Bool {
+        guard !store.isPlannedRun(session), let plan = store.currentGuidedWorkoutPlan else { return false }
+        // Route through the reconciliation seam (not an id-only check) so the done copy stays
+        // truthful after a relaunch, when the completed-id set is empty but the day record
+        // (by tagged name) still knows what's been guided.
+        return plan.sessions.contains {
+            $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
+                $0, completed: store.guidedCompletedSessionIDs,
+                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+            )
+        }
     }
 
     /// Day rollover + Live Activity reconciliation on every return to the foreground.
@@ -4210,6 +4227,8 @@ struct MoveDayDetailView: View {
     // Past-day reads (`store.loadDay` for a non-today key) aren't observed, so a remove/edit on a past
     // day needs an explicit nudge to re-render. Bumping this re-evaluates the body, re-reading `day`.
     @State private var reloadToken = 0
+    /// The guided run a today's plan's Start opened (`PlannedWorkoutRun.swift`). nil = closed.
+    @State private var plannedRunSession: WorkoutProgram.SessionSuggestion?
 
     private var day: FernletDay {
         _ = reloadToken
@@ -4255,8 +4274,21 @@ struct MoveDayDetailView: View {
             onDelete: {
                 store.deletePlannedWorkout(workout, date: dateKey)
                 reloadToken += 1
-            }
+            },
+            onStart: startAction(for: workout)
         )
+    }
+
+    /// Start, on today's plans only: the same guided run the Move root's row opens.
+    private func startAction(for workout: PlannedWorkout) -> (() -> Void)? {
+        guard dateKey == store.todayKey, PlannedWorkoutRun.canGuide(workout) else { return nil }
+        return {
+            guard let session = store.guidedSession(forPlanned: workout, date: dateKey) else {
+                FernletAuditLog.log("workout.plannedRun.notGuidable")
+                return
+            }
+            plannedRunSession = session
+        }
     }
 
     /// The day's plan: an empty-state that opens the planner, or the planned rows.
@@ -4368,6 +4400,13 @@ struct MoveDayDetailView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
+        // A finished run completes the planned row: re-read the day when the runner closes.
+        .sheet(item: $plannedRunSession, onDismiss: { reloadToken += 1 }) { session in
+            GuidedWorkoutSheet(store: store, session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
     }
 }
 
@@ -4383,6 +4422,9 @@ struct PlannedWorkoutRow: View {
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
+    /// Runs this plan in the guided runner, as written (`PlannedWorkoutRun.swift`). Nil — no Start — on
+    /// any day but today, and for a plan with nothing to run.
+    var onStart: (() -> Void)? = nil
 
     /// Remove asks first — a mis-tap on a small text button used to erase a plan (possibly a
     /// coach-imported one) with no dialog and no undo, while the sibling logged row confirmed.
@@ -4470,9 +4512,30 @@ struct PlannedWorkoutRow: View {
         }
     }
 
-    /// Edit / Remove.
+    /// "Start" — a filled capsule, the row's one primary — runs the plan in the guided runner. The spoken
+    /// name says which plan; Voice Control answers to the drawn word.
+    @ViewBuilder private var startButton: some View {
+        if let onStart {
+            Button(action: onStart) {
+                Label("Start", systemImage: "play.fill")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.onMoss)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.mossFill, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .fernletTapTarget()
+            .accessibilityLabel("Start \(plannedWorkout.displayedName), guided")
+            .accessibilityInputLabels([Text("Start"), Text("Start plan"), Text("Start workout")])
+            .accessibilityIdentifier("workout.plan.start")
+        }
+    }
+
+    /// Start (today's plans), Edit, Remove — stacked at accessibility text sizes rather than squeezed.
     private var actionRow: some View {
-        HStack(spacing: 10) {
+        AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+            startButton
             Button("Edit", action: onEdit)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)

@@ -83,6 +83,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         /// countdown running out, "Next", a skip, the Lock Screen) — kept for a cardio segment or a
         /// stretch-session step only, and what such a run logs as its length. Nil until then.
         var heldSeconds: Int?
+        /// A planned workout's line exactly as written, when it says more than this step shows (a coach's
+        /// cue, "each side") — drawn under the name. Nil on every other step, and in an older run.
+        var writtenLine: String?
 
         init(
             id: UUID = UUID(), name: String, sets: Int, reps: String, roleRaw: String, fromCatalog: Bool,
@@ -162,6 +165,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
         var overrideReasonRaw: String?
         /// The runner skipped past this lift; it is logged as skipped and never read as a result.
         var skipped: Bool?
+        /// The weight came written in a planned workout's line: `suggested` is that weight, preselected as
+        /// written, with no range around it. Nil for the engine's own suggestion, and in an older run.
+        var asWritten: Bool?
 
         /// Sets an edit may carry at most.
         static let maxSets = 20
@@ -239,6 +245,11 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     var sessionKindRaw: String
 
     var exercises: [Exercise]
+
+    /// The planned workout this run walks — a row the person planned ahead or a coach's plan put on the
+    /// calendar — which a natural finish completes, as "log it" does. Nil for the app's own sessions,
+    /// and in a run persisted before planned workouts could be guided.
+    var plannedWorkoutID: UUID?
 
     // MARK: Cursor
 

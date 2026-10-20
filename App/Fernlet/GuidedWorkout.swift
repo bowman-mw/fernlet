@@ -267,7 +267,8 @@ struct GuidedWorkoutSheet: View {
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            GuidedReadyList(exercises: session.exercises)
+            // A planned workout lists its lines as written; the app's own sessions, their steps.
+            GuidedReadyList(exercises: session.exercises, writtenLines: store.plannedRunLink(for: session)?.lines ?? [:])
 
             primaryButton("Start", identifier: "workout.guided.start") {
                 // Another session's run may still be live — after a relaunch the Suggest sheet mints a
@@ -352,6 +353,13 @@ struct GuidedWorkoutSheet: View {
                 side.text
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
+            }
+            // A planned workout's line as written, when it says more than the card does (a coach's cue).
+            if let written = exercise.writtenLine {
+                Text("Your plan: \(written)")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
             }
             // An interval's round; its pace is the countdown's caption, in words.
             if let round = exercise.segment?.round, let rounds = exercise.segment?.rounds {
@@ -703,6 +711,8 @@ struct GuidedWorkoutSheet: View {
         if isLastSet && isLastExercise { return "Finish workout" }
         // A one-set timed step (a stretch) moves on; "Done set" would name a set it is not.
         if exercise.holdSeconds != nil && exercise.sets <= 1 { return "Next" }
+        // A line walked as one step (a planned line the runner can't count) is simply done.
+        if exercise.sets < 1 { return "Done" }
         return "Done set"
     }
 
@@ -1007,6 +1017,9 @@ private struct GuidedHoldTimer: View {
 /// every activation, lifting and cardio movement on its own row.
 private struct GuidedReadyList: View {
     let exercises: [PrescribedExercise]
+    /// A planned workout's lines exactly as written, by step id — listed in place of the step's own line,
+    /// so a coach's weights and cues read as the coach wrote them. Empty for the app's own sessions.
+    var writtenLines: [UUID: String] = [:]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -1016,7 +1029,7 @@ private struct GuidedReadyList: View {
                 row(Text("Warm-up · \(warmUp.count) stretches · \(WorkoutSessionBlocks.minutes(of: warmUp)) min"))
             }
             ForEach(exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
-                row(Text(verbatim: exercise.line))
+                row(Text(verbatim: writtenLines[exercise.id] ?? exercise.line))
             }
             if !coolDown.isEmpty {
                 row(Text("Cool-down · \(coolDown.count) stretches · \(WorkoutSessionBlocks.minutes(of: coolDown)) min"))

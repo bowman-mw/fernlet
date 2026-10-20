@@ -146,6 +146,10 @@ struct GuidedWeightPicker: View {
     }
 
     private var guide: Text {
+        // A weight a planned workout's line named: the plan's own, not a range of Fernlet's.
+        if tracking.asWritten == true, let planned = tracking.suggested {
+            return Text("As planned: \(GuidedLoadFormat.weight(planned, unit: GuidedLoadFormat.unit(tracking)))")
+        }
         guard let range = GuidedLoadFormat.range(tracking), let suggested = tracking.suggested else {
             return Text("Pick a weight you could lift about 2 more times than asked.")
         }

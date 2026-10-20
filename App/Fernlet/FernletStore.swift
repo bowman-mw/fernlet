@@ -4833,6 +4833,10 @@ final class FernletStore {
         GuidedWorkoutRunStateStore(directory: appGroupDirectory)
     /// Serializes Live Activity update/end calls so two rapid transitions can't land out of order.
     @ObservationIgnored private var activitySyncTask: Task<Void, Never>?
+    /// The planned workout whose Start opened the runner, until the runner's own Start begins its run
+    /// (`PlannedWorkoutRun.swift`). One at a time; session-scoped, never persisted — from the run's start
+    /// the run state carries the plan's id itself.
+    @ObservationIgnored var pendingPlannedRun: PlannedRunLink?
 
     private static func roleRaw(_ role: SlotRole) -> String {
         switch role {
@@ -4901,10 +4905,14 @@ final class FernletStore {
     /// Returns whether the run actually started.
     func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion, replacingActiveRun: Bool = false) -> Bool {
         guard replacingActiveRun || activeGuidedRunBlockingStart(of: session) == nil else { return false }
-        let dayKey = guidedPlanDayKey ?? todayKey
-        let intensity = committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
-        let exercises = guidedRunExercises(for: session)
+        // A planned workout's run files under its plan's day and carries the plan's id and its lines as
+        // written (`PlannedWorkoutRun.swift`); nil for the app's own sessions.
+        let plan = plannedRunLink(for: session)
+        let dayKey = plan?.dayKey ?? guidedPlanDayKey ?? todayKey
+        let intensity = plan?.intensity ?? committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
+        var exercises = guidedRunExercises(for: session)
         guard !exercises.isEmpty else { return false }
+        plan?.annotate(&exercises)
 
         var state = GuidedWorkoutRunState(
             sessionID: session.id,
@@ -4916,6 +4924,7 @@ final class FernletStore {
             sessionKindRaw: session.kind.rawValue,
             exercises: exercises
         )
+        state.plannedWorkoutID = plan?.plannedWorkoutID
         state.phase = .working
         state.setStartedAt = Date()
         guidedRunState = state
@@ -5112,6 +5121,8 @@ final class FernletStore {
     /// completion. Deduped by session id so a finish seen by both the sheet and a reconcile logs once.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
+        // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
+        if logPlannedRun(state) { return }
         let dayKey = state.committedDayKey
         // Durable same-day backstop: after a relaunch the in-memory completed set is empty, but a
         // guided log already in today's record (tagged with this name) means it's done — don't re-log.
