@@ -34,6 +34,8 @@ The Move tab end to end: ``MoveView`` hosts a week-strip workout calendar over p
 
 The progress-photo timeline keeps capture working with no lock at all, so for a user who skipped the onboarding lock step it carries a one-time ``ProgressPhotoLockNudgeCard`` — "Set up lock" (granting `.progressPhotos` and nothing else) or "Not now" — driven by ``DeferredLockSetupNudge``, the first-use prompt `OnboardingDefaults.lockSetupDeferredKey` always promised. ``ProgressPhotoSectionContent`` decides the section's content in one place, so that card rides above the capture control and can never replace it.
 
+Exercise preferences (2026-10-20): in the plan editor (``GuidedWorkoutEditorSheet``) each lift can be swapped from ``ExerciseSwapSheet`` — up to four stand-ins the planner itself would allow at this location with these limits, or any exercise by search — after which its card offers "Always use this instead"; "Don't suggest" marks an exercise for the planner to leave out (``GuidedEditorPreferences`` holds both until Save). Workout setup's "Your exercises" (``WorkoutExercisePreferencesEntry``, ``WorkoutExercisePreferencesSheet``) lists the hidden exercises with "Show again", the saved swaps with "Remove", and the user's own exercises with "Add an exercise": ``CustomExerciseFormSheet`` asks for every field a catalog row carries, so the safety filter and slot eligibility judge a hand-made exercise like a bundled one, and it joins the planner, the AI adjuster's pool and the log sheet's picker. Custom exercises share `settings.customExercises` and its 500 cap with the coach-plan import (`FernletStore+ExercisePreferences.swift`); deleting one never touches a logged workout.
+
 ### Silly Stats
 
 Deliberately useless lifetime numbers — cookies per day (on ``SillyFoodCounter``'s cookie table, where an Oreo is half a cookie and anything homemade is a whole one), the weight lifted in grand pianos, the walk to the Moon, the stair machine's Eiffel Towers, sleep in koala days — on a page (``SillyStatsView``, also pushed from ``MilestonesView``) and a Home card (``SillyStatsHomeCard``), and in the companion's thought bubble every two or three days. ``SillyStatsTallier`` folds the diary, Apple Health's lifetime steps (`FernletStore.lifetimeHealthSteps(since:now:)`) and the device-local pat count into a ``SillyStatsTally``; ``SillyStatsEngine`` decides what is revealed (0.1% of the very long trips, the first whole unit for the slow stats, anything logged for the rest) and picks each comparison from a ``SillyUnit`` ladder; ``SillyStatsCopy`` writes the words with inflected nouns; ``SillyStatsCompanionPacer`` paces the mentions in device-local defaults; and ``SillyStatsService`` holds it all in memory, because some of it comes from Apple Health and a Health value never reaches synced state. Nothing here is a goal: no rates to beat, streaks, badges, coins or comparisons with friends, and nothing reads calories, body weight, cycle or intimate data, or journal text.
@@ -170,6 +172,11 @@ The app's front door and its conscience: first-run onboarding, the Settings hub 
 - ``WorkoutInjurySection``
 - ``WorkoutInjuryDraft``
 - ``WorkoutSessionSection``
+- ``WorkoutExercisePreferencesEntry``
+- ``WorkoutExercisePreferencesSheet``
+- ``CustomExerciseFormSheet``
+- ``ExerciseSwapSheet``
+- ``GuidedEditorPreferences``
 - ``WorkoutLocationSetupView``
 - ``ActivityPickerSection``
 - ``WorkoutPlanningService``

@@ -1292,6 +1292,12 @@ public nonisolated enum WorkoutProgram {
     /// `options` shape each session's length (``WorkoutSessionOptions``): the warm-up flow in full,
     /// short or off, the cool-down on or off, and a time budget each session is fitted into
     /// (``WorkoutSessionBudget``). The default plans exactly as before.
+    ///
+    /// `preferences` are the user's exercise preferences (``WorkoutExercisePreferences``): a hidden
+    /// exercise is left out of every block, so each slot falls back to its next eligible pick, and a
+    /// slot only hidden exercises could fill is dropped with its own note; a saved alternate replaces
+    /// the planner's pick only when it passes everything the pick did
+    /// (``preferredAlternate(for:slot:block:inputs:used:)``). The default changes nothing.
     public static func dayPlan(
         goal: GoalType,
         intensity: WorkoutIntensity,
@@ -1304,6 +1310,7 @@ public nonisolated enum WorkoutProgram {
         load: WorkoutLoadContext? = nil,
         recent: WorkoutRecoveryGuard.RecentTraining? = nil,
         options: WorkoutSessionOptions = WorkoutSessionOptions(),
+        preferences: WorkoutExercisePreferences = WorkoutExercisePreferences(),
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> DayPlan {
         // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
@@ -1319,7 +1326,8 @@ public nonisolated enum WorkoutProgram {
         let day = split.days[decision?.dayIndex ?? ((rotationIndex % dayCount) + dayCount) % dayCount]
         let style = WorkoutGoalStyle.style(for: goal, energy: intensity, sport: profile.sport)
         let limits = profile.injuryLimits
-        let feasible = catalog.filter { WorkoutSafetyFilter.feasible($0, location: location, limits: limits) }
+        let pool = splitHidden(catalog.filter { WorkoutSafetyFilter.feasible($0, location: location, limits: limits) },
+                               preferences: preferences)
         let biasTokens = selectionTokens(profile: profile, context: context)
 
         var dayUsed: Set<String> = []
@@ -1331,9 +1339,10 @@ public nonisolated enum WorkoutProgram {
 
         for session in day.sessions {
             let inputs = SlotInputs(
-                goal: goal, intensity: intensity, style: style, feasible: feasible, biasTokens: biasTokens,
+                goal: goal, intensity: intensity, style: style, feasible: pool.shown, biasTokens: biasTokens,
                 profile: profile, location: location, progression: progression, load: load,
-                limits: limits, recentHard: recent?.hardMuscles ?? [], options: options
+                limits: limits, recentHard: recent?.hardMuscles ?? [], options: options,
+                hiddenFeasible: pool.hidden, alternates: preferences.alternateKeys
             )
             let rendered = render(
                 session: session, inputs: inputs, context: context, used: &dayUsed,
@@ -1438,11 +1447,13 @@ public nonisolated enum WorkoutProgram {
 
         case .strength, .fullBody, .sport:
             let built = buildBlocks(session: session, inputs: inputs, used: &used, calibrationOpen: &calibrationOpen)
+            let hiddenDrops = hiddenOnlyDrops(built.dropped, slots: session.slots, inputs: inputs)
             let suggestion = WorkoutSuggestion(
                 name: name,
                 exercises: WorkoutSessionBlocks.planText(for: built.exercises),
-                notes: notes(inputs: inputs, context: context, dropped: built.dropped,
-                             includeContext: !isMultiSession, progressNotes: built.progressNotes)
+                notes: notes(inputs: inputs, context: context, dropped: built.dropped.filter { !hiddenDrops.contains($0) },
+                             includeContext: !isMultiSession, progressNotes: built.progressNotes,
+                             hiddenDropped: hiddenDrops)
             )
             return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: built.exercises, suggestion: suggestion), built.dropped)
         }
@@ -1468,6 +1479,30 @@ public nonisolated enum WorkoutProgram {
         var recentHard: Set<MuscleGroup> = []
         /// The session's length: the stretch blocks it walks and the time budget it is fitted into.
         var options = WorkoutSessionOptions()
+        /// The exercises the safety filter allows but the user hid ("Don't suggest this"): never
+        /// picked, only read to tell a slot they emptied from one nothing safe could fill.
+        var hiddenFeasible: [ExerciseTarget] = []
+        /// Saved alternates (``WorkoutExercisePreferences/alternateKeys``): the original's comparison
+        /// key → the alternate's frozen name.
+        var alternates: [String: String] = [:]
+    }
+
+    /// The safety-filtered pool split into what the planner may suggest and what the user hid.
+    static func splitHidden(
+        _ safe: [ExerciseTarget], preferences: WorkoutExercisePreferences
+    ) -> (shown: [ExerciseTarget], hidden: [ExerciseTarget]) {
+        let keys = preferences.hiddenKeys
+        guard !keys.isEmpty else { return (safe, []) }
+        var shown: [ExerciseTarget] = []
+        var hidden: [ExerciseTarget] = []
+        for exercise in safe {
+            if keys.contains(WorkoutExerciseCatalog.normalizedName(exercise.name)) {
+                hidden.append(exercise)
+            } else {
+                shown.append(exercise)
+            }
+        }
+        return (shown, hidden)
     }
 
     /// One filled slot: the prescribed step, the catalog row behind it, the slot it fills, and the
@@ -1595,14 +1630,15 @@ public nonisolated enum WorkoutProgram {
     ) -> [SlotPick] {
         var picks: [SlotPick] = []
         for slot in slots {
-            let pick = bestExercise(
+            let best = bestExercise(
                 for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
                 experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
             )
-            guard let pick else {
+            guard let best else {
                 if reportDrops { dropped.append(slot.label) }
                 continue
             }
+            let pick = preferredAlternate(for: best, slot: slot, block: block, inputs: inputs, used: used) ?? best
             used.insert(pick.name)
             let completions = block == .lifting ? inputs.progression[pick.name] ?? 0 : 0
             let prescribed = easedSlot(slot, for: pick, limits: inputs.limits)
@@ -1623,6 +1659,51 @@ public nonisolated enum WorkoutProgram {
         var eased = slot
         eased.role = .accessory
         return eased
+    }
+
+    /// The user's saved alternate for `pick` ("Always use this instead"), when it can take the slot:
+    /// it is in the feasible pool (the location has its tools and gear, the injury limits allow it,
+    /// and it is not hidden), no earlier slot today used it, it is eligible for the slot, and it fits
+    /// the time budget (``alternateFitsBudget(_:insteadOf:slot:block:inputs:)``). Otherwise nil, and
+    /// the planner's own pick stands — silently, since nothing went wrong.
+    static func preferredAlternate(
+        for pick: ExerciseTarget, slot: WorkoutSlotSpec, block: SessionBlock, inputs: SlotInputs, used: Set<String>
+    ) -> ExerciseTarget? {
+        guard !inputs.alternates.isEmpty,
+              let name = inputs.alternates[WorkoutExerciseCatalog.normalizedName(pick.name)] else { return nil }
+        let key = WorkoutExerciseCatalog.normalizedName(name)
+        guard let alternate = inputs.feasible.first(where: { WorkoutExerciseCatalog.normalizedName($0.name) == key }),
+              !used.contains(alternate.name), isEligible(alternate, for: slot) else { return nil }
+        guard alternateFitsBudget(alternate, insteadOf: pick, slot: slot, block: block, inputs: inputs) else { return nil }
+        return alternate
+    }
+
+    /// Under a time budget, an alternate may not make its step longer than the planner's pick would
+    /// be — a longer hold, or longer rest for its movement — so swapping it in never pushes a fitted
+    /// session over. Both are measured as first prescribed (no progression), with no budget always true.
+    static func alternateFitsBudget(
+        _ alternate: ExerciseTarget, insteadOf pick: ExerciseTarget, slot: WorkoutSlotSpec, block: SessionBlock,
+        inputs: SlotInputs
+    ) -> Bool {
+        guard inputs.options.length.minutes != nil else { return true }
+        let theirs = prescribe(pick, role: easedSlot(slot, for: pick, limits: inputs.limits).role, block: block,
+                               completions: 0, inputs: inputs)
+        let mine = prescribe(alternate, role: easedSlot(slot, for: alternate, limits: inputs.limits).role, block: block,
+                             completions: 0, inputs: inputs)
+        return WorkoutSessionTime.seconds(of: mine, goal: inputs.goal) <= WorkoutSessionTime.seconds(of: theirs, goal: inputs.goal)
+    }
+
+    /// The labels among `dropped` that a hidden exercise could have filled — what the session note
+    /// names separately ("only options here are ones you've hidden"), so a person who hid every fit
+    /// is not told the room had nothing safe.
+    static func hiddenOnlyDrops(
+        _ dropped: [String], slots: [WorkoutSlotSpec], inputs: SlotInputs
+    ) -> [String] {
+        guard !dropped.isEmpty, !inputs.hiddenFeasible.isEmpty else { return [] }
+        return dropped.filter { label in
+            guard let slot = slots.first(where: { $0.label == label }) else { return false }
+            return inputs.hiddenFeasible.contains { isEligible($0, for: slot) }
+        }
     }
 
     /// Takes a set off every lifting step whose primary muscles worked hard inside the 48-hour
@@ -1874,7 +1955,8 @@ public nonisolated enum WorkoutProgram {
         context: String,
         dropped: [String],
         includeContext: Bool,
-        progressNotes: [String]
+        progressNotes: [String],
+        hiddenDropped: [String] = []
     ) -> String {
         var parts: [String] = [inputs.location.name]
         parts += progressNotes
@@ -1887,7 +1969,16 @@ public nonisolated enum WorkoutProgram {
         if dropped.isEmpty == false {
             parts.append("Skipped \(dropped.joined(separator: ", ")) — no safe option here.")
         }
+        if hiddenDropped.isEmpty == false {
+            parts.append(hiddenDropNote(hiddenDropped))
+        }
         return parts.joined(separator: " · ")
+    }
+
+    /// The note for slots that only hidden exercises could fill. Plain English like the planner's
+    /// other notes (the plan text is persisted on the logged row and not localized yet).
+    public static func hiddenDropNote(_ labels: [String]) -> String {
+        "Skipped \(labels.joined(separator: ", ")) — the only options here are ones you've hidden."
     }
 }
 

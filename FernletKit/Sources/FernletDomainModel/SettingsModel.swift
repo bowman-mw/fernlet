@@ -249,6 +249,12 @@ public nonisolated struct FernletSettings: Codable {
     /// living in the synced settings blob means it reaches the user's other devices and is cleared
     /// by a settings wipe like every other preference.
     public var customExercises: [ExerciseTarget] = []
+    /// Exercises the planner never suggests and saved alternates it prefers
+    /// (``WorkoutExercisePreferences``). Encoded at THIS blob's top level as `workoutHiddenExercises`
+    /// and `workoutExerciseAlternates` — each only when it holds something — where an older build's
+    /// generic key parking keeps them through a re-save; decoded tolerantly (an unexpected shape or
+    /// entry is skipped, never thrown on).
+    public var workoutExercisePreferences = WorkoutExercisePreferences()
     /// How long a session may run (``WorkoutSessionLength``): the planner fits each session into it
     /// (``WorkoutSessionBudget``). `.noLimit`, the default, plans exactly as before.
     public var workoutSessionLength: WorkoutSessionLength = .noLimit {
@@ -559,6 +565,13 @@ public nonisolated struct FernletSettings: Codable {
         // the same ceiling, so decode and registry can never disagree about what is retained.
         customExercises = Array((try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? [])
             .prefix(WorkoutExerciseCatalog.maxCustomExercises))
+        // Read as raw JSON so a shape this build doesn't expect is skipped rather than thrown on.
+        workoutExercisePreferences = WorkoutExercisePreferences(
+            hidden: WorkoutExercisePreferences.hiddenNames(
+                from: try container.decodeIfPresent(JSONValue.self, forKey: .workoutHiddenExercises)),
+            alternates: WorkoutExercisePreferences.alternates(
+                from: try container.decodeIfPresent(JSONValue.self, forKey: .workoutExerciseAlternates))
+        )
         try decodeWorkoutSession(from: container)
         coachExchangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .coachExchangeEnabled) ?? false
         trainerExportIncludesGoal = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesGoal) ?? false
@@ -647,7 +660,8 @@ public nonisolated struct FernletSettings: Codable {
         // key of its own, and its absence here is also what lets it be excluded from the parked set.
         // `workoutInjuryAreas` / `unknownWorkoutInjuryAreaTokens` are the exception the other way: no
         // stored property of their own, they carry `workoutProfile`'s injury picker at the top level,
-        // where an older build's key parking keeps them through a re-save.
+        // where an older build's key parking keeps them through a re-save. `workoutHiddenExercises` /
+        // `workoutExerciseAlternates` are the same kind: they carry `workoutExercisePreferences`.
         case bottleOz, hydrationTarget, showDeveloperNotes, connectionInspectorMode,
              unknownConnectionInspectorModeToken, companionAppearance, equippedItemIDsBySlot,
              localDesignerID, ownedDesignerIDs, knownDesignerNames, selectedGoal,
@@ -666,7 +680,8 @@ public nonisolated struct FernletSettings: Codable {
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
              workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
              workoutLocations, activeWorkoutLocationID, workoutProgression,
-             customExercises, workoutSessionLength, unknownWorkoutSessionLengthToken,
+             customExercises, workoutHiddenExercises, workoutExerciseAlternates,
+             workoutSessionLength, unknownWorkoutSessionLengthToken,
              workoutWarmUp, unknownWorkoutWarmUpToken, workoutCoolDown, unknownWorkoutCoolDownToken,
              coachExchangeEnabled, trainerExportIncludesGoal,
              trainerExportIncludesHydration, trainerExportIncludesSleep,
@@ -785,6 +800,13 @@ public nonisolated struct FernletSettings: Codable {
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
         try container.encode(workoutProgression, forKey: .workoutProgression)
         try container.encode(customExercises, forKey: .customExercises)
+        // Written only when set, so a blob without preferences keeps its old shape exactly.
+        if !workoutExercisePreferences.hidden.isEmpty {
+            try container.encode(workoutExercisePreferences.hidden, forKey: .workoutHiddenExercises)
+        }
+        if !workoutExercisePreferences.alternates.isEmpty {
+            try container.encode(workoutExercisePreferences.alternates, forKey: .workoutExerciseAlternates)
+        }
         try container.encode(workoutSessionLength, forKey: .workoutSessionLength)
         try container.encodeIfPresent(unknownWorkoutSessionLengthToken, forKey: .unknownWorkoutSessionLengthToken)
         try container.encode(workoutWarmUp, forKey: .workoutWarmUp)

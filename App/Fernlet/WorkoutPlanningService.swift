@@ -102,7 +102,8 @@ final class WorkoutPlanningService {
     /// split day that spares muscles worked hard yesterday, or lightens the lifts that would repeat
     /// them. Each session is shaped by Workout setup's session options — the warm-up and cool-down
     /// switches and the time budget it is fitted into — with `sessionLength`, when given, standing in
-    /// for the setup's length for this plan only.
+    /// for the setup's length for this plan only. Hidden exercises are never suggested and saved
+    /// alternates are preferred where they fit (``WorkoutExercisePreferences``).
     func workoutDayPlan(
         intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
     ) -> WorkoutProgram.DayPlan {
@@ -127,7 +128,8 @@ final class WorkoutPlanningService {
             progression: host.settings.workoutProgression,
             load: load,
             recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey),
-            options: options
+            options: options,
+            preferences: host.settings.workoutExercisePreferences
         )
     }
 
@@ -184,6 +186,8 @@ final class WorkoutPlanningService {
         guard trimmed.isEmpty == false, host.settings.aiStatus != .off else { return plan }
         let location = host.settings.activeWorkoutLocation
         let profile = host.settings.workoutProfile
+        // Hidden exercises ("Don't suggest this") never reach the model's candidate list.
+        let preferences = host.settings.workoutExercisePreferences
         // User-invoked adjustment (the person typed a request and tapped): routes through the store's
         // AI gate at `standard` tier so the sleepy/resting budget + one-call-per-dispatch charge apply.
         let gate = host.aiGate
@@ -194,7 +198,8 @@ final class WorkoutPlanningService {
             guard session.kind == .strength || session.kind == .fullBody || session.kind == .sport else { continue }
             let currentNames = session.catalogExerciseNames
             let candidates = WorkoutAdjustmentCandidateBuilder.candidates(
-                currentNames: currentNames, request: trimmed, location: location, profile: profile
+                currentNames: currentNames, request: trimmed, location: location, profile: profile,
+                preferences: preferences
             )
             guard candidates.isEmpty == false else { continue }
             let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)

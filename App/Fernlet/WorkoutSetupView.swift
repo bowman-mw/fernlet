@@ -8,7 +8,9 @@ import FernletUI
 /// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
 /// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
 /// sport/interests, and areas to work around: a None · Mild · Severe picker per body area, the
-/// rested-muscle chips and the free-text note (``WorkoutInjurySection``, ``WorkoutInjuryDraft``) —
+/// rested-muscle chips and the free-text note (``WorkoutInjurySection``, ``WorkoutInjuryDraft``), and
+/// the way into the user's own exercises, hidden exercises and saved swaps
+/// (``WorkoutExercisePreferencesEntry``), which save as they change rather than with this draft —
 /// plus the guided runner's cue switches (Workout haptics and Workout sounds,
 /// ``WorkoutCueSettingsSection``), which are device-local rather than part of the synced profile and are
 /// stored on Save like the rest. Changing the split is a plain edit — a neutral note beside the options
@@ -89,6 +91,7 @@ struct WorkoutSetupSheet: View {
                     WorkoutSessionSection(options: $sessionOptions)
                     sportInterestsSection
                     WorkoutInjurySection(draft: $injuryDraft, notes: $profile.injuryNotes)
+                    WorkoutExercisePreferencesEntry(store: store)
                     WorkoutCueSettingsSection(preferences: $cuePreferences)
                 }
                 .padding(20)
