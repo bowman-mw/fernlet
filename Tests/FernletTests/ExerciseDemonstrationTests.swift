@@ -119,7 +119,9 @@ struct ExerciseDemonstrationTests {
         let both = mapping.values.filter { $0.gifMale != nil && $0.gifFemale != nil }.count
         let maleOnly = mapping.values.filter { $0.gifMale != nil && $0.gifFemale == nil }.count
         let femaleOnly = mapping.values.filter { $0.gifMale == nil && $0.gifFemale != nil }.count
-        #expect([both, maleOnly, femaleOnly] == [105, 9, 4])
+        #expect(both == 105)
+        #expect(maleOnly == 9)
+        #expect(femaleOnly == 4)
     }
 
     /// The committed file holds Gym Visual IDs and nothing else: GIF IDs of 6 or 7 digits,
@@ -179,7 +181,8 @@ struct ExerciseDemonstrationTests {
     @Test func thePlaceholderDrawsTheToolOrTheGearABodyweightMoveNeeds() throws {
         let rows = try Self.catalogRows()
         func glyph(_ name: String) throws -> GymEquipment {
-            ExerciseDemonstrationPlaceholder.glyph(for: try #require(rows.first(where: { $0.name == name }), "\(name) left the catalog"))
+            let row = try #require(rows.first(where: { $0.name == name }), "\(name) left the catalog")
+            return ExerciseDemonstrationPlaceholder.glyph(for: row)
         }
         #expect(try glyph("Bench press") == .barbell)
         #expect(try glyph("Goblet squat") == .kettlebells)
