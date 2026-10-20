@@ -63,7 +63,7 @@ struct DayDecodeCompatTests {
             "name": "Mystery session",
             "type": "Mobility",
             "mode": "recoveryFlow",
-            "activityType": "surfing",
+            "activityType": "curling",
             "exercises": "flow",
             "notes": "",
             "intensity": "brutal",
@@ -78,7 +78,7 @@ struct DayDecodeCompatTests {
         #expect(workout.mode == .strengthTraining)
         #expect(workout.unknownModeToken == "recoveryFlow")
         #expect(workout.activityType == nil)
-        #expect(workout.unknownActivityTypeToken == "surfing")
+        #expect(workout.unknownActivityTypeToken == "curling")
         #expect(workout.intensity == .moderate)
         #expect(workout.unknownIntensityToken == "brutal")
         #expect(workout.muscleGroups == [.chest])
@@ -90,7 +90,7 @@ struct DayDecodeCompatTests {
         #expect(reloaded.type == .fullBody)
         #expect(reloaded.unknownTypeToken == "Mobility")
         #expect(reloaded.unknownModeToken == "recoveryFlow")
-        #expect(reloaded.unknownActivityTypeToken == "surfing")
+        #expect(reloaded.unknownActivityTypeToken == "curling")
         #expect(reloaded.unknownIntensityToken == "brutal")
         #expect(reloaded.unknownMuscleGroupTokens == ["neckFlexors"])
     }
@@ -128,6 +128,29 @@ struct DayDecodeCompatTests {
         #expect(workout.unknownActivityTypeToken == nil)
         #expect(workout.muscleGroups == [.quads])
         #expect(workout.unknownMuscleGroupTokens.isEmpty)
+    }
+
+    /// The sports round 2 added (R5) reach an older build as tokens it does not know, which it parks
+    /// and writes back; this build adopts each one again, so a session logged as surfing or American
+    /// football on a newer phone keeps its type through a device that predates it.
+    @Test func sportsAnOlderBuildParkedAreReadopted() throws {
+        let day = try decodeDay("""
+        {
+          "date": "2026-10-20",
+          "workouts": [
+            {"name": "Surfing", "type": "Full Body", "mode": "activity", "exercises": "", "notes": "",
+             "intensity": "moderate", "unknownActivityTypeToken": "surfing"},
+            {"name": "American Football", "type": "Cardio", "mode": "activity", "exercises": "", "notes": "",
+             "intensity": "moderate", "unknownActivityTypeToken": "americanFootball"}
+          ]
+        }
+        """)
+        let types = day.workouts.map(\.activityType)
+        let parked = day.workouts.map(\.unknownActivityTypeToken)
+        let expectedTypes: [WorkoutActivityType?] = [.surfing, .americanFootball]
+        let noneParked: [String?] = [nil, nil]
+        #expect(types == expectedTypes)
+        #expect(parked == noneParked)
     }
 
     // MARK: - PlannedWorkout enums
