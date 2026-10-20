@@ -5,13 +5,14 @@
 // moment says (`GuidedRunSpokenCue`), the device-local "Spoken cues" switch, the director's gates (the
 // switch, the app in front, on time and once), the VoiceOver routing (one voice: the announcer instead
 // of the synthesizer, and nothing the runner sheet already said), and FernletUI's `FernletSpeaker` —
-// its audio policy per route and the exact audio-session call sequence around each line.
+// its one audio policy for every route (decision 3, "respect the switch") and the exact audio-session
+// call sequence around each line.
 //
 // The synthesizer, the audio session and VoiceOver never report back in a unit test, so each is an
 // injected seam here, as `FernletFeedback` and `FernletAnnouncer` are in their suites. What no test
-// here can check — that the voice is heard in AirPods over music, that the music dips and comes back,
-// that the ring/silent switch silences the speaker, and how VoiceOver reads the joined line — is owed
-// on a device.
+// here can check — that with the ringer on the voice is heard in AirPods over music that keeps
+// playing, that with the ringer on silent it is not heard at all, in AirPods or on the speaker, and
+// how VoiceOver reads the joined line — is owed on a device.
 
 import AVFAudio
 import Foundation
@@ -72,7 +73,8 @@ private final class AnnouncementRecorder {
     }
 }
 
-/// A speaker wired to recorders, with VoiceOver and the route fixed for the test.
+/// A speaker wired to recorders, with VoiceOver fixed for the test. There is no route to fix: the
+/// speaker plays every line on the same policy wherever the audio is going.
 @MainActor
 private final class SpeechRig {
     let voice: FakeVoice
@@ -80,7 +82,7 @@ private final class SpeechRig {
     let announcements: AnnouncementRecorder
     let speaker: FernletSpeaker
 
-    init(voiceOver: Bool = false, route: FernletSpeechAudioPolicy = .phoneSpeaker) {
+    init(voiceOver: Bool = false) {
         let voice = FakeVoice()
         let session = SessionRecorder()
         let announcements = AnnouncementRecorder()
@@ -88,7 +90,7 @@ private final class SpeechRig {
         self.session = session
         self.announcements = announcements
         speaker = FernletSpeaker(
-            voice: voice, policy: { route }, session: session.perform,
+            voice: voice, session: session.perform,
             isVoiceOverRunning: { voiceOver }, announcer: announcements.announcer, settle: .zero
         )
     }
@@ -428,10 +430,10 @@ private final class SpeechRig {
         cues.transition(from: move.before, to: move.after, cause: .setDone)
         let expected = try #require(GuidedRunSpokenCue.move(from: move.before, to: move.after, cause: .setDone))
         #expect(rig.voice.said == [expected])
-        #expect(rig.session.calls == [.configure(.phoneSpeaker), .activate])
+        #expect(rig.session.calls == [.configure, .activate])
         rig.voice.finish()
         await rig.speaker.settled()
-        #expect(rig.session.calls == [.configure(.phoneSpeaker), .activate, .deactivate])
+        #expect(rig.session.calls == [.configure, .activate, .deactivate])
         #expect(rig.announcements.posted.isEmpty)
     }
 
@@ -511,14 +513,16 @@ private final class SpeechRig {
         #expect(rig.voice.said.isEmpty && rig.session.calls.isEmpty)
     }
 
-    /// In headphones the session is configured for ducked playback; on the speaker, for ambient mixing.
-    @Test func speakerConfiguresTheRoutesPolicy() async {
-        let rig = SpeechRig(route: .headphones)
+    /// One line holds the session only while it is spoken: configured and activated before the voice
+    /// starts, released once after it ends.
+    @Test func speakerHoldsTheSessionOnlyForTheLine() async {
+        let rig = SpeechRig()
         rig.speaker.say(FernletSpokenLine(text: "Hold now.", voiceOverText: nil))
-        #expect(rig.session.calls == [.configure(.headphones), .activate])
+        #expect(rig.session.calls == [.configure, .activate])
+        #expect(rig.voice.said == ["Hold now."])
         rig.voice.finish()
         await rig.speaker.settled()
-        #expect(rig.session.calls.last == .deactivate)
+        #expect(rig.session.calls == [.configure, .activate, .deactivate])
     }
 
     /// Back-to-back lines configure and activate for each, release once after the last — and an
@@ -529,7 +533,7 @@ private final class SpeechRig {
         rig.speaker.say(FernletSpokenLine(text: "Next: Cat-cow.", voiceOverText: nil))
         rig.voice.finish(line: 0)
         await rig.speaker.settled()
-        #expect(rig.session.calls == [.configure(.phoneSpeaker), .activate, .configure(.phoneSpeaker), .activate])
+        #expect(rig.session.calls == [.configure, .activate, .configure, .activate])
         rig.voice.finish(line: 1)
         await rig.speaker.settled()
         let deactivations = rig.session.calls.filter { $0 == .deactivate }.count
@@ -542,15 +546,15 @@ private final class SpeechRig {
     /// never on a category that would stop the person's music.
     @Test func aRefusedSessionNeverSpeaks() {
         let unconfigured = SpeechRig()
-        unconfigured.session.refuse = .configure(.phoneSpeaker)
+        unconfigured.session.refuse = .configure
         unconfigured.speaker.say(FernletSpokenLine(text: "Rest's over.", voiceOverText: nil))
-        #expect(unconfigured.session.calls == [.configure(.phoneSpeaker)])
+        #expect(unconfigured.session.calls == [.configure])
         #expect(unconfigured.voice.said.isEmpty)
 
         let inactive = SpeechRig()
         inactive.session.refuse = .activate
         inactive.speaker.say(FernletSpokenLine(text: "Rest's over.", voiceOverText: nil))
-        #expect(inactive.session.calls == [.configure(.phoneSpeaker), .activate])
+        #expect(inactive.session.calls == [.configure, .activate])
         #expect(inactive.voice.said.isEmpty)
 
         let empty = SpeechRig()
@@ -560,32 +564,38 @@ private final class SpeechRig {
 
     // MARK: The audio policy
 
-    /// The phone speaker only when every output is the phone's own (or there is none); anything else —
-    /// headphones, Bluetooth, CarPlay, AirPlay — is the headphones policy.
-    @Test func policyFollowsTheRoute() {
-        #expect(FernletSpeechAudioPolicy.forRoute([.builtInSpeaker]) == .phoneSpeaker)
-        #expect(FernletSpeechAudioPolicy.forRoute([.builtInReceiver]) == .phoneSpeaker)
-        #expect(FernletSpeechAudioPolicy.forRoute([]) == .phoneSpeaker)
-        #expect(FernletSpeechAudioPolicy.forRoute([.headphones]) == .headphones)
-        #expect(FernletSpeechAudioPolicy.forRoute([.bluetoothA2DP]) == .headphones)
-        #expect(FernletSpeechAudioPolicy.forRoute([.carAudio]) == .headphones)
-        #expect(FernletSpeechAudioPolicy.forRoute([.builtInSpeaker, .airPlay]) == .headphones)
+    /// Every route gets the same session (decision 3, "respect the switch"): `.ambient` in the default
+    /// mode with no options. It mixes with the person's music or podcast, never ducks it and never
+    /// interrupts spoken audio, and the ring/silent switch silences it — in headphones too.
+    @Test func everyRouteGetsAmbientMixing() {
+        #expect(FernletSpeechAudioPolicy.category == .ambient)
+        #expect(FernletSpeechAudioPolicy.mode == .default)
+        #expect(FernletSpeechAudioPolicy.options.isEmpty)
+        #expect(!FernletSpeechAudioPolicy.options.contains(.duckOthers), "ducking dips the person's music")
+        #expect(!FernletSpeechAudioPolicy.options.contains(.interruptSpokenAudioAndMixWithOthers),
+                "this pauses the person's podcast")
     }
 
-    /// Neither policy can pause the person's music: the speaker mixes (and obeys the silent switch);
-    /// headphones duck the music and pause only spoken audio, Apple's exercise-app pattern.
-    @Test func neitherPolicyPausesMusic() {
-        let speaker = FernletSpeechAudioPolicy.phoneSpeaker
-        #expect(speaker.category == .ambient)
-        #expect(speaker.options.isEmpty)
-        let headphones = FernletSpeechAudioPolicy.headphones
-        #expect(headphones.category == .playback)
-        #expect(headphones.mode == .voicePrompt)
-        #expect(headphones.options.contains(.duckOthers))
-        #expect(headphones.options.contains(.interruptSpokenAudioAndMixWithOthers))
-        for policy in FernletSpeechAudioPolicy.allCases {
-            #expect(policy.category != .soloAmbient, "solo ambient would stop the person's music")
+    /// The speaker never asks where the audio is going, so no route — headphones, Bluetooth, CarPlay,
+    /// AirPlay — can get a session the switch does not silence: the code in FernletSpeech.swift reads
+    /// no route and names no category, mode or option that plays through the switch, ducks other audio
+    /// or pauses it, and it still lets the session go with `.notifyOthersOnDeactivation`.
+    ///
+    /// Comments are exempt (the file header says what was left out and why); code lines are not.
+    @Test func theSpeakerReadsNoRoute() throws {
+        let url = RepoRoot.url.appendingPathComponent("FernletKit/Sources/FernletUI/FernletSpeech.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        let banned = [
+            "currentRoute", ".playback", ".playAndRecord", ".voicePrompt", ".spokenAudio",
+            ".duckOthers", ".interruptSpokenAudioAndMixWithOthers", ".mixWithOthers",
+        ]
+        for token in banned {
+            #expect(!code.contains(token), "FernletSpeech.swift must not use \(token): spoken cues are .ambient on every route.")
         }
+        #expect(code.contains("setActive(false, options: .notifyOthersOnDeactivation)"))
     }
 
     /// The voice speaks the app's language, in the person's own region when their device speaks it.

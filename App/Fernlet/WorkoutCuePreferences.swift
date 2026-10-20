@@ -109,7 +109,7 @@ struct WorkoutCueSettingsSection: View {
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()
-                Text("Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. In headphones your music dips while they speak and a podcast pauses, then both carry on; on the phone's speaker they follow your ring/silent switch. With VoiceOver on, VoiceOver says them instead.")
+                Text("Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. They follow your ring/silent switch, in headphones too, and play over your music without pausing it. With VoiceOver on, VoiceOver says them instead.")
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                     .fernletWrappingText()

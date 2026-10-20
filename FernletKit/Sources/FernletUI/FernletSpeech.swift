@@ -16,17 +16,19 @@
 //     caller says VoiceOver has not already heard it (``FernletSpokenLine/voiceOverText`` is nil when
 //     the screen's own announcement says it), so nothing is said twice.
 //
-//  2. NEVER TAKE THE AUDIO. The session is configured just before each line and released just after
-//     it with `.notifyOthersOnDeactivation`, so the person's music comes straight back. Through
-//     headphones, Bluetooth, CarPlay or AirPlay the line plays the way Apple documents for an
-//     exercise app: `.playback` in `.voicePrompt` mode with `.duckOthers` and
-//     `.interruptSpokenAudioAndMixWithOthers` — music dips under the words and is never paused; a
-//     podcast pauses and resumes. On the phone's own speaker the session is `.ambient`: it mixes,
-//     never ducks, and the ring/silent switch silences it (the sounds-and-haptics investigation,
-//     §3.5 and decision 3: "On the speaker, the silent switch always wins"). A session that cannot
-//     be configured or activated means the line is NOT spoken — speaking on the default solo-ambient
-//     category would stop the person's music, which is the one thing this seam exists to avoid.
-//     Volume is the system's; there is no volume control here.
+//  2. NEVER TAKE THE AUDIO, AND RESPECT THE SWITCH. Every line plays on an `.ambient` session, on
+//     every route alike — the phone's speaker, headphones, Bluetooth, CarPlay, AirPlay: it mixes with
+//     whatever is playing, never ducks or pauses it, and the ring/silent switch silences it, in
+//     headphones too, like the runner's chime (the sounds-and-haptics investigation, §3.5, and the
+//     owner's decision 3 on 2026-10-20: "respect the switch", on every route). The cost, accepted
+//     with that decision: in headphones the music no longer dips under the words, and a podcast keeps
+//     talking over them. iOS offers no way to read the switch, so "duck only while the ringer is on"
+//     cannot be built. `.ambient` also falls silent when the screen locks; spoken cues only play
+//     while the app is in front anyway. The session is configured just before each line and released
+//     just after it with `.notifyOthersOnDeactivation`. A session that cannot be configured or
+//     activated means the line is NOT spoken — speaking on the default solo-ambient category would
+//     stop the person's music, which is the one thing this seam exists to avoid. Volume is the
+//     system's; there is no volume control here.
 //
 //  3. NO COPY. Nothing in this file is ever spoken or shown, so it holds no user-visible string; the
 //     words come resolved from the caller, like ``FernletAnnouncer``'s.
@@ -41,54 +43,25 @@ import UIKit
 
 // MARK: - Audio policy
 
-/// How a spoken line's audio session behaves, chosen for each line from where the audio is going.
+/// How a spoken line's audio session behaves: the same on every route — the phone's speaker,
+/// headphones, Bluetooth, CarPlay and AirPlay alike — so the speaker never asks where the audio is
+/// going.
 ///
-/// A pure value: ``category``, ``mode`` and ``options`` are what the production player hands
-/// `AVAudioSession.setCategory(_:mode:options:)`, and a test reads them to prove the person's music
-/// is mixed (and, in headphones, ducked) rather than paused. The raw values are stable identifiers
-/// for logs and tests, never display text.
-public nonisolated enum FernletSpeechAudioPolicy: String, CaseIterable, Sendable {
-    /// The phone's own speaker (or receiver): `.ambient` — mixes with other audio, never ducks it, and
-    /// is silenced by the ring/silent switch, like the runner's chime.
-    case phoneSpeaker
-    /// Anything else — headphones, Bluetooth, CarPlay, AirPlay: `.playback` in `.voicePrompt` mode,
-    /// ducking the music and pausing other spoken audio while a line plays, so a person who turned
-    /// spoken cues on hears them in their ears whatever the ring/silent switch says.
-    case headphones
+/// `.ambient` in the default mode with no options: it mixes with the person's music or podcast by
+/// definition, cannot duck or interrupt it, and is silenced by the ring/silent switch wherever the
+/// sound is going (decision 3, "respect the switch"; see the file header for what that costs in
+/// headphones). The three values are what the production player hands
+/// `AVAudioSession.setCategory(_:mode:options:)`, and a test reads them.
+public nonisolated enum FernletSpeechAudioPolicy {
+    /// `.ambient`: mixes with other audio, never ducks or pauses it, and the ring/silent switch
+    /// silences it — in headphones too.
+    public static var category: AVAudioSession.Category { .ambient }
 
-    /// The session category for this route.
-    public var category: AVAudioSession.Category {
-        switch self {
-        case .phoneSpeaker: .ambient
-        case .headphones: .playback
-        }
-    }
+    /// The default mode; `.ambient` takes no special one.
+    public static var mode: AVAudioSession.Mode { .default }
 
-    /// The session mode: `.voicePrompt` (short synthesized prompts, the navigation-app mode) in
-    /// headphones; the default on the speaker, where `.ambient` takes no special mode.
-    public var mode: AVAudioSession.Mode {
-        switch self {
-        case .phoneSpeaker: .default
-        case .headphones: .voicePrompt
-        }
-    }
-
-    /// The category options. `.ambient` mixes by definition and cannot duck; `.playback` gets the
-    /// exercise-app pair, both of which also mix with other audio.
-    public var options: AVAudioSession.CategoryOptions {
-        switch self {
-        case .phoneSpeaker: []
-        case .headphones: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
-        }
-    }
-
-    /// The policy for a route whose outputs are `outputs`: the phone speaker only when every output is
-    /// the phone's own speaker or receiver (or there is no output at all — the conservative answer,
-    /// since it respects the silent switch); headphones for anything else.
-    public static func forRoute(_ outputs: [AVAudioSession.Port]) -> FernletSpeechAudioPolicy {
-        let phone: Set<AVAudioSession.Port> = [.builtInSpeaker, .builtInReceiver]
-        return outputs.allSatisfy { phone.contains($0) } ? .phoneSpeaker : .headphones
-    }
+    /// None: `.ambient` already mixes, and an option that dips or pauses other audio is never set.
+    public static var options: AVAudioSession.CategoryOptions { [] }
 }
 
 /// One call the speech player makes on the shared audio session, in the order it makes them.
@@ -96,12 +69,13 @@ public nonisolated enum FernletSpeechAudioPolicy: String, CaseIterable, Sendable
 /// Production performs each on `AVAudioSession.sharedInstance()`; a test injects a recorder and
 /// asserts the exact sequence — configure and activate before a line, deactivate once after the last.
 public nonisolated enum FernletSpeechSessionCall: Equatable, Sendable {
-    /// `setCategory(_:mode:options:)` with the policy's three values.
-    case configure(FernletSpeechAudioPolicy)
-    /// `setActive(true)` — in headphones this is the moment the music dips.
+    /// `setCategory(_:mode:options:)` with ``FernletSpeechAudioPolicy``'s three values.
+    case configure
+    /// `setActive(true)`. On `.ambient` this takes nothing from other audio, which carries on
+    /// underneath the line.
     case activate
-    /// `setActive(false, options: .notifyOthersOnDeactivation)` — the music comes back up, and a
-    /// paused podcast is told it may resume.
+    /// `setActive(false, options: .notifyOthersOnDeactivation)` — the session is let go as soon as
+    /// the line ends, and other apps are told so.
     case deactivate
 }
 
@@ -146,17 +120,19 @@ public protocol FernletSpeechVoice: AnyObject {
 ///
 /// Production callers use ``system``. A test constructs its own with a recording voice, session,
 /// VoiceOver read and announcer, exactly as ``FernletFeedback`` and ``FernletAnnouncer`` are tested.
+/// There is no route to inject: every route gets the one ``FernletSpeechAudioPolicy``.
 ///
 /// **Invariants**
 ///
 /// - *One voice.* While VoiceOver runs, ``say(_:)`` never touches the voice or the audio session; it
 ///   posts ``FernletSpokenLine/voiceOverText`` through the announcer, or nothing.
-/// - *Configured or silent.* Each line configures the session for the current route
-///   (``FernletSpeechAudioPolicy``) and activates it first; if either fails, the line is dropped
-///   and logged, never spoken on a category that would stop the person's music.
+/// - *Configured or silent.* Each line configures the session (``FernletSpeechAudioPolicy``,
+///   `.ambient` on every route, so the ring/silent switch silences it in headphones too) and
+///   activates it first; if either fails, the line is dropped and logged, never spoken on a category
+///   that would stop the person's music.
 /// - *Released after the last line.* When the voice goes idle, the session is deactivated with
 ///   `.notifyOthersOnDeactivation` after a short settle (``defaultSettle``) — once, and not at all if
-///   another line started in the meantime, so back-to-back lines duck the music once.
+///   another line started in the meantime, so back-to-back lines hold the session once.
 /// - *No copy* (see the file header).
 ///
 /// **Concurrency:** main-actor, like the announcer and the views that drive it. The deactivation is
@@ -169,14 +145,13 @@ public final class FernletSpeaker {
 
     /// How long the session stays active after the voice goes idle before it is released: long
     /// enough for the synthesizer's audio to wind down (deactivating with I/O still running fails),
-    /// short enough that the music comes back as the line ends.
+    /// short enough that the session is let go as the line ends.
     public nonisolated static let defaultSettle: Duration = .milliseconds(300)
 
     /// The unified-log sink for a session that could not be configured, activated or released.
     private static let logger = Logger(subsystem: "com.fernlet", category: "speech")
 
     private let voice: any FernletSpeechVoice
-    private let policy: @MainActor () -> FernletSpeechAudioPolicy
     private let session: @MainActor (FernletSpeechSessionCall) throws -> Void
     private let isVoiceOverRunning: @MainActor () -> Bool
     private let announcer: FernletAnnouncer
@@ -190,21 +165,18 @@ public final class FernletSpeaker {
     ///
     /// - Parameters:
     ///   - voice: The voice; nil means an `AVSpeechSynthesizer` in the app's language.
-    ///   - policy: The audio policy for the current route; nil reads the shared session's route.
     ///   - session: Performs one session call; nil performs it on the shared `AVAudioSession`.
     ///   - isVoiceOverRunning: Whether VoiceOver is on, read at every line; nil reads `UIAccessibility`.
     ///   - announcer: Where a line goes under VoiceOver; nil means ``FernletAnnouncer/system``.
     ///   - settle: The wait between the voice going idle and the release; nil means ``defaultSettle``.
     public init(
         voice: (any FernletSpeechVoice)? = nil,
-        policy: (@MainActor () -> FernletSpeechAudioPolicy)? = nil,
         session: (@MainActor (FernletSpeechSessionCall) throws -> Void)? = nil,
         isVoiceOverRunning: (@MainActor () -> Bool)? = nil,
         announcer: FernletAnnouncer? = nil,
         settle: Duration? = nil
     ) {
         self.voice = voice ?? FernletSynthesizerVoice(language: FernletSpeaker.voiceLanguage())
-        self.policy = policy ?? { FernletSpeaker.currentRoutePolicy() }
         self.session = session ?? { try FernletSpeaker.perform($0) }
         self.isVoiceOverRunning = isVoiceOverRunning ?? { UIAccessibility.isVoiceOverRunning }
         self.announcer = announcer ?? .system
@@ -255,16 +227,15 @@ public final class FernletSpeaker {
         return "\(code)-\(region)"
     }
 
-    /// Configures and activates the session for the current route, then hands the line to the voice.
+    /// Configures and activates the session, then hands the line to the voice.
     /// R7: a session that refuses is logged and the line dropped — never spoken unconfigured.
     private func speakAloud(_ text: String) {
         guard !text.isEmpty else { return }
-        let route = policy()
         do {
-            try session(.configure(route))
+            try session(.configure)
             try session(.activate)
         } catch {
-            Self.logger.error("speech.session.refused: \(route.rawValue, privacy: .public) code=\((error as NSError).code, privacy: .public)")
+            Self.logger.error("speech.session.refused: code=\((error as NSError).code, privacy: .public)")
             return
         }
         deactivation?.cancel()
@@ -291,7 +262,7 @@ public final class FernletSpeaker {
         }
     }
 
-    /// Deactivates the session so the music comes back. R7: a refusal is logged; the next line's
+    /// Deactivates the session once the line is over. R7: a refusal is logged; the next line's
     /// release tries again.
     private func release() {
         do {
@@ -301,18 +272,16 @@ public final class FernletSpeaker {
         }
     }
 
-    /// The production policy: from the shared session's current output route.
-    private static func currentRoutePolicy() -> FernletSpeechAudioPolicy {
-        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
-        return FernletSpeechAudioPolicy.forRoute(outputs.map { $0.portType })
-    }
-
     /// The production session: one call on the shared `AVAudioSession`.
     private static func perform(_ call: FernletSpeechSessionCall) throws {
         let audio = AVAudioSession.sharedInstance()
         switch call {
-        case .configure(let route):
-            try audio.setCategory(route.category, mode: route.mode, options: route.options)
+        case .configure:
+            try audio.setCategory(
+                FernletSpeechAudioPolicy.category,
+                mode: FernletSpeechAudioPolicy.mode,
+                options: FernletSpeechAudioPolicy.options
+            )
         case .activate:
             try audio.setActive(true)
         case .deactivate:
