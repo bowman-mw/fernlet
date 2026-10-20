@@ -147,9 +147,12 @@ import FernletUI
         #expect(segments.map(\.pace) == paces)
         let rounds: [Int?] = (1...8).flatMap { round -> [Int?] in [round, round] }
         #expect(segments.map(\.round) == rounds)
-        #expect(segments.allSatisfy { $0.rounds == 8 && $0.seconds == 60 && $0.descriptor == Self.intervalsLine })
-        #expect(segments.first?.followsOn == false, "the first part gets its 'get ready'")
-        #expect(segments.dropFirst().allSatisfy(\.followsOn), "every later part starts straight off the one before")
+        let everyPartMatches = segments.allSatisfy { $0.rounds == 8 && $0.seconds == 60 && $0.descriptor == Self.intervalsLine }
+        #expect(everyPartMatches)
+        let firstFollowsOn = segments.first?.followsOn
+        #expect(firstFollowsOn == false, "the first part gets its 'get ready'")
+        let laterPartsFollowOn = segments.dropFirst().allSatisfy(\.followsOn)
+        #expect(laterPartsFollowOn, "every later part starts straight off the one before")
     }
 
     @Test func aSteadyLineIsOneCountdown() {
