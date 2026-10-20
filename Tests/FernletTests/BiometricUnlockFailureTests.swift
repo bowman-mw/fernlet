@@ -43,12 +43,24 @@ import FernletFoundation
          FernletLockError.keychainFailure(operation: "read biometric bypass", status: errSecUserCanceled))
     ]
 
-    /// Failures the person must hear about, with the shape each one arrives in.
-    private static let realFailures: [(label: String, error: any Error)] = [
-        ("no match within the system's retry limit", LAError(.authenticationFailed)),
-        ("biometry locked out", LAError(.biometryLockout)),
+    /// A face or finger that never matched within the system's retry limit, in both shapes.
+    private static let unmatched: [(label: String, error: any Error)] = [
+        ("no match", LAError(.authenticationFailed)),
+        ("reply NSError, no match",
+         NSError(domain: LAError.errorDomain, code: LAError.Code.authenticationFailed.rawValue))
+    ]
+
+    /// The sensor locking itself during the prompt, in both shapes.
+    private static let lockouts: [(label: String, error: any Error)] = [
+        ("lockout", LAError(.biometryLockout)),
         ("reply NSError, lockout",
-         NSError(domain: LAError.errorDomain, code: LAError.Code.biometryLockout.rawValue)),
+         NSError(domain: LAError.errorDomain, code: LAError.Code.biometryLockout.rawValue))
+    ]
+
+    /// Failures the person must hear about that have no Fernlet line of their own, with the shape
+    /// each one arrives in.
+    private static let realFailures: [(label: String, error: any Error)] = [
+        ("LocalAuthentication context invalidated", LAError(.invalidContext)),
         ("keychain refused after a successful match",
          FernletLockError.keychainFailure(operation: "read biometric bypass", status: errSecInteractionNotAllowed)),
         ("keychain authentication failed",
@@ -84,13 +96,33 @@ import FernletFoundation
         #expect(touchID == FernletLockCopy.Unlock.errorBiometricUnrecognized("Touch ID"))
     }
 
+    /// The two LocalAuthentication failures a person can cause get Fernlet's own lines, never
+    /// LocalAuthentication's untranslated developer text: a face that never matched reads as
+    /// "didn't recognize you", and a sensor that locked itself reads as "paused".
+    @Test func aFailedMatchAndALockoutGetFernletsOwnLines() {
+        for (label, error) in Self.unmatched {
+            #expect(!FernletBiometricUnlockFailure.isDismissal(error), "\(label) is not a dismissal")
+            #expect(FernletBiometricUnlockFailure.message(for: error, biometry: .faceID)
+                    == FernletLockCopy.Unlock.errorBiometricUnrecognized("Face ID"), "\(label)")
+        }
+        for (label, error) in Self.lockouts {
+            #expect(!FernletBiometricUnlockFailure.isDismissal(error), "\(label) is not a dismissal")
+            #expect(FernletBiometricUnlockFailure.message(for: error, biometry: .faceID)
+                    == FernletLockCopy.Unlock.errorBiometricLockout("Face ID"), "\(label)")
+            #expect(FernletBiometricUnlockFailure.message(for: error, biometry: .touchID)
+                    == FernletLockCopy.Unlock.errorBiometricLockout("Touch ID"), "\(label)")
+            #expect(FernletBiometricUnlockFailure.message(for: error, biometry: .faceID)
+                    != error.localizedDescription, "\(label) must not show LocalAuthentication's own text")
+        }
+    }
+
     /// An exhausted ladder still sets the too-many-attempts line.
     @Test func resetRequiredStillSetsTheTooManyAttemptsLine() {
         #expect(FernletBiometricUnlockFailure.message(
             for: FernletLockError.resetRequired, biometry: .faceID) == FernletLockCopy.Unlock.errorTooManyAttempts)
     }
 
-    /// A lockout, a match that never came, and a keychain refusal are not dismissals, and each
+    /// Any other LocalAuthentication error and every keychain refusal is not a dismissal, and each
     /// still sets its own description as the message.
     @Test func everyOtherFailureStillSetsItsDescription() {
         for (label, error) in Self.realFailures {
@@ -115,10 +147,15 @@ import FernletFoundation
         let attempt = try #require(afterHead[1].components(separatedBy: "private func ").first)
 
         #expect(attempt.contains("""
-            let failure = FernletBiometricUnlockFailure.message( for: error, biometry: lockService.biometricType) \
+            let failure = FernletBiometricUnlockFailure.message(for: error, biometry: biometry) \
             errorMessage = failure \
             if let failure { announceUnlockFailure(failure) }
             """), "triggerBiometric() must take its message and its announcement from FernletBiometricUnlockFailure")
+        let biometryRead = try #require(attempt.range(of: "let biometry = lockService.biometricType"),
+                                        "triggerBiometric() must read the biometry before the prompt")
+        let promptCall = try #require(attempt.range(of: "unlockWithBiometrics(for: scope)"))
+        #expect(biometryRead.upperBound <= promptCall.lowerBound,
+                "the biometry is read before the prompt; after a lockout it reads as .none")
         #expect(attempt.components(separatedBy: "catch").count == 2,
                 "one catch arm, so no arm can set a message of its own around the answer")
         #expect(attempt.components(separatedBy: "errorMessage =").count == 3,

@@ -1171,6 +1171,19 @@ extension FernletLockCopy {
                    comment: "Inline error when the biometric check ran and failed to match. The placeholder is an Apple product name and is not translated.")
         }
 
+        /// Inline error when biometry locked itself during the prompt after too many failed tries.
+        ///
+        /// "Paused" is the owner's word (2026-10-20): gentler than "locked", and true, because the
+        /// sensor comes back once the iPhone's own passcode is entered.
+        ///
+        /// - Parameter biometry: "Face ID", "Touch ID", "Optic ID" or the generic fallback.
+        static func errorBiometricLockout(_ biometry: String) -> String {
+            String(localized: "lock.unlock.error.biometricLockout",
+                   defaultValue: "\(biometry) is paused after too many tries. Use your passcode.",
+                   bundle: .module,
+                   comment: "Inline error when the biometric sensor locked itself during the unlock prompt because too many tries failed. 'Paused' is deliberate: softer than 'locked', and the sensor returns once the iPhone's own passcode is entered. 'Your passcode' is the Fernlet passcode typed on this screen. The placeholder is an Apple product name and is not translated.")
+        }
+
         /// Inline error when biometry is refused because the ladder is exhausted.
         static var errorTooManyAttempts: String {
             String(localized: "lock.unlock.error.tooManyAttempts",
@@ -1768,6 +1781,9 @@ public struct FernletLockView: View {
         guard !isCheckingBiometric else { return }
         errorMessage = nil
         isCheckingBiometric = true
+        // Read before the prompt: a lockout the prompt itself triggers turns `biometricType` to
+        // `.none`, and the message would then name "Biometrics" instead of the sensor that locked.
+        let biometry = lockService.biometricType
         Task { @MainActor in
             defer { isCheckingBiometric = false }
             do {
@@ -1780,8 +1796,7 @@ public struct FernletLockView: View {
                 // One answer feeds all three failure channels — the inline text, the error haptic
                 // `body` keys off that text, and the announcement — so a `nil` (a dismissed sheet,
                 // unavailable biometrics) means no text, no buzz and no speech, just the keypad.
-                let failure = FernletBiometricUnlockFailure.message(
-                    for: error, biometry: lockService.biometricType)
+                let failure = FernletBiometricUnlockFailure.message(for: error, biometry: biometry)
                 errorMessage = failure
                 if let failure { announceUnlockFailure(failure) }
             }
@@ -2030,20 +2045,37 @@ enum FernletBiometricUnlockFailure {
     /// - `nil`: the person dismissed the system sheet (``isDismissal(_:)``), or biometrics are not
     ///   available right now (`FernletLockError.biometricNotAvailable`, which also covers
     ///   PIN-before-biometrics and duress suppression). Either way the keypad is the answer.
-    /// - The "didn't recognize you" line for `FernletLockError.biometricFailed`, named from the
-    ///   device's biometry rather than a hard-coded "Face ID". The English literal this replaced
-    ///   told Touch ID and Optic ID users that a sensor they do not have failed, and it would have
-    ///   baked the wrong product name into every translation.
+    /// - The "didn't recognize you" line for `FernletLockError.biometricFailed`, and for
+    ///   `LAError.authenticationFailed`, which is what a face or finger that never matched within
+    ///   the system's retry limit comes back as. Named from the device's biometry rather than a
+    ///   hard-coded "Face ID": the English literal this replaced told Touch ID and Optic ID users
+    ///   that a sensor they do not have failed, and it would have baked the wrong product name into
+    ///   every translation.
+    /// - The "paused after too many tries" line for `LAError.biometryLockout`, when the sensor
+    ///   locked itself during this prompt.
     /// - The too-many-attempts line for `FernletLockError.resetRequired`.
-    /// - The error's own description for anything else: a lockout, a face that never matched within
-    ///   the system's retry limit, a keychain that refused to answer.
+    /// - The error's own description for anything else, a keychain that refused to answer among
+    ///   them. LocalAuthentication's own descriptions are developer text, never translated, which
+    ///   is why the two LocalAuthentication failures a person can actually cause are named above.
     ///
     /// - Parameters:
     ///   - error: What `FernletLockService.unlockWithBiometrics(for:)` threw.
-    ///   - biometry: The device's biometry, for the product name in the unrecognized line.
+    ///   - biometry: The device's biometry, read BEFORE the prompt. A lockout makes
+    ///     `FernletLockService.biometricType` answer `.none` afterwards, which would name the
+    ///     generic "Biometrics" instead of the sensor that just locked.
     /// - Returns: An already-localized sentence for the inline error, or `nil` for silence.
     static func message(for error: any Error, biometry: LABiometryType) -> String? {
         guard !isDismissal(error) else { return nil }
+        if let code = (error as? LAError)?.code {
+            switch code {
+            case .authenticationFailed:
+                return FernletLockCopy.Unlock.errorBiometricUnrecognized(biometricName(biometry))
+            case .biometryLockout:
+                return FernletLockCopy.Unlock.errorBiometricLockout(biometricName(biometry))
+            default:
+                return error.localizedDescription
+            }
+        }
         switch error as? FernletLockError {
         case .biometricNotAvailable?:
             return nil
