@@ -111,6 +111,10 @@ struct GuidedWorkoutSheet: View {
         // suspended, its in-app cues cannot play and the warm-up's hands-free advance stops. Scoped to
         // this sheet; the idle timer comes back the moment the run ends or the sheet or app goes away.
         .keepsScreenAwake(isLive)
+        // While this sheet shows the live run its own VoiceOver lines say every moment, so the cue
+        // director's spoken cues stay off VoiceOver until the sheet goes away (`GuidedRunCues.swift`).
+        .onChange(of: isLive, initial: true) { _, live in store.guidedRunCues.runnerOnScreen = live }
+        .onDisappear { store.guidedRunCues.runnerOnScreen = false }
         .interactiveDismissDisabled(isLive)
         .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
         .modifier(GuidedRunnerAlerts(
@@ -679,17 +683,22 @@ struct GuidedWorkoutSheet: View {
     /// Everything a bar button changes — the set strip, the rest timer, the exercise card — is
     /// elsewhere on the screen, so without this a double-tap moved the whole workout in silence.
     /// See ``GuidedRunAnnouncement`` for the spoken line and ``GuidedRunCuePlan`` for the cue; `cue`
-    /// is why the run moved, or nil for a move that should stay quiet.
+    /// is why the run moved, or nil for a move that should stay quiet. With spoken cues on, the
+    /// VoiceOver line also carries the new lift's weight (``GuidedRunCueDirector/voiceOverAddition(from:to:)``)
+    /// — one announcement, never a second voice beside it.
     private func announcingTransition(_ transition: @MainActor () -> Void, cue: GuidedRunCuePlan.Cause?) {
         let before = run
         transition()
+        let after = store.guidedRunState
         if let cue {
-            store.guidedRunCues.transition(from: before, to: store.guidedRunState, cause: cue)
+            store.guidedRunCues.transition(from: before, to: after, cause: cue)
         }
-        guard let before, let spoken = GuidedRunAnnouncement.spoken(from: before, to: store.guidedRunState) else {
+        guard let before, let spoken = GuidedRunAnnouncement.spoken(from: before, to: after) else {
             return
         }
-        FernletAnnouncer.system.announce(spoken.kind, spoken.sentence)
+        let addition = store.guidedRunCues.voiceOverAddition(from: before, to: after)
+        let line = GuidedRunSpokenCue.sentences(String(localized: spoken.sentence), addition)
+        FernletAnnouncer.system.announce(spoken.kind, resolved: line)
     }
 
     /// Says the rest's nudge is over when its timer reaches zero. The rest itself waits for the user

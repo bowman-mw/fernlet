@@ -25,8 +25,8 @@
 //     The files are short and authored quiet (see ``FernletSound``).
 //
 //  4. NO COPY. Nothing here is ever spoken or shown, so this file holds no user-visible string. Spoken
-//     equivalents stay with ``FernletAnnouncer``; a later spoken-cue option plugs in beside this seam,
-//     keyed by the same events, rather than inside it.
+//     equivalents stay with ``FernletAnnouncer``; the opt-in spoken cues (``FernletSpeaker``,
+//     `FernletSpeech.swift`) sit beside this seam, said at the same moments, rather than inside it.
 //
 
 import AudioToolbox

@@ -316,6 +316,10 @@ struct PersistedSurfaceWipeBoundaryTests {
         "fernlet.workoutCues.sounds": .kept(
             reason: "Guided-workout configuration, not a record: whether the runner plays its quiet chime. Same class as the haptics switch beside it, and clearing it would only hand back the default."
         ),
+        // Idea 11 (2026-10-20): the "Spoken cues" switch beside them, device-local the same way.
+        "fernlet.workoutCues.spoken": .kept(
+            reason: "Guided-workout configuration, not a record: whether the runner says its moments aloud. Same class as the haptics and sounds switches beside it — nothing spoken is ever stored — and clearing it would only hand back the default (off)."
+        ),
         // The two append-only ledgers' durable reset boundaries (tracker §3.6, 2026-09-24). Written BY
         // the wipe, before it deletes the rows, and retired by the ledger itself once the synced
         // marker lands — so a funnel clear would erase the one copy that outlives a process death.
