@@ -85,6 +85,17 @@ struct PrivacyPolicyParityTests {
     /// The marker added 2026-09-30 (period-data design, §10.5) pins the correction of a sentence that
     /// became false in all three copies at once: the journal, period-data and intimate-log backups
     /// "require Fernlet's app lock". Since the no-passcode Private tab they work either way.
+    ///
+    /// The four markers added 2026-10-20 (workout round 2) pin its disclosures:
+    /// - `Heart rate during cardio` — the opt-in live heart rate, the first Health read that happens
+    ///   during a workout, while the run is on screen and on the Lock Screen;
+    /// - `holds the reading in memory only` — that reading is never saved, synced or exported, and
+    ///   Fernlet writes no heart-rate value (`GuidedZones.swift`); a copy that drifted here would
+    ///   under-describe a sensor read;
+    /// - `Easy, Good or Tough` — the stored workout details: per-set weights, warm-up sets, the effort
+    ///   rating and the override reason, pain among them (`ExerciseResult`);
+    /// - `Workout suggestions.` — sleep, resting heart rate and heart-rate variability shape the
+    ///   planner's readiness, the stalled-lift check and the heart-rate zones, on the device.
     private static let substanceMarkers = [
         "iOS may refuse or end it at any time",
         "never retroactively repurposed",
@@ -108,7 +119,11 @@ struct PrivacyPolicyParityTests {
         "how long is left",
         "never synced to iCloud, never shown to friends",
         "if you made it in parts",
-        "work with or without a Fernlet passcode"
+        "work with or without a Fernlet passcode",
+        "Heart rate during cardio",
+        "holds the reading in memory only",
+        "Easy, Good or Tough",
+        "Workout suggestions."
     ]
 
     /// Loads each copy's text, keyed by its repo-relative path.
