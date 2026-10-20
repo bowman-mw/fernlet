@@ -281,6 +281,8 @@ struct GuidedWorkoutSheet: View {
         VStack(alignment: .leading, spacing: 22) {
             if let exercise = run.currentExercise {
                 exerciseCard(run, exercise)
+                GuidedPreviousLiftFix(store: store, run: run)
+                GuidedLoadPanel(store: store, exercise: exercise, isLastSet: run.currentSet >= run.totalSetsForCurrent)
 
                 if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) {
                     GuidedSetStrip(total: run.totalSetsForCurrent, completed: run.setsCompletedForCurrent)
@@ -493,6 +495,10 @@ struct GuidedWorkoutSheet: View {
                         restingSetLine(run)
                             .font(.fernlet(.labelSmall))
                             .foregroundStyle(Color.slate)
+                    }
+                    if exercise.tracking != nil {
+                        GuidedEditRepsButton(store: store, exercise: exercise, label: Text("Edit reps so far"))
+                            .padding(.top, 6)
                     }
                 }
             }
@@ -948,6 +954,8 @@ extension FernletStore {
     /// counts are capped, so the budget below is generous and the loop always terminates.
     func guidedSkipToNextExercise() {
         guard let start = guidedRunState, start.canSkipToNextExercise else { return }
+        // A skipped lift is logged as skipped, never as "completed as prescribed".
+        editGuidedRun { $0.markCurrentSkipped() }
         let startIndex = start.exerciseIndex
         var budget = 2 * max(1, start.totalSetsForCurrent) + 2
         while let state = guidedRunState,

@@ -529,6 +529,61 @@ the plan text a log records summarizes the warm-up and cool-down in one line eac
 - ``WorkoutSessionBlocks``
 - ``WorkoutRestGuidance``
 
+### Load-aware progression and plateaus
+
+The owner's spec of 2026-10-19. Given a ``WorkoutLoadContext`` (each lift's logged sessions as
+``LiftExposure``s, recent sleep and protein, the calibration state), `WorkoutProgram.dayPlan` runs
+its lifting picks through a load pass. Everything is derived from the history each time — no stored
+estimate — so the same history always builds the same plan.
+
+- **Estimate and range.** ``WorkoutLoadEngine`` estimates a one-rep max by Epley with the reps left in
+  the tank added back (sets of 12 or fewer, three sessions in eight weeks weighted 3:2:1) and sets a
+  ``WeightPrescription`` whose width follows ``EstimateConfidence``: ±10 % low, ±5 % medium, one step
+  at high, on the equipment's steps.
+- **Next session.** Completed → one more rep, or at the top of the range more weight and back to the
+  bottom ("add weight now"); tough or a small miss → repeat; a real miss → lighter; a third in a row
+  → lighter and a set fewer. Two overrides the same way, or a "too heavy / too light" answer,
+  re-center the estimate on the lifter's picks; a third override in five sessions asks why once
+  (``OverrideReason``).
+- **Plateau.** ``WorkoutPlateau`` calls a lift stalled only after steady recent training (three
+  sessions in four weeks, no gap over 14 days) whose last four sessions, taken from the range and not
+  buried behind two other compound lifts, beat the earlier best by 1 % or less — and not when overrides
+  explain it. The response follows ``PlateauStage`` in the owner's order: rest check
+  (``RecoverySummary``), an easier session with the lift first and longer rest, support work for the
+  helper muscles, then a variation. A new best clears it.
+- **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
+  weeks for people without a coach plan, a one-set strength check when the estimate is already
+  trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
+
+The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
+``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
+same facts are in the logged text, `ExerciseResult.loggedLine`).
+
+- ``WorkoutLoadContext``
+- ``WorkoutLoadEngine``
+- ``LiftExposure``
+- ``LiftPlan``
+- ``LoadChange``
+- ``LoadEstimate``
+- ``RepScheme``
+- ``WeightPrescription``
+- ``LoadGuidance``
+- ``ExerciseResult``
+- ``LoadUnit``
+- ``ExerciseEffort``
+- ``OverrideReason``
+- ``OverrideDirection``
+- ``EstimateConfidence``
+- ``WorkoutPlateau``
+- ``PlateauStatus``
+- ``PlateauStage``
+- ``RecoverySummary``
+- ``WorkoutCalibration``
+- ``CalibrationSettings``
+- ``CalibrationKind``
+- ``CalibrationSet``
+- ``CalibrationStep``
+
 ### Coach plans
 
 The `CoachPlan v1` wire schema (Fernlet Coach spec §3.5): a 1-30 day plan authored OUTSIDE Fernlet

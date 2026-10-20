@@ -163,11 +163,17 @@ public nonisolated enum WorkoutSessionBlocks {
     /// steps live in the guided run, not the log), and a line per activation, lifting and cardio
     /// movement in between. This is what a logged workout records.
     public static func planText(for exercises: [PrescribedExercise]) -> String {
+        planText(for: exercises, loggedLines: [:])
+    }
+
+    /// ``planText(for:)`` with some steps' lines replaced — what a finished guided run logs: each
+    /// tracked lift's own line ("Bench press - 3 x 8 @ 105 lb (did 8, 8, 6)") in place of its plan line.
+    public static func planText(for exercises: [PrescribedExercise], loggedLines: [UUID: String]) -> String {
         let warmUp = exercises.filter { $0.block == .warmUp }
         let coolDown = exercises.filter { $0.block == .coolDown }
         var lines: [String] = []
         if !warmUp.isEmpty { lines.append("Warm-up stretch flow - \(minutes(of: warmUp)) min") }
-        lines += exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.map(\.line)
+        lines += exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.map { loggedLines[$0.id] ?? $0.line }
         if !coolDown.isEmpty { lines.append("Cool-down stretches - \(minutes(of: coolDown)) min") }
         return lines.joined(separator: "\n")
     }

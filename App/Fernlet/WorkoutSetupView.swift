@@ -258,6 +258,10 @@ struct WorkoutSetupSheet: View {
                     }
                 }
             }
+
+            if profile.experience != .beginner {
+                OneRepMaxOptIn(isOn: $profile.oneRepMaxTesting)
+            }
         }
     }
 
@@ -313,5 +317,36 @@ struct WorkoutSetupSheet: View {
         store.setWorkoutProfile(updated)
         store.setSelectedSplit(selectedSplitID)
         dismiss()
+    }
+}
+
+/// The opt-in for true one-rep-max tests at the monthly strength check, for intermediate and
+/// advanced lifters only. Turning it on asks for a confirmation that carries the safety warnings;
+/// turning it off is immediate. Off, the check stays submaximal — which Fernlet treats as the better
+/// guide to training loads anyway.
+private struct OneRepMaxOptIn: View {
+    @Binding var isOn: Bool
+    @State private var confirming = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { isOn }, set: { wantsOn in
+                if wantsOn { confirming = true } else { isOn = false }
+            })) {
+                Text("True max at monthly strength checks")
+                    .foregroundStyle(Color.bark)
+            }
+            .accessibilityIdentifier("workout.setup.oneRepMax")
+            Text("Off, the check is a few lighter sets and one hard set — easier on you, and usually the better guide to your training weights.")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+        }
+        .alert("Test a true max?", isPresented: $confirming) {
+            Button("Turn on") { isOn = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep.")
+        }
     }
 }

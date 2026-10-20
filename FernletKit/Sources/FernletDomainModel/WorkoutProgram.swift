@@ -65,6 +65,9 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
     public var unknownExperienceToken: String? = nil
     /// nil → use the recommended split. Otherwise a `TrainingSplit.id`.
     public var selectedSplitID: String?
+    /// Opt-in: the monthly calibration tests a true one-rep max instead of a submaximal set.
+    /// Honored for intermediate and advanced lifters only (``WorkoutCalibration/kind(profile:confidence:)``).
+    public var oneRepMaxTesting: Bool = false
 
     public init(
         avoidedMuscles: Set<MuscleGroup> = [],
@@ -74,7 +77,8 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
         sport: String = "",
         trainingDaysPerWeek: Int = 3,
         experience: ExperienceLevel = .beginner,
-        selectedSplitID: String? = nil
+        selectedSplitID: String? = nil,
+        oneRepMaxTesting: Bool = false
     ) {
         self.avoidedMuscles = avoidedMuscles
         self.avoidedMovements = avoidedMovements
@@ -84,6 +88,7 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
         self.trainingDaysPerWeek = trainingDaysPerWeek
         self.experience = experience
         self.selectedSplitID = selectedSplitID
+        self.oneRepMaxTesting = oneRepMaxTesting
     }
 
     public nonisolated init(from decoder: Decoder) throws {
@@ -105,6 +110,7 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
         experience = experienceSplit.value
         unknownExperienceToken = experienceSplit.parkedToken
         selectedSplitID = try c.decodeIfPresent(String.self, forKey: .selectedSplitID)
+        oneRepMaxTesting = try c.decodeIfPresent(Bool.self, forKey: .oneRepMaxTesting) ?? false
     }
 
     /// Best-effort mapping of free-text constraint/injury phrases into structured contraindications,
@@ -1066,7 +1072,7 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
     public init(
         id: UUID = UUID(), name: String, sets: Int, reps: String, role: SlotRole, fromCatalog: Bool,
         restSecondsOverride: Int? = nil, block: SessionBlock = .lifting, holdSeconds: Int? = nil,
-        side: ExerciseSide? = nil
+        side: ExerciseSide? = nil, guidance: LoadGuidance? = nil
     ) {
         self.id = id
         self.name = name
@@ -1078,6 +1084,7 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
         self.block = block
         self.holdSeconds = holdSeconds
         self.side = side
+        self.guidance = guidance
     }
     public var id = UUID()
     public var name: String
@@ -1094,6 +1101,9 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
     public var holdSeconds: Int?
     /// Left or right for a one-sided step; nil otherwise.
     public var side: ExerciseSide?
+    /// The load plan for a rep-counted lift — its weight range, target reps, and calibration role —
+    /// which the guided runner prescribes from and records against. Nil on everything else.
+    public var guidance: LoadGuidance?
 
     /// The display text for a timed hold: "40 s".
     public static func holdText(seconds: Int) -> String { "\(seconds) s" }
@@ -1107,7 +1117,8 @@ public nonisolated struct PrescribedExercise: Identifiable, Equatable {
             let hold = Self.holdText(seconds: holdSeconds)
             return sets > 1 ? "\(label) - \(sets) x \(hold)" : "\(label) - \(hold)"
         }
-        return "\(label) - \(sets) x \(reps)"
+        let tag = guidance?.calibration.map { " (\(ExerciseResult.calibrationTag($0)))" } ?? ""
+        return "\(label) - \(sets) x \(reps)\(tag)"
     }
 }
 
@@ -1227,6 +1238,7 @@ public nonisolated enum WorkoutProgram {
         split: TrainingSplit,
         rotationIndex: Int,
         progression: [String: Int] = [:],
+        load: WorkoutLoadContext? = nil,
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> DayPlan {
         // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
@@ -1246,13 +1258,17 @@ public nonisolated enum WorkoutProgram {
         var dayUsed: Set<String> = []
         var dropped: [String] = []
         var sessions: [SessionSuggestion] = []
+        // One calibration a day at most: the first lifting session that can take it does.
+        var calibrationOpen = true
 
         for session in day.sessions {
+            let inputs = SlotInputs(
+                goal: goal, intensity: intensity, style: style, feasible: feasible, biasTokens: biasTokens,
+                profile: profile, location: location, progression: progression, load: load
+            )
             let rendered = render(
-                session: session, goal: goal, intensity: intensity, style: style,
-                feasible: feasible, biasTokens: biasTokens, used: &dayUsed,
-                profile: profile, location: location, context: context,
-                isMultiSession: day.sessions.count > 1, progression: progression
+                session: session, inputs: inputs, context: context, used: &dayUsed,
+                isMultiSession: day.sessions.count > 1, calibrationOpen: &calibrationOpen
             )
             dropped.append(contentsOf: rendered.dropped)
             sessions.append(rendered.session)
@@ -1312,48 +1328,39 @@ public nonisolated enum WorkoutProgram {
 
     private static func render(
         session: WorkoutSessionTemplate,
-        goal: GoalType,
-        intensity: WorkoutIntensity,
-        style: WorkoutGoalStyle,
-        feasible: [ExerciseTarget],
-        biasTokens: Set<String>,
-        used: inout Set<String>,
-        profile: WorkoutProfile,
-        location: WorkoutLocation,
+        inputs: SlotInputs,
         context: String,
+        used: inout Set<String>,
         isMultiSession: Bool,
-        progression: [String: Int]
+        calibrationOpen: inout Bool
     ) -> (session: SessionSuggestion, dropped: [String]) {
         let timeLabel = session.time.label
+        let name = sessionDisplayName(session, timeLabel: timeLabel)
 
         switch session.kind {
         case .cardio, .mobility:
-            let detail = session.conditioning ?? style.conditioningLabel
+            let detail = session.conditioning ?? inputs.style.conditioningLabel
             let exercises = [PrescribedExercise(name: detail, sets: 0, reps: "", role: .accessory, fromCatalog: false)]
             let suggestion = WorkoutSuggestion(
-                name: sessionDisplayName(session, timeLabel: timeLabel),
-                exercises: detail,
-                notes: notes(goal: goal, location: location, context: context, dropped: [], profile: profile, includeContext: !isMultiSession, weeksDone: 0)
+                name: name, exercises: detail,
+                notes: notes(inputs: inputs, context: context, dropped: [], includeContext: !isMultiSession, progressNotes: [])
             )
             return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: exercises, suggestion: suggestion), [])
 
         case .strength, .fullBody, .sport:
-            let inputs = SlotInputs(
-                goal: goal, intensity: intensity, style: style, feasible: feasible, biasTokens: biasTokens,
-                profile: profile, location: location, progression: progression
-            )
-            let built = buildBlocks(session: session, inputs: inputs, used: &used)
+            let built = buildBlocks(session: session, inputs: inputs, used: &used, calibrationOpen: &calibrationOpen)
             let suggestion = WorkoutSuggestion(
-                name: sessionDisplayName(session, timeLabel: timeLabel),
+                name: name,
                 exercises: WorkoutSessionBlocks.planText(for: built.exercises),
-                notes: notes(goal: goal, location: location, context: context, dropped: built.dropped, profile: profile, includeContext: !isMultiSession, weeksDone: built.weeksDone)
+                notes: notes(inputs: inputs, context: context, dropped: built.dropped,
+                             includeContext: !isMultiSession, progressNotes: built.progressNotes)
             )
             return (SessionSuggestion(title: session.title, timeLabel: timeLabel, kind: session.kind, exercises: built.exercises, suggestion: suggestion), built.dropped)
         }
     }
 
     /// What every slot pick in one day's render shares.
-    private struct SlotInputs {
+    struct SlotInputs {
         let goal: GoalType
         let intensity: WorkoutIntensity
         let style: WorkoutGoalStyle
@@ -1362,6 +1369,17 @@ public nonisolated enum WorkoutProgram {
         let profile: WorkoutProfile
         let location: WorkoutLocation
         let progression: [String: Int]
+        /// The lifts' logged sessions and recovery; nil keeps the count-based ladder alone.
+        let load: WorkoutLoadContext?
+    }
+
+    /// One filled slot: the prescribed step, the catalog row behind it, the slot it fills, and the
+    /// count-based ladder position it was prescribed from.
+    struct SlotPick {
+        var exercise: PrescribedExercise
+        var target: ExerciseTarget
+        var completions: Int
+        var slot: WorkoutSlotSpec
     }
 
     /// The core slot a session without one of its own gets for its activation block.
@@ -1370,14 +1388,15 @@ public nonisolated enum WorkoutProgram {
     )
 
     /// A lifting session's movements in run order — warm-up, activation, lifting, cardio,
-    /// cool-down — plus the slots it dropped and the progression week for its note.
+    /// cool-down — plus the slots it dropped and what its note says about progression.
     ///
     /// The template's core slot moves into the activation block, ahead of the lifting, and is
-    /// prescribed light; a session without one gets a light core pick there anyway. The cool-down
-    /// stretches the muscles the lifting picks actually worked.
+    /// prescribed light; a session without one gets a light core pick there anyway. With a load
+    /// context the lifting block runs through the load pass (``applyLoad(_:inputs:load:used:calibrationOpen:)``).
+    /// The cool-down stretches the muscles the lifting picks actually worked.
     private static func buildBlocks(
-        session: WorkoutSessionTemplate, inputs: SlotInputs, used: inout Set<String>
-    ) -> (exercises: [PrescribedExercise], dropped: [String], weeksDone: Int) {
+        session: WorkoutSessionTemplate, inputs: SlotInputs, used: inout Set<String>, calibrationOpen: inout Bool
+    ) -> (exercises: [PrescribedExercise], dropped: [String], progressNotes: [String]) {
         let slots = Array(session.slots.prefix(inputs.profile.experience.maxSlotsPerDay))
         let liftSlots = slots.filter { $0.role != .core }
         let coreSlots = slots.filter { $0.role == .core }
@@ -1395,14 +1414,21 @@ public nonisolated enum WorkoutProgram {
         if session.kind == .sport { cardio.append(descriptorStep(inputs.style.conditioningLabel)) }
         if let extra = session.conditioning { cardio.append(descriptorStep(extra)) }
         var liftingSteps = lifting.map(\.exercise)
+        var liftingTargets = lifting.map(\.target)
+        var progressNotes = ladderNote(lifting, style: inputs.style)
+        if let load = inputs.load {
+            let pass = applyLoad(lifting, inputs: inputs, load: load, used: &used, calibrationOpen: &calibrationOpen)
+            liftingSteps = pass.steps
+            liftingTargets = pass.targets
+            progressNotes = pass.notes
+        }
         if liftingSteps.isEmpty && cardio.isEmpty {
             liftingSteps = [descriptorStep("Full-body bodyweight circuit - 3 rounds", block: .lifting)]
         }
-        let worked = lifting.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.target.primaryMuscles) }
+        let worked = liftingTargets.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.primaryMuscles) }
         let exercises = WorkoutSessionBlocks.warmUp(feasible: inputs.feasible) + activation + liftingSteps
             + cardio + WorkoutSessionBlocks.coolDown(worked: worked, feasible: inputs.feasible)
-        let weeksDone = lifting.map(\.completions).min() ?? 0
-        return (exercises, dropped, weeksDone)
+        return (exercises, dropped, progressNotes)
     }
 
     /// Fills slots in order with their best eligible pick, prescribing each for its block, and
@@ -1410,8 +1436,8 @@ public nonisolated enum WorkoutProgram {
     private static func fill(
         _ slots: [WorkoutSlotSpec], block: SessionBlock, inputs: SlotInputs,
         used: inout Set<String>, dropped: inout [String], reportDrops: Bool
-    ) -> [(exercise: PrescribedExercise, target: ExerciseTarget, completions: Int)] {
-        var picks: [(exercise: PrescribedExercise, target: ExerciseTarget, completions: Int)] = []
+    ) -> [SlotPick] {
+        var picks: [SlotPick] = []
         for slot in slots {
             let pick = bestExercise(
                 for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
@@ -1423,7 +1449,10 @@ public nonisolated enum WorkoutProgram {
             }
             used.insert(pick.name)
             let completions = block == .lifting ? inputs.progression[pick.name] ?? 0 : 0
-            picks.append((prescribe(pick, role: slot.role, block: block, completions: completions, inputs: inputs), pick, completions))
+            picks.append(SlotPick(
+                exercise: prescribe(pick, role: slot.role, block: block, completions: completions, inputs: inputs),
+                target: pick, completions: completions, slot: slot
+            ))
         }
         return picks
     }
@@ -1431,7 +1460,7 @@ public nonisolated enum WorkoutProgram {
     /// Sets and reps (or a hold) for one pick. Lifting picks follow the goal and the day's energy,
     /// with double progression on rep-counted work; activation picks are deliberately light — two
     /// easy sets — so the trunk is awake, not tired, when the heavy lifting starts.
-    private static func prescribe(
+    static func prescribe(
         _ pick: ExerciseTarget, role: SlotRole, block: SessionBlock, completions: Int, inputs: SlotInputs
     ) -> PrescribedExercise {
         let timed = pick.measure == .seconds
@@ -1651,18 +1680,15 @@ public nonisolated enum WorkoutProgram {
     }
 
     private static func notes(
-        goal: GoalType,
-        location: WorkoutLocation,
+        inputs: SlotInputs,
         context: String,
         dropped: [String],
-        profile: WorkoutProfile,
         includeContext: Bool,
-        weeksDone: Int
+        progressNotes: [String]
     ) -> String {
-        var parts: [String] = [location.name]
-        if weeksDone > 0 {
-            parts.append("Week \(weeksDone + 1) — nudge the weight or reps up a little from last time.")
-        }
+        let profile = inputs.profile
+        var parts: [String] = [inputs.location.name]
+        parts += progressNotes
         if includeContext, context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             parts.append("Noted: \(context.trimmingCharacters(in: .whitespacesAndNewlines))")
         }

@@ -67,6 +67,16 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
     public var unknownIntensityToken: String? = nil
     public var completedAt = Date()
     public var loggedAt = Date()
+    /// What happened to each prescribed lift in a guided session — prescribed sets, reps and weight
+    /// range, the weight picked, and the actual reps when they differed (``ExerciseResult``).
+    /// Additive optional: nil on every row written before it existed, on hand-logged rows, and on
+    /// guided rows from a run with nothing to record. Encoded only when set, so other rows stay
+    /// byte-identical. The same facts are in `exercises` as text, so a build that drops this field
+    /// on a re-save loses only the structure, never the record.
+    public var exerciseResults: [ExerciseResult]?
+
+    /// Results a decoded row may carry at most (R3: the field arrives from synced storage).
+    public static let maxExerciseResults = 64
 
     public var exerciseLines: [String] {
         exercises
@@ -144,7 +154,8 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         loggedFromGuidedSession: Bool? = nil,
         intensity: WorkoutIntensity,
         completedAt: Date = Date(),
-        loggedAt: Date? = nil
+        loggedAt: Date? = nil,
+        exerciseResults: [ExerciseResult]? = nil
     ) {
         self.id = id
         self.name = name
@@ -166,6 +177,7 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         self.intensity = intensity
         self.completedAt = completedAt
         self.loggedAt = loggedAt ?? completedAt
+        self.exerciseResults = exerciseResults
     }
 
     public init(from decoder: Decoder) throws {
@@ -207,6 +219,8 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         unknownIntensityToken = intensitySplit.parkedToken
         completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt) ?? Date()
         loggedAt = try container.decodeIfPresent(Date.self, forKey: .loggedAt) ?? completedAt
+        exerciseResults = try container.decodeIfPresent([ExerciseResult].self, forKey: .exerciseResults)
+            .map { Array($0.filter { !$0.name.isEmpty }.prefix(Self.maxExerciseResults)) }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -238,16 +252,19 @@ public nonisolated struct Workout: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(unknownIntensityToken, forKey: .unknownIntensityToken)
         try container.encode(completedAt, forKey: .completedAt)
         try container.encode(loggedAt, forKey: .loggedAt)
+        // Encoded only when set, so rows without results stay byte-identical.
+        try container.encodeIfPresent(exerciseResults, forKey: .exerciseResults)
     }
 
     /// Persisted JSON keys for a logged ``Workout``'s wire format.
     ///
     /// Renaming a case is a data-format break; the optional tag keys (`healthKitAuthored`,
-    /// `loggedFromGuidedSession`) are encoded only when set so untagged rows stay byte-identical.
+    /// `loggedFromGuidedSession`, `exerciseResults`) are encoded only when set so untagged rows stay
+    /// byte-identical.
     private enum CodingKeys: String, CodingKey {
         case id, name, type, mode, activityType, exercises, rpe, notes, duration
         case distanceMiles, activeEnergyKcal, effort, muscleGroups, healthKitUUID, healthKitAuthored, plannedWorkoutID
-        case loggedFromGuidedSession
+        case loggedFromGuidedSession, exerciseResults
         case intensity, completedAt, loggedAt
         case unknownTypeToken, unknownModeToken, unknownActivityTypeToken
         case unknownMuscleGroupTokens, unknownIntensityToken
