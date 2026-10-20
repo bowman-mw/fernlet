@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Plateau-detector tuning prototype for Fernlet's workout planner (round 2, engine lane).
 
-This mirrors the Swift simulation harness in
-FernletKit/Tests/FernletDomainModelTests/WorkoutPlateauSimulationTests.swift so thresholds can be
-explored quickly. It is deterministic: every history comes from a SplitMix64 stream seeded by its
+Its histories are the ones the Swift simulation harness draws
+(Tests/FernletTests/WorkoutPlateauSimulationTests.swift), so thresholds can be explored quickly; its
+detector is a looser sketch of the shipping one, which swift_mirror.py mirrors line for line. It is deterministic: every history comes from a SplitMix64 stream seeded by its
 index, never the system RNG, and every loop is bounded.
 
 Synthetic truth: e1RM(t) = start * (1 + b * ln(t / t0)), t in weeks, t0 = 1.
