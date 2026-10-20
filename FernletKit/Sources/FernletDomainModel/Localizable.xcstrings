@@ -61,6 +61,18 @@
         }
       }
     },
+    "activityType.americanFootball" : {
+      "comment" : "Workout activity type: American football, flag football included (not soccer)",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "American Football"
+          }
+        }
+      }
+    },
     "activityType.badminton" : {
       "comment" : "Workout activity type: badminton",
       "extractionState" : "extracted_with_value",
@@ -85,6 +97,18 @@
         }
       }
     },
+    "activityType.baseball" : {
+      "comment" : "Workout activity type: baseball",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Baseball"
+          }
+        }
+      }
+    },
     "activityType.basketball" : {
       "comment" : "Workout activity type: basketball",
       "extractionState" : "extracted_with_value",
@@ -93,6 +117,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Basketball"
+          }
+        }
+      }
+    },
+    "activityType.boxing" : {
+      "comment" : "Workout activity type: boxing, on a bag or in the ring",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Boxing"
           }
         }
       }
@@ -133,6 +169,18 @@
         }
       }
     },
+    "activityType.crossCountrySkiing" : {
+      "comment" : "Workout activity type: cross-country (Nordic) skiing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cross-Country Skiing"
+          }
+        }
+      }
+    },
     "activityType.crossTraining" : {
       "comment" : "Workout activity type: cross training",
       "extractionState" : "extracted_with_value",
@@ -165,6 +213,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Dance"
+          }
+        }
+      }
+    },
+    "activityType.downhillSkiing" : {
+      "comment" : "Workout activity type: downhill (alpine) skiing",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Downhill Skiing"
           }
         }
       }
@@ -205,6 +265,18 @@
         }
       }
     },
+    "activityType.golf" : {
+      "comment" : "Workout activity type: golf",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Golf"
+          }
+        }
+      }
+    },
     "activityType.hiit" : {
       "comment" : "Workout activity type: high-intensity interval training",
       "extractionState" : "extracted_with_value",
@@ -225,6 +297,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Hiking"
+          }
+        }
+      }
+    },
+    "activityType.hockey" : {
+      "comment" : "Workout activity type: hockey, on ice or on a field",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hockey"
           }
         }
       }
@@ -261,6 +345,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Kickboxing"
+          }
+        }
+      }
+    },
+    "activityType.lacrosse" : {
+      "comment" : "Workout activity type: lacrosse",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lacrosse"
           }
         }
       }
@@ -373,6 +469,18 @@
         }
       }
     },
+    "activityType.rugby" : {
+      "comment" : "Workout activity type: rugby",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rugby"
+          }
+        }
+      }
+    },
     "activityType.running" : {
       "comment" : "Workout activity type: running, outdoors or on a treadmill",
       "extractionState" : "extracted_with_value",
@@ -381,6 +489,30 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Running"
+          }
+        }
+      }
+    },
+    "activityType.skating" : {
+      "comment" : "Workout activity type: skating on ice, inline or roller skates, or a skateboard",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skating"
+          }
+        }
+      }
+    },
+    "activityType.snowboarding" : {
+      "comment" : "Workout activity type: snowboarding",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Snowboarding"
           }
         }
       }
@@ -405,6 +537,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Social Dance"
+          }
+        }
+      }
+    },
+    "activityType.softball" : {
+      "comment" : "Workout activity type: softball",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Softball"
           }
         }
       }
@@ -441,6 +585,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Stairs"
+          }
+        }
+      }
+    },
+    "activityType.surfing" : {
+      "comment" : "Workout activity type: surfing and other board sports on the water",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Surfing"
           }
         }
       }
@@ -517,6 +673,18 @@
         }
       }
     },
+    "activityType.volleyball" : {
+      "comment" : "Workout activity type: volleyball, indoors or on the beach",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Volleyball"
+          }
+        }
+      }
+    },
     "activityType.walking" : {
       "comment" : "Workout activity type: walking",
       "extractionState" : "extracted_with_value",
@@ -525,6 +693,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Walking"
+          }
+        }
+      }
+    },
+    "activityType.wrestling" : {
+      "comment" : "Workout activity type: wrestling",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wrestling"
           }
         }
       }
@@ -30744,6 +30924,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "left out %@"
+          }
+        }
+      }
+    },
+    "workoutNote.budget.oneWarmUpSet" : {
+      "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — a lift's lighter warm-up sets were cut to just one. The argument is a comma-separated list of exercise names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "one warm-up set for %@"
           }
         }
       }

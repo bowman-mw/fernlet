@@ -101,23 +101,26 @@ extension WorkoutProgram {
                         slots: loaded.map(\.slot))
     }
 
-    /// Puts warm-up sets in front of each heavy main lift (``WorkoutWarmUpSets``) when the lifter has
-    /// them on and today isn't a light day. Runs after the calibration, so a lift the calibration
-    /// already ramps into gets no second ramp; each warm-up is a copy of its lift's pick, so it shares
-    /// the lift's slot, target and fatigue context.
+    /// Puts warm-up sets in front of the session's first heavy main lift (``WorkoutWarmUpSets``) when
+    /// the lifter has them on and today isn't a light day — that lift only, and none when it doesn't
+    /// qualify. Runs after the calibration, so a lift the calibration already ramps into gets no second
+    /// ramp; the sets land on the location's own loads when its weights are set. Each warm-up is a copy
+    /// of its lift's pick, so it shares the lift's slot, target and fatigue context.
     static func addWarmUpSets(_ loaded: inout [LoadedPick], inputs: SlotInputs, load: WorkoutLoadContext) {
-        guard load.warmUpSets, inputs.intensity != .light else { return }
-        var expanded: [LoadedPick] = []
-        for pick in loaded {
-            for step in WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern) {
-                var warmUp = pick
-                warmUp.exercise = step
-                warmUp.plan = nil
-                expanded.append(warmUp)
-            }
-            expanded.append(pick)
+        guard load.warmUpSets, inputs.intensity != .light,
+              let index = WorkoutWarmUpSets.firstHeavyMainLift(
+                  in: loaded.map(\.exercise), patterns: loaded.map { Optional($0.target.movementPattern) }
+              ) else { return }
+        let pick = loaded[index]
+        let ladder = pick.exercise.guidance.flatMap { loadLadder(for: $0, at: inputs.location) }
+        let steps = WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern, ladder: ladder)
+        let warmUps = steps.map { step in
+            var warmUp = pick
+            warmUp.exercise = step
+            warmUp.plan = nil
+            return warmUp
         }
-        loaded = expanded
+        loaded.insert(contentsOf: warmUps, at: index)
     }
 
     /// The plateau status of a rep-counted lift, nil for holds and lifts with no history.
@@ -175,20 +178,32 @@ extension WorkoutProgram {
 
     /// Counts the compound lifts ahead of each pick — the fatigue context a result records.
     static func assignFatigueContext(_ loaded: inout [LoadedPick]) {
+        let counts = compoundCounts(names: loaded.map(\.exercise.name),
+                                    patterns: loaded.map { Optional($0.target.movementPattern) })
+        for index in loaded.indices where index < counts.count {
+            loaded[index].exercise.guidance?.compoundsBefore = counts[index]
+        }
+    }
+
+    /// The compound lifts ahead of each step, in order. `patterns` runs parallel to `names`; a step
+    /// with no known pattern is not counted. Steps of one name share one lift (a calibration's steps,
+    /// a lift's warm-up sets): every one carries the count from its first. Shared with the re-run
+    /// after "Adjust with AI" (``WorkoutAdjustedLoad``).
+    static func compoundCounts(names: [String], patterns: [MovementPattern?]) -> [Int] {
         let noncompound: Set<MovementPattern> = [.isolation, .twist, .locomotion]
         var compounds = 0
         var firstSeen: [String: Int] = [:]
-        for index in loaded.indices {
-            let name = loaded[index].exercise.name
-            // A calibration's steps share one lift: every step carries the count from its first.
+        var counts: [Int] = []
+        for (index, name) in names.enumerated() {
             if let before = firstSeen[name] {
-                loaded[index].exercise.guidance?.compoundsBefore = before
+                counts.append(before)
                 continue
             }
-            loaded[index].exercise.guidance?.compoundsBefore = compounds
+            counts.append(compounds)
             firstSeen[name] = compounds
-            if !noncompound.contains(loaded[index].target.movementPattern) { compounds += 1 }
+            if index < patterns.count, let pattern = patterns[index], !noncompound.contains(pattern) { compounds += 1 }
         }
+        return counts
     }
 
     // MARK: Plateau response

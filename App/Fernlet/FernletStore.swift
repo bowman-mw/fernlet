@@ -4964,6 +4964,8 @@ final class FernletStore {
         // The session's start, for the logged duration: the run carries it, so it survives a relaunch.
         state.startedAt = state.setStartedAt
         guidedRunState = state
+        // Spoken cues name the first step once, here at Start (never on a resume).
+        guidedRunCues.started(state)
         mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
         // Starting a guided workout (and its Live Activity) is a first workout too: make the one
@@ -5228,7 +5230,10 @@ final class FernletStore {
         // workout keeps (`GuidedRunDuration`); nil for a run persisted before it recorded a start.
         let timing = GuidedRunDuration.minutes(startedAt: state.startedAt, finishedAt: state.finishedAt)
         var workout = Workout(
-            name: state.title, type: type, mode: mode, activityType: GuidedRunTimedLog.activityType(for: state),
+            name: state.title, type: type, mode: mode,
+            activityType: GuidedRunTimedLog.activityType(
+                for: state, sport: settings.workoutProfile.sport, region: Locale.current.region?.identifier
+            ),
             exercises: loadLog?.text ?? state.suggestionExercisesText,
             rpe: nil, notes: GuidedRunDuration.notes(state.suggestionNotes, capped: timing?.capped == true),
             // A timed cardio or mobility run logs the minutes actually held; every other run logs its

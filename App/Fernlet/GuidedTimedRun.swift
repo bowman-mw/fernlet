@@ -42,17 +42,24 @@ enum GuidedRunTimedLog {
         )
     }
 
-    /// The activity a finished cardio or mobility run logs as, so Apple Health files it as what it was
-    /// rather than "Other": its cardio line's type (HIIT for intervals, walking for a walk, mixed cardio
-    /// otherwise), and flexibility for a stretch session. Nil for every other run, whose type is not
-    /// this file's to decide.
-    static func activityType(for state: GuidedWorkoutRunState) -> WorkoutActivityType? {
+    /// The activity a finished cardio, mobility or sport run logs as, so Apple Health files it as what it
+    /// was rather than "Other": its cardio line's type (HIIT for intervals, walking for a walk, mixed
+    /// cardio otherwise), flexibility for a stretch session, and for a sport session the sport named in
+    /// Workout setup (`sport`, ``WorkoutSportActivity``) when Fernlet models it — pickleball, tennis,
+    /// volleyball and so on, with bare "football" read by `region` (round 2, R5). Nil for every other
+    /// run, and for a sport session whose sport matches none or is a distance sport: it keeps the
+    /// generic type it always had.
+    static func activityType(
+        for state: GuidedWorkoutRunState, sport: String? = nil, region: String? = nil
+    ) -> WorkoutActivityType? {
         switch SessionKind(rawValue: state.sessionKindRaw) {
         case .cardio:
             let line = state.exercises.first(where: { $0.segment != nil })?.segment?.descriptor
             return line.flatMap(WorkoutTimedSessions.activityType(forDescriptor:)) ?? .mixedCardio
         case .mobility:
             return .flexibility
+        case .sport:
+            return sport.flatMap { WorkoutSportActivity.activityType(forSport: $0, region: region) }
         default:
             return nil
         }

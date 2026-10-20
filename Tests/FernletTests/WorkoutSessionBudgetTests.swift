@@ -5,7 +5,8 @@ import FernletDomainModel
 
 /// Pins the session-time budget and the stretch switches (2026-10-20, idea 5): every budget across
 /// the goals and splits fits or says how long it runs, the trim order (short warm-up, cool-down
-/// stretches, accessory work, accessory sets, main-lift sets), main lifts never dropped, the injury
+/// stretches, accessory work, accessory sets, the warm-up ramp cut to one set, main-lift sets), main
+/// lifts never dropped, the injury
 /// limits and the 48-hour guard holding after trimming, the short warm-up chosen by the day's muscles,
 /// the Off switches, the cardio cap, the estimate the plan card and the runner share, and the
 /// settings' tolerant decoding.
@@ -279,6 +280,59 @@ struct WorkoutSessionBudgetTests {
             exerciseIndex: 14
         )
         #expect(onSquat.changeoverSecondsAhead() == 2 * WorkoutSessionTime.changeoverSeconds)
+    }
+
+    /// A back squat at 135 lb behind its warm-up ramp (45, 80 and 110 lb; 45 s each), then a lunge:
+    /// 135 + 720 + 315 = 1,170 s.
+    func rampedBlocks() -> WorkoutSessionBudget.Blocks {
+        let prescription = WeightPrescription(low: 125, high: 145, suggested: 135, step: 5, unit: .lb, confidence: .medium)
+        var squat = lift("Back squat", sets: 4, rest: 180, role: .main)
+        squat.guidance = LoadGuidance(targetReps: 8, prescription: prescription, equipment: .barbell, unit: .lb)
+        let ramp = WorkoutWarmUpSets.steps(for: squat, pattern: .squat)
+        return WorkoutSessionBudget.Blocks(lifting: ramp + [squat, lift("Lunge", sets: 3, rest: 90, role: .accessory)])
+    }
+
+    func weights(_ steps: [PrescribedExercise]) -> [Double?] {
+        steps.map { $0.guidance?.prescription?.suggested }
+    }
+
+    /// The warm-up ramp is step 5 (owner's pick R1): after the accessory work and sets, before any
+    /// main-lift set, it comes down to its one set nearest 60 % of the working weight.
+    @Test func aRampIsCutToItsSixtyPercentSetAfterAccessoriesAndBeforeMainSets() {
+        let blocks = rampedBlocks()
+        #expect(blocks.lifting.count == 5)
+        #expect(WorkoutSessionBudget.Trim.warmUpRamp("Back squat").stage == 5)
+        #expect(WorkoutSessionBudget.Trim.mainSet("Back squat").stage == 6)
+        let thirteen = WorkoutSessionBudget.fit(blocks, budgetMinutes: 13, goal: .strength)
+        #expect(thirteen.trims == [.accessory("Lunge"), .warmUpRamp("Back squat")])
+        #expect(thirteen.fits)
+        #expect(thirteen.estimatedSeconds == 765)
+        let kept = weights(thirteen.blocks.lifting)
+        let expectedKept: [Double?] = [80, 135]
+        #expect(kept == expectedKept, "the 60 % set and the working sets")
+        let workingSets = thirteen.blocks.lifting.last.map(\.sets)
+        #expect(workingSets == 4, "no main-lift set came off")
+        #expect(thirteen.note == "Fitted to 13 min: left out Lunge; one warm-up set for Back squat.")
+        let ten = WorkoutSessionBudget.fit(blocks, budgetMinutes: 10, goal: .strength)
+        let stages = ten.trims.map(\.stage)
+        #expect(stages == [3, 5, 6])
+        #expect(ten.note == "Fitted to 10 min: left out Lunge; fewer sets of Back squat; one warm-up set for Back squat.")
+    }
+
+    /// However tight the budget, the ramp keeps one set: it is cut once, never dropped.
+    @Test func aRampNeverDropsToNone() {
+        let outcome = WorkoutSessionBudget.fit(rampedBlocks(), budgetMinutes: 1, goal: .strength)
+        let ramps = outcome.trims.filter { $0 == .warmUpRamp("Back squat") }.count
+        #expect(ramps == 1)
+        #expect(!outcome.fits)
+        let warmUps = outcome.blocks.lifting.filter { WorkoutWarmUpSets.isWarmUpSet($0) }
+        let warmUpWeights = weights(warmUps)
+        let expected: [Double?] = [80]
+        #expect(warmUpWeights == expected)
+        let floorSets = outcome.blocks.lifting.last.map(\.sets)
+        #expect(floorSets == WorkoutSessionBudget.minimumSets)
+        let roomy = WorkoutSessionBudget.fit(rampedBlocks(), budgetMinutes: 60, goal: .strength)
+        #expect(roomy.trims.isEmpty, "a session that fits keeps its whole ramp")
     }
 
     /// A main lift prescribed as accessory work for a mild injury is still a main lift: kept, and

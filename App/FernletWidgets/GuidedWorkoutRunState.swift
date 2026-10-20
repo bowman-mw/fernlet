@@ -800,7 +800,9 @@ struct GuidedWorkoutRunState: Codable, Hashable {
             paceRaw: currentExercise?.segment?.paceRaw,
             round: currentExercise?.segment?.round,
             rounds: currentExercise?.segment?.rounds,
-            zone: currentZone
+            zone: currentZone,
+            warmUpSet: warmUpPosition?.index,
+            warmUpSets: warmUpPosition?.count
         )
     }
 

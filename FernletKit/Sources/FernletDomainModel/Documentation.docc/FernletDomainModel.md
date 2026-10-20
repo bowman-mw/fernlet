@@ -536,7 +536,8 @@ equal, and both count about a minute of changeover before each exercise after th
 (``WorkoutSessionTime/changeoverSeconds``; the warm-up and cool-down flows take none) — and
 ``WorkoutSessionBudget`` fits each session into the budget in the owner's order: the short
 warm-up, cool-down stretches down to two, accessory work (the jumps, the accessory lifts from the last,
-the balance drill), accessory sets, then main-lift sets down to two. Main lifts are never dropped and
+the balance drill), accessory sets, the warm-up ramp cut to its one set nearest 60 % (never to none), then
+main-lift sets down to two. Main lifts are never dropped and
 nothing grows, so the injury limits and the guard's lighter sets hold; when even the shortest version is
 over, the note says how long it runs. A cardio session's descriptor minutes are capped instead.
 
@@ -563,7 +564,10 @@ owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block)
 gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
 certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
 run's log folds segments back into their line, and a cardio or mobility session logs as the matching
-``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). Each segment's pace aims for a heart-rate zone (roadmap step 4b): ``HeartRateZones`` builds five zones from the person's own maximum heart rate when they gave one (120–220 bpm), else from age by Tanaka (208 − 0.7 × age), and, when a trusted resting heart rate is given, by Karvonen's heart-rate reserve (percent of maximum otherwise), and maps easy and steady to zone 2 and hard to zone 4. Pure; the live reading is the app's.
+``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). A guided sport session logs the sport
+named in Workout setup when Fernlet models it (``WorkoutSportActivity``: pickleball, tennis, volleyball,
+golf, hockey, boxing, skiing…, with bare "football" American football in the US and Canada and soccer
+elsewhere), else the generic type — as it does for a distance sport, whose gym session is not a run. Each segment's pace aims for a heart-rate zone (roadmap step 4b): ``HeartRateZones`` builds five zones from the person's own maximum heart rate when they gave one (120–220 bpm), else from age by Tanaka (208 − 0.7 × age), and, when a trusted resting heart rate is given, by Karvonen's heart-rate reserve (percent of maximum otherwise), and maps easy and steady to zone 2 and hard to zone 4. Pure; the live reading is the app's.
 
 A ``PlannedWorkout`` — planned ahead by the person or put on the calendar by a coach's plan — runs in the
 guided runner as written (comparison report idea 17, 2026-10-20). The app reads each line with its own
@@ -624,6 +628,7 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 - ``ExerciseSide``
 - ``WorkoutSessionBlocks``
 - ``WorkoutTimedSessions``
+- ``WorkoutSportActivity``
 - ``TimedDescriptor``
 - ``CardioSegment``
 - ``CardioPace``
@@ -665,14 +670,23 @@ estimate — so the same history always builds the same plan.
   ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
   level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
   itself now parks a newer build's equipment tokens and keys.
-- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets (about 40 % × 8, 60 % × 5,
-  80 % × 3) in front of a barbell or other big compound main lift that has a suggested weight, when
+- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets in front of the session's
+  FIRST heavy main lift — a compound main lift on a barbell or dumbbells — when it has a suggested
+  weight; when that lift can't ramp, no later lift does. A barbell ramp is the empty bar × 8, then
+  about 60 % × 5 and 80 % × 3; a dumbbell ramp is about 40 % × 8, 60 % × 5 and 80 % × 3 on the
+  dumbbells the location owns (its ``LoadLadder``), else 5 lb or 2 kg steps. It runs when
   ``WorkoutLoadContext/warmUpSets`` is on (the synced `FernletSettings.workoutWarmUpSets`, defaulting
   on for intermediate and advanced lifters) and the day is not light. Each is a single-set step tagged
   `.ramp` like the calibration's, so the log writes "(ramp-up)" and no estimate, plateau check or
-  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to drop. Barbell
-  warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the standard
-  45 lb / 20 kg bar and plates) says which plates go on each side, or the closest load it can make.
+  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to cut to one set.
+  Barbell warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the
+  standard 45 lb / 20 kg bar and plates, or the location's own bar and plates) says which plates go on
+  each side, or the closest load it can make.
+- **After "Adjust with AI".** The on-device adjuster answers with names, sets and reps only, so
+  ``WorkoutAdjustedLoad`` loads the adjusted lifting block again: a lift kept at the same reps keeps its
+  guidance, any other catalog lift is prescribed from its history on the location's weights, the
+  compound count ahead of each lift is redone, and the warm-up ramp goes back before the first heavy main
+  lift when the setting is on and the committed day isn't light. The time budget is not applied again.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -719,6 +733,7 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``LoadCap``
 - ``WorkoutWarmUpSets``
 - ``WarmUpSet``
+- ``WorkoutAdjustedLoad``
 - ``PlateCalculator``
 - ``BarbellPlateSet``
 - ``PlateLoadout``

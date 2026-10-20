@@ -1,4 +1,5 @@
 import Foundation
+import HealthKit
 import Testing
 import FernletDomainModel
 import HealthKitGateway
@@ -29,6 +30,24 @@ struct ActivityTypeCatalogTests {
             let decoded = ActivityTypeCatalog.fernletType(for: hkType)
 
             #expect(decoded == type)
+        }
+    }
+
+    /// The sports round 2 added (R5) write to Apple Health as their own types, and a Health workout of
+    /// one of them imports as that sport rather than Other.
+    @Test func theAddedSportsMapToTheirOwnHealthTypes() {
+        let pairs: [(WorkoutActivityType, HKWorkoutActivityType)] = [
+            (.boxing, .boxing), (.wrestling, .wrestling), (.volleyball, .volleyball),
+            (.americanFootball, .americanFootball), (.baseball, .baseball), (.softball, .softball),
+            (.hockey, .hockey), (.rugby, .rugby), (.lacrosse, .lacrosse), (.golf, .golf),
+            (.downhillSkiing, .downhillSkiing), (.crossCountrySkiing, .crossCountrySkiing),
+            (.snowboarding, .snowboarding), (.skating, .skatingSports), (.surfing, .surfingSports),
+        ]
+        for (type, hk) in pairs {
+            let written = ActivityTypeCatalog.hkActivityType(for: type)
+            let imported = ActivityTypeCatalog.fernletType(for: hk)
+            #expect(written == hk, "\(type) writes as its own Health type")
+            #expect(imported == type, "Health type \(hk.rawValue) imports as \(type)")
         }
     }
 
