@@ -304,8 +304,9 @@ import FernletUI
 
     @Test func theTimeLeftCountsEachPartOnce() throws {
         let run = try Self.startedRun(Self.session([Self.line(Self.intervalsLine)], kind: .cardio, title: "Intervals"))
-        // Sixteen minutes of parts and one five-second "get ready" — no lead-in between parts.
-        #expect(run.estimatedSecondsRemaining() == 16 * 60 + 5)
+        // Sixteen minutes of parts, each counted once. The one five-second "get ready" before the first part is
+        // not counted, as the plan card's estimate does not count it (so a budget's minutes stay whole).
+        #expect(run.estimatedSecondsRemaining() == 16 * 60)
     }
 
     // MARK: Skipping a block

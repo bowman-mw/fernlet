@@ -72,16 +72,11 @@ public nonisolated enum WorkoutSessionTime {
         max(1, (max(0, seconds) + 59) / 60)
     }
 
-    /// A descriptor step's time: the minutes its line names; else, for an interval line the guided runner
-    /// times (``WorkoutTimedSessions``), its rounds of work and easy; else ``descriptorFallbackSeconds``. A timed
+    /// A descriptor step's time: the minutes its line names, else ``descriptorFallbackSeconds``. A timed
     /// cardio part's get-ready lead-in is not counted here or in the runner's countdown, so a budget's capped
     /// minutes stay whole and the plan card and a started run agree.
     public static func descriptorSeconds(_ descriptor: String) -> Int {
-        if let minutes = WorkoutProgram.descriptorMinutes(in: descriptor) { return minutes * 60 }
-        if case .intervals(let rounds, let workSeconds, let easySeconds) = WorkoutTimedSessions.classify(descriptor) {
-            return rounds * (workSeconds + easySeconds)
-        }
-        return descriptorFallbackSeconds
+        WorkoutProgram.descriptorMinutes(in: descriptor).map { $0 * 60 } ?? descriptorFallbackSeconds
     }
 }
 
