@@ -161,20 +161,40 @@ public nonisolated enum WorkoutSessionBlocks {
 
     /// The session's plan text: one summary line for the warm-up and one for the cool-down (their
     /// steps live in the guided run, not the log), and a line per activation, lifting and cardio
-    /// movement in between. This is what a logged workout records.
+    /// movement in between. This is what a logged workout records, so it stays frozen English — the
+    /// history parser and `descriptorMinutes` read it back — and a screen draws each line through
+    /// ``WorkoutPlanLine/displayed(_:)`` (2026-10-20, idea 16).
     public static func planText(for exercises: [PrescribedExercise]) -> String {
         planText(for: exercises, loggedLines: [:])
     }
 
     /// ``planText(for:)`` with some steps' lines replaced — what a finished guided run logs: each
     /// tracked lift's own line ("Bench press - 3 x 8 @ 105 lb (did 8, 8, 6)") in place of its plan line.
+    /// A cardio line the runner timed as segments folds back into the one line it came from.
     public static func planText(for exercises: [PrescribedExercise], loggedLines: [UUID: String]) -> String {
         let warmUp = exercises.filter { $0.block == .warmUp }
         let coolDown = exercises.filter { $0.block == .coolDown }
         var lines: [String] = []
         if !warmUp.isEmpty { lines.append("Warm-up stretch flow - \(minutes(of: warmUp)) min") }
-        lines += exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.map { loggedLines[$0.id] ?? $0.line }
+        lines += middleLines(exercises.filter { $0.block != .warmUp && $0.block != .coolDown }, loggedLines: loggedLines)
         if !coolDown.isEmpty { lines.append("Cool-down stretches - \(minutes(of: coolDown)) min") }
         return lines.joined(separator: "\n")
+    }
+
+    /// One line per step between the warm-up and the cool-down, a run of cardio segments as the single
+    /// line they were read from ("Intervals - 8 × 1 min hard / 1 min easy"), never one per segment.
+    static func middleLines(_ steps: [PrescribedExercise], loggedLines: [UUID: String]) -> [String] {
+        var lines: [String] = []
+        var segmentLine: String?
+        for step in steps {
+            guard let segment = step.segment else {
+                segmentLine = nil
+                lines.append(loggedLines[step.id] ?? step.line)
+                continue
+            }
+            if segment.descriptor != segmentLine { lines.append(segment.descriptor) }
+            segmentLine = segment.descriptor
+        }
+        return lines
     }
 }

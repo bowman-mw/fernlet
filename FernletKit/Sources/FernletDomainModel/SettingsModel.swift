@@ -231,7 +231,14 @@ public nonisolated struct FernletSettings: Codable {
     /// once-per-day "you've already updated your shop today" note. Nil until the first listing change.
     public var shopLastPublishedDayKey: String? = nil
     public var companionName: String = ""
+    /// The planner's person-level context. Its injury picker (`WorkoutProfile.injuryAreas`) is
+    /// encoded at THIS blob's top level (`workoutInjuryAreas` + `unknownWorkoutInjuryAreaTokens`),
+    /// not inside the nested profile, so an older build's key parking keeps it through a re-save.
     public var workoutProfile: WorkoutProfile = WorkoutProfile()
+    /// Where the user trains. Each location's "Weights I have" (``WorkoutLocation/weights``) is
+    /// encoded at THIS blob's top level as `workoutLocationWeights` (location id → entry, written only
+    /// when some location has weights), not inside the nested locations, so an older build's key
+    /// parking keeps it through a re-save.
     public var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
     public var activeWorkoutLocationID: UUID? = nil
     /// Times each catalog exercise has been completed from a suggested session — drives week-to-week
@@ -246,6 +253,31 @@ public nonisolated struct FernletSettings: Codable {
     /// living in the synced settings blob means it reaches the user's other devices and is cleared
     /// by a settings wipe like every other preference.
     public var customExercises: [ExerciseTarget] = []
+    /// Exercises the planner never suggests and saved alternates it prefers
+    /// (``WorkoutExercisePreferences``). Encoded at THIS blob's top level as `workoutHiddenExercises`
+    /// and `workoutExerciseAlternates` — each only when it holds something — where an older build's
+    /// generic key parking keeps them through a re-save; decoded tolerantly (an unexpected shape or
+    /// entry is skipped, never thrown on).
+    public var workoutExercisePreferences = WorkoutExercisePreferences()
+    /// How long a session may run (``WorkoutSessionLength``): the planner fits each session into it
+    /// (``WorkoutSessionBudget``). `.noLimit`, the default, plans exactly as before.
+    public var workoutSessionLength: WorkoutSessionLength = .noLimit {
+        didSet { unknownWorkoutSessionLengthToken = nil }
+    }
+    /// Unknown `workoutSessionLength` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutSessionLengthToken: String? = nil
+    /// How much of the warm-up stretch flow a lifting session walks (``WorkoutWarmUpMode``).
+    public var workoutWarmUp: WorkoutWarmUpMode = .full {
+        didSet { unknownWorkoutWarmUpToken = nil }
+    }
+    /// Unknown `workoutWarmUp` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutWarmUpToken: String? = nil
+    /// Whether a lifting session ends with its cool-down stretches (``WorkoutCoolDownMode``).
+    public var workoutCoolDown: WorkoutCoolDownMode = .full {
+        didSet { unknownWorkoutCoolDownToken = nil }
+    }
+    /// Unknown `workoutCoolDown` token from a newer build; contract of `unknownConnectionInspectorModeToken`.
+    public var unknownWorkoutCoolDownToken: String? = nil
     /// Opt-in gate for the manual coach exchange — the clipboard export and the paste-a-plan-back
     /// import on the Move tab.
     ///
@@ -263,6 +295,12 @@ public nonisolated struct FernletSettings: Codable {
     public var trainerExportIncludesSleep: Bool = false
     public var trainerExportIncludesSickness: Bool = false
     public var trainerExportIncludesWellbeing: Bool = false
+    /// "Warm-up sets before heavy lifts" (Workout setup): `true` / `false` once the lifter has chosen,
+    /// nil until then — nil follows their level (on for intermediate and advanced, off for beginners;
+    /// ``WorkoutWarmUpSets/isEnabled(preference:experience:)``), so a level change moves an untouched
+    /// default with it. Synced, because it shapes the plan every device builds; at the top level, so an
+    /// older build parks the key and writes it back (`parkedUnknownKeys`). Absent from a blob until set.
+    public var workoutWarmUpSets: Bool? = nil
 
     /// Every top-level settings key this build does NOT know, captured verbatim on decode and written
     /// back verbatim on encode. The GENERIC, systemic counterpart to the per-field `unknown…Token`
@@ -283,6 +321,11 @@ public nonisolated struct FernletSettings: Codable {
     /// - NOT a `CodingKeys` case, so it is never emitted under its own key and never mistaken for a
     ///   known key when the parking set is computed.
     public var parkedUnknownKeys: [String: JSONValue] = [:]
+
+    /// The three session preferences as the planner reads them (``WorkoutSessionOptions``).
+    public var workoutSessionOptions: WorkoutSessionOptions {
+        WorkoutSessionOptions(length: workoutSessionLength, warmUp: workoutWarmUp, coolDown: workoutCoolDown)
+    }
 
     /// The location whose equipment drives workout suggestions. Falls back to the first location
     /// (or a full gym) so this is always non-nil.
@@ -516,23 +559,63 @@ public nonisolated struct FernletSettings: Codable {
     /// export toggles.
     private mutating func decodeWorkoutAndExport(from container: KeyedDecodingContainer<CodingKeys>) throws {
         workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()
+        // The injury picker's areas ride at the top level (see `WorkoutProfile.injuryAreas`).
+        workoutProfile.adoptInjuryAreaTokens(
+            main: try container.decodeIfPresent([String: String].self, forKey: .workoutInjuryAreas) ?? [:],
+            parked: try container.decodeIfPresent([String: String].self, forKey: .unknownWorkoutInjuryAreaTokens) ?? [:]
+        )
         let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]
         // R3: user-created list, capped where it enters this build.
         workoutLocations = decodedLocations.isEmpty
             ? [WorkoutLocation.fullGym]
             : Array(decodedLocations.prefix(Self.maxWorkoutLocations))
+        // Each location's weights ride at the top level (see `workoutLocations`); read as raw JSON so
+        // a shape this build doesn't expect is skipped or kept, never thrown on.
+        WorkoutLocation.adoptWeights(
+            from: try container.decodeIfPresent(JSONValue.self, forKey: .workoutLocationWeights),
+            into: &workoutLocations)
         activeWorkoutLocationID = try container.decodeIfPresent(UUID.self, forKey: .activeWorkoutLocationID)
         workoutProgression = try container.decodeIfPresent([String: Int].self, forKey: .workoutProgression) ?? [:]
         // R3: accumulates across coach-plan imports with no per-import total; the registry applies
         // the same ceiling, so decode and registry can never disagree about what is retained.
         customExercises = Array((try container.decodeIfPresent([ExerciseTarget].self, forKey: .customExercises) ?? [])
             .prefix(WorkoutExerciseCatalog.maxCustomExercises))
+        // Read as raw JSON so a shape this build doesn't expect is skipped rather than thrown on.
+        workoutExercisePreferences = WorkoutExercisePreferences(
+            hidden: WorkoutExercisePreferences.hiddenNames(
+                from: try container.decodeIfPresent(JSONValue.self, forKey: .workoutHiddenExercises)),
+            alternates: WorkoutExercisePreferences.alternates(
+                from: try container.decodeIfPresent(JSONValue.self, forKey: .workoutExerciseAlternates))
+        )
+        try decodeWorkoutSession(from: container)
         coachExchangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .coachExchangeEnabled) ?? false
         trainerExportIncludesGoal = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesGoal) ?? false
         trainerExportIncludesHydration = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesHydration) ?? false
         trainerExportIncludesSleep = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSleep) ?? false
         trainerExportIncludesSickness = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesSickness) ?? false
         trainerExportIncludesWellbeing = try container.decodeIfPresent(Bool.self, forKey: .trainerExportIncludesWellbeing) ?? false
+        workoutWarmUpSets = try container.decodeIfPresent(Bool.self, forKey: .workoutWarmUpSets)
+    }
+
+    /// The session-length budget and the stretch switches: tolerant scalar enums with parked tokens
+    /// (``EnumDecodeCompat``). Each value is assigned before its token, because the value's `didSet`
+    /// clears the token.
+    private mutating func decodeWorkoutSession(from container: KeyedDecodingContainer<CodingKeys>) throws {
+        let lengthSplit = try container.decodeTolerantEnum(
+            WorkoutSessionLength.self, forKey: .workoutSessionLength,
+            parkedTokenKey: .unknownWorkoutSessionLengthToken, default: .noLimit)
+        workoutSessionLength = lengthSplit.value
+        unknownWorkoutSessionLengthToken = lengthSplit.parkedToken
+        let warmUpSplit = try container.decodeTolerantEnum(
+            WorkoutWarmUpMode.self, forKey: .workoutWarmUp,
+            parkedTokenKey: .unknownWorkoutWarmUpToken, default: .full)
+        workoutWarmUp = warmUpSplit.value
+        unknownWorkoutWarmUpToken = warmUpSplit.parkedToken
+        let coolDownSplit = try container.decodeTolerantEnum(
+            WorkoutCoolDownMode.self, forKey: .workoutCoolDown,
+            parkedTokenKey: .unknownWorkoutCoolDownToken, default: .full)
+        workoutCoolDown = coolDownSplit.value
+        unknownWorkoutCoolDownToken = coolDownSplit.parkedToken
     }
 
     /// Clamps `value` into `range` — the boundary guard for the scalar settings a corrupt or foreign
@@ -591,6 +674,11 @@ public nonisolated struct FernletSettings: Codable {
         // Every STORED property that participates in the synced wire format. `parkedUnknownKeys` is
         // deliberately absent: it is written back at the top level by key (`encode(to:)`), never under a
         // key of its own, and its absence here is also what lets it be excluded from the parked set.
+        // `workoutInjuryAreas` / `unknownWorkoutInjuryAreaTokens` are the exception the other way: no
+        // stored property of their own, they carry `workoutProfile`'s injury picker at the top level,
+        // where an older build's key parking keeps them through a re-save. `workoutHiddenExercises` /
+        // `workoutExerciseAlternates` are the same kind: they carry `workoutExercisePreferences`, and
+        // `workoutLocationWeights` carries each `workoutLocations` entry's weights.
         case bottleOz, hydrationTarget, showDeveloperNotes, connectionInspectorMode,
              unknownConnectionInspectorModeToken, companionAppearance, equippedItemIDsBySlot,
              localDesignerID, ownedDesignerIDs, knownDesignerNames, selectedGoal,
@@ -607,10 +695,15 @@ public nonisolated struct FernletSettings: Codable {
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
-             workoutLocations, activeWorkoutLocationID, workoutProgression,
-             customExercises, coachExchangeEnabled, trainerExportIncludesGoal,
+             workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
+             workoutLocations, workoutLocationWeights, activeWorkoutLocationID, workoutProgression,
+             customExercises, workoutHiddenExercises, workoutExerciseAlternates,
+             workoutSessionLength, unknownWorkoutSessionLengthToken,
+             workoutWarmUp, unknownWorkoutWarmUpToken, workoutCoolDown, unknownWorkoutCoolDownToken,
+             coachExchangeEnabled, trainerExportIncludesGoal,
              trainerExportIncludesHydration, trainerExportIncludesSleep,
              trainerExportIncludesSickness, trainerExportIncludesWellbeing
+        case workoutWarmUpSets
     }
 
     /// Custom encode (required so `parkedUnknownKeys` can be re-emitted at the top level). It writes the
@@ -714,16 +807,43 @@ public nonisolated struct FernletSettings: Codable {
     /// Mirror of `decodeWorkoutAndExport(from:)`.
     private func encodeWorkoutAndExport(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(workoutProfile, forKey: .workoutProfile)
+        // Written only when set, so a blob without picker areas keeps its old shape exactly.
+        if !workoutProfile.injuryAreaTokens.isEmpty {
+            try container.encode(workoutProfile.injuryAreaTokens, forKey: .workoutInjuryAreas)
+        }
+        if !workoutProfile.unknownInjuryAreaTokens.isEmpty {
+            try container.encode(workoutProfile.unknownInjuryAreaTokens, forKey: .unknownWorkoutInjuryAreaTokens)
+        }
         try container.encode(workoutLocations, forKey: .workoutLocations)
+        // Written only when some location has weights, so a blob without any keeps its old shape.
+        let locationWeights = WorkoutLocation.weightsValue(for: workoutLocations)
+        if !locationWeights.isEmpty {
+            try container.encode(locationWeights, forKey: .workoutLocationWeights)
+        }
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
         try container.encode(workoutProgression, forKey: .workoutProgression)
         try container.encode(customExercises, forKey: .customExercises)
+        // Written only when set, so a blob without preferences keeps its old shape exactly.
+        if !workoutExercisePreferences.hidden.isEmpty {
+            try container.encode(workoutExercisePreferences.hidden, forKey: .workoutHiddenExercises)
+        }
+        if !workoutExercisePreferences.alternates.isEmpty {
+            try container.encode(workoutExercisePreferences.alternates, forKey: .workoutExerciseAlternates)
+        }
+        try container.encode(workoutSessionLength, forKey: .workoutSessionLength)
+        try container.encodeIfPresent(unknownWorkoutSessionLengthToken, forKey: .unknownWorkoutSessionLengthToken)
+        try container.encode(workoutWarmUp, forKey: .workoutWarmUp)
+        try container.encodeIfPresent(unknownWorkoutWarmUpToken, forKey: .unknownWorkoutWarmUpToken)
+        try container.encode(workoutCoolDown, forKey: .workoutCoolDown)
+        try container.encodeIfPresent(unknownWorkoutCoolDownToken, forKey: .unknownWorkoutCoolDownToken)
         try container.encode(coachExchangeEnabled, forKey: .coachExchangeEnabled)
         try container.encode(trainerExportIncludesGoal, forKey: .trainerExportIncludesGoal)
         try container.encode(trainerExportIncludesHydration, forKey: .trainerExportIncludesHydration)
         try container.encode(trainerExportIncludesSleep, forKey: .trainerExportIncludesSleep)
         try container.encode(trainerExportIncludesSickness, forKey: .trainerExportIncludesSickness)
         try container.encode(trainerExportIncludesWellbeing, forKey: .trainerExportIncludesWellbeing)
+        // Written only once chosen, so every blob saved before keeps its shape exactly.
+        try container.encodeIfPresent(workoutWarmUpSets, forKey: .workoutWarmUpSets)
     }
 
     /// The split logic (and its defensive bounds) moved to `EnumDecodeCompat.splitRawTokens` when

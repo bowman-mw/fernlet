@@ -17,6 +17,28 @@
     "%lld" : {
 
     },
+    "%lld bpm · aim %lld–%lld" : {
+      "comment" : "Guided cardio, Live Activity and runner: the live heart rate in beats per minute and the target range to aim for, e.g. '118 bpm · aim 110–125'. Gentle: 'aim', never a limit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld"
+          }
+        }
+      }
+    },
+    "%lld bpm · aim %lld–%lld · %@" : {
+      "comment" : "Guided cardio, Live Activity: the live heart rate, the range to aim for and where it sits, on one line, e.g. '118 bpm · aim 110–125 · in range'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld · %4$@"
+          }
+        }
+      }
+    },
     "%lld of %lld bottles" : {
       "localizations" : {
         "en" : {
@@ -37,6 +59,28 @@
         }
       }
     },
+    "%lld × %@" : {
+      "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld × %2$@"
+          }
+        }
+      }
+    },
+    "%lld × %@ @ %@" : {
+      "comment" : "Live Activity: last time's sets × reps @ weight for this lift, e.g. '3 × 8 @ 100 lb'. The weight arrives formatted with its unit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld × %2$@ @ %3$@"
+          }
+        }
+      }
+    },
     "%lld/%lld" : {
       "localizations" : {
         "en" : {
@@ -50,8 +94,74 @@
     "+1" : {
 
     },
+    "+15 s" : {
+      "comment" : "Workout rest button: adds 15 seconds to the rest timer. 's' abbreviates seconds.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+15 s"
+          }
+        }
+      }
+    },
+    "Add 15 seconds of rest" : {
+      "comment" : "Workout rest: the '+15 s' button's spoken name and its Shortcuts action title — adds 15 seconds to the rest timer.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add 15 seconds of rest"
+          }
+        }
+      }
+    },
+    "Added 15 seconds to your rest." : {
+      "comment" : "Siri / Shortcuts: spoken after '+15 s' lengthened the rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added 15 seconds to your rest."
+          }
+        }
+      }
+    },
+    "Adds 15 seconds to your current rest, up to 10 minutes in all." : {
+      "comment" : "Shortcuts: description of the 'Add 15 seconds of rest' action.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Adds 15 seconds to your current rest, up to 10 minutes in all."
+          }
+        }
+      }
+    },
     "Adds one bottle of water to today's Fernlet diary." : {
 
+    },
+    "Aim: a few words at a time" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: a few words at a time"
+          }
+        }
+      }
+    },
+    "Aim: talk in short sentences" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an easy or steady part (heart-rate zone 2), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: talk in short sentences"
+          }
+        }
+      }
     },
     "Cooking" : {
 
@@ -61,6 +171,28 @@
     },
     "Done set" : {
 
+    },
+    "Easy pace" : {
+      "comment" : "Workout Live Activity, guided cardio: an easy steady segment (easy cardio, an easy walk).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy pace"
+          }
+        }
+      }
+    },
+    "Easy · round %lld of %lld" : {
+      "comment" : "Workout Live Activity, guided cardio: an interval's easy (recovery) part and its round.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy · round %1$lld of %2$lld"
+          }
+        }
+      }
     },
     "Ends the current rest early and moves to your next set." : {
 
@@ -87,6 +219,39 @@
     "Finish workout" : {
 
     },
+    "Hard pace" : {
+      "comment" : "Workout Live Activity, guided cardio: a hard steady segment.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard pace"
+          }
+        }
+      }
+    },
+    "Hard · round %lld of %lld" : {
+      "comment" : "Workout Live Activity, guided cardio: an interval's hard part and its round, e.g. 'Hard · round 3 of 8'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard · round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Heart rate %lld, aiming for %lld to %lld, %@" : {
+      "comment" : "VoiceOver, guided cardio: the live heart rate, the range to aim for and where it sits, e.g. 'Heart rate 118, aiming for 110 to 125, a little high'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate %1$lld, aiming for %2$lld to %3$lld, %4$@"
+          }
+        }
+      }
+    },
     "Hold" : {
 
     },
@@ -96,14 +261,58 @@
     "In progress" : {
 
     },
+    "Last time: %@" : {
+      "comment" : "Live Activity: what this lift was last time, e.g. 'Last time: 3 × 8 @ 100 lb'. Same words as the workout editor's recall line.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Last time: %@"
+          }
+        }
+      }
+    },
     "Left side · hold %@" : {
 
     },
     "Log a bottle of water" : {
 
     },
+    "Longer rest" : {
+      "comment" : "Voice Control name for the '+15 s' rest button, in plain words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Longer rest"
+          }
+        }
+      }
+    },
     "Marks the current set done and starts your rest timer." : {
 
+    },
+    "Minus 15" : {
+      "comment" : "Voice Control short name for the '−15 s' rest button.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Minus 15"
+          }
+        }
+      }
+    },
+    "Minus 15 seconds" : {
+      "comment" : "Voice Control name for the '−15 s' rest button: the drawn text, spoken.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Minus 15 seconds"
+          }
+        }
+      }
     },
     "Moves to the next step of the recipe you're cooking." : {
 
@@ -130,6 +339,17 @@
     "No mood yet today" : {
 
     },
+    "No workout is running, so there's no rest to change." : {
+      "comment" : "Siri / Shortcuts: spoken when '+15 s' or '−15 s' ran with no guided workout in progress.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No workout is running, so there's no rest to change."
+          }
+        }
+      }
+    },
     "No workout is running, so there's no rest to skip." : {
 
     },
@@ -148,6 +368,28 @@
     "Paused" : {
 
     },
+    "Plus 15" : {
+      "comment" : "Voice Control short name for the '+15 s' rest button.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plus 15"
+          }
+        }
+      }
+    },
+    "Plus 15 seconds" : {
+      "comment" : "Voice Control name for the '+15 s' rest button: the drawn text, spoken.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plus 15 seconds"
+          }
+        }
+      }
+    },
     "Repeat cooking step" : {
 
     },
@@ -165,6 +407,17 @@
     },
     "Right side · hold %@" : {
 
+    },
+    "Round %lld of %lld" : {
+      "comment" : "Workout Live Activity, guided cardio: an interval part's round when its pace has no name.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld"
+          }
+        }
+      }
     },
     "Set %lld of %lld" : {
       "localizations" : {
@@ -202,8 +455,30 @@
     "Set done. Your next exercise is up." : {
 
     },
+    "Shorter rest" : {
+      "comment" : "Voice Control name for the '−15 s' rest button, in plain words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shorter rest"
+          }
+        }
+      }
+    },
     "Skip rest" : {
 
+    },
+    "Steady pace" : {
+      "comment" : "Workout Live Activity, guided cardio: a steady-state segment.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady pace"
+          }
+        }
+      }
     },
     "Step %lld of %lld" : {
       "localizations" : {
@@ -215,17 +490,83 @@
         }
       }
     },
+    "Suggested weight %@" : {
+      "comment" : "VoiceOver, Live Activity: the weight Fernlet suggests for this set, e.g. 'Suggested weight 105 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested weight %@"
+          }
+        }
+      }
+    },
+    "Take 15 seconds off the rest" : {
+      "comment" : "Workout rest: the '−15 s' button's spoken name and its Shortcuts action title — takes 15 seconds off the rest timer.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Take 15 seconds off the rest"
+          }
+        }
+      }
+    },
     "Take it at your own pace" : {
 
+    },
+    "Takes 15 seconds off your current rest, always leaving at least 5 seconds." : {
+      "comment" : "Shortcuts: description of the 'Take 15 seconds off the rest' action.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Takes 15 seconds off your current rest, always leaving at least 5 seconds."
+          }
+        }
+      }
     },
     "That was the last set — your workout is finished." : {
 
     },
+    "Took 15 seconds off your rest." : {
+      "comment" : "Siri / Shortcuts: spoken after '−15 s' shortened the rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Took 15 seconds off your rest."
+          }
+        }
+      }
+    },
     "Water" : {
 
     },
+    "Weight %@" : {
+      "comment" : "VoiceOver, Live Activity: the weight the lifter picked for this set, e.g. 'Weight 110 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight %@"
+          }
+        }
+      }
+    },
     "Workout" : {
 
+    },
+    "You're not resting right now, so there's no rest to change." : {
+      "comment" : "Siri / Shortcuts: spoken when '+15 s' or '−15 s' ran during a set rather than a rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're not resting right now, so there's no rest to change."
+          }
+        }
+      }
     },
     "You're not resting right now, so there's nothing to skip." : {
 
@@ -235,6 +576,50 @@
     },
     "Your companion's mood and today's water, at a glance." : {
 
+    },
+    "Your rest is already at its 10-minute limit." : {
+      "comment" : "Spoken when '+15 s' did nothing because the rest is already 10 minutes long (Siri, Shortcuts, and VoiceOver in the runner).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your rest is already at its 10-minute limit."
+          }
+        }
+      }
+    },
+    "Your rest is nearly over, so there's nothing to take off." : {
+      "comment" : "Spoken when '−15 s' did nothing because 5 seconds or less of the rest is left (Siri, Shortcuts, and VoiceOver in the runner).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your rest is nearly over, so there's nothing to take off."
+          }
+        }
+      }
+    },
+    "a little high" : {
+      "comment" : "Guided cardio: the live heart rate is above the target range. Gentle — never a warning; the person may ease off if they like.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little high"
+          }
+        }
+      }
+    },
+    "a little low" : {
+      "comment" : "Guided cardio: the live heart rate is below the target range. Gentle — never a push.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little low"
+          }
+        }
+      }
     },
     "bottles today" : {
 
@@ -455,8 +840,74 @@
         }
       }
     },
+    "in range" : {
+      "comment" : "Guided cardio: the live heart rate is inside the target range. Calm, lower case, said beside the reading.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "in range"
+          }
+        }
+      }
+    },
+    "last time %@" : {
+      "comment" : "VoiceOver, Live Activity: last time's weight for this lift, e.g. 'last time 100 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last time %@"
+          }
+        }
+      }
+    },
+    "last time %lld by %@" : {
+      "comment" : "VoiceOver, Live Activity: last time's sets by reps for this lift, e.g. 'last time 3 by 8'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last time %1$lld by %2$@"
+          }
+        }
+      }
+    },
+    "last time %lld by %@ at %@" : {
+      "comment" : "VoiceOver, Live Activity: last time's sets by reps at weight, e.g. 'last time 3 by 8 at 100 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last time %1$lld by %2$@ at %3$@"
+          }
+        }
+      }
+    },
+    "range %@ to %@" : {
+      "comment" : "VoiceOver, Live Activity: the weight range for this set, spoken after the weight, e.g. 'range 95 to 110 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "range %1$@ to %2$@"
+          }
+        }
+      }
+    },
     "to meet your companion" : {
 
+    },
+    "−15 s" : {
+      "comment" : "Workout rest button: takes 15 seconds off the rest timer. '−' is a minus sign; 's' abbreviates seconds.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "−15 s"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

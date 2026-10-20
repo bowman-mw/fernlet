@@ -29,6 +29,9 @@ extension FernletStore {
 // MARK: - Formatting
 
 /// Weights as the runner shows them: the locale's number format and unit abbreviation ("62,5 kg").
+///
+/// The formatting itself is ``WorkoutActivityLoadText``'s, shared with the Live Activity, so the
+/// weight panel and the Lock Screen never draw one weight two ways.
 enum GuidedLoadFormat {
     /// The unit a tracked lift is weighed in.
     static func unit(_ tracking: GuidedWorkoutRunState.Tracking) -> UnitMass {
@@ -36,18 +39,12 @@ enum GuidedLoadFormat {
     }
 
     static func weight(_ value: Double, unit: UnitMass) -> String {
-        Measurement(value: value, unit: unit).formatted(
-            .measurement(width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0...1)))
-        )
+        WorkoutActivityLoadText.weight(value, unit: unit, width: .abbreviated, locale: .current)
     }
 
     /// "95–110 lb", or one weight when the range is a single step.
     static func range(_ tracking: GuidedWorkoutRunState.Tracking) -> String? {
-        guard let low = tracking.rangeLow, let high = tracking.rangeHigh else { return nil }
-        let unit = unit(tracking)
-        guard high - low > 0.01 else { return weight(low, unit: unit) }
-        let lowText = low.formatted(.number.precision(.fractionLength(0...1)))
-        return "\(lowText)–\(weight(high, unit: unit))"
+        WorkoutActivityLoadText.range(low: tracking.rangeLow, high: tracking.rangeHigh, unit: unit(tracking), locale: .current)
     }
 
     /// Where the picker starts when there is no suggestion yet: an empty bar, a light dumbbell, a
@@ -65,8 +62,9 @@ enum GuidedLoadFormat {
 // MARK: - The load panel
 
 /// The panel under a tracked lift's card: the calibration cue, the weight picker (the suggestion
-/// preselected, so an untouched lift logs as done at that weight), the override question, the
-/// optional effort tap on the last set, and Edit reps.
+/// preselected, so an untouched lift logs as done at that weight), the "Plates" disclosure on a
+/// barbell lift (``GuidedPlatesDisclosure``), the override question, the optional effort tap on the
+/// last set, and Edit reps — which a warm-up set does without: its reps are never read.
 struct GuidedLoadPanel: View {
     var store: FernletStore
     let exercise: GuidedWorkoutRunState.Exercise
@@ -82,6 +80,9 @@ struct GuidedLoadPanel: View {
                 if tracking.isLoadable {
                     GuidedWeightPicker(store: store, exerciseID: exercise.id, tracking: tracking)
                 }
+                if tracking.equipmentRaw == Equipment.barbell.rawValue, tracking.isLoadable, let selected = tracking.selected {
+                    GuidedPlatesDisclosure(weight: selected, unit: LoadUnit(rawValue: tracking.unitRaw ?? "") ?? .lb)
+                }
                 if tracking.isOutsideRange && tracking.askReasonOnOverride {
                     GuidedOverrideReasonPicker(
                         store: store, exerciseID: exercise.id,
@@ -94,7 +95,9 @@ struct GuidedLoadPanel: View {
                         selected: tracking.effortRaw.flatMap(ExerciseEffort.init(rawValue:))
                     )
                 }
-                GuidedEditRepsButton(store: store, exercise: exercise, label: Text("Edit reps"))
+                if !exercise.isRampSet {
+                    GuidedEditRepsButton(store: store, exercise: exercise, label: Text("Edit reps"))
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
@@ -108,7 +111,8 @@ enum GuidedCalibrationCue {
     static func text(for raw: String?) -> Text? {
         switch raw {
         case GuidedWorkoutRunState.CalibrationToken.ramp:
-            return Text("Ramp-up set — light, just getting ready.")
+            return Text("Light on purpose — just getting ready.",
+                        comment: "Guided workout: the cue on a warm-up set (a lighter set before a lift's working sets or a strength check).")
         case GuidedWorkoutRunState.CalibrationToken.test:
             return Text("Test set: as many good reps as you can, stopping with 1–2 left. Edit the reps when you're done.")
         case GuidedWorkoutRunState.CalibrationToken.attempt:
@@ -148,11 +152,21 @@ struct GuidedWeightPicker: View {
         }
     }
 
+    /// The range and the suggestion; the suggestion alone for a set with one fixed weight (a warm-up
+    /// set, a calibration step); the first-time ask with neither.
     private var guide: Text {
-        guard let range = GuidedLoadFormat.range(tracking), let suggested = tracking.suggested else {
+        // A weight a planned workout's line named: the plan's own, not a range of Fernlet's.
+        if tracking.asWritten == true, let planned = tracking.suggested {
+            return Text("As planned: \(GuidedLoadFormat.weight(planned, unit: GuidedLoadFormat.unit(tracking)))")
+        }
+        guard let suggested = tracking.suggested else {
             return Text("Pick a weight you could lift about 2 more times than asked.")
         }
         let suggestion = GuidedLoadFormat.weight(suggested, unit: GuidedLoadFormat.unit(tracking))
+        guard let range = GuidedLoadFormat.range(tracking) else {
+            return Text("Suggested \(suggestion)",
+                        comment: "Guided workout: the weight Fernlet suggests for a set with one fixed weight (a warm-up set or a strength check), e.g. 'Suggested 95 lb'.")
+        }
         return Text("Range \(range) · suggested \(suggestion)")
     }
 
@@ -289,16 +303,17 @@ struct GuidedPreviousLiftFix: View {
 
     var body: some View {
         if let previous {
-            GuidedEditRepsButton(store: store, exercise: previous, label: Text("Edit reps for \(previous.name)"))
+            GuidedEditRepsButton(store: store, exercise: previous, label: Text("Edit reps for \(previous.displayedName)"))
         }
     }
 
-    /// The tracked lift just finished, while the step after it is on its first set.
+    /// The tracked lift just finished, while the step after it is on its first set — never a warm-up
+    /// set, whose reps are never read.
     private var previous: GuidedWorkoutRunState.Exercise? {
         guard run.isWorking, run.currentSet == 1, run.exerciseIndex > 0,
               run.exercises.indices.contains(run.exerciseIndex - 1) else { return nil }
         let candidate = run.exercises[run.exerciseIndex - 1]
-        guard candidate.tracking != nil, candidate.tracking?.skipped != true else { return nil }
+        guard candidate.tracking != nil, candidate.tracking?.skipped != true, !candidate.isRampSet else { return nil }
         return candidate
     }
 }
@@ -323,7 +338,7 @@ struct GuidedRepsEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SheetHeader(title: Text("Edit reps"), subtitle: Text(verbatim: exercise.name), onCancel: { dismiss() })
+            SheetHeader(title: Text("Edit reps"), subtitle: Text(verbatim: exercise.displayedName), onCancel: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Change only the sets that went differently.")

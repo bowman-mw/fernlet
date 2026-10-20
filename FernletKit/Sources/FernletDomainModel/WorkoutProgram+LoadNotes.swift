@@ -3,7 +3,8 @@
 //
 // The session-note lines the load pass writes: what changed on a lift and why, the plateau story,
 // and the calibration brief. Tone, per the owner: plateaus are normal and a lighter day is training
-// too — nothing here ever says "you failed". Plain English like the rest of the planner's copy.
+// too — nothing here ever says "you failed". The sentences themselves are String Catalog keys in
+// ``WorkoutPlannerCopy`` (2026-10-20, idea 16); this file decides which one a lift gets.
 
 import Foundation
 
@@ -26,7 +27,7 @@ extension WorkoutProgram {
             lines.append(line)
         }
         if needsFirstWeight {
-            lines.append("New lifts: pick a weight you could lift about 2 more times than asked — Fernlet learns from there.")
+            lines.append(WorkoutPlannerCopy.newLifts)
         }
         return lines
     }
@@ -34,24 +35,68 @@ extension WorkoutProgram {
     /// One lift's change in a sentence, or nil when there is nothing worth saying.
     static func changeLine(_ name: String, plan: LiftPlan) -> String? {
         let weight = plan.prescription.map(\.suggestedText)
-        let inParens = weight.map { " (\($0))" } ?? ""
         if plan.recentered, plan.change != .recalibrated {
-            return "\(name): the range now centers on the weights you've been choosing."
+            return WorkoutPlannerCopy.recentered(name)
         }
         switch plan.change {
-        case .moreReps: return "\(name): \(plan.reps) reps today, one more than last time."
-        case .moreSets: return "\(name): one more set today."
-        case .addWeight: return weight.map { "\(name): up to \($0) today." }
-        case .backToBottom: return "\(name): back to \(plan.reps) reps — add weight now\(inParens)."
-        case .lighter: return "\(name): a little lighter today\(inParens) to get the reps back."
-        case .lighterFewerSets: return "\(name): lighter and one set fewer today — a reset, not a step back."
-        case .afterBreak: return "\(name): welcome back — a little lighter to start\(inParens)."
-        case .recalibrated: return "\(name): starting from a fresh estimate\(inParens)."
-        case .holdForPain:
-            return "\(name): holding steady after it hurt last time. If it still hurts, try a different exercise or check with a professional."
-        case .holdForEquipment: return "\(name): same weight, one more rep — working with the equipment you have."
+        case .moreReps: return WorkoutPlannerCopy.moreReps(name, reps: plan.reps)
+        case .moreSets: return WorkoutPlannerCopy.moreSets(name)
+        case .addWeight: return weight.map { WorkoutPlannerCopy.addWeight(name, weight: $0) }
+        case .backToBottom: return WorkoutPlannerCopy.backToBottom(name, reps: plan.reps, weight: weight)
+        case .lighter: return WorkoutPlannerCopy.lighter(name, weight: weight)
+        case .lighterFewerSets: return WorkoutPlannerCopy.lighterFewerSets(name)
+        case .afterBreak: return WorkoutPlannerCopy.afterBreak(name, weight: weight)
+        case .recalibrated: return WorkoutPlannerCopy.recalibrated(name, weight: weight)
+        case .holdForPain: return WorkoutPlannerCopy.holdForPain(name)
+        case .holdForEquipment: return WorkoutPlannerCopy.holdForEquipment(name)
+        case .repsFirst: return plan.cap.map { repsFirstLine(name, plan: plan, cap: $0) }
+        case .setFirst: return plan.cap.map { setFirstLine(name, plan: plan, cap: $0) }
         case .same, .firstTime: return nil
         }
+    }
+
+    /// Why the weight waits, with today's reps: "Dumbbell press: your next dumbbell is 25 lb, so add
+    /// reps first — 13 today."
+    static func repsFirstLine(_ name: String, plan: LiftPlan, cap: LoadCap) -> String {
+        switch cap {
+        case .bigStep(let from, let to, let owned):
+            let next = loadText(to, plan.unit)
+            guard owned else {
+                return WorkoutPlannerCopy.repsFirstBigJump(name, next: next, from: loadText(from, plan.unit), reps: plan.reps)
+            }
+            return WorkoutPlannerCopy.repsFirstNext(name, nextLoad: nextLoadPhrase(next, equipment: plan.equipment),
+                                                    reps: plan.reps)
+        case .heaviest(let top):
+            let heaviest = heaviestPhrase(loadText(top, plan.unit), equipment: plan.equipment)
+            return WorkoutPlannerCopy.repsFirstHeaviest(name, heaviest: heaviest, reps: plan.reps)
+        }
+    }
+
+    /// The extra set: "Dumbbell press: one more set today, then up to 25 lb."
+    static func setFirstLine(_ name: String, plan: LiftPlan, cap: LoadCap) -> String {
+        switch cap {
+        case .bigStep(_, let to, _):
+            return WorkoutPlannerCopy.setFirstNext(name, load: loadText(to, plan.unit))
+        case .heaviest(let top):
+            let heaviest = heaviestPhrase(loadText(top, plan.unit), equipment: plan.equipment)
+            return WorkoutPlannerCopy.setFirstHeaviest(name, heaviest: heaviest)
+        }
+    }
+
+    /// "your next dumbbell is 25 lb", by the gear the lift is loaded with.
+    static func nextLoadPhrase(_ load: String, equipment: Equipment?) -> String {
+        WorkoutPlannerCopy.nextLoad(load, equipment: equipment)
+    }
+
+    /// "25 lb is your heaviest dumbbell", by the gear the lift is loaded with.
+    static func heaviestPhrase(_ load: String, equipment: Equipment?) -> String {
+        WorkoutPlannerCopy.heaviest(load, equipment: equipment)
+    }
+
+    /// "25 lb": a load as the notes print it. The unit is the frozen symbol ("lb", "kg"), which reads
+    /// the same in every language the app plans to ship.
+    static func loadText(_ weight: Double, _ unit: LoadUnit) -> String {
+        "\(WorkoutLoadEngine.weightText(weight)) \(unit.rawValue)"
     }
 
     /// The plateau story for the session's first stalled lift: that it's normal, the rest check
@@ -64,17 +109,17 @@ extension WorkoutProgram {
         if status.stage == .easierSession || status.stage == .recover {
             lines += recoveryLines(recovery)
         }
-        let rest = pick.slot.role == .main ? "+1 min" : "+30 s"
+        let rest = WorkoutPlannerCopy.extraRest(mainLift: pick.slot.role == .main)
         switch status.stage {
         case .easierSession:
-            let weight = pick.exercise.guidance?.prescription.map { " at about \($0.suggestedText)" } ?? ", lighter than usual"
-            lines.append("Today is an easier \(name) session: \(pick.exercise.sets) sets\(weight). An extra rest day instead is fine too — both count as training.")
+            let weight = pick.exercise.guidance?.prescription.map(\.suggestedText)
+            lines.append(WorkoutPlannerCopy.easierSession(name, sets: pick.exercise.sets, weight: weight))
         case .recover:
-            lines.append("\(name) goes first today, with a little more rest between sets (\(rest)).")
+            lines.append(WorkoutPlannerCopy.recoverFirst(name, rest: rest))
         case .supportWork:
-            lines.append("A little more rest between \(name) sets (\(rest)).")
+            lines.append(WorkoutPlannerCopy.supportRest(name, rest: rest))
         case .afterVariation:
-            lines.append("Back to \(name), with a little more rest between sets (\(rest)).")
+            lines.append(WorkoutPlannerCopy.afterVariation(name, rest: rest))
         case .variation:
             break
         }
@@ -83,20 +128,20 @@ extension WorkoutProgram {
 
     /// "Bench press has held steady for 3 weeks. That's normal…"
     static func plateauLead(_ name: String, weeks: Int) -> String {
-        let span = weeks >= 2 ? "for \(weeks) weeks" : "for a few sessions"
-        return "\(name) has held steady \(span). That's normal — strength comes in steps, and a pause often means your body wants more recovery."
+        WorkoutPlannerCopy.plateauLead(name, weeks: weeks)
     }
 
-    /// The rest check's lines: said only when sleep or protein ran low, silent with no data.
+    /// The rest check's lines: said only when sleep or protein ran low, silent with no data. The hours
+    /// carry one decimal in the device's own number format ("6.5", "6,5").
     static func recoveryLines(_ recovery: RecoverySummary) -> [String] {
         var lines: [String] = []
-        if recovery.sleepIsLow, let hours = recovery.averageSleepHours {
-            let text = String(format: "%.1f", hours)
-            lines.append("Sleep has averaged \(text) hours these past two weeks. More sleep is often the quickest way through.")
+        if recovery.sleepIsLow, let hours = recovery.averageSleepHours, hours.isFinite {
+            let text = hours.formatted(.number.precision(.fractionLength(1)).grouping(.never))
+            lines.append(WorkoutPlannerCopy.sleepLow(hours: text))
         }
         if recovery.proteinIsLow, let ratio = recovery.averageProteinRatio, ratio.isFinite {
             let percent = Int((ratio * 100).rounded())
-            lines.append("Protein has run about \(percent)% of your target lately — a little more helps muscles rebuild.")
+            lines.append(WorkoutPlannerCopy.proteinLow(percent: percent))
         }
         return lines
     }
@@ -104,15 +149,8 @@ extension WorkoutProgram {
     /// The calibration brief for the session note.
     static func calibrationNote(kind: CalibrationKind, lift: String, sets: [CalibrationSet], unit: LoadUnit) -> String {
         let keySet = sets.first(where: { $0.step != .ramp }) ?? sets.last
-        let weight = keySet.map { "\(WorkoutLoadEngine.weightText($0.weight)) \(unit.rawValue)" } ?? ""
-        switch kind {
-        case .submaximal:
-            return "Strength check today: \(lift) builds up over a few lighter sets, then one test set at \(weight) — as many good reps as you can, stopping with 1–2 left. Accessories are a set lighter."
-        case .strengthCheck:
-            return "Quick strength check today: one \(lift) set at \(weight) for as many good reps as you can, stopping with 1–2 left — edit the reps when you're done. Accessories are a set lighter."
-        case .oneRepMax:
-            return "Max test today: \(lift) builds up to three single attempts, starting at \(weight). Use a spotter or safety arms, stop if your form breaks, and skip it if you're sore, sick or short on sleep. Miss one and the rest are skipped."
-        }
+        let weight = keySet.map { loadText($0.weight, unit) } ?? ""
+        return WorkoutPlannerCopy.calibration(kind, lift: lift, weight: weight)
     }
 
     /// The count-based ladder's line when there is no load history to read (replaces the old
@@ -121,12 +159,12 @@ extension WorkoutProgram {
         guard let first = lifting.first(where: { $0.completions > 0 && $0.exercise.holdSeconds == nil }),
               let scheme = RepScheme(style.reps(for: first.slot.role)) else { return [] }
         guard scheme.isRange else {
-            return ["Same reps as last time — nudge the weight up a little when the last set feels solid."]
+            return [WorkoutPlannerCopy.sameReps]
         }
         let reps = Int(first.exercise.reps) ?? scheme.low
         if reps == scheme.low {
-            return ["Back to \(scheme.low) reps — add weight now, about 2.5–5%."]
+            return [WorkoutPlannerCopy.ladderBackTo(reps: scheme.low)]
         }
-        return ["Rep ladder: \(reps) of \(scheme.low)–\(scheme.high) today. One more rep each time; at \(scheme.high), add weight."]
+        return [WorkoutPlannerCopy.repLadder(reps: reps, low: scheme.low, high: scheme.high)]
     }
 }

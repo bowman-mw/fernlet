@@ -6,20 +6,36 @@ import FernletUI
 /// engine reads.
 ///
 /// Covers the chosen split (auto or an explicit pick from the recommendations), where the user
-/// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience,
-/// sport/interests, and areas to work around. Injury-area chips expand to the muscle-group and
-/// movement-pattern sets the planner avoids. Changing the split is a plain edit — a neutral note
-/// beside the options says training has been consistent, where a confirmation dialog used to
-/// interrupt the save; the sheet guards its draft like the other entry sheets instead.
+/// trains and the equipment there (via ``WorkoutLocationSetupView``), weekly frequency, experience
+/// (with the synced "Warm-up sets before heavy lifts" switch, ``WarmUpSetsToggle``), sport/interests, and areas to work around: a None · Mild · Severe picker per body area, the
+/// rested-muscle chips and the free-text note (``WorkoutInjurySection``, ``WorkoutInjuryDraft``), and
+/// the way into the user's own exercises, hidden exercises and saved swaps
+/// (``WorkoutExercisePreferencesEntry``), which save as they change rather than with this draft —
+/// plus the guided runner's cue switches (Workout haptics, Workout sounds and
+/// Spoken cues, ``WorkoutCueSettingsSection``), which are device-local rather than part of the synced profile and are
+/// stored on Save like the rest. Changing the split is a plain edit — a neutral note beside the options
+/// says training has been consistent, where a confirmation dialog used to interrupt the save; the sheet
+/// guards its draft like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     var store: FernletStore
 
     @State private var profile: WorkoutProfile
     @State private var interestsText: String
-    @State private var avoidedAreas: Set<String>
+    @State private var injuryDraft: WorkoutInjuryDraft
     @State private var selectedSplitID: String?
+    /// Session length and the stretch switches (``WorkoutSessionOptions``), saved with the rest.
+    @State private var sessionOptions: WorkoutSessionOptions
     @State private var showingLocations = false
+    /// The runner's cue switches, a draft like every other field: device-local, stored on Save.
+    @State private var cuePreferences: FernletFeedbackPreferences
+    /// The "Spoken cues" switch, a draft the same way.
+    @State private var spokenCues: Bool
+    /// "Warm-up sets before heavy lifts": nil until chosen (the level's default shows), synced on Save.
+    @State private var warmUpSets: Bool?
+    private let initialWarmUpSets: Bool?
+    /// The heart-rate switches' draft (device-local, like the cue switches).
+    @State private var zonePreferences: WorkoutZonePreferences
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -31,31 +47,15 @@ struct WorkoutSetupSheet: View {
     /// an `interactiveDismissDisabled`.
     private let initialProfile: WorkoutProfile
     private let initialInterestsText: String
-    private let initialAvoidedAreas: Set<String>
+    private let initialInjuryDraft: WorkoutInjuryDraft
+    private let initialCuePreferences: FernletFeedbackPreferences
+    private let initialSessionOptions: WorkoutSessionOptions
+    private let initialSpokenCues: Bool
+    private let initialZonePreferences: WorkoutZonePreferences
+    /// Whether Fernlet shares workouts with Apple Health — read once at init (it reads keychain-backed
+    /// switches); the heart-rate switch needs it to turn on.
+    private let healthSharingAllowed: Bool
 
-    /// One selectable "work around this" chip: a display name plus the muscle groups and movement
-    /// patterns the planner should avoid while it's on.
-    ///
-    /// Identified by its name; the selected chips are folded into the profile's
-    /// `avoidedMuscles`/`avoidedMovements` on save.
-    private struct InjuryArea: Identifiable {
-        var id: String { name }
-        var name: String
-        var muscles: Set<MuscleGroup>
-        var movements: Set<MovementPattern>
-    }
-
-    private static let injuryAreas: [InjuryArea] = [
-        InjuryArea(name: "Shoulders", muscles: [.frontDelts, .sideDelts, .rearDelts], movements: [.push]),
-        InjuryArea(name: "Knees", muscles: [.quads, .hamstrings], movements: [.squat, .lunge]),
-        InjuryArea(name: "Lower back", muscles: [.lowerBack], movements: [.hinge]),
-        InjuryArea(name: "Elbows", muscles: [.biceps, .triceps], movements: []),
-        InjuryArea(name: "Wrists", muscles: [.forearms], movements: []),
-        InjuryArea(name: "Hips", muscles: [.glutes, .adductors, .abductors], movements: []),
-        InjuryArea(name: "Hamstrings", muscles: [.hamstrings], movements: []),
-        InjuryArea(name: "Calves", muscles: [.calves], movements: []),
-        InjuryArea(name: "Chest", muscles: [.chest], movements: []),
-    ]
 
     init(store: FernletStore) {
         self.store = store
@@ -65,20 +65,31 @@ struct WorkoutSetupSheet: View {
         let active = selected.flatMap { id in WorkoutSplitCatalog.all.first { $0.id == id } }
             ?? recommendedSplits.first ?? WorkoutSplitCatalog.fallback
         self.originalSelectedSplitID = selected
-        self.currentSplitName = active.name
+        self.currentSplitName = active.displayName
         self.isTrainingConsistently = store.workoutConsistency() != .low
         _selectedSplitID = State(initialValue: settings.workoutProfile.selectedSplitID)
         _profile = State(initialValue: settings.workoutProfile)
         let seedInterests = settings.workoutProfile.interests.joined(separator: ", ")
         _interestsText = State(initialValue: seedInterests)
-        let avoided = settings.workoutProfile.avoidedMuscles
-        let preselected = Self.injuryAreas
-            .filter { $0.muscles.isEmpty == false && $0.muscles.isSubset(of: avoided) }
-            .map(\.name)
-        _avoidedAreas = State(initialValue: Set(preselected))
+        let draft = WorkoutInjuryDraft(profile: settings.workoutProfile)
+        _injuryDraft = State(initialValue: draft)
         self.initialProfile = settings.workoutProfile
         self.initialInterestsText = seedInterests
-        self.initialAvoidedAreas = Set(preselected)
+        self.initialInjuryDraft = draft
+        let cues = WorkoutCuePreferences.current()
+        _cuePreferences = State(initialValue: cues)
+        self.initialCuePreferences = cues
+        _sessionOptions = State(initialValue: settings.workoutSessionOptions)
+        self.initialSessionOptions = settings.workoutSessionOptions
+        let spoken = WorkoutCuePreferences.spokenEnabled()
+        _spokenCues = State(initialValue: spoken)
+        self.initialSpokenCues = spoken
+        _warmUpSets = State(initialValue: settings.workoutWarmUpSets)
+        self.initialWarmUpSets = settings.workoutWarmUpSets
+        let zones = WorkoutZonePreferences.current()
+        _zonePreferences = State(initialValue: zones)
+        self.initialZonePreferences = zones
+        self.healthSharingAllowed = store.isWorkoutHealthSharingEnabled
     }
 
     /// Any field diverges from what the sheet opened on. Shallow by design — a swipe-away guard,
@@ -86,8 +97,13 @@ struct WorkoutSetupSheet: View {
     private var isDirty: Bool {
         profile != initialProfile
             || interestsText != initialInterestsText
-            || avoidedAreas != initialAvoidedAreas
+            || injuryDraft != initialInjuryDraft
             || selectedSplitID != originalSelectedSplitID
+            || cuePreferences != initialCuePreferences
+            || sessionOptions != initialSessionOptions
+            || spokenCues != initialSpokenCues
+            || warmUpSets != initialWarmUpSets
+            || zonePreferences != initialZonePreferences
     }
 
     var body: some View {
@@ -97,8 +113,14 @@ struct WorkoutSetupSheet: View {
                     splitSection
                     locationsEntry
                     frequencySection
+                    WorkoutSessionSection(options: $sessionOptions)
                     sportInterestsSection
-                    injurySection
+                    WorkoutInjurySection(draft: $injuryDraft, notes: $profile.injuryNotes)
+                    WorkoutExercisePreferencesEntry(store: store)
+                    WorkoutCueSettingsSection(
+                        preferences: $cuePreferences, spoken: $spokenCues,
+                        zones: $zonePreferences, healthSharingAllowed: healthSharingAllowed
+                    )
                 }
                 .padding(20)
                 .padding(.bottom, 10)
@@ -120,6 +142,13 @@ struct WorkoutSetupSheet: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
+        // Turning "Heart rate during cardio" on is the one place Fernlet asks Apple Health to let it
+        // read heart rate — at the person's own tap, never silently. Health shows its sheet only if
+        // they have not answered before.
+        .onChange(of: zonePreferences.liveHeartRate) { _, isOn in
+            guard isOn, healthSharingAllowed else { return }
+            Task { await store.requestLiveHeartRateAccess() }
+        }
     }
 
     // MARK: Sections
@@ -127,21 +156,24 @@ struct WorkoutSetupSheet: View {
     private var splitSection: some View {
         SheetField("Your split") {
             VStack(alignment: .leading, spacing: 8) {
+                // Text, not String: these literals used to be `String` arguments, which never reach the
+                // catalog. Split names, summaries and tags are already localized by the domain.
                 splitOption(
-                    title: "Auto — recommended",
-                    subtitle: recommendedSplits.first.map { "Currently: \($0.name)" } ?? "Picks the best split for you",
-                    tag: "",
+                    title: Text("Auto — recommended"),
+                    subtitle: recommendedSplits.first.map { Text("Currently: \($0.displayName)") }
+                        ?? Text("Picks the best split for you"),
+                    tag: nil,
                     selected: selectedSplitID == nil,
                     badge: nil
                 ) { selectedSplitID = nil }
 
                 ForEach(recommendedSplits) { split in
                     splitOption(
-                        title: split.name,
-                        subtitle: split.summary,
-                        tag: "\(split.specificity.label) · \(split.frequencySummary)",
+                        title: Text(verbatim: split.displayName),
+                        subtitle: Text(verbatim: split.summary),
+                        tag: Text(verbatim: "\(split.specificity.label) · \(split.frequencySummary)"),
                         selected: selectedSplitID == split.id,
-                        badge: split.id == recommendedSplits.first?.id ? "Recommended" : nil
+                        badge: split.id == recommendedSplits.first?.id ? Text("Recommended") : nil
                     ) { selectedSplitID = split.id }
                 }
 
@@ -162,15 +194,17 @@ struct WorkoutSetupSheet: View {
     /// rendered without its cancel button on iOS 26, so tapping outside abandoned the whole save.
     private var consistencyNote: String? {
         guard isTrainingConsistently else { return nil }
-        return "You've been consistent with \(currentSplitName) — keep it unless something changed."
+        return String(localized: "workoutSetup.consistencyNote",
+                      defaultValue: "You've been consistent with \(currentSplitName) — keep it unless something changed.",
+                      comment: "Workout setup: a neutral note beside the split options. The argument is the split's name.")
     }
 
     private func splitOption(
-        title: String,
-        subtitle: String,
-        tag: String,
+        title: Text,
+        subtitle: Text?,
+        tag: Text?,
         selected: Bool,
-        badge: String?,
+        badge: Text?,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -179,11 +213,11 @@ struct WorkoutSetupSheet: View {
                     .foregroundStyle(selected ? Color.moss : Color.slate)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(title)
+                        title
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         if let badge {
-                            Text(badge)
+                            badge
                                 .font(.fernlet(.labelSmall))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -191,12 +225,12 @@ struct WorkoutSetupSheet: View {
                                 .foregroundStyle(Color.moss)
                         }
                     }
-                    if subtitle.isEmpty == false {
-                        Text(subtitle).font(.fernlet(.bodySmall)).foregroundStyle(Color.slate)
+                    if let subtitle {
+                        subtitle.font(.fernlet(.bodySmall)).foregroundStyle(Color.slate)
                     }
-                    if tag.isEmpty == false {
+                    if let tag {
                         // F3: text ink, not the `moss` accent (3.74:1, fails 4.5:1 small text).
-                        Text(tag).font(.fernlet(.labelSmall)).foregroundStyle(Color.mossInk)
+                        tag.font(.fernlet(.labelSmall)).foregroundStyle(Color.mossInk)
                     }
                 }
                 Spacer(minLength: 0)
@@ -220,7 +254,7 @@ struct WorkoutSetupSheet: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.moss)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(store.settings.activeWorkoutLocation.name)
+                        Text(store.settings.activeWorkoutLocation.displayedName)
                             .font(.fernlet(.headerMedium))
                             .foregroundStyle(Color.bark)
                         Text("\(store.settings.activeWorkoutLocation.ownedEquipment.count) pieces of equipment")
@@ -245,7 +279,8 @@ struct WorkoutSetupSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             SheetField("Days per week") {
                 Stepper(value: $profile.trainingDaysPerWeek, in: 1...6) {
-                    Text("\(profile.trainingDaysPerWeek) day\(profile.trainingDaysPerWeek == 1 ? "" : "s") a week")
+                    // One key with a plural rule ("1 day a week"), not an English "s" spliced in.
+                    Text("\(profile.trainingDaysPerWeek) days a week")
                         .foregroundStyle(Color.bark)
                 }
             }
@@ -262,6 +297,8 @@ struct WorkoutSetupSheet: View {
             if profile.experience != .beginner {
                 OneRepMaxOptIn(isOn: $profile.oneRepMaxTesting)
             }
+
+            WarmUpSetsToggle(choice: $warmUpSets, experience: profile.experience)
         }
     }
 
@@ -282,27 +319,7 @@ struct WorkoutSetupSheet: View {
         }
     }
 
-    private var injurySection: some View {
-        SheetField("Areas to work around") {
-            VStack(alignment: .leading, spacing: 8) {
-                FlowLayout(spacing: 8) {
-                    ForEach(Self.injuryAreas) { area in
-                        Button(area.name) { toggleArea(area.name) }
-                            .buttonStyle(ChipButtonStyle(selected: avoidedAreas.contains(area.name)))
-                    }
-                }
-                TextField("Anything else to keep in mind (not medical advice)", text: $profile.injuryNotes,
-                          prompt: .fieldPrompt("Anything else to keep in mind (not medical advice)"))
-                    .sheetTextInput()
-            }
-        }
-    }
-
     // MARK: Helpers
-
-    private func toggleArea(_ name: String) {
-        if avoidedAreas.contains(name) { avoidedAreas.remove(name) } else { avoidedAreas.insert(name) }
-    }
 
     private func commit() {
         var updated = profile
@@ -310,12 +327,15 @@ struct WorkoutSetupSheet: View {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.isEmpty == false }
-        let selected = Self.injuryAreas.filter { avoidedAreas.contains($0.name) }
-        updated.avoidedMuscles = selected.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.muscles) }
-        updated.avoidedMovements = selected.reduce(into: Set<MovementPattern>()) { $0.formUnion($1.movements) }
+        updated = injuryDraft.applied(to: updated)
 
         store.setWorkoutProfile(updated)
         store.setSelectedSplit(selectedSplitID)
+        WorkoutCuePreferences.save(cuePreferences)
+        store.setWorkoutSessionOptions(sessionOptions)
+        WorkoutCuePreferences.saveSpoken(spokenCues)
+        store.setWorkoutWarmUpSets(warmUpSets)
+        WorkoutZonePreferences.save(zonePreferences)
         dismiss()
     }
 }

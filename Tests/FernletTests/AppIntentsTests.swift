@@ -182,7 +182,8 @@ final class AppIntentsTests {
         #expect(one == "Logged a bottle of water.")
     }
 
-    /// Both guided-workout intents must REPORT what happened, not return a bare success.
+    /// Every guided-workout intent — "Done set", "Skip rest", "+15 s" and "−15 s" — must REPORT what
+    /// happened, not return a bare success.
     ///
     /// They are Siri phrases as well as Lock Screen buttons. A button can afford a silent no-op —
     /// the card the user is looking at simply does not move — but Siri plays the success chime for
@@ -190,8 +191,8 @@ final class AppIntentsTests {
     /// skip. Reverting to `-> some IntentResult` + `return .result()` fails here.
     @Test func guidedWorkoutIntentsSpeakTheirOutcome() throws {
         let source = try RepoRoot.source(Self.guidedIntentsSourcePath)
-        #expect(source.components(separatedBy: "some IntentResult & ProvidesDialog").count - 1 == 2,
-                "both guided-workout perform()s must return ProvidesDialog")
+        #expect(source.components(separatedBy: "some IntentResult & ProvidesDialog").count - 1 == 4,
+                "all four guided-workout perform()s must return ProvidesDialog")
         #expect(!source.contains("return .result()"),
                 "a guided-workout intent is back to reporting a no-op as a bare success")
         // The failure paths must SAY what happened, not merely decline.
@@ -226,6 +227,10 @@ final class AppIntentsTests {
         "No workout is running, so there's no rest to skip.",
         "You're resting right now, so there's no set to finish yet.",
         "You're not resting right now, so there's nothing to skip.",
+        "No workout is running, so there's no rest to change.",
+        "You're not resting right now, so there's no rest to change.",
+        "Your rest is already at its 10-minute limit.",
+        "Your rest is nearly over, so there's nothing to take off.",
     ]
 
     /// The `(low, high)` numbers from the first `inclusiveRange: (…)` literal in a source file.

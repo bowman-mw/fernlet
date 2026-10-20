@@ -200,6 +200,9 @@ struct TrainerExportBundle: Codable, Equatable {
         var muscleGroups: [String]?
         var exercises: [String]?      // free-text sets/reps/weights lines, as the user logged them
         var durationMinutes: Int?
+        /// Always statute miles, whatever the exporting device's region: it is the stored unit, and a
+        /// metric device converts only what a person types and reads (`WorkoutMeasurementEntry`). A
+        /// treadmill line in `exercises` likewise always carries its speed in mph.
         var distanceMiles: Double?
         var activeEnergyKcal: Double?
         var perceivedEffortRPE: Double?
@@ -292,6 +295,8 @@ struct TrainerExportBundle: Codable, Equatable {
     /// `ownedEquipment` is the granular user-facing gear list; it maps down onto the coarse
     /// ``Equipment`` capabilities the planning engine and safety filter reason about.
     struct TrainingSetup: Codable, Equatable {
+        /// The location's STORED name ("Full gym" for the default, never its localized display form),
+        /// and `splitName` the split's frozen English name, so an export reads the same from any device.
         var locationName: String
         var ownedEquipment: [String]
         var splitName: String?
@@ -583,7 +588,8 @@ extension FernletStore {
     /// what you last moved. It reads the SAME free-text lines the workout rows already carry
     /// (`Workout.exerciseLines`) rather than any new storage, which is why it must be honest about
     /// what it couldn't read — `unparsedLines` counts every line that yielded no sets/reps, and the
-    /// caller surfaces it in the export.
+    /// caller surfaces it in the export. A ramp-up line ("… (ramp-up)": a warm-up set or a
+    /// calibration's ramp) is neither: it is skipped, because it is never a working set.
     static func rollUpExerciseHistory(days: [FernletDay]) -> (entries: [TrainerExportBundle.ExerciseHistoryEntry],
                                                               unparsedLines: Int) {
         var byExercise: [String: ExerciseAccumulator] = [:]
@@ -593,7 +599,7 @@ extension FernletStore {
         // dictionary happened to yield last.
         for day in days.sorted(by: { $0.date < $1.date }) {
             for workout in day.workouts {
-                for line in workout.exerciseLines {
+                for line in workout.exerciseLines where !WorkoutWarmUpSets.isRampLine(line) {
                     guard let parsed = ExerciseLineParser.parse(line) else {
                         unparsed += 1
                         continue

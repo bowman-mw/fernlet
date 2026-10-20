@@ -5,9 +5,12 @@
 // gets its next prescription from its own history (``WorkoutLoadEngine``), a stalled lift gets the
 // owner's gentle plateau response (``WorkoutPlateau``), and about once a month the main lift becomes a
 // calibration (``WorkoutCalibration``). The session note says what changed and why, in plain words.
+// Where the location has its weights set (``WorkoutLocation/weights``), every weight here — the
+// prescription, the easier session's lighter load and the calibration's sets — is a load it has.
 //
-// The plan's note copy is plain English, like every other line the planner writes: the domain's plan
-// text is persisted on the logged row and is not localized yet (see the rest-day plan in the app).
+// The note sentences are String Catalog keys in ``WorkoutPlannerCopy`` (2026-10-20, idea 16), composed
+// in the device's language when the plan is built; the plan TEXT (exercise names, sets and reps) stays
+// the frozen English the history parser reads.
 
 import Foundation
 
@@ -20,16 +23,22 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     public var defaultUnit: LoadUnit
     public var recovery: RecoverySummary
     public var calibration: CalibrationSettings
+    /// Warm-up sets before heavy main lifts are on (``WorkoutWarmUpSets/isEnabled(preference:experience:)``,
+    /// resolved by the app from the setting and the lifter's level). Off by default here, so a context
+    /// built without saying so plans exactly as before.
+    public var warmUpSets: Bool
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
-        recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings()
+        recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
+        warmUpSets: Bool = false
     ) {
         self.exposures = exposures
         self.today = today
         self.defaultUnit = defaultUnit
         self.recovery = recovery
         self.calibration = calibration
+        self.warmUpSets = warmUpSets
     }
 
     /// One lift's sessions, oldest first.
@@ -57,10 +66,13 @@ extension WorkoutProgram {
     }
 
     /// The lifting block after the load pass, plus what the session note should say about it.
+    /// `slots` runs parallel to `steps`: the slot each step fills, which the time budget reads to
+    /// keep the main lifts.
     struct LoadPass {
         var steps: [PrescribedExercise]
         var targets: [ExerciseTarget]
         var notes: [String]
+        var slots: [WorkoutSlotSpec] = []
     }
 
     /// Runs the load pass over a session's lifting picks.
@@ -83,8 +95,29 @@ extension WorkoutProgram {
             calibrationOpen = false
             notes = [calibration]
         }
+        addWarmUpSets(&loaded, inputs: inputs, load: load)
         assignFatigueContext(&loaded)
-        return LoadPass(steps: loaded.map(\.exercise), targets: loaded.map(\.target), notes: notes + plateauNotes)
+        return LoadPass(steps: loaded.map(\.exercise), targets: loaded.map(\.target), notes: notes + plateauNotes,
+                        slots: loaded.map(\.slot))
+    }
+
+    /// Puts warm-up sets in front of each heavy main lift (``WorkoutWarmUpSets``) when the lifter has
+    /// them on and today isn't a light day. Runs after the calibration, so a lift the calibration
+    /// already ramps into gets no second ramp; each warm-up is a copy of its lift's pick, so it shares
+    /// the lift's slot, target and fatigue context.
+    static func addWarmUpSets(_ loaded: inout [LoadedPick], inputs: SlotInputs, load: WorkoutLoadContext) {
+        guard load.warmUpSets, inputs.intensity != .light else { return }
+        var expanded: [LoadedPick] = []
+        for pick in loaded {
+            for step in WorkoutWarmUpSets.steps(for: pick.exercise, pattern: pick.target.movementPattern) {
+                var warmUp = pick
+                warmUp.exercise = step
+                warmUp.plan = nil
+                expanded.append(warmUp)
+            }
+            expanded.append(pick)
+        }
+        loaded = expanded
     }
 
     /// The plateau status of a rep-counted lift, nil for holds and lifts with no history.
@@ -101,6 +134,12 @@ extension WorkoutProgram {
         ([target.equipment] + target.alternativeEquipment).first {
             location.has($0) && WorkoutLoadEngine.step(for: $0, unit: .lb) != nil
         }
+    }
+
+    /// The loads `location` has for a lift on `guidance`'s gear, in its unit; nil when the location's
+    /// weights say nothing about that gear.
+    static func loadLadder(for guidance: LoadGuidance, at location: WorkoutLocation) -> LoadLadder? {
+        guidance.equipment.flatMap { location.weights.ladder(for: $0, in: guidance.unit) }
     }
 
     // MARK: Per-lift prescription
@@ -123,7 +162,7 @@ extension WorkoutProgram {
             scheme: scheme, baseSets: inputs.style.adjustedSets(for: pick.slot.role, energy: inputs.intensity),
             exposures: history, equipment: equipment,
             isLowerBody: WorkoutLoadEngine.isLowerBody(pick.target.movementPattern),
-            defaultUnit: load.defaultUnit, today: load.today
+            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights
         ))
         pick.exercise.sets = plan.sets
         pick.exercise.reps = "\(plan.reps)"
@@ -162,14 +201,15 @@ extension WorkoutProgram {
             let original = loaded[index].target
             guard let stand = bestExercise(
                 for: loaded[index].slot, in: inputs.feasible, excluding: used.union([original.name]),
-                biasTokens: inputs.biasTokens, experience: inputs.profile.experience, location: inputs.location
+                biasTokens: inputs.biasTokens, experience: inputs.profile.experience, location: inputs.location,
+                limits: inputs.limits
             ) else { continue }
             used.insert(stand.name)
             loaded[index].exercise = prescribe(stand, role: loaded[index].slot.role, block: .lifting,
                                                completions: inputs.progression[stand.name] ?? 0, inputs: inputs)
             loaded[index].target = stand
             loaded[index].standsInFor = original.name
-            notes.append("\(stand.name) stands in for \(original.name) for a few weeks — a fresh angle often gets things moving.")
+            notes.append(WorkoutPlannerCopy.standsIn(stand.name, for: original.name))
         }
     }
 
@@ -190,7 +230,7 @@ extension WorkoutProgram {
             let slot = WorkoutSlotSpec(label: "Support", role: .accessory, muscles: [muscle])
             guard let support = bestExercise(
                 for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
-                experience: inputs.profile.experience, location: inputs.location
+                experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
             ) else { continue }
             used.insert(support.name)
             loaded[slotIndex].exercise = prescribe(support, role: .accessory, block: .lifting,
@@ -198,7 +238,7 @@ extension WorkoutProgram {
             loaded[slotIndex].target = support
             loaded[slotIndex].slot = slot
             loaded[slotIndex].plateau = nil
-            notes.append("For a few weeks, \(support.name) takes an accessory spot to build up the muscles that help your \(stalled.target.name).")
+            notes.append(WorkoutPlannerCopy.supportSwap(support.name, helping: stalled.target.name))
             return
         }
     }
@@ -215,7 +255,7 @@ extension WorkoutProgram {
             )
             let extra = role == .main ? WorkoutPlateau.extraRestMainSeconds : WorkoutPlateau.extraRestAccessorySeconds
             loaded[index].exercise.restSecondsOverride = WorkoutRestGuidance.clamp(base + extra)
-            if status.stage == .easierSession { makeEasier(&loaded[index]) }
+            if status.stage == .easierSession { makeEasier(&loaded[index], location: inputs.location) }
         }
         let front: Set<PlateauStage> = [.easierSession, .recover]
         guard let first = loaded.firstIndex(where: { $0.plateau.map { front.contains($0.stage) } ?? false }),
@@ -223,17 +263,20 @@ extension WorkoutProgram {
         loaded.insert(loaded.remove(at: first), at: 0)
     }
 
-    /// Half the sets (rounded up) and about 10 % lighter, flagged so it never anchors the next session.
-    static func makeEasier(_ pick: inout LoadedPick) {
+    /// Half the sets (rounded up) and about 10 % lighter — on a load the location has, when its
+    /// weights are set — flagged so it never anchors the next session.
+    static func makeEasier(_ pick: inout LoadedPick, location: WorkoutLocation) {
         pick.exercise.sets = max(1, (pick.exercise.sets + 1) / 2)
         guard var guidance = pick.exercise.guidance else { return }
         guidance.easierSession = true
         if let current = guidance.prescription {
-            let lighter = WorkoutLoadEngine.moved(
-                current.suggested, by: .down(WorkoutPlateau.easierLoadDecrease), step: current.step, lowerBody: false
+            let ladder = loadLadder(for: guidance, at: location)
+            let step = guidance.equipment.flatMap { WorkoutLoadEngine.step(for: $0, unit: current.unit) } ?? current.step
+            let lighter = WorkoutLoadEngine.movedOnto(
+                current.suggested, by: .down(WorkoutPlateau.easierLoadDecrease), step: step, lowerBody: false, ladder: ladder
             )
             guidance.prescription = WorkoutLoadEngine.prescription(
-                suggested: lighter, confidence: current.confidence, step: current.step, unit: current.unit
+                suggested: lighter, confidence: current.confidence, step: step, unit: current.unit, ladder: ladder
             )
         }
         pick.exercise.guidance = guidance
@@ -257,13 +300,17 @@ extension WorkoutProgram {
             return nil
         }
         let kind = WorkoutCalibration.kind(profile: inputs.profile, confidence: estimate.confidence)
+        let ladder = loadLadder(for: guidance, at: inputs.location)
         let sets = WorkoutCalibration.sets(
             kind: kind, oneRepMax: estimate.oneRepMax, todaysSuggested: guidance.prescription?.suggested,
-            todaysReps: guidance.targetReps, step: step
+            todaysReps: guidance.targetReps, step: step, ladder: ladder
         )
         guard !sets.isEmpty else { return nil }
         let pick = loaded[index]
-        let steps = sets.map { calibrationPick(pick, set: $0, guidance: guidance, step: step, confidence: estimate.confidence) }
+        let runnerStep = ladder?.runnerStep(default: step) ?? step
+        let steps = sets.map {
+            calibrationPick(pick, set: $0, guidance: guidance, step: runnerStep, confidence: estimate.confidence)
+        }
         loaded.replaceSubrange(index...index, with: steps)
         for other in loaded.indices where loaded[other].slot.role == .accessory {
             loaded[other].exercise.sets = max(1, loaded[other].exercise.sets - 1)

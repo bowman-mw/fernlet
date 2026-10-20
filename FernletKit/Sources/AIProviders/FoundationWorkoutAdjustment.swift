@@ -71,6 +71,8 @@ public enum WorkoutAdjustmentCandidateBuilder {
     ///   - profile: The equipment and injury constraints `WorkoutSafetyFilter` applies.
     ///   - limit: Maximum candidates emitted (the model's context budget). Zero or negative yields
     ///     an empty result rather than trapping.
+    ///   - preferences: The user's exercise preferences; an exercise they hid ("Don't suggest this")
+    ///     never reaches the prompt, so the model cannot bring it back.
     ///   - catalog: The exercise universe to draw from.
     /// - Returns: Candidates numbered from 1 in rank order; empty when nothing is feasible.
     public static func candidates(
@@ -79,14 +81,17 @@ public enum WorkoutAdjustmentCandidateBuilder {
         location: WorkoutLocation,
         profile: WorkoutProfile,
         limit: Int = 28,
+        preferences: WorkoutExercisePreferences = WorkoutExercisePreferences(),
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> [WorkoutAdjustmentCandidate] {
         // R5: `prefix(_:)` traps on a negative length, so validate `limit` at entry rather than at the
         // `prefix` below; "nothing to offer" is already this function's documented empty answer.
         // The adjustment rewrites the lifting block, so the warm-up and cool-down's stretches and the
-        // balance drills are never offered as a swap for a lift.
+        // balance drills are never offered as a swap for a lift — nor is anything the user hid.
+        let hidden = preferences.hiddenKeys
         let feasible = WorkoutSafetyFilter.feasibleExercises(in: catalog, location: location, profile: profile)
             .filter { $0.modality != .mobility && $0.modality != .balance }
+            .filter { hidden.isEmpty || !hidden.contains(WorkoutExerciseCatalog.normalizedName($0.name)) }
         guard limit > 0, feasible.isEmpty == false else { return [] }
 
         let byName = Dictionary(catalog.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })

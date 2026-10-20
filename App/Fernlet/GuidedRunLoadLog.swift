@@ -8,7 +8,9 @@ import FernletDomainModel
 /// becomes an ``ExerciseResult`` and its logged line ("Bench press - 3 x 8 @ 105 lb", with
 /// "(did 8, 8, 6)" when edited), and the session's text is rebuilt around those lines. A lift the
 /// runner skipped past is logged as skipped and never becomes a result, so a short-on-time skip is not
-/// read as a miss. The run state cannot import the domain, so tokens cross as raw strings here.
+/// read as a miss; a warm-up set it skipped leaves no trace. A warm-up set crosses as a calibration
+/// ramp, so it logs "(ramp-up)" and no estimate reads it. The run state cannot import the domain, so
+/// tokens cross as raw strings here.
 enum GuidedRunLoadLog {
 
     /// The run's tracking record for a planned step, or nil when the planner attached no guidance.
@@ -37,6 +39,40 @@ enum GuidedRunLoadLog {
         )
     }
 
+    /// Whether a planned step shows last time's numbers: a counted catalog lift, the same steps the
+    /// runner's "Last time" pill appears on (never a hold, a stretch or a cardio line).
+    static func showsLastTime(_ exercise: PrescribedExercise) -> Bool {
+        exercise.fromCatalog && exercise.sets >= 1 && exercise.holdSeconds == nil
+    }
+
+    /// Last time's numbers for every logged lift, keyed by normalized name, from one history rollup
+    /// (`FernletStore.exerciseHistoryEntries()`, most recently trained first — the first entry of a
+    /// name wins). Bounded by the entries passed in.
+    static func lastTimes(
+        from entries: [TrainerExportBundle.ExerciseHistoryEntry]
+    ) -> [String: GuidedWorkoutRunState.LastTime] {
+        var byName: [String: GuidedWorkoutRunState.LastTime] = [:]
+        for entry in entries {
+            let key = WorkoutExerciseCatalog.normalizedName(entry.name)
+            guard byName[key] == nil, let last = lastTime(from: entry) else { continue }
+            byName[key] = last
+        }
+        return byName
+    }
+
+    /// One entry's last-time numbers — sets and reps, a weight, or both — or nil with neither. The
+    /// unit crosses as the `LoadUnit` token the line parser wrote ("lb" / "kg"), or nil.
+    static func lastTime(from entry: TrainerExportBundle.ExerciseHistoryEntry) -> GuidedWorkoutRunState.LastTime? {
+        let sets = entry.lastSets.flatMap { $0 > 0 ? $0 : nil }
+        let reps = entry.lastReps.flatMap { $0.isEmpty ? nil : $0 }
+        let weight = entry.lastWeight.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        guard (sets != nil && reps != nil) || weight != nil else { return nil }
+        return GuidedWorkoutRunState.LastTime(
+            sets: sets, reps: reps, weight: weight,
+            unitRaw: entry.weightUnit.flatMap(LoadUnit.init(rawValue:))?.rawValue
+        )
+    }
+
     /// One tracked lift's result, or nil for an untracked step or one the runner skipped.
     static func result(for exercise: GuidedWorkoutRunState.Exercise) -> ExerciseResult? {
         guard let tracking = exercise.tracking, tracking.skipped != true, exercise.fromCatalog else { return nil }
@@ -57,30 +93,38 @@ enum GuidedRunLoadLog {
     }
 
     /// The finished run's log: its text with each tracked lift's own line, and the results — or
-    /// nil when no step was tracked (a run from before load tracking keeps its plan text).
+    /// nil when no step was tracked (a run from before load tracking keeps its plan text). A ramp-up
+    /// set that was skipped ("Skip warm-up sets") leaves no line at all: the lift was not skipped,
+    /// only its warm-up.
     static func log(for state: GuidedWorkoutRunState) -> (text: String, results: [ExerciseResult])? {
         guard state.exercises.contains(where: { $0.tracking != nil }) else { return nil }
+        let kept = state.exercises.filter { !($0.isRampSet && $0.tracking?.skipped == true) }
         var lines: [UUID: String] = [:]
         var results: [ExerciseResult] = []
-        for exercise in state.exercises {
+        for exercise in kept {
             if let result = result(for: exercise) {
                 results.append(result)
                 lines[exercise.id] = result.loggedLine
             } else if exercise.tracking?.skipped == true {
                 lines[exercise.id] = "\(exercise.name) - skipped"
+            } else if let written = exercise.writtenLine {
+                // A planned workout's untracked line logs as its plan wrote it, cue and all.
+                lines[exercise.id] = written
             }
         }
-        let steps = state.exercises.map { prescribed($0) }
+        let steps = kept.map { prescribed($0) }
         return (WorkoutSessionBlocks.planText(for: steps, loggedLines: lines), results)
     }
 
-    /// A run step back as a domain step, for the plan-text layout (warm-up and cool-down summaries).
+    /// A run step back as a domain step, for the plan-text layout (warm-up and cool-down summaries, and
+    /// a cardio line's segments folded back into the line they came from).
     static func prescribed(_ exercise: GuidedWorkoutRunState.Exercise) -> PrescribedExercise {
         PrescribedExercise(
             id: exercise.id, name: exercise.name, sets: exercise.sets, reps: exercise.reps,
             role: role(fromRaw: exercise.roleRaw), fromCatalog: exercise.fromCatalog,
             block: SessionBlock(rawValue: exercise.block) ?? .lifting, holdSeconds: exercise.holdSeconds,
-            side: exercise.sideRaw.flatMap(ExerciseSide.init(rawValue:))
+            side: exercise.sideRaw.flatMap(ExerciseSide.init(rawValue:)),
+            segment: GuidedRunTimedLog.cardioSegment(of: exercise)
         )
     }
 

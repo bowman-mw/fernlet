@@ -96,8 +96,22 @@
         }
       }
     },
+    "%@ bar" : {
+      "comment" : "Location editor, Weights I have: a bar to pick; the argument is its weight, e.g. 45 lb"
+    },
     "%@ didn't answer. Their Fernlet may be closed, locked, or busy sharing with someone else. Nothing was sent." : {
       "comment" : "Why a recipe share did not go out: the other phone never answered. %@ is the person's name."
+    },
+    "%@ instead of %@" : {
+      "comment" : "A saved swap: the first argument is planned wherever the second would be",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ instead of %2$@"
+          }
+        }
+      }
     },
     "%@ is blocked on this phone. If something needs more than a report, you can email the developer." : {
 
@@ -148,6 +162,9 @@
     },
     "%@ on this device, behind your app lock." : {
 
+    },
+    "%@ plates" : {
+      "comment" : "Location editor, Weights I have: a plate size's pair counter; the argument is the plate weight, e.g. 45 lb"
     },
     "%@ presets are behind Add." : {
 
@@ -515,6 +532,28 @@
         }
       }
     },
+    "%lld bpm · aim %lld–%lld" : {
+      "comment" : "Guided cardio, Live Activity and runner: the live heart rate in beats per minute and the target range to aim for, e.g. '118 bpm · aim 110–125'. Gentle: 'aim', never a limit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld"
+          }
+        }
+      }
+    },
+    "%lld bpm · aim %lld–%lld · %@" : {
+      "comment" : "Guided cardio, Live Activity: the live heart rate, the range to aim for and where it sits, on one line, e.g. '118 bpm · aim 110–125 · in range'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld bpm · aim %2$lld–%3$lld · %4$@"
+          }
+        }
+      }
+    },
     "%lld cal" : {
 
     },
@@ -543,22 +582,35 @@
         }
       }
     },
-    "%lld day%@ a week" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld day%2$@ a week"
-          }
-        }
-      }
-    },
     "%lld day%@ of training will be included." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld day%2$@ of training will be included."
+          }
+        }
+      }
+    },
+    "%lld days a week" : {
+      "comment" : "Workout setup: how many days a week the person trains, e.g. '3 days a week'.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld day a week"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld days a week"
+                }
+              }
+            }
           }
         }
       }
@@ -799,6 +851,29 @@
     "%lld planned" : {
 
     },
+    "%lld reps" : {
+      "comment" : "Set editor (Edit workout; Log workout, set by set): a set's rep count beside its − / + stepper, e.g. '8 reps'. Needs a plural variation per language; English also needs the one-rep form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld rep"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld reps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld seconds" : {
 
     },
@@ -852,6 +927,51 @@
     },
     "%lld tracked" : {
 
+    },
+    "%lld warm-up sets" : {
+      "comment" : "Workout plan and the runner's Ready list: a lift's lighter warm-up sets, folded into one row, e.g. '3 warm-up sets'. Needs a plural variation per language; English also needs the one-set form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld warm-up set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld warm-up sets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld × %@" : {
+      "comment" : "Live Activity: last time's sets × reps for this lift, e.g. '3 × 8'. Reps are as logged ('8', '8-10').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld × %2$@"
+          }
+        }
+      }
+    },
+    "%lld × %@ @ %@" : {
+      "comment" : "Live Activity: last time's sets × reps @ weight for this lift, e.g. '3 × 8 @ 100 lb'. The weight arrives formatted with its unit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld × %2$@ @ %3$@"
+          }
+        }
+      }
     },
     "%lld → %lld cal" : {
       "localizations" : {
@@ -916,6 +1036,17 @@
     },
     "+%lld" : {
 
+    },
+    "+15 s" : {
+      "comment" : "Workout rest button: adds 15 seconds to the rest timer. 's' abbreviates seconds.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "+15 s"
+          }
+        }
+      }
     },
     "- %@" : {
 
@@ -1037,6 +1168,9 @@
     "8-12" : {
 
     },
+    "9 km/h" : {
+
+    },
     "A Fernlet card they can open and save in Fernlet on iPhone." : {
 
     },
@@ -1067,6 +1201,17 @@
     "A mood, never a number." : {
 
     },
+    "A pace you could still talk at." : {
+      "comment" : "Guided cardio: the gentle line under the card during steady cardio — the talk test.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A pace you could still talk at."
+          }
+        }
+      }
+    },
     "A photo a friend shared is deleted from your phone with the trash button in the photo viewer, and the whole batch can be discarded at the end of a session. Session messages are never stored — they disappear for everyone when the session ends — and Fernlet won't send a message containing words from its short list of slurs. Recipes and activities you were sent are removed by deleting them where they appear. To stop someone sending you any of it, block or report them." : {
 
     },
@@ -1085,11 +1230,25 @@
     "A second code you can give away" : {
 
     },
+    "A set counts in full for the muscles a lift mainly works, and as half a set for the muscles that help. Warm-ups, stretches, holds and ramp-up sets aren't counted." : {
+      "comment" : "Weekly totals screen: how the per-muscle set counts are worked out."
+    },
     "A small daily care companion built around privacy, local control, and enoughness." : {
 
     },
     "A small record of being." : {
 
+    },
+    "A tap when a rest or a hold ends. Sounds stay quiet, follow your ring/silent switch, and play over your music without pausing it. The screen stays on while a workout runs. If you lock your phone, the end of a rest or a hold comes as a notification when Fernlet's notifications are allowed, and the workout waits on that step until you open Fernlet again." : {
+      "comment" : "Workout setup sheet: the note under the workout cue switches. 'ring/silent switch' is the iPhone's Ring/Silent switch or Action button setting; the sounds never pause the person's music. With the phone locked, a rest's or hold's end arrives as a notification and the workout waits on that step.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "A tap when a rest or a hold ends. Sounds stay quiet, follow your ring/silent switch, and play over your music without pausing it. The screen stays on while a workout runs. If you lock your phone, the end of a rest or a hold comes as a notification when Fernlet's notifications are allowed, and the workout waits on that step until you open Fernlet again."
+          }
+        }
+      }
     },
     "A word about this one — optional" : {
 
@@ -1146,6 +1305,17 @@
     "Add %@ to today" : {
 
     },
+    "Add 15 seconds of rest" : {
+      "comment" : "Workout rest: the '+15 s' button's spoken name and its Shortcuts action title — adds 15 seconds to the rest timer.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add 15 seconds of rest"
+          }
+        }
+      }
+    },
     "Add a bottle" : {
 
     },
@@ -1182,6 +1352,12 @@
     "Add alongside" : {
 
     },
+    "Add an exercise" : {
+      "comment" : "Your exercises: opens the form for a new custom exercise"
+    },
+    "Add an exercise Fernlet doesn't have, with its muscles and equipment. It's planned, checked against your equipment and limits, and logged like any other." : {
+      "comment" : "Your exercises: the empty custom-exercise list"
+    },
     "Add an item" : {
 
     },
@@ -1194,6 +1370,9 @@
     "Add by hand" : {
 
     },
+    "Add dumbbell" : {
+      "comment" : "Location editor, Weights I have: adds the typed dumbbell weight"
+    },
     "Add exercise" : {
 
     },
@@ -1202,6 +1381,9 @@
     },
     "Add its macros below, then save the custom ingredient." : {
 
+    },
+    "Add kettlebell" : {
+      "comment" : "Location editor, Weights I have: adds the typed kettlebell weight"
     },
     "Add macros for this custom food." : {
 
@@ -1214,6 +1396,17 @@
     },
     "Add progress photo" : {
 
+    },
+    "Add set" : {
+      "comment" : "Set editor: adds a set row at the last set's reps; a blank weight repeats the set above.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add set"
+          }
+        }
+      }
     },
     "Add step" : {
 
@@ -1255,9 +1448,45 @@
       "comment" : "A button to add a workout plan.",
       "isCommentAutoGenerated" : true
     },
+    "Add your own, and choose what Fernlet suggests." : {
+      "comment" : "Workout setup: what the exercises entry holds"
+    },
+    "Added 15 seconds of rest." : {
+      "comment" : "VoiceOver, workout runner: spoken after the '+15 s' button lengthened the rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added 15 seconds of rest."
+          }
+        }
+      }
+    },
+    "Added 15 seconds to your rest." : {
+      "comment" : "Siri / Shortcuts: spoken after '+15 s' lengthened the rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Added 15 seconds to your rest."
+          }
+        }
+      }
+    },
     "Adding workout plan…" : {
       "comment" : "A button label for importing a workout plan.",
       "isCommentAutoGenerated" : true
+    },
+    "Adds 15 seconds to your current rest, up to 10 minutes in all." : {
+      "comment" : "Shortcuts: description of the 'Add 15 seconds of rest' action.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Adds 15 seconds to your current rest, up to 10 minutes in all."
+          }
+        }
+      }
     },
     "Adds bottles of water to today's Fernlet diary." : {
 
@@ -1289,17 +1518,45 @@
     "Adjust with AI" : {
 
     },
+    "Adjustable to %@" : {
+      "comment" : "Location editor, Weights I have: dumbbell preset, an adjustable pair in small steps; the argument is its heaviest setting, e.g. 52.5 lb"
+    },
     "Adjusting…" : {
 
     },
     "Advanced" : {
 
     },
+    "Aerobic minutes" : {
+      "comment" : "Weekly totals screen: heading of the section with the week's aerobic minutes."
+    },
     "Age" : {
 
     },
     "Age: %lld" : {
 
+    },
+    "Aim: a few words at a time" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: a few words at a time"
+          }
+        }
+      }
+    },
+    "Aim: talk in short sentences" : {
+      "comment" : "Guided cardio, Live Activity: the talk test for an easy or steady part (heart-rate zone 2), shown when there is no live heart rate. Short — it shares a line with the countdown.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aim: talk in short sentences"
+          }
+        }
+      }
     },
     "All done" : {
       "comment" : "Shown and spoken by the breathing pacer the moment a session reaches its full length."
@@ -1343,6 +1600,15 @@
     },
     "Also include in trainer summaries" : {
 
+    },
+    "Also works with" : {
+
+    },
+    "Always" : {
+
+    },
+    "Always use this instead" : {
+      "comment" : "Plan editor: always plan this exercise where the one it replaced would be"
     },
     "Amount of %@" : {
 
@@ -1417,6 +1683,17 @@
     "Areas to work around" : {
 
     },
+    "As planned: %@" : {
+      "comment" : "Guided runner weight panel: the weight a planned workout's line named (a coach's plan or the person's own), preselected as written instead of a range. %@ is the weight with its unit, e.g. '135 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "As planned: %@"
+          }
+        }
+      }
+    },
     "Ask an AI for a plan" : {
 
     },
@@ -1448,6 +1725,9 @@
 
     },
     "Auto · %@" : {
+
+    },
+    "Auto — recommended" : {
 
     },
     "Average cycle length: %lld days" : {
@@ -1488,6 +1768,20 @@
     },
     "Bananas for Scale" : {
       "comment" : "Silly stat title"
+    },
+    "Bar: %@" : {
+      "comment" : "Guided workout, Plates: the bar the plates go on, e.g. 'Bar: 45 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bar: %@"
+          }
+        }
+      }
+    },
+    "Barbell" : {
+      "comment" : "Location editor, Weights I have: heading of the bar and plates block"
     },
     "Barcode lookup on Open Food Facts" : {
 
@@ -1639,6 +1933,20 @@
     "Camera viewfinder. Point the camera at the code on your other phone's screen." : {
 
     },
+    "Can't be done without" : {
+
+    },
+    "Can't load %@ exactly." : {
+      "comment" : "Guided workout, Plates: the chosen weight can't be made with the bar and plates, e.g. 'Can't load 137 lb exactly.' The closest weight follows.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Can't load %@ exactly."
+          }
+        }
+      }
+    },
     "Can't look for nearby friends" : {
 
     },
@@ -1711,6 +2019,9 @@
     "Change what's included in Settings › Sharing." : {
 
     },
+    "Changes save as you make them." : {
+
+    },
     "Changing the response asks for your duress code again — pick a code you have not used as your passcode." : {
 
     },
@@ -1781,8 +2092,17 @@
     "Choosing" : {
 
     },
+    "Clear barbell" : {
+      "comment" : "Location editor, Weights I have: button that clears the bar and plates"
+    },
     "Clear canvas" : {
 
+    },
+    "Clear dumbbells" : {
+      "comment" : "Location editor, Weights I have: button that empties the dumbbell list"
+    },
+    "Clear kettlebells" : {
+      "comment" : "Location editor, Weights I have: button that empties the kettlebell list"
     },
     "Clear search" : {
 
@@ -1795,6 +2115,17 @@
     },
     "Closed" : {
 
+    },
+    "Closest: %@" : {
+      "comment" : "Guided workout, Plates: the nearest weight the bar and plates can make, e.g. 'Closest: 135 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Closest: %@"
+          }
+        }
+      }
     },
     "Clothing" : {
 
@@ -1827,6 +2158,9 @@
 
     },
     "Comfortable — could hold a conversation." : {
+
+    },
+    "Common mistake" : {
 
     },
     "Companion" : {
@@ -1955,6 +2289,9 @@
           }
         }
       }
+    },
+    "Cool-down stretches" : {
+      "comment" : "Workout setup: switch for the stretches that end a lifting session"
     },
     "Cool-down · %lld stretches" : {
 
@@ -2101,11 +2438,17 @@
         }
       }
     },
+    "Counted in" : {
+
+    },
     "Counted on this iPhone only." : {
       "comment" : "Silly stat: pats are counted on this device only"
     },
     "Counting every sealed surface…" : {
 
+    },
+    "Counts cardio, sports and dance, including workouts from Apple Health. Strength, yoga, Pilates and other mind-body sessions aren't counted." : {
+      "comment" : "Weekly totals screen: which workouts the aerobic minutes include."
     },
     "Counts stored blobs by their format MARKER BYTES only — nothing is decrypted, and nothing is written or saved. One row per cryptographic surface; a surface that cannot be counted shows a dash and says why, never a zero." : {
 
@@ -2140,6 +2483,17 @@
     "Crypto format census (test-only view)" : {
 
     },
+    "Cues during a workout" : {
+      "comment" : "Workout setup sheet: caption of the field holding the guided runner's haptic and sound switches.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cues during a workout"
+          }
+        }
+      }
+    },
     "Cups of coffee and tea, stacked at about 12 cm a cup." : {
       "comment" : "Silly stat: how cups are counted"
     },
@@ -2150,6 +2504,9 @@
 
     },
     "Current password" : {
+
+    },
+    "Currently: %@" : {
 
     },
     "Custom color" : {
@@ -2375,6 +2732,9 @@
         }
       }
     },
+    "Demonstration of %@" : {
+      "comment" : "VoiceOver label for the exercise demonstration animation or picture in the how-to sheet. %@ is the exercise name."
+    },
     "Derived signals (test-only view)" : {
 
     },
@@ -2408,6 +2768,12 @@
     "Device-only probe" : {
 
     },
+    "Difficulty" : {
+
+    },
+    "Direction" : {
+
+    },
     "Discard" : {
 
     },
@@ -2432,11 +2798,20 @@
     "Distance" : {
 
     },
+    "Distance (km)" : {
+
+    },
     "Distance (mi)" : {
 
     },
     "Distance on foot from your steps, at about 1,300 a kilometer, or from your logged walks and runs." : {
       "comment" : "Silly stat: how walking distance is counted"
+    },
+    "Don't suggest" : {
+      "comment" : "Plan editor: stop Fernlet suggesting this exercise"
+    },
+    "Don't suggest %@" : {
+      "comment" : "Spoken name of the plan editor's Don't suggest button; the argument is the exercise"
     },
     "Done" : {
 
@@ -2459,6 +2834,12 @@
     "Dream Cinema" : {
       "comment" : "Silly stat title: dream sleep measured in films"
     },
+    "Dumbbell weight" : {
+      "comment" : "Location editor, Weights I have: field for a dumbbell weight not in the presets"
+    },
+    "Dumbbells" : {
+      "comment" : "Location editor, Weights I have: heading of the dumbbell block"
+    },
     "Duplicate policy" : {
 
     },
@@ -2480,17 +2861,108 @@
     "During a session, touch and hold a message someone sent and choose “Report…”. Do the same on a photo someone shared when you choose which photos to keep, or tap the flag in the photo viewer. The person is reported and blocked on your phone, their messages are hidden, and a reported photo is deleted from your phone." : {
 
     },
+    "During guided cardio, see your heart rate against a gentle target, from AirPods Pro 3, Powerbeats Pro 2 or a Bluetooth heart-rate strap paired with this iPhone. Turning it on asks Apple Health to let Fernlet read your heart rate. Apple Health keeps the readings, as it does for any workout; Fernlet keeps none. With no reading, the talk test guides you instead. Zone nudges add one light tap when you've drifted out of range for a while." : {
+      "comment" : "Workout setup: what the two heart-rate switches do, where the reading comes from and where it goes. Product names stay as Apple writes them. 'The talk test' = judging effort by how easily you can talk.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "During guided cardio, see your heart rate against a gentle target, from AirPods Pro 3, Powerbeats Pro 2 or a Bluetooth heart-rate strap paired with this iPhone. Turning it on asks Apple Health to let Fernlet read your heart rate. Apple Health keeps the readings, as it does for any workout; Fernlet keeps none. With no reading, the talk test guides you instead. Zone nudges add one light tap when you've drifted out of range for a while."
+          }
+        }
+      }
+    },
     "Each exercise as logged, most recent first." : {
 
     },
+    "Each set gets its own reps and weight." : {
+      "comment" : "Log workout sheet: the explainer line under the 'Log set by set' switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each set gets its own reps and weight."
+          }
+        }
+      }
+    },
+    "Each side: %@" : {
+      "comment" : "Guided workout, Plates: the plates on each side of the bar, heaviest first, e.g. 'Each side: 45, 10, and 2.5 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each side: %@"
+          }
+        }
+      }
+    },
+    "Ease in and breathe. Stop anywhere that feels like enough." : {
+      "comment" : "Guided stretch session (a Mobility day or the rest day's gentle stretch): the gentle line under the card.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ease in and breathe. Stop anywhere that feels like enough."
+          }
+        }
+      }
+    },
     "Ease into each stretch — no bouncing." : {
+
+    },
+    "Ease right off and get your breath back." : {
+      "comment" : "Guided cardio: the gentle line under the card during an interval's easy (recovery) part.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ease right off and get your breath back."
+          }
+        }
+      }
+    },
+    "Easier version" : {
 
     },
     "Easy" : {
 
     },
+    "Easy for %@. Round %lld of %lld." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an interval's easy (recovery) part begins. %1$@ is its length in words; then the round and the rounds in all.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy for %1$@. Round %2$lld of %3$lld."
+          }
+        }
+      }
+    },
+    "Easy pace for %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an easy steady segment (easy cardio, an easy walk) begins. %@ is its length in words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy pace for %@."
+          }
+        }
+      }
+    },
     "Easy — you could keep this up for a long while." : {
 
+    },
+    "Easy, round %lld of %lld." : {
+      "comment" : "Guided cardio, spoken cue: an interval's easy (recovery) part begins — its round and the rounds in all, e.g. 'Easy, round 3 of 8.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy, round %1$lld of %2$lld."
+          }
+        }
+      }
     },
     "Eating enough, eating well." : {
 
@@ -2505,6 +2977,9 @@
 
     },
     "Edit day" : {
+
+    },
+    "Edit exercise" : {
 
     },
     "Edit item" : {
@@ -2554,6 +3029,9 @@
     },
     "Eggs eaten, against the 300 or so a hen lays in a year." : {
       "comment" : "Silly stat: how eggs are counted"
+    },
+    "Either" : {
+      "comment" : "Custom exercise form: the push or pull has no set direction"
     },
     "Email" : {
 
@@ -2749,8 +3227,14 @@
     "Exercise history" : {
 
     },
+    "Exercise name" : {
+
+    },
     "Exercise results" : {
 
+    },
+    "Exercises and swaps" : {
+      "comment" : "Workout setup: entry to custom exercises, hidden exercises and saved swaps"
     },
     "Experience" : {
 
@@ -2895,6 +3379,9 @@
     "Fernlet doesn't send some of the words in this message. You can change them and send it again." : {
 
     },
+    "Fernlet fits each session into this time: a shorter warm-up first, then fewer extra exercises, then fewer sets. Your main lifts always stay." : {
+      "comment" : "Workout setup: how the session-length choice shapes each planned session"
+    },
     "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app." : {
 
     },
@@ -2945,6 +3432,12 @@
     "Fernlet needs the camera to take photos with friends. You can turn it on any time." : {
 
     },
+    "Fernlet only plans it where you have one of its tools and every piece of gear picked here." : {
+      "comment" : "Custom exercise form: how equipment and gear decide where the exercise is planned"
+    },
+    "Fernlet plans and checks this like its own exercises: your equipment and the areas you work around decide when it fits." : {
+      "comment" : "Custom exercise form: what the fields are for"
+    },
     "Fernlet protects your data with its own passcode, separate from your device passcode. Removing your device passcode won't affect your Fernlet app lock or erase your protected data." : {
 
     },
@@ -2971,6 +3464,9 @@
         }
       }
     },
+    "Fernlet stops planning it and it leaves your exercise list. Workouts you've already logged with it stay in your history." : {
+
+    },
     "Fernlet was still connecting to another Fernlet. Recipe sharing links two Fernlets at a time, so nothing went to %@." : {
       "comment" : "Why a recipe share did not go out: another connection attempt was already in progress. %@ is the person's name."
     },
@@ -2994,6 +3490,9 @@
     },
     "Fernlet will stop putting the foods you picked at the top of those searches. Your meals, recipes and everything else stay exactly as they are." : {
 
+    },
+    "Fernlet won't suggest this again." : {
+      "comment" : "Plan editor: this exercise is marked Don't suggest, written on Save"
     },
     "Fewer sets" : {
 
@@ -3026,6 +3525,17 @@
     "Finish" : {
 
     },
+    "Finish early" : {
+      "comment" : "Guided workout: the quiet secondary that ends a timed cardio or stretch session before its last part and logs the time done so far.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Finish early"
+          }
+        }
+      }
+    },
     "Finish set" : {
 
     },
@@ -3043,6 +3553,17 @@
     },
     "First day of cycle" : {
 
+    },
+    "Fix any set that went differently. Fernlet plans your next weights from these." : {
+      "comment" : "Edit workout: the note above each exercise's sets. Correcting a set changes the weights Fernlet suggests next time.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fix any set that went differently. Fernlet plans your next weights from these."
+          }
+        }
+      }
     },
     "Floss Rope" : {
       "comment" : "Silly stat title: floss used, laid end to end"
@@ -3170,6 +3691,17 @@
     "From Apple Health · Fernlet" : {
 
     },
+    "From now on, Fernlet plans %@ instead of %@." : {
+      "comment" : "Plan editor: a saved swap, written on Save; the arguments are the new and the original exercise",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "From now on, Fernlet plans %1$@ instead of %2$@."
+          }
+        }
+      }
+    },
     "From recipe" : {
 
     },
@@ -3179,8 +3711,30 @@
     "Gastrotrich Lifetimes" : {
       "comment" : "Silly stat title: how long the user has known the companion, in lifetimes of a tiny pond animal"
     },
+    "Gentle stretch" : {
+      "comment" : "Voice Control name for the rest day's optional 'Guide me through a gentle stretch' button.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Gentle stretch"
+          }
+        }
+      }
+    },
     "Get into position" : {
 
+    },
+    "Get ready" : {
+      "comment" : "Guided cardio: the caption over the countdown during the five seconds before a cardio part's time starts (a stretch says 'Get into position').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Get ready"
+          }
+        }
+      }
     },
     "Getting ready" : {
 
@@ -3196,6 +3750,39 @@
     },
     "Go back to it" : {
 
+    },
+    "Go — easy." : {
+      "comment" : "VoiceOver, guided cardio: spoken when the 'Get ready' lead-in ends and an easy part's time starts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go — easy."
+          }
+        }
+      }
+    },
+    "Go — hard." : {
+      "comment" : "VoiceOver, guided cardio: spoken when the 'Get ready' lead-in ends and a hard part's time starts — the cardio form of 'Hold now.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go — hard."
+          }
+        }
+      }
+    },
+    "Go — steady." : {
+      "comment" : "VoiceOver, guided cardio: spoken when the 'Get ready' lead-in ends and a steady session's time starts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Go — steady."
+          }
+        }
+      }
     },
     "Goal" : {
 
@@ -3248,6 +3835,28 @@
     "Guidance style" : {
 
     },
+    "Guide me through a gentle stretch" : {
+      "comment" : "Voice Control name for the rest day's optional gentle stretch button: its drawn words without the length.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Guide me through a gentle stretch"
+          }
+        }
+      }
+    },
+    "Guide me through a gentle stretch, about 8 minutes" : {
+      "comment" : "Suggest sheet on a rest day (the person marked themselves unwell): a quiet, optional button that starts an eight-minute guided floor stretch. Never the screen's main action.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Guide me through a gentle stretch, about 8 minutes"
+          }
+        }
+      }
+    },
     "Hand a recipe over in person." : {
 
     },
@@ -3257,8 +3866,55 @@
     "Haptics" : {
 
     },
+    "Hard for %@. Round %lld of %lld." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an interval's hard part begins. %1$@ is its length in words ('1 minute'); then the round and the rounds in all.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard for %1$@. Round %2$lld of %3$lld."
+          }
+        }
+      }
+    },
+    "Hard for you, not all-out." : {
+      "comment" : "Guided cardio: the gentle line under the card during an interval's hard part. Effort is relative to the person; never a push to the limit.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard for you, not all-out."
+          }
+        }
+      }
+    },
+    "Hard pace for %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as a hard steady segment begins. %@ is its length in words ('20 minutes').",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard pace for %@."
+          }
+        }
+      }
+    },
+    "Hard sets per muscle" : {
+      "comment" : "Weekly totals screen: heading of the section with the week's working sets for each muscle group."
+    },
     "Hard — talking takes effort." : {
 
+    },
+    "Hard, round %lld of %lld." : {
+      "comment" : "Guided cardio, spoken cue: an interval's hard part begins — its round and the rounds in all, e.g. 'Hard, round 3 of 8.' Hard for this person, not all-out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard, round %1$lld of %2$lld."
+          }
+        }
+      }
     },
     "Have the other phone scan this answer." : {
 
@@ -3305,6 +3961,50 @@
     "Heart %@" : {
 
     },
+    "Heart rate %lld, aiming for %lld to %lld, %@" : {
+      "comment" : "VoiceOver, guided cardio: the live heart rate, the range to aim for and where it sits, e.g. 'Heart rate 118, aiming for 110 to 125, a little high'. The last part is 'in range', 'a little high' or 'a little low'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate %1$lld, aiming for %2$lld to %3$lld, %4$@"
+          }
+        }
+      }
+    },
+    "Heart rate a little high." : {
+      "comment" : "VoiceOver, guided cardio: spoken with the opt-in zone nudge when the heart rate has sat above the target range for a while. Gentle — never a warning.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate a little high."
+          }
+        }
+      }
+    },
+    "Heart rate a little low." : {
+      "comment" : "VoiceOver, guided cardio: spoken with the opt-in zone nudge when the heart rate has sat below the target range for a while. Gentle — never a push.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate a little low."
+          }
+        }
+      }
+    },
+    "Heart rate during cardio" : {
+      "comment" : "Workout setup, Cues during a workout: the switch that reads live heart rate during guided cardio (from earbuds or a strap, through Apple Health). Off until turned on.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heart rate during cardio"
+          }
+        }
+      }
+    },
     "Hearts" : {
 
     },
@@ -3329,6 +4029,12 @@
     "Hidden" : {
 
     },
+    "Hidden from suggestions" : {
+
+    },
+    "Hidden from suggestions. You can show it again in Workout setup." : {
+      "comment" : "Plan editor: this exercise was already hidden in Workout setup"
+    },
     "Hide fertile window" : {
 
     },
@@ -3344,14 +4050,42 @@
     "Hold both phones together. One of them is the phone you're protecting; the other becomes its recovery device and will hold the only key that can open it again." : {
 
     },
+    "Hold now." : {
+      "comment" : "Spoken to VoiceOver when a timed step's 'Get into position' lead-in ends and the person should start holding (a stretch, a plank, a carry).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold now."
+          }
+        }
+      }
+    },
+    "Hold's done." : {
+      "comment" : "Guided workout, spoken cue: a timed hold (a stretch, a plank, a carry) ran out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold's done."
+          }
+        }
+      }
+    },
     "Holds a heart until you're next nearby." : {
 
+    },
+    "Home set %@" : {
+      "comment" : "Location editor, Weights I have: dumbbell preset, a fixed home set; the argument is the range, e.g. 5–25 lb"
     },
     "Home widgets" : {
 
     },
     "Homemade, any size" : {
 
+    },
+    "Horizontal is straight out in front, like a row. Vertical is overhead, like a pull-up." : {
+      "comment" : "Custom exercise form: explains the two directions"
     },
     "Hours (e.g. 7.5)" : {
 
@@ -3368,7 +4102,21 @@
     "How are you feeling?" : {
 
     },
+    "How did it feel?" : {
+      "comment" : "Set editor: asks, after the fact, how an exercise felt; the answers are Easy, Good and Tough (optional).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How did it feel?"
+          }
+        }
+      }
+    },
     "How friends will see you" : {
+
+    },
+    "How long?" : {
 
     },
     "How many bottles of water to log." : {
@@ -3378,6 +4126,15 @@
 
     },
     "How many servings?" : {
+
+    },
+    "How to" : {
+
+    },
+    "How to do %@" : {
+
+    },
+    "How to do it" : {
 
     },
     "How today felt" : {
@@ -3406,6 +4163,28 @@
     },
     "I understand — continue" : {
 
+    },
+    "I'll time each part and tell you when it changes. Go at a pace that feels good — you can stop whenever you like." : {
+      "comment" : "Guided workout Ready screen for a timed cardio session (steady or intervals).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I'll time each part and tell you when it changes. Go at a pace that feels good — you can stop whenever you like."
+          }
+        }
+      }
+    },
+    "I'll time each stretch and move you on by myself. Ease in, and never bounce or push into pain." : {
+      "comment" : "Guided workout Ready screen for a Mobility day's timed stretch session.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "I'll time each stretch and move you on by myself. Ease in, and never bounce or push into pain."
+          }
+        }
+      }
     },
     "I'm %lld or older" : {
 
@@ -3442,6 +4221,17 @@
     },
     "If you use Fernlet on another device, this reaches it the next time that device syncs — and a device you're using right then may re-add its most recent days and any custom clothing designs it still has." : {
 
+    },
+    "If you went outside the range, why?" : {
+      "comment" : "Edit workout: question above the reasons a lifter picked a weight outside the range Fernlet suggested (Too heavy, Too light, Equipment, Pain, Preference, Other). Optional.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you went outside the range, why?"
+          }
+        }
+      }
     },
     "Import" : {
 
@@ -3498,6 +4288,9 @@
 
     },
     "Include picture" : {
+
+    },
+    "Info" : {
 
     },
     "Ingredient substitution" : {
@@ -3602,6 +4395,28 @@
     "Journal, cycle, worry box" : {
 
     },
+    "Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today." : {
+      "comment" : "Guided workout Ready screen for the rest day's optional gentle stretch, on a day the person marked themselves unwell. Never pushes.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Just a few easy stretches, kneeling, lying and sitting. Stop whenever you've had enough — resting counts just as much today."
+          }
+        }
+      }
+    },
+    "Just the bar" : {
+      "comment" : "Guided workout, Plates: the weight is the empty bar, with no plates on it.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Just the bar"
+          }
+        }
+      }
+    },
     "Keep Fernlet data out of device backups?" : {
 
     },
@@ -3635,6 +4450,9 @@
     "Keep it, or turn it off. Either way, you can change it later." : {
 
     },
+    "Keep suggesting %@" : {
+      "comment" : "Spoken name of the Undo button under a Don't suggest mark; the argument is the exercise"
+    },
     "Keep this in your recipe book to log again later." : {
 
     },
@@ -3649,6 +4467,12 @@
     },
     "Kept on purpose" : {
 
+    },
+    "Kettlebell weight" : {
+      "comment" : "Location editor, Weights I have: field for a kettlebell size not offered as a chip"
+    },
+    "Kettlebells" : {
+      "comment" : "Location editor, Weights I have: heading of the kettlebell block"
     },
     "Kind" : {
 
@@ -3687,6 +4511,9 @@
     "Leave" : {
 
     },
+    "Left out because of your note: %@" : {
+      "comment" : "Body areas the free-text injury note names, which the planner leaves out; the argument is a list of areas"
+    },
     "Left side" : {
 
     },
@@ -3720,6 +4547,17 @@
     "Light and steady — just waking things up." : {
 
     },
+    "Light on purpose — just getting ready." : {
+      "comment" : "Guided workout: the cue on a warm-up set (a lighter set before a lift's working sets or a strength check).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Light on purpose — just getting ready."
+          }
+        }
+      }
+    },
     "Lighter" : {
 
     },
@@ -3737,6 +4575,9 @@
     },
     "Loading tier 2 memories…" : {
 
+    },
+    "Loads you can make: %@" : {
+      "comment" : "Location editor, Weights I have: the lightest to heaviest barbell load the bar and plates make, e.g. 45–405 lb"
     },
     "Local backup" : {
 
@@ -3828,6 +4669,17 @@
     "Log recipe as meal" : {
 
     },
+    "Log set by set" : {
+      "comment" : "Log workout sheet: switch that gives each set of an exercise its own reps and weight instead of one sets × reps × weight entry. Also a Voice Control name for the switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log set by set"
+          }
+        }
+      }
+    },
     "Log sleep" : {
 
     },
@@ -3916,6 +4768,9 @@
           }
         }
       }
+    },
+    "Main muscles" : {
+
     },
     "Make Fernlet yours" : {
 
@@ -4053,6 +4908,12 @@
     "Micronutrients" : {
 
     },
+    "Mild" : {
+      "comment" : "Injury picker option: train around this body area, lighter"
+    },
+    "Mild: Fernlet trains around it, lighter and with supported moves. Severe: those moves are left out." : {
+      "comment" : "Explains the two severities in the workout injury picker"
+    },
     "Milestone gifts have added %lld coins to your pouch." : {
 
     },
@@ -4064,6 +4925,28 @@
     },
     "Mindfulness" : {
 
+    },
+    "Minus 15" : {
+      "comment" : "Voice Control short name for the '−15 s' rest button.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Minus 15"
+          }
+        }
+      }
+    },
+    "Minus 15 seconds" : {
+      "comment" : "Voice Control name for the '−15 s' rest button: the drawn text, spoken.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Minus 15 seconds"
+          }
+        }
+      }
     },
     "Mirror" : {
 
@@ -4143,6 +5026,9 @@
     "Multiple devices" : {
 
     },
+    "Muscles to rest" : {
+      "comment" : "Caption over the single-muscle chips in the workout injury section"
+    },
     "Name" : {
 
     },
@@ -4175,6 +5061,17 @@
     },
     "Nearby recipe shares" : {
       "extractionState" : "manual"
+    },
+    "Needs workout sharing with Apple Health — turn it on in Settings › Health." : {
+      "comment" : "Workout setup: shown under the heart-rate switches while Fernlet does not share workouts with Apple Health, which the live heart rate needs. 'Settings › Health' is Fernlet's own Settings screen.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Needs workout sharing with Apple Health — turn it on in Settings › Health."
+          }
+        }
+      }
     },
     "New item" : {
 
@@ -4261,6 +5158,9 @@
     "No activities yet — start one above, or wait for a nearby friend to invite you." : {
 
     },
+    "No aerobic minutes logged." : {
+      "comment" : "Weekly totals screen: the aerobic section when the week has no aerobic minutes. Plain and quiet, never a nudge."
+    },
     "No biometric authentication available on this device." : {
 
     },
@@ -4299,6 +5199,9 @@
     },
     "No journal entries" : {
 
+    },
+    "No lifting sets logged." : {
+      "comment" : "Weekly totals screen: the sets section when the week has no lifting sets. Plain and quiet, never a nudge."
     },
     "No macros yet" : {
 
@@ -4348,6 +5251,9 @@
     "No rush getting started." : {
 
     },
+    "No saved swaps. Swap an exercise in a plan's Edit sheet, then tap Always use this instead." : {
+      "comment" : "Your exercises: the empty saved-swaps list"
+    },
     "No score — nothing was logged" : {
 
     },
@@ -4365,6 +5271,17 @@
     },
     "No usable answer — Fernlet used its own logic" : {
 
+    },
+    "No workout is running, so there's no rest to change." : {
+      "comment" : "Siri / Shortcuts: spoken when '+15 s' or '−15 s' ran with no guided workout in progress.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No workout is running, so there's no rest to change."
+          }
+        }
+      }
     },
     "No workout is running, so there's no rest to skip." : {
 
@@ -4386,6 +5303,9 @@
     },
     "Nobody has joined this session yet — that message wasn't sent. Try again in a moment." : {
 
+    },
+    "None" : {
+      "comment" : "Injury picker option: no limit for this body area"
     },
     "None logged" : {
 
@@ -4447,11 +5367,17 @@
     "Nothing after this one" : {
 
     },
+    "Nothing else here works the same muscles the same way. Search for any exercise below." : {
+      "comment" : "Swap sheet: no ready alternatives for this exercise at this location"
+    },
     "Nothing for sale right now." : {
 
     },
     "Nothing is added until you tap this. You can edit or delete any day afterwards." : {
 
+    },
+    "Nothing is hidden. In a plan's Edit sheet, tap Don't suggest on an exercise to keep it out of your plans." : {
+      "comment" : "Your exercises: the empty hidden list"
     },
     "Nothing planned yet — I can put something together." : {
 
@@ -4546,6 +5472,9 @@
     "One shared item couldn't be kept just now. Fernlet makes room as items finish or expire." : {
 
     },
+    "One side at a time" : {
+      "comment" : "Custom exercise form: switch for an exercise done one side, then the other"
+    },
     "One small care note is still a real note." : {
 
     },
@@ -4560,6 +5489,9 @@
     },
     "Only say yes if that phone is in front of you and it is the one you set this up with. Saying yes hands back the key to everything it had sealed." : {
 
+    },
+    "Only strength exercises fill a session's lifting, and a mobility stretch can join the cool-down. Power, balance and cardio moves are there to log." : {
+      "comment" : "Custom exercise form: how the kind of training decides where the exercise is planned"
     },
     "Only with a spotter or safety arms. Stop if your form breaks, and skip it when you're sore, sick or short on sleep." : {
 
@@ -4627,6 +5559,9 @@
     "Opens calm tools: breathing, grounding, and the worry box" : {
 
     },
+    "Opens it to edit" : {
+      "comment" : "Your exercises: what tapping a custom exercise does"
+    },
     "Opens where you train" : {
 
     },
@@ -4636,7 +5571,13 @@
     "Optional" : {
 
     },
+    "Optional. With these set, Fernlet suggests only weights you can make here, and adds reps before a big jump." : {
+      "comment" : "Location editor: what listing the weights a space has does"
+    },
     "Options for %@" : {
+
+    },
+    "Or search" : {
 
     },
     "Oreos and other sandwich cookies" : {
@@ -4646,6 +5587,9 @@
 
     },
     "Other cycle sample" : {
+
+    },
+    "Other muscles it works" : {
 
     },
     "Ovulation test" : {
@@ -4721,6 +5665,9 @@
     },
     "Pain, form issues, stopped early..." : {
 
+    },
+    "Pairs, by the weight of one dumbbell." : {
+      "comment" : "Location editor, Weights I have: how dumbbell weights are counted"
     },
     "Part %lld of %lld" : {
       "localizations" : {
@@ -4929,6 +5876,9 @@
     "Pick up your last session" : {
 
     },
+    "Picks the best split for you" : {
+
+    },
     "Pizza Pie Chart" : {
       "comment" : "Silly stat title"
     },
@@ -4974,8 +5924,41 @@
     "Plans your workouts around this space" : {
 
     },
+    "Plates" : {
+      "comment" : "Guided workout: the disclosure under a barbell lift's weight that shows the plates for each side.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plates"
+          }
+        }
+      }
+    },
     "Please try again." : {
 
+    },
+    "Plus 15" : {
+      "comment" : "Voice Control short name for the '+15 s' rest button.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plus 15"
+          }
+        }
+      }
+    },
+    "Plus 15 seconds" : {
+      "comment" : "Voice Control name for the '+15 s' rest button: the drawn text, spoken.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Plus 15 seconds"
+          }
+        }
+      }
     },
     "Point at the code on the other phone's screen." : {
 
@@ -5139,8 +6122,8 @@
     "RPE (1–10)" : {
 
     },
-    "Ramp-up set — light, just getting ready." : {
-
+    "Rack %@" : {
+      "comment" : "Location editor, Weights I have: dumbbell preset, a full gym rack; the argument is the range, e.g. 5–100 lb"
     },
     "Range %@ · suggested %@" : {
       "localizations" : {
@@ -5194,6 +6177,17 @@
     "Ready when you are" : {
       "comment" : "Shown and spoken by the breathing pacer while no session is running. Unhurried and permission-giving — the tool waits, it does not prompt."
     },
+    "Ready when you are — I'll time each part and move you on. No pressure." : {
+      "comment" : "Move tab, 'Today's workout' card: today's session is timed cardio or a stretch session rather than sets.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ready when you are — I'll time each part and move you on. No pressure."
+          }
+        }
+      }
+    },
     "Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure." : {
 
     },
@@ -5246,6 +6240,9 @@
 
     },
     "Recipes, plans, your photos and polaroids" : {
+
+    },
+    "Recommended" : {
 
     },
     "Recorded by a newer version of Fernlet. Shown exactly as it was recorded, because this version has no name for it." : {
@@ -5401,6 +6398,17 @@
     "Remove recovery device?" : {
 
     },
+    "Remove set %lld" : {
+      "comment" : "Set editor: the button that deletes one set's row, e.g. 'Remove set 3'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove set %lld"
+          }
+        }
+      }
+    },
     "Remove step %lld" : {
 
     },
@@ -5436,6 +6444,17 @@
     },
     "Repeat cooking step" : {
 
+    },
+    "Repeat last set" : {
+      "comment" : "Set editor: adds a copy of the last set, its reps and its weight.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Repeat last set"
+          }
+        }
+      }
     },
     "Repeat step" : {
 
@@ -5482,6 +6501,9 @@
     },
     "Replaces a backup this iPhone can't open." : {
       "comment" : "Accessibility hint for Start a new backup on a Sealed backup (journal or intimate logs)."
+    },
+    "Replaces your dumbbell list" : {
+      "comment" : "Location editor, Weights I have: VoiceOver hint on a dumbbell preset"
     },
     "Report" : {
 
@@ -5596,6 +6618,17 @@
     "Rest skipped. Your next set is up." : {
 
     },
+    "Rest's over." : {
+      "comment" : "Guided workout, spoken cue: a rest's timer reached zero. Gentle — the rest waits for the person; this only says the timer ran out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest's over."
+          }
+        }
+      }
+    },
     "Rest's over. Start your next set when you're ready." : {
 
     },
@@ -5668,6 +6701,39 @@
     },
     "Room for a little more" : {
 
+    },
+    "Round %lld of %lld" : {
+      "comment" : "Guided cardio: an interval's round on the runner card, e.g. 'Round 3 of 8'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Round %lld of %lld, %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as an interval part with no named pace begins: the round, the rounds in all, and its length in words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld, %3$@."
+          }
+        }
+      }
+    },
+    "Round %lld of %lld." : {
+      "comment" : "Guided cardio, spoken cue: an interval part with no named pace begins — its round and the rounds in all, e.g. 'Round 3 of 8.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Round %1$lld of %2$lld."
+          }
+        }
+      }
     },
     "Run a media at-rest conversion pass?" : {
 
@@ -5745,6 +6811,9 @@
 
     },
     "Saved recipe %@" : {
+
+    },
+    "Saved swaps" : {
 
     },
     "Saved to Apple Health" : {
@@ -5986,6 +7055,9 @@
     "Session info" : {
 
     },
+    "Session length" : {
+
+    },
     "Session messages" : {
 
     },
@@ -6000,6 +7072,17 @@
     },
     "Set" : {
 
+    },
+    "Set %lld" : {
+      "comment" : "Set editor: the label at the start of one set's row, e.g. 'Set 2'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %lld"
+          }
+        }
+      }
     },
     "Set %lld of %lld" : {
       "localizations" : {
@@ -6021,6 +7104,39 @@
         }
       }
     },
+    "Set %lld reps" : {
+      "comment" : "Set editor: the short Voice Control name of a set's reps stepper, e.g. 'Set 2 reps'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %lld reps"
+          }
+        }
+      }
+    },
+    "Set %lld weight" : {
+      "comment" : "Set editor: the short Voice Control name of a set's weight field, e.g. 'Set 2 weight'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %lld weight"
+          }
+        }
+      }
+    },
+    "Set %lld weight, %@" : {
+      "comment" : "Set editor: what VoiceOver says for a set's weight field — the set number, then the weight unit spelled out by the system, e.g. 'Set 2 weight, pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld weight, %2$@"
+          }
+        }
+      }
+    },
     "Set %lld: %lld reps" : {
       "localizations" : {
         "en" : {
@@ -6033,6 +7149,17 @@
     },
     "Set a passcode" : {
 
+    },
+    "Set by set" : {
+      "comment" : "Log workout sheet: a short Voice Control name for the 'Log set by set' switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set by set"
+          }
+        }
+      }
     },
     "Set done. Resting now." : {
 
@@ -6067,6 +7194,9 @@
     "Sets" : {
 
     },
+    "Sets per muscle and aerobic minutes, as logged." : {
+      "comment" : "Subtitle of the Weekly totals screen."
+    },
     "Sets × reps × weight in your logged exercises. A line without a weight doesn't add any." : {
       "comment" : "Silly stat: how weight lifted is counted"
     },
@@ -6075,6 +7205,9 @@
     },
     "Settings" : {
 
+    },
+    "Severe" : {
+      "comment" : "Injury picker option: leave this body area's exercises out"
     },
     "Shakespeare Steps" : {
       "comment" : "Silly stat title: steps compared with words Shakespeare wrote"
@@ -6148,8 +7281,17 @@
     "Shopping list" : {
 
     },
+    "Short is about four minutes of the stretch flow, picked for the muscles you're training. Off skips it." : {
+      "comment" : "Workout setup: what the Short and Off warm-up choices do"
+    },
     "Shorter rest" : {
 
+    },
+    "Show %@ again" : {
+      "comment" : "Spoken name of the Show again button; the argument is the exercise"
+    },
+    "Show again" : {
+      "comment" : "Your exercises: let Fernlet suggest this exercise again"
     },
     "Show calories" : {
 
@@ -6196,6 +7338,17 @@
     "Skip" : {
 
     },
+    "Skip cardio" : {
+      "comment" : "Guided workout: the quiet secondary that skips the rest of a timed cardio block and moves on to the cool-down.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skip cardio"
+          }
+        }
+      }
+    },
     "Skip cool-down" : {
 
     },
@@ -6216,6 +7369,28 @@
     },
     "Skip warm-up" : {
 
+    },
+    "Skip warm-up sets" : {
+      "comment" : "Guided workout: the quiet secondary on a warm-up set that skips the lift's remaining warm-up sets and goes to its first working set.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skip warm-up sets"
+          }
+        }
+      }
+    },
+    "Skip warm-ups" : {
+      "comment" : "Guided workout, Voice Control: a short name for 'Skip warm-up sets'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Skip warm-ups"
+          }
+        }
+      }
     },
     "Sleep" : {
 
@@ -6243,6 +7418,17 @@
     },
     "Small tools for a heavy moment. Pick whatever feels kind — or nothing at all." : {
 
+    },
+    "Smooth, easy reps — save your effort for the working sets." : {
+      "comment" : "Guided workout: the gentle line under a warm-up set's card.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Smooth, easy reps — save your effort for the working sets."
+          }
+        }
+      }
     },
     "Snap a photo when you log a meal and it'll show up here as a polaroid." : {
 
@@ -6310,6 +7496,28 @@
     "Split into parts" : {
 
     },
+    "Spoken cues" : {
+      "comment" : "Workout setup sheet, Cues during a workout: the switch that turns on spoken cues — the runner says the next exercise, its weight, and when a rest or a hold ends. Off by default.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spoken cues"
+          }
+        }
+      }
+    },
+    "Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. In headphones your music dips while they speak and a podcast pauses, then both carry on; on the phone's speaker they follow your ring/silent switch. With VoiceOver on, VoiceOver says them instead." : {
+      "comment" : "Workout setup sheet: the note under the Spoken cues switch. Music is ducked (made quieter), never paused, in headphones; a podcast or audiobook pauses and resumes. 'ring/silent switch' is the iPhone's Ring/Silent switch or Action button setting.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Spoken cues say the next exercise and side, its suggested weight and last time, an interval's pace and round, and when a rest or a hold ends, only while Fernlet is open. In headphones your music dips while they speak and a podcast pauses, then both carry on; on the phone's speaker they follow your ring/silent switch. With VoiceOver on, VoiceOver says them instead."
+          }
+        }
+      }
+    },
     "Sport" : {
 
     },
@@ -6327,6 +7535,17 @@
     },
     "Start %@ timer" : {
 
+    },
+    "Start %@, guided" : {
+      "comment" : "VoiceOver label for a planned workout row's Start button, which runs the plan in the guided runner. %@ is the planned workout's name.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start %@, guided"
+          }
+        }
+      }
     },
     "Start Fernlet" : {
 
@@ -6370,6 +7589,17 @@
     "Start on your other phone: open Settings → App lock → Recovery device, choose \"This is the recovery device\", and scan the code it shows." : {
 
     },
+    "Start plan" : {
+      "comment" : "Voice Control name for a planned workout row's Start button (it runs the plan in the guided runner).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start plan"
+          }
+        }
+      }
+    },
     "Start this one instead" : {
 
     },
@@ -6387,6 +7617,17 @@
     },
     "Stays sealed on this device only — worries never sync anywhere." : {
 
+    },
+    "Steady pace for %@." : {
+      "comment" : "VoiceOver, guided cardio: spoken as a steady-state segment begins. %@ is its length in words.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady pace for %@."
+          }
+        }
+      }
     },
     "Steady — you've got this." : {
 
@@ -6423,6 +7664,9 @@
     "Stop" : {
 
     },
+    "Stop always using %@" : {
+      "comment" : "Spoken name of the Undo button under a saved swap; the argument is the exercise"
+    },
     "Stop backing up this iPhone's cycle history?" : {
 
     },
@@ -6438,8 +7682,14 @@
     "Stop cooking %@?" : {
 
     },
+    "Stop if you feel sharp pain." : {
+
+    },
     "Stop sharing" : {
 
+    },
+    "Stop swapping %@" : {
+      "comment" : "Spoken name of a saved swap's Remove button; the argument is the original exercise"
     },
     "Stop syncing now, or also delete iCloud data." : {
 
@@ -6462,6 +7712,17 @@
     "Strength" : {
 
     },
+    "Stretch %lld of %lld · %lld min left" : {
+      "comment" : "Guided stretch session header: the stretch's position in the session, the stretches in all, and the minutes left.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stretch %1$lld of %2$lld · %3$lld min left"
+          }
+        }
+      }
+    },
     "Suggest" : {
 
     },
@@ -6476,6 +7737,28 @@
     },
     "Suggest workout" : {
 
+    },
+    "Suggested %@" : {
+      "comment" : "Guided workout: the weight Fernlet suggests for a set with one fixed weight (a warm-up set or a strength check), e.g. 'Suggested 95 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested %@"
+          }
+        }
+      }
+    },
+    "Suggested weight %@" : {
+      "comment" : "VoiceOver, Live Activity: the weight Fernlet suggests for this set, e.g. 'Suggested weight 105 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Suggested weight %@"
+          }
+        }
+      }
     },
     "Suggestions" : {
 
@@ -6497,6 +7780,9 @@
     },
     "Swap ingredient" : {
 
+    },
+    "Swapped in for %@." : {
+      "comment" : "Plan editor: this exercise replaced another; the argument is the one it replaced"
     },
     "Swim and ride distances from your logged workouts." : {
       "comment" : "Silly stat: how swim and ride distance is counted"
@@ -6536,6 +7822,17 @@
     "TWO-COLUMN LABEL DETECTED" : {
 
     },
+    "Take 15 seconds off the rest" : {
+      "comment" : "Workout rest: the '−15 s' button's spoken name and its Shortcuts action title — takes 15 seconds off the rest timer.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Take 15 seconds off the rest"
+          }
+        }
+      }
+    },
     "Take a photo" : {
 
     },
@@ -6548,11 +7845,25 @@
     "Take photo" : {
 
     },
+    "Takes 15 seconds off your current rest, always leaving at least 5 seconds." : {
+      "comment" : "Shortcuts: description of the 'Take 15 seconds off the rest' action.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Takes 15 seconds off your current rest, always leaving at least 5 seconds."
+          }
+        }
+      }
+    },
     "Tap a slot to change it." : {
 
     },
     "Tap anywhere when you're ready for the next one — take all the time you like." : {
 
+    },
+    "Tap each size you have." : {
+      "comment" : "Location editor, Weights I have: how to use the kettlebell size chips"
     },
     "Tap to log it again with today's time." : {
 
@@ -6577,6 +7888,9 @@
     },
     "That code didn't match" : {
 
+    },
+    "That list is full. Remove one to add another." : {
+      "comment" : "Location editor, Weights I have: shown when a typed weight can't be added because the list is at its limit"
     },
     "That phone can no longer recover this one. Your data is untouched — but if you arm the recovery lock again you will need to enrol a device first." : {
 
@@ -6634,6 +7948,9 @@
     },
     "The %@ preset is behind Add." : {
 
+    },
+    "The bar, and how many pairs of each plate." : {
+      "comment" : "Location editor, Weights I have: what the barbell block asks for"
     },
     "The box holds about 300 characters." : {
 
@@ -6717,6 +8034,9 @@
 
     },
     "Theme, backgrounds, companion, Home widgets" : {
+
+    },
+    "There's no how-to for this exercise yet." : {
 
     },
     "These are optional except age. Fernlet never asks for weight goals." : {
@@ -6878,6 +8198,9 @@
     "This version can't say where this went" : {
 
     },
+    "This week" : {
+      "comment" : "Weekly totals screen: caption under the date range when it is the current week."
+    },
     "This will delete data from iCloud, which may also remove it from other Fernlet devices signed into the same Apple ID. Your encrypted (sealed) backups in iCloud are deleted too — if you lose this device, that data can't be recovered. This device keeps a local copy of everything else." : {
 
     },
@@ -6898,6 +8221,17 @@
     },
     "Time" : {
 
+    },
+    "Time's up on this part." : {
+      "comment" : "Guided cardio, spoken cue: one timed part of a cardio session (an interval's hard or easy part, or a stretch of steady cardio) ran out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Time's up on this part."
+          }
+        }
+      }
     },
     "Timer's up — tap Next when you're ready. Nothing advances on its own." : {
 
@@ -6950,6 +8284,28 @@
     },
     "Too light" : {
 
+    },
+    "Took 15 seconds off the rest." : {
+      "comment" : "VoiceOver, workout runner: spoken after the '−15 s' button shortened the rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Took 15 seconds off the rest."
+          }
+        }
+      }
+    },
+    "Took 15 seconds off your rest." : {
+      "comment" : "Siri / Shortcuts: spoken after '−15 s' shortened the rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Took 15 seconds off your rest."
+          }
+        }
+      }
     },
     "Total Tonnage" : {
       "comment" : "Silly stat title: total weight lifted"
@@ -7074,6 +8430,17 @@
     "Two minutes per brushing." : {
       "comment" : "Silly stat: how brushing time is counted"
     },
+    "Two or three lighter sets that build up to the working weight on barbell and other big lifts. Never on a light day, or before a lift has a weight to build up to." : {
+      "comment" : "Workout setup: the note under 'Warm-up sets before heavy lifts'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Two or three lighter sets that build up to the working weight on barbell and other big lifts. Never on a light day, or before a lift has a weight to build up to."
+          }
+        }
+      }
+    },
     "Type %@ to confirm" : {
 
     },
@@ -7161,8 +8528,30 @@
     "Use the flashlight in dim lighting." : {
 
     },
+    "Use typed name" : {
+      "comment" : "Log workout sheet, set by set: the Voice Control name of the button that uses the typed text as the exercise.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use typed name"
+          }
+        }
+      }
+    },
     "Use values" : {
 
+    },
+    "Use “%@”" : {
+      "comment" : "Log workout sheet, set by set: picks the typed text as the exercise when it names nothing in the exercise list, e.g. 'Use “Sled push”'. The quotes surround what the person typed.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use “%@”"
+          }
+        }
+      }
     },
     "Useless numbers, lovingly counted. They turn up as you log." : {
 
@@ -7210,6 +8599,53 @@
         }
       }
     },
+    "Warm-up set" : {
+      "comment" : "Guided workout, Up next list: the caption under a lighter warm-up set before a lift.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up set"
+          }
+        }
+      }
+    },
+    "Warm-up set %lld of %lld" : {
+      "comment" : "Guided workout: the label on a lighter warm-up set before a lift's working sets, e.g. 'Warm-up set 1 of 3'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up set %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Warm-up set %lld of %lld: %@." : {
+      "comment" : "Guided workout, VoiceOver and spoken cues: the run moved onto a lighter warm-up set, e.g. 'Warm-up set 1 of 3: Back squat.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up set %1$lld of %2$lld: %3$@."
+          }
+        }
+      }
+    },
+    "Warm-up sets before heavy lifts" : {
+      "comment" : "Workout setup: the switch that puts lighter warm-up sets before barbell and other big lifts.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Warm-up sets before heavy lifts"
+          }
+        }
+      }
+    },
+    "Warm-up stretches" : {
+
+    },
     "Warm-up · %lld stretches" : {
 
     },
@@ -7241,6 +8677,17 @@
     "We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good." : {
 
     },
+    "We'll walk through it together. Go at a pace that feels good." : {
+      "comment" : "Guided workout Ready screen for a session that is neither sets nor timed cardio or stretching.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "We'll walk through it together. Go at a pace that feels good."
+          }
+        }
+      }
+    },
     "We've been friends for ^[%@ gastrotrich lifetime](inflect: true). They're tiny and live about three days." : {
       "comment" : "Companion line about how long the user has had the app"
     },
@@ -7256,11 +8703,39 @@
     "Web nutrition search" : {
 
     },
+    "Weekly totals" : {
+      "comment" : "Title of the Move tab screen with one week's sets per muscle and aerobic minutes; also the label of the link that opens it."
+    },
     "Weight" : {
 
     },
+    "Weight %@" : {
+      "comment" : "VoiceOver, Live Activity: the weight the lifter picked for this set, e.g. 'Weight 110 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight %@"
+          }
+        }
+      }
+    },
     "Weight and height, for macro targets." : {
 
+    },
+    "Weight unit" : {
+      "comment" : "Set editor: caption of the pounds / kilograms choice for every weight of one exercise.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight unit"
+          }
+        }
+      }
+    },
+    "Weights I have" : {
+      "comment" : "Location editor: heading of the optional list of dumbbells, kettlebells, bar and plates a space has"
     },
     "Welcome to Fernlet" : {
 
@@ -7368,6 +8843,17 @@
     "Without macros this logs as 0g, so it won't count toward your day. Scan the label to add them — or remember it now and fill them in later." : {
 
     },
+    "Working sets: %@. Set 1 of %lld." : {
+      "comment" : "Guided workout, VoiceOver: the warm-up sets are done and the lift's working sets begin, e.g. 'Working sets: Back squat. Set 1 of 3.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Working sets: %1$@. Set 1 of %2$lld."
+          }
+        }
+      }
+    },
     "Workout" : {
 
     },
@@ -7380,11 +8866,33 @@
     "Workout collision policy" : {
 
     },
+    "Workout done." : {
+      "comment" : "Guided workout, spoken cue: the last step is done and the workout was logged. Calm and factual — no praise.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout done."
+          }
+        }
+      }
+    },
     "Workout exercises" : {
 
     },
     "Workout finished and logged." : {
 
+    },
+    "Workout haptics" : {
+      "comment" : "Workout setup sheet: switch for the guided runner's haptic cues (a tap when a rest or a hold ends). On by default.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout haptics"
+          }
+        }
+      }
     },
     "Workout in progress" : {
 
@@ -7407,6 +8915,17 @@
     "Workout setup" : {
 
     },
+    "Workout sounds" : {
+      "comment" : "Workout setup sheet: switch for the guided runner's quiet sound cues. Off by default.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Workout sounds"
+          }
+        }
+      }
+    },
     "Workout type" : {
 
     },
@@ -7414,6 +8933,9 @@
 
     },
     "Workouts & activity" : {
+
+    },
+    "Works the same muscles" : {
 
     },
     "Worries you've set down. The box keeps them — releasing one lets it go for good." : {
@@ -7497,6 +9019,28 @@
     "You marked yourself unwell, so today is for rest. If moving would feel good, keep it gentle — or skip it entirely." : {
 
     },
+    "You should be able to talk in short sentences." : {
+      "comment" : "Guided cardio: the talk test under the card for an easy or steady part (heart-rate zone 2), shown when there is no live heart rate.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You should be able to talk in short sentences."
+          }
+        }
+      }
+    },
+    "You should only manage a few words at a time." : {
+      "comment" : "Guided cardio: the talk test under the card for an interval's hard part (heart-rate zone 4), shown when there is no live heart rate. Hard for this person, not all-out.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You should only manage a few words at a time."
+          }
+        }
+      }
+    },
     "You were removed from that session. Anything you kept is already saved." : {
 
     },
@@ -7527,6 +9071,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "You're keeping %1$lld of %2$lld shared photos. Once it's full, the oldest quietly make room for new ones — save any you'd like to keep."
+          }
+        }
+      }
+    },
+    "You're not resting right now, so there's no rest to change." : {
+      "comment" : "Siri / Shortcuts: spoken when '+15 s' or '−15 s' ran during a set rather than a rest.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You're not resting right now, so there's no rest to change."
           }
         }
       }
@@ -7654,6 +9209,9 @@
     "Your entry" : {
 
     },
+    "Your exercises" : {
+
+    },
     "Your feet have out-written %@. One step, one word." : {
       "comment" : "Companion line about steps"
     },
@@ -7765,6 +9323,9 @@
     "Your other phone is now showing an answer code. Scan it." : {
 
     },
+    "Your own exercises" : {
+
+    },
     "Your own provider endpoint" : {
 
     },
@@ -7773,6 +9334,17 @@
     },
     "Your place in the steps is forgotten and the Live Activity is cleared. The recipe itself is untouched." : {
 
+    },
+    "Your plan: %@" : {
+      "comment" : "Guided runner: under the exercise's name, the planned workout's line exactly as written (a coach's or the person's own) when it says more than the card shows, e.g. a cue like '(RPE 7)'. %@ is that line, user data.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your plan: %@"
+          }
+        }
+      }
     },
     "Your private calendar." : {
 
@@ -7788,6 +9360,28 @@
     },
     "Your recipes" : {
 
+    },
+    "Your rest is already at its 10-minute limit." : {
+      "comment" : "Spoken when '+15 s' did nothing because the rest is already 10 minutes long (Siri, Shortcuts, and VoiceOver in the runner).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your rest is already at its 10-minute limit."
+          }
+        }
+      }
+    },
+    "Your rest is nearly over, so there's nothing to take off." : {
+      "comment" : "Spoken when '−15 s' did nothing because 5 seconds or less of the rest is left (Siri, Shortcuts, and VoiceOver in the runner).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your rest is nearly over, so there's nothing to take off."
+          }
+        }
+      }
     },
     "Your sealed journal, cycle and intimacy notes are still on this phone. Your recovery device holds the key to them. You will scan codes between the two phones, approve the request there, then choose a new passcode here." : {
 
@@ -7815,6 +9409,17 @@
     },
     "Your verification code, as a QR code for the person you're connecting with to scan" : {
 
+    },
+    "Zone nudges" : {
+      "comment" : "Workout setup, Cues during a workout: the switch for one light tap when the heart rate has drifted out of the target zone for a while. Off until turned on.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Zone nudges"
+          }
+        }
+      }
     },
     "^[%@ Burj Khalifa](inflect: true)" : {
       "comment" : "Silly stats comparison unit: the world's tallest building"
@@ -7926,6 +9531,9 @@
     "^[%lld ingredient](inflect: true) weighed by a USDA typical size (estimate)" : {
 
     },
+    "^[%lld pair](inflect: true)" : {
+      "comment" : "Location editor, Weights I have: how many pairs of one plate size are owned"
+    },
     "^[%lld pat](inflect: true)" : {
       "comment" : "Silly stat headline: lifetime pats"
     },
@@ -7945,6 +9553,28 @@
     },
     "^[%lld tasks](inflect: true)" : {
 
+    },
+    "a little high" : {
+      "comment" : "Guided cardio: the live heart rate is above the target range. Gentle — never a warning; the person may ease off if they like.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little high"
+          }
+        }
+      }
+    },
+    "a little low" : {
+      "comment" : "Guided cardio: the live heart rate is below the target range. Gentle — never a push.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "a little low"
+          }
+        }
+      }
     },
     "a soft tap on each turn" : {
 
@@ -8555,6 +10185,9 @@
         }
       }
     },
+    "e.g. Landmine press" : {
+
+    },
     "e.g. Upper strength" : {
 
     },
@@ -8721,6 +10354,18 @@
     "grams — no calories here" : {
 
     },
+    "guided.replaceRun.message" : {
+      "comment" : "Confirmation before starting a guided workout while another is in progress. The argument is the other session's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is still going. Starting this one will let go of the sets you've already done there."
+          }
+        }
+      }
+    },
     "host" : {
 
     },
@@ -8732,6 +10377,17 @@
     },
     "iOS ended the background session" : {
 
+    },
+    "in range" : {
+      "comment" : "Guided cardio: the live heart rate is inside the target range. Calm, lower case, said beside the reading.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "in range"
+          }
+        }
+      }
     },
     "intent.water.logged" : {
       "comment" : "Siri confirmation after logging water. The number is how many bottles were logged; needs a plural variation per language, and English also needs the one-bottle form.",
@@ -8779,6 +10435,39 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Could not read that label."
+          }
+        }
+      }
+    },
+    "last time %@" : {
+      "comment" : "VoiceOver, Live Activity: last time's weight for this lift, e.g. 'last time 100 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last time %@"
+          }
+        }
+      }
+    },
+    "last time %lld by %@" : {
+      "comment" : "VoiceOver, Live Activity: last time's sets by reps for this lift, e.g. 'last time 3 by 8'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last time %1$lld by %2$@"
+          }
+        }
+      }
+    },
+    "last time %lld by %@ at %@" : {
+      "comment" : "VoiceOver, Live Activity: last time's sets by reps at weight, e.g. 'last time 3 by 8 at 100 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "last time %1$lld by %2$@ at %3$@"
           }
         }
       }
@@ -9499,6 +11188,17 @@
         }
       }
     },
+    "range %@ to %@" : {
+      "comment" : "VoiceOver, Live Activity: the weight range for this set, spoken after the weight, e.g. 'range 95 to 110 pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "range %1$@ to %2$@"
+          }
+        }
+      }
+    },
     "recipeImport.error.aiBudgetExhaustedNotQueued" : {
       "comment" : "Shown when a pasted recipe link needs on-device AI, today's AI budget is spent, AND the link could not be saved for a retry tomorrow — so, unlike the usual resting message, it asks the person to paste it again.",
       "extractionState" : "extracted_with_value",
@@ -9852,11 +11552,178 @@
     "tempo, form note" : {
 
     },
+    "weekly.aerobic.line" : {
+      "comment" : "Weekly totals screen: aerobic minutes logged this week out of the 150-minute guideline, e.g. '95 of 150 minutes'. The first number is what was logged; the second is always 150.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ minutes"
+          }
+        }
+      }
+    },
+    "weekly.aerobic.reference" : {
+      "comment" : "Weekly totals screen: neutral context under the aerobic minutes. The numbers are the World Health Organization's weekly minimums (150 moderate, 75 vigorous). Keep it a plain statement, never advice.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The WHO guideline for adults is at least %1$@ minutes of moderate activity a week, or %2$@ minutes of vigorous activity."
+          }
+        }
+      }
+    },
+    "weekly.aerobic.spoken" : {
+      "comment" : "Weekly totals screen, spoken: aerobic minutes logged this week out of the 150-minute guideline. The first number is what was logged; the second is always 150.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ of %2$@ aerobic minutes"
+          }
+        }
+      }
+    },
+    "weekly.sets.reference" : {
+      "comment" : "Weekly totals screen: neutral context above the per-muscle set counts. The numbers are the low and high ends of the range (10 and 20). Keep it a plain statement, never advice or a target.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@–%2$@ hard sets a week per muscle is a common range for muscle growth."
+          }
+        }
+      }
+    },
+    "weekly.sets.spoken.half" : {
+      "comment" : "Weekly totals screen, spoken after a muscle name: how many hard sets it had this week. The number always has a half (for example 9.5), because helper muscles get half a set.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ hard sets"
+          }
+        }
+      }
+    },
+    "weekly.sets.spoken.whole" : {
+      "comment" : "Weekly totals screen, spoken after a muscle name: how many hard sets it had this week, a whole number. Needs a plural variation per language; English also needs the one-set form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hard set"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld hard sets"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "what to do in this step" : {
 
     },
     "woke up twice..." : {
 
+    },
+    "workout.guided.durationCappedNote" : {
+      "comment" : "Added to the notes of a guided workout whose runner was left open for more than three hours (for example overnight). The logged duration is capped at 3 hours; the sentence tells the person they can correct it in the Edit sheet. Keep the number 3 in step with the cap.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "This session was open for more than 3 hours, so it's logged as 3. Edit the duration if you know the real time."
+          }
+        }
+      }
+    },
+    "workout.pace.easy" : {
+      "comment" : "Guided cardio: the pace of an interval's recovery part or an easy steady session, shown over its countdown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Easy"
+          }
+        }
+      }
+    },
+    "workout.pace.hard" : {
+      "comment" : "Guided cardio: the pace of an interval's work part, shown over its countdown. Hard for this person, not all-out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hard"
+          }
+        }
+      }
+    },
+    "workout.pace.steady" : {
+      "comment" : "Guided cardio: the pace of a steady-state session, shown over its countdown.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Steady"
+          }
+        }
+      }
+    },
+    "workout.sets.weightPrompt" : {
+      "comment" : "Prompt in an empty per-set weight field (Edit workout, Log workout set by set).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight"
+          }
+        }
+      }
+    },
+    "workout.spoken.sentences" : {
+      "comment" : "Guided workout, spoken cues and VoiceOver: two spoken sentences joined into one line, e.g. 'Next: Bench press.' then 'Suggested weight 105 pounds, last time 3 by 8 at 100 pounds'. Change only the separator or the order.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "workoutSetup.consistencyNote" : {
+      "comment" : "Workout setup: a neutral note beside the split options. The argument is the split's name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "You've been consistent with %@ — keep it unless something changed."
+          }
+        }
+      }
     },
     "worryBox.error.compose" : {
       "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
@@ -9946,6 +11813,17 @@
     },
     "…" : {
 
+    },
+    "−15 s" : {
+      "comment" : "Workout rest button: takes 15 seconds off the rest timer. '−' is a minus sign; 's' abbreviates seconds.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "−15 s"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

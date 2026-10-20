@@ -106,6 +106,8 @@
 		6869C3082FB8D39D0098A0F3 /* Exceptions for "Fernlet" folder in "Fernlet" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				"ExerciseMedia/.gitignore",
+				ExerciseMedia/README.md,
 				Info.plist,
 			);
 			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
@@ -139,6 +141,8 @@
 				GuidedWorkoutRunStateStore.swift,
 				LiveActivityRunReflecting.swift,
 				WorkoutActivityAttributes.swift,
+				WorkoutActivityLoadText.swift,
+				WorkoutActivityZoneText.swift,
 			);
 			target = 6869C2E12FB8D39D0098A0F3 /* Fernlet */;
 		};

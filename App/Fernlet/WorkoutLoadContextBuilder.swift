@@ -5,16 +5,18 @@ import FernletFoundation
 /// Builds the planner's ``WorkoutLoadContext`` from the day history.
 ///
 /// Each lift's sessions come from two sources, oldest first:
-/// - a guided row's structured ``ExerciseResult``s (the runner's record of what was prescribed, the
-///   weight picked, and the reps done) — first-class;
-/// - a hand-logged row's lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb") — what the person
-///   wrote is what they did, so it counts as completed. Several lines of one lift on one day keep the
-///   heaviest.
+/// - a row's structured ``ExerciseResult``s (the runner's record of what was prescribed, the weight
+///   picked, and the reps done; a lift entered set by set in the Log sheet; a set corrected later in
+///   the Edit sheet) — first-class;
+/// - a hand-logged row's other lines, read by ``ExerciseLineParser`` ("Squat 5x5 @225lb") — what the
+///   person wrote is what they did, so it counts as completed. Several lines of one lift on one day
+///   keep the heaviest, and a lift the row's own structured record covers is read from the record.
 ///
 /// A guided row WITHOUT results is skipped: it records the plan that was suggested, not what was
 /// lifted (every guided log before load tracking, and the "Mark done" path), so reading it would make
 /// a fixed "4 x 5" plan look like a stall every week. Sleep and protein over the last two weeks feed
-/// the plateau's rest check; the newest calibration test dates the next one. Pure over its inputs.
+/// the plateau's rest check; the newest calibration test dates the next one; the warm-up-sets setting
+/// and the lifter's level say whether heavy lifts get warm-up sets. Pure over its inputs.
 enum WorkoutLoadContextBuilder {
     /// How far back sessions are read (the plateau's lookback).
     static let lookbackDays = WorkoutPlateau.lookbackDays
@@ -44,7 +46,10 @@ enum WorkoutLoadContextBuilder {
         return WorkoutLoadContext(
             exposures: sessions.byLift, today: todayDate, defaultUnit: unit,
             recovery: recovery(window, todayDate: todayDate, settings: settings),
-            calibration: CalibrationSettings(hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration)
+            calibration: CalibrationSettings(hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration),
+            warmUpSets: WorkoutWarmUpSets.isEnabled(
+                preference: settings.workoutWarmUpSets, experience: settings.workoutProfile.experience
+            )
         )
     }
 
@@ -60,15 +65,18 @@ enum WorkoutLoadContextBuilder {
         for (day, date) in days {
             var handLogged: [String: LiftExposure] = [:]
             for workout in day.workouts {
-                if let results = workout.exerciseResults {
-                    for result in results {
-                        byLift[WorkoutExerciseCatalog.normalizedName(result.name), default: []]
-                            .append(LiftExposure(date: date, result: result))
-                        if result.calibration == .test || result.calibration == .attempt { lastCalibration = date }
-                    }
-                } else if workout.loggedFromGuidedSession != true {
-                    foldHandLogged(workout.exerciseLines, date: date, into: &handLogged)
+                let results = workout.exerciseResults ?? []
+                for result in results {
+                    byLift[WorkoutExerciseCatalog.normalizedName(result.name), default: []]
+                        .append(LiftExposure(date: date, result: result))
+                    if result.calibration == .test || result.calibration == .attempt { lastCalibration = date }
                 }
+                // A guided row's other lines are its plan, never performance. A hand-logged row's
+                // lines are what was lifted, except a lift its own structured record (entered set by
+                // set, or corrected in the Edit sheet) already covers.
+                guard workout.loggedFromGuidedSession != true else { continue }
+                let covered = Set(results.map { WorkoutExerciseCatalog.normalizedName($0.name) })
+                foldHandLogged(workout.exerciseLines, date: date, excluding: covered, into: &handLogged)
             }
             for key in handLogged.keys.sorted() {
                 guard let exposure = handLogged[key] else { continue }
@@ -81,19 +89,24 @@ enum WorkoutLoadContextBuilder {
         return (byLift, lastCalibration)
     }
 
-    /// Folds one hand-logged row's lines into the day's per-lift sessions, keeping the heaviest.
-    static func foldHandLogged(_ lines: [String], date: Date, into sessions: inout [String: LiftExposure]) {
+    /// Folds one hand-logged row's lines into the day's per-lift sessions, keeping the heaviest. Lifts
+    /// in `covered` (normalized names the row's structured results already record) are skipped.
+    static func foldHandLogged(
+        _ lines: [String], date: Date, excluding covered: Set<String> = [], into sessions: inout [String: LiftExposure]
+    ) {
         for line in lines {
-            guard let logged = handLoggedExposure(line, date: date) else { continue }
+            guard let logged = handLoggedExposure(line, date: date), !covered.contains(logged.key) else { continue }
             if let existing = sessions[logged.key], (existing.weight ?? 0) >= (logged.exposure.weight ?? 0) { continue }
             sessions[logged.key] = logged.exposure
         }
     }
 
     /// One hand-logged line as a completed session keyed by its lift, or nil for a hold, a rep
-    /// range, or a line with no sets×reps.
+    /// range, a ramp-up set copied from a guided log ("… (ramp-up)", which is never a working set), or
+    /// a line with no sets×reps.
     static func handLoggedExposure(_ line: String, date: Date) -> (key: String, exposure: LiftExposure)? {
-        guard let parsed = ExerciseLineParser.parse(line), let reps = parsed.repsCount, reps > 0,
+        guard !WorkoutWarmUpSets.isRampLine(line),
+              let parsed = ExerciseLineParser.parse(line), let reps = parsed.repsCount, reps > 0,
               let sets = parsed.sets, sets > 0 else { return nil }
         let key = WorkoutExerciseCatalog.normalizedName(parsed.name)
         guard !key.isEmpty else { return nil }

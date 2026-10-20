@@ -20,7 +20,8 @@ import FernletUI
 /// 2026-08-21 redesign (MOVE-26): the primary control lives in a FIXED bottom bar above the safe
 /// area — "Done set" while working ("Finish workout" on the last set), "Skip rest" while resting —
 /// with a quiet "Skip to next exercise" secondary beneath it. Everything else (set strip, rest
-/// preview, Up-next list) scrolls and is never a control. At accessibility sizes the labels
+/// preview, Up-next list) scrolls and is never a control — save the rest timer's quiet "−15 s" /
+/// "+15 s" chips (idea 7, the Live Activity's same adjustment). At accessibility sizes the labels
 /// abbreviate ("1 of 5", "1/4") so the numerals stay large, and the Last-time pill and Up-next
 /// list give way (1e·AX3).
 struct GuidedWorkoutSheet: View {
@@ -51,6 +52,8 @@ struct GuidedWorkoutSheet: View {
     /// presentation from `exerciseHistoryEntries()` (one full-history rollup) rather than
     /// re-rolling per exercise.
     @State private var lastWeightByName: [String: String] = [:]
+    /// The exercise whose how-to sheet is open, by frozen name; nil when none is.
+    @State private var howTo: ExerciseHowToRequest?
 
     init(
         store: FernletStore,
@@ -77,7 +80,10 @@ struct GuidedWorkoutSheet: View {
     /// Names the run that would be lost, so the trade is legible before it's made rather than after.
     private var replaceConfirmMessage: String {
         guard let other = store.activeGuidedRunBlockingStart(of: session) else { return "" }
-        return "\(other.title) is still going. Starting this one will let go of the sets you've already done there."
+        let name = WorkoutSessionNames.drawn(other.title)
+        return String(localized: "guided.replaceRun.message",
+                      defaultValue: "\(name) is still going. Starting this one will let go of the sets you've already done there.",
+                      comment: "Confirmation before starting a guided workout while another is in progress. The argument is the other session's name.")
     }
 
     var body: some View {
@@ -103,7 +109,17 @@ struct GuidedWorkoutSheet: View {
             }
         }
         .background(Color.parchment)
+        // Cooking's rule, for the same reason: while a run is live and this sheet is in front the
+        // screen stays on, so a phone propped on a bench does not lock mid-rest — locked, the app is
+        // suspended, its in-app cues cannot play and the warm-up's hands-free advance stops. Scoped to
+        // this sheet; the idle timer comes back the moment the run ends or the sheet or app goes away.
+        .keepsScreenAwake(isLive)
+        // While this sheet shows the live run its own VoiceOver lines say every moment, so the cue
+        // director's spoken cues stay off VoiceOver until the sheet goes away (`GuidedRunCues.swift`).
+        .onChange(of: isLive, initial: true) { _, live in store.guidedRunCues.runnerOnScreen = live }
+        .onDisappear { store.guidedRunCues.runnerOnScreen = false }
         .interactiveDismissDisabled(isLive)
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
             showReplaceConfirm: $showReplaceConfirm,
@@ -162,7 +178,7 @@ struct GuidedWorkoutSheet: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.suggestion.name)
+                Text(session.displayedName)
                     .font(.fernlet(.headerMedium))
                     .foregroundStyle(Color.bark)
                 if let run, run.isWorking || run.isResting {
@@ -211,6 +227,8 @@ struct GuidedWorkoutSheet: View {
             Text("Cardio · \(minutes) min left")
         case GuidedWorkoutRunState.BlockToken.coolDown:
             Text("Cool-down \(position) of \(total) · \(minutes) min left")
+        case GuidedWorkoutRunState.BlockToken.mobility:
+            Text("Stretch \(position) of \(total) · \(minutes) min left")
         default:
             Text("Exercise \(position) of \(total) · \(minutes) min left")
         }
@@ -254,12 +272,13 @@ struct GuidedWorkoutSheet: View {
             Text("Ready when you are")
                 .font(.fernlet(.displayMedium))
                 .foregroundStyle(Color.bark)
-            Text("We'll walk through it together — one set at a time, with a gentle rest timer between. Go at a pace that feels good.")
+            GuidedReadyIntro.text(for: session)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()
 
-            GuidedReadyList(exercises: session.exercises)
+            // A planned workout lists its lines as written; the app's own sessions, their steps.
+            GuidedReadyList(exercises: session.exercises, writtenLines: store.plannedRunLink(for: session)?.lines ?? [:])
 
             primaryButton("Start", identifier: "workout.guided.start") {
                 // Another session's run may still be live — after a relaunch the Suggest sheet mints a
@@ -284,7 +303,8 @@ struct GuidedWorkoutSheet: View {
                 GuidedPreviousLiftFix(store: store, run: run)
                 GuidedLoadPanel(store: store, exercise: exercise, isLastSet: run.currentSet >= run.totalSetsForCurrent)
 
-                if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) {
+                // A warm-up set is one set: its card says "Warm-up set 1 of 3", so no strip of one.
+                if exercise.fromCatalog && exercise.sets >= 1 && !Self.isSingleHold(exercise) && !exercise.isRampSet {
                     GuidedSetStrip(total: run.totalSetsForCurrent, completed: run.setsCompletedForCurrent)
                     restPreview(run, exercise)
                 }
@@ -303,12 +323,17 @@ struct GuidedWorkoutSheet: View {
             }
         }
         .task(id: run.holdWindow?.upperBound) { await advanceWhenHoldEnds(run) }
+        // While this view is up it moves a timed step on at its hold's end and plays that move's cue
+        // itself, so the store's cue director leaves the hold's end to it (`GuidedRunCues.swift`).
+        .onAppear { store.guidedRunCues.sheetDrivesHoldEnd = true }
+        .onDisappear { store.guidedRunCues.sheetDrivesHoldEnd = false }
     }
 
     /// Moves a timed step on by itself when its hold runs out — a stretch flow you can do without
     /// looking at the phone. Only while this exact set is still the one being worked (a tap, a Lock
     /// Screen button or a skip that got there first cancels it). Keyed by the hold's end, so the
-    /// next step re-arms it.
+    /// next step re-arms it. The move carries the hold-end cue, unless the app slept through the
+    /// hold's end — then the background notification already said it, and the move stays quiet.
     private func advanceWhenHoldEnds(_ run: GuidedWorkoutRunState) async {
         guard let end = run.holdWindow?.upperBound else { return }
         let remaining = end.timeIntervalSinceNow
@@ -321,7 +346,8 @@ struct GuidedWorkoutSheet: View {
         }
         guard let now = store.guidedRunState, now.isWorking,
               now.exerciseIndex == run.exerciseIndex, now.currentSet == run.currentSet else { return }
-        announcingTransition(store.guidedMarkSetDone)
+        let onTime = GuidedRunCuePlan.isOnTime(end, now: Date())
+        announcingTransition(store.guidedMarkSetDone, cue: onTime ? .holdRanOut : nil)
     }
 
     /// A one-set timed step — a stretch, a balance hold. Its countdown says everything, so it gets no
@@ -333,14 +359,31 @@ struct GuidedWorkoutSheet: View {
     /// The cream card naming the current exercise with its Set / Reps / Last-time pills.
     private func exerciseCard(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            exerciseTitle(run, exercise)
+            exerciseCardHeader(run, exercise)
             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
                 side.text
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.slate)
             }
+            // A planned workout's line as written, when it says more than the card does (a coach's cue).
+            if let written = exercise.writtenLine {
+                Text("Your plan: \(written)")
+                    .font(.fernlet(.bodySmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+            // An interval's round; its pace is the countdown's caption, in words.
+            if let round = exercise.segment?.round, let rounds = exercise.segment?.rounds {
+                Text("Round \(round) of \(rounds)")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.slate)
+            }
             if let window = run.holdWindow {
-                GuidedHoldTimer(window: window)
+                GuidedHoldTimer(window: window, paceRaw: exercise.segment?.paceRaw)
+            }
+            // A cardio part's live heart rate against its target; nothing without a reading (idea 9).
+            if let zone = store.guidedZones.zone(for: run), zone.isLive {
+                GuidedZoneReadout(zone: zone)
             }
 
             if Self.isSingleHold(exercise) {
@@ -348,7 +391,10 @@ struct GuidedWorkoutSheet: View {
                 EmptyView()
             } else if exercise.fromCatalog && exercise.sets >= 1 {
                 HStack(spacing: 10) {
-                    metricPill(title: "Set", value: setCounterText(run))
+                    // A warm-up set's place is its label above; "Set 1 of 1" would say nothing.
+                    if !exercise.isRampSet {
+                        metricPill(title: "Set", value: setCounterText(run))
+                    }
                     if !exercise.reps.isEmpty {
                         metricPill(title: exercise.holdSeconds == nil ? "Reps" : "Hold", value: exercise.reps)
                     }
@@ -370,6 +416,27 @@ struct GuidedWorkoutSheet: View {
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
     }
 
+    /// The card's head: the exercise name with its how-to button (a catalog exercise only: the cues, the
+    /// common mistake and an easier version, beside the name they explain), then a warm-up set's place.
+    @ViewBuilder
+    private func exerciseCardHeader(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            exerciseTitle(run, exercise)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if ExerciseHowToCatalog.entry(for: exercise.name) != nil {
+                ExerciseHowToButton(exerciseName: exercise.name) {
+                    howTo = ExerciseHowToRequest(name: exercise.name)
+                }
+            }
+        }
+        if let warmUp = run.warmUpPosition {
+            GuidedWarmUpWords.setLabel(index: warmUp.index, count: warmUp.count)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.mossInk)
+                .accessibilityIdentifier("workout.guided.warmUpSet")
+        }
+    }
+
     /// The exercise name — and, at accessibility text sizes only, the two things the layout drops
     /// around it, re-hung on this element as VoiceOver custom content (T2-2).
     ///
@@ -383,7 +450,7 @@ struct GuidedWorkoutSheet: View {
     /// `Text(verbatim:)` while its "nothing yet" case can be a localized literal.
     @ViewBuilder
     private func exerciseTitle(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
-        let title = Text(exercise.name)
+        let title = Text(verbatim: exercise.displayedName)
             .font(.fernlet(.displayMedium))
             .foregroundStyle(Color.bark)
         if dynamicTypeSize.isAccessibilitySize {
@@ -407,7 +474,7 @@ struct GuidedWorkoutSheet: View {
     /// The dropped `GuidedUpNextList` as one spoken value. `formatted(.list(type: .and))` rather than
     /// a hand-joined string: the separator and the final conjunction are locale-dependent.
     private func upNextValue(_ run: GuidedWorkoutRunState) -> Text {
-        let names = upcomingExercises(run).map(\.name)
+        let names = upcomingExercises(run).map(GuidedSegmentWords.upNextName)
         guard !names.isEmpty else { return Text("Nothing after this one") }
         return Text(verbatim: names.formatted(.list(type: .and)))
     }
@@ -481,6 +548,7 @@ struct GuidedWorkoutSheet: View {
                     .accessibilityAddTraits(.updatesFrequently)
                     .accessibilityIdentifier("workout.guided.restTimer")
                     .task(id: restEndsAt) { await announceRestOver(at: restEndsAt) }
+                GuidedRestAdjustRow(store: store)
             }
 
             if let exercise = run.currentExercise {
@@ -488,7 +556,7 @@ struct GuidedWorkoutSheet: View {
                     Text("Next up")
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
-                    Text(exercise.name)
+                    Text(verbatim: exercise.displayedName)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     if exercise.fromCatalog && exercise.sets >= 1 {
@@ -544,7 +612,7 @@ struct GuidedWorkoutSheet: View {
 
     private var completionMessage: Text {
         sessionsRemain
-            ? Text("\(session.suggestion.name) is logged. The rest of today's plan is there whenever you're ready.")
+            ? Text("\(session.displayedName) is logged. The rest of today's plan is there whenever you're ready.")
             : Text("That's logged for today.")
     }
 
@@ -566,10 +634,13 @@ struct GuidedWorkoutSheet: View {
                     resting ? "Skip rest" : doneSetLabel(run),
                     identifier: resting ? "workout.guided.skipRest" : "workout.guided.doneSet"
                 ) {
-                    announcingTransition(resting ? store.guidedSkipRest : store.guidedMarkSetDone)
+                    announcingTransition(resting ? store.guidedSkipRest : store.guidedMarkSetDone,
+                                         cue: resting ? .skip : .setDone)
                 }
                 if run.canSkipBlock {
                     skipBlockButton(run)
+                } else if run.canSkipWarmUpSets {
+                    skipWarmUpSetsButton
                 } else {
                     skipToNextButton(run)
                 }
@@ -601,7 +672,7 @@ struct GuidedWorkoutSheet: View {
     /// not removed — on the last exercise, so the bar's height never jumps.
     private func skipToNextButton(_ run: GuidedWorkoutRunState) -> some View {
         Button {
-            announcingTransition(store.guidedSkipToNextExercise)
+            announcingTransition(store.guidedSkipToNextExercise, cue: .skip)
         } label: {
             Text(dynamicTypeSize.isAccessibilitySize ? "Skip" : "Skip to next exercise")
                 .font(.fernlet(.label))
@@ -621,34 +692,63 @@ struct GuidedWorkoutSheet: View {
         .accessibilityIdentifier("workout.guided.skipExercise")
     }
 
-    /// The quiet "Skip warm-up" / "Skip cool-down" secondary, in the skip-to-next slot. Skipping the
-    /// cool-down finishes the session and logs it — the lifting is done.
+    /// The quiet "Skip warm-up" / "Skip cardio" / "Finish early" / "Skip cool-down" secondary, in the
+    /// skip-to-next slot (``GuidedBlockSkip``). Skipping the cool-down finishes the session and logs it —
+    /// the lifting is done — and "Finish early" logs a cardio or stretch session's time so far.
     private func skipBlockButton(_ run: GuidedWorkoutRunState) -> some View {
-        let warmUp = run.currentBlock == GuidedWorkoutRunState.BlockToken.warmUp
+        let skip = GuidedBlockSkip(run: run)
         return Button {
-            announcingTransition(store.guidedSkipBlock)
+            announcingTransition(store.guidedSkipBlock, cue: .skip)
         } label: {
-            Text(warmUp ? "Skip warm-up" : "Skip cool-down")
+            skip.label
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.slate)
         }
         .buttonStyle(.plain)
         .fernletTapTarget()
-        .accessibilityIdentifier(warmUp ? "workout.guided.skipWarmUp" : "workout.guided.skipCoolDown")
+        .accessibilityIdentifier(skip.identifier)
     }
 
-    /// Runs one of the bottom bar's transitions and says what it changed.
+    /// The quiet "Skip warm-up sets" secondary on a lift's warm-up set, in the skip-to-next slot:
+    /// straight to the lift's first working set, the skipped warm-ups left out of the log.
+    private var skipWarmUpSetsButton: some View {
+        Button {
+            announcingTransition(store.guidedSkipWarmUpSets, cue: .skip)
+        } label: {
+            Text("Skip warm-up sets",
+                 comment: "Guided workout: the quiet secondary on a warm-up set that skips the lift's remaining warm-up sets and goes to its first working set.")
+                .font(.fernlet(.label))
+                .foregroundStyle(Color.slate)
+        }
+        .buttonStyle(.plain)
+        .fernletTapTarget()
+        // Voice Control: the drawn words, plus a short form.
+        .accessibilityInputLabels([Text("Skip warm-up sets"), Text("Skip warm-ups")])
+        .accessibilityIdentifier("workout.guided.skipWarmUpSets")
+    }
+
+    /// Runs one of the bottom bar's transitions, plays its haptic or sound cue, and says what it
+    /// changed.
     ///
     /// Everything a bar button changes — the set strip, the rest timer, the exercise card — is
     /// elsewhere on the screen, so without this a double-tap moved the whole workout in silence.
-    /// See ``GuidedRunAnnouncement``.
-    private func announcingTransition(_ transition: @MainActor () -> Void) {
+    /// See ``GuidedRunAnnouncement`` for the spoken line and ``GuidedRunCuePlan`` for the cue; `cue`
+    /// is why the run moved, or nil for a move that should stay quiet. With spoken cues on, the
+    /// VoiceOver line also carries the new lift's weight (``GuidedRunCueDirector/voiceOverAddition(from:to:)``)
+    /// — one announcement, never a second voice beside it.
+    private func announcingTransition(_ transition: @MainActor () -> Void, cue: GuidedRunCuePlan.Cause?) {
         let before = run
         transition()
-        guard let before, let spoken = GuidedRunAnnouncement.spoken(from: before, to: store.guidedRunState) else {
+        let after = store.guidedRunState
+        if let cue {
+            store.guidedRunCues.transition(from: before, to: after, cause: cue)
+        }
+        guard let before, let spoken = GuidedRunAnnouncement.spoken(from: before, to: after) else {
             return
         }
-        FernletAnnouncer.system.announce(spoken.kind, spoken.sentence)
+        let addition = store.guidedRunCues.voiceOverAddition(from: before, to: after)
+        let line = GuidedRunSpokenCue.sentences(String(localized: spoken.sentence), addition)
+        FernletAnnouncer.system.announce(spoken.kind, resolved: line)
     }
 
     /// Says the rest's nudge is over when its timer reaches zero. The rest itself waits for the user
@@ -675,6 +775,8 @@ struct GuidedWorkoutSheet: View {
         if isLastSet && isLastExercise { return "Finish workout" }
         // A one-set timed step (a stretch) moves on; "Done set" would name a set it is not.
         if exercise.holdSeconds != nil && exercise.sets <= 1 { return "Next" }
+        // A line walked as one step (a planned line the runner can't count) is simply done.
+        if exercise.sets < 1 { return "Done" }
         return "Done set"
     }
 
@@ -683,9 +785,21 @@ struct GuidedWorkoutSheet: View {
         case GuidedWorkoutRunState.BlockToken.warmUp: Text("Ease into each stretch — no bouncing.")
         case GuidedWorkoutRunState.BlockToken.activation: Text("Light and steady — just waking things up.")
         case GuidedWorkoutRunState.BlockToken.coolDown: Text("Breathe out and let it go.")
-        default:
-            run.currentSet == 1 ? Text("No rush getting started.") : Text("Steady — you've got this.")
+        case GuidedWorkoutRunState.BlockToken.cardio: cardioEncouragement(run)
+        case GuidedWorkoutRunState.BlockToken.mobility: Text("Ease in and breathe. Stop anywhere that feels like enough.")
+        default: GuidedWarmUpWords.liftingEncouragement(run)
         }
+    }
+
+    /// The line under a cardio part: the talk test for its zone when there is no live heart rate — the
+    /// silent fallback, with no number and no word about a missing reading — and the pace's own gentle
+    /// line beside a live reading (the card already shows where it sits).
+    private func cardioEncouragement(_ run: GuidedWorkoutRunState) -> Text {
+        let paceRaw = run.currentExercise?.segment?.paceRaw
+        guard let zone = store.guidedZones.zone(for: run), !zone.isLive, let target = zone.target else {
+            return GuidedSegmentWords.encouragement(paceRaw)
+        }
+        return GuidedZoneWords.talkTest(target: target)
     }
 
     /// Rebuilds the Last-time weight map from ONE `exerciseHistoryEntries()` pass — each per-name
@@ -765,6 +879,46 @@ private struct GuidedRunnerAlerts: ViewModifier {
     }
 }
 
+/// "−15 s" and "+15 s" under the rest timer — the same adjustment as the Live Activity's buttons
+/// (`FernletStore.guidedAdjustRest(by:)`): never under five seconds left, never past ten minutes.
+///
+/// Quiet chips, not a second primary: "Skip rest" in the bottom bar stays the one big control. Each
+/// tap says what it did to VoiceOver — the timer's own spoken value is re-read only when the cursor
+/// lands on it — and at a limit, where nothing on screen moves, says why.
+private struct GuidedRestAdjustRow: View {
+    var store: FernletStore
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button { adjust(by: -GuidedWorkoutRunState.restAdjustStepSeconds) } label: {
+                Text("−15 s")
+            }
+            .buttonStyle(ChipButtonStyle(selected: false))
+            .fernletTapTarget()
+            .accessibilityLabel("Take 15 seconds off the rest")
+            // Voice Control: the drawn "−15 s", spoken, plus the plain verbs.
+            .accessibilityInputLabels([Text("Minus 15 seconds"), Text("Minus 15"), Text("Shorter rest")])
+            .accessibilityIdentifier("workout.guided.rest.shorter")
+
+            Button { adjust(by: GuidedWorkoutRunState.restAdjustStepSeconds) } label: {
+                Text("+15 s")
+            }
+            .buttonStyle(ChipButtonStyle(selected: false))
+            .fernletTapTarget()
+            .accessibilityLabel("Add 15 seconds of rest")
+            .accessibilityInputLabels([Text("Plus 15 seconds"), Text("Plus 15"), Text("Longer rest")])
+            .accessibilityIdentifier("workout.guided.rest.longer")
+        }
+    }
+
+    /// Moves the rest's end and says what happened.
+    private func adjust(by seconds: Int) {
+        let moved = store.guidedAdjustRest(by: seconds)
+        let spoken = GuidedRunAnnouncement.restAdjusted(adding: seconds > 0, moved: moved)
+        FernletAnnouncer.system.announce(.status, spoken)
+    }
+}
+
 /// The runner's segmented set strip — the "health bar" of the current exercise (MOVE-26).
 ///
 /// Pure display: done sets fill moss, the set in progress fills a lighter moss, upcoming sets stay
@@ -821,7 +975,7 @@ private struct GuidedUpNextList: View {
                 ForEach(exercises) { exercise in
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(exercise.name)
+                            Text(verbatim: exercise.displayedName)
                                 .font(.fernlet(.body))
                                 .foregroundStyle(Color.bark)
                             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
@@ -829,18 +983,41 @@ private struct GuidedUpNextList: View {
                                     .font(.fernlet(.labelSmall))
                                     .foregroundStyle(Color.slate)
                             }
+                            if exercise.isRampSet {
+                                GuidedWarmUpWords.upNextCaption
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                            }
+                            // A cardio segment's pace — every segment shares its line's name.
+                            if let segment = exercise.segment {
+                                GuidedSegmentWords.caption(segment.paceRaw)
+                                    .font(.fernlet(.labelSmall))
+                                    .foregroundStyle(Color.slate)
+                            }
                         }
                         Spacer(minLength: 8)
-                        if exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty {
-                            Text(verbatim: exercise.sets > 1 ? "\(exercise.sets) × \(exercise.reps)" : exercise.reps)
-                                .font(.fernlet(.labelSmall))
-                                .foregroundStyle(Color.slate)
-                        }
+                        prescription(exercise)
                     }
                     .padding(12)
                     .background(Color.cream.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
                 }
             }
+        }
+    }
+}
+
+extension GuidedUpNextList {
+    /// The row's trailing prescription: "3 × 8" or a hold for a catalog step, a clock for a cardio
+    /// segment ("1:00"), nothing for an untimed line.
+    @ViewBuilder fileprivate func prescription(_ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        if exercise.segment != nil, let seconds = exercise.holdSeconds {
+            Text(verbatim: GuidedSegmentWords.clock(seconds: seconds))
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+        } else if exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty {
+            Text(verbatim: exercise.sets > 1 ? "\(exercise.sets) × \(exercise.reps)" : exercise.reps)
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
         }
     }
 }
@@ -861,14 +1038,23 @@ struct GuidedSideLabel {
 
 /// The hold countdown on a timed step's card: "Get into position" through the lead-in, then
 /// "Hold" over a countdown of the fixed window — never a live `Date()` range, so it clamps at 0:00
-/// rather than inverting (the same rule as the rest timer).
+/// rather than inverting (the same rule as the rest timer). A cardio segment reads "Get ready", then
+/// its pace in words ("Hard", "Easy", "Steady") over the same countdown.
 private struct GuidedHoldTimer: View {
     let window: ClosedRange<Date>
+    /// The cardio segment's pace token, or nil for a hold.
+    var paceRaw: String? = nil
     @State private var holding = false
+
+    /// The caption over the countdown, for the lead-in or the hold.
+    private var caption: Text {
+        guard let paceRaw else { return holding ? Text("Hold") : Text("Get into position") }
+        return holding ? GuidedSegmentWords.caption(paceRaw) : Text("Get ready")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(holding ? "Hold" : "Get into position")
+            caption
                 .font(.fernlet(.labelSmall))
                 .tracking(0.6)
                 .textCase(.uppercase)
@@ -882,7 +1068,9 @@ private struct GuidedHoldTimer: View {
         .task(id: window.lowerBound) { await waitForHoldStart() }
     }
 
-    /// Flips the caption from "Get into position" to "Hold" when the lead-in ends.
+    /// Flips the caption from "Get into position" to "Hold" when the lead-in ends, and says so to
+    /// VoiceOver at that moment (``GuidedRunAnnouncement/holdStarted(leadInEndedAt:now:)``). A hold
+    /// already running when this view appears flips silently.
     private func waitForHoldStart() async {
         let remaining = window.lowerBound.timeIntervalSinceNow
         guard remaining > 0 else {
@@ -896,6 +1084,10 @@ private struct GuidedHoldTimer: View {
             return
         }
         holding = true
+        if let line = GuidedRunAnnouncement.holdStarted(leadInEndedAt: window.lowerBound, now: Date()) {
+            // A segment's form of "Hold now." is "Go — hard." and the like.
+            FernletAnnouncer.system.announce(.status, paceRaw.map(GuidedSegmentWords.goLine) ?? line)
+        }
     }
 }
 
@@ -904,6 +1096,9 @@ private struct GuidedHoldTimer: View {
 /// every activation, lifting and cardio movement on its own row.
 private struct GuidedReadyList: View {
     let exercises: [PrescribedExercise]
+    /// A planned workout's lines exactly as written, by step id — listed in place of the step's own line,
+    /// so a coach's weights and cues read as the coach wrote them. Empty for the app's own sessions.
+    var writtenLines: [UUID: String] = [:]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -912,8 +1107,12 @@ private struct GuidedReadyList: View {
             if !warmUp.isEmpty {
                 row(Text("Warm-up · \(warmUp.count) stretches · \(WorkoutSessionBlocks.minutes(of: warmUp)) min"))
             }
-            ForEach(exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
-                row(Text(verbatim: exercise.line))
+            // A lift's warm-up sets fold into one row ("Back squat · 3 warm-up sets"); a planned workout's
+            // own written line comes first, else the step's line in the user's language.
+            ForEach(GuidedPlanRow.rows(exercises.filter { $0.block != .warmUp && $0.block != .coolDown })) { item in
+                row(item.warmUpCount > 0
+                    ? GuidedWarmUpWords.summary(name: item.step.displayName, count: item.warmUpCount)
+                    : Text(verbatim: writtenLines[item.step.id] ?? item.step.displayLine))
             }
             if !coolDown.isEmpty {
                 row(Text("Cool-down · \(coolDown.count) stretches · \(WorkoutSessionBlocks.minutes(of: coolDown)) min"))

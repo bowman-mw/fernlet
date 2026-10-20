@@ -15,7 +15,7 @@ import FernletUI
 /// local `@State`. Day rollover and Live Activity progress are reconciled on scene activation
 /// because a foreground can cross local midnight without re-firing `onAppear`. Navigation pushes a
 /// day-key `String` for ``MoveDayDetailView``, a `ProgressPhotoRecord` for the photo detail, and a
-/// ``MoveRoute`` for the parameterless screens (``ExerciseHistoryView``).
+/// ``MoveRoute`` for the parameterless screens (``ExerciseHistoryView``, ``WeeklyTotalsView``).
 struct MoveView: View {
     var store: FernletStore
     @Binding var activeSheet: FernletSheet?
@@ -163,7 +163,7 @@ struct MoveView: View {
     /// primary opens the Suggest flow directly from the root — one sheet, not three.
     @ViewBuilder private var guidedEntryCard: some View {
         if let activeRun = store.guidedRunState, activeRun.isWorking || activeRun.isResting {
-            ResumeWorkoutCard(title: activeRun.title, isResting: activeRun.isResting) {
+            ResumeWorkoutCard(title: WorkoutSessionNames.drawn(activeRun.title), isResting: activeRun.isResting) {
                 if let session = store.guidedSessionForResume() { guidedSession = session }
             }
         } else if let guidedCardState {
@@ -171,6 +171,7 @@ struct MoveView: View {
                 state: guidedCardState,
                 loggedSessionName: loggedGuidedSessionName,
                 isRestDay: store.needsRestToday,
+                readyIsTimed: guidedReadyIsTimed,
                 onStart: startTodaysGuidedWorkout
             )
         } else {
@@ -183,6 +184,14 @@ struct MoveView: View {
         }
     }
 
+    /// Whether the session the card would start is timed cardio or stretching rather than sets — the
+    /// card then says it times each part instead of promising "set by set".
+    private var guidedReadyIsTimed: Bool {
+        guard case .ready(let id) = guidedCardState,
+              let session = store.currentGuidedWorkoutPlan?.sessions.first(where: { $0.id == id }) else { return false }
+        return !session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
+    }
+
     /// The name of today's guided session that is already accounted for, so the done card can say
     /// WHICH session is logged instead of a nameless "That's logged for today".
     private var loggedGuidedSessionName: String? {
@@ -193,7 +202,21 @@ struct MoveView: View {
                 completed: store.guidedCompletedSessionIDs,
                 loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
             )
-        }?.suggestion.name
+        }?.displayedName
+    }
+
+    /// Today's planned row's Start: opens the guided runner — its Ready screen lists the plan as written,
+    /// or, when this plan's run is already under way, the run itself. Nil (no Start) for a plan with
+    /// nothing the runner can walk.
+    private func startAction(for planned: PlannedWorkout) -> (() -> Void)? {
+        guard PlannedWorkoutRun.canGuide(planned) else { return nil }
+        return {
+            guard let session = store.guidedSession(forPlanned: planned, date: store.todayKey) else {
+                FernletAuditLog.log("workout.plannedRun.notGuidable")
+                return
+            }
+            guidedSession = session
+        }
     }
 
     /// Today's planned rows then today's logged rows, divided.
@@ -217,7 +240,8 @@ struct MoveView: View {
                         onDelete: {
                             store.deletePlannedWorkout(plannedWorkout, date: store.todayKey)
                             refreshAllDays()
-                        }
+                        },
+                        onStart: startAction(for: plannedWorkout)
                     )
                     if index < store.day.plannedWorkouts.count - 1 || !store.day.workouts.isEmpty {
                         FernletRowDivider()
@@ -319,6 +343,8 @@ struct MoveView: View {
 
             exerciseHistoryLink
 
+            WeeklyTotalsLink { path.append(MoveRoute.weeklyTotals) }
+
             todaysMovementSection
 
             #if canImport(UIKit)
@@ -330,24 +356,26 @@ struct MoveView: View {
 
     /// The guided runner sheet for `session`, with the "other sessions remain" copy resolved.
     private func guidedRunnerSheet(_ session: WorkoutProgram.SessionSuggestion) -> some View {
-        GuidedWorkoutSheet(
-            store: store,
-            session: session,
-            sessionsRemain: store.currentGuidedWorkoutPlan.map { plan in
-                // Route through the reconciliation seam (not an id-only check) so the done copy stays
-                // truthful after a relaunch, when the completed-id set is empty but the day record
-                // (by tagged name) still knows what's been guided.
-                plan.sessions.contains {
-                    $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
-                        $0, completed: store.guidedCompletedSessionIDs,
-                        loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
-                    )
-                }
-            } ?? false
-        )
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(20)
+        GuidedWorkoutSheet(store: store, session: session, sessionsRemain: otherSessionsRemain(after: session))
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(20)
+    }
+
+    /// Whether other sessions of today's committed plan still need doing after `session` — the runner's
+    /// done copy then names what was logged. Never for a planned workout's run, which is not one of the
+    /// plan's sessions.
+    private func otherSessionsRemain(after session: WorkoutProgram.SessionSuggestion) -> Bool {
+        guard !store.isPlannedRun(session), let plan = store.currentGuidedWorkoutPlan else { return false }
+        // Route through the reconciliation seam (not an id-only check) so the done copy stays
+        // truthful after a relaunch, when the completed-id set is empty but the day record
+        // (by tagged name) still knows what's been guided.
+        return plan.sessions.contains {
+            $0.id != session.id && !GuidedWorkoutAvailability.isAlreadyLogged(
+                $0, completed: store.guidedCompletedSessionIDs,
+                loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+            )
+        }
     }
 
     /// Day rollover + Live Activity reconciliation on every return to the foreground.
@@ -391,6 +419,8 @@ struct MoveView: View {
         switch route {
         case .exerciseHistory:
             ExerciseHistoryView(store: store)
+        case .weeklyTotals:
+            WeeklyTotalsView(store: store)
         }
     }
 
@@ -473,16 +503,33 @@ struct MoveView: View {
 /// The guidable filter, in one place so the Move-root card and the Suggest sheet agree (reused, not
 /// reimplemented).
 ///
-/// A session is worth *guiding* through only when it carries real, set-based catalog work; pure
-/// cardio/mobility/rest carry descriptor lines with `sets == 0`. ``MoveView``,
+/// A session is worth *guiding* through when it carries real, set-based catalog work, or a cardio or
+/// mobility line the runner can time (``WorkoutTimedSessions``: steady and interval cardio, a mobility
+/// flow). A line it cannot time stays a descriptor (`sets == 0`) and its session unguided, and the rest
+/// day's gentle stretch is never the day's session — only an optional extra
+/// (``optionalStretch(in:excluding:loggedGuidedWorkoutNames:)``). ``MoveView``,
 /// ``WorkoutSuggestionSheet``, and ``GuidedWorkoutCardState`` all route their already-logged checks
 /// through these predicates, which is the invariant that keeps a session finished from one entry
 /// point excluded everywhere — including after a relaunch, when session ids are fresh but the tagged
 /// name in the day record survives.
 enum GuidedWorkoutAvailability {
-    /// A session with real, set-based catalog exercises (the guided runner needs sets to time rests).
+    /// A session with real, set-based catalog exercises, or a cardio or mobility line the runner can
+    /// time as countdowns.
     nonisolated static func isGuidable(_ session: WorkoutProgram.SessionSuggestion) -> Bool {
-        session.exercises.contains { $0.fromCatalog && $0.sets >= 1 }
+        session.exercises.contains { ($0.fromCatalog && $0.sets >= 1) || WorkoutTimedSessions.isGuidable($0) }
+    }
+
+    /// The rest day's gentle stretch, while it is still to do — offered as a quiet extra on the Suggest
+    /// sheet, never as today's workout: the day's readiness says rest, and rest stays the plan.
+    nonisolated static func optionalStretch(
+        in plan: WorkoutProgram.DayPlan,
+        excluding completed: Set<UUID>,
+        loggedGuidedWorkoutNames: Set<String> = []
+    ) -> WorkoutProgram.SessionSuggestion? {
+        plan.sessions.first { session in
+            !isGuidable(session) && session.exercises.contains(where: WorkoutTimedSessions.isOptionalStretch)
+                && !isAlreadyLogged(session, completed: completed, loggedGuidedWorkoutNames: loggedGuidedWorkoutNames)
+        }
     }
 
     /// A session is already accounted for when its id is in the in-memory completed set OR today's
@@ -664,6 +711,8 @@ struct StartTodaysWorkoutCard: View {
     /// already-approved plan is framed as something that can wait. Geometry and actions are
     /// unchanged; only the words soften, so the choice stays the user's.
     var isRestDay: Bool = false
+    /// The `.ready` session is timed cardio or stretching, not sets: its line says the parts are timed.
+    var readyIsTimed: Bool = false
     /// Opens the runner (`.ready`) or the Suggest flow (`.noPlan`) — the parent decides.
     var onStart: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -764,6 +813,8 @@ struct StartTodaysWorkoutCard: View {
         switch state {
         case .ready where isRestDay:
             return Text(MoveRestDayCopy.cardApprovedPlan)
+        case .ready where readyIsTimed:
+            return Text("Ready when you are — I'll time each part and move you on. No pressure.")
         case .ready:
             return Text("Ready when you are — I'll walk you through it, set by set, and time the rests. No pressure.")
         case .noPlan where isRestDay:
@@ -824,6 +875,12 @@ struct WorkoutSheet: View {
     /// The row the name field was last prefilled from by "Log again". The field draws its
     /// `displayedName`; ``typedName`` hands the stored name back while that text is untouched.
     @State private var prefilledFrom: Workout?
+    /// "Log set by set" (idea 6): the picked lift takes one row per set instead of the Sets / Reps /
+    /// Weight fields, and saves the same structured record a guided run does. Off by default, so the
+    /// free-text entry works exactly as before.
+    @State private var logsBySet = false
+    /// The picked lift's set rows while ``logsBySet`` is on; rebuilt whenever the pick changes.
+    @State private var setsDraft: ExerciseSetsDraft?
 
     var intensity: WorkoutIntensity {
         if logMode == .activity {
@@ -963,7 +1020,8 @@ struct WorkoutSheet: View {
             prefillDraft(from: entry)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: entry.name)
+                // Drawn through the display lookup; the chip still prefills by the logged name.
+                Text(verbatim: ExerciseHowToCatalog.displayName(for: entry.name))
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                 if let recall = entry.lastTimeRecallValues, !dynamicTypeSize.isAccessibilitySize {
@@ -981,7 +1039,7 @@ struct WorkoutSheet: View {
         .buttonStyle(.plain)
         // Voice Control: the chip's name carries last time's sets ("Rows, 3x10"); its exercise is
         // what a user says.
-        .accessibilityInputLabels([Text(verbatim: entry.name)])
+        .accessibilityInputLabels([Text(verbatim: ExerciseHowToCatalog.displayName(for: entry.name))])
         .accessibilityIdentifier("workout.recentExercise.\(entry.name)")
         .accessibilityCustomContent(AccessibilityCustomContentKey("Last time"),
                                     entry.lastTimeRecallValues.map { Text(verbatim: $0) })
@@ -1023,7 +1081,10 @@ struct WorkoutSheet: View {
         if let minutes = workout.duration { duration = String(minutes) }
     }
 
-    /// The exercise builder plus the rows already added — strength mode only.
+    /// The exercise builder plus the rows already added — strength mode only. With "Log set by set"
+    /// on, the builder keeps its picker (which also takes a typed name) and the set rows replace its
+    /// Sets / Reps / Weight fields. The switch sits under the builder, so the quick path above it —
+    /// Kind, Recent and the search — still fits the medium detent (artboard 3b).
     @ViewBuilder private var strengthSection: some View {
         WorkoutExerciseBuilder(
             selectedExercise: $draft.exercise,
@@ -1035,9 +1096,18 @@ struct WorkoutSheet: View {
             details: $draft.details,
             resetToken: $draft.resetToken,
             mode: logMode,
+            showAddButton: !logsBySet,
             historyStore: store,
+            showsStrengthFields: !logsBySet,
+            allowsTypedExercise: logsBySet,
             onAdd: addDraftExercise
         )
+
+        bySetToggle
+
+        if logsBySet {
+            bySetEntry
+        }
 
         if !exerciseRows.isEmpty {
             SheetField("Workout exercises") {
@@ -1050,6 +1120,68 @@ struct WorkoutSheet: View {
                 }
             }
         }
+    }
+
+    /// The "Log set by set" switch above the builder.
+    private var bySetToggle: some View {
+        Toggle(isOn: $logsBySet) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Log set by set")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.bark)
+                Text("Each set gets its own reps and weight.")
+                    .font(.fernlet(.labelSmall))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+            }
+        }
+        .tint(Color.moss)
+        // Voice Control: the spoken label runs on into the explainer line.
+        .accessibilityInputLabels([Text("Log set by set"), Text("Set by set")])
+        .accessibilityIdentifier("workout.log.bySet")
+    }
+
+    /// The picked lift's set rows and its Add button, while "Log set by set" is on. A treadmill pick
+    /// keeps the builder's own speed and incline fields; the button adds it the usual way.
+    @ViewBuilder private var bySetEntry: some View {
+        if let exercise = draft.exercise, exercise.inputKind == .strength, let binding = Binding($setsDraft) {
+            ExerciseSetsEditor(draft: binding, identifier: "workout.log.sets", showsName: false)
+        }
+        Button(action: addDraftExercise) {
+            Label("Add exercise", systemImage: "plus.circle.fill")
+                .font(.fernlet(.label))
+                .foregroundStyle(draft.exercise == nil ? Color.bark : Color.moss)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.cream, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(draft.exercise == nil)
+        .accessibilityIdentifier("workout.log.sets.add")
+    }
+
+    /// A fresh set-by-set draft for the newly picked lift (nil when the pick was cleared), in the
+    /// unit the person's region weighs in.
+    private func resetSetsDraft(for exercise: ExerciseTarget?) {
+        guard let exercise else {
+            setsDraft = nil
+            return
+        }
+        setsDraft = ExerciseSetsDraft.blank(
+            name: exercise.name, unit: WorkoutLoadContextBuilder.defaultUnit(for: .current),
+            equipment: exercise.equipment)
+    }
+
+    /// The picked lift's set rows as a logged row, or nil when set-by-set entry does not apply (it is
+    /// off, nothing is picked, or the pick is a treadmill entry).
+    private func structuredEntry() -> WorkoutExerciseEntry? {
+        guard logsBySet, logMode == .strengthTraining, let exercise = draft.exercise,
+              exercise.inputKind == .strength, var sets = setsDraft else { return nil }
+        sets.name = exercise.name
+        guard let result = sets.handLoggedResult() else { return nil }
+        return WorkoutExerciseEntry(exercise: exercise, sets: "", reps: "", weight: "", speed: "", incline: "",
+                                    details: "", result: result)
     }
 
     /// RPE + duration, side by side — strength mode only.
@@ -1181,6 +1313,7 @@ struct WorkoutSheet: View {
             draft.clear()
             lastLogged = store.mostRecentLoggedWorkout(mode: logMode)
         }
+        .onChange(of: draft.exercise) { _, exercise in resetSetsDraft(for: exercise) }
     }
 
     /// Builds the workout from the sheet's fields and logs it against the target day.
@@ -1193,6 +1326,8 @@ struct WorkoutSheet: View {
         if logMode == .strengthTraining, draft.hasExercise {
             addDraftExercise()
         }
+        // Lifts entered set by set carry their structured record too; a free-text-only log has none.
+        let structured = logMode == .strengthTraining ? exerciseRows.compactMap(\.result) : []
         var workout = Workout(
             name: workoutName,
             type: inferredCategory,
@@ -1202,11 +1337,13 @@ struct WorkoutSheet: View {
             rpe: logMode == .strengthTraining ? LocaleTolerantNumber.double(from: rpe) : nil,
             notes: notes,
             duration: WorkoutSheetRules.durationMinutes(from: duration),
-            distanceMiles: logMode == .activity ? LocaleTolerantNumber.double(from: distance) : nil,
+            // Typed in the device's units, stored in miles as always.
+            distanceMiles: logMode == .activity ? WorkoutMeasurementEntry.miles(fromEntry: distance) : nil,
             activeEnergyKcal: logMode == .activity ? LocaleTolerantNumber.double(from: energyKcal) : nil,
             effort: logMode == .activity ? LocaleTolerantNumber.int(from: effort) : nil,
             muscleGroups: logMode == .strengthTraining ? aggregatedMuscleGroups : [],
-            intensity: intensity
+            intensity: intensity,
+            exerciseResults: structured.isEmpty ? nil : Array(structured.prefix(Workout.maxExerciseResults))
         )
         workout.completedAt = completedAtDate
         workout.loggedAt = completedAtDate
@@ -1269,6 +1406,13 @@ struct WorkoutSheet: View {
     /// a silent behaviour change rather than a simplification. The plan sheet has no such guard, which is
     /// exactly why the shared draft takes it as a parameter instead of assuming one side's answer.
     private func addDraftExercise() {
+        // Set by set: the picked lift's rows become a structured row (its record plus its line).
+        if let entry = structuredEntry() {
+            exerciseRows.append(entry)
+            draft.clear()
+            setsDraft = nil
+            return
+        }
         // R7: `commit` returns false and leaves the rows untouched when no exercise is chosen —
         // consume it (mirroring ``WorkoutPlanSheet``, which already guards the same call).
         guard draft.commit(into: &exerciseRows, includingSetsAndReps: logMode == .strengthTraining) else { return }
@@ -1331,7 +1475,10 @@ enum WorkoutSheetRules {
     /// Shared by ``WorkoutPlanSheet`` (re-hydrating "Plan steps" on open) and ``WorkoutSheet``'s
     /// "Log it again" prefill (MOVE-08) — one parser, so the two sheets can never disagree about
     /// what a line means. Lines that match no catalog exercise are skipped, not invented.
-    static func exerciseEntries(from text: String) -> [WorkoutExerciseEntry] {
+    ///
+    /// A treadmill line stores its speed in mph; its Speed field reads in the device's units
+    /// (`imperial` nil reads this device), so a metric reopen shows km/h and re-saves the same mph.
+    static func exerciseEntries(from text: String, imperial: Bool? = nil) -> [WorkoutExerciseEntry] {
         text.components(separatedBy: .newlines).compactMap { line in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, let exercise = catalogExercise(namedBy: trimmed) else {
@@ -1358,7 +1505,9 @@ enum WorkoutSheetRules {
                 reps: setRep.groups.dropFirst().first ?? "",
                 weight: exercise.inputKind == .strength ? weight : "",
                 // `summary` writes "5.5 mph"; an older line carried the speed after "@".
-                speed: treadmill.map { $0.speed.isEmpty ? weight : $0.speed } ?? "",
+                speed: treadmill.map {
+                    WorkoutMeasurementEntry.speedEntry(fromStored: $0.speed.isEmpty ? weight : $0.speed, imperial: imperial)
+                } ?? "",
                 incline: treadmill?.incline ?? "",
                 details: details
             )
@@ -1522,6 +1671,8 @@ struct WorkoutSuggestionSheet: View {
     var store: FernletStore
     @State private var energy: WorkoutIntensity = .moderate
     @State private var context = ""
+    // Today's session length: seeded once from Workout setup, and shapes only the plan it builds.
+    @State private var sessionLength: WorkoutSessionLength = .noLimit
     @State private var showingSetup = false
     // The "Your spaces" list (1c), opened by the configurator's inline space row's Change (MOVE-34).
     @State private var showingSpaces = false
@@ -1536,6 +1687,8 @@ struct WorkoutSuggestionSheet: View {
     @State private var guidedSession: WorkoutProgram.SessionSuggestion?
     // Set when the user taps "Edit"; presents the manual workout editor for that session. nil = closed.
     @State private var editingSession: WorkoutProgram.SessionSuggestion?
+    // Set when the user taps a plan row's info button; presents that exercise's how-to. nil = closed.
+    @State private var howTo: ExerciseHowToRequest?
 
     // Today's plan and the set of already-logged sessions live on the store, shared with the Move-root
     // "Start today's workout" card. Reading them here (instead of a private @State) is what lets a
@@ -1587,7 +1740,7 @@ struct WorkoutSuggestionSheet: View {
                         .accessibilityHidden(true)
                     // Localizing interpolation, never a verbatim String build: "items" is display
                     // copy; the location name interpolates as data.
-                    Text("\(store.settings.activeWorkoutLocation.name) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
+                    Text("\(store.settings.activeWorkoutLocation.displayedName) · \(store.settings.activeWorkoutLocation.ownedEquipment.count) items")
                         .font(.fernlet(.label))
                         .foregroundStyle(Color.bark)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -1622,7 +1775,7 @@ struct WorkoutSuggestionSheet: View {
                 Image(systemName: "dumbbell")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.moss)
-                Text("Equipment & limits · \(store.settings.activeWorkoutLocation.name)")
+                Text("Equipment & limits · \(store.settings.activeWorkoutLocation.displayedName)")
                     .font(.fernlet(.label))
                     .foregroundStyle(Color.bark)
                     .lineLimit(1)
@@ -1733,6 +1886,7 @@ struct WorkoutSuggestionSheet: View {
             if !dynamicTypeSize.isAccessibilitySize, !remainingSessions.isEmpty {
                 logAlreadyDoneButton(remainingSessions)
             }
+            gentleStretchButton(in: dayPlan)
             if let guidable = guidableSession(in: dayPlan) {
                 startNowButton(guidable)
             }
@@ -1748,6 +1902,33 @@ struct WorkoutSuggestionSheet: View {
         .padding(.top, 12)
         .padding(.bottom, 20)
         .background(Color.parchment)
+    }
+
+    /// The rest day's optional gentle stretch (``GuidedWorkoutAvailability/optionalStretch(in:excluding:loggedGuidedWorkoutNames:)``),
+    /// about eight minutes on the floor — a quiet tint like "Already did this", never the screen's green:
+    /// on a day the person said they are unwell a stretch is offered, not pushed, and the plan stays rest.
+    @ViewBuilder private func gentleStretchButton(in dayPlan: WorkoutProgram.DayPlan) -> some View {
+        if let session = GuidedWorkoutAvailability.optionalStretch(
+            in: dayPlan, excluding: guidedCompletedSessionIDs, loggedGuidedWorkoutNames: store.loggedGuidedWorkoutNamesToday
+        ) {
+            Button {
+                guidedSession = session
+            } label: {
+                Text("Guide me through a gentle stretch, about 8 minutes")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.moss)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Color.moss.opacity(0.12), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            // Voice Control: the drawn line is long; its first words, or the plain name, are enough.
+            .accessibilityInputLabels([Text("Gentle stretch"), Text("Guide me through a gentle stretch")])
+            .accessibilityIdentifier("workout.startGentleStretch")
+        }
     }
 
     /// The retroactive "already did this" action in the committed-plan bar.
@@ -1838,6 +2019,7 @@ struct WorkoutSuggestionSheet: View {
         // never build a harder plan on it.
         let intensity = store.needsRestToday ? .light : energy
         let requestContext = context
+        let length = sessionLength
         Task {
             await Task.yield()
             do {
@@ -1848,7 +2030,7 @@ struct WorkoutSuggestionSheet: View {
                 isSuggesting = false
                 return
             }
-            store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext)
+            store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext, sessionLength: length)
             isSuggesting = false
         }
     }
@@ -1857,7 +2039,7 @@ struct WorkoutSuggestionSheet: View {
     /// row per exercise, and the session note.
     private func sessionCard(_ session: WorkoutProgram.SessionSuggestion) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(session.suggestion.name)
+            Text(session.displayedName)
                 .font(.fernlet(.headerMedium))
                 .foregroundStyle(Color.bark)
             sessionMetaLine(session)
@@ -1869,8 +2051,13 @@ struct WorkoutSuggestionSheet: View {
                 if !warmUp.isEmpty {
                     blockSummaryRow(Text("Warm-up · \(warmUp.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: warmUp))
                 }
-                ForEach(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }) { exercise in
-                    sessionExerciseRow(exercise)
+                // A lift's warm-up sets fold into one row ("Back squat · 3 warm-up sets").
+                ForEach(GuidedPlanRow.rows(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown })) { row in
+                    if row.warmUpCount > 0 {
+                        GuidedWarmUpPlanRow(name: row.step.name, count: row.warmUpCount)
+                    } else {
+                        sessionExerciseRow(row.step)
+                    }
                 }
                 if !coolDown.isEmpty {
                     blockSummaryRow(Text("Cool-down · \(coolDown.count) stretches"), minutes: WorkoutSessionBlocks.minutes(of: coolDown))
@@ -1903,40 +2090,49 @@ struct WorkoutSuggestionSheet: View {
     }
 
     /// "5 exercises · ~45 min" under the session name. The count is the movements listed one per row
-    /// (activation, lifting, cardio); the time includes the warm-up and cool-down.
+    /// (activation, lifting, cardio; a lift's warm-up sets are not one); the time includes the warm-up and
+    /// cool-down, by the same estimate the planner fits a session-length budget with and the runner counts
+    /// down from (``WorkoutSessionTime``) — so a session set to 30 minutes says ~30 here and in the run.
     private func sessionMetaLine(_ session: WorkoutProgram.SessionSuggestion) -> Text {
-        let minutes = Self.estimatedMinutes(for: session, goal: store.settings.selectedGoal)
-        let count = session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.count
+        let minutes = WorkoutSessionTime.minutes(of: session.exercises, goal: store.settings.selectedGoal)
+        let count = GuidedPlanRow.movementCount(session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown })
         return count == 1
             ? Text("1 exercise · ~\(minutes) min")
             : Text("\(count) exercises · ~\(minutes) min")
     }
 
-    /// One exercise's prescription row: name beside "4 × 8–12". At accessibility sizes name and
-    /// prescription stop sharing a line (1d·AX3).
+    /// One exercise's prescription row: name beside "4 × 8–12", with the how-to button at the end of
+    /// a catalog exercise's row. At accessibility sizes name and prescription stop sharing a line
+    /// (1d·AX3). The name is drawn through `displayName`; the plan keeps the frozen one.
     @ViewBuilder private func sessionExerciseRow(_ exercise: PrescribedExercise) -> some View {
         let prescription: String? = exercise.fromCatalog && exercise.sets >= 1 && !exercise.reps.isEmpty
             ? (exercise.holdSeconds != nil && exercise.sets <= 1 ? exercise.reps : "\(exercise.sets) × \(exercise.reps)")
             : nil
+        // A descriptor step's name is frozen plan text ("Easy cardio - 20 min"), drawn localized.
+        let drawnName = exercise.fromCatalog ? exercise.displayName : WorkoutPlanLine.displayed(exercise.name)
         if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.bark)
-                if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
-                    side.text
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: drawnName)
+                        .font(.fernlet(.body))
+                        .foregroundStyle(Color.bark)
+                    if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
+                        side.text
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
+                    if let prescription {
+                        Text(verbatim: prescription)
+                            .font(.fernlet(.labelSmall))
+                            .foregroundStyle(Color.slate)
+                    }
                 }
-                if let prescription {
-                    Text(verbatim: prescription)
-                        .font(.fernlet(.labelSmall))
-                        .foregroundStyle(Color.slate)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                sessionHowToButton(exercise)
             }
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(exercise.name)
+                Text(verbatim: drawnName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
                 if let side = GuidedSideLabel(raw: exercise.side?.rawValue) {
@@ -1950,28 +2146,19 @@ struct WorkoutSuggestionSheet: View {
                         .font(.fernlet(.labelSmall))
                         .foregroundStyle(Color.slate)
                 }
+                sessionHowToButton(exercise)
             }
         }
     }
 
-    /// The same rough time heuristic the runner's header uses, over a not-yet-started session:
-    /// 45s per prescribed set (a timed set: its hold plus the get-into-position lead-in) plus that
-    /// exercise's rest between its own sets (override, else the research default for the goal), and
-    /// 5 min per descriptor line. `static` so it is testable without standing up the sheet (the
-    /// `AwayHeartsCopy` precedent).
-    nonisolated static func estimatedMinutes(for session: WorkoutProgram.SessionSuggestion, goal: GoalType) -> Int {
-        var seconds = 0
-        for exercise in session.exercises {
-            if exercise.fromCatalog && exercise.sets >= 1 {
-                let rest = exercise.restSecondsOverride
-                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: exercise.name, role: exercise.role, goal: goal)
-                let perSet = exercise.holdSeconds.map { $0 + GuidedWorkoutRunState.holdLeadInSeconds } ?? 45
-                seconds += exercise.sets * perSet + max(0, exercise.sets - 1) * max(0, rest)
-            } else {
-                seconds += 300
+    /// The row's how-to button, for a catalog exercise with bundled how-to text; nothing otherwise
+    /// (a cardio descriptor line, a custom exercise).
+    @ViewBuilder private func sessionHowToButton(_ exercise: PrescribedExercise) -> some View {
+        if ExerciseHowToCatalog.entry(for: exercise.name) != nil {
+            ExerciseHowToButton(exerciseName: exercise.name) {
+                howTo = ExerciseHowToRequest(name: exercise.name)
             }
         }
-        return max(1, (seconds + 59) / 60)
     }
 
     /// "Start now" — the screen's ONE green, and the only route into the runner (MOVE-17/MOVE-01).
@@ -2051,6 +2238,9 @@ struct WorkoutSuggestionSheet: View {
             equipmentLimitsButton
             reworkPlanAffordance
         }
+        // One presenter for every row's info button, on the plan rather than on each card, so two
+        // sessions never bind two sheets to the same state.
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
     }
 
     /// The one italic "what happens next" line of the committed plan (1d); rendered in the scroll
@@ -2067,7 +2257,7 @@ struct WorkoutSuggestionSheet: View {
     /// `displayWord` is the localized half of the intensity's token/display fork — never
     /// interpolate the frozen `rawValue` into display copy.
     private var committedContextLine: some View {
-        let locationName = store.settings.activeWorkoutLocation.name
+        let locationName = store.settings.activeWorkoutLocation.displayedName
         let intensity = (store.committedGuidedIntensity ?? energy).displayWord
         return Text("\(locationName) · built for a \(intensity) day")
             .font(.fernlet(.labelSmall))
@@ -2079,6 +2269,9 @@ struct WorkoutSuggestionSheet: View {
     /// can require a short scroll at default type. The old Goal row and closing caption stay out.
     @ViewBuilder private var configuratorContent: some View {
         feelingSection
+        if !store.needsRestToday {
+            sessionLengthField
+        }
         spaceRow
         SheetField("Anything else?") {
             TextField("e.g. sore left knee, short on time", text: $context,
@@ -2118,6 +2311,28 @@ struct WorkoutSuggestionSheet: View {
         }
     }
 
+    /// "How long?" — today's session length (``WorkoutSessionLength``), seeded from Workout setup.
+    /// A one-line menu rather than a fifth chip row, so the configurator stays short; the caption
+    /// names the menu, so VoiceOver reads "How long?, 30 min, pop-up button" and Voice Control
+    /// answers to "Tap How long". Hidden on a rest day, whose gentle plan has no length to fit.
+    private var sessionLengthField: some View {
+        SheetField("How long?", namesControl: true) {
+            Picker(selection: $sessionLength) {
+                ForEach(WorkoutSessionLength.allCases) { length in
+                    Text(length.displayName).tag(length)
+                }
+            } label: {
+                Text("How long?")
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            // A menu picker draws its value in the tint; `moss` measures 3.74:1 on parchment, under
+            // the 4.5:1 text floor, so the value takes the moss text token (the injury picker's rule).
+            .tint(Color.mossInk)
+            .accessibilityIdentifier("workout.suggest.length")
+        }
+    }
+
     /// The intensity chips the configurator offers: Light / Moderate / Hard, or Light alone on a rest
     /// day (readiness `needs rest` — today marked unwell). Gentle options only; no push. Static so it
     /// is testable (the `AwayHeartsCopy` precedent).
@@ -2146,6 +2361,8 @@ struct WorkoutSuggestionSheet: View {
     private func seedIntensityOnce(preferCommitted: Bool) {
         guard !didApplyReadiness else { return }
         didApplyReadiness = true
+        // The session length seeds with it, once per presentation, from Workout setup.
+        sessionLength = store.settings.workoutSessionLength
         if preferCommitted, let committed = store.committedGuidedIntensity {
             energy = committed
         } else if let rec = recommendedIntensity {
@@ -2220,7 +2437,7 @@ struct WorkoutSuggestionSheet: View {
             // as the first line of the scroll content.
             SheetHeader(
                 title: sheetTitle,
-                eyebrow: dayPlan.map { Text("\($0.splitName) · \($0.dayTitle)") },
+                eyebrow: dayPlan.map { Text("\($0.displayedSplitName) · \($0.displayedDayTitle)") },
                 onCancel: attemptCancel
             )
             ScrollView {
@@ -2355,9 +2572,11 @@ struct WorkoutRow: View {
             Text(workout.displayedName).font(.fernlet(.headerMedium))
             Spacer()
             if let rpe = workout.rpe {
+                // The hues' TEXT inks: plain `moss` on its own 12% tint measured 3.44:1 (bundle 6,
+                // 2026-10-20); `mossInk` and `terracottaInk` are the 4.5:1 text tokens for these hues.
                 Text("RPE \(rpe, specifier: "%.1g")")
                     .font(.fernlet(.stat))
-                    .foregroundStyle(rpe >= 8 ? Color.terracotta : Color.moss)
+                    .foregroundStyle(rpe >= 8 ? Color.terracottaInk : Color.mossInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background((rpe >= 8 ? Color.terracotta : Color.moss).opacity(0.12), in: Capsule())
@@ -2365,12 +2584,17 @@ struct WorkoutRow: View {
         }
     }
 
-    /// Category, duration, and intensity.
+    /// Category, duration, distance, and intensity, all in the row's full-strength `slate`. The category
+    /// used to be drawn in its accent hue, which as small text measured 3.95:1 for moss (bundle 6,
+    /// 2026-10-20) and less for goldenrod and dusty rose; the word itself carries the category. The
+    /// distance is stored in miles and read in the device's units ("3.1 mi", "5 km").
     private var metaRow: some View {
         HStack(spacing: 12) {
             Text(verbatim: category.displayName)
-                .foregroundStyle(category.color)
             if let duration = workout.duration { Text("\(duration) min") }
+            if let miles = workout.distanceMiles, miles > 0 {
+                Text(verbatim: WorkoutMeasurementEntry.distanceText(miles: miles))
+            }
             // Both halves of the fork are now localized: `WorkoutType.displayName` exists and this
             // site was still rendering the FROZEN `rawValue` beside the translated intensity word.
             Text(verbatim: workout.intensity.displayWord)
@@ -2394,7 +2618,7 @@ struct WorkoutRow: View {
                 .foregroundStyle(Color.slate)
         }
         if !workout.notes.isEmpty {
-            Text(workout.notes)
+            Text(workout.displayedNotes)
                 .font(.fernlet(.bubble))
                 .foregroundStyle(Color.slate)
         }
@@ -2477,9 +2701,12 @@ struct WorkoutRow: View {
 
 /// A small editor for an already-logged workout — the reversible half of the recoverability feature.
 ///
-/// It edits only the fields that make sense to correct after the fact (name, intensity, duration,
-/// notes) and reuses the manual Log sheet's field idiom (`SheetField`, `SheetTextEditor`, chips,
-/// `SheetSaveBar`). Everything else — provenance (planned/guided/Health), exercises, targets,
+/// It edits the fields that make sense to correct after the fact (name, intensity, duration, notes)
+/// and each lift's sets — reps, weight, how it felt and why it left the range (idea 6) — and reuses
+/// the manual Log sheet's field idiom (`SheetField`, `SheetTextEditor`, chips, `SheetSaveBar`). A
+/// corrected set rewrites the lift's structured record and its readable line together
+/// (``WorkoutSetEditing``), and the load engine reads it from there, so a mis-tapped set no longer
+/// skews the next prescription. Everything else — provenance (planned/guided/Health), targets,
 /// timestamps — is carried straight through by editing a copy of the original and letting the store
 /// re-assert provenance on save. A guided-logged row's name is pinned (it's the guided card's
 /// reconciliation key), and a store refusal (a genuine Health import) keeps the sheet open with an
@@ -2496,6 +2723,10 @@ struct EditWorkoutSheet: View {
     @State private var duration: String
     @State private var rpe: String
     @State private var notes: String
+    /// Each editable lift's sets (``WorkoutSetEditing/drafts(for:defaultUnit:)``), and what they were
+    /// when the sheet opened — the save writes back only the lifts that changed.
+    @State private var setDrafts: [ExerciseSetsDraft]
+    private let originalSetDrafts: [ExerciseSetsDraft]
     @State private var showHealthRefusalAlert = false
     @State private var showDiscardConfirm = false
 
@@ -2511,6 +2742,10 @@ struct EditWorkoutSheet: View {
         _duration = State(initialValue: workout.duration.map(String.init) ?? "")
         _rpe = State(initialValue: Self.rpeText(workout.rpe))
         _notes = State(initialValue: workout.notes)
+        let drafts = WorkoutSetEditing.drafts(
+            for: workout, defaultUnit: WorkoutLoadContextBuilder.defaultUnit(for: .current))
+        _setDrafts = State(initialValue: drafts)
+        originalSetDrafts = drafts
     }
 
     /// The RPE as the field shows it — "7", not "7.0" — and empty when the row carries none.
@@ -2528,6 +2763,7 @@ struct EditWorkoutSheet: View {
             || duration != (workout.duration.map(String.init) ?? "")
             || rpe != Self.rpeText(workout.rpe)
             || notes != workout.notes
+            || setDrafts != originalSetDrafts
     }
 
     private func attemptCancel() {
@@ -2568,13 +2804,34 @@ struct EditWorkoutSheet: View {
         }
     }
 
+    /// Each editable lift's sets — a guided lift, one logged set by set, or a hand-written line that
+    /// reads as sets × reps. Absent for a row with none (an activity, or a guided log from before
+    /// load tracking, whose lines are the plan rather than a record).
+    private var setsSection: some View {
+        SheetField("Sets") {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Fix any set that went differently. Fernlet plans your next weights from these.")
+                    .font(.fernlet(.bubble))
+                    .foregroundStyle(Color.slate)
+                    .fernletWrappingText()
+                ForEach($setDrafts) { $draft in
+                    let index = setDrafts.firstIndex { $0.id == draft.id } ?? 0
+                    ExerciseSetsEditor(draft: $draft, identifier: "workout.edit.sets.\(index)")
+                        .padding(14)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.bark.opacity(0.10), lineWidth: 1))
+                }
+            }
+        }
+    }
+
     /// Writes the edited fields back through the store.
     ///
     /// Consumes the store's refusal Bool: on a refusal (a genuine Health import) keep the sheet open
     /// and explain, rather than dismissing as if the edit saved.
     private func saveEdits() {
         guard !trimmedName.isEmpty else { return }
-        var updated = workout
+        // Corrected sets first: each changed lift's record and its line, rewritten together.
+        var updated = WorkoutSetEditing.applying(setDrafts, original: originalSetDrafts, to: workout)
         updated.name = workout.savedName(editing: trimmedName)
         updated.intensity = intensity
         updated.duration = WorkoutSheetRules.durationMinutes(from: duration)
@@ -2617,6 +2874,10 @@ struct EditWorkoutSheet: View {
                         }
                     }
 
+                    if !setDrafts.isEmpty {
+                        setsSection
+                    }
+
                     SheetField("Workout notes") {
                         SheetTextEditor(
                             text: $notes,
@@ -2655,7 +2916,9 @@ struct WorkoutExerciseRow: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.moss)
-            Text(exercise)
+            // The stored line is frozen plan text; it is drawn with the planner's descriptors in the
+            // user's language and a treadmill's mph in km/h on a metric device.
+            Text(WorkoutMeasurementEntry.drawnLine(exercise))
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2748,8 +3011,8 @@ struct MoveContextStrip: View {
     private var spaceValue: String {
         let count = location.ownedEquipment.count
         return dynamicTypeSize.isAccessibilitySize
-            ? "\(location.name) · \(count)"
-            : "\(location.name) · \(count) items"
+            ? "\(location.displayedName) · \(count)"
+            : "\(location.displayedName) · \(count) items"
     }
 
     /// Spoken when no movement goal is set. A shared constant rather than an inline `??` literal:
@@ -2766,7 +3029,7 @@ struct MoveContextStrip: View {
     /// English inside an otherwise translated sentence.
     private var spaceAccessibilityValue: String {
         String(localized: "move.space.accessibilityValue",
-               defaultValue: "\(location.name), \(location.ownedEquipment.count) items",
+               defaultValue: "\(location.displayedName), \(location.ownedEquipment.count) items",
                comment: "Spoken value of the Move header's space segment: the training location's name and how many pieces of equipment it has.")
     }
 
@@ -2907,8 +3170,30 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
     var speed: String
     var incline: String
     var details: String
+    /// The structured record of a lift entered set by set in the Log sheet (idea 6); nil for every
+    /// free-text row. When set, the row's line is the record's own ``ExerciseResult/loggedLine``, so
+    /// the readable log and the record cannot disagree.
+    var result: ExerciseResult? = nil
 
-    var summary: String {
+    /// The row's line without its name, for the added-row card ("3 x 8 @ 100 lb (did 8, 8, 6)").
+    var detailSummary: String {
+        guard let result else {
+            return summary.replacingOccurrences(of: exercise.name, with: "").trimmingCharacters(in: .whitespaces)
+        }
+        let line = result.loggedLine
+        let prefix = "\(result.name) - "
+        guard line.hasPrefix(prefix) else { return line }
+        return String(line.dropFirst(prefix.count))
+    }
+
+    var summary: String { summaryLine(imperial: nil) }
+
+    /// ``summary`` on a device that reads miles (`true`), kilometres (`false`), or this one (nil). The
+    /// line always stores a treadmill speed in mph: on a metric device the typed km/h is converted
+    /// (``WorkoutMeasurementEntry/storedSpeed(fromEntry:imperial:)``), and screens read it back in km/h.
+    /// A lift entered set by set is its record's own line.
+    func summaryLine(imperial: Bool?) -> String {
+        if let result { return result.loggedLine }
         var parts: [String] = [exercise.name]
         let cleanSets = sets.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanReps = reps.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2928,7 +3213,9 @@ struct WorkoutExerciseEntry: Identifiable, Equatable {
             }
             if !cleanWeight.isEmpty { parts.append("@\(cleanWeight)") }
         case .treadmill:
-            if !cleanSpeed.isEmpty { parts.append("\(cleanSpeed) mph") }
+            if !cleanSpeed.isEmpty {
+                parts.append("\(WorkoutMeasurementEntry.storedSpeed(fromEntry: cleanSpeed, imperial: imperial)) mph")
+            }
             if !cleanIncline.isEmpty { parts.append("\(cleanIncline)% incline") }
         case .none:
             break
@@ -3083,6 +3370,11 @@ struct WorkoutExerciseBuilder: View {
     /// Backs the "last time" recall line with the store's logged day history; `nil` (the default)
     /// hides the line entirely, so call sites without a store are untouched.
     var historyStore: FernletStore? = nil
+    /// Draws the Sets / Reps / Weight / Details fields for a strength pick. The Log sheet turns it off
+    /// while "Log set by set" is on, where per-set rows take their place.
+    var showsStrengthFields = true
+    /// Forwarded to ``ExerciseSearchPicker`` — lets a typed name stand as the exercise.
+    var allowsTypedExercise = false
     var onAdd: () -> Void
 
     /// The resolved recall values for the current pick — held as state so the rollup runs once per
@@ -3134,8 +3426,10 @@ struct WorkoutExerciseBuilder: View {
     /// Speed / incline / details — the treadmill prescription fields.
     @ViewBuilder private var treadmillFields: some View {
         HStack(alignment: .top, spacing: 12) {
+            // The speed is typed in the device's units; the saved line converts km/h to mph.
             SheetField("Speed", namesControl: true) {
-                TextField("5.5 mph", text: $speed, prompt: .fieldPrompt("5.5 mph"))
+                TextField(WorkoutMeasurementEntry.usesImperial ? "5.5 mph" : "9 km/h", text: $speed,
+                          prompt: .fieldPrompt(WorkoutMeasurementEntry.usesImperial ? "5.5 mph" : "9 km/h"))
                     .keyboardType(.decimalPad)
                     .sheetTextInput(font: .fernlet(.label))
             }
@@ -3174,7 +3468,8 @@ struct WorkoutExerciseBuilder: View {
                 resetToken: $resetToken,
                 title: pickerTitle,
                 placeholder: searchPlaceholder,
-                autofocus: autofocusSearch
+                autofocus: autofocusSearch,
+                allowsTypedExercise: allowsTypedExercise
             )
 
             if let lastTimeValues {
@@ -3187,7 +3482,7 @@ struct WorkoutExerciseBuilder: View {
 
             switch inputKind {
             case .strength:
-                strengthFields
+                if showsStrengthFields { strengthFields }
             case .treadmill:
                 treadmillFields
             case .none:
@@ -3219,13 +3514,57 @@ struct ExerciseSearchPicker: View {
     /// Puts the keyboard in the search field as the sheet opens. Only the speed-first Quick exercise
     /// sheet asks for it — a sheet with fields above the picker shouldn't yank focus past them.
     var autofocus = false
+    /// Offers the typed text itself as the exercise when no catalog name matches it — the Log sheet's
+    /// set-by-set entry, where a lift outside the catalog can still be recorded. Off everywhere else.
+    var allowsTypedExercise = false
     @FocusState private var searchFocused: Bool
     /// One in-flight result-count announcement at a time (T2-14) — the debounce itself. Held as
     /// state so a newer keystroke can cancel the pending one; see ``announceResultCount(_:)``.
     @State private var resultAnnouncementTask: Task<Void, Never>?
 
+    /// Longest typed name taken as an exercise.
+    static let maxTypedNameLength = 80
+
     private var results: [ExerciseTarget] {
         Array(WorkoutExerciseCatalog.search(query).prefix(8))
+    }
+
+    /// The typed text as an exercise of its own, when typed names are allowed and the text names no
+    /// catalog exercise. It carries no muscles or gear: it is logged and recalled by name only.
+    private var typedExercise: ExerciseTarget? {
+        guard allowsTypedExercise, selectedExercise == nil else { return nil }
+        let name = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= Self.maxTypedNameLength,
+              WorkoutExerciseCatalog.exercise(named: name) == nil else { return nil }
+        return ExerciseTarget(name: name, primaryMuscles: [])
+    }
+
+    /// "Use “Farmer's walk”" — picks the typed name as the exercise.
+    private func typedExerciseRow(_ exercise: ExerciseTarget) -> some View {
+        Button {
+            selectedExercise = exercise
+            query = exercise.name
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "pencil")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.moss)
+                    .accessibilityHidden(true)
+                Text("Use “\(exercise.name)”")
+                    .font(.fernlet(.body))
+                    .foregroundStyle(Color.bark)
+                    .fernletWrappingText()
+                Spacer(minLength: 0)
+            }
+            .padding(10)
+            .frame(minHeight: 44)
+            .background(Color.cream, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.bark.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        // Voice Control: the drawn label quotes whatever was typed; "Use typed name" always works.
+        .accessibilityInputLabels([Text("Use typed name")])
+        .accessibilityIdentifier("exercise.useTyped")
     }
 
     /// The count worth SPEAKING, or `nil` when there is nothing to say.
@@ -3285,7 +3624,7 @@ struct ExerciseSearchPicker: View {
     private func selectFirstResult() {
         guard selectedExercise == nil, let first = results.first else { return }
         selectedExercise = first
-        query = first.name
+        query = first.displayName
         searchFocused = false
     }
 
@@ -3316,7 +3655,7 @@ struct ExerciseSearchPicker: View {
                         ForEach(results) { exercise in
                             ExerciseSearchResultRow(exercise: exercise, isSelected: false) {
                                 selectedExercise = exercise
-                                query = exercise.name
+                                query = exercise.displayName
                             }
                         }
                     }
@@ -3328,6 +3667,10 @@ struct ExerciseSearchPicker: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel(Text("Exercise results"))
                     .accessibilityValue(Text(verbatim: Self.resultCountText(results.count)))
+
+                    if let typedExercise {
+                        typedExerciseRow(typedExercise)
+                    }
                 }
             }
         }
@@ -3362,7 +3705,7 @@ struct ExerciseSearchResultRow: View {
                     .frame(width: 9, height: 9)
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(exercise.name)
+                    Text(verbatim: exercise.displayName)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     // `displayName`, not `rawValue` — the seventh site of this class in this file.
@@ -3384,7 +3727,7 @@ struct ExerciseSearchResultRow: View {
         .buttonStyle(.plain)
         // Voice Control: the row's name runs on through its category and every muscle it works;
         // the exercise's name is what a user says.
-        .accessibilityInputLabels([Text(verbatim: exercise.name)])
+        .accessibilityInputLabels([Text(verbatim: exercise.displayName)])
     }
 }
 
@@ -3399,10 +3742,10 @@ struct LoggedExerciseRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.exercise.name)
+                Text(verbatim: entry.exercise.displayName)
                     .font(.fernlet(.body))
                     .foregroundStyle(Color.bark)
-                Text(entry.summary.replacingOccurrences(of: entry.exercise.name, with: "").trimmingCharacters(in: .whitespaces))
+                Text(WorkoutMeasurementEntry.displayedSpeeds(in: entry.detailSummary))
                     .font(.fernlet(.labelSmall))
                     .foregroundStyle(Color.slate)
                 Text(entry.exercise.muscles.joined(separator: ", "))
@@ -3416,7 +3759,7 @@ struct LoggedExerciseRow: View {
                     .foregroundStyle(Color.slate)
             }
             .buttonStyle(.plain)
-            .fernletIconButton("Remove \(entry.exercise.name)")
+            .fernletIconButton("Remove \(entry.exercise.displayName)")
             // T2-12: the spoken name interpolates the exercise, so a Voice Control user had to
             // say "tap remove barbell back squat". Duplicate short names across rows are fine —
             // Voice Control numbers ambiguous matches.
@@ -3441,7 +3784,7 @@ struct EditablePlannedExerciseRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.exercise.name)
+                    Text(verbatim: entry.exercise.displayName)
                         .font(.fernlet(.body))
                         .foregroundStyle(Color.bark)
                     Text(entry.exercise.muscles.joined(separator: ", "))
@@ -3455,7 +3798,7 @@ struct EditablePlannedExerciseRow: View {
                         .foregroundStyle(Color.slate)
                 }
                 .buttonStyle(.plain)
-                .fernletIconButton("Remove \(entry.exercise.name)")
+                .fernletIconButton("Remove \(entry.exercise.displayName)")
                 // T2-12, as on ``LoggedExerciseRow``.
                 .accessibilityInputLabels([Text("Remove")])
             }
@@ -3954,6 +4297,8 @@ struct MoveDayDetailView: View {
     // Past-day reads (`store.loadDay` for a non-today key) aren't observed, so a remove/edit on a past
     // day needs an explicit nudge to re-render. Bumping this re-evaluates the body, re-reading `day`.
     @State private var reloadToken = 0
+    /// The guided run a today's plan's Start opened (`PlannedWorkoutRun.swift`). nil = closed.
+    @State private var plannedRunSession: WorkoutProgram.SessionSuggestion?
 
     private var day: FernletDay {
         _ = reloadToken
@@ -3999,8 +4344,21 @@ struct MoveDayDetailView: View {
             onDelete: {
                 store.deletePlannedWorkout(workout, date: dateKey)
                 reloadToken += 1
-            }
+            },
+            onStart: startAction(for: workout)
         )
+    }
+
+    /// Start, on today's plans only: the same guided run the Move root's row opens.
+    private func startAction(for workout: PlannedWorkout) -> (() -> Void)? {
+        guard dateKey == store.todayKey, PlannedWorkoutRun.canGuide(workout) else { return nil }
+        return {
+            guard let session = store.guidedSession(forPlanned: workout, date: dateKey) else {
+                FernletAuditLog.log("workout.plannedRun.notGuidable")
+                return
+            }
+            plannedRunSession = session
+        }
     }
 
     /// The day's plan: an empty-state that opens the planner, or the planned rows.
@@ -4112,6 +4470,13 @@ struct MoveDayDetailView: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
         }
+        // A finished run completes the planned row: re-read the day when the runner closes.
+        .sheet(item: $plannedRunSession, onDismiss: { reloadToken += 1 }) { session in
+            GuidedWorkoutSheet(store: store, session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(20)
+        }
     }
 }
 
@@ -4127,6 +4492,9 @@ struct PlannedWorkoutRow: View {
     var onComplete: () -> Void
     var onEdit: () -> Void
     var onDelete: () -> Void
+    /// Runs this plan in the guided runner, as written (`PlannedWorkoutRun.swift`). Nil — no Start — on
+    /// any day but today, and for a plan with nothing to run.
+    var onStart: (() -> Void)? = nil
 
     /// Remove asks first — a mis-tap on a small text button used to erase a plan (possibly a
     /// coach-imported one) with no dialog and no undo, while the sibling logged row confirmed.
@@ -4198,7 +4566,7 @@ struct PlannedWorkoutRow: View {
         if !stepLines.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(stepLines.prefix(4).enumerated()), id: \.offset) { _, line in
-                    Text(line)
+                    Text(WorkoutMeasurementEntry.drawnLine(line))
                         .font(.fernlet(.bodySmall))
                         .foregroundStyle(Color.bark.opacity(0.82))
                         .lineLimit(2)
@@ -4214,9 +4582,30 @@ struct PlannedWorkoutRow: View {
         }
     }
 
-    /// Edit / Remove.
+    /// "Start" — a filled capsule, the row's one primary — runs the plan in the guided runner. The spoken
+    /// name says which plan; Voice Control answers to the drawn word.
+    @ViewBuilder private var startButton: some View {
+        if let onStart {
+            Button(action: onStart) {
+                Label("Start", systemImage: "play.fill")
+                    .font(.fernlet(.label))
+                    .foregroundStyle(Color.onMoss)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.mossFill, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .fernletTapTarget()
+            .accessibilityLabel("Start \(plannedWorkout.displayedName), guided")
+            .accessibilityInputLabels([Text("Start"), Text("Start plan"), Text("Start workout")])
+            .accessibilityIdentifier("workout.plan.start")
+        }
+    }
+
+    /// Start (today's plans), Edit, Remove — stacked at accessibility text sizes rather than squeezed.
     private var actionRow: some View {
-        HStack(spacing: 10) {
+        AdaptiveStack(spacing: 10, horizontalAlignment: .leading) {
+            startButton
             Button("Edit", action: onEdit)
                 .font(.fernlet(.label))
                 .foregroundStyle(Color.moss)
@@ -4309,7 +4698,8 @@ struct WorkoutPlanSheet: View {
         let seedName = editingPlan?.displayedName ?? ""
         let seedPlanned = editingPlan?.exercises ?? ""
         let seedDuration = editingPlan?.duration.map(String.init) ?? ""
-        let seedDistance = editingPlan?.targetDistanceMiles.map { String($0) } ?? ""
+        // Stored in miles; the field reads in the device's units (kilometres on a metric device).
+        let seedDistance = editingPlan?.targetDistanceMiles.map { WorkoutMeasurementEntry.entryText(miles: $0) } ?? ""
         let seedEnergy = editingPlan?.targetEnergyKcal.map { String($0) } ?? ""
         let seedEffort = editingPlan?.targetEffort.map(String.init) ?? ""
         let seedNotes = editingPlan?.notes ?? ""
@@ -4648,7 +5038,7 @@ struct WorkoutPlanSheet: View {
                 muscleGroups: plannedMuscleGroups,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 duration: WorkoutSheetRules.durationMinutes(from: duration),
-                targetDistanceMiles: LocaleTolerantNumber.double(from: distance),
+                targetDistanceMiles: WorkoutMeasurementEntry.miles(fromEntry: distance),
                 targetEnergyKcal: LocaleTolerantNumber.double(from: energyKcal),
                 targetEffort: LocaleTolerantNumber.int(from: effort),
                 createdAt: editingPlan?.createdAt ?? Date()

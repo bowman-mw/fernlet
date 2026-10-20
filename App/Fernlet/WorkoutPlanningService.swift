@@ -98,8 +98,18 @@ final class WorkoutPlanningService {
     /// round in turn whichever weekdays they train. Equipment + injuries are applied
     /// deterministically by the engine; sets, reps and weight ranges follow each lift's logged
     /// sessions (``WorkoutLoadContextBuilder``), with plateau handling and the monthly calibration.
-    func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
+    /// The 48-hour guard reads the same history (``WorkoutRecentTrainingBuilder``): it moves to a
+    /// split day that spares muscles worked hard yesterday, or lightens the lifts that would repeat
+    /// them. Each session is shaped by Workout setup's session options — the warm-up and cool-down
+    /// switches and the time budget it is fitted into — with `sessionLength`, when given, standing in
+    /// for the setup's length for this plan only. Hidden exercises are never suggested and saved
+    /// alternates are preferred where they fit (``WorkoutExercisePreferences``).
+    func workoutDayPlan(
+        intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
+    ) -> WorkoutProgram.DayPlan {
         let history = host.loadDays()
+        var options = host.settings.workoutSessionOptions
+        if let sessionLength { options.length = sessionLength }
         let split = activeWorkoutSplit(history: history)
         let rotation = WorkoutProgram.nextDayIndex(
             in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
@@ -116,7 +126,10 @@ final class WorkoutPlanningService {
             split: split,
             rotationIndex: rotation,
             progression: host.settings.workoutProgression,
-            load: load
+            load: load,
+            recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey),
+            options: options,
+            preferences: host.settings.workoutExercisePreferences
         )
     }
 
@@ -145,13 +158,15 @@ final class WorkoutPlanningService {
     /// A single `.mobility` session whose only exercise is a non-catalog descriptor (`sets == 0`), so
     /// `GuidedWorkoutAvailability.isGuidable` is false: the Move root card settles on its "easy
     /// movement" state instead of offering "Start today's workout", and "Already did this — log it"
-    /// still logs it (at light intensity) if the user did move. Plain strings, like every other
-    /// generated plan's copy (the domain's plan text is not localized yet).
+    /// still logs it (at light intensity) if the user did move. The names and the movement line are
+    /// frozen English, like every generated plan's (a logged row is saved under the name, and the line
+    /// is parsed for its minutes); screens draw them through `WorkoutSessionNames`,
+    /// `WorkoutProgram.DayPlan.displayedSplitName` and `WorkoutPlanLine`. The note is localized.
     nonisolated static func restDayPlan(locationName: String) -> WorkoutProgram.DayPlan {
         let suggestion = WorkoutSuggestion(
             name: "Gentle movement",
             exercises: restDayMovementLine,
-            notes: "You marked yourself unwell, so rest is the real plan today. This is here only if moving would feel good."
+            notes: WorkoutPlannerCopy.restDayNote
         )
         let session = WorkoutProgram.SessionSuggestion(
             title: "Rest",
@@ -161,7 +176,8 @@ final class WorkoutPlanningService {
             suggestion: suggestion
         )
         return WorkoutProgram.DayPlan(
-            splitName: "Rest day", dayTitle: "Rest", sessions: [session], droppedSlots: [], locationName: locationName
+            splitName: TrainingSplit.restDayName, dayTitle: "Rest", sessions: [session], droppedSlots: [],
+            locationName: locationName
         )
     }
 
@@ -173,6 +189,8 @@ final class WorkoutPlanningService {
         guard trimmed.isEmpty == false, host.settings.aiStatus != .off else { return plan }
         let location = host.settings.activeWorkoutLocation
         let profile = host.settings.workoutProfile
+        // Hidden exercises ("Don't suggest this") never reach the model's candidate list.
+        let preferences = host.settings.workoutExercisePreferences
         // User-invoked adjustment (the person typed a request and tapped): routes through the store's
         // AI gate at `standard` tier so the sleepy/resting budget + one-call-per-dispatch charge apply.
         let gate = host.aiGate
@@ -183,7 +201,8 @@ final class WorkoutPlanningService {
             guard session.kind == .strength || session.kind == .fullBody || session.kind == .sport else { continue }
             let currentNames = session.catalogExerciseNames
             let candidates = WorkoutAdjustmentCandidateBuilder.candidates(
-                currentNames: currentNames, request: trimmed, location: location, profile: profile
+                currentNames: currentNames, request: trimmed, location: location, profile: profile,
+                preferences: preferences
             )
             guard candidates.isEmpty == false else { continue }
             let payload = WorkoutAdjustmentPayload(request: trimmed, currentExercises: currentNames, candidateCount: candidates.count)
@@ -205,7 +224,7 @@ final class WorkoutPlanningService {
         }
         return WorkoutProgram.DayPlan(
             splitName: plan.splitName, dayTitle: plan.dayTitle, sessions: sessions,
-            droppedSlots: plan.droppedSlots, locationName: plan.locationName
+            droppedSlots: plan.droppedSlots, locationName: plan.locationName, recovery: plan.recovery
         )
     }
 }

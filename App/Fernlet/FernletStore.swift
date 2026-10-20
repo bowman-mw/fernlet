@@ -3284,8 +3284,9 @@ final class FernletStore {
         return true
     }
 
-    /// Replaces a logged workout in place (used by the edit sheet, which only exposes
-    /// name/intensity/duration/notes). Provenance and timestamps the edit UI can't reach are re-asserted
+    /// Replaces a logged workout in place (used by the edit sheet, which exposes name/intensity/duration/
+    /// notes and each lift's sets — the corrected `exerciseResults` and their lines arrive on `workout`
+    /// and are stored as given). Provenance and timestamps the edit UI can't reach are re-asserted
     /// from the stored row so a partial edit can't drop them. Genuine Health *imports* are refused (not
     /// editable — another app owns them). A Fernlet-*authored* row IS editable — its immutable Health
     /// sample is re-synced (delete-old + save-new) so the Health copy never silently diverges from the
@@ -4556,6 +4557,11 @@ final class FernletStore {
         diary.setSelectedSplit(id)
     }
 
+    /// Saves Workout setup's session length and stretch switches (``WorkoutSessionOptions``).
+    func setWorkoutSessionOptions(_ options: WorkoutSessionOptions) {
+        diary.setWorkoutSessionOptions(options)
+    }
+
     /// How consistently the user has trained over the last 4 weeks — a recommendation input.
     func workoutConsistency() -> WorkoutConsistency {
         workoutPlanningService.workoutConsistency()
@@ -4579,11 +4585,15 @@ final class FernletStore {
     /// the plan is ``WorkoutPlanningService/restDayPlan(locationName:)``, one gentle un-guided
     /// movement line the user can take or leave, so neither the preview nor a committed plan can put
     /// strength work in front of someone who said they are unwell.
-    func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
+    ///
+    /// `sessionLength` is the plan sheet's one-day length; nil uses Workout setup's.
+    func workoutDayPlan(
+        intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
+    ) -> WorkoutProgram.DayPlan {
         if needsRestToday {
             return WorkoutPlanningService.restDayPlan(locationName: settings.activeWorkoutLocation.name)
         }
-        return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context)
+        return workoutPlanningService.workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
     }
 
     /// Records that catalog exercises were completed, advancing their week-to-week progression.
@@ -4686,11 +4696,14 @@ final class FernletStore {
     /// Commits today's plan (generating it once if today has none yet) and returns it — used when the
     /// user actually starts, from the card or from the Suggest sheet's "Suggest" button. A same-day
     /// call reuses the committed instance so its session IDs and any completions survive; only a new
-    /// day (re)generates and clears the completed-session set.
+    /// day (re)generates and clears the completed-session set. `sessionLength` is the Suggest sheet's
+    /// one-day length (nil: Workout setup's); like `context`, it shapes only the plan it builds.
     @discardableResult
-    func commitTodaysGuidedWorkoutPlan(intensity: WorkoutIntensity, context: String = "") -> WorkoutProgram.DayPlan {
+    func commitTodaysGuidedWorkoutPlan(
+        intensity: WorkoutIntensity, context: String = "", sessionLength: WorkoutSessionLength? = nil
+    ) -> WorkoutProgram.DayPlan {
         if let plan = currentGuidedWorkoutPlan { return plan }
-        let plan = workoutDayPlan(intensity: intensity, context: context)
+        let plan = workoutDayPlan(intensity: intensity, context: context, sessionLength: sessionLength)
         guidedPlanStorage = plan
         guidedPlanDayKey = todayKey
         committedGuidedIntensityStorage = intensity
@@ -4815,13 +4828,38 @@ final class FernletStore {
     /// can advance it from the Lock Screen — even after the app is suspended or terminated. Observable
     /// so the guided sheet and card reflect every transition, whether it came from the in-app buttons
     /// or the Lock Screen. Session-scoped; never part of the synced blob.
-    private(set) var guidedRunState: GuidedWorkoutRunState?
+    ///
+    /// Every assignment — an in-app move, a Lock Screen intent's reconcile, a finish, an abandon, the
+    /// wipe — re-arms the run's haptic, sound and background cues, so they always describe the run as
+    /// it is now and stop the moment it ends (`GuidedRunCues.swift`).
+    private(set) var guidedRunState: GuidedWorkoutRunState? = nil {
+        didSet {
+            guidedRunCues.runChanged(to: guidedRunState)
+            guidedZones.runChanged(to: guidedRunState)
+        }
+    }
+    /// The guided runner's cue director: rest-end and hold-end haptics and sounds in the app, and the
+    /// pending cue notification for a phone in the background. Internal and settable so the runner
+    /// sheet can report its taps and a test can inject a recording director.
+    @ObservationIgnored lazy var guidedRunCues = GuidedRunCueDirector()
+    /// Guided cardio's heart-rate cue (`GuidedZones.swift`): the live session on a cardio segment, the
+    /// reading the runner card draws, the opt-in zone nudge, and the Live Activity's reading. Internal and
+    /// settable so a test can inject a director over a fake heart-rate source.
+    @ObservationIgnored lazy var guidedZones: GuidedZoneDirector = GuidedZoneDirector(
+        sharingAllowed: { [weak self] in self?.isWorkoutHealthSharingEnabled ?? false },
+        zones: { [weak self] in self?.heartRateZones() },
+        publish: { [weak self] in self?.publishGuidedZone() }
+    )
     /// On THIS store's app-group root. `resetAll` clears this file and `GuidedWorkoutRunStoreTests`
     /// reads it, so the process-wide container was a live cross-suite race, not a latent one.
     @ObservationIgnored private lazy var guidedRunStateStore =
         GuidedWorkoutRunStateStore(directory: appGroupDirectory)
     /// Serializes Live Activity update/end calls so two rapid transitions can't land out of order.
     @ObservationIgnored private var activitySyncTask: Task<Void, Never>?
+    /// The planned workout whose Start opened the runner, until the runner's own Start begins its run
+    /// (`PlannedWorkoutRun.swift`). One at a time; session-scoped, never persisted — from the run's start
+    /// the run state carries the plan's id itself.
+    @ObservationIgnored var pendingPlannedRun: PlannedRunLink?
 
     private static func roleRaw(_ role: SlotRole) -> String {
         switch role {
@@ -4857,7 +4895,8 @@ final class FernletStore {
                 restSecondsOverride: $0.restSeconds,
                 block: SessionBlock(rawValue: $0.block) ?? .lifting,
                 holdSeconds: $0.holdSeconds,
-                side: $0.sideRaw.flatMap(ExerciseSide.init(rawValue:))
+                side: $0.sideRaw.flatMap(ExerciseSide.init(rawValue:)),
+                segment: GuidedRunTimedLog.cardioSegment(of: $0)
             )
         }
         return WorkoutProgram.SessionSuggestion(
@@ -4889,26 +4928,14 @@ final class FernletStore {
     /// Returns whether the run actually started.
     func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion, replacingActiveRun: Bool = false) -> Bool {
         guard replacingActiveRun || activeGuidedRunBlockingStart(of: session) == nil else { return false }
-        let dayKey = guidedPlanDayKey ?? todayKey
-        let intensity = committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
-        let goal = settings.selectedGoal
-        let exercises = session.exercises.map { pe in
-            GuidedWorkoutRunState.Exercise(
-                id: pe.id,
-                name: pe.name,
-                sets: pe.sets,
-                reps: pe.reps,
-                roleRaw: Self.roleRaw(pe.role),
-                fromCatalog: pe.fromCatalog,
-                restSeconds: pe.restSecondsOverride
-                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal),
-                holdSeconds: pe.holdSeconds,
-                blockRaw: pe.block.rawValue,
-                sideRaw: pe.side?.rawValue,
-                tracking: GuidedRunLoadLog.tracking(for: pe)
-            )
-        }
+        // A planned workout's run files under its plan's day and carries the plan's id and its lines as
+        // written (`PlannedWorkoutRun.swift`); nil for the app's own sessions.
+        let plan = plannedRunLink(for: session)
+        let dayKey = plan?.dayKey ?? guidedPlanDayKey ?? todayKey
+        let intensity = plan?.intensity ?? committedGuidedIntensityStorage ?? recommendedWorkoutIntensity() ?? .moderate
+        var exercises = guidedRunExercises(for: session)
         guard !exercises.isEmpty else { return false }
+        plan?.annotate(&exercises)
 
         var state = GuidedWorkoutRunState(
             sessionID: session.id,
@@ -4920,8 +4947,11 @@ final class FernletStore {
             sessionKindRaw: session.kind.rawValue,
             exercises: exercises
         )
+        state.plannedWorkoutID = plan?.plannedWorkoutID
         state.phase = .working
         state.setStartedAt = Date()
+        // The session's start, for the logged duration: the run carries it, so it survives a relaunch.
+        state.startedAt = state.setStartedAt
         guidedRunState = state
         mirrorGuidedRunState(state)
         WorkoutLiveActivityController.start(state)
@@ -4930,6 +4960,50 @@ final class FernletStore {
         // finish's save awaits the same task. Nothing to save yet, so the handle is dropped.
         _ = offerWorkoutHealthAccessOnFirstUse()
         return true
+    }
+
+    /// The run's steps for `session`: each exercise's rest baked in (per-exercise override, else the
+    /// research-based default), its load plan, and — for a counted lift — last time's numbers, so the
+    /// Live Activity can show them with no app state. One history rollup covers the whole run, the
+    /// same data the runner's "Last time" pill reads, and none at all when no step shows them. A timed
+    /// cardio or mobility line is walked as its countdown segments or stretches
+    /// (``WorkoutTimedSessions/expand(_:feasible:)``), the stretches drawn from what this space and
+    /// these limits allow.
+    private func guidedRunExercises(for session: WorkoutProgram.SessionSuggestion) -> [GuidedWorkoutRunState.Exercise] {
+        guard !session.exercises.isEmpty else { return [] }
+        let goal = settings.selectedGoal
+        let stretches = WorkoutTimedSessions.needsStretches(session.exercises)
+            ? WorkoutSafetyFilter.feasibleExercises(in: WorkoutExerciseCatalog.allExercises,
+                                                    location: settings.activeWorkoutLocation, profile: settings.workoutProfile)
+            : []
+        let steps = WorkoutTimedSessions.expand(session.exercises, feasible: stretches)
+        let lastTimes = steps.contains(where: { GuidedRunLoadLog.showsLastTime($0) })
+            ? GuidedRunLoadLog.lastTimes(from: exerciseHistoryEntries())
+            : [:]
+        return steps.map { pe in
+            let lastTime = GuidedRunLoadLog.showsLastTime(pe)
+                ? lastTimes[WorkoutExerciseCatalog.normalizedName(pe.name)] : nil
+            return GuidedWorkoutRunState.Exercise(
+                id: pe.id,
+                name: pe.name,
+                sets: pe.sets,
+                reps: pe.reps,
+                roleRaw: Self.roleRaw(pe.role),
+                fromCatalog: pe.fromCatalog,
+                restSeconds: pe.restSecondsOverride
+                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: pe.name, role: pe.role, goal: goal),
+                holdSeconds: pe.holdSeconds,
+                blockRaw: pe.block.rawValue,
+                sideRaw: pe.side?.rawValue,
+                tracking: GuidedRunLoadLog.tracking(for: pe),
+                // The drawn name, baked in for the Live Activity and the Lock Screen intents, which
+                // cannot reach the domain lookup. `name` above stays the frozen one the log reads.
+                displayName: pe.displayName,
+                lastTime: lastTime,
+                leadInSeconds: pe.segment?.followsOn == true ? 0 : nil,
+                segment: GuidedRunTimedLog.runSegment(pe.segment)
+            )
+        }
     }
 
     /// Mark the current set done from the in-app sheet (mirrors the Live Activity "Done set" button):
@@ -4948,11 +5022,32 @@ final class FernletStore {
         applyGuidedTransition(state)
     }
 
+    /// Move the current rest's end by `seconds` from the in-app sheet — the runner's "−15 s" / "+15 s",
+    /// the same adjustment as the Live Activity's buttons (``GuidedWorkoutRunState/adjustRest(by:now:)``).
+    /// Mirrored and reflected like any transition; setting the run re-arms the rest-end cue and its
+    /// background notification for the new end. Returns whether the rest moved (false at a limit or
+    /// outside a rest), so the sheet can say so.
+    func guidedAdjustRest(by seconds: Int) -> Bool {
+        guard var state = guidedRunState, state.phase == .resting, state.adjustRest(by: seconds, now: Date()) else {
+            return false
+        }
+        applyGuidedTransition(state)
+        return true
+    }
+
     /// Skip the rest of the warm-up or the cool-down from the in-app sheet — the runner's quiet
     /// "Skip warm-up" / "Skip cool-down". Skipping the cool-down finishes and logs the session.
     func guidedSkipBlock() {
         guard var state = guidedRunState, state.canSkipBlock else { return }
         state.skipBlock(now: Date())
+        applyGuidedTransition(state)
+    }
+
+    /// Skip the current lift's remaining warm-up sets from the in-app sheet — the runner's quiet "Skip
+    /// warm-up sets" — straight to its first working set. The skipped sets leave no line in the log.
+    func guidedSkipWarmUpSets() {
+        guard var state = guidedRunState, state.canSkipWarmUpSets else { return }
+        state.skipWarmUpSets(now: Date())
         applyGuidedTransition(state)
     }
 
@@ -4987,23 +5082,53 @@ final class FernletStore {
             syncActivity { await GuidedWorkoutActivityBridge.end() }
         } else {
             mirrorGuidedRunState(state)
-            syncActivity { await GuidedWorkoutActivityBridge.sync(to: state) }
+            let zone = guidedZones.zone(for: state)
+            syncActivity { await GuidedWorkoutActivityBridge.sync(to: state, zone: zone) }
         }
+    }
+
+    /// Re-publishes the live run with guided cardio's current heart-rate cue — the zone director's call
+    /// when the reading moved enough to show (`GuidedZoneDirector`). Chained like every other update, so
+    /// it never lands out of order with a set or a rest. No-op without a live run.
+    private func publishGuidedZone() {
+        guard let state = guidedRunState, !state.isDone else { return }
+        let zone = guidedZones.zone(for: state)
+        syncActivity { await GuidedWorkoutActivityBridge.sync(to: state, zone: zone) }
+    }
+
+    /// Whether Fernlet may share workouts with Apple Health right now — the master and workout switches,
+    /// read live. The gate guided cardio's live heart-rate session needs (`GuidedZones.swift`).
+    var isWorkoutHealthSharingEnabled: Bool {
+        healthKitService?.isWriteSharingEnabled(for: .workoutLogging) == true
+    }
+
+    /// The person's heart-rate zones: their age as this device has it (typed, with any Apple Health
+    /// date of birth laid over it) and, when Health supplied one today, their resting heart rate.
+    func heartRateZones() -> HeartRateZones {
+        HeartRateZones(age: effectiveUserProfile.age, restingHeartRate: day.healthContext?.body?.restingHeartRateBPM)
+    }
+
+    /// Asks Apple Health to let Fernlet read heart rate — only from the person turning on "Heart rate
+    /// during cardio" in Workout setup, and only while workout sharing is on.
+    func requestLiveHeartRateAccess() async {
+        await guidedZones.requestReadAccess()
     }
 
     /// Applies an in-app load-tracking edit (a weight pick, edited reps, an effort tap, an override
     /// reason, a skip mark) to the live run and mirrors it, so a finish from the Lock Screen still
-    /// logs it. No phase change, so the Live Activity is re-synced only when the step count moved (a
-    /// missed max attempt drops the attempts after it). No-op once the run is done.
+    /// logs it. No phase change, so the Live Activity is re-synced only when what it shows moved — a
+    /// weight pick changes its load line; a missed max attempt drops the attempts after it. No-op once
+    /// the run is done.
     func editGuidedRun(_ edit: (inout GuidedWorkoutRunState) -> Void) {
         guard var state = guidedRunState, !state.isDone else { return }
-        let stepCount = state.exercises.count
+        let shown = state.contentState
         edit(&state)
         guidedRunState = state
         mirrorGuidedRunState(state)
-        if state.exercises.count != stepCount {
+        if state.contentState != shown {
             let snapshot = state
-            syncActivity { await GuidedWorkoutActivityBridge.sync(to: snapshot) }
+            let zone = guidedZones.zone(for: snapshot)
+            syncActivity { await GuidedWorkoutActivityBridge.sync(to: snapshot, zone: zone) }
         }
     }
 
@@ -5029,6 +5154,8 @@ final class FernletStore {
     /// adopted so the sheet/card resume it; a run the process merely outlived (untouched for hours) is
     /// retired. When there is no run at all, any activity still on screen is retired.
     func reconcileGuidedRunFromAppGroup() {
+        // A heart-rate session HealthKit kept alive across a crash is ended here, once per launch.
+        guidedZones.retireRecoveredSessionIfNeeded()
         guard let fileState = guidedRunStateStore.read() else {
             // No backing run: retire any activity left on screen (an in-app finish whose immediate
             // end() didn't land, or an orphan from a prior build). No-op when nothing is live.
@@ -5059,8 +5186,12 @@ final class FernletStore {
     /// plan is gone). Anchors the logged workout to the day/intensity the plan was committed with — a
     /// rest can cross local midnight — tags it as a guided log, advances progression, and records the
     /// completion. Deduped by session id so a finish seen by both the sheet and a reconcile logs once.
+    /// The row carries the session's duration and ends at the run's own finish, which is what its
+    /// Apple Health copy is written from.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
+        // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
+        if logPlannedRun(state) { return }
         let dayKey = state.committedDayKey
         // Durable same-day backstop: after a relaunch the in-memory completed set is empty, but a
         // guided log already in today's record (tagged with this name) means it's done — don't re-log.
@@ -5072,13 +5203,26 @@ final class FernletStore {
         // Tracked lifts log what happened — the weight picked and any edited reps — as text and as
         // structured results; a run with nothing tracked logs its plan text as before.
         let loadLog = GuidedRunLoadLog.log(for: state)
+        // The session's length from the run's own start and finish, in the minutes a hand-logged
+        // workout keeps (`GuidedRunDuration`); nil for a run persisted before it recorded a start.
+        let timing = GuidedRunDuration.minutes(startedAt: state.startedAt, finishedAt: state.finishedAt)
         var workout = Workout(
-            name: state.title, type: type, mode: mode, exercises: loadLog?.text ?? state.suggestionExercisesText,
-            rpe: nil, notes: state.suggestionNotes, duration: nil,
+            name: state.title, type: type, mode: mode, activityType: GuidedRunTimedLog.activityType(for: state),
+            exercises: loadLog?.text ?? state.suggestionExercisesText,
+            rpe: nil, notes: GuidedRunDuration.notes(state.suggestionNotes, capped: timing?.capped == true),
+            // A timed cardio or mobility run logs the minutes actually held; every other run logs its
+            // wall-clock minutes from start to finish (capped).
+            duration: GuidedRunTimedLog.heldMinutes(for: state) ?? timing?.minutes,
             loggedFromGuidedSession: true, intensity: intensity,
             exerciseResults: loadLog.flatMap { $0.results.isEmpty ? nil : $0.results }
         )
-        if dayKey != todayKey,
+        // The run's own finish when it falls on the day the workout is filed under, so a Lock Screen
+        // finish logged at a later reconcile still ends when it did, and the row and its Health copy
+        // span the real session. A finish on another day keeps the noon back-dating below.
+        if let finishedAt = state.finishedAt, FernletDate.dayKey(for: finishedAt) == dayKey {
+            workout.completedAt = finishedAt
+            workout.loggedAt = finishedAt
+        } else if dayKey != todayKey,
            let targetDate = FernletDate.date(fromDayKey: dayKey),
            let completedAt = Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: targetDate) {
             workout.completedAt = completedAt

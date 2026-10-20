@@ -310,6 +310,58 @@ is persisted as a completed row's notes and drawn verbatim. Both are stored text
 tokens (`reconstructPlannedWorkout` matches the note), so each needs the same draw-time mapping
 rather than a localized write.
 
+**Addendum (2026-10-20, exercise display names and how-to text, D-L2):** `ExerciseTarget.name` stays
+the frozen identity. `ExerciseHowToCatalog` (FernletDomainModel) holds, for each of the 118 catalog
+exercises, a display name plus 3–5 cues, one common mistake and one easier version, every string a
+`String(localized:bundle: .module)` key under `exercise.<keyStem>.` in the domain catalog (889 keys,
+`en` only). `displayName(for:)` is an exact match on the frozen spelling, like `StoredWorkoutName`.
+Draws routed through it: the plan card's exercise rows, the guided runner (title, Next up, Up next,
+Ready list via `PrescribedExercise.displayLine`), its spoken transitions, the editor sheet, the reps
+editor, Exercise history, the Log sheet's picker, Recent chips and added rows, and the Live Activity,
+which reads the name the app bakes into `GuidedWorkoutRunState.Exercise.displayName` (the widget
+cannot import the domain). The picker's search matches display names as well as the frozen ones.
+Kept on `name`: plan text (`line`), logged lines and `ExerciseResult.name`, progression keys, the
+history rollup and trainer export, the planner and AI prompts, and the coach-plan wire and review
+screens (which show the coach's own text). **Still English:** a logged row's exercise lines are
+stored text and are drawn as stored; plateau, calibration and session notes embed names in English
+sentences (idea 16).
+**Addendum (2026-10-20, workout copy, comparison-report idea 16):** the workout planner's own words.
+- **Notes are keys, composed at plan time.** Every session-note sentence the planner writes — the load
+  pass's progression and weights-on-hand lines, the plateau story and rest check, the calibration
+  brief, the 48-hour guard, the time budget, "Noted: …", the skipped-slot lines, the AI-adjusted tag
+  and the rest-day note — is a `String(localized:…, bundle: .module)` key in `WorkoutPlannerCopy`, with
+  format specifiers a translator can reorder and plural-ruled count phrases (`workoutNote.count.*`). A
+  note is stored on the logged row (`Workout.notes`) in the language the device ran when the plan was
+  built and is never re-translated; an optional " (25 lb)" that used to be spliced in is now a second
+  whole sentence. The names inside a note are drawn names (the location, the slot labels, the split
+  days); exercise names stay the frozen catalog names, which idea 3's lookup deliberately keeps out of
+  the planner.
+- **Planner names are frozen tokens with draw-time mappings.** A guided session is logged under its
+  English name ("Full Body A", "Morning · Easy cardio") and the rotation and guided reconciliation
+  match it; `StoredWorkoutName` gained a third case so a row the guided flow logged draws it through
+  `WorkoutSessionNames` (a hand-logged "Push" stays the user's own). Split names (the export's
+  `splitName`), day titles, slot labels (`mainLabels`, `droppedSlots`) and the plan-text descriptors
+  ("Easy cardio - 20 min", which `descriptorMinutes` reads back) keep their English and draw through
+  `TrainingSplit.displayName`, `WorkoutSplitDayNames`, `WorkoutSlotNames` and `WorkoutPlanLine`. Split
+  summaries, `frequencySummary`, `SplitSpecificity`, `WorkoutConsistency`, `ExperienceLevel`,
+  `WorkoutPlanSource.title` and `GymEquipment.displayName` had no token reader and are localized in
+  place. `WorkoutPlanSource.completionNote` (the §3.4 residual above) now draws through
+  `Workout.displayedNotes`.
+- **Location names without a schema change.** The `LocationTemplate` debt recorded in review A4/F4
+  proposed a `templateID`; instead a location whose stored name is still exactly a built-in English
+  name ("Full gym", "Home", "Hotel gym", …) draws `WorkoutLocation.displayedName`, and the rename
+  field saves through `savedName(editing:)`, so the presets list (which matches stored names) and the
+  export are unchanged.
+- **Units (Phase 0 §2.4, extended).** Workout distance and treadmill speed follow the lb/kg rule
+  (`measurementSystem == .us` reads miles and mph, everything else kilometres and km/h) at the
+  entry/display boundary only (`WorkoutMeasurementEntry`, app target): `distanceMiles`,
+  `targetDistanceMiles`, HealthKit's mile quantity, the export's `distanceMiles` and a treadmill line's
+  "5.5 mph" are stored exactly as before.
+- **Still English, on purpose:** the plan TEXT's lift lines and calibration tags ("(test set)"), the
+  Live Activity's exercise names (idea 3's lane), the coach-plan importer's reason sentences, the
+  "Location N" a blank rename is repaired to, and an activity plan's `exercises` default name.
+  Pinned by `WorkoutCopyLocalizationTests`.
+
 ---
 
 ## 4. Phase 2 — Translation pass (es / fr / de)
@@ -329,6 +381,34 @@ rather than a localized write.
   pseudolocalization or de translations early, not last.
 - **UI tests stay green:** the suite runs in `en` by default, so the ~181 English string
   assertions across 20 `FernletUITests` files keep passing. Localized-run testing is Phase 5.
+
+> **First drafts landed (2026-10-20): the exercise how-to text.** The 889 `exercise.<keyStem>.`
+> keys in the FernletDomainModel catalog (names, cues, mistakes, easier versions) carry es, fr and
+> de machine drafts, every one `needs_review`, informal tú / tu / du per D-L1. They are **dormant**:
+> a package's resource bundle resolves to the language the main bundle resolved to, and the app
+> ships English alone (no non-English entry in any app-target catalog, so no `es.lproj` / `fr.lproj`
+> / `de.lproj` in the app or an extension; no `CFBundleAllowMixedLocalizations`), so a device set to
+> Spanish still draws the English defaults. Measured, not assumed: with an English-only main bundle,
+> a bundle holding only `es`/`fr` resolved to English (default value) under `AppleLanguages (fr, en)`,
+> `Locale.current` was `en_FR`, and the same bundles resolved French once mixed localizations were
+> allowed. `ExerciseHowToTests.theDraftTranslationsStayDormantWhileTheAppShipsOnlyEnglish` pins
+> those preconditions. `knownRegions` already lists de/es/fr (Phase 1), but that is project metadata
+> and puts nothing in the bundle.
+>
+> **Held back:** the how-to sheet's own labels ("Common mistake", "Stop if you feel sharp pain.",
+> "How to do %@", …) live in the APP catalog, and any es/fr/de entry there compiles a lproj into the
+> main bundle — which switches the whole app into that language and wakes the exercise drafts with
+> it. They are drafted but wait for the app-wide switch-on, after native review of the exercise
+> drafts.
+>
+> **Consequence for the wall's manual runtime check** (`LocalizationBoundaryTests` header, "redo it
+> whenever a module gains its first real translation"): by the rule above, injecting `fr` into a
+> module catalog alone should render English under `-AppleLanguages (fr)`, because the main bundle
+> has no French. The 2026-08-23 FernletUI run is recorded as rendering French, and how that run was
+> set up is not written down, so the first simulator run with these drafts settles it: launched with
+> `-AppleLanguages (es)`, a how-to sheet must read English. To see a module's French on purpose, give
+> the main bundle a French localization too (one `fr` entry in `App/Fernlet/Localizable.xcstrings`,
+> reverted afterwards).
 
 ---
 

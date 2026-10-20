@@ -84,6 +84,78 @@
           }
         }
       }
+    },
+    "notification.workoutCue.holdEnded.body" : {
+      "comment" : "Body of the hold-ended workout cue. Calm wording; the run moves on when the person opens Fernlet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ease out of it. The next step is ready when you are."
+          }
+        }
+      }
+    },
+    "notification.workoutCue.holdEnded.title" : {
+      "comment" : "Title of the in-session cue delivered when a timed hold (a stretch, a plank, a carry) runs out while Fernlet is in the background.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hold's done"
+          }
+        }
+      }
+    },
+    "notification.workoutCue.restEnded.body" : {
+      "comment" : "Body of the rest-ended workout cue. An invitation, never a command or a hurry.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start your next set when you're ready."
+          }
+        }
+      }
+    },
+    "notification.workoutCue.restEnded.title" : {
+      "comment" : "Title of the in-session cue delivered when a guided workout's rest timer reaches zero while Fernlet is in the background. Gentle: the rest waits for the person; this only says the timer ran out.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rest's over"
+          }
+        }
+      }
+    },
+    "notification.workoutCue.segmentEnded.body" : {
+      "comment" : "Body of the cardio segment-ended workout cue. Calm, never a hurry; the guided run waits on that part until the person opens Fernlet.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Change your pace when you're ready. The next part starts when you open Fernlet."
+          }
+        }
+      }
+    },
+    "notification.workoutCue.segmentEnded.title" : {
+      "comment" : "Title of the in-session cue delivered when one timed part of a guided cardio session (an interval's hard or easy part, or a steady stretch of cardio) runs out while Fernlet is in the background.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Time's up on this part"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

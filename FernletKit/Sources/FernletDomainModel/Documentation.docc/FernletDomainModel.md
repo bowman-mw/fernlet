@@ -75,6 +75,10 @@ byte-identical to what already shipped and a separate reader-facing property add
 - ``MealType/displayName`` and ``WorkoutType/displayName`` — persisted categories that are also the
   vocabulary the meal-parsing prompt hands the model, the input `WorkoutExerciseCatalog.inferType`
   matches against, and fields of the trainer export.
+- ``ExerciseHowToCatalog/displayName(for:)`` — an exercise's ``ExerciseTarget/name`` is its identity,
+  plan and log text, progression key, prompt vocabulary and coach-plan wire, so it never translates;
+  screens draw it through this exact-match lookup (``ExerciseTarget/displayName``,
+  ``PrescribedExercise/displayLine``), which also carries each exercise's localized how-to text.
 
 Two more strings read exactly like UI copy and are not: ProximityKit's `PayloadSummary` `title`, `subtitle`,
 and every `extraDetails` key and value are folded into the Ed25519 canonical signing bytes by
@@ -476,6 +480,8 @@ in-memory form state only — never on a ``RecipeIngredient``, the synced blob o
 - ``ExerciseDifficulty``
 - ``ExerciseMeasure``
 - ``WorkoutExerciseCatalog``
+- ``ExerciseHowTo``
+- ``ExerciseHowToCatalog``
 - ``WorkoutSuggestion``
 
 ### Workout programming
@@ -502,7 +508,95 @@ a one-sided step carries `side`. Only the lifting block progresses
 the plan text a log records summarizes the warm-up and cool-down in one line each
 (``WorkoutSessionBlocks/planText(for:)``).
 
+Injuries reach the filter as one ``InjuryLimits`` (`WorkoutProfile.injuryLimits`), combined from
+three inputs: the body-area picker (`WorkoutProfile.injuryAreas`, each ``BodyArea`` at an
+``InjurySeverity``; frozen tokens with parked decoding, carried at the top level of the settings
+blob as `workoutInjuryAreas` so an older build's key parking keeps it through a re-save), the
+free-text note read by whole words
+(``InjuryNoteMatcher`` — "getting back into lifting" names no back), and the avoided sets older
+builds wrote. The picker wins for an area it names; the rest is severe. Severe leaves the area's work
+out (its muscles, its movement patterns, and for the spine a loaded bar); mild leaves out only the
+heavy end (barbell, advanced, jumps), scores machine, cable and bench-supported variants higher, and
+prescribes the area's main lift as accessory work.
+
+The 48-hour guard (``WorkoutRecoveryGuard``) reads yesterday's hard sets
+(``WorkoutRecoveryGuard/RecentTraining``, gathered app-side): when today's split day would train
+those primary muscles hard again it moves to the next split day that spares them — unless the
+overlap is the split's own order, which moving would only push back every pass — and otherwise takes
+a set off each overlapping lift, saying why in the note. Recovery and mobility days, and the warm-up,
+activation and cool-down, are exempt.
+
+A session's length follows ``WorkoutSessionOptions`` (synced settings with frozen tokens and parked
+decoding): ``WorkoutWarmUpMode`` walks the owner's flow in full (exactly as written), short (about four
+minutes of it, a subset in its order chosen for the day's worked areas,
+``WorkoutSessionBlocks/shortWarmUpSeconds``) or not at all; ``WorkoutCoolDownMode`` keeps or drops the
+cool-down; and ``WorkoutSessionLength`` sets a 20, 30, 45 or 60-minute budget. ``WorkoutSessionTime``
+times a session by the guided runner's own rule — the plan card's estimate and the run's countdown start
+equal — and ``WorkoutSessionBudget`` fits each session into the budget in the owner's order: the short
+warm-up, cool-down stretches down to two, accessory work (the jumps, the accessory lifts from the last,
+the balance drill), accessory sets, then main-lift sets down to two. Main lifts are never dropped and
+nothing grows, so the injury limits and the guard's lighter sets hold; when even the shortest version is
+over, the note says how long it runs. A cardio session's descriptor minutes are capped instead.
+
+Exercise preferences (``WorkoutExercisePreferences``, synced at the top level of the settings blob as
+`workoutHiddenExercises` and `workoutExerciseAlternates`, frozen names decoded tolerantly and bounded)
+reach every block: an exercise the user hid ("Don't suggest this") leaves the feasible pool, so each
+slot falls back to its next eligible pick, a slot only hidden exercises could fill is dropped with its
+own note, and the AI adjuster never sees it. A saved alternate ("Always use this instead", one hop)
+replaces the planner's pick only when it is in the feasible pool (equipment, injury limits, not hidden),
+unused, eligible for the slot, and — under a time budget — no longer than the pick; otherwise the pick
+stands silently. ``WorkoutExerciseSwapOptions`` ranks the plan editor's stand-ins. A hand-made custom
+exercise (``CustomExerciseDraft``) carries every curation field a catalog row does, so the safety filter
+and eligibility judge it the same way; ``CustomExerciseLibrary`` checks the name (not empty, no clash
+with a bundled or another custom name) and the shared 500-exercise cap, and deleting one never touches
+a logged workout.
+
+Cardio and mobility lines stay text in the plan — the text is the source of truth, and a session-length
+budget caps it — and become timed steps only when a guided run starts
+(``WorkoutTimedSessions/expand(_:feasible:)``, roadmap step 4a, 2026-10-20). ``WorkoutTimedSessions``
+reads a line strictly (``TimedDescriptor``): "Easy cardio - 20 min" is one steady countdown, "Intervals -
+8 × 1 min hard / 1 min easy" is sixteen ``CardioSegment``s of a ``CardioPace`` each, every part after
+the first following straight on with no lead-in; "Mobility flow - 15 min" is a stretch session in the
+owner's warm-up order with 30–45 s holds (the ``SessionBlock/mobility`` block), and the rest day's
+gentle stretching a short floor stretch that is never the day's session. A line it cannot read with
+certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step it was. A finished
+run's log folds segments back into their line, and a cardio or mobility session logs as the matching
+``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). Each segment's pace aims for a heart-rate zone (roadmap step 4b): ``HeartRateZones`` builds five zones from age by Tanaka (208 − 0.7 × age) and, when a trusted resting heart rate is given, by Karvonen's heart-rate reserve (percent of maximum otherwise), and maps easy and steady to zone 2 and hard to zone 4. Pure; the live reading is the app's.
+
+A ``PlannedWorkout`` — planned ahead by the person or put on the calendar by a coach's plan — runs in the
+guided runner as written (comparison report idea 17, 2026-10-20). The app reads each line with its own
+line parser and ``WorkoutPlanRun/step(for:parsed:location:load:catalog:)`` decides the step: a line the
+runner can time stays a descriptor for the expansion above (checked first, since "8 × 1 min" also reads
+as eight sets of one), sets × reps and timed holds become counted steps under the catalog's name, and
+anything else one step marked done that shows the line. Nothing is filtered or dropped. A weight the line
+names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
+names none gets the load engine's suggestion, for the sets and reps as written.
+
+The planner's words are localized without touching what it stores (2026-10-20, idea 16). Every session-note sentence is a String Catalog key in ``WorkoutPlannerCopy``, composed in the device's language when the plan is built. The names the planner stores and matches stay frozen English — a session's name is what its guided log is saved under and what the rotation matches, a split's and a location's name are what the trainer export carries, the plan text is what the history parser reads — and screens draw them through ``WorkoutSessionNames``, ``WorkoutSplitDayNames``, `TrainingSplit.displayName`, ``WorkoutSlotNames``, ``WorkoutLocationNames`` (`WorkoutLocation.displayedName`, which a rename field saves back through `savedName(editing:)`) and ``WorkoutPlanLine``.
+
+- ``WorkoutPlannerCopy``
+- ``WorkoutSessionNames``
+- ``WorkoutSplitDayNames``
+- ``WorkoutSlotNames``
+- ``WorkoutLocationNames``
+- ``WorkoutPlanLine``
+- ``WorkoutExercisePreferences``
+- ``WorkoutExerciseSwapOptions``
+- ``CustomExerciseDraft``
+- ``CustomExerciseIssue``
+- ``CustomExerciseLibrary``
 - ``WorkoutProfile``
+- ``BodyArea``
+- ``InjurySeverity``
+- ``InjuryLimits``
+- ``InjuryNoteMatcher``
+- ``WorkoutRecoveryGuard``
+- ``WorkoutSessionOptions``
+- ``WorkoutSessionLength``
+- ``WorkoutWarmUpMode``
+- ``WorkoutCoolDownMode``
+- ``WorkoutSessionTime``
+- ``WorkoutSessionBudget``
 - ``ExperienceLevel``
 - ``WorkoutLocation``
 - ``LocationTemplate``
@@ -527,6 +621,12 @@ the plan text a log records summarizes the warm-up and cool-down in one line eac
 - ``SessionBlock``
 - ``ExerciseSide``
 - ``WorkoutSessionBlocks``
+- ``WorkoutTimedSessions``
+- ``TimedDescriptor``
+- ``CardioSegment``
+- ``CardioPace``
+- ``HeartRateZones``
+- ``WorkoutPlanRun``
 - ``WorkoutRestGuidance``
 
 ### Load-aware progression and plateaus
@@ -554,10 +654,37 @@ estimate — so the same history always builds the same plan.
 - **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
   weeks for people without a coach plan, a one-set strength check when the estimate is already
   trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
+- **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
+  plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
+  the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
+  load it can make (``LoadLadder``). The light-load guard holds with or without them: when the next
+  load is more than `WorkoutLoadEngine.lightLoadGuardRatio` (10 %) heavier, or there is none, the
+  lift adds reps up to three past the range, then a set, then takes the jump (``LoadCap``,
+  ``LoadChange/repsFirst``, ``LoadChange/setFirst``). The weights sync at the settings blob's top
+  level (`workoutLocationWeights`), where an older build's key parking keeps them; ``WorkoutLocation``
+  itself now parks a newer build's equipment tokens and keys.
+- **Warm-up sets.** ``WorkoutWarmUpSets`` puts two or three lighter sets (about 40 % × 8, 60 % × 5,
+  80 % × 3) in front of a barbell or other big compound main lift that has a suggested weight, when
+  ``WorkoutLoadContext/warmUpSets`` is on (the synced `FernletSettings.workoutWarmUpSets`, defaulting
+  on for intermediate and advanced lifters) and the day is not light. Each is a single-set step tagged
+  `.ramp` like the calibration's, so the log writes "(ramp-up)" and no estimate, plateau check or
+  weekly count reads it; `LoadGuidance.warmUp` tells it apart for a time budget to drop. Barbell
+  warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the standard
+  45 lb / 20 kg bar and plates) says which plates go on each side, or the closest load it can make.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
 same facts are in the logged text, `ExerciseResult.loggedLine`).
+
+The same record is written after the fact (idea 6): a correction re-records a lift's sets
+(`ExerciseResult.record(_:unit:)`), and a lift entered set by set in the Log sheet is recorded the
+way a run records it (`ExerciseResult.handLogged(name:sets:unit:equipment:effort:)`), each set a
+``LoggedSet``. When the sets were not all lifted at one weight the result keeps `setWeights` and its
+line spells them out ("(did 8 @ 100, 8 @ 100, 6 @ 95)"); the engine judges such a session at its
+heaviest set's weight, and a lighter set keeps it from counting as completed
+(`LiftExposure.workingSetReps`). `Workout.replaceExerciseLine(_:with:)` keeps the line in step
+with the record. A result parks the keys a newer build adds and writes them back, so a re-save here
+never drops them; an older build that drops `setWeights` still has them in the line.
 
 - ``WorkoutLoadContext``
 - ``WorkoutLoadEngine``
@@ -569,6 +696,7 @@ same facts are in the logged text, `ExerciseResult.loggedLine`).
 - ``WeightPrescription``
 - ``LoadGuidance``
 - ``ExerciseResult``
+- ``LoggedSet``
 - ``LoadUnit``
 - ``ExerciseEffort``
 - ``OverrideReason``
@@ -583,6 +711,15 @@ same facts are in the logged text, `ExerciseResult.loggedLine`).
 - ``CalibrationKind``
 - ``CalibrationSet``
 - ``CalibrationStep``
+- ``WorkoutWeightInventory``
+- ``WorkoutWeightPresets``
+- ``LoadLadder``
+- ``LoadCap``
+- ``WorkoutWarmUpSets``
+- ``WarmUpSet``
+- ``PlateCalculator``
+- ``BarbellPlateSet``
+- ``PlateLoadout``
 
 ### Coach plans
 

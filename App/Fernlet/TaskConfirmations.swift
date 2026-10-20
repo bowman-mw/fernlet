@@ -114,7 +114,8 @@ enum GuidedRunAnnouncement {
     /// user needs to hear changed (a refused transition, a run that went away).
     ///
     /// Exercise names are spoken: they are the plan's own words, already on screen, and nothing
-    /// about them is sealed.
+    /// about them is sealed. They are spoken as drawn (`displayedName`, the user's language), never
+    /// as the frozen catalog name.
     static func spoken(
         from before: GuidedWorkoutRunState,
         to after: GuidedWorkoutRunState?
@@ -129,19 +130,31 @@ enum GuidedRunAnnouncement {
         guard after.isWorking, let exercise = after.currentExercise else { return nil }
         let countsSets = exercise.fromCatalog && exercise.sets >= 1
         if after.exerciseIndex != before.exerciseIndex {
+            // A cardio segment says its pace, length and round — its name ("Intervals") is the same for
+            // every part, so "Next: Intervals." would say nothing. One line per change: the haptic and
+            // sound cue are separate channels, and a segment that follows straight on has no lead-in
+            // line after it.
+            if let segment = exercise.segment {
+                return (.status, GuidedSegmentWords.changeLine(segment, seconds: exercise.holdSeconds ?? 0))
+            }
+            // A warm-up set says which one ("Warm-up set 1 of 3: Back squat."), and the lift after its
+            // warm-ups says its working sets begin.
+            if let warmUp = GuidedWarmUpWords.changeLine(from: before, to: after) {
+                return (.status, warmUp)
+            }
             // A one-sided step (a stretch, a balance hold) says its side; a single timed step has no
             // set to count ("Set 1 of 1" for every stretch would be noise).
             switch exercise.sideRaw {
-            case "left": return (.status, "Next: \(exercise.name), left side.")
-            case "right": return (.status, "Next: \(exercise.name), right side.")
+            case "left": return (.status, "Next: \(exercise.displayedName), left side.")
+            case "right": return (.status, "Next: \(exercise.displayedName), right side.")
             default: break
             }
             if exercise.holdSeconds != nil && exercise.sets <= 1 {
-                return (.status, "Next: \(exercise.name).")
+                return (.status, "Next: \(exercise.displayedName).")
             }
             return countsSets
-                ? (.status, "Next exercise: \(exercise.name). Set 1 of \(after.totalSetsForCurrent).")
-                : (.status, "Next exercise: \(exercise.name).")
+                ? (.status, "Next exercise: \(exercise.displayedName). Set 1 of \(after.totalSetsForCurrent).")
+                : (.status, "Next exercise: \(exercise.displayedName).")
         }
         guard countsSets else { return nil }
         return (.status, "Set \(after.currentSet) of \(after.totalSetsForCurrent).")
@@ -150,4 +163,29 @@ enum GuidedRunAnnouncement {
     /// Spoken when a rest's timer reaches zero. The rest does not end by itself — the user decides —
     /// so this says the nudge is over, not that anything moved.
     static let restOver: LocalizedStringResource = "Rest's over. Start your next set when you're ready."
+
+    /// Spoken when a timed step's "Get into position" lead-in ends and the hold begins — the moment
+    /// the hold countdown's caption turns to "Hold" and the haptic cue plays. Without it a VoiceOver
+    /// user with haptics off had no signal to start holding.
+    static let holdStartedLine: LocalizedStringResource = "Hold now."
+
+    /// The hold-start line for a lead-in that ended at `leadInEnd`, or nil when that moment has
+    /// passed — the runner was reopened mid-hold, or the app slept through it — so the line is said
+    /// once, at the moment, and never late. Nothing else is spoken at that instant: the step's own
+    /// "Next: …" line was said five seconds earlier, when the step began.
+    static func holdStarted(leadInEndedAt leadInEnd: Date, now: Date) -> LocalizedStringResource? {
+        GuidedRunCuePlan.isOnTime(leadInEnd, now: now) ? holdStartedLine : nil
+    }
+
+    /// Spoken after the runner's "+15 s" / "−15 s": what the tap did to the rest, or — at a limit, when
+    /// nothing on screen moves — why it did nothing. The timer beside the buttons changes too, but its
+    /// spoken value is re-read only when VoiceOver lands on it.
+    static func restAdjusted(adding: Bool, moved: Bool) -> LocalizedStringResource {
+        switch (adding, moved) {
+        case (true, true): return "Added 15 seconds of rest."
+        case (false, true): return "Took 15 seconds off the rest."
+        case (true, false): return "Your rest is already at its 10-minute limit."
+        case (false, false): return "Your rest is nearly over, so there's nothing to take off."
+        }
+    }
 }

@@ -159,3 +159,7 @@ companion, not a medical device; it does not provide medical advice, diagnosis, 
 The fonts in [`App/Fernlet/Fonts/`](App/Fernlet/Fonts) are the exception. They are licensed under
 the SIL Open Font License 1.1, not Apache-2.0, and each family's copyright notice and license are in
 [`App/Fernlet/Fonts/LICENSES/`](App/Fernlet/Fonts/LICENSES).
+
+The exercise demonstrations licensed from Gym Visual are not part of this repository or its license.
+They are never committed; a build from source shows a placeholder in their place (see
+[`App/Fernlet/ExerciseMedia/README.md`](App/Fernlet/ExerciseMedia/README.md)).

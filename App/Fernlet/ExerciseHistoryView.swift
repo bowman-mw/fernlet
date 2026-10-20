@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import FernletDomainModel
 import FernletFoundation
 import FernletUI
 
@@ -18,6 +19,8 @@ import FernletUI
 enum MoveRoute: Hashable {
     /// The per-exercise recall list, ``ExerciseHistoryView``.
     case exerciseHistory
+    /// One week's sets per muscle and aerobic minutes, ``WeeklyTotalsView``.
+    case weeklyTotals
 }
 
 /// Display half of the Exercise history screen's "best" line, beside
@@ -50,7 +53,8 @@ extension TrainerExportBundle.ExerciseHistoryEntry {
 struct ExerciseHistoryRowModel: Identifiable, Equatable {
     /// The rollup emits one entry per normalized exercise name, so the name identifies the row.
     var id: String { name }
-    /// The exercise name as the user logged it — user data, rendered verbatim, never localized.
+    /// The exercise name as the user logged it — user data, and the history's grouping key. Never
+    /// localized; screens draw ``displayName``.
     let name: String
     /// Day key ("2026-08-08") of the most recent session — the frozen token half; display goes
     /// through ``lastDateText``.
@@ -65,6 +69,10 @@ struct ExerciseHistoryRowModel: Identifiable, Equatable {
     let bestValues: String?
     /// Days on which the exercise appeared — the rollup's frequency signal, not a set count.
     let sessions: Int
+
+    /// The name the row draws: a bundled catalog name in the user's language, anything else (a name
+    /// typed another way, a custom exercise) exactly as logged.
+    var displayName: String { ExerciseHowToCatalog.displayName(for: name) }
 
     /// The most recent session's date, formatted for display.
     var lastDateText: String { Self.displayDate(fromDayKey: lastLoggedDayKey) }
@@ -149,8 +157,8 @@ struct ExerciseHistoryView: View {
     }
 }
 
-/// One exercise's recall row: the name as logged over the last-session, best-load, and frequency
-/// lines.
+/// One exercise's recall row: the exercise's drawn name over the last-session, best-load, and
+/// frequency lines.
 ///
 /// Value strings arrive pre-resolved from ``ExerciseHistoryRowModel``; only the labels are
 /// authored copy here, so they localize while the values never do. Lines with nothing factual to
@@ -177,7 +185,7 @@ struct ExerciseHistoryRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(row.name)
+            Text(verbatim: row.displayName)
                 .font(.fernlet(.body))
                 .foregroundStyle(Color.bark)
             lastLine

@@ -581,14 +581,21 @@ struct WorkoutProgramTests {
         #expect(state == .allComplete(remainingMovement: false))
     }
 
-    @Test func cardIsNoneToGuideForACardioOnlyDay() {
-        // A descriptor line carries sets == 0 → not guidable, but there's still movement to do.
+    @Test func cardIsReadyForATimedCardioDay() {
+        // Idea 4 (2026-10-20): a cardio line the runner can time is a guided session of its own.
         let cardio = session("Zone 2", [ex("Easy cardio - 25 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)], kind: .cardio)
-        let state = GuidedWorkoutCardState.resolve(plan: plan([cardio]), completed: [])
+        #expect(GuidedWorkoutCardState.resolve(plan: plan([cardio]), completed: []) == .ready(sessionID: cardio.id))
+    }
+
+    @Test func cardIsNoneToGuideForAnUntimedMovementDay() {
+        // A descriptor line the runner cannot time (sets == 0, no clock it can read with certainty) →
+        // not guidable, but there's still movement to do.
+        let drills = session("Drills", [ex("Soccer drills / conditioning - 15 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)], kind: .cardio)
+        let state = GuidedWorkoutCardState.resolve(plan: plan([drills]), completed: [])
         if case .noneToGuide(let reason) = state {
             #expect(reason.contains("easy movement"))
         } else {
-            Issue.record("expected .noneToGuide for a cardio-only day, got \(state)")
+            Issue.record("expected .noneToGuide for an untimed movement day, got \(state)")
         }
     }
 
@@ -603,9 +610,9 @@ struct WorkoutProgramTests {
     }
 
     @Test func cardPicksTheFirstUnloggedGuidableSessionOnAMultiSessionDay() {
-        // Cardio warm-up first (not guidable), then two strength sessions. The card opens the first
-        // *guidable, not-yet-logged* session — and reports allComplete only once both are logged.
-        let cardio = session("Warm-up", [ex("Row - 10 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)], kind: .cardio)
+        // An untimed movement session first (not guidable), then two strength sessions. The card opens
+        // the first *guidable, not-yet-logged* session — and reports allComplete only once both are logged.
+        let cardio = session("Warm-up", [ex("Gentle mobility + walk - 12 min", sets: 0, role: .accessory, reps: "", fromCatalog: false)], kind: .cardio)
         let am = session("AM strength", [ex("Squat", sets: 3)])
         let pm = session("PM strength", [ex("Deadlift", sets: 2)])
         let day = plan([cardio, am, pm])

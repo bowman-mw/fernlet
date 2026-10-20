@@ -78,6 +78,28 @@ struct GuidedWorkoutRunStoreTests {
         #expect(run.exercises.last?.restSeconds == 42)
     }
 
+    /// A run started from a planned session counts down from the plan card's estimate to the second
+    /// (`WorkoutSessionTime`): a session fitted to 30 minutes says ~30 on the card and in the runner.
+    /// Sport conditioning carries a descriptor step, so its named minutes are compared too.
+    @Test func aStartedRunCountsDownFromThePlanCardsEstimate() throws {
+        let store = makeStore()
+        store.clearGuidedRun()
+        let goal = store.settings.selectedGoal
+        let split = TrainingSplit(id: "probe", name: "Probe", summary: "", specificity: .balanced, goalFit: [goal],
+                                  days: [WorkoutSplitDay(title: "Day", sessions: [WorkoutSessions.sportConditioning])])
+        let planned = WorkoutProgram.dayPlan(
+            goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .intermediate),
+            location: .fullGym, context: "", split: split, rotationIndex: 0,
+            options: WorkoutSessionOptions(length: .min30)
+        )
+        let s = try #require(planned.sessions.first)
+        #expect(s.exercises.contains { $0.sets == 0 }, "the conditioning descriptor is in the run")
+        commitPlan(store, s)
+        #expect(store.startGuidedRun(s) == true)
+        let run = try #require(store.guidedRunState)
+        #expect(run.estimatedSecondsRemaining() == WorkoutSessionTime.seconds(of: s.exercises, goal: goal))
+    }
+
     // MARK: Mark set done → finish → log (deduped)
 
     @Test func finishingAGuidedRunLogsOnceAndClears() {
