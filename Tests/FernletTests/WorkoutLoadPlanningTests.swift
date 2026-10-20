@@ -411,7 +411,7 @@ struct WorkoutLoadPlanningTests {
         }
         let long = lifts(5, sets: 4)
         #expect(WorkoutFuelCheck.workingSets(long) == 20)
-        #expect(WorkoutSessionBudget.minutes(of: long, goal: .strength) > WorkoutFuelCheck.longSessionMinutes)
+        #expect(WorkoutSessionTime.minutes(of: long, goal: .strength) > WorkoutFuelCheck.longSessionMinutes)
         #expect(WorkoutFuelCheck.asks(long, goal: .strength, foodAware: true))
         #expect(WorkoutFuelCheck.asks(long, goal: .sportsPrep, foodAware: true))
         #expect(!WorkoutFuelCheck.asks(long, goal: .strength, foodAware: false))

@@ -36,6 +36,6 @@ public nonisolated enum WorkoutFuelCheck {
     public static func asks(_ steps: [PrescribedExercise], goal: GoalType, foodAware: Bool) -> Bool {
         guard foodAware, PlateauTracking.forGoal(goal) == .mainLifts else { return false }
         return workingSets(steps) >= highVolumeSets
-            && WorkoutSessionBudget.minutes(of: steps, goal: goal) > longSessionMinutes
+            && WorkoutSessionTime.minutes(of: steps, goal: goal) > longSessionMinutes
     }
 }
