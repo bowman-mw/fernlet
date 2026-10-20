@@ -352,9 +352,10 @@ sentences (idea 16).
   name ("Full gym", "Home", "Hotel gym", …) draws `WorkoutLocation.displayedName`, and the rename
   field saves through `savedName(editing:)`, so the presets list (which matches stored names) and the
   export are unchanged.
-- **Units (Phase 0 §2.4, extended).** Workout distance and treadmill speed follow the lb/kg rule
-  (`measurementSystem == .us` reads miles and mph, everything else kilometres and km/h) at the
-  entry/display boundary only (`WorkoutMeasurementEntry`, app target): `distanceMiles`,
+- **Units (Phase 0 §2.4, extended).** Workout distance and treadmill speed follow the system's
+  measurement setting, as Apple Fitness does (`.us` and `.uk` read miles and mph — the UK reads road
+  distance in miles, 2026-10-20 — and `.metric` kilometres and km/h; loads keep the `.us`-only lb/kg
+  rule) at the entry/display boundary only (`WorkoutMeasurementEntry`, app target): `distanceMiles`,
   `targetDistanceMiles`, HealthKit's mile quantity, the export's `distanceMiles` and a treadmill line's
   "5.5 mph" are stored exactly as before.
 - **Still English, on purpose:** the plan TEXT's lift lines and calibration tags ("(test set)"), the

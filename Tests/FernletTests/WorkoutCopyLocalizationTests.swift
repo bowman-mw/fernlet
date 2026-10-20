@@ -360,6 +360,38 @@ struct WorkoutCopyLocalizationTests {
         #expect(WorkoutMeasurementEntry.displayedSpeeds(in: imperial, imperial: true) == imperial)
     }
 
+    /// N9 (2026-10-20): distance and speed follow the system's measurement setting, as Apple Fitness
+    /// does — the UK reads miles and mph, the US miles, metric kilometres and km/h — while loads keep
+    /// pounds for the US system only.
+    @Test func theUKReadsMilesAndMph() throws {
+        let britain = Locale(identifier: "en_GB")
+        #expect(britain.measurementSystem == .uk, "precondition: en_GB is the UK system")
+        #expect(WorkoutMeasurementEntry.readsImperial(britain))
+        #expect(WorkoutMeasurementEntry.readsImperial(Locale(identifier: "en_US")))
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(identifier: "de_DE")))
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(identifier: "en_AU")))
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(identifier: "fr_CA")))
+
+        // The setting, not the region: a US-region device set to Metric reads kilometres, and one set
+        // to the UK system reads miles.
+        var metricUS = Locale.Components(identifier: "en_US")
+        metricUS.measurementSystem = .metric
+        #expect(!WorkoutMeasurementEntry.readsImperial(Locale(components: metricUS)))
+        var ukSystem = Locale.Components(identifier: "fr_FR")
+        ukSystem.measurementSystem = .uk
+        #expect(WorkoutMeasurementEntry.readsImperial(Locale(components: ukSystem)))
+
+        let readsMiles = WorkoutMeasurementEntry.readsImperial(britain)
+        #expect(WorkoutMeasurementEntry.distanceText(miles: 3.1, imperial: readsMiles, locale: britain) == "3.1 mi")
+        let line = "Treadmill walk 5.5 mph 2% incline"
+        #expect(WorkoutMeasurementEntry.displayedSpeeds(in: line, imperial: readsMiles, locale: britain) == line)
+        let stored = try #require(WorkoutMeasurementEntry.miles(fromEntry: "3.1", imperial: readsMiles))
+        #expect(stored == 3.1, "a UK distance is typed and stored in miles")
+        #expect(WorkoutMeasurementEntry.storedSpeed(fromEntry: "5.5", imperial: readsMiles) == "5.5")
+
+        #expect(WorkoutLoadContextBuilder.defaultUnit(for: britain) == .kg, "a UK gym's loads stay in kilograms")
+    }
+
     // MARK: - Helpers
 
     /// Every session name the split catalog can plan: a title, or a time label and a title.
