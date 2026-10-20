@@ -346,6 +346,34 @@ sentences (idea 16).
 - **UI tests stay green:** the suite runs in `en` by default, so the ~181 English string
   assertions across 20 `FernletUITests` files keep passing. Localized-run testing is Phase 5.
 
+> **First drafts landed (2026-10-20): the exercise how-to text.** The 889 `exercise.<keyStem>.`
+> keys in the FernletDomainModel catalog (names, cues, mistakes, easier versions) carry es, fr and
+> de machine drafts, every one `needs_review`, informal tú / tu / du per D-L1. They are **dormant**:
+> a package's resource bundle resolves to the language the main bundle resolved to, and the app
+> ships English alone (no non-English entry in any app-target catalog, so no `es.lproj` / `fr.lproj`
+> / `de.lproj` in the app or an extension; no `CFBundleAllowMixedLocalizations`), so a device set to
+> Spanish still draws the English defaults. Measured, not assumed: with an English-only main bundle,
+> a bundle holding only `es`/`fr` resolved to English (default value) under `AppleLanguages (fr, en)`,
+> `Locale.current` was `en_FR`, and the same bundles resolved French once mixed localizations were
+> allowed. `ExerciseHowToTests.theDraftTranslationsStayDormantWhileTheAppShipsOnlyEnglish` pins
+> those preconditions. `knownRegions` already lists de/es/fr (Phase 1), but that is project metadata
+> and puts nothing in the bundle.
+>
+> **Held back:** the how-to sheet's own labels ("Common mistake", "Stop if you feel sharp pain.",
+> "How to do %@", …) live in the APP catalog, and any es/fr/de entry there compiles a lproj into the
+> main bundle — which switches the whole app into that language and wakes the exercise drafts with
+> it. They are drafted but wait for the app-wide switch-on, after native review of the exercise
+> drafts.
+>
+> **Consequence for the wall's manual runtime check** (`LocalizationBoundaryTests` header, "redo it
+> whenever a module gains its first real translation"): by the rule above, injecting `fr` into a
+> module catalog alone should render English under `-AppleLanguages (fr)`, because the main bundle
+> has no French. The 2026-08-23 FernletUI run is recorded as rendering French, and how that run was
+> set up is not written down, so the first simulator run with these drafts settles it: launched with
+> `-AppleLanguages (es)`, a how-to sheet must read English. To see a module's French on purpose, give
+> the main bundle a French localization too (one `fr` entry in `App/Fernlet/Localizable.xcstrings`,
+> reverted afterwards).
+
 ---
 
 ## 5. Phase 3 — Language-sensitive engines
