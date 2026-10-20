@@ -15,7 +15,7 @@ second small script of its own, `probe/probe.js`, under the same rules.
 
 | Path | Purpose |
 | --- | --- |
-| `index.html` | Landing page — the companion, the friend mesh, period tracking, the privacy architecture, FAQ, roadmap. |
+| `index.html` | Landing page — the companion, the workout planner, the friend mesh, period tracking, the privacy architecture, FAQ, roadmap. |
 | `privacy/index.html` | The privacy policy — **generated from [`Docs/Privacy-Policy.md`](../Docs/Privacy-Policy.md)**, which stays the source of truth. When the policy changes, regenerate this page (and update `App/Fernlet/PrivacyPolicyView.swift`) so all three copies match. This URL goes in App Store Connect as the Privacy Policy URL. |
 | `support/index.html` | Support/contact page — the ASC Support URL. |
 | `404.html` | Not-found page (both GitHub Pages and Cloudflare Pages pick it up automatically). |

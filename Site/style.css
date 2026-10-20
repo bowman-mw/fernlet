@@ -303,6 +303,61 @@ h2{font-family:var(--font-header);font-size:clamp(28px,3.6vw,42px);font-weight:4
   padding-top:18px;border-top:1px solid var(--hair)}
 .mesh-foot p{font-family:var(--font-body);font-style:italic;font-size:16px;line-height:1.5;color:var(--ink2);margin:0;flex:1 1 200px}
 
+/* ── Workouts ────────────────────────────────────── */
+/* --wk-soft is the section's secondary ink: the slate hue, darkened in light mode so 16px body
+   text clears 4.5:1 on both cream and parchment (slate itself sits near 3:1 there). */
+#workouts{--wk-soft:#5A6773}
+.wk-row+.wk-row{margin-top:clamp(24px,4vw,48px)}
+.wk-row .feature p,.wk-row .step p{color:var(--wk-soft)}
+.wk-card>h3{font-family:var(--font-header);font-size:21px;font-weight:400;margin:0 0 16px}
+.wk-card>p{font-family:var(--font-body);font-size:16px;line-height:1.55;color:var(--ink2);margin:0 0 16px}
+.wk-card>p:last-child{margin-bottom:0}
+.wk-flow{list-style:none;margin:0;padding:0}
+.wk-flow li{position:relative;display:flex;gap:14px;align-items:flex-start;padding-bottom:18px}
+.wk-flow li:last-child{padding-bottom:0}
+.wk-flow li::before{content:"";position:absolute;left:13px;top:32px;bottom:4px;width:2px;border-radius:1px;background:var(--hair-2)}
+.wk-flow li:last-child::before{display:none}
+.wk-n{width:28px;height:28px;border-radius:9px;background:var(--color-lichen);color:#3A5C34;flex-shrink:0;
+  display:grid;place-items:center;font-family:var(--font-ui);font-size:13px;font-weight:500}
+.wk-flow h4,.wk-card .step h4{font-family:var(--font-header);font-size:19px;font-weight:400;margin:2px 0 4px}
+.wk-min{font-family:var(--font-ui);font-size:12px;font-weight:500;letter-spacing:.02em;color:var(--wk-soft);margin-left:8px;white-space:nowrap}
+.wk-flow p{font-family:var(--font-body);font-size:16px;line-height:1.55;color:var(--wk-soft);margin:0}
+.wk-foot{font-family:var(--font-body);font-style:italic;font-size:16px;line-height:1.5;color:var(--ink2);
+  margin:20px 0 0;padding-top:16px;border-top:1px solid var(--hair)}
+/* The Lock Screen illustration: a lit object, so it keeps its own colours in both themes. The card
+   is the Live Activity's cream tint and moss button; the soft ink is darkened for contrast. */
+.wk-lockfig{margin:0;display:flex;flex-direction:column;gap:12px}
+.wk-lockscreen{border-radius:var(--radius-xl);padding:20px 16px 18px;box-shadow:var(--shadow-card);
+  background:linear-gradient(165deg,#56704E 0%,#3B4C36 55%,#2B3527 100%)}
+.wk-clock{font-family:var(--font-display);font-weight:600;font-size:46px;line-height:1;text-align:center;
+  color:#F5EFE0;letter-spacing:-.01em;margin-bottom:18px}
+.wk-lock{background:#FBF7EE;color:#3D2E1E;border-radius:22px;padding:14px 16px}
+.wk-lock-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.wk-lock-title{display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:12px;color:#6E604B}
+.wk-lock-name{font-family:var(--font-ui);font-size:18px;font-weight:600;line-height:1.25;margin:5px 0 3px}
+.wk-lock-line{font-family:var(--font-ui);font-size:13px;color:#6E604B}
+.wk-lock-time{font-family:var(--font-ui);font-size:36px;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
+.wk-lock-btn{margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;
+  border-radius:999px;background:#5A7A52;color:#FBF7EE;font-family:var(--font-ui);font-size:14px;font-weight:600}
+.wk-lockfig figcaption{font-family:var(--font-body);font-size:16px;line-height:1.55;color:var(--ink2);padding:0 4px}
+.wk-range{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:14px}
+.wk-range li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:6px 12px;
+  font-family:var(--font-ui);font-size:13px;color:var(--ink2)}
+.wk-range li>b{font-weight:500;text-align:right;color:var(--color-bark)}
+.wk-bar{grid-column:1 / -1;grid-row:2;position:relative;height:10px;border-radius:5px;background:var(--track)}
+.wk-bar i{position:absolute;top:0;bottom:0;left:var(--l);width:var(--w);border-radius:5px;background:var(--color-fern)}
+.wk-bar::after,.wk-key::before{content:"";width:12px;height:12px;border-radius:50%;background:var(--color-moss);
+  box-shadow:0 0 0 2px var(--color-cream)}
+.wk-bar::after{position:absolute;top:-1px;left:50%;margin-left:-6px}
+.wk-card>.wk-key{display:flex;align-items:center;gap:8px;font-family:var(--font-ui);font-size:13px;line-height:1.4;
+  color:var(--wk-soft);margin:0 0 18px}
+.wk-key::before{flex-shrink:0}
+.wk-points{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.wk-points li{display:flex;gap:12px;align-items:flex-start;font-family:var(--font-body);font-size:16px;line-height:1.55;color:var(--ink2)}
+.wk-points li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--color-fern);flex-shrink:0;margin-top:9px}
+.wk-card .stack{margin-bottom:16px}
+.wk-notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:12px;margin-top:clamp(24px,4vw,48px)}
+
 /* ── Cycle ───────────────────────────────────────── */
 .cycle-card{align-self:flex-start}
 .cycle-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:20px}
@@ -451,11 +506,12 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
 @keyframes blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
 @keyframes sway{0%,100%{transform:rotate(var(--r,0deg))}50%{transform:rotate(calc(var(--r,0deg) + 1.1deg))}}
 @keyframes heartFloat{0%{opacity:0;transform:translateY(0) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translateY(-92px) scale(1)}}
-@media (max-width:1040px){
+@media (max-width:1160px){
   /* Two nav buttons plus the full anchor row no longer fit together anywhere between phone
      and small-laptop widths — the anchors wrap mid-row and split away from the brand. Drop
      them across that whole range, not just under 720px: the page reads top-to-bottom anyway,
-     and brand + the two buttons alone always fit (stacking cleanly if a phone is narrow). */
+     and brand + the two buttons alone always fit (stacking cleanly if a phone is narrow).
+     With six anchors the row needs about 1100px on fallback fonts, hence 1160px of margin. */
   .navlinks a:not(.btn){display:none}
 }
 @media (max-width:720px){
@@ -517,6 +573,11 @@ footer{border-top:1px solid var(--hair);padding:30px 0 44px}
   .chips button.on[data-state=okay]{background:rgba(201,150,74,.22);color:#E3BE7E;border-color:#A8792F}
   .chips button.on[data-state=tired]{background:rgba(139,123,158,.24);color:#C4B6D4;border-color:#7A6B8C}
   .chips button.on[data-state=sick]{background:rgba(192,103,74,.20);color:#DFA48D;border-color:#A85536}
+
+  /* Workouts: the soft ink goes back to the dark theme's slate, which already clears 6:1 there. */
+  #workouts{--wk-soft:var(--color-slate)}
+  .wk-n{background:rgba(127,176,105,.20);color:#C8DBC2}
+  .wk-bar i{background:#6E9C5E}
 
   /* Mesh demo sits on a dark card, so its moss lines need the brighter green. */
   .links .l1,.links .l2,.links .l3{border-left-color:rgba(127,176,105,.5)}
