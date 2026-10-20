@@ -147,6 +147,14 @@ extension WorkoutPlannerCopy {
 
     // MARK: - The calibration brief
 
+    /// N3: the strength check waits for a roomier day.
+    static var calibrationMoved: String {
+        String(localized: "workoutNote.calibration.moved",
+               defaultValue: "The monthly strength check moves to a day with more time, so today's session stays within its time.",
+               bundle: .module,
+               comment: "Workout session note: the monthly strength test is postponed because today's session is set to be short.")
+    }
+
     /// The note for a calibration session, by kind. `weight` is the key set's load with its unit.
     static func calibration(_ kind: CalibrationKind, lift: String, weight: String) -> String {
         switch kind {

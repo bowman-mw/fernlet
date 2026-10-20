@@ -30736,6 +30736,30 @@
         }
       }
     },
+    "workoutNote.block.heavier" : {
+      "comment" : "Workout session note for a trained strength lifter's planned block. Arguments: the week of the block (digits), the block's length in weeks (digits), a number of sets (e.g. '5 sets'), then a number of reps (e.g. '3 reps').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Heavier block, week %1$@ of %2$@: main lifts are %3$@ of %4$@ — fewer reps at more weight, then back to volume."
+          }
+        }
+      }
+    },
+    "workoutNote.block.volume" : {
+      "comment" : "Workout session note for a trained strength lifter's planned block. Arguments: the week of the block (digits), the block's length in weeks (digits), a number of sets (e.g. '4 sets'), then a number of reps (e.g. '6 reps').",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Volume block, week %1$@ of %2$@: main lifts are %3$@ of %4$@ — more work at a moderate weight, then a heavier block."
+          }
+        }
+      }
+    },
     "workoutNote.budget.fewerCoolDown" : {
       "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — some cool-down stretches were left out",
       "extractionState" : "extracted_with_value",
@@ -30828,6 +30852,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "shorter warm-up"
+          }
+        }
+      }
+    },
+    "workoutNote.calibration.moved" : {
+      "comment" : "Workout session note: the monthly strength test is postponed because today's session is set to be short.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "The monthly strength check moves to a day with more time, so today's session stays within its time."
           }
         }
       }
@@ -31087,6 +31123,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%@: the same again today — one more session like the last, and it moves on."
+          }
+        }
+      }
+    },
+    "workoutNote.load.harderVariation" : {
+      "comment" : "Workout session note: a lift is at the heaviest weight this place has, so a harder version of it is offered, never required. Arguments: the lift, then the harder exercise.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you'd like a harder step for %1$@, %2$@ works the same muscles — it's the first swap when you edit the plan. Otherwise more reps, then a set, keep it moving."
           }
         }
       }

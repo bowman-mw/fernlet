@@ -24,7 +24,9 @@ extension WorkoutProgram {
             if let guidance = pick.exercise.guidance, guidance.isLoadable, guidance.prescription == nil {
                 needsFirstWeight = true
             }
+            // A block's phase switch rebaselines the lift; the block note says why, once.
             guard lines.count < maxProgressLines, let plan = pick.plan,
+                  !(pick.block != nil && plan.change == .recalibrated),
                   let line = changeLine(pick.target.name, plan: plan) else { continue }
             lines.append(line)
         }
@@ -191,6 +193,13 @@ extension WorkoutProgram {
     /// "Bench press has held steady for 3 weeks. That's normal…"
     static func plateauLead(_ name: String, weeks: Int) -> String {
         WorkoutPlannerCopy.plateauLead(name, weeks: weeks)
+    }
+
+    /// The block calendar's line (G2): which phase this is, its week, and what the main lifts do on a
+    /// day of this energy.
+    static func blockNote(_ week: BlockWeek, energy: WorkoutIntensity) -> String {
+        WorkoutPlannerCopy.block(week.phase, week: week.week, of: WorkoutBlocks.phaseWeeks,
+                                 sets: WorkoutBlocks.sets(week.phase, energy: energy), reps: week.phase.reps)
     }
 
     /// The calibration brief for the session note.

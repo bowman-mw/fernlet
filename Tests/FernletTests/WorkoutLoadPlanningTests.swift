@@ -176,7 +176,9 @@ struct WorkoutLoadPlanningTests {
         #expect(lift.reps == "9")
         #expect(session.suggestion.notes.contains("\(main): the same again today — one more session like the last, and it moves on."))
         let novice = try pushSession(history: history, experience: .beginner)
-        #expect(try #require(lifting(novice).first { $0.name == main }).reps == "10")
+        let noviceLifts = lifting(novice)
+        let noviceLift = try #require(noviceLifts.first { $0.name == main })
+        #expect(noviceLift.reps == "10")
     }
 
     @Test func eachLiftsTrainingAgeIsReadFromItsFirstLoggedSession() throws {

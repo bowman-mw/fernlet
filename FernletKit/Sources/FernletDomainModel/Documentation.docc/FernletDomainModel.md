@@ -677,9 +677,21 @@ estimate — so the same history always builds the same plan.
   helper-muscle support step is gone; the old ladder's tokens resolve to the nearest new step
   (``PlateauStage/resolve(token:parkedToken:)``). The session note gives at most two context lines and
   always a plain training option.
+- **Blocks (G2, 2026-10-20).** A trained Strength lifter's main lifts follow ``WorkoutBlocks``: four
+  weeks of volume (``BlockPhase/volume``, 4 × 6) then four heavier (``BlockPhase/heavier``, 5 × 3),
+  counted from one fixed Monday so every device agrees (``BlockWeek``). The engine rebaselines each
+  lift from its estimate at a switch, the session note names the block and its week, and the plateau
+  trend reads both phases as one line — the backup to the plan.
 - **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
   weeks for people without a coach plan, a one-set strength check when the estimate is already
-  trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
+  trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max. On a
+  day whose time budget can't hold it (under 30 minutes, or the block with the check's rests over the
+  budget), the check waits for a roomier day and the note says so (N3).
+- **At the heaviest weight (N7).** While a lift sits at the heaviest load its location has, the plan
+  offers a harder variation — the same work one difficulty step up, a squat may step to a split
+  squat (``LoadGuidance/harderVariation``) — as the plan editor's first swap; more reps, then a set,
+  stays the plan. The guided runner's lighter and heavier buttons step through the loads the location
+  owns (``LoadGuidance/loads``, ``LoadLadder/window(around:count:)``; R6).
 - **Weights on hand (2026-10-20).** A location can list the dumbbell pairs, kettlebells, bar and
   plate pairs it has (``WorkoutWeightInventory``, presets in ``WorkoutWeightPresets``); every weight
   the load pass prescribes there — the range, the easier session, the calibration's sets — is then a
@@ -755,6 +767,9 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``WorkoutWarmUpSets``
 - ``WarmUpSet``
 - ``PlateCalculator``
+- ``WorkoutBlocks``
+- ``BlockPhase``
+- ``BlockWeek``
 - ``BarbellPlateSet``
 - ``PlateLoadout``
 

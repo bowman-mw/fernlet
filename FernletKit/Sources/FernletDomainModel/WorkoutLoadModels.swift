@@ -488,11 +488,23 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
     /// `.ramp` step like a calibration's, told apart so a time budget can drop it and the plan editor
     /// can hide it. Plan-only: the run and the log know it as a ramp set.
     public var warmUp: Bool
+    /// A harder variation the planner offers while the lift sits at the heaviest load this location
+    /// has (N7, 2026-10-20) — its frozen catalog name, which the plan editor's swap offers first.
+    /// Plan-only; nil otherwise. More reps, then a set, stays the plan either way.
+    public var harderVariation: String?
+    /// The loads this location owns for the lift's gear, in ``unit``, lightest first and at most
+    /// ``maxRunnerLoads`` around the suggestion (R6) — what the runner's lighter and heavier buttons
+    /// step through. Nil when the location's weights say nothing about the gear.
+    public var loads: [Double]?
+
+    /// Owned loads a lift carries into a run at most: the nearest this many around the suggestion.
+    public static let maxRunnerLoads = 48
 
     public init(
         targetReps: Int, prescription: WeightPrescription? = nil, equipment: Equipment? = nil,
         unit: LoadUnit = .lb, askReasonOnOverride: Bool = false, calibration: CalibrationStep? = nil,
-        easierSession: Bool = false, compoundsBefore: Int = 0, warmUp: Bool = false
+        easierSession: Bool = false, compoundsBefore: Int = 0, warmUp: Bool = false,
+        harderVariation: String? = nil, loads: [Double]? = nil
     ) {
         self.targetReps = targetReps
         self.prescription = prescription
@@ -503,6 +515,8 @@ public nonisolated struct LoadGuidance: Equatable, Sendable {
         self.easierSession = easierSession
         self.compoundsBefore = compoundsBefore
         self.warmUp = warmUp
+        self.harderVariation = harderVariation
+        self.loads = loads.map { Array($0.prefix(Self.maxRunnerLoads)) }
     }
 
     /// The lift takes a load (the runner shows a weight picker even with no suggestion yet).

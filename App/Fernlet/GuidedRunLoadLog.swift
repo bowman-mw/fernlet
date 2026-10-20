@@ -35,7 +35,8 @@ enum GuidedRunLoadLog {
             calibrationRaw: guidance.calibration?.rawValue,
             easierSession: guidance.easierSession,
             compoundsBefore: guidance.compoundsBefore,
-            selected: guidance.prescription?.suggested
+            selected: guidance.prescription?.suggested,
+            loads: step == nil ? nil : guidance.loads.map { Array($0.prefix(GuidedWorkoutRunState.Tracking.maxLoads)) }
         )
     }
 

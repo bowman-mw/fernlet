@@ -79,6 +79,34 @@ extension WorkoutPlannerCopy {
                comment: "Workout session note about one lift for someone past their first months of lifting: progress comes after two good sessions in a row, so today repeats the last one. The argument is the exercise name.")
     }
 
+    /// N7: "If you'd like a harder step for Goblet squat, Bulgarian split squat works the same muscles
+    /// — it's the first swap when you edit the plan. Otherwise more reps, then a set, keep it moving."
+    static func harderVariation(_ variant: String, lift: String) -> String {
+        String(localized: "workoutNote.load.harderVariation",
+               defaultValue: "If you'd like a harder step for \(lift), \(variant) works the same muscles — it's the first swap when you edit the plan. Otherwise more reps, then a set, keep it moving.",
+               bundle: .module,
+               comment: "Workout session note: a lift is at the heaviest weight this place has, so a harder version of it is offered, never required. Arguments: the lift, then the harder exercise.")
+    }
+
+    /// The block calendar's line (G2): "Heavier block, week 2 of 4: main lifts are 5 sets of 3 reps —
+    /// fewer reps at more weight, then back to volume."
+    static func block(_ phase: BlockPhase, week: Int, of weeks: Int, sets: Int, reps: Int) -> String {
+        let current = week.formatted()
+        let total = weeks.formatted()
+        switch phase {
+        case .volume:
+            return String(localized: "workoutNote.block.volume",
+                          defaultValue: "Volume block, week \(current) of \(total): main lifts are \(setCount(sets)) of \(repCount(reps)) — more work at a moderate weight, then a heavier block.",
+                          bundle: .module,
+                          comment: "Workout session note for a trained strength lifter's planned block. Arguments: the week of the block (digits), the block's length in weeks (digits), a number of sets (e.g. '4 sets'), then a number of reps (e.g. '6 reps').")
+        case .heavier:
+            return String(localized: "workoutNote.block.heavier",
+                          defaultValue: "Heavier block, week \(current) of \(total): main lifts are \(setCount(sets)) of \(repCount(reps)) — fewer reps at more weight, then back to volume.",
+                          bundle: .module,
+                          comment: "Workout session note for a trained strength lifter's planned block. Arguments: the week of the block (digits), the block's length in weeks (digits), a number of sets (e.g. '5 sets'), then a number of reps (e.g. '3 reps').")
+        }
+    }
+
     /// "Bench press: lighter and one set fewer today — a reset, not a step back."
     static func lighterFewerSets(_ name: String) -> String {
         String(localized: "workoutNote.load.lighterFewerSets",

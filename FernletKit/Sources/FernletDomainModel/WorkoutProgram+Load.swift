@@ -93,6 +93,8 @@ extension WorkoutProgram {
         /// Set on a variant: the stalled lift it joins (``PlateauStage/variant``).
         var variantOf: String?
         var plan: LiftPlan?
+        /// Set when the lift follows the block calendar today (``WorkoutBlocks``).
+        var block: BlockWeek?
     }
 
     /// The slot a plateau variant fills beside its lift: frozen like every slot label, drawn through
@@ -123,9 +125,21 @@ extension WorkoutProgram {
         applyPlateauLoad(&loaded, inputs: inputs, load: load)
         let plateauNotes = plateauStory(loaded, inputs: inputs) ?? []
         var notes = progressNotes(loaded)
-        if calibrationOpen, let calibration = expandCalibration(&loaded, inputs: inputs, load: load) {
-            calibrationOpen = false
-            notes = [calibration]
+        if let week = loaded.lazy.compactMap(\.block).first {
+            notes.insert(blockNote(week, energy: inputs.intensity), at: 0)
+        }
+        if let harder = offerHarderVariations(&loaded, inputs: inputs, used: used) { notes.append(harder) }
+        if calibrationOpen {
+            var trial = loaded
+            if let calibration = expandCalibration(&trial, inputs: inputs, load: load) {
+                if calibrationFits(trial, inputs: inputs) {
+                    loaded = trial
+                    calibrationOpen = false
+                    notes = [calibration]
+                } else {
+                    notes.append(WorkoutPlannerCopy.calibrationMoved)
+                }
+            }
         }
         addWarmUpSets(&loaded, inputs: inputs, load: load)
         assignFatigueContext(&loaded)
@@ -185,32 +199,54 @@ extension WorkoutProgram {
 
     /// Gives one rep-counted lift its next sets, reps and weight range from its own history. A lift
     /// with no history keeps the count-based ladder and gets guidance with no suggested weight, so the
-    /// runner asks the lifter to pick one.
+    /// runner asks the lifter to pick one. A trained Strength lifter's main lift follows the block
+    /// calendar's reps and sets (``WorkoutBlocks``) instead of the goal's.
     static func plan(_ pick: inout LoadedPick, inputs: SlotInputs, load: WorkoutLoadContext) {
         guard pick.exercise.fromCatalog, pick.exercise.holdSeconds == nil,
-              let scheme = RepScheme(inputs.style.reps(for: pick.slot.role)) else { return }
+              let styleScheme = RepScheme(inputs.style.reps(for: pick.slot.role)) else { return }
         let history = load.history(for: pick.target.name)
         let equipment = loadEquipment(for: pick.target, at: inputs.location)
+        let tier = load.trainingAge(for: pick.target.name)?.tier ?? .beginner
+        let block = WorkoutBlocks.applies(goal: inputs.goal, tier: tier, role: pick.slot.role)
+            ? WorkoutBlocks.week(on: load.today) : nil
+        let scheme = block.map { RepScheme(low: $0.phase.reps, high: $0.phase.reps) } ?? styleScheme
+        let sets = block.map { WorkoutBlocks.sets($0.phase, energy: inputs.intensity) }
+            ?? inputs.style.adjustedSets(for: pick.slot.role, energy: inputs.intensity)
+        pick.block = block
+        if let block {
+            pick.exercise.sets = sets
+            pick.exercise.reps = "\(block.phase.reps)"
+        }
         guard !history.isEmpty else {
-            pick.exercise.guidance = LoadGuidance(
+            var first = LoadGuidance(
                 targetReps: Int(pick.exercise.reps) ?? scheme.low, equipment: equipment, unit: load.defaultUnit
             )
+            first.loads = runnerLoads(for: first, at: inputs.location)
+            pick.exercise.guidance = first
             return
         }
         let plan = WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
-            scheme: scheme, baseSets: inputs.style.adjustedSets(for: pick.slot.role, energy: inputs.intensity),
-            exposures: history, equipment: equipment,
+            scheme: scheme, baseSets: sets, exposures: history, equipment: equipment,
             isLowerBody: WorkoutLoadEngine.isLowerBody(pick.target.movementPattern),
-            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights,
-            tier: load.trainingAge(for: pick.target.name)?.tier ?? .beginner
+            defaultUnit: load.defaultUnit, today: load.today, inventory: inputs.location.weights, tier: tier
         ))
         pick.exercise.sets = plan.sets
         pick.exercise.reps = "\(plan.reps)"
-        pick.exercise.guidance = LoadGuidance(
+        var guidance = LoadGuidance(
             targetReps: plan.reps, prescription: plan.prescription, equipment: equipment, unit: plan.unit,
             askReasonOnOverride: plan.askReasonOnOverride
         )
+        guidance.loads = runnerLoads(for: guidance, at: inputs.location)
+        pick.exercise.guidance = guidance
         pick.plan = plan
+    }
+
+    /// The owned loads a guided run steps through for this lift (R6): those around its suggestion,
+    /// or around the middle of what the location has when there is no suggestion yet.
+    static func runnerLoads(for guidance: LoadGuidance, at location: WorkoutLocation) -> [Double]? {
+        guard let ladder = loadLadder(for: guidance, at: location) else { return nil }
+        let middle = ladder.loads[ladder.loads.count / 2]
+        return ladder.window(around: guidance.prescription?.suggested ?? middle, count: LoadGuidance.maxRunnerLoads)
     }
 
     /// Counts the compound lifts ahead of each pick — the fatigue context a result records.
@@ -342,6 +378,59 @@ extension WorkoutProgram {
         pick.exercise.guidance = guidance
     }
 
+    // MARK: A harder variation (N7)
+
+    /// N7 (2026-10-20): while a lift sits at the heaviest load this location has, the planner offers
+    /// a harder variation of it — the plan editor's first swap (``LoadGuidance/harderVariation``) —
+    /// and the session note says so once. More reps, then a set, stays the plan.
+    static func offerHarderVariations(_ loaded: inout [LoadedPick], inputs: SlotInputs, used: Set<String>) -> String? {
+        var note: String?
+        for index in loaded.indices where loaded[index].variantOf == nil && atHeaviest(loaded[index].plan) {
+            let lift = loaded[index].target
+            guard let harder = harderVariation(for: lift, inputs: inputs, excluding: used) else { continue }
+            loaded[index].exercise.guidance?.harderVariation = harder.name
+            guard note == nil else { continue }
+            note = WorkoutPlannerCopy.harderVariation(ExerciseHowToCatalog.displayName(for: harder.name),
+                                                      lift: ExerciseHowToCatalog.displayName(for: lift.name))
+        }
+        return note
+    }
+
+    /// Whether the plan holds a lift at the heaviest load the location has (``LoadCap/heaviest(top:)``).
+    static func atHeaviest(_ plan: LiftPlan?) -> Bool {
+        guard case .heaviest(_)? = plan?.cap else { return false }
+        return true
+    }
+
+    /// The harder variation offered for `target`: an exercise the planner may suggest here, not in the
+    /// session already, doing the same kind of work — the same modality and measure, the same movement
+    /// pattern (a squat may step to a split squat or lunge), a shared primary muscle — at a harder
+    /// difficulty. The nearest step wins: most shared primaries, then the same pattern, then the
+    /// smallest step in difficulty, then the name. Nil when nothing fits.
+    static func harderVariation(for target: ExerciseTarget, inputs: SlotInputs, excluding used: Set<String>) -> ExerciseTarget? {
+        let candidates = inputs.feasible.filter { candidate in
+            candidate.name != target.name && !used.contains(candidate.name)
+                && candidate.difficulty > target.difficulty && candidate.modality == target.modality
+                && candidate.measure == target.measure
+                && isHarderPattern(candidate.movementPattern, from: target.movementPattern)
+                && !candidate.primaryMuscles.isDisjoint(with: target.primaryMuscles)
+        }
+        return candidates.min { harderRank($0, for: target) < harderRank($1, for: target) }
+    }
+
+    /// The same pattern, or a squat's step to a single-leg split squat or lunge.
+    static func isHarderPattern(_ candidate: MovementPattern, from original: MovementPattern) -> Bool {
+        candidate == original || (original == .squat && candidate == .lunge)
+    }
+
+    /// The order ``harderVariation(for:inputs:excluding:)`` ranks by, lowest first.
+    static func harderRank(_ candidate: ExerciseTarget, for target: ExerciseTarget) -> (Int, Int, Int, String) {
+        let shared = candidate.primaryMuscles.intersection(target.primaryMuscles).count
+        let pattern = candidate.movementPattern == target.movementPattern ? 0 : 1
+        let gap = candidate.difficulty.rawValue - target.difficulty.rawValue
+        return (-shared, pattern, gap, candidate.name)
+    }
+
     // MARK: Calibration
 
     /// Turns the session's main lift into this month's calibration when one is due, and takes a set
@@ -378,6 +467,24 @@ extension WorkoutProgram {
         return calibrationNote(kind: kind, lift: pick.target.name, sets: sets, unit: guidance.unit)
     }
 
+    /// The shortest session budget a strength check runs in: its ramp and its long rests need it.
+    static let calibrationMinimumMinutes = 30
+
+    /// Whether a session's lifting block with its calibration still fits the day's time budget (N3,
+    /// 2026-10-20): a budget of at least ``calibrationMinimumMinutes``, and the block — counting the
+    /// rests between the check's single sets, which the session clock leaves out — with room for a
+    /// short warm-up. When it doesn't, the strength check waits: it stays due, so it comes on the next
+    /// day with more time, rather than squeezing today.
+    static func calibrationFits(_ loaded: [LoadedPick], inputs: SlotInputs) -> Bool {
+        guard let budget = inputs.options.length.minutes else { return true }
+        guard budget >= calibrationMinimumMinutes else { return false }
+        let steps = loaded.map(\.exercise)
+        let checkRests = steps.filter { $0.guidance?.calibration != nil }.dropLast()
+            .reduce(0) { $0 + ($1.restSecondsOverride ?? 0) }
+        let seconds = WorkoutSessionTime.seconds(of: steps, goal: inputs.goal) + checkRests
+        return seconds + WorkoutSessionBlocks.shortWarmUpSeconds <= budget * 60
+    }
+
     /// One calibration set as its own single-set step at a fixed weight.
     static func calibrationPick(
         _ pick: LoadedPick, set: CalibrationSet, guidance: LoadGuidance, step: Double, confidence: EstimateConfidence
@@ -389,7 +496,7 @@ extension WorkoutProgram {
             name: pick.exercise.name, sets: 1, reps: "\(set.reps)", role: pick.slot.role, fromCatalog: true,
             restSecondsOverride: set.restSeconds, block: .lifting,
             guidance: LoadGuidance(targetReps: set.reps, prescription: weight, equipment: guidance.equipment,
-                                   unit: guidance.unit, calibration: set.step)
+                                   unit: guidance.unit, calibration: set.step, loads: guidance.loads)
         )
         copy.plan = nil
         return copy
