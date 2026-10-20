@@ -93,9 +93,9 @@ public nonisolated enum WorkoutSessionFlags {
     public static func sleepFlag(lastNight: Double?, previousNight: Double?, earlierNights: [Double]) -> SleepFlag? {
         guard let lastNight else { return nil }
         let window = Array(earlierNights.suffix(medianWindowDays))
-        let median = median(of: window)
-        guard isShort(lastNight, median: median) else { return nil }
-        guard let previousNight, isShort(previousNight, median: median) else { return .shortNight }
+        let usual = median(of: window)
+        guard isShort(lastNight, median: usual) else { return nil }
+        guard let previousNight, isShort(previousNight, median: usual) else { return .shortNight }
         return .shortNights
     }
 }

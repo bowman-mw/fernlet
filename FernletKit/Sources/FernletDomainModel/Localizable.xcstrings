@@ -30878,6 +30878,29 @@
         }
       }
     },
+    "workoutNote.count.sessions" : {
+      "comment" : "Workout session note: a number of training sessions of one lift, e.g. '8 sessions'. Placed inside other note sentences.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld sessions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "workoutNote.count.sets" : {
       "comment" : "Workout session note: a number of sets of a lift, e.g. '3 sets'. Placed inside other note sentences.",
       "localizations" : {
@@ -31296,74 +31319,86 @@
         }
       }
     },
-    "workoutNote.plateau.backTo" : {
-      "comment" : "Workout session note: a stalled lift returns after a few weeks of a different exercise. Arguments: the exercise name, then the extra rest (e.g. '+1 min').",
+    "workoutNote.plateau.deload" : {
+      "comment" : "Workout session note: a lighter session after two lower ones, with fewer sets. Arguments: the exercise name, then a number of sets (e.g. '2 sets').",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Back to %1$@, with a little more rest between sets (%2$@)."
+            "value" : "Today is a lighter %1$@ session: %2$@ instead of the usual. That's often all it takes."
           }
         }
       }
     },
-    "workoutNote.plateau.easier" : {
-      "comment" : "Workout session note: a lighter day for a lift that has stalled. Arguments: the exercise name, then a number of sets (e.g. '2 sets').",
+    "workoutNote.plateau.deloadAt" : {
+      "comment" : "Workout session note: a lighter session after two lower ones, with fewer sets and the weight kept. Arguments: the exercise name, a number of sets (e.g. '2 sets'), then a weight with its unit.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Today is an easier %1$@ session: %2$@, lighter than usual. An extra rest day instead is fine too — both count as training."
+            "value" : "Today is a lighter %1$@ session: %2$@ at the usual weight, about %3$@. That's often all it takes."
           }
         }
       }
     },
-    "workoutNote.plateau.easierAt" : {
-      "comment" : "Workout session note: a lighter day for a lift that has stalled. Arguments: the exercise name, a number of sets (e.g. '2 sets'), and a weight with its unit.",
+    "workoutNote.plateau.dipLead" : {
+      "comment" : "Workout session note: a lift's last two sessions were clearly below its usual level. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Today is an easier %1$@ session: %2$@ at about %3$@. An extra rest day instead is fine too — both count as training."
+            "value" : "%@ came in a little lower the last two times. That happens, and it usually passes."
           }
         }
       }
     },
-    "workoutNote.plateau.extraRestAccessory" : {
-      "comment" : "Extra rest between sets, inside a workout session note: thirty more seconds",
+    "workoutNote.plateau.extraSet" : {
+      "comment" : "Workout session note for a lift that has held steady and takes no added weight: one more set for a while. Both arguments are the exercise name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "+30 s"
+            "value" : "For the next few sessions, %1$@ gets one more set. One more %2$@ day a week works too, if you'd like."
           }
         }
       }
     },
-    "workoutNote.plateau.extraRestMain" : {
-      "comment" : "Extra rest between sets, inside a workout session note: one more minute",
+    "workoutNote.plateau.heavierBlock" : {
+      "comment" : "Workout session note for a lift that has held steady: a short block of heavier, lower-rep work. Arguments: the exercise name, a number of reps (e.g. '6 reps'), a weight with its unit, then the exercise name again.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "+1 min"
+            "value" : "For the next few sessions, %1$@ goes a little heavier for fewer reps — %2$@ at about %3$@. One more %4$@ day a week works too, if you'd like."
           }
         }
       }
     },
-    "workoutNote.plateau.goesFirst" : {
-      "comment" : "Workout session note about a stalled lift. Arguments: the exercise name, then the extra rest (e.g. '+1 min').",
+    "workoutNote.plateau.holdingSteady" : {
+      "comment" : "Workout session note for a lift that has held steady for a long while, for a person not training mainly for strength. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$@ goes first today, with a little more rest between sets (%2$@)."
+            "value" : "%@ is holding steady, and that's a good place to be. Keep training it as it is, or change it up whenever you like."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.holdingSteady.strength" : {
+      "comment" : "Workout session note for a strength-focused person whose lift has held steady for a long while. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@ is holding steady, and steady is fine. Keep training it as it is, try a different rep range for a while, or give another lift the spotlight — whichever suits you."
           }
         }
       }
@@ -31375,7 +31410,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%@ has held steady for a few sessions. That's normal — strength comes in steps, and a pause often means your body wants more recovery."
+            "value" : "%@ has held steady for a few sessions. That's normal — strength comes in steps."
           }
         }
       }
@@ -31387,19 +31422,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$@ has held steady for %2$@. That's normal — strength comes in steps, and a pause often means your body wants more recovery."
+            "value" : "%1$@ has held steady for %2$@. That's normal — strength comes in steps."
           }
         }
       }
     },
-    "workoutNote.plateau.moreRest" : {
-      "comment" : "Workout session note about a stalled lift. Arguments: the exercise name, then the extra rest (e.g. '+1 min').",
+    "workoutNote.plateau.lightDayContext" : {
+      "comment" : "Workout session note giving context to a lift's progress: some sessions were on days the person chose or was offered as light. Arguments: a number written as digits (e.g. '2'), then a number of sessions (e.g. '8 sessions').",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "A little more rest between %1$@ sets (%2$@)."
+            "value" : "%1$@ of the last %2$@ fell on a light day, which can take a little off a session."
           }
         }
       }
@@ -31416,38 +31451,62 @@
         }
       }
     },
-    "workoutNote.plateau.sleepLow" : {
-      "comment" : "Workout session note in the plateau story, said only when sleep ran low. The argument is the average hours of sleep with one decimal, e.g. '6.5'.",
+    "workoutNote.plateau.retest" : {
+      "comment" : "Workout session note for a lift that has held steady: it moves to the start of the session with longer rest, to give it a fair try. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Sleep has averaged %@ hours these past two weeks. More sleep is often the quickest way through."
+            "value" : "Today %@ goes first, with at least 3 minutes' rest between sets — a fair retest."
           }
         }
       }
     },
-    "workoutNote.plateau.support" : {
-      "comment" : "Workout session note: an extra exercise builds the helper muscles of a stalled lift. Arguments: the extra exercise, then the stalled lift.",
+    "workoutNote.plateau.shortNightContext" : {
+      "comment" : "Workout session note giving context to a lift's progress. Arguments: a number written as digits (e.g. '3'), then a number of sessions (e.g. '8 sessions').",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "For a few weeks, %1$@ takes an accessory spot to build up the muscles that help your %2$@."
+            "value" : "%1$@ of the last %2$@ came after a short night, which can take a little off a session."
           }
         }
       }
     },
-    "workoutNote.plateau.variation" : {
-      "comment" : "Workout session note: a different exercise replaces a stalled lift for a few weeks. Arguments: the replacement exercise, then the stalled one.",
+    "workoutNote.plateau.slowing" : {
+      "comment" : "Workout session note: a lift is still improving but more slowly than before. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$@ stands in for %2$@ for a few weeks — a fresh angle often gets things moving."
+            "value" : "%@ is coming along more slowly now, which is the normal curve as strength builds. Today's plan stays as it is."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.tooEarly" : {
+      "comment" : "Workout session note: most recent sessions of a lift followed a short night or were on a light day, so its progress can't be read yet. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Many recent %@ sessions came after a short night or fell on a light day, so it's too early to read how it's going. Today's plan stays as it is."
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.variantBeside" : {
+      "comment" : "Workout session note: a related exercise is added beside a lift that has held steady; the lift stays in the plan. Arguments: the added exercise, then the lift.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "For a few weeks, %1$@ joins %2$@, which keeps going with one set fewer — a fresh angle often gets things moving."
           }
         }
       }
@@ -32364,18 +32423,6 @@
         }
       }
     },
-    "workoutSlot.support" : {
-      "comment" : "Part of a workout session: extra work for the muscles that help a stalled lift",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Support"
-          }
-        }
-      }
-    },
     "workoutSlot.traps" : {
       "comment" : "Part of a workout session: a trapezius exercise, like a shrug",
       "extractionState" : "extracted_with_value",
@@ -32408,6 +32455,18 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Triceps 2"
+          }
+        }
+      }
+    },
+    "workoutSlot.variant" : {
+      "comment" : "Part of a workout session: a related exercise added beside a lift that has held steady for a while",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Variant"
           }
         }
       }

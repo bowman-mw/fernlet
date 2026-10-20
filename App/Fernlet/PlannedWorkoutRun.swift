@@ -228,7 +228,8 @@ extension FernletStore {
         if let run = guidedRunState, !run.isDone, run.plannedWorkoutID == planned.id {
             return guidedSessionForResume()
         }
-        let load = WorkoutLoadContextBuilder.build(days: loadDays(), today: day, todayKey: todayKey, settings: settings)
+        let load = WorkoutLoadContextBuilder.build(days: loadDays(), today: day, todayKey: todayKey, settings: settings,
+                                                   body: effectiveUserProfile)
         let steps = PlannedWorkoutRun.steps(for: planned, location: settings.activeWorkoutLocation, load: load)
         guard !steps.isEmpty else { return nil }
         let session = PlannedWorkoutRun.session(

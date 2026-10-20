@@ -1,9 +1,10 @@
 // WorkoutProgram+LoadNotes.swift
 // FernletDomainModel
 //
-// The session-note lines the load pass writes: what changed on a lift and why, the plateau story,
-// and the calibration brief. Tone, per the owner: plateaus are normal and a lighter day is training
-// too — nothing here ever says "you failed". The sentences themselves are String Catalog keys in
+// The session-note lines the load pass writes: what changed on a lift and why, the trend story (a
+// stall on its ladder, a dip, a slowing or too-early note), and the calibration brief. Tone, per the
+// owner: plateaus are normal and a lighter day is training too — nothing here ever says "you failed",
+// and a short night is said as something that happened alongside, never as the person's fault. The sentences themselves are String Catalog keys in
 // ``WorkoutPlannerCopy`` (2026-10-20, idea 16); this file decides which one a lift gets.
 
 import Foundation
@@ -14,11 +15,12 @@ extension WorkoutProgram {
     static let maxProgressLines = 2
 
     /// What changed on the session's lifts, main lift first — at most two lines, plus one line for
-    /// lifts that still need a first weight. Stalled lifts are left to the plateau story.
+    /// lifts that still need a first weight. A stalled or dipping lift is left to the trend story,
+    /// which says what today changes on it.
     static func progressNotes(_ loaded: [LoadedPick]) -> [String] {
         var lines: [String] = []
         var needsFirstWeight = false
-        for pick in loaded where pick.plateau == nil {
+        for pick in loaded where !isRespondedTo(pick) {
             if let guidance = pick.exercise.guidance, guidance.isLoadable, guidance.prescription == nil {
                 needsFirstWeight = true
             }
@@ -30,6 +32,11 @@ extension WorkoutProgram {
             lines.append(WorkoutPlannerCopy.newLifts)
         }
         return lines
+    }
+
+    /// Whether the plateau response changed this lift's plan: a stall on its ladder, or a dip's deload.
+    static func isRespondedTo(_ pick: LoadedPick) -> Bool {
+        pick.plateau?.state == .stalled || pick.plateau?.state == .dipping
     }
 
     /// One lift's change in a sentence, or nil when there is nothing worth saying.
@@ -99,51 +106,90 @@ extension WorkoutProgram {
         "\(WorkoutLoadEngine.weightText(weight)) \(unit.rawValue)"
     }
 
-    /// The plateau story for the session's first stalled lift: that it's normal, the rest check
-    /// (sleep and protein, only when they ran low), then what today does about it.
-    static func plateauStory(_ loaded: [LoadedPick], recovery: RecoverySummary) -> [String]? {
-        guard let pick = loaded.first(where: { $0.plateau != nil }), let status = pick.plateau else { return nil }
-        let name = pick.standsInFor ?? pick.target.name
-        var lines: [String] = []
-        if status.stage != .supportWork { lines.append(plateauLead(name, weeks: status.weeksHeld)) }
-        if status.stage == .easierSession || status.stage == .recover {
-            lines += recoveryLines(recovery)
+    /// Context lines a plateau story carries at most, before its plain training option.
+    static let maxContextLines = 2
+
+    /// The trend story for one lift of the session: a stalled or dipping lift first, else a slowing
+    /// one, else one whose window was mostly flagged. At most ``maxContextLines`` context lines (what
+    /// the trend shows, and what happened alongside it), then always a plain training option. Calm by
+    /// rule: steady is normal, a dip happens, and a flag is said as co-occurrence, never as blame.
+    static func plateauStory(_ loaded: [LoadedPick], inputs: SlotInputs) -> [String]? {
+        let lifts = loaded.filter { $0.variantOf == nil && $0.exercise.guidance?.warmUp != true }
+        let order: [TrendState] = [.stalled, .dipping, .slowing, .tooEarly]
+        var chosen: LoadedPick?
+        for state in order where chosen == nil {
+            chosen = lifts.first { $0.plateau?.state == state }
         }
-        let rest = WorkoutPlannerCopy.extraRest(mainLift: pick.slot.role == .main)
-        switch status.stage {
-        case .easierSession:
-            let weight = pick.exercise.guidance?.prescription.map(\.suggestedText)
-            lines.append(WorkoutPlannerCopy.easierSession(name, sets: pick.exercise.sets, weight: weight))
-        case .recover:
-            lines.append(WorkoutPlannerCopy.recoverFirst(name, rest: rest))
-        case .supportWork:
-            lines.append(WorkoutPlannerCopy.supportRest(name, rest: rest))
-        case .afterVariation:
-            lines.append(WorkoutPlannerCopy.afterVariation(name, rest: rest))
-        case .variation:
+        guard let pick = chosen, let status = pick.plateau else { return nil }
+        let name = ExerciseHowToCatalog.displayName(for: pick.target.name)
+        var context: [String] = []
+        if let lead = leadLine(name, status: status) { context.append(lead) }
+        if let flags = flagContextLine(status.reading) { context.append(flags) }
+        let option = trainingOption(pick, name: name, status: status, loaded: loaded, goal: inputs.goal)
+        return Array(context.prefix(maxContextLines)) + [option]
+    }
+
+    /// What the trend shows, as the story's first line; nil when the option line says it all.
+    static func leadLine(_ name: String, status: PlateauStatus) -> String? {
+        switch status.state {
+        case .stalled:
+            return status.stage == .holdingSteady ? nil : plateauLead(name, weeks: status.weeksHeld)
+        case .dipping:
+            return WorkoutPlannerCopy.dipLead(name)
+        case .slowing, .tooEarly, .progressing:
+            return nil
+        }
+    }
+
+    /// The sleep or light-day line: how many of the trend window's sessions came after a short night
+    /// (or, with none, on a light day). Said as co-occurrence; nil when none were flagged.
+    static func flagContextLine(_ reading: TrendReading) -> String? {
+        let window = reading.windowSessions
+        guard window > 0 else { return nil }
+        if reading.shortNightSessions > 0 {
+            return WorkoutPlannerCopy.shortNightContext(reading.shortNightSessions, of: window)
+        }
+        guard reading.lightDaySessions > 0 else { return nil }
+        return WorkoutPlannerCopy.lightDayContext(reading.lightDaySessions, of: window)
+    }
+
+    /// The plain training option: what today does about the trend, by its state and ladder step.
+    static func trainingOption(
+        _ pick: LoadedPick, name: String, status: PlateauStatus, loaded: [LoadedPick], goal: GoalType
+    ) -> String {
+        let guidance = pick.exercise.guidance
+        let weight = guidance?.prescription.map(\.suggestedText)
+        switch status.state {
+        case .dipping:
+            return WorkoutPlannerCopy.deload(name, sets: pick.exercise.sets, weight: weight)
+        case .slowing:
+            return WorkoutPlannerCopy.slowing(name)
+        case .tooEarly, .progressing:
+            return WorkoutPlannerCopy.tooEarly(name)
+        case .stalled:
             break
         }
-        return lines
+        switch status.stage ?? .holdingSteady {
+        case .fairRetest:
+            return WorkoutPlannerCopy.fairRetest(name)
+        case .loadingChange:
+            guard let weight, let reps = guidance?.targetReps, guidance?.equipment != nil else {
+                return WorkoutPlannerCopy.extraSet(name)
+            }
+            return WorkoutPlannerCopy.heavierBlock(name, reps: reps, weight: weight)
+        case .variant:
+            guard let variant = loaded.first(where: { $0.variantOf == pick.target.name }) else {
+                return WorkoutPlannerCopy.holdingSteady(name, goal: goal)
+            }
+            return WorkoutPlannerCopy.variantBeside(ExerciseHowToCatalog.displayName(for: variant.target.name), lift: name)
+        case .holdingSteady:
+            return WorkoutPlannerCopy.holdingSteady(name, goal: goal)
+        }
     }
 
     /// "Bench press has held steady for 3 weeks. That's normal…"
     static func plateauLead(_ name: String, weeks: Int) -> String {
         WorkoutPlannerCopy.plateauLead(name, weeks: weeks)
-    }
-
-    /// The rest check's lines: said only when sleep or protein ran low, silent with no data. The hours
-    /// carry one decimal in the device's own number format ("6.5", "6,5").
-    static func recoveryLines(_ recovery: RecoverySummary) -> [String] {
-        var lines: [String] = []
-        if recovery.sleepIsLow, let hours = recovery.averageSleepHours, hours.isFinite {
-            let text = hours.formatted(.number.precision(.fractionLength(1)).grouping(.never))
-            lines.append(WorkoutPlannerCopy.sleepLow(hours: text))
-        }
-        if recovery.proteinIsLow, let ratio = recovery.averageProteinRatio, ratio.isFinite {
-            let percent = Int((ratio * 100).rounded())
-            lines.append(WorkoutPlannerCopy.proteinLow(percent: percent))
-        }
-        return lines
     }
 
     /// The calibration brief for the session note.

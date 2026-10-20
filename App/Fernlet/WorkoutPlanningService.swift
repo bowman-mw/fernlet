@@ -13,6 +13,9 @@ import HealthKitGateway
 @MainActor
 protocol WorkoutPlanningContext: AnyObject {
     var settings: FernletSettings { get }
+    /// The body profile in effect on this device (typed, with this device's Health import laid over
+    /// it), for the load pass's expected strength curve.
+    var effectiveUserProfile: UserNutritionProfile { get }
     var day: FernletDay { get }
     var todayKey: String { get }
     func loadDays() -> [String: FernletDay]
@@ -115,7 +118,8 @@ final class WorkoutPlanningService {
             in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
         )
         let load = WorkoutLoadContextBuilder.build(
-            days: history, today: host.day, todayKey: host.todayKey, settings: host.settings
+            days: history, today: host.day, todayKey: host.todayKey, settings: host.settings,
+            body: host.effectiveUserProfile
         )
         return WorkoutProgram.dayPlan(
             goal: host.settings.selectedGoal,

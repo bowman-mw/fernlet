@@ -3,10 +3,10 @@ import Testing
 import FernletDomainModel
 @testable import Fernlet
 
-/// Pins load-aware progression, the owner's spec of 2026-10-19: the estimate (Epley with reps in
-/// reserve), confidence and the range it sets, the next prescription from the last result, the
-/// override question, the plateau rule and its staged response, the monthly calibration, and the
-/// persisted result's round trip.
+/// Pins load-aware progression, the owner's spec of 2026-10-19 with round 2's changes (2026-10-20):
+/// the estimate (Epley with reps in reserve), confidence and the range it sets, the next prescription
+/// from the last result (a flagged miss holds), the override question, the trend's plateau and dip
+/// calls and the ladder they walk, the monthly calibration, and the persisted result's round trip.
 @MainActor
 struct WorkoutLoadEngineTests {
 
@@ -38,12 +38,6 @@ struct WorkoutLoadEngineTests {
             scheme: scheme, baseSets: sets, exposures: history, equipment: equipment,
             isLowerBody: lowerBody, defaultUnit: .lb, today: day(today)
         ))
-    }
-
-    /// Four weeks of 135 lb × 9 (target 10, missed) after a best of 135 × 10 — a stall.
-    func stalledHistory() -> [LiftExposure] {
-        [session(0, 135, reps: [10, 10, 10], target: 10)]
-            + [7, 14, 21, 28].map { session($0, 135, reps: [9, 9, 9], target: 10) }
     }
 
     // MARK: - Estimate
@@ -118,18 +112,38 @@ struct WorkoutLoadEngineTests {
         #expect(squat.prescription?.suggested == 235)
     }
 
-    @Test func toughOrSmallMissesRepeatAndRealMissesGoLighter() {
+    @Test func aMissRepeatsAndOnlyTwoUnflaggedMissesGoLighter() {
         let tough = plan([session(28, 135, reps: [10, 10, 10], target: 10, effort: .tough)])
         #expect((tough.reps, tough.change, tough.prescription?.suggested) == (10, .same, 135))
 
         let minor = plan([session(28, 135, reps: [10, 10, 8], target: 10)])
         #expect((minor.change, minor.prescription?.suggested) == (.same, 135))
 
+        // One miss is mostly noise (G10): even a big one repeats the load.
         let real = plan([session(28, 135, reps: [10, 8, 7], target: 10)])
-        #expect((real.change, real.prescription?.suggested) == (.lighter, 130))
+        #expect((real.change, real.prescription?.suggested) == (.same, 135))
+
+        let second = plan([24, 28].map { session($0, 135, reps: [10, 8, 7], target: 10) })
+        #expect((second.change, second.prescription?.suggested) == (.lighter, 130))
 
         let third = plan([20, 24, 28].map { session($0, 135, reps: [10, 10, 9], target: 10) })
         #expect((third.change, third.sets, third.prescription?.suggested) == (.lighterFewerSets, 2, 120))
+    }
+
+    @Test func aFlaggedMissHoldsTheLoadAndNeverCountsTowardACut() {
+        func tired(_ offset: Int, light: Bool = false) -> LiftExposure {
+            var miss = session(offset, 135, reps: [10, 8, 7], target: 10)
+            miss.flag = light ? WorkoutSessionFlag(lightDay: true) : WorkoutSessionFlag(sleep: .shortNight)
+            return miss
+        }
+        let missed = session(24, 135, reps: [10, 8, 7], target: 10)
+        let afterShortNight = plan([missed, tired(28)])
+        #expect((afterShortNight.change, afterShortNight.prescription?.suggested) == (.same, 135))
+        let onALightDay = plan([missed, tired(28, light: true)])
+        #expect(onALightDay.change == .same)
+        // A flagged miss between two unflagged ones neither counts nor breaks the run.
+        let between = plan([session(20, 135, reps: [10, 8, 7], target: 10), tired(24), session(28, 135, reps: [10, 8, 7], target: 10)])
+        #expect((between.change, between.prescription?.suggested) == (.lighter, 130))
     }
 
     @Test func aLongBreakRestartsALittleLighter() {
@@ -180,71 +194,132 @@ struct WorkoutLoadEngineTests {
         #expect(!WorkoutLoadEngine.askReasonOnOverride([overrides[0]], today: day(30)))
     }
 
-    // MARK: - Plateau
+    // MARK: - Plateau (the trend, G1 and G5)
 
-    @Test func aStallAfterSteadyTrainingIsAPlateauStartingWithAnEasierSession() throws {
-        let status = try #require(WorkoutPlateau.status(of: stalledHistory(), unit: .lb, today: day(30)))
-        #expect(status.stage == .easierSession)
-        #expect(status.sessionsSinceOnset == 0)
-        #expect(status.weeksHeld == 4)
-        let next = stalledHistory() + [session(32, 120, reps: [9, 9], target: 9, easier: true)]
-        #expect(try #require(WorkoutPlateau.status(of: next, unit: .lb, today: day(33))).stage == .recover)
-    }
-
-    @Test func progressGapsOverridesAndFatigueAreNotPlateaus() {
-        let climbing = [0, 7, 14, 21, 28].enumerated().map { session($1, 135, reps: [8 + $0, 8 + $0, 8 + $0], target: 8 + $0) }
-        #expect(WorkoutPlateau.status(of: climbing, unit: .lb, today: day(30)) == nil)
-
-        let gappy = [session(0, 135, reps: [10, 10, 10], target: 10)]
-            + [10, 12, 30, 32].map { session($0, 135, reps: [9, 9, 9], target: 10) }
-        #expect(WorkoutPlateau.status(of: gappy, unit: .lb, today: day(33)) == nil)
-
-        var overridden = stalledHistory()
-        overridden[3].weight = 160
-        overridden[4].weight = 160
-        #expect(WorkoutPlateau.status(of: overridden, unit: .lb, today: day(30)) == nil)
-
-        let tired = [session(0, 135, reps: [10, 10, 10], target: 10)]
-            + [7, 14, 21, 28].map { session($0, 135, reps: [9, 9, 9], target: 10, compounds: 2) }
-        #expect(WorkoutPlateau.status(of: tired, unit: .lb, today: day(30)) == nil)
-
-        #expect(WorkoutPlateau.status(of: stalledHistory(), unit: .lb, today: day(28 + 43)) == nil)
-    }
-
-    @Test func aLiftWithoutALoadPlateausOnReps() {
-        let pushUps = [session(0, nil, reps: [20, 20], target: 20, structured: false)]
-            + [7, 14, 21, 28].map { session($0, nil, reps: [18, 18], target: 18, structured: false) }
-        #expect(WorkoutPlateau.status(of: pushUps, unit: .lb, today: day(30))?.stage == .easierSession)
-    }
-
-    @Test func theResponseWalksRestThenSupportThenAVariation() {
-        let last = day(40)
-        #expect(WorkoutPlateau.stage(sessionsSinceOnset: 1, lastSession: last, today: day(41)) == .recover)
-        #expect(WorkoutPlateau.stage(sessionsSinceOnset: 2, lastSession: last, today: day(41)) == .supportWork)
-        #expect(WorkoutPlateau.stage(sessionsSinceOnset: 5, lastSession: last, today: day(41)) == .supportWork)
-        #expect(WorkoutPlateau.stage(sessionsSinceOnset: 6, lastSession: last, today: day(50)) == .variation)
-        #expect(WorkoutPlateau.stage(sessionsSinceOnset: 6, lastSession: last, today: day(68)) == .afterVariation)
-        #expect(WorkoutPlateau.stage(sessionsSinceOnset: 7, lastSession: last, today: day(41)) == .easierSession)
-    }
-
-    @Test func helperMusclesFollowTheOwnersListThenTheCatalog() throws {
-        func helpers(_ name: String) throws -> [MuscleGroup] {
-            WorkoutPlateau.helperMuscles(for: try #require(WorkoutExerciseCatalog.exercise(named: name)))
+    /// Three sessions a week (days 0, 2 and 4 of each week) for `weeks` weeks, completed at 8 reps.
+    func weekly(_ weeks: Int, weight: (Int) -> Double = { _ in 100 }) -> [LiftExposure] {
+        (0..<weeks).flatMap { week in
+            [0, 2, 4].map { session(week * 7 + $0, weight(week), reps: [8, 8, 8], target: 8) }
         }
-        #expect(try Array(helpers("Bench press").prefix(3)) == [.triceps, .upperBack, .rearDelts])
-        #expect(try Array(helpers("Back squat").prefix(4)) == [.glutes, .hamstrings, .abs, .upperBack])
-        #expect(try Array(helpers("Deadlift").prefix(4)) == [.glutes, .hamstrings, .forearms, .lats])
-        #expect(try Array(helpers("Overhead press").prefix(3)) == [.triceps, .sideDelts, .upperBack])
-        #expect(try Array(helpers("Barbell row").prefix(3)) == [.biceps, .rearDelts, .forearms])
     }
 
-    @Test func theRestCheckSpeaksOnlyWhenSleepOrProteinRanLow() {
-        #expect(RecoverySummary(averageSleepHours: 6.2, sleepNights: 4).sleepIsLow)
-        #expect(!RecoverySummary(averageSleepHours: 6.2, sleepNights: 2).sleepIsLow)
-        #expect(!RecoverySummary(averageSleepHours: 7.5, sleepNights: 9).sleepIsLow)
+    /// A beginner whose known training age started with the history (step 2's setup answer).
+    func knownAge(_ history: [LiftExposure]) -> TrendProfile {
+        let weeks = 1 + (history.last?.date.timeIntervalSince(Self.base) ?? 0) / (7 * 86_400)
+        return TrendProfile(trainingAge: TrainingAge(weeks: weeks))
+    }
+
+    @Test func aFlatLineAfterWeeksOfSteadyTrainingStallsAndStartsWithAFairRetest() throws {
+        let eight = weekly(8)
+        let slowing = try #require(WorkoutPlateau.status(of: eight, unit: .lb, today: day(55), profile: knownAge(eight)))
+        #expect(slowing.state == .slowing)
+        #expect(slowing.stage == nil)
+
+        let nine = weekly(9)
+        let status = try #require(WorkoutPlateau.status(of: nine, unit: .lb, today: day(62), profile: knownAge(nine)))
+        #expect(status.state == .stalled)
+        #expect(status.stage == .fairRetest)
+        #expect(status.sessionsSinceOnset == 0)
+        #expect(status.weeksHeld == 8)
+
+        let ten = weekly(10)
+        let next = try #require(WorkoutPlateau.status(of: ten, unit: .lb, today: day(69), profile: knownAge(ten)))
+        #expect(next.stage == .loadingChange)
+        #expect(next.sessionsSinceOnset == 3)
+    }
+
+    @Test func aStillClimbingLiftIsNoPlateauWhereTheOldRuleSawOne() {
+        let climbing = weekly(9) { 100 + 5 * Double($0) }
+        #expect(WorkoutPlateau.status(of: climbing, unit: .lb, today: day(62), profile: knownAge(climbing)) == nil)
+    }
+
+    @Test func aBreakOverridesAndBuriedSessionsAreNotPlateaus() {
+        let flat = weekly(9)
+        let profile = knownAge(flat)
+        #expect(WorkoutPlateau.status(of: flat, unit: .lb, today: day(60 + 43), profile: profile) == nil)
+
+        var overridden = flat
+        overridden[25].weight = 130
+        overridden[26].weight = 130
+        #expect(WorkoutPlateau.status(of: overridden, unit: .lb, today: day(62), profile: profile) == nil)
+
+        let buried = flat.map { exposure -> LiftExposure in
+            var tired = exposure
+            tired.compoundsBefore = 2
+            return tired
+        }
+        #expect(WorkoutPlateau.status(of: buried, unit: .lb, today: day(62), profile: profile) == nil)
+    }
+
+    @Test func twoCleanSessionsWellUnderTheLineAreADipThatOneDeloadAnswers() throws {
+        let history = weekly(6) { 100 + 5 * Double($0) } + [42, 44].map { session($0, 125, reps: [6, 6, 6], target: 8) }
+        let status = try #require(WorkoutPlateau.status(of: history, unit: .lb, today: day(45), profile: knownAge(history)))
+        #expect(status.state == .dipping)
+        #expect(status.stage == nil)
+        let deload = session(46, 125, reps: [8, 8], target: 8, easier: true)
+        #expect(WorkoutPlateau.status(of: history + [deload], unit: .lb, today: day(47), profile: knownAge(history)) == nil)
+    }
+
+    @Test func lowSessionsAfterShortNightsOrOnLightDaysAreNeitherADipNorAStall() {
+        for flag in [WorkoutSessionFlag(sleep: .shortNight), WorkoutSessionFlag(lightDay: true)] {
+            let low = [42, 44].map { offset -> LiftExposure in
+                var tired = session(offset, 125, reps: [6, 6, 6], target: 8)
+                tired.flag = flag
+                return tired
+            }
+            let history = weekly(6) { 100 + 5 * Double($0) } + low
+            #expect(WorkoutPlateau.status(of: history, unit: .lb, today: day(45), profile: knownAge(history)) == nil)
+        }
+    }
+
+    @Test func aLiftWithoutALoadStallsOnReps() throws {
+        let pushUps = (0..<9).flatMap { week in
+            [0, 2, 4].map { session(week * 7 + $0, nil, reps: [12, 12], target: 12, structured: false) }
+        }
+        let status = try #require(WorkoutPlateau.status(of: pushUps, unit: .lb, today: day(62), profile: knownAge(pushUps)))
+        #expect(status.state == .stalled)
+        #expect(status.stage == .fairRetest)
+    }
+
+    @Test func aSteadyLineInAnOlderLongTrainedLifterIsSuccessNeverAStall() {
+        let older = LifterTraits(ageYears: 67)
+        #expect(WorkoutTrend.expectedRate(age: .years(5), traits: older, lowerBody: false, levelKg: nil) == 0)
+        #expect(WorkoutTrend.expectedRate(age: .years(5), traits: .unknown, lowerBody: false, levelKg: nil) == 0.025)
+        let flat = weekly(16)
+        let status = WorkoutPlateau.status(of: flat, unit: .lb, today: day(16 * 7),
+                                           profile: TrendProfile(trainingAge: .years(5), traits: older))
+        let state = status?.state
+        #expect(state != .stalled)
+    }
+
+    @Test func theLadderWalksARetestALoadingChangeAVariantThenHoldsSteady() {
+        let steps = [0, 1, 2, 7, 8, 15, 16, 40].map { WorkoutPlateau.stage(sessionsSinceOnset: $0) }
+        let expected: [PlateauStage] = [
+            .fairRetest, .fairRetest, .loadingChange, .loadingChange, .variant, .variant, .holdingSteady, .holdingSteady,
+        ]
+        #expect(steps == expected)
+    }
+
+    @Test func theOldLaddersTokensResolveToTheNearestNewStep() {
+        #expect(PlateauStage(persistedToken: "easierSession") == .fairRetest)
+        #expect(PlateauStage(persistedToken: "recover") == .fairRetest)
+        #expect(PlateauStage(persistedToken: "supportWork") == .loadingChange)
+        #expect(PlateauStage(persistedToken: "variation") == .variant)
+        #expect(PlateauStage(persistedToken: "afterVariation") == .holdingSteady)
+        #expect(PlateauStage(persistedToken: "variant") == .variant)
+        #expect(PlateauStage(persistedToken: "deloadWeek") == nil)
+        let unknown = PlateauStage.resolve(token: "deloadWeek", parkedToken: nil)
+        #expect(unknown.value == .fairRetest)
+        #expect(unknown.parkedToken == "deloadWeek")
+        let legacy = PlateauStage.resolve(token: "supportWork", parkedToken: nil)
+        #expect(legacy.value == .loadingChange)
+        #expect(legacy.parkedToken == nil)
+    }
+
+    @Test func theProteinContextSpeaksOnlyWhenProteinRanLow() {
         #expect(RecoverySummary(averageProteinRatio: 0.7, proteinDays: 5).proteinIsLow)
         #expect(!RecoverySummary(averageProteinRatio: 0.7, proteinDays: 3).proteinIsLow)
-        #expect(!RecoverySummary.unknown.sleepIsLow && !RecoverySummary.unknown.proteinIsLow)
+        #expect(!RecoverySummary.unknown.proteinIsLow)
     }
 
     // MARK: - Calibration

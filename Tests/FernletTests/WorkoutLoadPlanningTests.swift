@@ -5,9 +5,9 @@ import FernletFoundation
 @testable import Fernlet
 
 /// Pins where load-aware progression meets the app: the day plan's load pass (weight ranges, the
-/// "add weight now" reset, the plateau response in order — easier session up front, support work,
-/// a variation — and the monthly calibration), the runner's tracking from plan to log, and the
-/// context the planner reads from the day history.
+/// "add weight now" reset, the plateau ladder — a fair retest up front, then a heavier block — the
+/// dip's deload, and the monthly calibration), the runner's tracking from plan to log, and the context
+/// the planner reads from the day history, with each session's sleep and readiness flag.
 @MainActor
 struct WorkoutLoadPlanningTests {
 
@@ -48,10 +48,27 @@ struct WorkoutLoadPlanningTests {
                      structured: true)
     }
 
-    /// A best of 135 × 10, then tough 135 × 9s every week from day 7 through `lastDay`.
-    func stalled(through lastDay: Int) -> [LiftExposure] {
-        [session(0, 135, reps: 10, target: 10)]
-            + stride(from: 7, through: lastDay, by: 7).map { session($0, 135, reps: 9, target: 9, effort: .tough) }
+    /// Three sessions a week (days 0, 2 and 4) at 8 reps: six weeks climbing 5 lb a week from 100 lb,
+    /// then `flatWeeks` weeks flat at 130 lb. With an inferred training age the trend calls the stall
+    /// after nine flat weeks (``WorkoutTrend``; `Tools/plateau-sim/swift_mirror.py` replays it).
+    func climbThenFlat(flatWeeks: Int) -> [LiftExposure] {
+        (0..<(6 + flatWeeks)).flatMap { week in
+            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(min(week, 6)), reps: 8, target: 8) }
+        }
+    }
+
+    /// Six weeks climbing, then two sessions well under the line (125 lb × 6 against 8 asked) — a dip,
+    /// or with `flag` two low sessions after short nights.
+    func dipped(flag: WorkoutSessionFlag? = nil) -> [LiftExposure] {
+        let climbing = (0..<6).flatMap { week in
+            [0, 2, 4].map { session(week * 7 + $0, 100 + 5 * Double(week), reps: 8, target: 8) }
+        }
+        let low = [42, 44].map { offset -> LiftExposure in
+            var missed = session(offset, 125, reps: 6, target: 8)
+            missed.flag = flag
+            return missed
+        }
+        return climbing + low
     }
 
     // MARK: - The load pass
@@ -84,39 +101,52 @@ struct WorkoutLoadPlanningTests {
         #expect(reset.contains("Back to 8 reps — add weight now, about 2.5–5%."))
     }
 
-    @Test func aPlateauStartsWithAnEasierSessionUpFrontAndMoreRest() throws {
+    @Test func aStallStartsWithAFairRetestUpFrontWithLongerRest() throws {
         let second = lifting(try pushSession())[1]
-        let session = try pushSession(history: [key(second.name): stalled(through: 28)])
+        let session = try pushSession(history: [key(second.name): climbThenFlat(flatWeeks: 9)], today: 104)
         let first = try #require(lifting(session).first)
         #expect(first.name == second.name)
-        #expect(first.sets == 2)
-        #expect(first.guidance?.easierSession == true)
-        #expect(first.guidance?.prescription?.suggested == 120)
-        let rest = WorkoutRestGuidance.restSeconds(
-            demand: WorkoutRestGuidance.demand(role: .main, movementPattern: .push), goal: .wellness
-        )
-        #expect(first.restSecondsOverride == WorkoutRestGuidance.clamp(rest + WorkoutPlateau.extraRestMainSeconds))
-        #expect(session.suggestion.notes.contains("\(second.name) has held steady for 4 weeks. That's normal"))
-        #expect(session.suggestion.notes.contains("Today is an easier \(second.name) session: 2 sets at about 120 lb."))
+        let rest = try #require(first.restSecondsOverride)
+        #expect(rest >= WorkoutPlateau.retestRestSeconds)
+        #expect(first.guidance?.easierSession == false)
+        let notes = session.suggestion.notes
+        #expect(notes.contains("\(second.name) has held steady for"))
+        #expect(notes.contains("Today \(second.name) goes first, with at least 3 minutes' rest between sets — a fair retest."))
+        #expect(!notes.contains("helper muscles") && !notes.contains("Sleep has averaged"))
     }
 
-    @Test func theSupportBlockSwapsAnAccessoryForHelperWork() throws {
-        let baseline = lifting(try pushSession())
-        let main = try #require(baseline.first).name
-        let session = try pushSession(history: [key(main): stalled(through: 42)], today: 44)
-        let names = lifting(session).map(\.name)
-        let added = try #require(names.first { !baseline.map(\.name).contains($0) })
-        let support = try #require(WorkoutExerciseCatalog.exercise(named: added))
-        #expect(!support.primaryMuscles.isDisjoint(with: [.upperBack, .rearDelts]))
-        #expect(names.contains { WorkoutExerciseCatalog.exercise(named: $0)?.primaryMuscles.contains(.triceps) == true })
-        #expect(session.suggestion.notes.contains("takes an accessory spot to build up the muscles that help your \(main)"))
-    }
-
-    @Test func aVariationStandsInAfterTheSupportBlock() throws {
+    @Test func theLoadingChangeIsAShortHeavierBlock() throws {
         let main = try #require(lifting(try pushSession()).first).name
-        let session = try pushSession(history: [key(main): stalled(through: 70)], today: 72)
-        #expect(!lifting(session).map(\.name).contains(main))
-        #expect(session.suggestion.notes.contains("stands in for \(main) for a few weeks"))
+        let session = try pushSession(history: [key(main): climbThenFlat(flatWeeks: 10)], today: 111)
+        let lift = try #require(lifting(session).first { $0.name == main })
+        // The plan's next step is 9 reps at 130 lb; the block takes two reps off and loads the estimate
+        // for 7 (130 × (1 + 10/30) ÷ (1 + 9/30) ≈ 133, on the 5 lb step).
+        #expect(lift.reps == "7")
+        #expect(lift.guidance?.targetReps == 7)
+        #expect(lift.guidance?.prescription?.suggested == 135)
+        #expect(session.suggestion.notes.contains("For the next few sessions, \(main) goes a little heavier for fewer reps — 7 reps at about 135 lb."))
+    }
+
+    @Test func aDipGetsADeloadHalfTheSetsAtTheKeptLoad() throws {
+        let main = try #require(lifting(try pushSession()).first)
+        let session = try pushSession(history: [key(main.name): dipped()], today: 46)
+        let lift = try #require(lifting(session).first { $0.name == main.name })
+        #expect(lift.sets == (main.sets + 1) / 2)
+        #expect(lift.guidance?.easierSession == true)
+        #expect(lift.guidance?.prescription?.suggested == 125)
+        let notes = session.suggestion.notes
+        #expect(notes.contains("\(main.name) came in a little lower the last two times."))
+        #expect(notes.contains("Today is a lighter \(main.name) session: 2 sets at the usual weight, about 125 lb."))
+    }
+
+    @Test func lowSessionsAfterShortNightsHoldTheLoadWithNoDeload() throws {
+        let main = try #require(lifting(try pushSession()).first)
+        let session = try pushSession(history: [key(main.name): dipped(flag: WorkoutSessionFlag(sleep: .shortNight))], today: 46)
+        let lift = try #require(lifting(session).first { $0.name == main.name })
+        #expect(lift.sets == main.sets)
+        #expect(lift.guidance?.easierSession == false)
+        #expect(lift.guidance?.prescription?.suggested == 125)
+        #expect(!session.suggestion.notes.contains("came in a little lower"))
     }
 
     @Test func aDueCalibrationTurnsTheMainLiftIntoARampAndATest() throws {
@@ -230,7 +260,33 @@ struct WorkoutLoadPlanningTests {
         #expect(bench.map(\.structured) == [true, false, true])
         #expect(context.calibration.lastCalibration == FernletDate.date(fromDayKey: FernletDate.dayKey(for: day(25))))
         #expect(context.defaultUnit == .lb)
-        #expect(context.recovery.sleepNights == 3 && context.recovery.sleepIsLow)
+        // Six hours the night before is a short night; two in a row (days 21 and 22) the firmer flag.
+        let sleeps = bench.map { $0.flag?.sleep }
+        let expected: [SleepFlag?] = [.shortNight, .shortNights, nil]
+        #expect(sleeps == expected)
         #expect(WorkoutLoadContextBuilder.defaultUnit(for: Locale(identifier: "de_DE")) == .kg)
+    }
+
+    @Test func theSleepFlagReadsSixHoursAndTheMedianAndALightDayFlagsToo() throws {
+        let session = day(30)
+        var nights: [String: Double] = [:]
+        for back in 1...14 { nights[FernletDate.dayKey(for: day(30 - back))] = 8.5 }
+        // Median 8.5 h: 7 h is 90 minutes under it, 7.2 h is not; 6 h is short whatever the median.
+        nights[FernletDate.dayKey(for: session)] = 7.0
+        #expect(WorkoutLoadContextBuilder.sleepFlag(on: session, nights: nights) == .shortNight)
+        nights[FernletDate.dayKey(for: session)] = 7.2
+        #expect(WorkoutLoadContextBuilder.sleepFlag(on: session, nights: nights) == nil)
+        nights[FernletDate.dayKey(for: session)] = 6.0
+        nights[FernletDate.dayKey(for: day(29))] = 6.0
+        #expect(WorkoutLoadContextBuilder.sleepFlag(on: session, nights: nights) == .shortNights)
+        // A night with nothing logged is never short.
+        #expect(WorkoutLoadContextBuilder.sleepFlag(on: day(60), nights: nights) == nil)
+
+        let light = Workout(name: "Push", type: .upper, exercises: "Bench press 3x8 @100 lb", rpe: nil, notes: "",
+                            duration: nil, intensity: .light)
+        let row = FernletDay(date: FernletDate.dayKey(for: day(20)), workouts: [light])
+        let context = WorkoutLoadContextBuilder.exposures([(row, day(20))])
+        let flag = try #require(context.byLift[key("Bench press")]?.first?.flag)
+        #expect(flag.lightDay && flag.sleep == nil)
     }
 }

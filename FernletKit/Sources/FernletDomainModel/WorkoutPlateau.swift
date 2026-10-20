@@ -141,12 +141,15 @@ public nonisolated enum WorkoutPlateau {
     // MARK: Status
 
     /// The lift's status, or nil when it is progressing, too new, on a break, or explained by
-    /// overrides. `exposures` are the lift's sessions, oldest first; `profile` defaults to an inferred
-    /// training age with no traits; `levelKg` is the lift's estimated max in kilograms, when loaded.
+    /// overrides — or dipping with the deload already logged. `exposures` are the lift's sessions,
+    /// oldest first; `profile` defaults to an inferred training age with no traits; `levelKg` is the
+    /// lift's estimated max in kilograms, when loaded.
     public static func status(
         of exposures: [LiftExposure], unit: LoadUnit, today: Date, profile: TrendProfile? = nil, levelKg: Double? = nil
     ) -> PlateauStatus? {
-        let history = Array(exposures.suffix(WorkoutLoadEngine.maxExposuresPerLift).filter { $0.calibration != .ramp })
+        // Ramp sets leave before the cap: three warm-ups a session would otherwise crowd out three
+        // quarters of the sessions an advanced lifter's 12-week window needs.
+        let history = Array(exposures.filter { $0.calibration != .ramp }.suffix(WorkoutLoadEngine.maxExposuresPerLift))
         guard let last = history.last, WorkoutLoadEngine.days(from: last.date, to: today) <= staleDays else {
             return nil
         }
@@ -161,6 +164,8 @@ public nonisolated enum WorkoutPlateau {
         case .progressing:
             return nil
         case .dipping:
+            // A deload logged since the two low sessions answered them; the next regular session decides.
+            guard history.last?.easierSession != true else { return nil }
             return PlateauStatus(state: .dipping, weeksHeld: weeks, reading: reading)
         case .stalled, .slowing, .tooEarly:
             if let onset {
@@ -174,12 +179,16 @@ public nonisolated enum WorkoutPlateau {
     }
 
     /// The point where the current stall was first called, or nil. A stall holds through slowing and
-    /// too-early readings (a flagged week can't end it) and clears only when the lift progresses.
+    /// too-early readings (a flagged week can't end it) and clears only when the lift progresses. Each
+    /// earlier reading is taken as of its own newest session, so a known training age is that much
+    /// younger there (``TrendProfile/asOf(_:newest:)``).
     static func onsetIndex(_ points: [TrendPoint], profile: TrendProfile, levelKg: Double?) -> Int? {
-        guard !points.isEmpty else { return nil }
+        guard let newest = points.last?.date else { return nil }
         var onset: Int?
         for end in 1...points.count {
-            switch WorkoutTrend.reading(of: Array(points.prefix(end)), profile: profile, levelKg: levelKg).state {
+            let prefix = Array(points.prefix(end))
+            let asOf = profile.asOf(prefix.last?.date ?? newest, newest: newest)
+            switch WorkoutTrend.reading(of: prefix, profile: asOf, levelKg: levelKg).state {
             case .stalled: onset = onset ?? end - 1
             case .progressing: onset = nil
             case .slowing, .dipping, .tooEarly: break

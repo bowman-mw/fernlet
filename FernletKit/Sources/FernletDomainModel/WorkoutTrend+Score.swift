@@ -35,7 +35,7 @@ extension WorkoutTrend {
     /// The lift's trend points, oldest first: its scored sessions since the rep scheme last moved and
     /// since its last long break, all of one kind (loaded, or reps only, as the newest session is).
     public static func points(from exposures: [LiftExposure], unit: LoadUnit) -> [TrendPoint] {
-        let evidence = exposures.suffix(WorkoutLoadEngine.maxExposuresPerLift).filter(isEvidence)
+        let evidence = exposures.filter(isEvidence).suffix(WorkoutLoadEngine.maxExposuresPerLift)
         guard let latest = evidence.last else { return [] }
         let loaded = latest.weight != nil
         let segment = currentSegment(evidence.filter { ($0.weight != nil) == loaded }, loaded: loaded)

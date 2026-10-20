@@ -349,18 +349,22 @@ struct WorkoutWarmUpSetsTests {
         #expect(afterAll == afterWorking, "the next prescription anchors on the working sets")
     }
 
-    @Test func warmUpSetsAreNeverPlateauEvidence() {
-        let stalled = [lifted(0, 135, reps: 10)]
-            + stride(from: 7, through: 28, by: 7).map { lifted($0, 135, reps: 9, effort: .tough) }
+    @Test func warmUpSetsAreNeverPlateauEvidenceNorCrowdTheCap() {
+        // Nine flat weeks, three sessions a week: a stall for a beginner whose age is known.
+        let stalled = (0..<9).flatMap { week in [0, 2, 4].map { lifted(week * 7 + $0, 135) } }
         var ramped: [LiftExposure] = []
         for session in stalled {
             let offset = Int(session.date.timeIntervalSince(Self.base) / 86_400)
             ramped += [lifted(offset, 55, calibration: .ramp), lifted(offset, 80, reps: 5, calibration: .ramp),
                        lifted(offset, 110, reps: 3, calibration: .ramp), session]
         }
-        let plain = WorkoutPlateau.status(of: stalled, unit: .lb, today: day(30))
-        let withWarmUps = WorkoutPlateau.status(of: ramped, unit: .lb, today: day(30))
-        #expect(plain != nil)
+        // 108 exposures, over the 64 a lift keeps: the ramps leave before the cap, not after.
+        #expect(ramped.count > WorkoutLoadEngine.maxExposuresPerLift)
+        let profile = TrendProfile(trainingAge: TrainingAge(weeks: 1 + 60.0 / 7))
+        let plain = WorkoutPlateau.status(of: stalled, unit: .lb, today: day(62), profile: profile)
+        let withWarmUps = WorkoutPlateau.status(of: ramped, unit: .lb, today: day(62), profile: profile)
+        let state = plain?.state
+        #expect(state == .stalled)
         #expect(withWarmUps == plain)
     }
 

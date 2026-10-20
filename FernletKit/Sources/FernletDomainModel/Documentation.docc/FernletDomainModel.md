@@ -631,8 +631,9 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 
 ### Load-aware progression and plateaus
 
-The owner's spec of 2026-10-19. Given a ``WorkoutLoadContext`` (each lift's logged sessions as
-``LiftExposure``s, recent sleep and protein, the calibration state), `WorkoutProgram.dayPlan` runs
+The owner's spec of 2026-10-19, with round 2's trend and ladder (2026-10-20). Given a
+``WorkoutLoadContext`` (each lift's logged sessions as ``LiftExposure``s with their sleep and
+readiness flags, recent protein, the calibration state), `WorkoutProgram.dayPlan` runs
 its lifting picks through a load pass. Everything is derived from the history each time — no stored
 estimate — so the same history always builds the same plan.
 
@@ -641,16 +642,34 @@ estimate — so the same history always builds the same plan.
   ``WeightPrescription`` whose width follows ``EstimateConfidence``: ±10 % low, ±5 % medium, one step
   at high, on the equipment's steps.
 - **Next session.** Completed → one more rep, or at the top of the range more weight and back to the
-  bottom ("add weight now"); tough or a small miss → repeat; a real miss → lighter; a third in a row
-  → lighter and a set fewer. Two overrides the same way, or a "too heavy / too light" answer,
-  re-center the estimate on the lifter's picks; a third override in five sessions asks why once
-  (``OverrideReason``).
-- **Plateau.** ``WorkoutPlateau`` calls a lift stalled only after steady recent training (three
-  sessions in four weeks, no gap over 14 days) whose last four sessions, taken from the range and not
-  buried behind two other compound lifts, beat the earlier best by 1 % or less — and not when overrides
-  explain it. The response follows ``PlateauStage`` in the owner's order: rest check
-  (``RecoverySummary``), an easier session with the lift first and longer rest, support work for the
-  helper muscles, then a variation. A new best clears it.
+  bottom ("add weight now"); tough or a miss → repeat; a second miss in a row on days with no sleep or
+  readiness flag → lighter; a third → lighter and a set fewer. A flagged miss (``WorkoutSessionFlag``)
+  always holds the load and never counts toward a cut (G10, 2026-10-20). Two overrides the same way,
+  or a "too heavy / too light" answer, re-center the estimate on the lifter's picks; a third override
+  in five sessions asks why once (``OverrideReason``).
+- **The trend (G1, 2026-10-20).** ``WorkoutTrend`` fits a robust weighted line through each lift's
+  session scores in log units (``WorkoutTrend/sessionScore(of:in:)``: the top one or two sets with
+  reps plus reps in reserve at 10 or fewer, 12 at most, averaged; a true single at its weight) and
+  judges its slope against the person's expected linear-log curve, b about 10 % from an untrained
+  start and 2.5 % from a trained one (``TrainingTier``, ``TrainingAge``, ``LifterTraits``; zero for a
+  long-trained lifter over 60, so a steady line there is success). The noise starts at the tier's
+  prior and becomes the person's own scatter after ten clean sessions. ``TrendState``: progressing,
+  slowing (a soft note), stalled (the upper 80 % bound of the slope under 1 % per four weeks and
+  clearly under the expected curve, on three readings in a row), dipping (two clean sessions more
+  than two typical errors under the line) or too early. A session after a short night or on a light
+  day (``WorkoutSessionFlags``: 6 h or less, or 90 minutes under the 14-night median) counts at half
+  weight when it falls short and never toward a stall. The trend restarts when the rep scheme moves
+  or after four weeks away. A seeded Monte Carlo (`WorkoutPlateauSimulationTests`) holds false
+  plateaus to 5 % or fewer of histories over 12 weeks, against nearly all of them for the rule it
+  replaced.
+- **Plateau (G5).** ``WorkoutPlateau`` reads the trend into a ``PlateauStatus`` — not when overrides
+  explain it or the lift is on a break — and a stall walks ``PlateauStage`` in order: a fair retest
+  (the lift first, at least three minutes' rest), a loading change (a short heavier block, or a set
+  more), a variant beside the lift (which stays, a set lighter), then holding steady with calm,
+  goal-appropriate options. A dip gets a deload instead: half the sets at the kept load, once. The old
+  helper-muscle support step is gone; the old ladder's tokens resolve to the nearest new step
+  (``PlateauStage/resolve(token:parkedToken:)``). The session note gives at most two context lines and
+  always a plain training option.
 - **Calibration.** ``WorkoutCalibration`` turns the main lift into a submaximal test about every four
   weeks for people without a coach plan, a one-set strength check when the estimate is already
   trusted, or — opt-in, trained lifters only (`WorkoutProfile.oneRepMaxTesting`) — a true max.
@@ -702,6 +721,17 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``OverrideReason``
 - ``OverrideDirection``
 - ``EstimateConfidence``
+- ``WorkoutTrend``
+- ``TrendState``
+- ``TrendReading``
+- ``TrendPoint``
+- ``TrendProfile``
+- ``TrainingTier``
+- ``TrainingAge``
+- ``LifterTraits``
+- ``WorkoutSessionFlag``
+- ``SleepFlag``
+- ``WorkoutSessionFlags``
 - ``WorkoutPlateau``
 - ``PlateauStatus``
 - ``PlateauStage``

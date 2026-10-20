@@ -3020,6 +3020,10 @@ struct LocalizationBoundaryTests {
                      key: "workoutNote.count.weeks", source: "the plateau note's week count ('3 weeks')"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
                      key: "workoutNote.count.hours", source: "the 48-hour guard note's hour count ('48 hours')"),
+        // The plateau story's context line (2026-10-20, G10): "3 of the last 8 sessions came after a
+        // short night" counts the trend window's sessions.
+        HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
+                     key: "workoutNote.count.sessions", source: "the trend story's session count ('8 sessions')"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",
                      key: "trainingSplit.frequency.daysPerWeek", source: "a split's frequency ('3 days/week')"),
         HarvestedKey(catalog: "FernletKit/Sources/FernletDomainModel/Localizable.xcstrings",

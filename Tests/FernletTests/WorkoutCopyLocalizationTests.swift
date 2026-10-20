@@ -342,7 +342,7 @@ struct WorkoutCopyLocalizationTests {
 
     /// Every slot label the session templates use.
     static func allSlotLabels() -> [String] {
-        var labels: Set<String> = ["Support"]
+        var labels: Set<String> = [WorkoutProgram.variantSlotLabel]
         for split in WorkoutSplitCatalog.all {
             for day in split.days {
                 for session in day.sessions { labels.formUnion(session.slots.map(\.label)) }

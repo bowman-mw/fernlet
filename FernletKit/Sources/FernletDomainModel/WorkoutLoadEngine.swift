@@ -10,7 +10,10 @@
 //   three sessions in eight weeks.
 // - Confidence sets how wide the prescribed range is: ±10 % low, ±5 % medium, one step at high.
 // - The next prescription follows the last result: completed → one more rep (or, at the top of the
-//   range, more weight and back to the bottom); tough or a small miss → repeat; a real miss → lighter.
+//   range, more weight and back to the bottom); tough or a miss → repeat; lighter only after two misses
+//   on days with no sleep or readiness flag (G10, 2026-10-20: one session's estimated max moves 3–5 %
+//   from day to day, so one miss is mostly noise, and a miss after a short night or on a light day
+//   holds the load instead of counting).
 // - Weights land on what the location has (``WorkoutWeightInventory``) when it says, and a step that
 //   would raise the load by more than ``WorkoutLoadEngine/lightLoadGuardRatio`` — or a step that
 //   doesn't exist there — waits for reps first, then a set (WorkoutLoadEngine+Inventory.swift).
@@ -31,11 +34,11 @@ public nonisolated enum LoadChange: Equatable, Sendable {
     case addWeight
     /// Completed at the top of the range: heavier, reps back to the bottom.
     case backToBottom
-    /// Tough, or a small miss: the same again.
+    /// Tough, or a miss that doesn't yet call for less: the same again.
     case same
-    /// A real miss: a little lighter.
+    /// A second miss in a row on unflagged days: a little lighter.
     case lighter
-    /// A third miss in a row: lighter and one set fewer, for one session.
+    /// A third unflagged miss in a row: lighter and one set fewer, for one session.
     case lighterFewerSets
     /// Back after a long gap: a little lighter to start again.
     case afterBreak
@@ -136,12 +139,13 @@ public nonisolated enum WorkoutLoadEngine {
     /// The weight step after a completed top-of-range session, as a fraction.
     public static let upperBodyIncrease = 0.025
     public static let lowerBodyIncrease = 0.05
-    /// A miss of this many reps or fewer, summed over the sets, repeats the load.
-    public static let minorMissReps = 2
-    /// Lighter after a real miss, and after the third in a row.
+    /// Misses in a row on unflagged days before the load goes lighter (G10: a flagged miss holds the
+    /// load and never counts).
+    public static let missesForLighter = 2
+    /// Lighter after two unflagged misses, and after the third in a row.
     public static let missDecrease = 0.05
     public static let repeatedMissDecrease = 0.10
-    /// Misses in a row that also drop a set.
+    /// Unflagged misses in a row that also drop a set.
     public static let missesForFewerSets = 3
     /// A gap longer than this restarts a little lighter.
     public static let breakDays = 28
@@ -446,6 +450,10 @@ extension WorkoutLoadEngine {
     /// too big a jump or missing), targets up to ``equipmentExtraReps`` past the range still count,
     /// and a completed session at the top climbs reps, then a set, before the load moves
     /// (``cappedOutcome(target:scheme:cap:anchor:history:)``).
+    ///
+    /// A miss holds the load. It goes lighter only after ``missesForLighter`` misses in a row on days
+    /// with no sleep or readiness flag; a flagged miss (``LiftExposure/flag``) always holds and never
+    /// counts toward a cut.
     static func outcome(
         of anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, loadable: Bool, cap: LoadCap? = nil
     ) -> Outcome {
@@ -455,11 +463,11 @@ extension WorkoutLoadEngine {
             return Outcome(reps: target, setsDelta: 0, change: .holdForPain, move: .hold)
         }
         guard anchor.completed else {
-            let misses = trailingMisses(history)
+            let misses = anchor.flag == nil ? trailingMisses(history) : 0
             if misses >= missesForFewerSets {
                 return Outcome(reps: target, setsDelta: -1, change: .lighterFewerSets, move: .down(repeatedMissDecrease))
             }
-            if misses >= 2 || anchor.shortfall > minorMissReps {
+            if misses >= missesForLighter {
                 return Outcome(reps: target, setsDelta: 0, change: .lighter, move: .down(missDecrease))
             }
             return Outcome(reps: target, setsDelta: 0, change: .same, move: .hold)
@@ -489,12 +497,13 @@ extension WorkoutLoadEngine {
                        change: equipmentCapped ? .holdForEquipment : .moreSets, move: .hold)
     }
 
-    /// Regular sessions in a row, newest backwards, that missed their target.
+    /// Regular sessions in a row, newest backwards, that missed their target on an unflagged day. A
+    /// flagged miss neither counts nor breaks the run; a completed session ends it.
     static func trailingMisses(_ history: [LiftExposure]) -> Int {
         var count = 0
         for exposure in history.reversed() where !exposure.easierSession && exposure.calibration == nil {
             guard !exposure.completed else { break }
-            count += 1
+            if exposure.flag == nil { count += 1 }
         }
         return count
     }

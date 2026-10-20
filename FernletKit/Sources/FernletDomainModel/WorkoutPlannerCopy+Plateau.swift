@@ -1,83 +1,140 @@
 // WorkoutPlannerCopy+Plateau.swift
 // FernletDomainModel
 //
-// The plateau story, the rest check, the variation and support-work lines, and the calibration brief,
-// as String Catalog keys (2026-10-20, idea 16). The copy says plateaus are normal; it never says "you
-// failed".
+// The trend story — the plateau ladder (a fair retest, a heavier block, a variant beside the lift,
+// holding steady), the dip's deload, the slowing and too-early notes and their sleep or light-day
+// context — and the calibration brief, as String Catalog keys (2026-10-20). The copy says plateaus are
+// normal and a dip happens; it never says "you failed", and a short night is something that came
+// before a session, never a fault.
 
 import Foundation
 
 extension WorkoutPlannerCopy {
 
-    // MARK: - The plateau story
+    // MARK: - The trend story
 
-    /// "Bench press has held steady for 3 weeks. That's normal — …", or "for a few sessions" under two
-    /// weeks.
+    /// "Bench press has held steady for 3 weeks. That's normal — strength comes in steps.", or "for a
+    /// few sessions" under two weeks.
     static func plateauLead(_ name: String, weeks: Int) -> String {
         guard weeks >= 2 else {
             return String(localized: "workoutNote.plateau.leadSessions",
-                          defaultValue: "\(name) has held steady for a few sessions. That's normal — strength comes in steps, and a pause often means your body wants more recovery.",
+                          defaultValue: "\(name) has held steady for a few sessions. That's normal — strength comes in steps.",
                           bundle: .module,
                           comment: "Workout session note opening the plateau story for one lift. The argument is the exercise name.")
         }
         return String(localized: "workoutNote.plateau.leadWeeks",
-                      defaultValue: "\(name) has held steady for \(weekCount(weeks)). That's normal — strength comes in steps, and a pause often means your body wants more recovery.",
+                      defaultValue: "\(name) has held steady for \(weekCount(weeks)). That's normal — strength comes in steps.",
                       bundle: .module,
                       comment: "Workout session note opening the plateau story for one lift. Arguments: the exercise name, then a number of weeks (e.g. '3 weeks').")
     }
 
-    /// "Today is an easier Bench press session: 2 sets at about 95 lb. An extra rest day instead is
-    /// fine too — both count as training."
-    static func easierSession(_ name: String, sets: Int, weight: String?) -> String {
-        guard let weight else {
-            return String(localized: "workoutNote.plateau.easier",
-                          defaultValue: "Today is an easier \(name) session: \(setCount(sets)), lighter than usual. An extra rest day instead is fine too — both count as training.",
-                          bundle: .module,
-                          comment: "Workout session note: a lighter day for a lift that has stalled. Arguments: the exercise name, then a number of sets (e.g. '2 sets').")
-        }
-        return String(localized: "workoutNote.plateau.easierAt",
-                      defaultValue: "Today is an easier \(name) session: \(setCount(sets)) at about \(weight). An extra rest day instead is fine too — both count as training.",
-                      bundle: .module,
-                      comment: "Workout session note: a lighter day for a lift that has stalled. Arguments: the exercise name, a number of sets (e.g. '2 sets'), and a weight with its unit.")
-    }
-
-    /// The extra rest a stalled lift gets between sets: "+1 min" on a main lift, "+30 s" otherwise.
-    static func extraRest(mainLift: Bool) -> String {
-        guard mainLift else {
-            return String(localized: "workoutNote.plateau.extraRestAccessory", defaultValue: "+30 s", bundle: .module,
-                          comment: "Extra rest between sets, inside a workout session note: thirty more seconds")
-        }
-        return String(localized: "workoutNote.plateau.extraRestMain", defaultValue: "+1 min", bundle: .module,
-                      comment: "Extra rest between sets, inside a workout session note: one more minute")
-    }
-
-    /// "Bench press goes first today, with a little more rest between sets (+1 min)."
-    static func recoverFirst(_ name: String, rest: String) -> String {
-        String(localized: "workoutNote.plateau.goesFirst",
-               defaultValue: "\(name) goes first today, with a little more rest between sets (\(rest)).", bundle: .module,
-               comment: "Workout session note about a stalled lift. Arguments: the exercise name, then the extra rest (e.g. '+1 min').")
-    }
-
-    /// "A little more rest between Bench press sets (+1 min)."
-    static func supportRest(_ name: String, rest: String) -> String {
-        String(localized: "workoutNote.plateau.moreRest",
-               defaultValue: "A little more rest between \(name) sets (\(rest)).", bundle: .module,
-               comment: "Workout session note about a stalled lift. Arguments: the exercise name, then the extra rest (e.g. '+1 min').")
-    }
-
-    /// "Back to Bench press, with a little more rest between sets (+1 min)."
-    static func afterVariation(_ name: String, rest: String) -> String {
-        String(localized: "workoutNote.plateau.backTo",
-               defaultValue: "Back to \(name), with a little more rest between sets (\(rest)).", bundle: .module,
-               comment: "Workout session note: a stalled lift returns after a few weeks of a different exercise. Arguments: the exercise name, then the extra rest (e.g. '+1 min').")
-    }
-
-    /// The rest check's sleep line. `hours` arrives formatted for the device's locale ("6.5").
-    static func sleepLow(hours: String) -> String {
-        String(localized: "workoutNote.plateau.sleepLow",
-               defaultValue: "Sleep has averaged \(hours) hours these past two weeks. More sleep is often the quickest way through.",
+    /// The ladder's first step: "Today Bench press goes first, with at least 3 minutes' rest between
+    /// sets — a fair retest."
+    static func fairRetest(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.retest",
+               defaultValue: "Today \(name) goes first, with at least 3 minutes' rest between sets — a fair retest.",
                bundle: .module,
-               comment: "Workout session note in the plateau story, said only when sleep ran low. The argument is the average hours of sleep with one decimal, e.g. '6.5'.")
+               comment: "Workout session note for a lift that has held steady: it moves to the start of the session with longer rest, to give it a fair try. The argument is the exercise name.")
+    }
+
+    /// The loading change: "For the next few sessions, Bench press goes a little heavier for fewer
+    /// reps — 6 reps at about 145 lb. One more Bench press day a week works too, if you'd like."
+    static func heavierBlock(_ name: String, reps: Int, weight: String) -> String {
+        String(localized: "workoutNote.plateau.heavierBlock",
+               defaultValue: "For the next few sessions, \(name) goes a little heavier for fewer reps — \(repCount(reps)) at about \(weight). One more \(name) day a week works too, if you'd like.",
+               bundle: .module,
+               comment: "Workout session note for a lift that has held steady: a short block of heavier, lower-rep work. Arguments: the exercise name, a number of reps (e.g. '6 reps'), a weight with its unit, then the exercise name again.")
+    }
+
+    /// The loading change on a lift with no load (or no estimate yet): one more set.
+    static func extraSet(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.extraSet",
+               defaultValue: "For the next few sessions, \(name) gets one more set. One more \(name) day a week works too, if you'd like.",
+               bundle: .module,
+               comment: "Workout session note for a lift that has held steady and takes no added weight: one more set for a while. Both arguments are the exercise name.")
+    }
+
+    /// The variant beside the lift: "For a few weeks, Close-grip bench press joins Bench press, which
+    /// keeps going with one set fewer — a fresh angle often gets things moving."
+    static func variantBeside(_ variant: String, lift: String) -> String {
+        String(localized: "workoutNote.plateau.variantBeside",
+               defaultValue: "For a few weeks, \(variant) joins \(lift), which keeps going with one set fewer — a fresh angle often gets things moving.",
+               bundle: .module,
+               comment: "Workout session note: a related exercise is added beside a lift that has held steady; the lift stays in the plan. Arguments: the added exercise, then the lift.")
+    }
+
+    /// The ladder's last step, by goal: calm, with options and no push.
+    static func holdingSteady(_ name: String, goal: GoalType) -> String {
+        switch goal {
+        case .strength, .sportsPrep:
+            String(localized: "workoutNote.plateau.holdingSteady.strength",
+                   defaultValue: "\(name) is holding steady, and steady is fine. Keep training it as it is, try a different rep range for a while, or give another lift the spotlight — whichever suits you.",
+                   bundle: .module,
+                   comment: "Workout session note for a strength-focused person whose lift has held steady for a long while. The argument is the exercise name.")
+        case .wellness, .weightManagement, .mentalHealth, .recovery, .exploring:
+            String(localized: "workoutNote.plateau.holdingSteady",
+                   defaultValue: "\(name) is holding steady, and that's a good place to be. Keep training it as it is, or change it up whenever you like.",
+                   bundle: .module,
+                   comment: "Workout session note for a lift that has held steady for a long while, for a person not training mainly for strength. The argument is the exercise name.")
+        }
+    }
+
+    /// A dip's first line: "Back squat came in a little lower the last two times. That happens, and it
+    /// usually passes."
+    static func dipLead(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.dipLead",
+               defaultValue: "\(name) came in a little lower the last two times. That happens, and it usually passes.",
+               bundle: .module,
+               comment: "Workout session note: a lift's last two sessions were clearly below its usual level. The argument is the exercise name.")
+    }
+
+    /// The deload: "Today is a lighter Back squat session: 2 sets at the usual weight, about 185 lb.
+    /// That's often all it takes."
+    static func deload(_ name: String, sets: Int, weight: String?) -> String {
+        guard let weight else {
+            return String(localized: "workoutNote.plateau.deload",
+                          defaultValue: "Today is a lighter \(name) session: \(setCount(sets)) instead of the usual. That's often all it takes.",
+                          bundle: .module,
+                          comment: "Workout session note: a lighter session after two lower ones, with fewer sets. Arguments: the exercise name, then a number of sets (e.g. '2 sets').")
+        }
+        return String(localized: "workoutNote.plateau.deloadAt",
+                      defaultValue: "Today is a lighter \(name) session: \(setCount(sets)) at the usual weight, about \(weight). That's often all it takes.",
+                      bundle: .module,
+                      comment: "Workout session note: a lighter session after two lower ones, with fewer sets and the weight kept. Arguments: the exercise name, a number of sets (e.g. '2 sets'), then a weight with its unit.")
+    }
+
+    /// The slowing note: soft, and the plan stays.
+    static func slowing(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.slowing",
+               defaultValue: "\(name) is coming along more slowly now, which is the normal curve as strength builds. Today's plan stays as it is.",
+               bundle: .module,
+               comment: "Workout session note: a lift is still improving but more slowly than before. The argument is the exercise name.")
+    }
+
+    /// Too early to read the trend: half or more of the recent sessions were flagged.
+    static func tooEarly(_ name: String) -> String {
+        String(localized: "workoutNote.plateau.tooEarly",
+               defaultValue: "Many recent \(name) sessions came after a short night or fell on a light day, so it's too early to read how it's going. Today's plan stays as it is.",
+               bundle: .module,
+               comment: "Workout session note: most recent sessions of a lift followed a short night or were on a light day, so its progress can't be read yet. The argument is the exercise name.")
+    }
+
+    /// "3 of the last 8 sessions came after a short night, which can take a little off a session."
+    static func shortNightContext(_ count: Int, of window: Int) -> String {
+        let flagged = count.formatted()
+        return String(localized: "workoutNote.plateau.shortNightContext",
+                      defaultValue: "\(flagged) of the last \(sessionCount(window)) came after a short night, which can take a little off a session.",
+                      bundle: .module,
+                      comment: "Workout session note giving context to a lift's progress. Arguments: a number written as digits (e.g. '3'), then a number of sessions (e.g. '8 sessions').")
+    }
+
+    /// "2 of the last 8 sessions fell on a light day, which can take a little off a session."
+    static func lightDayContext(_ count: Int, of window: Int) -> String {
+        let flagged = count.formatted()
+        return String(localized: "workoutNote.plateau.lightDayContext",
+                      defaultValue: "\(flagged) of the last \(sessionCount(window)) fell on a light day, which can take a little off a session.",
+                      bundle: .module,
+                      comment: "Workout session note giving context to a lift's progress: some sessions were on days the person chose or was offered as light. Arguments: a number written as digits (e.g. '2'), then a number of sessions (e.g. '8 sessions').")
     }
 
     /// The rest check's protein line.
@@ -86,23 +143,6 @@ extension WorkoutPlannerCopy {
                defaultValue: "Protein has run about \(percent)% of your target lately — a little more helps muscles rebuild.",
                bundle: .module,
                comment: "Workout session note in the plateau story, said only when protein ran low. The argument is a whole percentage of the person's protein target.")
-    }
-
-    /// "Goblet squat stands in for Back squat for a few weeks — a fresh angle often gets things moving."
-    static func standsIn(_ stand: String, for original: String) -> String {
-        String(localized: "workoutNote.plateau.variation",
-               defaultValue: "\(stand) stands in for \(original) for a few weeks — a fresh angle often gets things moving.",
-               bundle: .module,
-               comment: "Workout session note: a different exercise replaces a stalled lift for a few weeks. Arguments: the replacement exercise, then the stalled one.")
-    }
-
-    /// "For a few weeks, Close-grip bench press takes an accessory spot to build up the muscles that
-    /// help your Bench press."
-    static func supportSwap(_ support: String, helping stalled: String) -> String {
-        String(localized: "workoutNote.plateau.support",
-               defaultValue: "For a few weeks, \(support) takes an accessory spot to build up the muscles that help your \(stalled).",
-               bundle: .module,
-               comment: "Workout session note: an extra exercise builds the helper muscles of a stalled lift. Arguments: the extra exercise, then the stalled lift.")
     }
 
     // MARK: - The calibration brief

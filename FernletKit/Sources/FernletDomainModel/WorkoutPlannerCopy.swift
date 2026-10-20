@@ -9,7 +9,8 @@
 // in the language the device ran then. That is deliberate and stays: a stored note is never
 // re-translated. What this file guarantees is that the COMPOSITION is translatable — each sentence is
 // one key with its arguments as format specifiers a translator can reorder, and every counted noun is
-// a plural-ruled count phrase (``repCount(_:)``, ``setCount(_:)``, ``weekCount(_:)``, ``hourCount(_:)``).
+// a plural-ruled count phrase (``repCount(_:)``, ``setCount(_:)``, ``weekCount(_:)``, ``sessionCount(_:)``,
+// ``hourCount(_:)``).
 //
 // Exercise names reach these sentences as the frozen catalog names. The planner keeps the frozen name
 // everywhere (it is the progression key and the plan text), so a note names a lift the way the plan
@@ -42,6 +43,12 @@ public nonisolated enum WorkoutPlannerCopy {
     static func weekCount(_ count: Int) -> String {
         String(localized: "workoutNote.count.weeks", defaultValue: "\(count) weeks", bundle: .module,
                comment: "Workout session note: a number of weeks, e.g. '3 weeks'. Placed inside other note sentences.")
+    }
+
+    /// "8 sessions".
+    static func sessionCount(_ count: Int) -> String {
+        String(localized: "workoutNote.count.sessions", defaultValue: "\(count) sessions", bundle: .module,
+               comment: "Workout session note: a number of training sessions of one lift, e.g. '8 sessions'. Placed inside other note sentences.")
     }
 
     /// "48 hours".

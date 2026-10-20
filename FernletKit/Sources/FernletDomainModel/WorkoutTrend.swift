@@ -11,24 +11,28 @@
 // States: progressing, slowing (a soft note), stalled (the response ladder), dipping (a short volume
 // cut), and too early to tell. Deterministic and stateless, like the load engine.
 //
-// Every threshold was tuned in a seeded Monte Carlo before it shipped
-// (`Tests/FernletTests/WorkoutPlateauSimulationTests.swift`; the prototype that explored them is
-// `Tools/plateau-sim/`). 1,200 synthetic histories over 12 weeks, noise 3–5 %, 2–3 sessions a week,
-// a fatigue dip in 30 % of histories and 15 % of sessions sleep- or readiness-flagged:
+// Every threshold was tuned in a seeded Monte Carlo before it shipped (the prototype that explored
+// them is `Tools/plateau-sim/plateau_sim.py`). `Tests/FernletTests/WorkoutPlateauSimulationTests.swift`
+// pins this file's behavior on those histories, and `Tools/plateau-sim/swift_mirror.py` mirrors this
+// file line for line so the numbers can be regenerated without a Mac. Over 1,200 synthetic histories of
+// 12 weeks (noise 3–5 %, 2–3 sessions a week, a fatigue dip in 30 % of histories, 15 % of sessions
+// after a short night), `swift_mirror.py 1200` gives:
 //
-// | Training age known? | Cohort          | False plateau, old rule | False plateau, new | False dipping |
-// |---------------------|-----------------|-------------------------|--------------------|---------------|
-// | yes (step 2)        | beginner        | 99.7 %                  | 1.1 %              | 0.8 %         |
-// | yes                 | trained         | 100 %                   | 2.4 %              | 0.7 %         |
-// | yes                 | older, b = 0    | 100 %                   | 0 %                | 0 %           |
-// | inferred (today)    | beginner        | 99.7 %                  | 0.3 %              | 0.8 %         |
-// | inferred            | trained         | 100 %                   | 3.3 %              | 1.7 %         |
+// | Training age          | Cohort                | Old rule false plateau | New false plateau | New false dip |
+// |-----------------------|-----------------------|------------------------|-------------------|---------------|
+// | known (step 2)        | beginner              | 99.7 %                 | 1.1 %             | 0.8 %         |
+// | known                 | trained               | 100 %                  | 2.3 %             | 0.5 %         |
+// | known                 | older long-trained    | 100 %                  | 0 %               | 0 %           |
+// | inferred (no answer)  | beginner              | 99.7 %                 | 0.3 %             | 0.8 %         |
+// | inferred              | trained               | 100 %                  | 3.3 %             | 1.7 %         |
+// | inferred              | older long-trained    | 100 %                  | 3.0 %             | 1.7 %         |
 //
-// A true stall (slope 0 from week 3–6) is found in 86–98 % of beginner histories with a median delay
-// of 8.5–9.5 weeks when the training age is known; a trained lifter's stall is barely distinguishable
-// from their expected curve (0.1 % a week), so it is found in about a third of histories, after about
-// 12 weeks — the research's "a credible stalled call takes about three months". The old rule found
-// every stall within a week, because it called almost everything a stall.
+// A true stall (slope 0 from week 3–6, 24 weeks) is found in 90 % of beginner histories with a median
+// delay of 8.7 weeks when the training age is known (43 %, 9.9 weeks, inferred). A trained lifter's
+// stall is barely distinguishable from their expected curve (about 0.1 % a week), so it is found in
+// about a quarter to a third of histories, after about 12 weeks — the research's "a credible stalled
+// call takes about three months". The old rule found every stall within a week, because it called
+// almost everything a stall.
 
 import Foundation
 
@@ -168,6 +172,15 @@ public nonisolated struct TrendProfile: Equatable, Sendable {
         self.trainingAge = trainingAge
         self.traits = traits
         self.lowerBody = lowerBody
+    }
+
+    /// This profile as of `date`, an earlier session than `newest`: a known training age that much
+    /// younger (never under a week); an inferred one is read from the history either way.
+    public func asOf(_ date: Date, newest: Date) -> TrendProfile {
+        guard let age = trainingAge, !age.isInferred else { return self }
+        var earlier = self
+        earlier.trainingAge = TrainingAge(weeks: age.weeks - WorkoutTrend.weeks(from: date, to: newest))
+        return earlier
     }
 }
 

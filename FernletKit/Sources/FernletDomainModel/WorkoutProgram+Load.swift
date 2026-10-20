@@ -2,11 +2,12 @@
 // FernletDomainModel
 //
 // Where the load engine meets the day plan. After the lifting slots are filled, each rep-counted lift
-// gets its next prescription from its own history (``WorkoutLoadEngine``), a stalled lift gets the
-// owner's gentle plateau response (``WorkoutPlateau``), and about once a month the main lift becomes a
-// calibration (``WorkoutCalibration``). The session note says what changed and why, in plain words.
-// Where the location has its weights set (``WorkoutLocation/weights``), every weight here — the
-// prescription, the easier session's lighter load and the calibration's sets — is a load it has.
+// gets its next prescription from its own history (``WorkoutLoadEngine``), a lift whose trend has
+// stalled walks the plateau ladder and a dipping one gets a deload (``WorkoutPlateau``, 2026-10-20),
+// and about once a month the main lift becomes a calibration (``WorkoutCalibration``). The session
+// note says what changed and why, in plain words. Where the location has its weights set
+// (``WorkoutLocation/weights``), every weight here — the prescription, the heavier block, the
+// deload's kept load and the calibration's sets — is a load it has.
 //
 // The note sentences are String Catalog keys in ``WorkoutPlannerCopy`` (2026-10-20, idea 16), composed
 // in the device's language when the plan is built; the plan TEXT (exercise names, sets and reps) stays
@@ -14,8 +15,9 @@
 
 import Foundation
 
-/// Everything the planner needs to prescribe loads: each lift's logged sessions, today, the unit to
-/// fall back on, recent recovery, and the calibration state. Built by the app from the day history.
+/// Everything the planner needs to prescribe loads: each lift's logged sessions (with their sleep and
+/// readiness flags), today, the unit to fall back on, recent protein, and the calibration state. Built
+/// by the app from the day history.
 public nonisolated struct WorkoutLoadContext: Sendable {
     /// Sessions per lift, keyed by ``WorkoutExerciseCatalog/normalizedName(_:)``, oldest first.
     public var exposures: [String: [LiftExposure]]
@@ -27,11 +29,14 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     /// resolved by the app from the setting and the lifter's level). Off by default here, so a context
     /// built without saying so plans exactly as before.
     public var warmUpSets: Bool
+    /// The person's age, sex and body weight, which nudge each lift's expected curve (G9: a
+    /// long-trained lifter over 60 expects a steady line). Unknown by default.
+    public var traits: LifterTraits
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
         recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
-        warmUpSets: Bool = false
+        warmUpSets: Bool = false, traits: LifterTraits = .unknown
     ) {
         self.exposures = exposures
         self.today = today
@@ -39,6 +44,7 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         self.recovery = recovery
         self.calibration = calibration
         self.warmUpSets = warmUpSets
+        self.traits = traits
     }
 
     /// One lift's sessions, oldest first.
@@ -60,10 +66,14 @@ extension WorkoutProgram {
         var target: ExerciseTarget
         var slot: WorkoutSlotSpec
         var plateau: PlateauStatus?
-        /// Set on a variation: the stalled lift it stands in for.
-        var standsInFor: String?
+        /// Set on a variant: the stalled lift it joins (``PlateauStage/variant``).
+        var variantOf: String?
         var plan: LiftPlan?
     }
+
+    /// The slot a plateau variant fills beside its lift: frozen like every slot label, drawn through
+    /// ``WorkoutSlotNames``, and never one of a template's main slots, so a time budget may trim it.
+    static let variantSlotLabel = "Variant"
 
     /// The lifting block after the load pass, plus what the session note should say about it.
     /// `slots` runs parallel to `steps`: the slot each step fills, which the time budget reads to
@@ -84,12 +94,10 @@ extension WorkoutProgram {
             LoadedPick(exercise: pick.exercise, target: pick.target, slot: pick.slot,
                        plateau: plateauStatus(of: pick.target, load: load))
         }
-        var plateauNotes: [String] = []
-        substituteVariations(&loaded, inputs: inputs, used: &used, notes: &plateauNotes)
-        swapInSupportWork(&loaded, inputs: inputs, used: &used, notes: &plateauNotes)
+        addVariant(&loaded, inputs: inputs, used: &used)
         for index in loaded.indices { plan(&loaded[index], inputs: inputs, load: load) }
-        applyPlateauLoad(&loaded, inputs: inputs)
-        if let story = plateauStory(loaded, recovery: load.recovery) { plateauNotes.insert(contentsOf: story, at: 0) }
+        applyPlateauLoad(&loaded, inputs: inputs, load: load)
+        let plateauNotes = plateauStory(loaded, inputs: inputs) ?? []
         var notes = progressNotes(loaded)
         if calibrationOpen, let calibration = expandCalibration(&loaded, inputs: inputs, load: load) {
             calibrationOpen = false
@@ -120,12 +128,18 @@ extension WorkoutProgram {
         loaded = expanded
     }
 
-    /// The plateau status of a rep-counted lift, nil for holds and lifts with no history.
+    /// The trend status of a rep-counted lift (``WorkoutPlateau/status(of:unit:today:profile:levelKg:)``),
+    /// nil for holds and lifts with no history. The lift's estimated max, in kilograms, lets the
+    /// expected curve tell a strong lifter from a newer one.
     static func plateauStatus(of target: ExerciseTarget, load: WorkoutLoadContext) -> PlateauStatus? {
         guard target.measure != .seconds else { return nil }
         let history = load.history(for: target.name)
         guard !history.isEmpty else { return nil }
-        return WorkoutPlateau.status(of: history, unit: load.unit(for: history), today: load.today)
+        let unit = load.unit(for: history)
+        let levelKg = WorkoutLoadEngine.estimate(from: history, unit: unit, today: load.today)
+            .map { LoadUnit.kg.converted($0.oneRepMax, from: unit) }
+        let profile = TrendProfile(traits: load.traits, lowerBody: WorkoutLoadEngine.isLowerBody(target.movementPattern))
+        return WorkoutPlateau.status(of: history, unit: unit, today: load.today, profile: profile, levelKg: levelKg)
     }
 
     /// The gear a lift is loaded with here: its own tool, else the first loadable alternative this
@@ -193,91 +207,111 @@ extension WorkoutProgram {
 
     // MARK: Plateau response
 
-    /// A stalled lift past its support block gets its slot's next-best exercise for four weeks.
-    static func substituteVariations(
-        _ loaded: inout [LoadedPick], inputs: SlotInputs, used: inout Set<String>, notes: inout [String]
-    ) {
-        for index in loaded.indices where loaded[index].plateau?.stage == .variation {
-            let original = loaded[index].target
-            guard let stand = bestExercise(
-                for: loaded[index].slot, in: inputs.feasible, excluding: used.union([original.name]),
-                biasTokens: inputs.biasTokens, experience: inputs.profile.experience, location: inputs.location,
-                limits: inputs.limits
-            ) else { continue }
-            used.insert(stand.name)
-            loaded[index].exercise = prescribe(stand, role: loaded[index].slot.role, block: .lifting,
-                                               completions: inputs.progression[stand.name] ?? 0, inputs: inputs)
-            loaded[index].target = stand
-            loaded[index].standsInFor = original.name
-            notes.append(WorkoutPlannerCopy.standsIn(stand.name, for: original.name))
-        }
-    }
-
-    /// During the support block, one accessory slot becomes work for the stalled lift's helper
-    /// muscles: the last accessory that isn't already helping it (an existing triceps slot stays on a
-    /// stalled bench day), filled for the first helper muscle the session doesn't train at all.
-    static func swapInSupportWork(
-        _ loaded: inout [LoadedPick], inputs: SlotInputs, used: inout Set<String>, notes: inout [String]
-    ) {
-        guard let stalled = loaded.first(where: { $0.plateau?.stage == .supportWork && $0.standsInFor == nil }) else { return }
-        let helpers = WorkoutPlateau.helperMuscles(for: stalled.target)
-        guard let slotIndex = loaded.lastIndex(where: {
-            $0.slot.role == .accessory && $0.target.name != stalled.target.name && $0.standsInFor == nil
-                && $0.target.primaryMuscles.isDisjoint(with: helpers)
-        }) else { return }
-        let worked = loaded.reduce(into: Set<MuscleGroup>()) { $0.formUnion($1.target.primaryMuscles) }
-        for muscle in helpers where !worked.contains(muscle) {
-            let slot = WorkoutSlotSpec(label: "Support", role: .accessory, muscles: [muscle])
-            guard let support = bestExercise(
-                for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
-                experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
-            ) else { continue }
-            used.insert(support.name)
-            loaded[slotIndex].exercise = prescribe(support, role: .accessory, block: .lifting,
-                                                   completions: inputs.progression[support.name] ?? 0, inputs: inputs)
-            loaded[slotIndex].target = support
-            loaded[slotIndex].slot = slot
-            loaded[slotIndex].plateau = nil
-            notes.append(WorkoutPlannerCopy.supportSwap(support.name, helping: stalled.target.name))
+    /// The variant step (``PlateauStage/variant``): the slot's next-best exercise joins the session's
+    /// first lift on that step, right after it, at accessory volume. The lift itself stays — one set
+    /// fewer (``applyPlateauLoad(_:inputs:load:)``), never removed — and the variant fills a slot of
+    /// its own (``variantSlotLabel``), so a time budget may trim it but never the lift.
+    static func addVariant(_ loaded: inout [LoadedPick], inputs: SlotInputs, used: inout Set<String>) {
+        guard let index = loaded.firstIndex(where: { $0.plateau?.stage == .variant && $0.variantOf == nil }) else {
             return
         }
+        let original = loaded[index]
+        let slot = WorkoutSlotSpec(label: variantSlotLabel, role: .accessory, movement: original.slot.movement,
+                                   plane: original.slot.plane, muscles: original.slot.muscles,
+                                   region: original.slot.region)
+        guard let variant = bestExercise(
+            for: slot, in: inputs.feasible, excluding: used.union([original.target.name]),
+            biasTokens: inputs.biasTokens, experience: inputs.profile.experience, location: inputs.location,
+            limits: inputs.limits
+        ) else { return }
+        used.insert(variant.name)
+        let exercise = prescribe(variant, role: .accessory, block: .lifting,
+                                 completions: inputs.progression[variant.name] ?? 0, inputs: inputs)
+        let pick = LoadedPick(exercise: exercise, target: variant, slot: slot, variantOf: original.target.name)
+        loaded.insert(pick, at: index + 1)
     }
 
-    /// The load side of the response: longer rest on every stalled lift, the easier session (half
-    /// the sets, about 10 % lighter), and the first stalled lift of the session moved to the front.
-    static func applyPlateauLoad(_ loaded: inout [LoadedPick], inputs: SlotInputs) {
-        for index in loaded.indices {
-            guard let status = loaded[index].plateau, loaded[index].standsInFor == nil else { continue }
-            let role = loaded[index].slot.role
-            let base = WorkoutRestGuidance.restSeconds(
-                demand: WorkoutRestGuidance.demand(role: role, movementPattern: loaded[index].target.movementPattern),
-                goal: inputs.goal
-            )
-            let extra = role == .main ? WorkoutPlateau.extraRestMainSeconds : WorkoutPlateau.extraRestAccessorySeconds
-            loaded[index].exercise.restSecondsOverride = WorkoutRestGuidance.clamp(base + extra)
-            if status.stage == .easierSession { makeEasier(&loaded[index], location: inputs.location) }
+    /// The load side of the response, by step: the fair retest's rest (at least
+    /// ``WorkoutPlateau/retestRestSeconds``), the loading change's heavier block, one set fewer on a
+    /// lift beside its variant, and the dip's deload. Then the first lift on its retest moves to the
+    /// front of the session.
+    static func applyPlateauLoad(_ loaded: inout [LoadedPick], inputs: SlotInputs, load: WorkoutLoadContext) {
+        for index in loaded.indices where loaded[index].variantOf == nil {
+            guard let status = loaded[index].plateau else { continue }
+            if status.state == .dipping {
+                deload(&loaded[index], location: inputs.location)
+                continue
+            }
+            switch status.stage {
+            case .fairRetest?:
+                fairRetest(&loaded[index], goal: inputs.goal)
+            case .loadingChange?:
+                heavierBlock(&loaded[index], inputs: inputs, load: load)
+            case .variant?:
+                let name = loaded[index].target.name
+                if loaded.contains(where: { $0.variantOf == name }) {
+                    let sets = loaded[index].exercise.sets
+                    loaded[index].exercise.sets = max(min(sets, WorkoutPlateau.variantMainMinimumSets),
+                                                      sets - WorkoutPlateau.variantMainSetDrop)
+                }
+            case .holdingSteady?, nil:
+                break
+            }
         }
-        let front: Set<PlateauStage> = [.easierSession, .recover]
-        guard let first = loaded.firstIndex(where: { $0.plateau.map { front.contains($0.stage) } ?? false }),
+        guard let first = loaded.firstIndex(where: { $0.plateau?.stage == .fairRetest && $0.plateau?.state == .stalled }),
               first > 0 else { return }
         loaded.insert(loaded.remove(at: first), at: 0)
     }
 
-    /// Half the sets (rounded up) and about 10 % lighter — on a load the location has, when its
-    /// weights are set — flagged so it never anchors the next session.
-    static func makeEasier(_ pick: inout LoadedPick, location: WorkoutLocation) {
+    /// The fair retest: at least three minutes between sets (more when the goal's own rest is longer).
+    static func fairRetest(_ pick: inout LoadedPick, goal: GoalType) {
+        let base = pick.exercise.restSecondsOverride ?? WorkoutRestGuidance.restSeconds(
+            demand: WorkoutRestGuidance.demand(role: pick.slot.role, movementPattern: pick.target.movementPattern),
+            goal: goal
+        )
+        pick.exercise.restSecondsOverride = WorkoutRestGuidance.clamp(max(base, WorkoutPlateau.retestRestSeconds))
+    }
+
+    /// The loading change: a short heavier block — ``WorkoutPlateau/heavierBlockRepDrop`` fewer reps
+    /// (never under ``WorkoutPlateau/heavierBlockMinimumReps``) at the weight the estimate gives for
+    /// them, on a load the location has. A lift with no load, or no estimate yet, gets one more set
+    /// instead.
+    static func heavierBlock(_ pick: inout LoadedPick, inputs: SlotInputs, load: WorkoutLoadContext) {
+        guard var guidance = pick.exercise.guidance else { return }
+        let reps = max(WorkoutPlateau.heavierBlockMinimumReps, guidance.targetReps - WorkoutPlateau.heavierBlockRepDrop)
+        let history = load.history(for: pick.target.name)
+        guard reps < guidance.targetReps, let current = guidance.prescription,
+              let equipment = guidance.equipment, let step = WorkoutLoadEngine.step(for: equipment, unit: current.unit),
+              let estimate = WorkoutLoadEngine.estimate(from: history, unit: current.unit, today: load.today) else {
+            pick.exercise.sets += 1
+            return
+        }
+        let weight = WorkoutLoadEngine.workingWeight(oneRepMax: estimate.oneRepMax, reps: reps, step: step)
+        let ladder = loadLadder(for: guidance, at: inputs.location)
+        guidance.targetReps = reps
+        guidance.prescription = WorkoutLoadEngine.prescription(
+            suggested: max(weight, current.suggested), confidence: current.confidence, step: step,
+            unit: current.unit, ladder: ladder
+        ) ?? current
+        pick.exercise.reps = "\(reps)"
+        pick.exercise.guidance = guidance
+    }
+
+    /// The dip's deload: half the sets (rounded up) with the load kept — the last working weight, on
+    /// the location's nearest load when that is within ``WorkoutPlateau/deloadMaxDecrease`` of it — and
+    /// flagged as an easier session, so it never anchors the next one or reads as the trend.
+    static func deload(_ pick: inout LoadedPick, location: WorkoutLocation) {
         pick.exercise.sets = max(1, (pick.exercise.sets + 1) / 2)
         guard var guidance = pick.exercise.guidance else { return }
         guidance.easierSession = true
-        if let current = guidance.prescription {
+        if let current = guidance.prescription, let kept = pick.plan?.previousWeight, kept > 0 {
             let ladder = loadLadder(for: guidance, at: location)
             let step = guidance.equipment.flatMap { WorkoutLoadEngine.step(for: $0, unit: current.unit) } ?? current.step
-            let lighter = WorkoutLoadEngine.movedOnto(
-                current.suggested, by: .down(WorkoutPlateau.easierLoadDecrease), step: step, lowerBody: false, ladder: ladder
-            )
+            let placed = ladder?.nearest(to: kept) ?? WorkoutLoadEngine.rounded(kept, toStep: step)
+            let weight = placed >= kept * (1 - WorkoutPlateau.deloadMaxDecrease) ? placed : current.suggested
             guidance.prescription = WorkoutLoadEngine.prescription(
-                suggested: lighter, confidence: current.confidence, step: step, unit: current.unit, ladder: ladder
-            )
+                suggested: max(step, weight), confidence: current.confidence, step: step, unit: current.unit, ladder: ladder
+            ) ?? current
         }
         pick.exercise.guidance = guidance
     }
@@ -290,7 +324,7 @@ extension WorkoutProgram {
         guard WorkoutCalibration.isDue(load.calibration, intensity: inputs.intensity, today: load.today),
               let index = loaded.firstIndex(where: {
                   $0.slot.role == .main && $0.exercise.guidance?.isLoadable == true
-                      && $0.plateau?.stage != .easierSession && $0.standsInFor == nil
+                      && $0.exercise.guidance?.easierSession != true && $0.variantOf == nil
               }),
               let guidance = loaded[index].exercise.guidance, let equipment = guidance.equipment,
               let step = WorkoutLoadEngine.step(for: equipment, unit: guidance.unit) else { return nil }
