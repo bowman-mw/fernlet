@@ -1614,6 +1614,8 @@ struct WorkoutSuggestionSheet: View {
     var store: FernletStore
     @State private var energy: WorkoutIntensity = .moderate
     @State private var context = ""
+    // Today's session length: seeded once from Workout setup, and shapes only the plan it builds.
+    @State private var sessionLength: WorkoutSessionLength = .noLimit
     @State private var showingSetup = false
     // The "Your spaces" list (1c), opened by the configurator's inline space row's Change (MOVE-34).
     @State private var showingSpaces = false
@@ -1932,6 +1934,7 @@ struct WorkoutSuggestionSheet: View {
         // never build a harder plan on it.
         let intensity = store.needsRestToday ? .light : energy
         let requestContext = context
+        let length = sessionLength
         Task {
             await Task.yield()
             do {
@@ -1942,7 +1945,7 @@ struct WorkoutSuggestionSheet: View {
                 isSuggesting = false
                 return
             }
-            store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext)
+            store.commitTodaysGuidedWorkoutPlan(intensity: intensity, context: requestContext, sessionLength: length)
             isSuggesting = false
         }
     }
@@ -1997,9 +2000,11 @@ struct WorkoutSuggestionSheet: View {
     }
 
     /// "5 exercises · ~45 min" under the session name. The count is the movements listed one per row
-    /// (activation, lifting, cardio); the time includes the warm-up and cool-down.
+    /// (activation, lifting, cardio); the time includes the warm-up and cool-down, by the same
+    /// estimate the planner fits a session-length budget with and the runner counts down from
+    /// (``WorkoutSessionTime``) — so a session set to 30 minutes says ~30 here and in the run.
     private func sessionMetaLine(_ session: WorkoutProgram.SessionSuggestion) -> Text {
-        let minutes = Self.estimatedMinutes(for: session, goal: store.settings.selectedGoal)
+        let minutes = WorkoutSessionTime.minutes(of: session.exercises, goal: store.settings.selectedGoal)
         let count = session.exercises.filter { $0.block != .warmUp && $0.block != .coolDown }.count
         return count == 1
             ? Text("1 exercise · ~\(minutes) min")
@@ -2062,26 +2067,6 @@ struct WorkoutSuggestionSheet: View {
                 howTo = ExerciseHowToRequest(name: exercise.name)
             }
         }
-    }
-
-    /// The same rough time heuristic the runner's header uses, over a not-yet-started session:
-    /// 45s per prescribed set (a timed set: its hold plus the get-into-position lead-in) plus that
-    /// exercise's rest between its own sets (override, else the research default for the goal), and
-    /// 5 min per descriptor line. `static` so it is testable without standing up the sheet (the
-    /// `AwayHeartsCopy` precedent).
-    nonisolated static func estimatedMinutes(for session: WorkoutProgram.SessionSuggestion, goal: GoalType) -> Int {
-        var seconds = 0
-        for exercise in session.exercises {
-            if exercise.fromCatalog && exercise.sets >= 1 {
-                let rest = exercise.restSecondsOverride
-                    ?? WorkoutRestGuidance.restSeconds(forExerciseNamed: exercise.name, role: exercise.role, goal: goal)
-                let perSet = exercise.holdSeconds.map { $0 + GuidedWorkoutRunState.holdLeadInSeconds } ?? 45
-                seconds += exercise.sets * perSet + max(0, exercise.sets - 1) * max(0, rest)
-            } else {
-                seconds += 300
-            }
-        }
-        return max(1, (seconds + 59) / 60)
     }
 
     /// "Start now" — the screen's ONE green, and the only route into the runner (MOVE-17/MOVE-01).
@@ -2192,6 +2177,9 @@ struct WorkoutSuggestionSheet: View {
     /// can require a short scroll at default type. The old Goal row and closing caption stay out.
     @ViewBuilder private var configuratorContent: some View {
         feelingSection
+        if !store.needsRestToday {
+            sessionLengthField
+        }
         spaceRow
         SheetField("Anything else?") {
             TextField("e.g. sore left knee, short on time", text: $context,
@@ -2231,6 +2219,28 @@ struct WorkoutSuggestionSheet: View {
         }
     }
 
+    /// "How long?" — today's session length (``WorkoutSessionLength``), seeded from Workout setup.
+    /// A one-line menu rather than a fifth chip row, so the configurator stays short; the caption
+    /// names the menu, so VoiceOver reads "How long?, 30 min, pop-up button" and Voice Control
+    /// answers to "Tap How long". Hidden on a rest day, whose gentle plan has no length to fit.
+    private var sessionLengthField: some View {
+        SheetField("How long?", namesControl: true) {
+            Picker(selection: $sessionLength) {
+                ForEach(WorkoutSessionLength.allCases) { length in
+                    Text(length.displayName).tag(length)
+                }
+            } label: {
+                Text("How long?")
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            // A menu picker draws its value in the tint; `moss` measures 3.74:1 on parchment, under
+            // the 4.5:1 text floor, so the value takes the moss text token (the injury picker's rule).
+            .tint(Color.mossInk)
+            .accessibilityIdentifier("workout.suggest.length")
+        }
+    }
+
     /// The intensity chips the configurator offers: Light / Moderate / Hard, or Light alone on a rest
     /// day (readiness `needs rest` — today marked unwell). Gentle options only; no push. Static so it
     /// is testable (the `AwayHeartsCopy` precedent).
@@ -2259,6 +2269,8 @@ struct WorkoutSuggestionSheet: View {
     private func seedIntensityOnce(preferCommitted: Bool) {
         guard !didApplyReadiness else { return }
         didApplyReadiness = true
+        // The session length seeds with it, once per presentation, from Workout setup.
+        sessionLength = store.settings.workoutSessionLength
         if preferCommitted, let committed = store.committedGuidedIntensity {
             energy = committed
         } else if let rec = recommendedIntensity {

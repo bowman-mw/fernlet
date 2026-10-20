@@ -2004,6 +2004,9 @@
         }
       }
     },
+    "Cool-down stretches" : {
+      "comment" : "Workout setup: switch for the stretches that end a lifting session"
+    },
     "Cool-down · %lld stretches" : {
 
     },
@@ -2968,6 +2971,9 @@
     "Fernlet doesn't send some of the words in this message. You can change them and send it again." : {
 
     },
+    "Fernlet fits each session into this time: a shorter warm-up first, then fewer extra exercises, then fewer sets. Your main lifts always stay." : {
+      "comment" : "Workout setup: how the session-length choice shapes each planned session"
+    },
     "Fernlet has no record of writing anything to Apple Health, so it isn't offering to delete from there. If it wrote entries on an earlier install, turn Health back on to let Fernlet remove them, or delete them yourself in the Health app." : {
 
     },
@@ -3475,6 +3481,9 @@
       }
     },
     "How friends will see you" : {
+
+    },
+    "How long?" : {
 
     },
     "How many bottles of water to log." : {
@@ -6166,6 +6175,9 @@
     "Session info" : {
 
     },
+    "Session length" : {
+
+    },
     "Session messages" : {
 
     },
@@ -6385,6 +6397,9 @@
     },
     "Shopping list" : {
 
+    },
+    "Short is about four minutes of the stretch flow, picked for the muscles you're training. Off skips it." : {
+      "comment" : "Workout setup: what the Short and Off warm-up choices do"
     },
     "Shorter rest" : {
 
@@ -7475,6 +7490,9 @@
           }
         }
       }
+    },
+    "Warm-up stretches" : {
+
     },
     "Warm-up · %lld stretches" : {
 

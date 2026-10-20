@@ -29419,6 +29419,66 @@
         }
       }
     },
+    "workoutSessionLength.min20" : {
+      "comment" : "Workout session length choice: twenty minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "20 min"
+          }
+        }
+      }
+    },
+    "workoutSessionLength.min30" : {
+      "comment" : "Workout session length choice: thirty minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "30 min"
+          }
+        }
+      }
+    },
+    "workoutSessionLength.min45" : {
+      "comment" : "Workout session length choice: forty-five minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "45 min"
+          }
+        }
+      }
+    },
+    "workoutSessionLength.min60" : {
+      "comment" : "Workout session length choice: sixty minutes",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "60 min"
+          }
+        }
+      }
+    },
+    "workoutSessionLength.noLimit" : {
+      "comment" : "Workout session length choice: no time limit on the session",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "No limit"
+          }
+        }
+      }
+    },
     "workoutType.armsBack" : {
       "comment" : "Legacy workout category, history rows only",
       "extractionState" : "extracted_with_value",
@@ -29511,6 +29571,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Upper"
+          }
+        }
+      }
+    },
+    "workoutWarmUp.full" : {
+      "comment" : "Warm-up stretches choice: the whole stretch flow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Full"
+          }
+        }
+      }
+    },
+    "workoutWarmUp.off" : {
+      "comment" : "Warm-up stretches choice: no warm-up stretches",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Off"
+          }
+        }
+      }
+    },
+    "workoutWarmUp.short" : {
+      "comment" : "Warm-up stretches choice: about four minutes of the flow",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Short"
           }
         }
       }

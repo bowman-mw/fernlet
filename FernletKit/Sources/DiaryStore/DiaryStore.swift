@@ -1243,6 +1243,17 @@ public final class DiaryStore {
         batchSnapshotPersistence { settings.workoutProfile.selectedSplitID = id }
     }
 
+    /// Persists the session-length budget and the stretch switches. Writes only the fields that
+    /// changed: assigning one clears its parked newer-build token, which an untouched field must keep.
+    public func setWorkoutSessionOptions(_ options: WorkoutSessionOptions) {
+        guard options != settings.workoutSessionOptions else { return }
+        batchSnapshotPersistence {
+            if settings.workoutSessionLength != options.length { settings.workoutSessionLength = options.length }
+            if settings.workoutWarmUp != options.warmUp { settings.workoutWarmUp = options.warmUp }
+            if settings.workoutCoolDown != options.coolDown { settings.workoutCoolDown = options.coolDown }
+        }
+    }
+
     /// Bumps the per-exercise progression counter once per distinct non-empty name — the
     /// input to progression suggestions. ``decrementCompletedExercises(_:)`` is the exact reverse.
     public func recordCompletedExercises(_ names: [String]) {

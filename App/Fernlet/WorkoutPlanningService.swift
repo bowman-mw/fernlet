@@ -100,9 +100,15 @@ final class WorkoutPlanningService {
     /// sessions (``WorkoutLoadContextBuilder``), with plateau handling and the monthly calibration.
     /// The 48-hour guard reads the same history (``WorkoutRecentTrainingBuilder``): it moves to a
     /// split day that spares muscles worked hard yesterday, or lightens the lifts that would repeat
-    /// them.
-    func workoutDayPlan(intensity: WorkoutIntensity, context: String) -> WorkoutProgram.DayPlan {
+    /// them. Each session is shaped by Workout setup's session options — the warm-up and cool-down
+    /// switches and the time budget it is fitted into — with `sessionLength`, when given, standing in
+    /// for the setup's length for this plan only.
+    func workoutDayPlan(
+        intensity: WorkoutIntensity, context: String, sessionLength: WorkoutSessionLength? = nil
+    ) -> WorkoutProgram.DayPlan {
         let history = host.loadDays()
+        var options = host.settings.workoutSessionOptions
+        if let sessionLength { options.length = sessionLength }
         let split = activeWorkoutSplit(history: history)
         let rotation = WorkoutProgram.nextDayIndex(
             in: split, recentSessionNames: recentWorkoutNamesByDay(history: history)
@@ -120,7 +126,8 @@ final class WorkoutPlanningService {
             rotationIndex: rotation,
             progression: host.settings.workoutProgression,
             load: load,
-            recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey)
+            recent: WorkoutRecentTrainingBuilder.build(days: history, todayKey: host.todayKey),
+            options: options
         )
     }
 

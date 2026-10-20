@@ -57,10 +57,13 @@ extension WorkoutProgram {
     }
 
     /// The lifting block after the load pass, plus what the session note should say about it.
+    /// `slots` runs parallel to `steps`: the slot each step fills, which the time budget reads to
+    /// keep the main lifts.
     struct LoadPass {
         var steps: [PrescribedExercise]
         var targets: [ExerciseTarget]
         var notes: [String]
+        var slots: [WorkoutSlotSpec] = []
     }
 
     /// Runs the load pass over a session's lifting picks.
@@ -84,7 +87,8 @@ extension WorkoutProgram {
             notes = [calibration]
         }
         assignFatigueContext(&loaded)
-        return LoadPass(steps: loaded.map(\.exercise), targets: loaded.map(\.target), notes: notes + plateauNotes)
+        return LoadPass(steps: loaded.map(\.exercise), targets: loaded.map(\.target), notes: notes + plateauNotes,
+                        slots: loaded.map(\.slot))
     }
 
     /// The plateau status of a rep-counted lift, nil for holds and lifts with no history.
