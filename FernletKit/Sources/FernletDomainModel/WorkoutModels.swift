@@ -877,7 +877,7 @@ public nonisolated enum Equipment: String, Codable, CaseIterable, Identifiable, 
 /// Carries the per-activity UI defaults (symbol, expected distance/pace, default duration) and
 /// folds to a coarse ``WorkoutType`` via `fernletCategory`. Decodes tolerantly where persisted on
 /// workout rows.
-public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable {
+public nonisolated enum WorkoutActivityType: String, Codable, CaseIterable, Identifiable, Sendable {
     case running, walking, hiking, cycling, indoorCycling
     case yoga, pilates, barre, dance, socialDance
     case swimmingPool, swimmingOpenWater, rowing, elliptical, stairClimbing, stairs
