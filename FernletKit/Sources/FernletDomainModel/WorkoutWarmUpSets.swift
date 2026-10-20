@@ -43,6 +43,9 @@ public nonisolated enum WorkoutWarmUpSets {
     public static let minimumSetsOffBarbell = 2
     /// Movement patterns heavy enough to ramp into: the big compound lifts.
     static let compoundPatterns: Set<MovementPattern> = [.squat, .hinge, .lunge, .push, .pull]
+    /// The gear a ramp is worth building on (owner's pick R1, 2026-10-20): the barbell and dumbbells.
+    /// A machine, cable or kettlebell lift starts at its working weight.
+    public static let rampEquipment: Set<Equipment> = [.barbell, .dumbbell]
 
     // MARK: The setting
 
@@ -60,13 +63,14 @@ public nonisolated enum WorkoutWarmUpSets {
 
     // MARK: Which lifts
 
-    /// Whether a planned lift gets warm-up sets: a main lift, rep-counted, a compound `pattern`, loaded
-    /// on gear that takes weight, with a suggested working weight — and not already a calibration step.
+    /// Whether a planned lift gets warm-up sets: a main lift, rep-counted, a compound `pattern`, on a
+    /// barbell or dumbbells (``rampEquipment``), with a suggested working weight — and not already a
+    /// calibration step.
     public static func qualifies(_ exercise: PrescribedExercise, pattern: MovementPattern) -> Bool {
         guard exercise.role == .main, exercise.block == .lifting, exercise.holdSeconds == nil,
               compoundPatterns.contains(pattern), let guidance = exercise.guidance, guidance.calibration == nil,
-              let equipment = guidance.equipment, let prescription = guidance.prescription,
-              prescription.suggested > 0 else { return false }
+              let equipment = guidance.equipment, rampEquipment.contains(equipment),
+              let prescription = guidance.prescription, prescription.suggested > 0 else { return false }
         return WorkoutLoadEngine.step(for: equipment, unit: prescription.unit) != nil
     }
 
