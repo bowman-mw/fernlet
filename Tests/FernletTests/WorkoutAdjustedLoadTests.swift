@@ -100,10 +100,15 @@ struct WorkoutAdjustedLoadTests {
         let benchWeight = try #require(bench.guidance?.prescription?.suggested)
         #expect(benchWeight > 0)
         let squat = try #require(steps.last { $0.name == "Back squat" })
+        let target = try #require(WorkoutExerciseCatalog.exercise(named: "Back squat"))
+        let engine = WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
+            scheme: RepScheme(low: 12, high: 12), baseSets: 3, exposures: [lifted(28, 185)], equipment: target.equipment,
+            isLowerBody: true, defaultUnit: .lb, today: day(30), inventory: WorkoutLocation.fullGym.weights
+        ))
         let squatReps = squat.guidance?.targetReps
-        let squatWeight = squat.guidance?.prescription?.suggested
-        #expect(squatReps == 12, "new reps: prescribed again for them")
-        #expect(squatWeight != 135)
+        let squatPrescription = squat.guidance?.prescription
+        #expect(squatReps == engine.reps, "new reps: prescribed again from history for them")
+        #expect(squatPrescription == engine.prescription)
         let benchBefore = bench.guidance?.compoundsBefore
         let squatBefore = squat.guidance?.compoundsBefore
         #expect(benchBefore == 0)
