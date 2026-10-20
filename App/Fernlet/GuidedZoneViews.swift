@@ -41,7 +41,8 @@ struct GuidedZoneReadout: View {
 }
 
 /// Workout setup's two heart-rate switches, under "Cues during a workout": "Heart rate during cardio"
-/// and "Zone nudges", with a line saying what they do, where the reading comes from and where it goes.
+/// and "Zone nudges", with a line saying what they do, where the reading comes from and where it goes,
+/// and one saying which sensors work (Apple Watch not yet).
 ///
 /// "Heart rate during cardio" can only be turned on while Fernlet shares workouts with Apple Health
 /// (it can always be turned off); "Zone nudges" only with it. Edits the sheet's draft, so Cancel
@@ -67,6 +68,10 @@ struct WorkoutZoneSettingsRows: View {
             .disabled(!preferences.liveHeartRate)
             .accessibilityIdentifier("workout.setup.zoneNudges")
             Text("During guided cardio, see your heart rate against a gentle target, from AirPods Pro 3, Powerbeats Pro 2 or a Bluetooth heart-rate strap paired with this iPhone. Turning it on asks Apple Health to let Fernlet read your heart rate. Apple Health keeps the readings, as it does for any workout; Fernlet keeps none. With no reading, the talk test guides you instead. Zone nudges add one light tap when you've drifted out of range for a while.")
+                .font(.fernlet(.labelSmall))
+                .foregroundStyle(Color.slate)
+                .fernletWrappingText()
+            Text("Apple Watch isn't supported yet; AirPods Pro 3, Powerbeats Pro 2 and Bluetooth chest straps are.")
                 .font(.fernlet(.labelSmall))
                 .foregroundStyle(Color.slate)
                 .fernletWrappingText()

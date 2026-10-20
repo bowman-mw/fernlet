@@ -1680,6 +1680,17 @@
     "Apple Private Cloud Compute" : {
 
     },
+    "Apple Watch isn't supported yet; AirPods Pro 3, Powerbeats Pro 2 and Bluetooth chest straps are." : {
+      "comment" : "Workout setup, under the heart-rate switches: which sensors the live heart rate works with. Product names stay as Apple writes them; 'Bluetooth chest straps' = heart-rate chest straps paired over Bluetooth.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple Watch isn't supported yet; AirPods Pro 3, Powerbeats Pro 2 and Bluetooth chest straps are."
+          }
+        }
+      }
+    },
     "Areas to work around" : {
 
     },
