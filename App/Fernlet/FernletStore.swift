@@ -5209,7 +5209,8 @@ final class FernletStore {
         // workout keeps (`GuidedRunDuration`); nil for a run persisted before it recorded a start.
         let timing = GuidedRunDuration.minutes(startedAt: state.startedAt, finishedAt: state.finishedAt)
         var workout = Workout(
-            name: state.title, type: type, mode: mode, activityType: GuidedRunTimedLog.activityType(for: state),
+            name: state.title, type: type, mode: mode,
+            activityType: GuidedRunTimedLog.activityType(for: state, sport: settings.workoutProfile.sport),
             exercises: loadLog?.text ?? state.suggestionExercisesText,
             rpe: nil, notes: GuidedRunDuration.notes(state.suggestionNotes, capped: timing?.capped == true),
             // A timed cardio or mobility run logs the minutes actually held; every other run logs its
