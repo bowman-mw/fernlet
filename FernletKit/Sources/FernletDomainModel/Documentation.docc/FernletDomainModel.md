@@ -676,6 +676,11 @@ estimate — so the same history always builds the same plan.
   Barbell warm-ups land on loads the plates make: ``PlateCalculator`` over a ``BarbellPlateSet`` (the
   standard 45 lb / 20 kg bar and plates, or the location's own bar and plates) says which plates go on
   each side, or the closest load it can make.
+- **After "Adjust with AI".** The on-device adjuster answers with names, sets and reps only, so
+  ``WorkoutAdjustedLoad`` loads the adjusted lifting block again: a lift kept at the same reps keeps its
+  guidance, any other catalog lift is prescribed from its history on the location's weights, the
+  compound count ahead of each lift is redone, and the warm-up ramp goes back before the first heavy main
+  lift when the setting is on and the committed day isn't light. The time budget is not applied again.
 
 The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResult`` per lift on
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
@@ -722,6 +727,7 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``LoadCap``
 - ``WorkoutWarmUpSets``
 - ``WarmUpSet``
+- ``WorkoutAdjustedLoad``
 - ``PlateCalculator``
 - ``BarbellPlateSet``
 - ``PlateLoadout``
