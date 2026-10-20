@@ -559,6 +559,16 @@ The guided runner prescribes from ``LoadGuidance`` and records an ``ExerciseResu
 ``Workout``'s additive `exerciseResults` (nil means "completed as prescribed" was never recorded; the
 same facts are in the logged text, `ExerciseResult.loggedLine`).
 
+The same record is written after the fact (idea 6): a correction re-records a lift's sets
+(`ExerciseResult.record(_:unit:)`), and a lift entered set by set in the Log sheet is recorded the
+way a run records it (`ExerciseResult.handLogged(name:sets:unit:equipment:effort:)`), each set a
+``LoggedSet``. When the sets were not all lifted at one weight the result keeps `setWeights` and its
+line spells them out ("(did 8 @ 100, 8 @ 100, 6 @ 95)"); the engine judges such a session at its
+heaviest set's weight, and a lighter set keeps it from counting as completed
+(`LiftExposure.workingSetReps`). `Workout.replaceExerciseLine(_:with:)` keeps the line in step
+with the record. A result parks the keys a newer build adds and writes them back, so a re-save here
+never drops them; an older build that drops `setWeights` still has them in the line.
+
 - ``WorkoutLoadContext``
 - ``WorkoutLoadEngine``
 - ``LiftExposure``
@@ -569,6 +579,7 @@ same facts are in the logged text, `ExerciseResult.loggedLine`).
 - ``WeightPrescription``
 - ``LoadGuidance``
 - ``ExerciseResult``
+- ``LoggedSet``
 - ``LoadUnit``
 - ``ExerciseEffort``
 - ``OverrideReason``

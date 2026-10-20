@@ -2981,6 +2981,11 @@ struct LocalizationBoundaryTests {
         HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
                      key: "Remove %lld intimate logs this iPhone can't open?",
                      source: "Privacy & Data's intimate-log-backup Remove confirmation title"),
+        // Idea 6 (2026-10-20): a set row's rep count in the set editor (Edit workout, Log set by
+        // set). Hand-authored with its key, so English never reads "1 reps".
+        HarvestedKey(catalog: "App/Fernlet/Localizable.xcstrings",
+                     key: "%lld reps",
+                     source: "a set row's rep count in the set editor"),
     ]
 
     /// Every count-bearing key carries real plural variations.

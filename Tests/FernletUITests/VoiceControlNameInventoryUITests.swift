@@ -303,6 +303,29 @@ final class VoiceControlNameInventoryUITests: XCTestCase {
         try VoiceControlNameInventory.record(app, "Sheet · Workout – activity", in: self)
     }
 
+    /// The Log sheet's set-by-set entry (idea 6): a lift picked, "Log set by set" switched on, and
+    /// its set rows — each reps stepper, weight field and Add / Repeat button named for Voice Control.
+    @MainActor
+    func testWorkoutSheetSetBySetNames() throws {
+        let app = UXTestApp.launch(openSheet: "workout")
+        XCTAssertTrue(app.descendants(matching: .any)["sheet.workout"].waitForExistence(timeout: 8))
+        let search = app.textFields["exercise.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 4))
+        search.tap()
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 2) { search.tap() }
+        // Return picks the top match, as a person finishing the search would.
+        search.typeText("Bench press\n")
+        let toggle = app.switches["workout.log.bySet"].firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 4), "no Log set by set switch")
+        for _ in 0..<6 where !toggle.isHittable { app.swipeUp() }
+        if toggle.value as? String != "1" { toggle.tap() }
+        if toggle.value as? String != "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap() }
+        let reps = app.descendants(matching: .any)["workout.log.sets.set1.reps"].firstMatch
+        XCTAssertTrue(reps.waitForExistence(timeout: 4), "the picked lift's set rows never appeared")
+        XCTAssertTrue(app.textFields["workout.log.sets.set1.weight"].firstMatch.exists, "no weight field on set 1")
+        try VoiceControlNameInventory.record(app, "Sheet · Workout – set by set", in: self)
+    }
+
     // MARK: - Fundamentals: settings and help
 
     @MainActor

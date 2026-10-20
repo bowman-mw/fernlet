@@ -799,6 +799,29 @@
     "%lld planned" : {
 
     },
+    "%lld reps" : {
+      "comment" : "Set editor (Edit workout; Log workout, set by set): a set's rep count beside its − / + stepper, e.g. '8 reps'. Needs a plural variation per language; English also needs the one-rep form.",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld rep"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "new",
+                  "value" : "%lld reps"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld seconds" : {
 
     },
@@ -1225,6 +1248,17 @@
     },
     "Add progress photo" : {
 
+    },
+    "Add set" : {
+      "comment" : "Set editor: adds a set row at the last set's reps; a blank weight repeats the set above.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Add set"
+          }
+        }
+      }
     },
     "Add step" : {
 
@@ -2505,6 +2539,17 @@
     "Each exercise as logged, most recent first." : {
 
     },
+    "Each set gets its own reps and weight." : {
+      "comment" : "Log workout sheet: the explainer line under the 'Log set by set' switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Each set gets its own reps and weight."
+          }
+        }
+      }
+    },
     "Ease into each stretch — no bouncing." : {
 
     },
@@ -3066,6 +3111,17 @@
     "First day of cycle" : {
 
     },
+    "Fix any set that went differently. Fernlet plans your next weights from these." : {
+      "comment" : "Edit workout: the note above each exercise's sets. Correcting a set changes the weights Fernlet suggests next time.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fix any set that went differently. Fernlet plans your next weights from these."
+          }
+        }
+      }
+    },
     "Floss Rope" : {
       "comment" : "Silly stat title: floss used, laid end to end"
     },
@@ -3401,6 +3457,17 @@
     "How are you feeling?" : {
 
     },
+    "How did it feel?" : {
+      "comment" : "Set editor: asks, after the fact, how an exercise felt; the answers are Easy, Good and Tough (optional).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "How did it feel?"
+          }
+        }
+      }
+    },
     "How friends will see you" : {
 
     },
@@ -3475,6 +3542,17 @@
     },
     "If you use Fernlet on another device, this reaches it the next time that device syncs — and a device you're using right then may re-add its most recent days and any custom clothing designs it still has." : {
 
+    },
+    "If you went outside the range, why?" : {
+      "comment" : "Edit workout: question above the reasons a lifter picked a weight outside the range Fernlet suggested (Too heavy, Too light, Equipment, Pain, Preference, Other). Optional.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "If you went outside the range, why?"
+          }
+        }
+      }
     },
     "Import" : {
 
@@ -3860,6 +3938,17 @@
     },
     "Log recipe as meal" : {
 
+    },
+    "Log set by set" : {
+      "comment" : "Log workout sheet: switch that gives each set of an exercise its own reps and weight instead of one sets × reps × weight entry. Also a Voice Control name for the switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Log set by set"
+          }
+        }
+      }
     },
     "Log sleep" : {
 
@@ -5434,6 +5523,17 @@
     "Remove recovery device?" : {
 
     },
+    "Remove set %lld" : {
+      "comment" : "Set editor: the button that deletes one set's row, e.g. 'Remove set 3'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Remove set %lld"
+          }
+        }
+      }
+    },
     "Remove step %lld" : {
 
     },
@@ -5469,6 +5569,17 @@
     },
     "Repeat cooking step" : {
 
+    },
+    "Repeat last set" : {
+      "comment" : "Set editor: adds a copy of the last set, its reps and its weight.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Repeat last set"
+          }
+        }
+      }
     },
     "Repeat step" : {
 
@@ -6034,6 +6145,17 @@
     "Set" : {
 
     },
+    "Set %lld" : {
+      "comment" : "Set editor: the label at the start of one set's row, e.g. 'Set 2'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %lld"
+          }
+        }
+      }
+    },
     "Set %lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -6054,6 +6176,39 @@
         }
       }
     },
+    "Set %lld reps" : {
+      "comment" : "Set editor: the short Voice Control name of a set's reps stepper, e.g. 'Set 2 reps'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %lld reps"
+          }
+        }
+      }
+    },
+    "Set %lld weight" : {
+      "comment" : "Set editor: the short Voice Control name of a set's weight field, e.g. 'Set 2 weight'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %lld weight"
+          }
+        }
+      }
+    },
+    "Set %lld weight, %@" : {
+      "comment" : "Set editor: what VoiceOver says for a set's weight field — the set number, then the weight unit spelled out by the system, e.g. 'Set 2 weight, pounds'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set %1$lld weight, %2$@"
+          }
+        }
+      }
+    },
     "Set %lld: %lld reps" : {
       "localizations" : {
         "en" : {
@@ -6066,6 +6221,17 @@
     },
     "Set a passcode" : {
 
+    },
+    "Set by set" : {
+      "comment" : "Log workout sheet: a short Voice Control name for the 'Log set by set' switch.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Set by set"
+          }
+        }
+      }
     },
     "Set done. Resting now." : {
 
@@ -7194,8 +7360,30 @@
     "Use the flashlight in dim lighting." : {
 
     },
+    "Use typed name" : {
+      "comment" : "Log workout sheet, set by set: the Voice Control name of the button that uses the typed text as the exercise.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use typed name"
+          }
+        }
+      }
+    },
     "Use values" : {
 
+    },
+    "Use “%@”" : {
+      "comment" : "Log workout sheet, set by set: picks the typed text as the exercise when it names nothing in the exercise list, e.g. 'Use “Sled push”'. The quotes surround what the person typed.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Use “%@”"
+          }
+        }
+      }
     },
     "Useless numbers, lovingly counted. They turn up as you log." : {
 
@@ -7294,6 +7482,17 @@
     },
     "Weight and height, for macro targets." : {
 
+    },
+    "Weight unit" : {
+      "comment" : "Set editor: caption of the pounds / kilograms choice for every weight of one exercise.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight unit"
+          }
+        }
+      }
     },
     "Welcome to Fernlet" : {
 
@@ -9912,6 +10111,18 @@
     },
     "woke up twice..." : {
 
+    },
+    "workout.sets.weightPrompt" : {
+      "comment" : "Prompt in an empty per-set weight field (Edit workout, Log workout set by set).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Weight"
+          }
+        }
+      }
     },
     "worryBox.error.compose" : {
       "comment" : "Shown and spoken when saving a worry from the compose sheet fails.",
