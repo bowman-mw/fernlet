@@ -163,9 +163,12 @@ public nonisolated enum WorkoutPlanRun {
     /// The load engine's guidance for a catalog lift whose line named no weight — the same engine the
     /// app's own sessions use, reading the lift's history, but for the sets and reps as written: only the
     /// weight (and, for a written range like "8-12", where in it to aim) comes from the engine. Nil for a
-    /// timed exercise, a cardio or stretch row, and reps the engine cannot read ("AMRAP").
+    /// timed exercise, a cardio or stretch row, and reps the engine cannot read ("AMRAP"). `inventory`
+    /// snaps the weight onto loads the location has (the re-run after "Adjust with AI" passes the
+    /// location's weights; a planned line's run passes none, as before).
     static func engineGuidance(
-        for target: ExerciseTarget, reps: String, sets: Int, location: WorkoutLocation, load: WorkoutLoadContext
+        for target: ExerciseTarget, reps: String, sets: Int, location: WorkoutLocation, load: WorkoutLoadContext,
+        inventory: WorkoutWeightInventory? = nil
     ) -> LoadGuidance? {
         guard target.measure != .seconds, target.modality == .strength || target.modality == .power,
               let scheme = RepScheme(reps) else { return nil }
@@ -177,7 +180,7 @@ public nonisolated enum WorkoutPlanRun {
         let plan = WorkoutLoadEngine.plan(WorkoutLoadEngine.LiftInputs(
             scheme: scheme, baseSets: sets, exposures: history, equipment: equipment,
             isLowerBody: WorkoutLoadEngine.isLowerBody(target.movementPattern),
-            defaultUnit: load.defaultUnit, today: load.today
+            defaultUnit: load.defaultUnit, today: load.today, inventory: inventory
         ))
         return LoadGuidance(
             targetReps: plan.reps, prescription: plan.prescription, equipment: equipment, unit: plan.unit,

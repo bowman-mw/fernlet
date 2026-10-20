@@ -178,20 +178,32 @@ extension WorkoutProgram {
 
     /// Counts the compound lifts ahead of each pick — the fatigue context a result records.
     static func assignFatigueContext(_ loaded: inout [LoadedPick]) {
+        let counts = compoundCounts(names: loaded.map(\.exercise.name),
+                                    patterns: loaded.map { Optional($0.target.movementPattern) })
+        for index in loaded.indices where index < counts.count {
+            loaded[index].exercise.guidance?.compoundsBefore = counts[index]
+        }
+    }
+
+    /// The compound lifts ahead of each step, in order. `patterns` runs parallel to `names`; a step
+    /// with no known pattern is not counted. Steps of one name share one lift (a calibration's steps,
+    /// a lift's warm-up sets): every one carries the count from its first. Shared with the re-run
+    /// after "Adjust with AI" (``WorkoutAdjustedLoad``).
+    static func compoundCounts(names: [String], patterns: [MovementPattern?]) -> [Int] {
         let noncompound: Set<MovementPattern> = [.isolation, .twist, .locomotion]
         var compounds = 0
         var firstSeen: [String: Int] = [:]
-        for index in loaded.indices {
-            let name = loaded[index].exercise.name
-            // A calibration's steps share one lift: every step carries the count from its first.
+        var counts: [Int] = []
+        for (index, name) in names.enumerated() {
             if let before = firstSeen[name] {
-                loaded[index].exercise.guidance?.compoundsBefore = before
+                counts.append(before)
                 continue
             }
-            loaded[index].exercise.guidance?.compoundsBefore = compounds
+            counts.append(compounds)
             firstSeen[name] = compounds
-            if !noncompound.contains(loaded[index].target.movementPattern) { compounds += 1 }
+            if index < patterns.count, let pattern = patterns[index], !noncompound.contains(pattern) { compounds += 1 }
         }
+        return counts
     }
 
     // MARK: Plateau response
