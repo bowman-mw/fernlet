@@ -563,6 +563,15 @@ certainty (drills, a mixed "mobility + walk", "3 rounds") stays the untimed step
 run's log folds segments back into their line, and a cardio or mobility session logs as the matching
 ``WorkoutActivityType`` (HIIT, walking, mixed cardio, flexibility). No heart rate yet.
 
+A ``PlannedWorkout`` — planned ahead by the person or put on the calendar by a coach's plan — runs in the
+guided runner as written (comparison report idea 17, 2026-10-20). The app reads each line with its own
+line parser and ``WorkoutPlanRun/step(for:parsed:location:load:catalog:)`` decides the step: a line the
+runner can time stays a descriptor for the expansion above (checked first, since "8 × 1 min" also reads
+as eight sets of one), sets × reps and timed holds become counted steps under the catalog's name, and
+anything else one step marked done that shows the line. Nothing is filtered or dropped. A weight the line
+names is preselected as written (``WorkoutPlanRun/Step/weightAsWritten``); only a catalog lift whose line
+names none gets the load engine's suggestion, for the sets and reps as written.
+
 - ``WorkoutExercisePreferences``
 - ``WorkoutExerciseSwapOptions``
 - ``CustomExerciseDraft``
@@ -608,6 +617,7 @@ run's log folds segments back into their line, and a cardio or mobility session 
 - ``TimedDescriptor``
 - ``CardioSegment``
 - ``CardioPace``
+- ``WorkoutPlanRun``
 - ``WorkoutRestGuidance``
 
 ### Load-aware progression and plateaus

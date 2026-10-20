@@ -1600,6 +1600,17 @@
     "Areas to work around" : {
 
     },
+    "As planned: %@" : {
+      "comment" : "Guided runner weight panel: the weight a planned workout's line named (a coach's plan or the person's own), preselected as written instead of a range. %@ is the weight with its unit, e.g. '135 lb'.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "As planned: %@"
+          }
+        }
+      }
+    },
     "Ask an AI for a plan" : {
 
     },
@@ -7254,6 +7265,17 @@
     "Start %@ timer" : {
 
     },
+    "Start %@, guided" : {
+      "comment" : "VoiceOver label for a planned workout row's Start button, which runs the plan in the guided runner. %@ is the planned workout's name.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start %@, guided"
+          }
+        }
+      }
+    },
     "Start Fernlet" : {
 
     },
@@ -7295,6 +7317,17 @@
     },
     "Start on your other phone: open Settings → App lock → Recovery device, choose \"This is the recovery device\", and scan the code it shows." : {
 
+    },
+    "Start plan" : {
+      "comment" : "Voice Control name for a planned workout row's Start button (it runs the plan in the guided runner).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start plan"
+          }
+        }
+      }
     },
     "Start this one instead" : {
 
@@ -8931,6 +8964,17 @@
     },
     "Your place in the steps is forgotten and the Live Activity is cleared. The recipe itself is untouched." : {
 
+    },
+    "Your plan: %@" : {
+      "comment" : "Guided runner: under the exercise's name, the planned workout's line exactly as written (a coach's or the person's own) when it says more than the card shows, e.g. a cue like '(RPE 7)'. %@ is that line, user data.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your plan: %@"
+          }
+        }
+      }
     },
     "Your private calendar." : {
 

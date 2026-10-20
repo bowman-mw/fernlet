@@ -102,6 +102,9 @@ enum GuidedRunLoadLog {
                 lines[exercise.id] = result.loggedLine
             } else if exercise.tracking?.skipped == true {
                 lines[exercise.id] = "\(exercise.name) - skipped"
+            } else if let written = exercise.writtenLine {
+                // A planned workout's untracked line logs as its plan wrote it, cue and all.
+                lines[exercise.id] = written
             }
         }
         let steps = state.exercises.map { prescribed($0) }
