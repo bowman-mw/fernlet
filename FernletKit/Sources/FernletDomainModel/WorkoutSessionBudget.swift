@@ -83,7 +83,6 @@ public nonisolated enum WorkoutSessionTime {
         }
         return descriptorFallbackSeconds
     }
-    }
 }
 
 /// Fits a session into its time budget — the trim order is in this file's header.
