@@ -5113,10 +5113,15 @@ final class FernletStore {
         healthKitService?.isWriteSharingEnabled(for: .workoutLogging) == true
     }
 
-    /// The person's heart-rate zones: their age as this device has it (typed, with any Apple Health
-    /// date of birth laid over it) and, when Health supplied one today, their resting heart rate.
+    /// The person's heart-rate zones: their own maximum heart rate when they gave one in Workout setup
+    /// (``WorkoutZonePreferences/maxHeartRate(in:)``), else their age as this device has it (typed, with
+    /// any Apple Health date of birth laid over it); and, when Health supplied one today, their resting
+    /// heart rate.
     func heartRateZones() -> HeartRateZones {
-        HeartRateZones(age: effectiveUserProfile.age, restingHeartRate: day.healthContext?.body?.restingHeartRateBPM)
+        HeartRateZones(
+            age: effectiveUserProfile.age, restingHeartRate: day.healthContext?.body?.restingHeartRateBPM,
+            ownMaximum: WorkoutZonePreferences.maxHeartRate()
+        )
     }
 
     /// Asks Apple Health to let Fernlet read heart rate — only from the person turning on "Heart rate
@@ -7019,6 +7024,10 @@ final class FernletStore {
         // types picked, rendered to whoever holds the phone next. Same class of device-local
         // `UserDefaults` sidecar as the serving memory above; a plain removal has no failure signal.
         RecentActivityTypeMemory.clearAll()
+        // The person's own maximum heart rate (Workout setup's "My max heart rate",
+        // `fernlet.workoutCues.maxHeartRate`): a fact about their body, unlike the heart-rate switches
+        // beside it, which are kept. Same plain `UserDefaults` removal, no failure signal.
+        WorkoutZonePreferences.clearMaxHeartRate()
         // Which recipes this device already spent its one automatic web-image download on — the
         // same class of device-local `UserDefaults` sidecar; clear it with the others so the
         // bookkeeping doesn't outlive the recipes it described.
