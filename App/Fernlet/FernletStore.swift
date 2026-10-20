@@ -3241,8 +3241,9 @@ final class FernletStore {
     /// Health copy (async, honestly reported; the local row is removed regardless — local intent wins). A
     /// not-yet-stamped row (its Health save may still be in flight) is removable too. For every removable
     /// row it also:
-    /// - clears the guided completion (session id + progression) when the row was guided-logged and the
-    ///   committed plan is still resolvable, so the Start card / "Mark done" honestly re-offer it;
+    /// - clears the guided completion (session id + progression) when the row was guided-logged from a
+    ///   generated session and the committed plan is still resolvable, so the Start card / "Mark done"
+    ///   honestly re-offer it (a planned workout's run, ``Workout/isPlanRun``, never touched either);
     /// - restores the planned row a completion consumed (best-effort; the original planned id is
     ///   preserved so weekly copy-forward identity survives);
     /// - records a tombstone + fires a targeted Health delete by `fernlet.workoutID`, so an app-authored
@@ -3255,7 +3256,8 @@ final class FernletStore {
         guard !workout.isHealthImported else { return false }
 
         // Reverse the guided completion while the committed plan + the row's name are still resolvable.
-        if workout.loggedFromGuidedSession == true {
+        // A plan's run shares no completion with the generated plan, even under the same name.
+        if workout.loggedFromGuidedSession == true && !workout.isPlanRun {
             reverseGuidedCompletion(for: workout, date: date)
         }
 
@@ -4653,10 +4655,12 @@ final class FernletStore {
     /// after a routine relaunch minted the plan with fresh session ids and started
     /// `guidedCompletedSessionIDs` empty. Only tagged rows count: a manual Log-sheet entry or a planned
     /// completion that happens to share a guided session's name ("Legs", "Push") must NOT make the
-    /// guided flow claim itself done or refuse a rework. The guided log itself carries the tag, so the
-    /// relaunch double-log protection still holds. Observable via `day`.
+    /// guided flow claim itself done or refuse a rework. A guided run of a planned workout is tagged
+    /// too, but it is matched by its plan's id, never by name (``Workout/isPlanRun``), so it is left
+    /// out here. The guided log itself carries the tag, so the relaunch double-log protection still
+    /// holds. Observable via `day`.
     var loggedGuidedWorkoutNamesToday: Set<String> {
-        Set(day.workouts.filter { $0.loggedFromGuidedSession == true }.map(\.name))
+        Set(day.workouts.filter { $0.loggedFromGuidedSession == true && !$0.isPlanRun }.map(\.name))
     }
 
     /// Maps the derived intensity-readiness signal to a recommended workout intensity, if present.
@@ -4719,13 +4723,16 @@ final class FernletStore {
     }
 
     /// Whether today's committed plan can still be reworked back into the configurator. True only while
-    /// NOTHING of it has been logged — neither through the in-memory completed set, nor (after a
+    /// NOTHING of it has been logged — none of its sessions in the in-memory completed set, nor (after a
     /// relaunch) as a matching workout already in today's day record. Once anything is logged the plan
-    /// is pinned, because reworking it would orphan a logged session's place in the plan.
+    /// is pinned, because reworking it would orphan a logged session's place in the plan. Checked per
+    /// session, so a planned workout's run (whose session is not one of the plan's) never pins it.
     var canReworkTodaysGuidedPlan: Bool {
-        guard let plan = currentGuidedWorkoutPlan, guidedCompletedSessionIDs.isEmpty else { return false }
+        guard let plan = currentGuidedWorkoutPlan else { return false }
         let logged = loggedGuidedWorkoutNamesToday
-        return !plan.sessions.contains { logged.contains($0.suggestion.name) }
+        return !plan.sessions.contains {
+            guidedCompletedSessionIDs.contains($0.id) || logged.contains($0.suggestion.name)
+        }
     }
 
     /// Clears today's committed guided plan so the Suggest sheet falls back to its configurator
@@ -5192,14 +5199,19 @@ final class FernletStore {
     /// completion. Deduped by session id so a finish seen by both the sheet and a reconcile logs once.
     /// The row carries the session's duration and ends at the run's own finish, which is what its
     /// Apple Health copy is written from.
+    ///
+    /// A planned workout's run whose planned row was removed mid-run logs here too, as a plain guided
+    /// run with no plan id, but it stays that plan's run (``Workout/isPlanRun``, by the plan's lines
+    /// it keeps): no name backstop against the generated plan, and no step up its rep ladder.
     private func finishGuidedRunLogging(_ state: GuidedWorkoutRunState) {
         guard !guidedCompletedSessionIDs.contains(state.sessionID) else { return }
         // A planned workout's run completes its planned row, as "log it" does (`PlannedWorkoutRun.swift`).
         if logPlannedRun(state) { return }
         let dayKey = state.committedDayKey
+        let isPlanRun = state.plannedWorkoutID != nil
         // Durable same-day backstop: after a relaunch the in-memory completed set is empty, but a
         // guided log already in today's record (tagged with this name) means it's done — don't re-log.
-        if dayKey == todayKey && loggedGuidedWorkoutNamesToday.contains(state.title) { return }
+        if !isPlanRun && dayKey == todayKey && loggedGuidedWorkoutNamesToday.contains(state.title) { return }
         let intensity = WorkoutIntensity(rawValue: state.intensityRaw) ?? .moderate
         let kind = SessionKind(rawValue: state.sessionKindRaw) ?? .fullBody
         let mode: WorkoutMode = (kind == .strength || kind == .fullBody) ? .strengthTraining : .activity
@@ -5220,6 +5232,7 @@ final class FernletStore {
             loggedFromGuidedSession: true, intensity: intensity,
             exerciseResults: loadLog.flatMap { $0.results.isEmpty ? nil : $0.results }
         )
+        if isPlanRun { workout.plannedExercises = state.suggestionExercisesText }
         // The run's own finish when it falls on the day the workout is filed under, so a Lock Screen
         // finish logged at a later reconcile still ends when it did, and the row and its Health copy
         // span the real session. A finish on another day keeps the noon back-dating below.
@@ -5234,10 +5247,13 @@ final class FernletStore {
         }
         addWorkout(workout, date: dayKey)
         // Only the lifting block progresses: stretches, the light activation work and the cool-down
-        // are never counted (the same rule as `SessionSuggestion.catalogExerciseNames`).
-        recordCompletedExercises(state.exercises
-            .filter { $0.fromCatalog && $0.block == GuidedWorkoutRunState.BlockToken.lifting }
-            .map(\.name))
+        // are never counted (the same rule as `SessionSuggestion.catalogExerciseNames`). A plan's run
+        // never counts, as `logPlannedRun` does not.
+        if !isPlanRun {
+            recordCompletedExercises(state.exercises
+                .filter { $0.fromCatalog && $0.block == GuidedWorkoutRunState.BlockToken.lifting }
+                .map(\.name))
+        }
         markGuidedSessionCompleted(state.sessionID)
     }
 

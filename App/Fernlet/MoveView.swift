@@ -538,7 +538,8 @@ enum GuidedWorkoutAvailability {
     /// but the guided log (written with `suggestion.name` and tagged `loggedFromGuidedSession`) survives
     /// in `day.workouts` — so matching on that name keeps an already-logged guided session from being
     /// offered, and re-logged, again. Only tagged names are passed in, so a manual or planned "Legs"
-    /// never counts.
+    /// never counts — nor does a guided run of a planned "Legs" (``Workout/isPlanRun``), which the
+    /// store matches by its plan's id and leaves out of the names.
     nonisolated static func isAlreadyLogged(
         _ session: WorkoutProgram.SessionSuggestion,
         completed: Set<UUID>,
