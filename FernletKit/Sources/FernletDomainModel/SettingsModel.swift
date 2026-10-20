@@ -231,6 +231,9 @@ public nonisolated struct FernletSettings: Codable {
     /// once-per-day "you've already updated your shop today" note. Nil until the first listing change.
     public var shopLastPublishedDayKey: String? = nil
     public var companionName: String = ""
+    /// The planner's person-level context. Its injury picker (`WorkoutProfile.injuryAreas`) is
+    /// encoded at THIS blob's top level (`workoutInjuryAreas` + `unknownWorkoutInjuryAreaTokens`),
+    /// not inside the nested profile, so an older build's key parking keeps it through a re-save.
     public var workoutProfile: WorkoutProfile = WorkoutProfile()
     public var workoutLocations: [WorkoutLocation] = [WorkoutLocation.fullGym]
     public var activeWorkoutLocationID: UUID? = nil
@@ -516,6 +519,11 @@ public nonisolated struct FernletSettings: Codable {
     /// export toggles.
     private mutating func decodeWorkoutAndExport(from container: KeyedDecodingContainer<CodingKeys>) throws {
         workoutProfile = try container.decodeIfPresent(WorkoutProfile.self, forKey: .workoutProfile) ?? WorkoutProfile()
+        // The injury picker's areas ride at the top level (see `WorkoutProfile.injuryAreas`).
+        workoutProfile.adoptInjuryAreaTokens(
+            main: try container.decodeIfPresent([String: String].self, forKey: .workoutInjuryAreas) ?? [:],
+            parked: try container.decodeIfPresent([String: String].self, forKey: .unknownWorkoutInjuryAreaTokens) ?? [:]
+        )
         let decodedLocations = try container.decodeIfPresent([WorkoutLocation].self, forKey: .workoutLocations) ?? [WorkoutLocation.fullGym]
         // R3: user-created list, capped where it enters this build.
         workoutLocations = decodedLocations.isEmpty
@@ -591,6 +599,9 @@ public nonisolated struct FernletSettings: Codable {
         // Every STORED property that participates in the synced wire format. `parkedUnknownKeys` is
         // deliberately absent: it is written back at the top level by key (`encode(to:)`), never under a
         // key of its own, and its absence here is also what lets it be excluded from the parked set.
+        // `workoutInjuryAreas` / `unknownWorkoutInjuryAreaTokens` are the exception the other way: no
+        // stored property of their own, they carry `workoutProfile`'s injury picker at the top level,
+        // where an older build's key parking keeps them through a re-save.
         case bottleOz, hydrationTarget, showDeveloperNotes, connectionInspectorMode,
              unknownConnectionInspectorModeToken, companionAppearance, equippedItemIDsBySlot,
              localDesignerID, ownedDesignerIDs, knownDesignerNames, selectedGoal,
@@ -607,6 +618,7 @@ public nonisolated struct FernletSettings: Codable {
              proximityDisplayName, showProximityDebugTools, allowNearbyRecipeShares,
              allowNearbyClothingShares, allowNearbyHearts, heartsAwayDelivery, allowNearbyPresence, allowNearbyFriendState,
              hasPromptedForPresence, shopLastPublishedDayKey, companionName, workoutProfile,
+             workoutInjuryAreas, unknownWorkoutInjuryAreaTokens,
              workoutLocations, activeWorkoutLocationID, workoutProgression,
              customExercises, coachExchangeEnabled, trainerExportIncludesGoal,
              trainerExportIncludesHydration, trainerExportIncludesSleep,
@@ -714,6 +726,13 @@ public nonisolated struct FernletSettings: Codable {
     /// Mirror of `decodeWorkoutAndExport(from:)`.
     private func encodeWorkoutAndExport(into container: inout KeyedEncodingContainer<CodingKeys>) throws {
         try container.encode(workoutProfile, forKey: .workoutProfile)
+        // Written only when set, so a blob without picker areas keeps its old shape exactly.
+        if !workoutProfile.injuryAreaTokens.isEmpty {
+            try container.encode(workoutProfile.injuryAreaTokens, forKey: .workoutInjuryAreas)
+        }
+        if !workoutProfile.unknownInjuryAreaTokens.isEmpty {
+            try container.encode(workoutProfile.unknownInjuryAreaTokens, forKey: .unknownWorkoutInjuryAreaTokens)
+        }
         try container.encode(workoutLocations, forKey: .workoutLocations)
         try container.encodeIfPresent(activeWorkoutLocationID, forKey: .activeWorkoutLocationID)
         try container.encode(workoutProgression, forKey: .workoutProgression)

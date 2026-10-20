@@ -3738,6 +3738,9 @@
     "Leave" : {
 
     },
+    "Left out because of your note: %@" : {
+      "comment" : "Body areas the free-text injury note names, which the planner leaves out; the argument is a list of areas"
+    },
     "Left side" : {
 
     },
@@ -4107,6 +4110,12 @@
     "Micronutrients" : {
 
     },
+    "Mild" : {
+      "comment" : "Injury picker option: train around this body area, lighter"
+    },
+    "Mild: Fernlet trains around it, lighter and with supported moves. Severe: those moves are left out." : {
+      "comment" : "Explains the two severities in the workout injury picker"
+    },
     "Milestone gifts have added %lld coins to your pouch." : {
 
     },
@@ -4196,6 +4205,9 @@
     },
     "Multiple devices" : {
 
+    },
+    "Muscles to rest" : {
+      "comment" : "Caption over the single-muscle chips in the workout injury section"
     },
     "Name" : {
 
@@ -4440,6 +4452,9 @@
     },
     "Nobody has joined this session yet — that message wasn't sent. Try again in a moment." : {
 
+    },
+    "None" : {
+      "comment" : "Injury picker option: no limit for this body area"
     },
     "None logged" : {
 
@@ -6129,6 +6144,9 @@
     },
     "Settings" : {
 
+    },
+    "Severe" : {
+      "comment" : "Injury picker option: leave this body area's exercises out"
     },
     "Shakespeare Steps" : {
       "comment" : "Silly stat title: steps compared with words Shakespeare wrote"

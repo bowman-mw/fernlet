@@ -541,6 +541,114 @@
         }
       }
     },
+    "bodyArea.ankleFoot" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ankle or foot"
+          }
+        }
+      }
+    },
+    "bodyArea.elbow" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Elbow"
+          }
+        }
+      }
+    },
+    "bodyArea.hip" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hip"
+          }
+        }
+      }
+    },
+    "bodyArea.knee" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Knee"
+          }
+        }
+      }
+    },
+    "bodyArea.lowerBack" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lower back"
+          }
+        }
+      }
+    },
+    "bodyArea.neck" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Neck"
+          }
+        }
+      }
+    },
+    "bodyArea.shoulder" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Shoulder"
+          }
+        }
+      }
+    },
+    "bodyArea.upperBack" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Upper back"
+          }
+        }
+      }
+    },
+    "bodyArea.wristHand" : {
+      "comment" : "Body area in the workout injury picker",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Wrist or hand"
+          }
+        }
+      }
+    },
     "care.group.anytime" : {
       "comment" : "Personal-care checklist section for tasks with no fixed time of day",
       "extractionState" : "extracted_with_value",

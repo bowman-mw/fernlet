@@ -162,7 +162,8 @@ extension WorkoutProgram {
             let original = loaded[index].target
             guard let stand = bestExercise(
                 for: loaded[index].slot, in: inputs.feasible, excluding: used.union([original.name]),
-                biasTokens: inputs.biasTokens, experience: inputs.profile.experience, location: inputs.location
+                biasTokens: inputs.biasTokens, experience: inputs.profile.experience, location: inputs.location,
+                limits: inputs.limits
             ) else { continue }
             used.insert(stand.name)
             loaded[index].exercise = prescribe(stand, role: loaded[index].slot.role, block: .lifting,
@@ -190,7 +191,7 @@ extension WorkoutProgram {
             let slot = WorkoutSlotSpec(label: "Support", role: .accessory, muscles: [muscle])
             guard let support = bestExercise(
                 for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
-                experience: inputs.profile.experience, location: inputs.location
+                experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
             ) else { continue }
             used.insert(support.name)
             loaded[slotIndex].exercise = prescribe(support, role: .accessory, block: .lifting,

@@ -69,6 +69,52 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
     /// Honored for intermediate and advanced lifters only (``WorkoutCalibration/kind(profile:confidence:)``).
     public var oneRepMaxTesting: Bool = false
 
+    /// The injury picker's body areas, each at mild or severe (``InjuryLimits`` says what each
+    /// does; ``injuryLimits`` combines them with the note and the avoided sets).
+    ///
+    /// Read and written typed; persisted as frozen tokens in ``injuryAreaTokens``. Changing an
+    /// area's severity here clears that area's parked token (the last editor wins, as with
+    /// ``EnumDecodeCompat``'s scalar fields); a newer build's unknown areas stay parked.
+    ///
+    /// Persisted at the TOP LEVEL of ``FernletSettings`` (`workoutInjuryAreas`), not inside this
+    /// struct's own encoding: every build since generic key parking keeps an unknown top-level key
+    /// through a re-save, while an older build re-saving this struct would drop a nested key — and
+    /// with it a person's limits.
+    public var injuryAreas: [BodyArea: InjurySeverity] {
+        get { InjuryAreaTokens.typed(injuryAreaTokens) }
+        set {
+            let old = injuryAreas
+            injuryAreaTokens = InjuryAreaTokens.tokens(newValue)
+            for area in BodyArea.allCases where old[area] != newValue[area] {
+                unknownInjuryAreaTokens[area.rawValue] = nil
+            }
+        }
+    }
+    /// The persisted shape of ``injuryAreas``: area token → severity token, pairs this build knows
+    /// only. FROZEN shape (a JSON object of strings): every build since 2026-10-20 decodes it as one.
+    /// Not one of this struct's `CodingKeys` — ``FernletSettings`` writes it (see ``injuryAreas``).
+    public private(set) var injuryAreaTokens: [String: String] = [:]
+    /// Area → severity pairs this build can't read — a newer build's area, or a newer severity for
+    /// a known area — parked and re-encoded so a save here can't strip a newer device's limit.
+    public var unknownInjuryAreaTokens: [String: String] = [:]
+
+    /// This struct's own wire keys — every stored property except the injury-area tokens, which
+    /// ``FernletSettings`` carries at its top level. The names are the property names the encoding
+    /// was synthesized with before, so the nested shape is unchanged.
+    private enum CodingKeys: String, CodingKey {
+        case avoidedMuscles, unknownAvoidedMuscleTokens, avoidedMovements, unknownAvoidedMovementTokens
+        case injuryNotes, interests, sport, trainingDaysPerWeek, experience, unknownExperienceToken
+        case selectedSplitID, oneRepMaxTesting
+    }
+
+    /// Takes the injury-area tokens ``FernletSettings`` decoded from its top level, through the
+    /// tolerant, parked split (an unknown area or severity parks; a known parked severity is adopted).
+    mutating func adoptInjuryAreaTokens(main: [String: String], parked: [String: String]) {
+        let split = InjuryAreaTokens.split(main: main, parked: parked)
+        injuryAreaTokens = split.known
+        unknownInjuryAreaTokens = split.parked
+    }
+
     public init(
         avoidedMuscles: Set<MuscleGroup> = [],
         avoidedMovements: Set<MovementPattern> = [],
@@ -78,7 +124,8 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
         trainingDaysPerWeek: Int = 3,
         experience: ExperienceLevel = .beginner,
         selectedSplitID: String? = nil,
-        oneRepMaxTesting: Bool = false
+        oneRepMaxTesting: Bool = false,
+        injuryAreas: [BodyArea: InjurySeverity] = [:]
     ) {
         self.avoidedMuscles = avoidedMuscles
         self.avoidedMovements = avoidedMovements
@@ -89,6 +136,7 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
         self.experience = experience
         self.selectedSplitID = selectedSplitID
         self.oneRepMaxTesting = oneRepMaxTesting
+        self.injuryAreaTokens = InjuryAreaTokens.tokens(injuryAreas)
     }
 
     public nonisolated init(from decoder: Decoder) throws {
@@ -114,30 +162,18 @@ public nonisolated struct WorkoutProfile: Codable, Equatable {
     }
 
     /// Best-effort mapping of free-text constraint/injury phrases into structured contraindications,
-    /// used to carry onboarding text (e.g. "shoulder issues") into the safety filter. Conservative:
-    /// over-restricting is the safe direction. The raw text is kept in `injuryNotes`.
+    /// used to carry onboarding text (e.g. "shoulder issues") into the avoided sets older builds
+    /// read. Whole words through ``InjuryNoteMatcher`` — "getting back into lifting" avoids nothing —
+    /// and conservative: every area named is avoided whole. The raw text is kept in `injuryNotes`,
+    /// which the planner reads live (``injuryLimits``).
     public static func avoidedMuscles(fromConstraintText text: String) -> Set<MuscleGroup> {
-        let lower = text.lowercased()
-        var muscles: Set<MuscleGroup> = []
-        if lower.contains("shoulder") || lower.contains("rotator") { muscles.formUnion([.frontDelts, .sideDelts, .rearDelts]) }
-        if lower.contains("knee") { muscles.formUnion([.quads, .hamstrings]) }
-        if lower.contains("back") || lower.contains("spine") || lower.contains("disc") { muscles.formUnion([.lowerBack]) }
-        if lower.contains("elbow") { muscles.formUnion([.biceps, .triceps]) }
-        if lower.contains("wrist") { muscles.formUnion([.forearms]) }
-        if lower.contains("hip") { muscles.formUnion([.glutes, .adductors, .abductors]) }
-        if lower.contains("hamstring") { muscles.formUnion([.hamstrings]) }
-        if lower.contains("ankle") || lower.contains("calf") { muscles.formUnion([.calves]) }
-        if lower.contains("chest") || lower.contains("pec") { muscles.formUnion([.chest]) }
-        return muscles
+        let match = InjuryNoteMatcher.match(text)
+        return match.areas.reduce(into: match.muscles) { $0.formUnion($1.muscles) }
     }
 
+    /// The movement half of ``avoidedMuscles(fromConstraintText:)``.
     public static func avoidedMovements(fromConstraintText text: String) -> Set<MovementPattern> {
-        let lower = text.lowercased()
-        var movements: Set<MovementPattern> = []
-        if lower.contains("shoulder") || lower.contains("rotator") { movements.formUnion([.push]) }
-        if lower.contains("back") || lower.contains("spine") || lower.contains("disc") { movements.formUnion([.hinge]) }
-        if lower.contains("knee") { movements.formUnion([.squat, .lunge]) }
-        return movements
+        InjuryNoteMatcher.match(text).areas.reduce(into: Set<MovementPattern>()) { $0.formUnion($1.movements) }
     }
 
     /// Builds a profile from the free-text level / interests / constraints captured at onboarding,
@@ -431,20 +467,24 @@ public nonisolated struct WorkoutLocation: Identifiable, Codable, Equatable {
 
 /// The single authority on whether an exercise is allowed for a user. Deterministic by design — the
 /// AI adjuster (added later) must run its output back through this, never around it.
-/// Not medical advice: it filters on coarse, user-supplied contraindications.
+/// Not medical advice: it filters on coarse, user-supplied contraindications — the profile's
+/// combined ``InjuryLimits`` (the body-area picker, the injury note read by whole words, and the
+/// avoided sets older builds wrote).
 public nonisolated enum WorkoutSafetyFilter {
     public static func feasible(_ exercise: ExerciseTarget, location: WorkoutLocation, profile: WorkoutProfile) -> Bool {
+        feasible(exercise, location: location, limits: profile.injuryLimits)
+    }
+
+    /// ``feasible(_:location:profile:)`` with the limits already combined, for a filter over many
+    /// exercises (the note is read once, not once per exercise).
+    public static func feasible(_ exercise: ExerciseTarget, location: WorkoutLocation, limits: InjuryLimits) -> Bool {
         guard hasEquipment(for: exercise, at: location) else { return false }
-        if profile.avoidedMovements.contains(exercise.movementPattern) { return false }
-        if profile.avoidedMuscles.isEmpty == false {
-            let worked = exercise.primaryMuscles.union(exercise.secondaryMuscles)
-            if worked.isDisjoint(with: profile.avoidedMuscles) == false { return false }
-        }
-        return true
+        return limits.allows(exercise)
     }
 
     public static func feasibleExercises(in catalog: [ExerciseTarget], location: WorkoutLocation, profile: WorkoutProfile) -> [ExerciseTarget] {
-        catalog.filter { feasible($0, location: location, profile: profile) }
+        let limits = profile.injuryLimits
+        return catalog.filter { feasible($0, location: location, limits: limits) }
     }
 
     /// Whether the location can run the exercise at all: one of its tools (`equipment` or an
@@ -1223,19 +1263,31 @@ public nonisolated enum WorkoutProgram {
         public var sessions: [SessionSuggestion]
         public var droppedSlots: [String]
         public var locationName: String
+        /// What the 48-hour guard decided (``WorkoutRecoveryGuard``): the day it planned, the
+        /// rotation's day when it moved off it, and the overlap it lightened. Nil when no recent
+        /// training was passed in.
+        public var recovery: WorkoutRecoveryGuard.Decision?
 
-        public init(splitName: String, dayTitle: String, sessions: [SessionSuggestion], droppedSlots: [String], locationName: String) {
+        public init(
+            splitName: String, dayTitle: String, sessions: [SessionSuggestion], droppedSlots: [String],
+            locationName: String, recovery: WorkoutRecoveryGuard.Decision? = nil
+        ) {
             self.splitName = splitName
             self.dayTitle = dayTitle
             self.sessions = sessions
             self.droppedSlots = droppedSlots
             self.locationName = locationName
+            self.recovery = recovery
         }
     }
 
     /// Renders the session(s) for one day of the split. `rotationIndex` picks the day (wrapped into
     /// range); the app passes ``nextDayIndex(in:recentSessionNames:)`` so the program walks the
     /// split in order, one completed day at a time.
+    ///
+    /// With `recent`, the 48-hour guard (``WorkoutRecoveryGuard``) may move to another split day or
+    /// lighten the lifts whose primary muscles worked hard inside its window, and says so in the
+    /// first session's note. Without it the rotation's day is planned as it is.
     public static func dayPlan(
         goal: GoalType,
         intensity: WorkoutIntensity,
@@ -1246,6 +1298,7 @@ public nonisolated enum WorkoutProgram {
         rotationIndex: Int,
         progression: [String: Int] = [:],
         load: WorkoutLoadContext? = nil,
+        recent: WorkoutRecoveryGuard.RecentTraining? = nil,
         catalog: [ExerciseTarget] = WorkoutExerciseCatalog.allExercises
     ) -> DayPlan {
         // R5: `TrainingSplit` is publicly constructible, so `days` can be empty — and the old
@@ -1257,21 +1310,25 @@ public nonisolated enum WorkoutProgram {
                            locationName: location.name)
         }
         let dayCount = split.days.count
-        let day = split.days[((rotationIndex % dayCount) + dayCount) % dayCount]
+        let decision = recent.map { WorkoutRecoveryGuard.decide(split: split, dueIndex: rotationIndex, recent: $0) }
+        let day = split.days[decision?.dayIndex ?? ((rotationIndex % dayCount) + dayCount) % dayCount]
         let style = WorkoutGoalStyle.style(for: goal, energy: intensity, sport: profile.sport)
-        let feasible = WorkoutSafetyFilter.feasibleExercises(in: catalog, location: location, profile: profile)
+        let limits = profile.injuryLimits
+        let feasible = catalog.filter { WorkoutSafetyFilter.feasible($0, location: location, limits: limits) }
         let biasTokens = selectionTokens(profile: profile, context: context)
 
         var dayUsed: Set<String> = []
         var dropped: [String] = []
         var sessions: [SessionSuggestion] = []
-        // One calibration a day at most: the first lifting session that can take it does.
-        var calibrationOpen = true
+        // One calibration a day at most: the first lifting session that can take it does — and none
+        // on a day the guard lightens, when the muscles it would test are still tired.
+        var calibrationOpen = decision?.overlap.isEmpty ?? true
 
         for session in day.sessions {
             let inputs = SlotInputs(
                 goal: goal, intensity: intensity, style: style, feasible: feasible, biasTokens: biasTokens,
-                profile: profile, location: location, progression: progression, load: load
+                profile: profile, location: location, progression: progression, load: load,
+                limits: limits, recentHard: recent?.hardMuscles ?? []
             )
             let rendered = render(
                 session: session, inputs: inputs, context: context, used: &dayUsed,
@@ -1284,8 +1341,19 @@ public nonisolated enum WorkoutProgram {
         if sessions.isEmpty {
             sessions = [Self.fallbackSession]
         }
+        if let decision, let from = decision.movedFrom {
+            prependNote(WorkoutRecoveryGuard.movedNote(to: day, from: split.days[from]), to: &sessions)
+        }
 
-        return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped, locationName: location.name)
+        return DayPlan(splitName: split.name, dayTitle: day.title, sessions: sessions, droppedSlots: dropped,
+                       locationName: location.name, recovery: decision)
+    }
+
+    /// Puts `note` first in the first session's note.
+    static func prependNote(_ note: String, to sessions: inout [SessionSuggestion]) {
+        guard !sessions.isEmpty else { return }
+        let existing = sessions[0].suggestion.notes
+        sessions[0].suggestion.notes = existing.isEmpty ? note : "\(note) · \(existing)"
     }
 
     /// How many past training days ``nextDayIndex(in:recentSessionNames:)`` looks through.
@@ -1308,19 +1376,24 @@ public nonisolated enum WorkoutProgram {
     ///   keeps a repeated day (Upper twice in Upper/Lower) alternating correctly.
     public static func nextDayIndex(in split: TrainingSplit, recentSessionNames: [[String]]) -> Int {
         guard !split.days.isEmpty else { return 0 }
-        let dayNames = split.days.map { day in
-            Set(day.sessions.map { sessionDisplayName($0, timeLabel: $0.time.label) })
-        }
         for logged in recentSessionNames.prefix(rotationLookbackDays) {
-            let names = Set(logged.prefix(rotationNamesPerDay))
-            var best: (index: Int, overlap: Int)?
-            for (index, sessionNames) in dayNames.enumerated() {
-                let overlap = sessionNames.intersection(names).count
-                if overlap > 0, overlap > (best?.overlap ?? 0) { best = (index, overlap) }
-            }
-            if let best { return (best.index + 1) % split.days.count }
+            if let matched = matchedDayIndex(in: split, names: logged) { return (matched + 1) % split.days.count }
         }
         return 0
+    }
+
+    /// The split day that one past day's logged workout names belong to: the day sharing the most
+    /// session display names with them, ties to the earlier day; nil when none shares a name.
+    public static func matchedDayIndex(in split: TrainingSplit, names logged: [String]) -> Int? {
+        let names = Set(logged.prefix(rotationNamesPerDay))
+        guard !names.isEmpty else { return nil }
+        var best: (index: Int, overlap: Int)?
+        for (index, day) in split.days.enumerated() {
+            let dayNames = Set(day.sessions.map { sessionDisplayName($0, timeLabel: $0.time.label) })
+            let overlap = dayNames.intersection(names).count
+            if overlap > 0, overlap > (best?.overlap ?? 0) { best = (index, overlap) }
+        }
+        return best?.index
     }
 
     /// The "there is always something to do" session used when a split renders nothing at all.
@@ -1378,6 +1451,12 @@ public nonisolated enum WorkoutProgram {
         let progression: [String: Int]
         /// The lifts' logged sessions and recovery; nil keeps the count-based ladder alone.
         let load: WorkoutLoadContext?
+        /// The profile's combined injury limits: the feasible list already honours them; the slot
+        /// score and the prescription read the mild areas (``InjuryLimits/eases(_:)``).
+        var limits: InjuryLimits = .empty
+        /// Primary muscles that got hard working sets inside the 48-hour window: a lifting pick
+        /// working one of them gives up a set (``WorkoutRecoveryGuard``).
+        var recentHard: Set<MuscleGroup> = []
     }
 
     /// One filled slot: the prescribed step, the catalog row behind it, the slot it fills, and the
@@ -1429,6 +1508,9 @@ public nonisolated enum WorkoutProgram {
             liftingTargets = pass.targets
             progressNotes = pass.notes
         }
+        let recovery = lightened(liftingSteps, targets: liftingTargets, recentHard: inputs.recentHard)
+        liftingSteps = recovery.steps
+        if let note = recovery.note { progressNotes.insert(note, at: 0) }
         if liftingSteps.isEmpty && cardio.isEmpty {
             liftingSteps = [descriptorStep("Full-body bodyweight circuit - 3 rounds", block: .lifting)]
         }
@@ -1448,7 +1530,7 @@ public nonisolated enum WorkoutProgram {
         for slot in slots {
             let pick = bestExercise(
                 for: slot, in: inputs.feasible, excluding: used, biasTokens: inputs.biasTokens,
-                experience: inputs.profile.experience, location: inputs.location
+                experience: inputs.profile.experience, location: inputs.location, limits: inputs.limits
             )
             guard let pick else {
                 if reportDrops { dropped.append(slot.label) }
@@ -1456,12 +1538,43 @@ public nonisolated enum WorkoutProgram {
             }
             used.insert(pick.name)
             let completions = block == .lifting ? inputs.progression[pick.name] ?? 0 : 0
+            let prescribed = easedSlot(slot, for: pick, limits: inputs.limits)
             picks.append(SlotPick(
-                exercise: prescribe(pick, role: slot.role, block: block, completions: completions, inputs: inputs),
-                target: pick, completions: completions, slot: slot
+                exercise: prescribe(pick, role: prescribed.role, block: block, completions: completions, inputs: inputs),
+                target: pick, completions: completions, slot: prescribed
             ))
         }
         return picks
+    }
+
+    /// The slot a pick is prescribed from. A main lift that loads an area being trained around (a
+    /// mild area) is prescribed as accessory work: the accessory rep range — so the load pass picks
+    /// a lighter weight for the higher reps — the accessory set count, and no calibration (which
+    /// only ever tests a main lift). Anything else keeps its slot.
+    static func easedSlot(_ slot: WorkoutSlotSpec, for pick: ExerciseTarget, limits: InjuryLimits) -> WorkoutSlotSpec {
+        guard slot.role == .main, limits.eases(pick) else { return slot }
+        var eased = slot
+        eased.role = .accessory
+        return eased
+    }
+
+    /// Takes a set off every lifting step whose primary muscles worked hard inside the 48-hour
+    /// window, and names those lifts in the note (``WorkoutRecoveryGuard``). Steps and targets are
+    /// parallel; a timed hold or a single-set step simply keeps its one set.
+    static func lightened(
+        _ steps: [PrescribedExercise], targets: [ExerciseTarget], recentHard: Set<MuscleGroup>
+    ) -> (steps: [PrescribedExercise], note: String?) {
+        guard !recentHard.isEmpty, steps.count == targets.count else { return (steps, nil) }
+        var result = steps
+        var names: [String] = []
+        for index in result.indices where result[index].fromCatalog && result[index].block == .lifting {
+            guard !targets[index].primaryMuscles.isDisjoint(with: recentHard) else { continue }
+            let fewer = WorkoutRecoveryGuard.lightenedSets(result[index].sets)
+            guard fewer < result[index].sets else { continue }
+            result[index].sets = fewer
+            if !names.contains(result[index].name) { names.append(result[index].name) }
+        }
+        return (result, names.isEmpty ? nil : WorkoutRecoveryGuard.lightenedNote(lifts: names))
     }
 
     /// Sets and reps (or a hold) for one pick. Lifting picks follow the goal and the day's energy,
@@ -1545,14 +1658,17 @@ public nonisolated enum WorkoutProgram {
 
     /// The highest-scoring eligible exercise for a slot, or nil when nothing is eligible (the slot
     /// is then dropped and named in the session note). Ties fall to the name, so the pick is
-    /// deterministic; the equipment and difficulty terms in ``slotScore`` keep real ties rare.
+    /// deterministic; the equipment and difficulty terms in ``slotScore`` keep real ties rare. With
+    /// `limits` naming a mild area, a machine, cable or bench-supported variant of a lift that loads
+    /// it scores higher (``InjuryLimits/supportBonus(for:)``).
     static func bestExercise(
         for slot: WorkoutSlotSpec,
         in feasible: [ExerciseTarget],
         excluding used: Set<String>,
         biasTokens: Set<String>,
         experience: ExperienceLevel,
-        location: WorkoutLocation
+        location: WorkoutLocation,
+        limits: InjuryLimits = .empty
     ) -> ExerciseTarget? {
         feasible
             .filter { used.contains($0.name) == false && isEligible($0, for: slot) }
@@ -1560,7 +1676,7 @@ public nonisolated enum WorkoutProgram {
                 let score = slotScore(
                     slot: slot, exercise: exercise, biasTokens: biasTokens,
                     experience: experience, location: location
-                )
+                ) + limits.supportBonus(for: exercise)
                 return (exercise, score)
             }
             .sorted { lhs, rhs in
@@ -1693,13 +1809,12 @@ public nonisolated enum WorkoutProgram {
         includeContext: Bool,
         progressNotes: [String]
     ) -> String {
-        let profile = inputs.profile
         var parts: [String] = [inputs.location.name]
         parts += progressNotes
         if includeContext, context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             parts.append("Noted: \(context.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
-        if profile.avoidedMuscles.isEmpty == false || profile.avoidedMovements.isEmpty == false {
+        if !inputs.limits.isEmpty {
             parts.append("Worked around your noted limits.")
         }
         if dropped.isEmpty == false {
