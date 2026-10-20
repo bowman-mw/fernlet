@@ -282,7 +282,7 @@ struct ExerciseHowToTests {
         let sheet = try RepoRoot.source("App/Fernlet/ExerciseHowToSheet.swift")
         let order = [
             "title: Text(verbatim: ExerciseHowToCatalog.displayName(for: exerciseName))",
-            "ExerciseDemonstrationSlot(exerciseName: exerciseName)",
+            "ExerciseDemonstrationSlot(exerciseName: exerciseName, sex: sex)",
             "ExerciseHowToFacts(target:",
             "ExerciseHowToSteps(cues: entry.cues)",
             "ExerciseHowToNote(title: \"Common mistake\"",
@@ -301,8 +301,10 @@ struct ExerciseHowToTests {
         for path in ["App/Fernlet/GuidedWorkout.swift", "App/Fernlet/MoveView.swift"] {
             let source = try RepoRoot.source(path)
             #expect(source.contains("ExerciseHowToButton(exerciseName: exercise.name)"), "\(path) lost its how-to button")
-            #expect(source.components(separatedBy: ".exerciseHowToSheet($howTo)").count - 1 == 1,
+            #expect(source.components(separatedBy: ".exerciseHowToSheet($howTo").count - 1 == 1,
                     "\(path) presents the how-to sheet from exactly one place")
+            #expect(source.contains(".exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)"),
+                    "\(path) must pass the profile's sex, which picks the demonstration's version")
         }
     }
 

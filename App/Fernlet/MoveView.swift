@@ -2148,7 +2148,7 @@ struct WorkoutSuggestionSheet: View {
         }
         // One presenter for every row's info button, on the plan rather than on each card, so two
         // sessions never bind two sheets to the same state.
-        .exerciseHowToSheet($howTo)
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
     }
 
     /// The one italic "what happens next" line of the committed plan (1d); rendered in the scroll

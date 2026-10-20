@@ -2437,6 +2437,9 @@
         }
       }
     },
+    "Demonstration of %@" : {
+      "comment" : "VoiceOver label for the exercise demonstration animation or picture in the how-to sheet. %@ is the exercise name."
+    },
     "Derived signals (test-only view)" : {
 
     },

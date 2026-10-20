@@ -111,7 +111,7 @@ struct GuidedWorkoutSheet: View {
         // this sheet; the idle timer comes back the moment the run ends or the sheet or app goes away.
         .keepsScreenAwake(isLive)
         .interactiveDismissDisabled(isLive)
-        .exerciseHowToSheet($howTo)
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
             showReplaceConfirm: $showReplaceConfirm,
