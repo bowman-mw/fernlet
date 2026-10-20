@@ -419,7 +419,8 @@ struct TrainerExportView: View {
         var lines = [
             "Your workouts, and how each exercise has progressed",
             "What you've eaten, and the targets you're aiming at",
-            "Your equipment, and the muscles and movements you avoid",
+            "Your equipment and weights, your session length, and the muscles, movements and areas "
+                + "you avoid or train around",
         ]
         let settings = store.settings
         if settings.trainerExportIncludesGoal { lines.append("Your goal") }
@@ -444,7 +445,8 @@ struct TrainerExportView: View {
                 .foregroundStyle(Color.slate)
                 .fixedSize(horizontal: false, vertical: true)
             bullet("Includes the last 8 weeks of workouts, 2 weeks of meals, and how each exercise has "
-                   + "progressed — plus your targets, equipment, and the muscles and movements you avoid.",
+                   + "progressed — plus your targets, equipment and weights, session length, and the muscles, "
+                   + "movements and areas you avoid or train around.",
                    tint: Color.moss)
             bullet("This is plain text on your clipboard. Whatever app you paste it into will have it.",
                    tint: Color.terracotta)

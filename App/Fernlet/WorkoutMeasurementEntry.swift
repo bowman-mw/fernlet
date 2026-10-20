@@ -6,12 +6,13 @@
 //  Storage stays in US units exactly as before — `Workout.distanceMiles`,
 //  `PlannedWorkout.targetDistanceMiles`, HealthKit's mile quantity, the trainer export's
 //  `distanceMiles`, and a treadmill line's "5.5 mph" — the way enum raw values stay stable English
-//  tokens. What a person types and reads follows the device's measurement system: kilometres and
-//  km/h everywhere but the US.
+//  tokens. What a person types and reads follows the device's measurement system, as Apple Fitness
+//  does (2026-10-20, N9): miles and mph where `Locale.measurementSystem` is `.us` or `.uk` — the UK
+//  is metric but reads road distance and speed in miles — and kilometres and km/h on `.metric`.
 //
-//  The rule is the one `WorkoutLoadContextBuilder.defaultUnit(for:)` uses for pounds and kilograms:
-//  US customary units only where `Locale.measurementSystem` is `.us`. (`BodyMeasurementEntry` reads
-//  the same system for body weight and height.)
+//  Loads and the body are a different rule: pounds, and body weight and height in US units, only
+//  where the system is `.us` (`WorkoutLoadContextBuilder.defaultUnit(for:)`, `BodyMeasurementEntry`),
+//  because a UK gym's plates and scales read kilograms.
 //
 
 import Foundation
@@ -27,12 +28,14 @@ nonisolated enum WorkoutMeasurementEntry {
     /// Kilometres in one statute mile (exact, by definition).
     static let kilometersPerMile = 1.609344
 
-    /// Whether this device reads miles and mph. Read per call, never cached.
+    /// Whether this device reads miles and mph. Read per call, never cached, so a change of region
+    /// shows on the next draw.
     static var usesImperial: Bool { readsImperial(Locale.current) }
 
-    /// Whether `locale` reads miles and mph: US customary units only.
+    /// Whether `locale` reads distance in miles and speed in mph: the US system, and the UK's (which
+    /// is metric everywhere but the road). Every other system reads kilometres and km/h.
     static func readsImperial(_ locale: Locale) -> Bool {
-        locale.measurementSystem == .us
+        locale.measurementSystem == .us || locale.measurementSystem == .uk
     }
 
     // MARK: - Distance

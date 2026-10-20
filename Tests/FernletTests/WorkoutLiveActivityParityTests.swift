@@ -229,15 +229,16 @@ private final class RestCueRecorder {
     @Test func theTimeLeftEstimateFollowsAnAdjustedRest() {
         var state = Self.run([Self.lift("Squat", sets: 2), Self.lift("Bench press", sets: 2)])
         state.markSetDone(now: Self.t0)
-        #expect(state.estimatedSecondsRemaining() == 315)
+        // Squat's last set and its 90 s rest, Bench press's 2 × 45 + 90, and the 60 s changeover between.
+        #expect(state.estimatedSecondsRemaining() == 375)
         let lengthened = state.adjustRest(by: 15, now: Self.t0)
         #expect(lengthened)
-        #expect(state.estimatedSecondsRemaining() == 330)
+        #expect(state.estimatedSecondsRemaining() == 390)
         let shortened = state.adjustRest(by: -15, now: Self.t0)
         #expect(shortened)
         let shortenedAgain = state.adjustRest(by: -15, now: Self.t0)
         #expect(shortenedAgain)
-        #expect(state.estimatedSecondsRemaining() == 300)
+        #expect(state.estimatedSecondsRemaining() == 360)
     }
 
     // MARK: The content state's load

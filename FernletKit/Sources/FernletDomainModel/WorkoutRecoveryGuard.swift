@@ -127,9 +127,9 @@ public nonisolated enum WorkoutRecoveryGuard {
     }
 
     /// The note for lightened lifts: "One set fewer on Back squat, Lunge — those muscles worked hard
-    /// in the last 48 hours."
+    /// in the last 48 hours." `lifts` are frozen names; the note draws them in the device's language.
     static func lightenedNote(lifts: [String]) -> String {
-        WorkoutPlannerCopy.recoveryLightened(lifts: lifts.joined(separator: ", "), hours: windowHours)
+        WorkoutPlannerCopy.recoveryLightened(lifts: WorkoutPlannerCopy.exerciseList(lifts), hours: windowHours)
     }
 
     /// A day's name in a note: its one session's title ("Legs", "Full Body B"), else the day's own
