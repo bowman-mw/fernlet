@@ -106,7 +106,7 @@ struct GuidedWorkoutSheet: View {
         }
         .background(Color.parchment)
         .interactiveDismissDisabled(isLive)
-        .exerciseHowToSheet($howTo)
+        .exerciseHowToSheet($howTo, sex: store.effectiveUserProfile.sex)
         .modifier(GuidedRunnerAlerts(
             showEndConfirm: $showEndConfirm,
             showReplaceConfirm: $showReplaceConfirm,

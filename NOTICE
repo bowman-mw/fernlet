@@ -6,6 +6,12 @@ you may not use this work except in compliance with the License.
 You may obtain a copy of the License in the LICENSE file at the root
 of this repository or at http://www.apache.org/licenses/LICENSE-2.0
 
+Exercise demonstrations
+
+The exercise demonstrations licensed from Gym Visual (gymvisual.com)
+are not part of this repository or its license (see
+App/Fernlet/ExerciseMedia/README.md).
+
 Bundled fonts
 
 The fonts in App/Fernlet/Fonts are not covered by the Apache License.

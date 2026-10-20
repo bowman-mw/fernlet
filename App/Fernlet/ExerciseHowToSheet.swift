@@ -5,8 +5,9 @@
 //  The exercise how-to sheet (comparison report idea 3): an exercise's drawn name, primary muscles
 //  and equipment, three to five cues, the common mistake, an easier version and the one safety line,
 //  reached from the guided runner's exercise card and the plan's exercise rows. The text is the
-//  domain's bundled, localized `ExerciseHowToCatalog`; this file only lays it out. A slot at the top
-//  is reserved for the demonstration media a later task adds.
+//  domain's bundled, localized `ExerciseHowToCatalog`; this file only lays it out. The slot at the top
+//  draws the exercise's demonstration (idea 8, `ExerciseDemonstrationView.swift`): the licensed media
+//  this build carries for the profile's sex, or a placeholder tile when it carries none.
 //
 
 import SwiftUI
@@ -22,10 +23,11 @@ struct ExerciseHowToRequest: Identifiable, Equatable {
 
 extension View {
     /// Presents the how-to sheet for `request`'s exercise while it is non-nil. One presenter per
-    /// screen: every info button on it sets the same binding.
-    func exerciseHowToSheet(_ request: Binding<ExerciseHowToRequest?>) -> some View {
+    /// screen: every info button on it sets the same binding. `sex` is the profile's, which picks
+    /// the demonstration's version.
+    func exerciseHowToSheet(_ request: Binding<ExerciseHowToRequest?>, sex: BiologicalSex) -> some View {
         sheet(item: request) { shown in
-            ExerciseHowToSheet(exerciseName: shown.name)
+            ExerciseHowToSheet(exerciseName: shown.name, sex: sex)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(20)
@@ -58,14 +60,17 @@ struct ExerciseHowToButton: View {
 
 /// How to do one catalog exercise, as a read-only sheet: Done top-right is the whole exit.
 ///
-/// Reading order is layout order, top to bottom: the name (the sheet's heading), the media slot, the
-/// main muscles and equipment, then three headed sections — the cues as numbered steps, the common
-/// mistake, the easier version — and the safety line last. Each cue is one VoiceOver element with its
+/// Reading order is layout order, top to bottom: the name (the sheet's heading), the demonstration
+/// (one image element, or nothing when it is the decorative placeholder), the main muscles and
+/// equipment, then three headed sections — the cues as numbered steps, the common mistake, the
+/// easier version — and the safety line last. Each cue is one VoiceOver element with its
 /// number. Everything scrolls and wraps, so the largest text sizes reflow rather than truncate.
 struct ExerciseHowToSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// The frozen catalog name of the exercise shown.
     let exerciseName: String
+    /// The profile's sex: the demonstration shows that version first.
+    let sex: BiologicalSex
 
     private var entry: ExerciseHowTo? { ExerciseHowToCatalog.entry(for: exerciseName) }
 
@@ -77,7 +82,7 @@ struct ExerciseHowToSheet: View {
             )
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    ExerciseDemonstrationSlot(exerciseName: exerciseName)
+                    ExerciseDemonstrationSlot(exerciseName: exerciseName, sex: sex)
                     if let entry {
                         ExerciseHowToFacts(target: WorkoutExerciseCatalog.exercise(named: exerciseName))
                         ExerciseHowToSteps(cues: entry.cues)
@@ -99,17 +104,27 @@ struct ExerciseHowToSheet: View {
     }
 }
 
-/// The reserved demonstration slot at the top of the how-to sheet.
+/// The demonstration at the top of the how-to sheet (comparison report idea 8).
 ///
-/// The demonstration-media task fills it (a still or a silent loop matched to the profile, with the
-/// cues as its alternative text). Until then it draws nothing and adds nothing to the accessibility
-/// tree, so the sheet opens straight onto the name and the cues.
+/// `ExerciseDemonstrationLibrary` picks the file from what this build carries: the profile's sex
+/// first, then the other's, a still under Reduce Motion. A silent loop or a still reads as one image,
+/// "Demonstration of <name>", with the numbered cues below as its description. With no licensed file
+/// bundled (any build from a clean clone) it draws the decorative equipment tile, which VoiceOver
+/// skips, so the sheet still reads name first, then the facts and cues.
 struct ExerciseDemonstrationSlot: View {
-    /// The frozen catalog name the media will be looked up by.
+    /// The frozen catalog name the media is looked up by.
     let exerciseName: String
+    let sex: BiologicalSex
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        EmptyView()
+        let demonstration = ExerciseDemonstrationLibrary.demonstration(
+            for: exerciseName, sex: sex, reduceMotion: reduceMotion)
+        if let fileName = demonstration.fileName {
+            ExerciseDemonstrationMedia(fileName: fileName, animates: demonstration.animates, exerciseName: exerciseName)
+        } else {
+            ExerciseDemonstrationPlaceholder(target: WorkoutExerciseCatalog.exercise(named: exerciseName))
+        }
     }
 }
 

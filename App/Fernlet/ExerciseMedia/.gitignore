@@ -1,0 +1,6 @@
+# Licensed Gym Visual exercise media. NEVER commit it: the N-CRFL licence forbids redistribution,
+# and this repository is public. Everything in this folder is ignored except this file and the
+# README beside it (see README.md). Do not add rules below; do not `git add -f` a media file.
+*
+!.gitignore
+!README.md
