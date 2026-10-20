@@ -12,8 +12,8 @@ import FernletUI
 /// the way into the user's own exercises, hidden exercises and saved swaps
 /// (``WorkoutExercisePreferencesEntry``), which save as they change rather than with this draft —
 /// plus the guided runner's cue switches (Workout haptics, Workout sounds and
-/// Spoken cues, ``WorkoutCueSettingsSection``), which are device-local rather than part of the synced profile and are
-/// stored on Save like the rest. Changing the split is a plain edit — a neutral note beside the options
+/// Spoken cues, ``WorkoutCueSettingsSection``) and guided cardio's heart-rate switches and "My max heart
+/// rate", which are device-local rather than part of the synced profile and are stored on Save like the rest. Changing the split is a plain edit — a neutral note beside the options
 /// says training has been consistent, where a confirmation dialog used to interrupt the save; the sheet
 /// guards its draft like the other entry sheets instead.
 struct WorkoutSetupSheet: View {
@@ -36,6 +36,11 @@ struct WorkoutSetupSheet: View {
     private let initialWarmUpSets: Bool?
     /// The heart-rate switches' draft (device-local, like the cue switches).
     @State private var zonePreferences: WorkoutZonePreferences
+    /// "My max heart rate" as typed (device-local, stored on Save; empty or unusable clears it).
+    @State private var maxHeartRateText: String
+    private let initialMaxHeartRateText: String
+    /// The age estimate of the maximum heart rate (Tanaka), in whole bpm, for the field's footnote.
+    private let estimatedMaxHeartRate: Int
     private let recommendedSplits: [TrainingSplit]
     private let originalSelectedSplitID: String?
     private let currentSplitName: String
@@ -89,6 +94,10 @@ struct WorkoutSetupSheet: View {
         let zones = WorkoutZonePreferences.current()
         _zonePreferences = State(initialValue: zones)
         self.initialZonePreferences = zones
+        let maxText = WorkoutZonePreferences.maxHeartRate().map(String.init) ?? ""
+        _maxHeartRateText = State(initialValue: maxText)
+        self.initialMaxHeartRateText = maxText
+        self.estimatedMaxHeartRate = Int(HeartRateZones.tanakaMaximum(age: store.effectiveUserProfile.age).rounded())
         self.healthSharingAllowed = store.isWorkoutHealthSharingEnabled
     }
 
@@ -104,6 +113,7 @@ struct WorkoutSetupSheet: View {
             || spokenCues != initialSpokenCues
             || warmUpSets != initialWarmUpSets
             || zonePreferences != initialZonePreferences
+            || maxHeartRateText != initialMaxHeartRateText
     }
 
     var body: some View {
@@ -119,7 +129,8 @@ struct WorkoutSetupSheet: View {
                     WorkoutExercisePreferencesEntry(store: store)
                     WorkoutCueSettingsSection(
                         preferences: $cuePreferences, spoken: $spokenCues,
-                        zones: $zonePreferences, healthSharingAllowed: healthSharingAllowed
+                        zones: $zonePreferences, maxHeartRate: $maxHeartRateText,
+                        healthSharingAllowed: healthSharingAllowed, estimatedMaximum: estimatedMaxHeartRate
                     )
                 }
                 .padding(20)
@@ -336,6 +347,7 @@ struct WorkoutSetupSheet: View {
         WorkoutCuePreferences.saveSpoken(spokenCues)
         store.setWorkoutWarmUpSets(warmUpSets)
         WorkoutZonePreferences.save(zonePreferences)
+        WorkoutZonePreferences.saveMaxHeartRate(WorkoutZonePreferences.maxHeartRate(typed: maxHeartRateText))
         dismiss()
     }
 }
