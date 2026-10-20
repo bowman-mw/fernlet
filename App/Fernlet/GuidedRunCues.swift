@@ -204,19 +204,19 @@ final class GuidedRunCueDirector {
     /// Creates a director. Every dependency is injectable; the defaults are production.
     ///
     /// - Parameters:
-    ///   - feedback: The haptic and sound player.
+    ///   - feedback: The haptic and sound player; nil means the production player.
     ///   - preferences: The person's switches, read at every play.
     ///   - isAppActive: Whether the app is in front, read at every play.
     ///   - scheduleBackground: Replaces the pending background cue.
     init(
-        feedback: FernletFeedback = .system,
+        feedback: FernletFeedback? = nil,
         preferences: @escaping @MainActor () -> FernletFeedbackPreferences = { WorkoutCuePreferences.current() },
         isAppActive: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active },
         scheduleBackground: @escaping BackgroundScheduler = { cues, sound in
             await NotificationService.replaceWorkoutCues(cues, soundFileName: sound)
         }
     ) {
-        self.feedback = feedback
+        self.feedback = feedback ?? .system
         self.preferences = preferences
         self.isAppActive = isAppActive
         self.scheduleBackground = scheduleBackground
