@@ -284,6 +284,12 @@ final class GuidedZoneDirector {
         self.publish = publish
     }
 
+    /// The session start and the freshness timer end with the director (the memory wall's ML1).
+    isolated deinit {
+        startTask?.cancel()
+        staleTask?.cancel()
+    }
+
     /// The cue `state` shows right now: the talk test, or the live reading against its target.
     func zone(for state: GuidedWorkoutRunState?) -> WorkoutActivityAttributes.ContentState.Zone? {
         GuidedZonePlan.zone(for: state, zones: zones, reading: reading, now: clock())

@@ -359,23 +359,7 @@ struct GuidedWorkoutSheet: View {
     /// The cream card naming the current exercise with its Set / Reps / Last-time pills.
     private func exerciseCard(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
-                exerciseTitle(run, exercise)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                // How to do it, beside the name it explains: the cues, the common mistake and an
-                // easier version, for a catalog exercise only.
-                if ExerciseHowToCatalog.entry(for: exercise.name) != nil {
-                    ExerciseHowToButton(exerciseName: exercise.name) {
-                        howTo = ExerciseHowToRequest(name: exercise.name)
-                    }
-                }
-            }
-            if let warmUp = run.warmUpPosition {
-                GuidedWarmUpWords.setLabel(index: warmUp.index, count: warmUp.count)
-                    .font(.fernlet(.body))
-                    .foregroundStyle(Color.mossInk)
-                    .accessibilityIdentifier("workout.guided.warmUpSet")
-            }
+            exerciseCardHeader(run, exercise)
             if let side = GuidedSideLabel(raw: exercise.sideRaw) {
                 side.text
                     .font(.fernlet(.body))
@@ -430,6 +414,27 @@ struct GuidedWorkoutSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(Color.cream, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    /// The card's head: the exercise name with its how-to button (a catalog exercise only: the cues, the
+    /// common mistake and an easier version, beside the name they explain), then a warm-up set's place.
+    @ViewBuilder
+    private func exerciseCardHeader(_ run: GuidedWorkoutRunState, _ exercise: GuidedWorkoutRunState.Exercise) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            exerciseTitle(run, exercise)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if ExerciseHowToCatalog.entry(for: exercise.name) != nil {
+                ExerciseHowToButton(exerciseName: exercise.name) {
+                    howTo = ExerciseHowToRequest(name: exercise.name)
+                }
+            }
+        }
+        if let warmUp = run.warmUpPosition {
+            GuidedWarmUpWords.setLabel(index: warmUp.index, count: warmUp.count)
+                .font(.fernlet(.body))
+                .foregroundStyle(Color.mossInk)
+                .accessibilityIdentifier("workout.guided.warmUpSet")
+        }
     }
 
     /// The exercise name — and, at accessibility text sizes only, the two things the layout drops

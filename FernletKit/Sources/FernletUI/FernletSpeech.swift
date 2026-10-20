@@ -211,6 +211,11 @@ public final class FernletSpeaker {
         self.settle = settle ?? Self.defaultSettle
     }
 
+    /// The pending session release ends with the speaker (the memory wall's ML1).
+    isolated deinit {
+        deactivation?.cancel()
+    }
+
     /// Says one spoken cue the way the person hears the app: through VoiceOver's announcer while it
     /// runs (only the part VoiceOver has not already heard), otherwise aloud through the voice.
     ///
