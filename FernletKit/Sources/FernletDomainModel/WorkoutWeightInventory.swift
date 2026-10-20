@@ -48,7 +48,7 @@ public nonisolated struct WorkoutWeightInventory: Equatable, Sendable {
     /// The bar's own weight; nil when no barbell weights are set here.
     public private(set) var barWeight: Double?
     /// Plate pairs owned, one entry per pair (two pairs of 45s are `[45, 45]`), lightest first.
-    public private(set) var platePairs: [Double] = []
+    public internal(set) var platePairs: [Double] = []
     /// Keys a newer build wrote into this entry that this one does not know, written back verbatim.
     public var parkedUnknownKeys: [String: JSONValue] = [:]
 
