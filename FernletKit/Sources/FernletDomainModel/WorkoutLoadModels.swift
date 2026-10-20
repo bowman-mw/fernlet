@@ -360,13 +360,17 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
     /// Each set's weight when the sets differed, aligned with ``repsPerSet``; nil when every set was
     /// lifted at ``weight``. A list that does not line up with the sets is dropped at init.
     public var setWeights: [Double]?
+    /// The session's sleep or readiness flag (G10), set by the app from the day history; never
+    /// persisted. A flagged miss holds the load, and a flagged session that falls short of the trend
+    /// counts at half weight and never toward a stall.
+    public var flag: WorkoutSessionFlag?
 
     public init(
         date: Date, weight: Double?, unit: LoadUnit?, targetReps: Int, repsPerSet: [Int],
         effort: ExerciseEffort? = nil, rangeLow: Double? = nil, rangeHigh: Double? = nil,
         overrideReason: OverrideReason? = nil, calibration: CalibrationStep? = nil,
         easierSession: Bool = false, compoundsBefore: Int = 0, structured: Bool = false,
-        setWeights: [Double]? = nil
+        setWeights: [Double]? = nil, flag: WorkoutSessionFlag? = nil
     ) {
         self.date = date
         self.weight = weight
@@ -383,17 +387,18 @@ public nonisolated struct LiftExposure: Equatable, Sendable {
         self.structured = structured
         let aligned = setWeights.map { Array($0.prefix(ExerciseResult.maxSets)) }
         self.setWeights = aligned?.count == self.repsPerSet.count ? aligned : nil
+        self.flag = flag
     }
 
     /// A structured result, dated by the day it was logged. Its working weight (the heaviest set's
     /// when the sets differed) is the session's weight.
-    public init(date: Date, result: ExerciseResult) {
+    public init(date: Date, result: ExerciseResult, flag: WorkoutSessionFlag? = nil) {
         self.init(
             date: date, weight: result.workingWeight, unit: result.unit, targetReps: result.targetReps,
             repsPerSet: result.repsPerSet, effort: result.effort, rangeLow: result.rangeLow,
             rangeHigh: result.rangeHigh, overrideReason: result.overrideReason, calibration: result.calibration,
             easierSession: result.easierSession == true, compoundsBefore: result.compoundsBefore,
-            structured: true, setWeights: result.alignedSetWeights
+            structured: true, setWeights: result.alignedSetWeights, flag: flag
         )
     }
 
