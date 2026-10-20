@@ -392,6 +392,64 @@ final class CoachPlanExchangeTests: XCTestCase {
         XCTAssertEqual(bundle.exerciseHistory?.first?.bestWeight, 135)
     }
 
+    /// N1 and N5 (2026-10-20): the export carries the areas trained around as one line of frozen
+    /// tokens (severe areas stay in the avoided lists), the session length, and each location's
+    /// weights on hand with the active location first and a location without weights left out.
+    func testExportCarriesTrainAroundAreasSessionLengthAndWeights() throws {
+        let store = makeTestStore()
+        var settings = store.settings
+        settings.workoutProfile.injuryAreas = [.knee: .mild, .lowerBack: .mild, .shoulder: .severe]
+        settings.workoutSessionLength = .min45
+        var home = WorkoutLocation.home
+        home.weights = WorkoutWeightInventory(unit: .kg)
+        home.weights.setDumbbells([2, 4, 6])
+        home.weights.addKettlebell(16)
+        var gym = WorkoutLocation.fullGym
+        gym.weights = WorkoutWeightInventory(unit: .lb)
+        gym.weights.setBar(45)
+        gym.weights.setPairs(2, of: 45)
+        let park = WorkoutLocation(name: "Park", ownedEquipment: [])
+        settings.workoutLocations = [home, park, gym]
+        settings.activeWorkoutLocationID = gym.id
+        store.settings = settings
+
+        let bundle = store.buildTrainerExport(options: .coreOnly)
+        XCTAssertEqual(bundle.profile.trainAroundAreas, "lowerBack, knee", "mild areas only, in picker order")
+        XCTAssertEqual(bundle.trainingSetup?.sessionLength, "45 min")
+        let weights = try XCTUnwrap(bundle.trainingSetup?.weightsOnHand)
+        XCTAssertEqual(weights.map(\.locationName), [gym.name, home.name], "active first; no row for the park")
+        XCTAssertEqual(weights.first?.unit, "lb")
+        XCTAssertEqual(weights.first?.barWeight, 45)
+        XCTAssertEqual(weights.first?.platePairs, [45, 45])
+        XCTAssertNil(weights.first?.dumbbells)
+        XCTAssertEqual(weights.last?.unit, "kg")
+        XCTAssertEqual(weights.last?.dumbbells, [2, 4, 6])
+        XCTAssertEqual(weights.last?.kettlebells, [16])
+        XCTAssertNil(weights.last?.barWeight)
+
+        let data = try XCTUnwrap(store.encodeTrainerExport(bundle))
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("\"trainAroundAreas\" : \"lowerBack, knee\""), "one line, not a list")
+        XCTAssertTrue(json.contains("\"weightsOnHand\""))
+    }
+
+    /// With nothing set, the new keys say so plainly or stay out: "no limit", no areas, no weights.
+    /// And they are optional keys, so a setup written before them still reads.
+    func testExportDefaultsAndOlderSetupsStillRead() throws {
+        let bundle = makeTestStore().buildTrainerExport(options: .coreOnly)
+        XCTAssertNil(bundle.profile.trainAroundAreas)
+        XCTAssertEqual(bundle.trainingSetup?.sessionLength, "no limit")
+        XCTAssertNil(bundle.trainingSetup?.weightsOnHand)
+
+        let older = #"{"locationName":"Full gym","ownedEquipment":["dumbbells"],"splitIsUserChosen":false}"#
+        let setup = try JSONDecoder().decode(TrainerExportBundle.TrainingSetup.self, from: Data(older.utf8))
+        XCTAssertNil(setup.sessionLength)
+        XCTAssertNil(setup.weightsOnHand)
+        let profile = try JSONDecoder().decode(TrainerExportBundle.TrainingProfile.self,
+                                               from: Data(#"{"injuryNotes":"sore knee"}"#.utf8))
+        XCTAssertNil(profile.trainAroundAreas)
+    }
+
     /// The clipboard window must narrow history; the file/mesh export must not.
     func testCoachWindowNarrowsHistoryButDefaultDoesNot() {
         let (seed, repository, narratives) = makeTestStoreWithRepositories()
@@ -443,6 +501,10 @@ final class CoachPlanExchangeTests: XCTestCase {
         XCTAssertTrue(text.contains("\"about\""), "the user's own data must be in the same blob")
         XCTAssertTrue(text.contains("avoidedMuscles") || text.contains("safety"),
                       "the prompt must tell the model to respect the avoid lists")
+        XCTAssertTrue(text.contains("`profile.trainAroundAreas`"), "the prompt must say how to treat mild areas")
+        XCTAssertTrue(text.contains("`trainingSetup.weightsOnHand`"), "the prompt must ask for loads the weights make")
+        XCTAssertTrue(text.contains("`trainingSetup.sessionLength`"), "the prompt must ask sessions to fit")
+        XCTAssertTrue(text.contains("\"sessionLength\""), "the session length travels with the data")
         // The catalog is deliberately NOT sent — the owner's call, and what makes new exercises the
         // model's job to define.
         XCTAssertFalse(text.contains("Lateral raise"), "the exercise catalog must not be shipped")

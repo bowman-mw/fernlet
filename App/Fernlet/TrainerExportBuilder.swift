@@ -9,10 +9,11 @@
 //  ALLOWLIST — every field is selected by hand, so a future field is invisible to a trainer until someone
 //  consciously adds it here. There is no copy-and-strip. A trainer/nutritionist gets exactly: the user's
 //  workouts over time, per-day nutrition summaries (as-logged macro + micronutrient totals + meal names),
-//  and training-safety context (injury notes, avoided muscles/movements). Optionally, and ONLY when the
-//  user toggles them on: goal, hydration, sleep summary, sickness windows, and wellbeing (a derived
-//  signal). NEVER: journal text, Sensitive/Tier-2 memory, period/cycle data, intimate-activity data,
-//  photos, friends, location, or recipe ingredient lists.
+//  training-safety context (injury notes, avoided muscles/movements, the body areas trained around), and
+//  the training setup (equipment, each workout location's weights on hand, session length). Optionally,
+//  and ONLY when the user toggles them on: goal, hydration, sleep summary, sickness windows, and
+//  wellbeing (a derived signal). NEVER: journal text, Sensitive/Tier-2 memory, period/cycle data,
+//  intimate-activity data, photos, friends, geographic location, or recipe ingredient lists.
 //
 
 import Foundation
@@ -142,6 +143,11 @@ struct TrainerExportBundle: Codable, Equatable {
         var injuryNotes: String?
         var avoidedMuscles: [String]?
         var avoidedMovements: [String]?
+        /// The body areas the user trains around — the injury picker's mild areas — as ONE line of
+        /// frozen area tokens in picker order ("knee, lowerBack"); nil when there are none. Added
+        /// 2026-10-20 (N1); an optional key, so a reader of an older export is unaffected. Severe
+        /// areas need no line: saving the picker mirrors them into the two avoided lists above.
+        var trainAroundAreas: String?
         var sport: String?
         var experience: String?
         var trainingDaysPerWeek: Int?
@@ -302,6 +308,29 @@ struct TrainerExportBundle: Codable, Equatable {
         var splitName: String?
         var splitIsUserChosen: Bool
         var trainingDaysPerWeek: Int?
+        /// How long a session may run, as set in Workout setup: "45 min", or "no limit". Frozen English
+        /// export text (2026-10-20, N5); the planner fits sessions to it with about a minute of
+        /// changeover per exercise.
+        var sessionLength: String?
+        /// Each workout location's weights on hand ("Weights I have"), the active location first; only
+        /// locations with any are listed, and nil when none has (2026-10-20, N5).
+        var weightsOnHand: [LocationWeights]?
+    }
+
+    /// One location's weights on hand, in the unit they were entered in.
+    ///
+    /// A direct projection of ``WorkoutWeightInventory``: dumbbell pairs by one dumbbell's weight,
+    /// kettlebells, the bar, and plate pairs one entry per pair (two pairs of 45s are `[45, 45]`).
+    /// Empty lists become nil. A coach prescribing loads should use only what these can make.
+    struct LocationWeights: Codable, Equatable {
+        /// The location's STORED name, matching `TrainingSetup.locationName` for the active one.
+        var locationName: String
+        /// "lb" or "kg" — a frozen `LoadUnit` token.
+        var unit: String
+        var dumbbells: [Double]?
+        var kettlebells: [Double]?
+        var barWeight: Double?
+        var platePairs: [Double]?
     }
 
     /// One exercise's history, rolled up across the window: how often, how recently, how heavy.
@@ -376,27 +405,15 @@ extension FernletStore {
             injuryNotes: wp.injuryNotes.isEmpty ? nil : wp.injuryNotes,
             avoidedMuscles: wp.avoidedMuscles.isEmpty ? nil : wp.avoidedMuscles.map(\.rawValue).sorted(),
             avoidedMovements: wp.avoidedMovements.isEmpty ? nil : wp.avoidedMovements.map(\.rawValue).sorted(),
+            trainAroundAreas: Self.trainAroundLine(wp),
             sport: wp.sport.isEmpty ? nil : wp.sport,
             experience: wp.experience.rawValue,
             trainingDaysPerWeek: wp.trainingDaysPerWeek > 0 ? wp.trainingDaysPerWeek : nil,
             goal: options.includeGoal ? settings.selectedGoal.rawValue : nil)
 
-        var includes = ["Your workouts over time (names, sets/reps/weights as logged, duration, effort)",
-                        "Per-day nutrition summaries (calorie + macro + micronutrient totals, meal names)",
-                        "Your daily calorie and macro targets",
-                        "Where you train, the equipment you have, and the split you follow",
-                        "How each exercise has progressed (frequency, recent and best sets)",
-                        "Workouts you've already planned for the coming weeks, so they can be adjusted",
-                        "Training-safety context (injury notes, avoided muscles and movements)"]
-        if options.includeGoal { includes.append("Your goal type") }
-        if options.includeHydration { includes.append("Daily hydration") }
-        if options.includeSleep { includes.append("Sleep summaries") }
-        if options.includeSickness { includes.append("Days you were unwell") }
-        if options.includeWellbeing { includes.append("Your wellbeing score for each day") }
-
         let about = TrainerExportBundle.About(
             exportedOn: todayKey,
-            includes: includes,
+            includes: Self.exportIncludes(options: options),
             neverIncludes: [
                 "Journal entries and private notes",
                 "Period / cycle data and intimate-activity data",
@@ -412,6 +429,26 @@ extension FernletStore {
             exerciseHistory: rollup.entries.isEmpty ? nil : rollup.entries,
             unparsedExerciseLines: rollup.unparsedLines > 0 ? rollup.unparsedLines : nil,
             days: dayExports)
+    }
+
+    /// The about block's "includes" list: the always-included core, then each opt-in category that is
+    /// on. Frozen English export text, like the rest of the bundle.
+    static func exportIncludes(options: TrainerExportOptions) -> [String] {
+        var includes = ["Your workouts over time (names, sets/reps/weights as logged, duration, effort)",
+                        "Per-day nutrition summaries (calorie + macro + micronutrient totals, meal names)",
+                        "Your daily calorie and macro targets",
+                        "Where you train, the equipment and weights you have, your session length, "
+                            + "and the split you follow",
+                        "How each exercise has progressed (frequency, recent and best sets)",
+                        "Workouts you've already planned for the coming weeks, so they can be adjusted",
+                        "Training-safety context (injury notes, avoided muscles and movements, "
+                            + "areas you train around)"]
+        if options.includeGoal { includes.append("Your goal type") }
+        if options.includeHydration { includes.append("Daily hydration") }
+        if options.includeSleep { includes.append("Sleep summaries") }
+        if options.includeSickness { includes.append("Days you were unwell") }
+        if options.includeWellbeing { includes.append("Your wellbeing score for each day") }
+        return includes
     }
 
     /// The macro targets in effect, flagged user-set or derived.
@@ -446,7 +483,43 @@ extension FernletStore {
             ownedEquipment: location.ownedEquipment.map(\.rawValue).sorted(),
             splitName: split.name,
             splitIsUserChosen: chosenID != nil,
-            trainingDaysPerWeek: days > 0 ? days : nil)
+            trainingDaysPerWeek: days > 0 ? days : nil,
+            sessionLength: Self.sessionLengthText(settings.workoutSessionLength),
+            weightsOnHand: Self.weightsOnHand(settings.workoutLocations, activeID: location.id))
+    }
+
+    /// The body areas `profile` trains around — the planner's mild areas
+    /// (``WorkoutProfile/injuryLimits``) — as one line of frozen ``BodyArea`` tokens in picker order:
+    /// "knee, lowerBack". Nil when there are none. Tokens, not display names: an export field reads the
+    /// same from any device, like the avoided lists beside it.
+    static func trainAroundLine(_ profile: WorkoutProfile) -> String? {
+        let mild = profile.injuryLimits.mildAreas
+        let tokens = BodyArea.allCases.filter { mild.contains($0) }.map(\.rawValue)
+        return tokens.isEmpty ? nil : tokens.joined(separator: ", ")
+    }
+
+    /// The session length as frozen English export text: "45 min", or "no limit" — never the
+    /// localized menu label.
+    static func sessionLengthText(_ length: WorkoutSessionLength) -> String {
+        length.minutes.map { "\($0) min" } ?? "no limit"
+    }
+
+    /// Each location's weights on hand, the active one first, then the rest in their saved order;
+    /// locations with no weights are left out, and nil when none has any. Bounded by the locations.
+    static func weightsOnHand(_ locations: [WorkoutLocation],
+                              activeID: UUID) -> [TrainerExportBundle.LocationWeights]? {
+        let ordered = locations.filter { $0.id == activeID } + locations.filter { $0.id != activeID }
+        let rows = ordered.compactMap { location -> TrainerExportBundle.LocationWeights? in
+            let weights = location.weights
+            guard !weights.isEmpty else { return nil }
+            return TrainerExportBundle.LocationWeights(
+                locationName: location.name, unit: weights.unit.rawValue,
+                dumbbells: weights.dumbbells.isEmpty ? nil : weights.dumbbells,
+                kettlebells: weights.kettlebells.isEmpty ? nil : weights.kettlebells,
+                barWeight: weights.barWeight,
+                platePairs: weights.platePairs.isEmpty ? nil : weights.platePairs)
+        }
+        return rows.isEmpty ? nil : rows
     }
 
     /// Encodes the bundle to pretty, stable JSON bytes (for the reviewable preview and the future sealed
