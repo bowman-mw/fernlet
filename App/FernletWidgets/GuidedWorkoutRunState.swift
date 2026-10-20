@@ -129,7 +129,7 @@ struct GuidedWorkoutRunState: Codable, Hashable {
 
     /// The pace tokens, spelled here because this shared file cannot import the domain: each equals the
     /// domain `CardioPace` case's raw value (pinned by a test), and like it is FROZEN.
-    enum PaceToken {
+    nonisolated enum PaceToken {
         static let steady = "steady"
         static let hard = "hard"
         static let easy = "easy"
