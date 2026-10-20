@@ -254,6 +254,12 @@ final class GuidedRunCueDirector {
         self.spokenCuesOn = spokenCuesOn ?? { WorkoutCuePreferences.spokenEnabled() }
     }
 
+    /// The in-app timer and the pending background scheduling end with the director (the memory wall's ML1).
+    isolated deinit {
+        timer?.cancel()
+        backgroundTask?.cancel()
+    }
+
     /// The run changed (or went away): re-arm the in-app timer and replace the background cue.
     func runChanged(to state: GuidedWorkoutRunState?) {
         run = state
