@@ -3554,6 +3554,39 @@
     "First day of cycle" : {
 
     },
+    "First: %@, left side." : {
+      "comment" : "Guided workout, spoken cue at Start: the run's first step, one-sided, e.g. 'First: Cat-cow, left side.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First: %@, left side."
+          }
+        }
+      }
+    },
+    "First: %@, right side." : {
+      "comment" : "Guided workout, spoken cue at Start: the run's first step, one-sided, e.g. 'First: Cat-cow, right side.'",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First: %@, right side."
+          }
+        }
+      }
+    },
+    "First: %@." : {
+      "comment" : "Guided workout, spoken cue at Start: the run's first step, e.g. 'First: Goblet squat.' A suggested weight may follow.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "First: %@."
+          }
+        }
+      }
+    },
     "Fix any set that went differently. Fernlet plans your next weights from these." : {
       "comment" : "Edit workout: the note above each exercise's sets. Correcting a set changes the weights Fernlet suggests next time.",
       "localizations" : {
