@@ -38,6 +38,11 @@ public nonisolated enum LoadChange: Equatable, Sendable {
     case backToBottom
     /// Tough, or a miss that doesn't yet call for less: the same again.
     case same
+    /// A miss on a day flagged for sleep or readiness (G10): the load holds and the miss doesn't count.
+    case heldAfterFlag
+    /// A miss only in the later sets of a long session with nothing eaten for a while (G12): the load
+    /// holds and the miss doesn't count.
+    case heldUnfueled
     /// Completed, but a lifter past their first six months on the lift steps after two successful
     /// sessions in a row (G3): the same again, once more.
     case confirming
@@ -120,6 +125,8 @@ public nonisolated struct LiftPlan: Equatable, Sendable {
     public var cap: LoadCap? = nil
     /// The gear the lift is loaded with, for the note's noun ("your next dumbbell").
     public var equipment: Equipment? = nil
+    /// The last regular session's sleep or readiness flag, for the hold note's words.
+    public var previousFlag: WorkoutSessionFlag? = nil
 }
 
 /// The deterministic rules of load-aware progression: estimate, confidence, range, next step.
@@ -418,7 +425,8 @@ extension WorkoutLoadEngine {
         return LiftPlan(
             sets: max(1, inputs.baseSets + outcome.setsDelta), reps: outcome.reps, prescription: prescription,
             change: outcome.change, askReasonOnOverride: ask, previousWeight: anchor.weight, unit: unit,
-            recentered: estimate?.recentered ?? false, cap: outcome.cap, equipment: inputs.equipment
+            recentered: estimate?.recentered ?? false, cap: outcome.cap, equipment: inputs.equipment,
+            previousFlag: anchor.flag
         )
     }
 
@@ -473,7 +481,8 @@ extension WorkoutLoadEngine {
     ///
     /// A miss holds the load. It goes lighter only after ``missesForLighter`` misses in a row on days
     /// with no sleep or readiness flag; a flagged miss (``LiftExposure/flag``) always holds and never
-    /// counts toward a cut.
+    /// counts toward a cut, and nor does a miss only in the later sets of a long session started
+    /// without food (``LiftExposure/backOffMissUnfueled``, G12).
     static func outcome(
         of anchor: LiftExposure, history: [LiftExposure], scheme: RepScheme, loadable: Bool, cap: LoadCap? = nil,
         tier: TrainingTier = .beginner, today: Date? = nil
@@ -484,7 +493,9 @@ extension WorkoutLoadEngine {
             return Outcome(reps: target, setsDelta: 0, change: .holdForPain, move: .hold)
         }
         guard anchor.completed else {
-            let misses = anchor.flag == nil ? trailingMisses(history) : 0
+            if anchor.flag != nil { return Outcome(reps: target, setsDelta: 0, change: .heldAfterFlag, move: .hold) }
+            if anchor.backOffMissUnfueled { return Outcome(reps: target, setsDelta: 0, change: .heldUnfueled, move: .hold) }
+            let misses = trailingMisses(history)
             if misses >= missesForFewerSets {
                 return Outcome(reps: target, setsDelta: -1, change: .lighterFewerSets, move: .down(repeatedMissDecrease))
             }
@@ -552,12 +563,13 @@ extension WorkoutLoadEngine {
     }
 
     /// Regular sessions in a row, newest backwards, that missed their target on an unflagged day. A
-    /// flagged miss neither counts nor breaks the run; a completed session ends it.
+    /// flagged miss, or a back-off-only miss with nothing eaten for a while (G12), neither counts nor
+    /// breaks the run; a completed session ends it.
     static func trailingMisses(_ history: [LiftExposure]) -> Int {
         var count = 0
         for exposure in history.reversed() where !exposure.easierSession && exposure.calibration == nil {
             guard !exposure.completed else { break }
-            if exposure.flag == nil { count += 1 }
+            if exposure.flag == nil && !exposure.backOffMissUnfueled { count += 1 }
         }
         return count
     }

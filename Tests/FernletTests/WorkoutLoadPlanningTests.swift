@@ -343,4 +343,122 @@ struct WorkoutLoadPlanningTests {
         let flag = try #require(context.byLift[key("Bench press")]?.first?.flag)
         #expect(flag.lightDay && flag.sleep == nil)
     }
+
+    // MARK: - Food (G11, G12, G13)
+
+    /// G11: the builder reads the last two weeks' protein in grams per kilogram of the body weight in
+    /// effect, and counts the days with meals in each week; today, and anything older, is left out.
+    @Test func theProteinContextIsGramsPerKilogramWithEachWeeksLoggedDays() throws {
+        func meals(_ offset: Int, protein: Int) -> FernletDay {
+            let macros = Macros(protein: protein, carbs: 0, fat: 0)
+            let meal = Meal(name: "Lunch", mealType: .lunch, macros: macros, quality: .good, confidence: "high",
+                            note: "", source: "manual")
+            return FernletDay(date: FernletDate.dayKey(for: day(offset)), meals: [meal])
+        }
+        // Six days in the last week, five in the week before, and one older day that isn't read.
+        let days = [99, 98, 97, 96, 95, 94, 92, 91, 90, 89, 87, 80].map { meals($0, protein: 64) }
+        let context = WorkoutLoadContextBuilder.build(
+            days: Dictionary(uniqueKeysWithValues: days.map { ($0.date, $0) }), today: meals(100, protein: 300),
+            todayKey: FernletDate.dayKey(for: day(100)), settings: FernletSettings(),
+            body: UserNutritionProfile(weightPounds: 80 * 2.20462), locale: Locale(identifier: "en_US")
+        )
+        let byWeek = context.recovery.loggedDaysByWeek
+        let expected = [6, 5]
+        #expect(byWeek == expected)
+        let perKilogram = try #require(context.recovery.proteinGramsPerKg)
+        #expect(abs(perKilogram - 0.8) < 0.001)
+        #expect(context.recovery.proteinUnderFloor)
+        // The food-logs switch reads as on until switched off, and nothing reads a weigh-in yet.
+        #expect(context.foodAware)
+        #expect(context.bodyWeights.isEmpty)
+        var off = FernletSettings()
+        off.workoutFoodAware = false
+        let quiet = WorkoutLoadContextBuilder.build(days: [:], today: FernletDay(date: "2026-10-20"),
+                                                    todayKey: "2026-10-20", settings: off)
+        #expect(!quiet.foodAware)
+    }
+
+    /// G13: the switch syncs at the top level only once chosen, so every blob saved before keeps its
+    /// shape; a fresh start (resetDiary's new settings) forgets it with the rest.
+    @Test func theFoodLogsSwitchIsWrittenOnlyOnceChosen() throws {
+        func object(_ settings: FernletSettings) throws -> [String: Any] {
+            try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(settings)) as? [String: Any])
+        }
+        let fresh = FernletSettings()
+        #expect(fresh.workoutFoodAware == nil)
+        #expect(fresh.workoutUsesFoodLogs)
+        let freshHasKey = try object(fresh)["workoutFoodAware"] != nil
+        #expect(!freshHasKey)
+        var chosen = FernletSettings()
+        chosen.workoutFoodAware = false
+        let written = try object(chosen)["workoutFoodAware"] as? Bool
+        #expect(written == false)
+        let back = try JSONDecoder().decode(FernletSettings.self, from: JSONEncoder().encode(chosen))
+        #expect(back.workoutFoodAware == false)
+        #expect(!back.workoutUsesFoodLogs)
+    }
+
+    /// G12: the one optional food question comes only before a session of more than 45 minutes with 15
+    /// or more working sets, only for the goals that follow their main lifts, and never with the
+    /// food-logs switch off.
+    @Test func theFoodQuestionComesOnlyBeforeLongHighVolumeSessions() {
+        func lifts(_ count: Int, sets: Int) -> [PrescribedExercise] {
+            (0..<count).map { index in
+                PrescribedExercise(name: "Lift \(index)", sets: sets, reps: "8", role: .main, fromCatalog: true,
+                                   restSecondsOverride: 150,
+                                   guidance: LoadGuidance(targetReps: 8, equipment: .barbell, unit: .lb))
+            }
+        }
+        let long = lifts(5, sets: 4)
+        #expect(WorkoutFuelCheck.workingSets(long) == 20)
+        #expect(WorkoutSessionBudget.minutes(of: long, goal: .strength) > WorkoutFuelCheck.longSessionMinutes)
+        #expect(WorkoutFuelCheck.asks(long, goal: .strength, foodAware: true))
+        #expect(WorkoutFuelCheck.asks(long, goal: .sportsPrep, foodAware: true))
+        #expect(!WorkoutFuelCheck.asks(long, goal: .strength, foodAware: false))
+        for goal in [GoalType.weightManagement, .wellness, .mentalHealth, .recovery, .exploring] {
+            #expect(!WorkoutFuelCheck.asks(long, goal: goal, foodAware: true), "\(goal) was asked")
+        }
+        #expect(!WorkoutFuelCheck.asks(lifts(3, sets: 3), goal: .strength, foodAware: true))
+        // Plenty of sets in a short session isn't asked either.
+        let quick = long.map { lift -> PrescribedExercise in
+            var short = lift
+            short.restSecondsOverride = 30
+            return short
+        }
+        #expect(!WorkoutFuelCheck.asks(quick, goal: .strength, foodAware: true))
+    }
+
+    /// G12: the Ready screen's "no" rides on every tracked lift's result, and a run saved before the
+    /// question existed decodes with no answer.
+    @Test func theRunsFoodAnswerRidesOnEachTrackedResult() throws {
+        let weight = WeightPrescription(low: 95, high: 110, suggested: 100, step: 5, unit: .lb, confidence: .low)
+        let bench = PrescribedExercise(name: "Bench press", sets: 3, reps: "8", role: .main, fromCatalog: true,
+                                       guidance: LoadGuidance(targetReps: 8, prescription: weight, equipment: .barbell, unit: .lb))
+        let step = GuidedWorkoutRunState.Exercise(
+            id: bench.id, name: bench.name, sets: bench.sets, reps: bench.reps, roleRaw: "main", fromCatalog: true,
+            restSeconds: 90, blockRaw: bench.block.rawValue, tracking: GuidedRunLoadLog.tracking(for: bench)
+        )
+        var state = GuidedWorkoutRunState(sessionID: UUID(), committedDayKey: "2026-10-20", intensityRaw: "moderate",
+                                          title: "Push", suggestionExercisesText: "", suggestionNotes: "",
+                                          sessionKindRaw: "strength", exercises: [step])
+        let unanswered = try #require(GuidedRunLoadLog.log(for: state)?.results.first)
+        #expect(unanswered.unfueled == nil)
+        state.unfueled = true
+        let said = try #require(GuidedRunLoadLog.log(for: state)?.results.first)
+        #expect(said.unfueled == true)
+        let encodedResult = String(decoding: try JSONEncoder().encode(unanswered), as: UTF8.self)
+        #expect(!encodedResult.contains("unfueled"))
+        let carried = try JSONDecoder().decode(ExerciseResult.self, from: JSONEncoder().encode(said))
+        #expect(carried.unfueled == true)
+        let exposure = LiftExposure(date: day(0), result: carried)
+        #expect(exposure.unfueled)
+
+        state.unfueled = nil
+        let encoded = try JSONEncoder().encode(state)
+        let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let hasKey = object["unfueled"] != nil
+        #expect(!hasKey)
+        let decoded = try JSONDecoder().decode(GuidedWorkoutRunState.self, from: encoded)
+        #expect(decoded.unfueled == nil)
+    }
 }

@@ -19,14 +19,14 @@ import FernletFoundation
 /// Every session carries its G10 flag (``WorkoutSessionFlag``): the night before it — the day's own
 /// sleep log, else Health's figure for the night — against 6 h and against the person's median of
 /// the 14 nights before, the night before that for the firmer flag, and a workout logged as light.
-/// Protein over the last two weeks is context for the trend story; the newest calibration test dates
-/// the next one; the warm-up-sets setting and the lifter's level say whether heavy lifts get warm-up
-/// sets. Pure over its inputs.
+/// Protein over the last two weeks is context for the trend story when Workout setup's food-logs
+/// switch is on (G11, G13); the newest calibration test dates the next one; the warm-up-sets setting
+/// and the lifter's level say whether heavy lifts get warm-up sets. Pure over its inputs.
 enum WorkoutLoadContextBuilder {
     /// How far back sessions are read (the plateau's lookback).
     static let lookbackDays = WorkoutPlateau.lookbackDays
-    /// The protein context's window.
-    static let recoveryDays = 14
+    /// The protein context's window: whole weeks, so each week's logged days can be counted.
+    static let recoveryDays = 7 * RecoverySummary.loggedWeeks
     /// Plausible logged sleep, in hours; anything outside is ignored.
     static let sleepHoursRange = 0.5...16.0
     /// How far back a lift's first logged session is looked for (G8): two years and a week, past
@@ -53,17 +53,22 @@ enum WorkoutLoadContextBuilder {
             }
             .sorted { $0.1 < $1.1 }
         let sessions = exposures(window, nights: sleepByDay(merged))
+        let profile = body ?? settings.userProfile
         return WorkoutLoadContext(
             exposures: sessions.byLift, today: todayDate, defaultUnit: unit,
-            recovery: recovery(window, todayDate: todayDate, settings: settings),
+            recovery: recovery(window, todayDate: todayDate, bodyKilograms: profile.weightKilograms),
             calibration: CalibrationSettings(hasCoach: settings.coachExchangeEnabled, lastCalibration: sessions.lastCalibration),
             warmUpSets: WorkoutWarmUpSets.isEnabled(
                 preference: settings.workoutWarmUpSets, experience: settings.workoutProfile.experience
             ),
-            traits: traits(body ?? settings.userProfile),
+            traits: traits(profile),
             experience: settings.workoutProfile.experience,
             liftWeeks: liftWeeks(merged, todayDate: todayDate),
-            focus: settings.workoutStrengthFocus
+            focus: settings.workoutStrengthFocus,
+            foodAware: settings.workoutUsesFoodLogs,
+            // G13 reads logged weigh-ins only; Fernlet keeps no body-weight log yet (the profile holds
+            // one current weight, and Health's is read as the latest only), so the trend stays silent.
+            bodyWeights: []
         )
     }
 
@@ -207,20 +212,21 @@ enum WorkoutLoadContextBuilder {
         return WorkoutSessionFlags.sleepFlag(lastNight: night(0), previousNight: night(1), earlierNights: earlier)
     }
 
-    /// Protein over the context's window, today excluded (it isn't over). Sleep is no longer averaged:
+    /// Protein over the last ``RecoverySummary/loggedWeeks`` weeks, today excluded (it isn't over), in
+    /// grams per kilogram of `bodyKilograms`, with the days that had meals counted week by week so the
+    /// summary can tell whether the logging is good enough to read (G11). Sleep is not averaged here:
     /// it flags single sessions instead (``sleepFlag(on:nights:)``).
-    static func recovery(_ days: [(FernletDay, Date)], todayDate: Date, settings: FernletSettings) -> RecoverySummary {
-        let recent = days.filter { pair in
-            let age = Calendar.current.dateComponents([.day], from: pair.1, to: todayDate).day ?? Int.max
-            return age >= 0 && age < recoveryDays
+    static func recovery(_ days: [(FernletDay, Date)], todayDate: Date, bodyKilograms: Double) -> RecoverySummary {
+        var grams: [Double] = []
+        var byWeek = Array(repeating: 0, count: RecoverySummary.loggedWeeks)
+        for (day, date) in days where !day.meals.isEmpty {
+            let age = Calendar.current.dateComponents([.day], from: date, to: todayDate).day ?? Int.max
+            guard age >= 1, age <= recoveryDays else { continue }
+            byWeek[(age - 1) / 7] += 1
+            grams.append(Double(day.meals.reduce(0) { $0 + $1.macroSnapshot.protein }))
         }
-        let target = Double(NutritionTargetCalculator.targets(for: settings).protein)
-        let proteinDays = recent.filter { $0.1 < todayDate && !$0.0.meals.isEmpty }
-            .map { pair in Double(pair.0.meals.reduce(0) { $0 + $1.macroSnapshot.protein }) }
-        return RecoverySummary(
-            averageProteinRatio: proteinDays.isEmpty || target <= 0
-                ? nil : proteinDays.reduce(0, +) / Double(proteinDays.count) / target,
-            proteinDays: target > 0 ? proteinDays.count : 0
-        )
+        let perKilogram = grams.isEmpty || bodyKilograms <= 0
+            ? nil : grams.reduce(0, +) / Double(grams.count) / bodyKilograms
+        return RecoverySummary(proteinGramsPerKg: perKilogram, loggedDaysByWeek: byWeek)
     }
 }

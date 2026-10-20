@@ -633,7 +633,7 @@ The planner's words are localized without touching what it stores (2026-10-20, i
 
 The owner's spec of 2026-10-19, with round 2's trend and ladder (2026-10-20). Given a
 ``WorkoutLoadContext`` (each lift's logged sessions as ``LiftExposure``s with their sleep and
-readiness flags, recent protein, the calibration state), `WorkoutProgram.dayPlan` runs
+readiness flags, recent protein and logged weigh-ins, the calibration state), `WorkoutProgram.dayPlan` runs
 its lifting picks through a load pass. Everything is derived from the history each time — no stored
 estimate — so the same history always builds the same plan.
 
@@ -651,7 +651,8 @@ estimate — so the same history always builds the same plan.
   lift has been logged (``WorkoutLoadContext/trainingAge(for:)``); "under 6 months" keeps the trend's
   age inferred. Tough or a miss → repeat; a second miss in a row on days with no sleep or
   readiness flag → lighter; a third → lighter and a set fewer. A flagged miss (``WorkoutSessionFlag``)
-  always holds the load and never counts toward a cut (G10, 2026-10-20). Two overrides the same way,
+  always holds the load and never counts toward a cut (G10, 2026-10-20; `LoadChange.heldAfterFlag`,
+  its note said as what happened alongside it). Two overrides the same way,
   or a "too heavy / too light" answer, re-center the estimate on the lifter's picks; a third override
   in five sessions asks why once (``OverrideReason``).
 - **The trend (G1, 2026-10-20).** ``WorkoutTrend`` fits a robust weighted line through each lift's
@@ -683,6 +684,20 @@ estimate — so the same history always builds the same plan.
   (``WorkoutPlateau/strengthHeldStatus(of:unit:today:profile:)``, ``WorkoutTrend/hasEased(_:profile:)``:
   weeks of a line falling beyond noise, said as something a calorie deficit can bring, never a push to
   eat more); strength and sports prep follow their main lifts' full trend and keep the test.
+- **Food, as context only (G11–G13, 2026-10-20).** Workout setup's "Use food logs in workout notes"
+  (``WorkoutLoadContext/foodAware``, the synced `FernletSettings.workoutFoodAware`, on until switched
+  off) lets the trend story mention food once the logs can be read; food never cuts a weight or speeds
+  progress, and missing logs say nothing. Protein (``RecoverySummary``) is read against a fixed floor
+  of about 1.2 g per kg a day, allowing for self-logged intake running about a fifth low, only with
+  meals on five or more days in each of the last two weeks, beside a stall, a dip or a slowing, never
+  to weight management, with a doctor caveat for older lifters and kidney concerns. Logged weigh-ins
+  (``WorkoutBodyWeightTrend``: at least 0.5 % a week down over two to four weeks, 1.645 standard
+  errors clear of flat, on three weigh-ins in a row — 3 % of steady weights called falling over eight
+  weeks in its simulation) explain a Size lifter's stall, and beside weight management's strength-held
+  check bring a gentle check-in. Before a long, high-volume session the runner may ask one optional
+  "Eaten in the last few hours?" (``WorkoutFuelCheck``); a "no" holds a shortfall in the later sets
+  rather than counting it (`LoadChange.heldUnfueled`, ``ExerciseResult/unfueled``) and the trend
+  scores the top set alone.
 - **Training focus (G6).** ``WorkoutStrengthFocus``, a synced Workout setup choice: Strength (main
   lifts 3–5 reps), Size (6–10 main, 10–15 the rest, a set more past six months on a lift and two past
   two years) or Both — the default, the goal's own mix. A Size focus never follows the blocks.
@@ -783,6 +798,9 @@ never drops them; an older build that drops `setWeights` still has them in the l
 - ``BlockWeek``
 - ``WorkoutStrengthFocus``
 - ``PlateauTracking``
+- ``WorkoutFuelCheck``
+- ``WorkoutBodyWeightTrend``
+- ``BodyWeightSample``
 - ``BarbellPlateSet``
 - ``PlateLoadout``
 

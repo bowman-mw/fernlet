@@ -16,8 +16,8 @@
 import Foundation
 
 /// Everything the planner needs to prescribe loads: each lift's logged sessions (with their sleep and
-/// readiness flags), today, the unit to fall back on, recent protein, and the calibration state. Built
-/// by the app from the day history.
+/// readiness flags), today, the unit to fall back on, recent protein and logged body weight, and the
+/// calibration state. Built by the app from the day history.
 public nonisolated struct WorkoutLoadContext: Sendable {
     /// Sessions per lift, keyed by ``WorkoutExerciseCatalog/normalizedName(_:)``, oldest first.
     public var exposures: [String: [LiftExposure]]
@@ -40,12 +40,21 @@ public nonisolated struct WorkoutLoadContext: Sendable {
     public var liftWeeks: [String: Double]
     /// The lifting focus (G6): Strength, Size, or Both — the default, which keeps the goal's mix.
     public var focus: WorkoutStrengthFocus
+    /// Workout setup's "Use food logs in workout notes" switch (G13), resolved by the app (on unless
+    /// switched off). Off by default here, so a context built without saying so mentions no food or
+    /// body weight. On, the notes still say nothing until the logs are good enough to read
+    /// (``RecoverySummary/loggingIsGood``, ``WorkoutBodyWeightTrend/isFalling(_:today:)``).
+    public var foodAware: Bool
+    /// The weigh-ins the person logged, oldest first (G13); empty when they don't log their weight,
+    /// and then the notes never mention it.
+    public var bodyWeights: [BodyWeightSample]
 
     public init(
         exposures: [String: [LiftExposure]], today: Date, defaultUnit: LoadUnit,
         recovery: RecoverySummary = .unknown, calibration: CalibrationSettings = CalibrationSettings(),
         warmUpSets: Bool = false, traits: LifterTraits = .unknown, experience: ExperienceLevel? = nil,
-        liftWeeks: [String: Double] = [:], focus: WorkoutStrengthFocus = .both
+        liftWeeks: [String: Double] = [:], focus: WorkoutStrengthFocus = .both, foodAware: Bool = false,
+        bodyWeights: [BodyWeightSample] = []
     ) {
         self.exposures = exposures
         self.today = today
@@ -57,6 +66,8 @@ public nonisolated struct WorkoutLoadContext: Sendable {
         self.experience = experience
         self.liftWeeks = liftWeeks
         self.focus = focus
+        self.foodAware = foodAware
+        self.bodyWeights = bodyWeights
     }
 
     /// One lift's training age (G8): the setup answer as a floor — six months for "6 months to 2

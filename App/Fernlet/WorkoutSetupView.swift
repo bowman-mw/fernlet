@@ -36,6 +36,9 @@ struct WorkoutSetupSheet: View {
     private let initialWarmUpSets: Bool?
     @State private var strengthFocus: WorkoutStrengthFocus
     private let initialStrengthFocus: WorkoutStrengthFocus
+    /// "Use food logs in workout notes": nil until chosen (reads as on), synced on Save.
+    @State private var foodAware: Bool?
+    private let initialFoodAware: Bool?
     /// The heart-rate switches' draft (device-local, like the cue switches).
     @State private var zonePreferences: WorkoutZonePreferences
     private let recommendedSplits: [TrainingSplit]
@@ -90,6 +93,8 @@ struct WorkoutSetupSheet: View {
         self.initialWarmUpSets = settings.workoutWarmUpSets
         _strengthFocus = State(initialValue: settings.workoutStrengthFocus)
         self.initialStrengthFocus = settings.workoutStrengthFocus
+        _foodAware = State(initialValue: settings.workoutFoodAware)
+        self.initialFoodAware = settings.workoutFoodAware
         let zones = WorkoutZonePreferences.current()
         _zonePreferences = State(initialValue: zones)
         self.initialZonePreferences = zones
@@ -108,6 +113,7 @@ struct WorkoutSetupSheet: View {
             || spokenCues != initialSpokenCues
             || warmUpSets != initialWarmUpSets
             || strengthFocus != initialStrengthFocus
+            || foodAware != initialFoodAware
             || zonePreferences != initialZonePreferences
     }
 
@@ -314,6 +320,8 @@ struct WorkoutSetupSheet: View {
             }
 
             WarmUpSetsToggle(choice: $warmUpSets, experience: profile.experience)
+
+            FoodLogsToggle(choice: $foodAware)
         }
     }
 
@@ -369,6 +377,7 @@ struct WorkoutSetupSheet: View {
         WorkoutCuePreferences.saveSpoken(spokenCues)
         store.setWorkoutWarmUpSets(warmUpSets)
         store.setWorkoutStrengthFocus(strengthFocus)
+        store.setWorkoutFoodAware(foodAware)
         WorkoutZonePreferences.save(zonePreferences)
         dismiss()
     }

@@ -168,12 +168,31 @@ extension WorkoutPlannerCopy {
                       comment: "Workout session note giving context to a lift's progress: some sessions were on days the person chose or was offered as light. Arguments: a number written as digits (e.g. '2'), then a number of sessions (e.g. '8 sessions').")
     }
 
-    /// The rest check's protein line.
-    static func proteinLow(percent: Int) -> String {
-        String(localized: "workoutNote.plateau.proteinLow",
-               defaultValue: "Protein has run about \(percent)% of your target lately — a little more helps muscles rebuild.",
+    /// G11: logged protein under the floor, read allowing for under-logging, with the doctor caveat.
+    /// Context only — never said to weight management, never a load change.
+    static var proteinFloor: String {
+        let floor = RecoverySummary.floorGramsPerKg.formatted()
+        let full = RecoverySummary.fullGramsPerKg.formatted()
+        return String(localized: "workoutNote.plateau.proteinFloor",
+                      defaultValue: "Protein logged over the last two weeks has been under about \(floor) g per kg of body weight a day — below that, muscles have less to rebuild with, and around \(full) g is plenty. If you're older or have kidney concerns, check with your doctor before changing how much protein you eat.",
+                      bundle: .module,
+                      comment: "Workout session note in the plateau story, said only when meals have been logged most days for two weeks and protein ran under the floor. Arguments: grams of protein per kilogram of body weight a day, as decimals — the floor (e.g. '1.2'), then the amount that covers it (e.g. '1.6').")
+    }
+
+    /// G13: a Size lifter's stall beside a falling body weight.
+    static var bodyWeightSizeContext: String {
+        String(localized: "workoutNote.plateau.bodyWeightSize",
+               defaultValue: "Your logged body weight has been coming down over the last few weeks, and muscle size usually holds steady while it does — this stretch may simply be that.",
                bundle: .module,
-               comment: "Workout session note in the plateau story, said only when protein ran low. The argument is a whole percentage of the person's protein target.")
+               comment: "Workout session note in the plateau story for someone training for muscle size who logs their weight: their weight has been falling, which explains a stall. Calm and factual; never advice to eat more.")
+    }
+
+    /// G13: weight management's strength-held check beside a falling body weight — a gentle check-in.
+    static var bodyWeightCheckIn: String {
+        String(localized: "workoutNote.plateau.bodyWeightCheckIn",
+               defaultValue: "Your logged body weight has been coming down over the same weeks, and the two often happen together. How have you been feeling lately?",
+               bundle: .module,
+               comment: "Workout session note for someone whose goal is weight management and who logs their weight: strength has eased a little while weight came down. A gentle check-in, never advice about eating.")
     }
 
     // MARK: - The calibration brief

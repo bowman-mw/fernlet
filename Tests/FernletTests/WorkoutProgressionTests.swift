@@ -4,8 +4,10 @@
 // Round 2's progression pieces (2026-10-20) that ride on the day plan and the runner: planned blocks for
 // trained Strength lifters (G2), the harder variation offered at the heaviest weight a location has
 // (N7), the runner stepping through the weights a location owns (R6), and the monthly strength check
-// waiting for a day with more time (N3). The training-age pacing and the fixed steps (G3, G4, G8) are
-// pinned beside the engine in WorkoutLoadEngineTests and WorkoutLoadPlanningTests.
+// waiting for a day with more time (N3); what each goal hears (G7), the focus (G6) and the age-adjusted
+// copy (G9); and the protein and body-weight lines of the trend story (G11, G13). The training-age
+// pacing and the fixed steps (G3, G4, G8) are pinned beside the engine in WorkoutLoadEngineTests and
+// WorkoutLoadPlanningTests, with the food question and the protein context's builder (G12, G11).
 
 import Foundation
 import Testing
@@ -39,10 +41,12 @@ struct WorkoutProgressionTests {
         goal: GoalType = .wellness, template: WorkoutSessionTemplate = WorkoutSessions.push,
         location: WorkoutLocation = .fullGym, history: [String: [LiftExposure]] = [:], today: Int = 30,
         experience: ExperienceLevel? = nil, calibration: CalibrationSettings = CalibrationSettings(hasCoach: true),
-        length: WorkoutSessionLength = .noLimit, traits: LifterTraits = .unknown, focus: WorkoutStrengthFocus = .both
+        length: WorkoutSessionLength = .noLimit, traits: LifterTraits = .unknown, focus: WorkoutStrengthFocus = .both,
+        recovery: RecoverySummary = .unknown, foodAware: Bool = false, bodyWeights: [BodyWeightSample] = []
     ) throws -> WorkoutProgram.SessionSuggestion {
-        let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, calibration: calibration,
-                                      traits: traits, experience: experience, focus: focus)
+        let load = WorkoutLoadContext(exposures: history, today: day(today), defaultUnit: .lb, recovery: recovery,
+                                      calibration: calibration, traits: traits, experience: experience, focus: focus,
+                                      foodAware: foodAware, bodyWeights: bodyWeights)
         let plan = WorkoutProgram.dayPlan(
             goal: goal, intensity: .moderate, profile: WorkoutProfile(experience: .beginner), location: location,
             context: "", split: Self.split(template), rotationIndex: 0, load: load,
@@ -343,6 +347,73 @@ struct WorkoutProgressionTests {
         let tokens = WorkoutStrengthFocus.allCases.map(\.rawValue)
         let frozen = ["strength", "size", "both"]
         #expect(tokens == frozen)
+    }
+
+    // MARK: - G11, G13 food and body weight in the trend story
+
+    /// Protein logged at 0.8 g per kg a day on every day of the last two weeks: under the floor even
+    /// allowing for under-logging.
+    static let lowProtein = RecoverySummary(proteinGramsPerKg: 0.8, loggedDaysByWeek: [7, 7])
+
+    /// A morning weigh-in on each of the 28 days before `today`, from 80 kg down 1 % a week.
+    func falling(today: Int) -> [BodyWeightSample] {
+        (1...28).reversed().map { back in
+            BodyWeightSample(date: day(today - back), kilograms: 80 * pow(0.99, Double(28 - back) / 7))
+        }
+    }
+
+    @Test func aStallUnderTheProteinFloorSaysSoOnlyWithFoodLogsOn() throws {
+        let main = try #require(lifting(try plan(goal: .strength)).first).name
+        let history = [key(main): climbThenFlat(flatWeeks: 9)]
+        let said = try plan(goal: .strength, history: history, today: 104, recovery: Self.lowProtein, foodAware: true)
+        let notes = said.suggestion.notes
+        #expect(notes.contains("\(main) has held steady for"))
+        #expect(notes.contains("Protein logged over the last two weeks has been under about 1.2 g per kg"))
+        #expect(notes.contains("check with your doctor"))
+        // It is context only: the plan is the same with or without it.
+        let quiet = try plan(goal: .strength, history: history, today: 104, recovery: Self.lowProtein)
+        #expect(!quiet.suggestion.notes.contains("Protein"))
+        let same = lifting(said).map(\.line) == lifting(quiet).map(\.line)
+        #expect(same)
+        // Patchy logging says nothing.
+        let patchy = RecoverySummary(proteinGramsPerKg: 0.5, loggedDaysByWeek: [7, 3])
+        let unread = try plan(goal: .strength, history: history, today: 104, recovery: patchy, foodAware: true)
+        #expect(!unread.suggestion.notes.contains("Protein"))
+    }
+
+    @Test func weightManagementNeverHearsAboutEatingMore() throws {
+        let main = try #require(lifting(try plan(goal: .weightManagement)).first).name
+        let eased = try plan(goal: .weightManagement, history: [key(main): easing()], today: 97,
+                             recovery: Self.lowProtein, foodAware: true)
+        let notes = eased.suggestion.notes
+        #expect(notes.contains("\(main) has eased a little over recent weeks."))
+        #expect(!notes.contains("Protein"))
+        #expect(!notes.contains("eat more"))
+    }
+
+    @Test func aFallingBodyWeightExplainsASizeStallAndBringsAGentleCheckIn() throws {
+        let main = try #require(lifting(try plan(goal: .strength)).first).name
+        let history = [key(main): climbThenFlat(flatWeeks: 9)]
+        let weights = falling(today: 104)
+        #expect(WorkoutBodyWeightTrend.isFalling(weights, today: day(104)))
+        let size = try plan(goal: .strength, history: history, today: 104, focus: .size, foodAware: true,
+                            bodyWeights: weights)
+        #expect(size.suggestion.notes.contains("Your logged body weight has been coming down over the last few weeks, and muscle size usually holds steady while it does"))
+        // Only for the Size focus, and only with the food-logs switch on.
+        let both = try plan(goal: .strength, history: history, today: 104, foodAware: true, bodyWeights: weights)
+        #expect(!both.suggestion.notes.contains("body weight"))
+        let off = try plan(goal: .strength, history: history, today: 104, focus: .size, bodyWeights: weights)
+        #expect(!off.suggestion.notes.contains("body weight"))
+
+        let wm = try #require(lifting(try plan(goal: .weightManagement)).first).name
+        let checkIn = try plan(goal: .weightManagement, history: [key(wm): easing()], today: 97, foodAware: true,
+                               bodyWeights: falling(today: 97))
+        let notes = checkIn.suggestion.notes
+        #expect(notes.contains("Your logged body weight has been coming down over the same weeks, and the two often happen together. How have you been feeling lately?"))
+        #expect(!notes.contains("eat more") && !notes.contains("Protein"))
+        // No weigh-ins, no word about weight.
+        let unlogged = try plan(goal: .weightManagement, history: [key(wm): easing()], today: 97, foodAware: true)
+        #expect(!unlogged.suggestion.notes.contains("body weight"))
     }
 
     // MARK: - N3 the strength check's roomier day

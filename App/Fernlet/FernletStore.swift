@@ -4925,8 +4925,11 @@ final class FernletStore {
     /// so a user can walk past the Resume card into the configurator and mint a fresh session, and this
     /// would otherwise overwrite the in-progress run — state, app-group mirror and Live Activity — with
     /// no prompt. `replacingActiveRun` is the caller's word that the user was asked and said yes.
-    /// Returns whether the run actually started.
-    func startGuidedRun(_ session: WorkoutProgram.SessionSuggestion, replacingActiveRun: Bool = false) -> Bool {
+    /// `unfueled` is a "no" to the Ready screen's optional food question (G12), which the finished
+    /// run's results carry. Returns whether the run actually started.
+    func startGuidedRun(
+        _ session: WorkoutProgram.SessionSuggestion, replacingActiveRun: Bool = false, unfueled: Bool = false
+    ) -> Bool {
         guard replacingActiveRun || activeGuidedRunBlockingStart(of: session) == nil else { return false }
         // A planned workout's run files under its plan's day and carries the plan's id and its lines as
         // written (`PlannedWorkoutRun.swift`); nil for the app's own sessions.
@@ -4948,6 +4951,8 @@ final class FernletStore {
             exercises: exercises
         )
         state.plannedWorkoutID = plan?.plannedWorkoutID
+        // G12: the Ready screen's optional "no" to "Eaten in the last few hours?", for the results.
+        state.unfueled = unfueled ? true : nil
         state.phase = .working
         state.setStartedAt = Date()
         // The session's start, for the logged duration: the run carries it, so it survives a relaunch.

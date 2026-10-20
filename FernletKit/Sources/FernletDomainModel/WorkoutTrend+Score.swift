@@ -96,7 +96,9 @@ extension WorkoutTrend {
         }
         let estimates = setEstimates(of: exposure, in: unit)
         let preferred = estimates.filter { $0.effortReps <= preferredEffortReps }
-        let pool = (preferred.isEmpty ? estimates : preferred).map { $0.estimate }.sorted(by: >).prefix(topSets)
+        // With nothing eaten for a while (G12), the later sets say little about the max: the top one alone.
+        let take = exposure.unfueled ? 1 : topSets
+        let pool = (preferred.isEmpty ? estimates : preferred).map { $0.estimate }.sorted(by: >).prefix(take)
         guard !pool.isEmpty else { return nil }
         return pool.reduce(0, +) / Double(pool.count)
     }

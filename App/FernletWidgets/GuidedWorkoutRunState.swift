@@ -305,6 +305,12 @@ struct GuidedWorkoutRunState: Codable, Hashable {
     /// and in a run persisted before planned workouts could be guided.
     var plannedWorkoutID: UUID?
 
+    /// True when the lifter answered "no" to the Ready screen's optional "Eaten in the last few
+    /// hours?" (G12, `WorkoutFuelCheck`). Every tracked lift's result carries it, so a shortfall in the
+    /// later sets is held rather than counted as a miss; it never changes a weight. Nil when not asked,
+    /// answered "yes", or in a run persisted before the question existed — which decodes unchanged.
+    var unfueled: Bool?
+
     // MARK: Cursor
 
     /// 0-based index into `exercises`.

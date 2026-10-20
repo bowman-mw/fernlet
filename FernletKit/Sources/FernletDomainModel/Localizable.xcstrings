@@ -31247,6 +31247,42 @@
         }
       }
     },
+    "workoutNote.load.heldAfterLightDay" : {
+      "comment" : "Workout session note about one lift: the reps fell short last time on a day the person took or was offered as light, so the weight stays. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: the same weight today — last time fell on a light day, so it doesn't count as a miss."
+          }
+        }
+      }
+    },
+    "workoutNote.load.heldAfterShortNight" : {
+      "comment" : "Workout session note about one lift: the reps fell short last time on a day after a short night's sleep, so the weight stays. Said as something that happened alongside, never as blame. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: the same weight today — last time came after a short night, which can take a little off a session, so it doesn't count as a miss."
+          }
+        }
+      }
+    },
+    "workoutNote.load.heldUnfueled" : {
+      "comment" : "Workout session note about one lift: its later sets fell short last time in a long session started without having eaten, so the weight stays and it isn't counted as a miss. Calm and factual, never advice to eat. The argument is the exercise name.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%@: the same again today — later sets often come up short in a long session when nothing's been eaten for a while, so last time doesn't count as a miss."
+          }
+        }
+      }
+    },
     "workoutNote.load.holdForEquipment" : {
       "comment" : "Workout session note about one lift: the person's weights can't go up a step, so add a rep instead. The argument is the exercise name.",
       "extractionState" : "extracted_with_value",
@@ -31487,6 +31523,30 @@
         }
       }
     },
+    "workoutNote.plateau.bodyWeightCheckIn" : {
+      "comment" : "Workout session note for someone whose goal is weight management and who logs their weight: strength has eased a little while weight came down. A gentle check-in, never advice about eating.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your logged body weight has been coming down over the same weeks, and the two often happen together. How have you been feeling lately?"
+          }
+        }
+      }
+    },
+    "workoutNote.plateau.bodyWeightSize" : {
+      "comment" : "Workout session note in the plateau story for someone training for muscle size who logs their weight: their weight has been falling, which explains a stall. Calm and factual; never advice to eat more.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Your logged body weight has been coming down over the last few weeks, and muscle size usually holds steady while it does — this stretch may simply be that."
+          }
+        }
+      }
+    },
     "workoutNote.plateau.deload" : {
       "comment" : "Workout session note: a lighter session after two lower ones, with fewer sets. Arguments: the exercise name, then a number of sets (e.g. '2 sets').",
       "extractionState" : "extracted_with_value",
@@ -31643,14 +31703,14 @@
         }
       }
     },
-    "workoutNote.plateau.proteinLow" : {
-      "comment" : "Workout session note in the plateau story, said only when protein ran low. The argument is a whole percentage of the person's protein target.",
+    "workoutNote.plateau.proteinFloor" : {
+      "comment" : "Workout session note in the plateau story, said only when meals have been logged most days for two weeks and protein ran under the floor. Arguments: grams of protein per kilogram of body weight a day, as decimals — the floor (e.g. '1.2'), then the amount that covers it (e.g. '1.6').",
       "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Protein has run about %lld%% of your target lately — a little more helps muscles rebuild."
+            "value" : "Protein logged over the last two weeks has been under about %1$@ g per kg of body weight a day — below that, muscles have less to rebuild with, and around %2$@ g is plenty. If you're older or have kidney concerns, check with your doctor before changing how much protein you eat."
           }
         }
       }

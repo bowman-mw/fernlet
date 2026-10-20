@@ -127,8 +127,16 @@ struct WorkoutCopyLocalizationTests {
         #expect(ladder == "Rep ladder: 9 of 8–12 today. One more rep each time; at 12, add weight.")
         let bottom = WorkoutPlannerCopy.ladderBackTo(reps: 8)
         #expect(bottom == "Back to 8 reps — add weight now, about 2.5–5%.")
-        let protein = WorkoutPlannerCopy.proteinLow(percent: 70)
-        #expect(protein.hasPrefix("Protein has run about 70% of your target"))
+        let protein = WorkoutPlannerCopy.proteinFloor
+        #expect(protein.hasPrefix("Protein logged over the last two weeks has been under about 1.2 g per kg of body weight a day"))
+        #expect(protein.hasSuffix("If you're older or have kidney concerns, check with your doctor before changing how much protein you eat."))
+        // G10: a flagged miss's hold is said as what happened alongside it, never as the person's fault.
+        let night = WorkoutPlannerCopy.heldAfterFlag("Back squat", shortNight: true)
+        #expect(night == "Back squat: the same weight today — last time came after a short night, which can take a little off a session, so it doesn't count as a miss.")
+        let light = WorkoutPlannerCopy.heldAfterFlag("Back squat", shortNight: false)
+        #expect(light == "Back squat: the same weight today — last time fell on a light day, so it doesn't count as a miss.")
+        let unfueled = WorkoutPlannerCopy.heldUnfueled("Back squat")
+        #expect(unfueled.hasPrefix("Back squat: the same again today — later sets often come up short in a long session"))
         let skipped = WorkoutProgram.hiddenDropNote(["Hinge", "Core"])
         #expect(skipped == "Skipped Hinge, Core — the only options here are ones you've hidden.")
         let fitted = WorkoutPlannerCopy.budgetFitted(minutes: 30, changes: WorkoutPlannerCopy.budgetShorterWarmUp)

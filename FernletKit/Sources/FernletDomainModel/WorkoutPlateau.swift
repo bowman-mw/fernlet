@@ -86,26 +86,54 @@ public nonisolated struct PlateauStatus: Equatable, Sendable {
     }
 }
 
-/// Recent protein, summarized by the app. Context only; step 4 of the round reworks it. The old
-/// "sleep under 7 h on average" check is retired: sleep now flags single sessions (``WorkoutSessionFlag``).
+/// Recent protein, summarized by the app — context for the trend story only (G11, 2026-10-20). It never
+/// cuts a load or speeds progress: at most it is said beside a hold the training data already called.
+///
+/// Protein's benefit plateaus near 1.6 g per kilogram of body weight a day (2.2 at the very top) and
+/// all but vanishes under about 1.2, so the check is a fixed floor, not a share of a target; and
+/// self-logged intake runs about 19–25 % low, so the logged figure is read as ``underReporting`` low
+/// before it is compared. It speaks only when the logging can be trusted — meals on
+/// ``loggedDaysPerWeek`` or more days in each of the last ``loggedWeeks`` weeks — and says nothing
+/// when it can't.
 public nonisolated struct RecoverySummary: Equatable, Sendable {
-    /// Average share of the protein target eaten, over days with meals logged (1.0 = on target).
-    public var averageProteinRatio: Double?
-    public var proteinDays: Int
+    /// Average logged protein a day, in grams per kilogram of body weight, over the days with meals
+    /// logged; nil without a body weight or any meals.
+    public var proteinGramsPerKg: Double?
+    /// Days with meals logged in each of the last weeks, the most recent first.
+    public var loggedDaysByWeek: [Int]
 
-    public init(averageProteinRatio: Double? = nil, proteinDays: Int = 0) {
-        self.averageProteinRatio = averageProteinRatio
-        self.proteinDays = max(0, proteinDays)
+    /// The floor: under about this much a day, protein's benefit to muscle falls away.
+    public static let floorGramsPerKg = 1.2
+    /// About here the benefit tops out: "fully fueled", the amount the note names.
+    public static let fullGramsPerKg = 1.6
+    /// How far low self-logged intake tends to run; the logged figure is divided by one minus this.
+    public static let underReporting = 0.2
+    /// Logging that can be trusted: meals on at least this many days in each of the last weeks…
+    public static let loggedDaysPerWeek = 5
+    /// …for at least this many weeks.
+    public static let loggedWeeks = 2
+
+    public init(proteinGramsPerKg: Double? = nil, loggedDaysByWeek: [Int] = []) {
+        self.proteinGramsPerKg = proteinGramsPerKg.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+        self.loggedDaysByWeek = Array(loggedDaysByWeek.prefix(Self.loggedWeeks)).map { min(7, max(0, $0)) }
     }
 
     /// Nothing known.
     public static let unknown = RecoverySummary()
 
-    /// Under 80 % of the protein target on average, over at least four days with meals.
-    public var proteinIsLow: Bool {
-        guard proteinDays >= WorkoutPlateau.proteinMinimumDays, let ratio = averageProteinRatio else { return false }
-        return ratio < WorkoutPlateau.proteinLowRatio
+    /// Meals logged on enough days, for long enough, to read anything from them.
+    public var loggingIsGood: Bool {
+        loggedDaysByWeek.count >= Self.loggedWeeks && loggedDaysByWeek.allSatisfy { $0 >= Self.loggedDaysPerWeek }
     }
+
+    /// The logged figure allowing for under-reporting; nil while the logging can't be trusted.
+    public var likelyGramsPerKg: Double? {
+        guard loggingIsGood, let logged = proteinGramsPerKg else { return nil }
+        return logged / (1 - Self.underReporting)
+    }
+
+    /// Under the floor, even allowing for under-reporting. False while the logging can't be trusted.
+    public var proteinUnderFloor: Bool { (likelyGramsPerKg ?? .infinity) < Self.floorGramsPerKg }
 }
 
 /// How much of the trend a goal hears (G7, 2026-10-20). Wellness, mental health, recovery and
@@ -160,8 +188,6 @@ public nonisolated enum WorkoutPlateau {
     public static let variantMainMinimumSets = 2
     /// The deload keeps the load; it may sit at most this far under the last working weight.
     public static let deloadMaxDecrease = 0.05
-    public static let proteinLowRatio = 0.8
-    public static let proteinMinimumDays = 4
 
     // MARK: Status
 

@@ -168,12 +168,47 @@ struct WorkoutLoadEngineTests {
         }
         let missed = session(24, 135, reps: [10, 8, 7], target: 10)
         let afterShortNight = plan([missed, tired(28)])
-        #expect((afterShortNight.change, afterShortNight.prescription?.suggested) == (.same, 135))
+        #expect((afterShortNight.change, afterShortNight.prescription?.suggested) == (.heldAfterFlag, 135))
+        let sleep = afterShortNight.previousFlag?.sleep
+        #expect(sleep == .shortNight)
         let onALightDay = plan([missed, tired(28, light: true)])
-        #expect(onALightDay.change == .same)
+        #expect(onALightDay.change == .heldAfterFlag)
         // A flagged miss between two unflagged ones neither counts nor breaks the run.
         let between = plan([session(20, 135, reps: [10, 8, 7], target: 10), tired(24), session(28, 135, reps: [10, 8, 7], target: 10)])
         #expect((between.change, between.prescription?.suggested) == (.lighter, 130))
+    }
+
+    /// G12: a "no" to "Eaten in the last few hours?" before a long session holds a shortfall in the
+    /// later sets — carbohydrate tops up volume, not the top set — and never moves the weight.
+    @Test func aLaterSetsMissWithNothingEatenHoldsAndNeverCountsTowardACut() {
+        func unfueled(_ offset: Int, reps: [Int]) -> LiftExposure {
+            var miss = session(offset, 135, reps: reps, target: 10)
+            miss.unfueled = true
+            return miss
+        }
+        let missed = session(24, 135, reps: [10, 8, 7], target: 10)
+        let held = plan([missed, unfueled(28, reps: [10, 8, 7])])
+        #expect((held.change, held.prescription?.suggested) == (.heldUnfueled, 135))
+        // The top set falling short too is a real miss, and two in a row go lighter.
+        let real = plan([missed, unfueled(28, reps: [9, 8, 7])])
+        #expect(real.change == .lighter)
+        // A held miss between two unflagged ones neither counts nor breaks the run.
+        let between = plan([session(20, 135, reps: [10, 8, 7], target: 10), unfueled(24, reps: [10, 8, 7]),
+                            session(28, 135, reps: [10, 8, 7], target: 10)])
+        #expect(between.change == .lighter)
+        // A "no" on a session that reached every target changes nothing: one more rep, as always.
+        let completed = plan([unfueled(28, reps: [10, 10, 10])])
+        #expect((completed.change, completed.reps) == (.moreReps, 11))
+    }
+
+    @Test func withNothingEatenTheTrendScoresTheTopSetAlone() throws {
+        var exposure = session(0, 100, reps: [10, 8, 6], target: 10)
+        let usual = try #require(WorkoutTrend.sessionScore(of: exposure, in: .lb))
+        exposure.unfueled = true
+        let topSet = try #require(WorkoutTrend.sessionScore(of: exposure, in: .lb))
+        // The later sets' 8 and 6 reps to the limit: 126.7 and 120 averaged, or the better one alone.
+        #expect(abs(usual - (100 * (1 + 8.0 / 30) + 100 * (1 + 6.0 / 30)) / 2) < 0.001)
+        #expect(abs(topSet - 100 * (1 + 8.0 / 30)) < 0.001)
     }
 
     @Test func aLongBreakRestartsALittleLighter() {
@@ -346,10 +381,25 @@ struct WorkoutLoadEngineTests {
         #expect(legacy.parkedToken == nil)
     }
 
-    @Test func theProteinContextSpeaksOnlyWhenProteinRanLow() {
-        #expect(RecoverySummary(averageProteinRatio: 0.7, proteinDays: 5).proteinIsLow)
-        #expect(!RecoverySummary(averageProteinRatio: 0.7, proteinDays: 3).proteinIsLow)
-        #expect(!RecoverySummary.unknown.proteinIsLow)
+    /// G11: a fixed floor of about 1.2 g per kg a day, read allowing for self-logged intake running
+    /// about a fifth low, and only on logging good enough to read — meals on five or more days in each
+    /// of the last two weeks.
+    @Test func theProteinFloorSpeaksOnlyOnGoodLoggingAndUnderTheFloor() throws {
+        // 0.9 g/kg logged reads as about 1.13: under the floor.
+        let low = RecoverySummary(proteinGramsPerKg: 0.9, loggedDaysByWeek: [6, 5])
+        #expect(low.loggingIsGood)
+        let likely = try #require(low.likelyGramsPerKg)
+        #expect(abs(likely - 0.9 / 0.8) < 0.0001)
+        #expect(low.proteinUnderFloor)
+        // 1.0 g/kg logged reads as 1.25: over the floor once the under-logging is allowed for.
+        #expect(!RecoverySummary(proteinGramsPerKg: 1.0, loggedDaysByWeek: [7, 7]).proteinUnderFloor)
+        // Four days in one of the weeks, or one week of logs, can't be read: nothing is said.
+        let patchy = RecoverySummary(proteinGramsPerKg: 0.5, loggedDaysByWeek: [7, 4])
+        #expect(!patchy.loggingIsGood)
+        #expect(!patchy.proteinUnderFloor)
+        #expect(!RecoverySummary(proteinGramsPerKg: 0.5, loggedDaysByWeek: [7]).proteinUnderFloor)
+        #expect(!RecoverySummary(proteinGramsPerKg: nil, loggedDaysByWeek: [7, 7]).proteinUnderFloor)
+        #expect(!RecoverySummary.unknown.proteinUnderFloor)
     }
 
     // MARK: - Calibration
