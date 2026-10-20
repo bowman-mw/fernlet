@@ -181,14 +181,14 @@ def old_is_stalled(sessions):
 
 TIERS = {
     # min clean sessions, min span (weeks), trend window (weeks), stall window (weeks), noise prior
-    "beginner": dict(min_sessions=5, min_weeks=1.5, max_weeks=4.0, stall_weeks=6.0, prior=0.045),
-    "intermediate": dict(min_sessions=8, min_weeks=6.0, max_weeks=8.0, stall_weeks=8.0, prior=0.035),
+    "beginner": dict(min_sessions=5, min_weeks=1.5, max_weeks=4.0, stall_weeks=8.0, prior=0.045),
+    "intermediate": dict(min_sessions=8, min_weeks=6.0, max_weeks=8.0, stall_weeks=10.0, prior=0.035),
     "advanced": dict(min_sessions=12, min_weeks=10.0, max_weeks=12.0, stall_weeks=12.0, prior=0.03),
 }
 PARAMS = dict(
     z_upper=0.8416,          # one-sided 80 % bound
-    z_expected=0.0,          # how clearly the slope must sit under the expected curve, in SEs
-    stall_persist=1,         # consecutive evaluations the stall test must hold
+    z_expected=1.2816,          # how clearly the slope must sit under the expected curve, in SEs
+    stall_persist=3,         # consecutive evaluations the stall test must hold
     own_weeks=4.0,           # inferred training age: the earlier stretch the own-progress slope reads
     own_min_sessions=6,
     stall_gain=0.01,         # 1 % per 4 weeks
