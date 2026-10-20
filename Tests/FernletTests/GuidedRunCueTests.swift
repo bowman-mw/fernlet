@@ -58,8 +58,8 @@ private final class BackgroundRecorder {
 
     // MARK: Fixtures
 
-    private static let start = Date(timeIntervalSince1970: 2_000_000)
-    private static let hapticsOnly = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
+    private nonisolated static let start = Date(timeIntervalSince1970: 2_000_000)
+    private nonisolated static let hapticsOnly = FernletFeedbackPreferences(hapticsEnabled: true, soundsEnabled: false)
     private static let bothOff = FernletFeedbackPreferences(hapticsEnabled: false, soundsEnabled: false)
 
     private static func run(_ exercises: [GuidedWorkoutRunState.Exercise], at origin: Date = GuidedRunCueTests.start) -> GuidedWorkoutRunState {
