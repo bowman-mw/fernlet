@@ -13,6 +13,7 @@
 //  (tracker row N6), written through the same store calls as the plan editor's.
 //
 
+import Foundation
 import SwiftUI
 import FernletDomainModel
 import FernletFoundation

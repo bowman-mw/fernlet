@@ -311,7 +311,8 @@ struct ExerciseDemonstrationTests {
                 }
             }
         }
-        #expect(looping == [[true, true, true, false]], "only an unpaused animation, on screen and active, loops")
+        let onlyUnpausedVisibleActive: [[Bool]] = [[true, true, true, false]]
+        #expect(looping == onlyUnpausedVisibleActive, "only an unpaused animation, on screen and active, loops")
         let playing = ExerciseDemonstrationPlayback(
             fileName: "1113.gif",
             loops: ExerciseDemonstrationPlayback.loops(animates: true, isOnScreen: true, isActive: true, isPaused: false),
@@ -364,7 +365,8 @@ struct ExerciseDemonstrationTests {
             #expect(view.contains(word), "the pause words lost \(word)")
         }
         let badgeStart = try #require(view.range(of: "struct ExerciseDemonstrationPauseBadge"))
-        let badge = view[badgeStart.lowerBound...]
+        let badgeEnd = try #require(view.range(of: "struct ExerciseDemonstrationFrames"))
+        let badge = view[badgeStart.lowerBound..<badgeEnd.lowerBound]
         for needle in ["isPaused ? \"play.fill\" : \"pause.fill\"", ".foregroundStyle(Color.bark)",
                        ".background(Color.parchment, in: Circle())", ".strokeBorder(Color.slate, lineWidth: 1.5)",
                        ".accessibilityHidden(true)"] {
