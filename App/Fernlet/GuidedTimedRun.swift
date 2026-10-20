@@ -83,7 +83,7 @@ enum GuidedRunTimedLog {
 enum GuidedSegmentWords {
 
     /// The pace word: "Hard", "Easy" or "Steady".
-    static func paceWord(_ paceRaw: String) -> String {
+    nonisolated static func paceWord(_ paceRaw: String) -> String {
         switch paceRaw {
         case GuidedWorkoutRunState.PaceToken.hard:
             String(localized: "workout.pace.hard", defaultValue: "Hard",
@@ -103,13 +103,13 @@ enum GuidedSegmentWords {
     }
 
     /// A segment's length as a clock ("1:00", "20:00") for the up-next list.
-    static func clock(seconds: Int) -> String {
+    nonisolated static func clock(seconds: Int) -> String {
         Duration.seconds(max(0, seconds)).formatted(.time(pattern: .minuteSecond))
     }
 
     /// An up-next row's spoken and listed name: the pace and length for a segment ("Easy 1:00"), the
     /// exercise's name otherwise.
-    static func upNextName(_ exercise: GuidedWorkoutRunState.Exercise) -> String {
+    nonisolated static func upNextName(_ exercise: GuidedWorkoutRunState.Exercise) -> String {
         guard let segment = exercise.segment else { return exercise.name }
         return "\(paceWord(segment.paceRaw)) \(clock(seconds: exercise.holdSeconds ?? 0))"
     }
