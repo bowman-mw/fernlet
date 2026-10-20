@@ -3298,6 +3298,7 @@ final class FernletStore {
         var updated = workout
         updated.plannedWorkoutID = existing.plannedWorkoutID
         updated.loggedFromGuidedSession = existing.loggedFromGuidedSession
+        updated.plannedExercises = existing.plannedExercises
         updated.completedAt = existing.completedAt
         updated.loggedAt = existing.loggedAt
         // A guided row's NAME is the relaunch reconciliation key (`loggedGuidedWorkoutNamesToday`) — pin it
@@ -3354,6 +3355,9 @@ final class FernletStore {
     /// Best-effort reverse of `PlannedWorkout.completedWorkout`, rebuilding the planned row a completion
     /// consumed. The `Workout` carries these exactly: plannedWorkoutID (→ preserved planned id),
     /// name, mode, activityType, exercises, muscleGroups, duration, distance/energy/effort targets.
+    /// A guided run of the plan rewrote `exercises` with what was done; its `plannedExercises` keeps
+    /// the plan's own lines, and those come back instead. (A timed cardio plan's `duration` is still
+    /// the minutes the run held, not the plan's: that one field is not kept.)
     /// Lossy fields it can't carry are approximated: `split` collapses through `WorkoutType`
     /// (push/pull/upper all read back as `.upper`, legs/lower → `.lower`, etc.), `source` is recovered
     /// from the boilerplate completion note (else `.user`), `createdAt` is taken from the completion
@@ -3373,7 +3377,7 @@ final class FernletStore {
             source: source,
             mode: workout.mode,
             activityType: workout.activityType,
-            exercises: workout.exercises,
+            exercises: workout.plannedExercises ?? workout.exercises,
             muscleGroups: workout.muscleGroups,
             notes: "",
             duration: workout.duration,
