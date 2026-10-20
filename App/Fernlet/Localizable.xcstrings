@@ -3110,6 +3110,17 @@
     "Enough to feel it, not enough to drain." : {
 
     },
+    "Enter a whole number from 120 to 220, or leave it empty." : {
+      "comment" : "Workout setup, under My max heart rate, shown only while the field holds something unusable (it would be cleared on Save). Calm, not an error.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enter a whole number from 120 to 220, or leave it empty."
+          }
+        }
+      }
+    },
     "Enter details by hand" : {
 
     },
@@ -4522,6 +4533,17 @@
     "Leave" : {
 
     },
+    "Left empty, Fernlet estimates it from your age with 208 − 0.7 × age (Tanaka): about %lld bpm for you. If you know your own, from a lab test or a hard effort you measured, enter it and your zones use it instead." : {
+      "comment" : "Workout setup, under My max heart rate. Keep the formula as written; Tanaka is the researcher's surname. The argument is the estimate for this person in beats per minute.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Left empty, Fernlet estimates it from your age with 208 − 0.7 × age (Tanaka): about %lld bpm for you. If you know your own, from a lab test or a hard effort you measured, enter it and your zones use it instead."
+          }
+        }
+      }
+    },
     "Left out because of your note: %@" : {
       "comment" : "Body areas the free-text injury note names, which the planner leaves out; the argument is a list of areas"
     },
@@ -4838,8 +4860,30 @@
     "Matching" : {
 
     },
+    "Max" : {
+      "comment" : "Voice Control's shortest name for the My max heart rate field in Workout setup (short for maximum). One word.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Max"
+          }
+        }
+      }
+    },
     "Max attempt — use a spotter or safety arms, and stop if your form breaks. Missed it? Set the reps to 0 and the rest are skipped." : {
 
+    },
+    "Max heart rate" : {
+      "comment" : "Voice Control name for the My max heart rate field in Workout setup. Keep it short: it is what the person says to reach the field.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Max heart rate"
+          }
+        }
+      }
     },
     "Meal" : {
 
@@ -5039,6 +5083,28 @@
     },
     "Muscles to rest" : {
       "comment" : "Caption over the single-muscle chips in the workout injury section"
+    },
+    "My max heart rate" : {
+      "comment" : "Workout setup: the name of the optional field for the person's own maximum heart rate, in beats per minute.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "My max heart rate"
+          }
+        }
+      }
+    },
+    "My max heart rate (bpm)" : {
+      "comment" : "Workout setup, under the heart-rate switches: the caption of an optional field for the person's own maximum heart rate. bpm = beats per minute.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "My max heart rate (bpm)"
+          }
+        }
+      }
     },
     "Name" : {
 
