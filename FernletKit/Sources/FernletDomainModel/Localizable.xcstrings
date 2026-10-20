@@ -30748,6 +30748,18 @@
         }
       }
     },
+    "workoutNote.budget.oneWarmUpSet" : {
+      "comment" : "Part of a list in a workout session note, after 'Fitted to 30 min:' — a lift's lighter warm-up sets were cut to just one. The argument is a comma-separated list of exercise names.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "one warm-up set for %@"
+          }
+        }
+      }
+    },
     "workoutNote.budget.over" : {
       "comment" : "Workout session note: even trimmed, the session runs past the person's session length. Arguments: the estimated minutes, then the chosen session length in minutes.",
       "extractionState" : "extracted_with_value",

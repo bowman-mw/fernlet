@@ -11,7 +11,9 @@
 // 3. accessory work, lowest priority first: the activation's jumps, the lifting block's accessory
 //    lifts from the last one up, then the activation's balance drill;
 // 4. accessory sets, one at a time from the last accessory lift, round after round, never below two;
-// 5. main-lift sets, the same way, never below two.
+// 5. the warm-up ramp (``WorkoutWarmUpSets``), cut to its one set nearest 60 % of the working weight —
+//    never to none (the owner's pick R1, 2026-10-20);
+// 6. main-lift sets, the same way as accessory sets, never below two.
 // Main lifts are never dropped (a lift eased to accessory work for a mild injury is still the slot's
 // main lift), the activation block keeps at least one move and the lifting block at least one lift.
 // Nothing is ever added or made harder, so the injury limits and the 48-hour guard's lighter sets still
@@ -99,16 +101,19 @@ public nonisolated enum WorkoutSessionBudget {
         case coolDownStretch(String)
         case accessory(String)
         case accessorySet(String)
+        /// A lift's warm-up ramp cut to one set.
+        case warmUpRamp(String)
         case mainSet(String)
 
-        /// The trim's step in the order (1 … 5): the trims of a fit never step backwards.
+        /// The trim's step in the order (1 … 6): the trims of a fit never step backwards.
         public var stage: Int {
             switch self {
             case .shortWarmUp: 1
             case .coolDownStretch: 2
             case .accessory: 3
             case .accessorySet: 4
-            case .mainSet: 5
+            case .warmUpRamp: 5
+            case .mainSet: 6
             }
         }
     }
@@ -177,6 +182,7 @@ public nonisolated enum WorkoutSessionBudget {
         dropAccessoryLifts(&work)
         dropActivation(&work, timed: true)
         reduceSets(&work, mainLifts: false)
+        trimWarmUpRamps(&work)
         reduceSets(&work, mainLifts: true)
         return Outcome(blocks: work.blocks, trims: work.trims, estimatedSeconds: work.seconds, budgetMinutes: budget)
     }
@@ -272,7 +278,29 @@ public nonisolated enum WorkoutSessionBudget {
         }
     }
 
-    /// Steps 4 and 5: one set at a time from the last lift of the kind, round after round, never
+    /// Step 5: each lift's warm-up ramp cut to the one set nearest 60 % of its working weight
+    /// (``WorkoutWarmUpSets/keptOnTrim(_:working:)``) — never to none. A warm-up set is one of the
+    /// lift's main-lift steps, so no earlier step drops it.
+    static func trimWarmUpRamps(_ work: inout Work) {
+        let lifts = orderedNames(work.blocks.lifting.filter(WorkoutWarmUpSets.isWarmUpSet))
+        for name in lifts {
+            guard work.isOver else { return }
+            let ramp = work.blocks.lifting.filter { $0.name == name && WorkoutWarmUpSets.isWarmUpSet($0) }
+            let lift = work.blocks.lifting.first { $0.name == name && !WorkoutWarmUpSets.isWarmUpSet($0) }
+            guard ramp.count > 1,
+                  let kept = WorkoutWarmUpSets.keptOnTrim(ramp, working: lift?.guidance?.prescription?.suggested ?? 0)
+            else { continue }
+            for index in work.blocks.lifting.indices.reversed() {
+                let step = work.blocks.lifting[index]
+                guard step.name == name, WorkoutWarmUpSets.isWarmUpSet(step), step.id != kept.id else { continue }
+                work.blocks.lifting.remove(at: index)
+                work.blocks.mainLift.remove(at: index)
+            }
+            work.trims.append(.warmUpRamp(name))
+        }
+    }
+
+    /// Steps 4 and 6: one set at a time from the last lift of the kind, round after round, never
     /// below ``minimumSets``.
     static func reduceSets(_ work: inout Work, mainLifts: Bool) {
         for _ in 0..<maxSetRounds {
@@ -310,16 +338,18 @@ public nonisolated enum WorkoutSessionBudget {
     }
 
     /// "shorter warm-up; fewer cool-down stretches; left out Squat jump, Cable curl; fewer sets of
-    /// Bench press" — the trims in order, empty when there were none.
+    /// Bench press; one warm-up set for Back squat" — the trims in order, empty when there were none.
     static func changeSummary(_ trims: [Trim]) -> String {
         var dropped: [String] = []
         var fewerSets: [String] = []
+        var oneWarmUp: [String] = []
         var coolDown = false
         for trim in trims {
             switch trim {
             case .shortWarmUp: continue
             case .coolDownStretch: coolDown = true
             case .accessory(let name): dropped.append(name)
+            case .warmUpRamp(let name): oneWarmUp.append(name)
             case .accessorySet(let name), .mainSet(let name):
                 if !fewerSets.contains(name) { fewerSets.append(name) }
             }
@@ -329,6 +359,7 @@ public nonisolated enum WorkoutSessionBudget {
         if coolDown { parts.append(WorkoutPlannerCopy.budgetFewerCoolDown) }
         if !dropped.isEmpty { parts.append(WorkoutPlannerCopy.budgetLeftOut(dropped.joined(separator: ", "))) }
         if !fewerSets.isEmpty { parts.append(WorkoutPlannerCopy.budgetFewerSets(fewerSets.joined(separator: ", "))) }
+        if !oneWarmUp.isEmpty { parts.append(WorkoutPlannerCopy.budgetOneWarmUpSet(oneWarmUp.joined(separator: ", "))) }
         return parts.joined(separator: "; ")
     }
 }

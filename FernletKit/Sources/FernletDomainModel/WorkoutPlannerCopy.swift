@@ -168,4 +168,11 @@ public nonisolated enum WorkoutPlannerCopy {
         String(localized: "workoutNote.budget.fewerSets", defaultValue: "fewer sets of \(names)", bundle: .module,
                comment: "Part of a list in a workout session note, after 'Fitted to 30 min:' — some exercises got fewer sets. The argument is a comma-separated list of exercise names.")
     }
+
+    /// One change in a budget note: "one warm-up set for Back squat" — a lift's warm-up ramp was cut to
+    /// its one set nearest 60 % of the working weight.
+    static func budgetOneWarmUpSet(_ names: String) -> String {
+        String(localized: "workoutNote.budget.oneWarmUpSet", defaultValue: "one warm-up set for \(names)", bundle: .module,
+               comment: "Part of a list in a workout session note, after 'Fitted to 30 min:' — a lift's lighter warm-up sets were cut to just one. The argument is a comma-separated list of exercise names.")
+    }
 }
