@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <title>How Fernlet protects your data — Fernlet</title>
-<meta name="description" content="A plain-language explanation of Fernlet's privacy design, storage choices, optional iCloud sync, and on-device AI.">
+<meta name="description" content="A plain-language explanation of Fernlet's privacy design, storage choices, optional iCloud sync, on-device AI, and how the workout planner decides.">
 <meta property="og:title" content="Fernlet — how it protects your data">
-<meta property="og:description" content="A plain-language explanation of Fernlet's privacy design, storage choices, optional iCloud sync, and on-device AI.">
+<meta property="og:description" content="A plain-language explanation of Fernlet's privacy design, storage choices, optional iCloud sync, on-device AI, and how the workout planner decides.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://fernlet.com/technical/">
 <link rel="canonical" href="https://fernlet.com/technical/">
@@ -59,6 +59,7 @@
         <a href="#t4">No ads or tracking</a>
         <a href="#t5">Friends are local and intentional</a>
         <a href="#t6">On-device AI</a>
+        <a href="#workouts">How the workout planner decides</a>
         <a href="#t7">Inspect the work</a>
       </nav>
     </div>
@@ -108,6 +109,28 @@
       <h2 id="t6">On-device AI</h2>
       <p>Fernlet's AI features run on your iPhone, using Apple's on-device models. Your journal, health data, photos, cycle information, and friend data don't get sent to an external AI service.</p>
       <p>The sealed store is intentionally outside the AI feature boundary. On-device AI does not read raw cycle data, intimate notes, or sealed journal entries. The full on-device experience needs an iPhone 15 Pro or newer; on older supported phones, Fernlet falls back to simpler, deterministic logic instead of reaching for a server.</p>
+    </section>
+
+    <section>
+      <h2 id="workouts">How the workout planner decides</h2>
+      <p>The workout planner is ordinary code that runs on your iPhone: given the same inputs, it builds the same session. The planner, the guided workout and the optional AI adjust make no network requests. A workout leaves your phone the same ways the rest of your log does: through your own iCloud if you turned on sync, into Apple Health if you allowed it, or to someone you choose to send it to.</p>
+      <ul>
+        <li><span><strong>What it reads.</strong> Your split and training days, your experience level, the equipment you've checked off for the place you're training, the muscles and movements you've asked it to avoid, and the workouts you've logged.</span></li>
+        <li><span><strong>How hard today should be.</strong> The Light, Moderate or Hard choice starts on a suggestion from the last three days: training load, energy and meals, plus resting heart rate, heart-rate variability and sleep when you share them from Apple Health. You can pick another. If you've marked yourself unwell, that decides it before anything else is read, and the plan becomes one gentle movement line with nothing to guide.</span></li>
+        <li><span><strong>Which exercises.</strong> Each slot in a session describes a movement and the muscles it's for, not a fixed exercise. It's filled only from exercises your equipment allows and that don't work a muscle or movement on your avoid list. If nothing fits, the slot is dropped and the session note says so, rather than filling it with something unrelated. The split moves on from the last session you logged, so every day of it comes round in turn whichever weekdays you train.</span></li>
+        <li><span><strong>The order of a session.</strong> A warm-up stretch flow of about eight minutes, with 20 to 30 second holds that each start after a five-second lead-in to get into position. Then activation: light core work, a single-leg balance hold, and on some leg days, for lifters past the beginner stage, a few low jumps. Then the lifting, any cardio, and a cool-down of up to four 45-second stretches chosen to cover the muscles the lifting worked. The same equipment and avoid-list check applies to every stretch.</span></li>
+      </ul>
+      <div class="callout">
+        <p><strong>Weights from your own history</strong> — For each lift, Fernlet estimates your one-rep max with the Epley formula, adding back the reps you had left (from the optional Easy · Good · Tough tap, or about two when you don't tap). Your last three sessions count 3:2:1, newest first. It suggests a weight that leaves about two reps in reserve and shows a range around it: ±10% after one session, ±5% after two, and a single equipment step once three sessions in six weeks agree within 5%. Workouts you write by hand, in lines such as “Squat 5x5 @225lb”, count as history too.</p>
+      </div>
+      <ul>
+        <li><span><strong>Moving on.</strong> Finish every rep and the next session asks for one more. At the top of the rep range it adds weight, about 2.5% for upper-body lifts and 5% for squats, hinges and lunges, rounded to your equipment's steps, and starts the reps again at the bottom. Bodyweight and band work move on in reps, then sets.</span></li>
+        <li><span><strong>Holding or easing off.</strong> A Tough set, or a small miss of two reps or fewer, repeats the same weight. A bigger miss, or a second in a row, goes about 5% lighter. A third in a row goes about 10% lighter with one set fewer for that session. After more than four weeks away, a lift restarts about 10% lighter.</span></li>
+        <li><span><strong>When you choose differently.</strong> If you pick outside the range twice in five sessions, the next time it asks why, and not again on that lift for four weeks. “Too heavy” or “too light” re-centres the range on your own picks. “Pain” holds the lift steady and suggests trying a different exercise or checking with a professional.</span></li>
+        <li><span><strong>Plateaus.</strong> A lift counts as stalled only when you've trained it at least three times in four weeks with no gap over two weeks, and its last four sessions haven't beaten your earlier best by more than 1%. A strength check's build-up sets, easier sessions, sessions you marked Easy or answered “pain” on, and lifts done after two other compound lifts don't count as evidence. The response goes in order, and a new best ends it at any point: first, a note if your sleep averaged under seven hours or your protein under 80% of your target over the past two weeks, and an easier session (half the sets, about 10% lighter) or an extra rest day; then your usual weight with more rest and the lift moved first; then four sessions of support work for the muscles that help that lift; then a variation in its place for four weeks.</span></li>
+        <li><span><strong>The monthly strength check.</strong> Every four weeks, never on a light day and not while Manual plan exchange is on (a coach's plan brings its own testing), one lift is checked: a few lighter ramp sets, then one set at your five-rep weight, stopped with one or two reps left. Once Fernlet already trusts its estimate, the check is a single set at that day's weight. Intermediate and advanced lifters can opt in to testing a true one-rep max instead, behind a confirmation that asks for a spotter or safety arms. It builds up to three single attempts, and a miss ends the test.</span></li>
+        <li><span><strong>Adjust with AI.</strong> The optional adjust runs on Apple's on-device model and reworks only the lifting part of a session. The model is shown a numbered list of exercises that already passed the equipment and avoid-list check, and it answers with numbers from that list, so it can't add anything else. If AI is off, or the model fails, the plan stays as it was built.</span></li>
+      </ul>
     </section>
 
     <section>
