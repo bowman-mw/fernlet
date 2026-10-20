@@ -187,7 +187,7 @@ TIERS = {
 }
 PARAMS = dict(
     z_upper=0.8416,          # one-sided 80 % bound
-    z_expected=1.2816,          # how clearly the slope must sit under the expected curve, in SEs
+    z_expected=1.645,          # how clearly the slope must sit under the expected curve, in SEs
     stall_persist=3,         # consecutive evaluations the stall test must hold
     own_weeks=4.0,           # inferred training age: the earlier stretch the own-progress slope reads
     own_min_sessions=6,
@@ -390,12 +390,17 @@ def is_dipping(window, sigma):
     fit = fit_window(base, sigma, PARAMS["flagged_weight"])
     if fit is None:
         return False
-    (slope, icpt, _), _, _, _ = fit
+    (slope, icpt, sxx), xs, _, ws = fit
     # The line's level at the last earlier session, never extrapolated: a rising curve can only
-    # lift the newest sessions, so a beginner's bending curve never reads as a dip.
-    level = icpt + slope * (base[-1].day - base[0].day) / 7.0
+    # lift the newest sessions, so a beginner's bending curve never reads as a dip. The typical
+    # error of a session against that level counts the level's own uncertainty too.
+    x_end = xs[-1]
+    x_mean = sum(w * x for w, x in zip(ws, xs)) / sum(ws)
+    level = icpt + slope * x_end
+    level_var = sigma * sigma * (1.0 / sum(ws) + (x_end - x_mean) ** 2 / sxx)
+    typical = math.sqrt(sigma * sigma + level_var)
     for s in window[-2:]:
-        if math.log(s.score) - level >= -PARAMS["dip_errors"] * sigma:
+        if math.log(s.score) - level >= -PARAMS["dip_errors"] * typical:
             return False
     return True
 
